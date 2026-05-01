@@ -1,0 +1,21 @@
+# Fichiers générés par Gradle
+.gradle/
+build/
+app/build/
+
+# Fichiers locaux Android Studio
+*.iml
+.idea/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore (ne jamais commiter les clés de signature)
+*.jks
+*.keystore
+release/
+
+# OS
+.DS_Store
+Thumbs.db

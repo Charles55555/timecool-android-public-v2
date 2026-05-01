@@ -1,0 +1,3199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#ffffff">
+<title>TimeCool — Démo Investisseurs v3</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+  --g-blue:#1a73e8; --g-red:#ea4335; --g-yellow:#fbbc04; --g-green:#34a853;
+  --g-purple:#8430ce; --g-teal:#00acc1; --g-orange:#f4511e;
+  --text:#202124; --text-sec:#5f6368; --border:#dadce0;
+  --bg:#fff; --bg-soft:#f8f9fa; --bg-hover:#f1f3f4;
+}
+html,body { font-family:'Google Sans',Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); height:100%; overflow:hidden; -webkit-font-smoothing:antialiased; }
+body { display:flex; flex-direction:column; }
+
+.mode-bar { display:flex; background:#fff; border-bottom:2px solid var(--border); padding:6px; }
+.mode-row-wrapper { display:flex; gap:8px; padding:8px 8px 12px; background:#fff; border-bottom:2px solid var(--border); }
+.mode-column { flex:1; display:flex; flex-direction:column; gap:6px; }
+.profile-col { display:flex; flex-direction:column; gap:4px; padding:0 4px; }
+.mode-btn { width:100%; padding:11px; border:none; border-radius:22px; background:#f1f3f4; font-size:13px; font-weight:500; color:var(--text-sec); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
+.mode-btn.active { background:var(--g-blue); color:white; }
+.mode-btn svg { width:16px; height:16px; fill:currentColor; }
+
+.profile-tab { padding:7px 10px; border:1px solid var(--border); background:#fff; border-radius:14px; font-size:12px; font-weight:500; color:var(--text-sec); cursor:pointer; white-space:nowrap; text-align:center; }
+.profile-tab.active { background:#e8f0fe; color:var(--g-blue); border-color:var(--g-blue); font-weight:600; }
+
+.header { display:flex; align-items:center; padding:10px 12px; border-bottom:1px solid var(--border); background:#fff; z-index:10; gap:8px; }
+.menu-btn, .icon-btn { width:40px; height:40px; border:none; background:transparent; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; }
+.menu-btn:hover, .icon-btn:hover { background:var(--bg-hover); }
+.menu-btn svg { width:22px; height:22px; fill:var(--text-sec); }
+.icon-btn svg { width:20px; height:20px; fill:var(--text-sec); }
+.logo { display:flex; align-items:center; gap:8px; flex:1; }
+.logo-text { font-size:20px; font-weight:700; letter-spacing:-0.5px; }
+.logo-time { color:var(--g-red); }
+.logo-cool { color:var(--g-yellow); }
+.dots { display:flex; gap:3px; margin-left:4px; }
+.dot { width:5px; height:5px; border-radius:50%; }
+.dot-b{background:var(--g-blue);} .dot-r{background:var(--g-red);}
+.dot-y{background:var(--g-yellow);} .dot-g{background:var(--g-green);}
+.header-right { display:flex; gap:4px; align-items:center; }
+.badge { position:absolute; top:4px; right:4px; background:var(--g-red); color:white; font-size:10px; font-weight:bold; min-width:16px; height:16px; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:0 4px; }
+.avatar { width:32px; height:32px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:13px; }
+.avatar-user { background:linear-gradient(135deg, var(--g-blue), var(--g-purple)); }
+.avatar-pro { background:linear-gradient(135deg, var(--g-green), var(--g-teal)); }
+
+.privacy-badge { padding:7px 12px; background:#e8f0fe; color:var(--g-blue); font-size:11px; text-align:center; display:flex; align-items:center; justify-content:center; gap:6px; }
+.privacy-badge svg { width:13px; height:13px; fill:var(--g-blue); }
+
+.sub-header { display:flex; align-items:center; padding:10px 16px; gap:8px; border-bottom:1px solid var(--border); background:#fff; }
+.month-title { font-size:19px; font-weight:400; color:var(--text); flex:1; }
+.nav-btn { width:34px; height:34px; border:none; background:transparent; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.nav-btn svg { width:18px; height:18px; fill:var(--text-sec); }
+.today-btn { padding:6px 14px; border:1px solid var(--border); background:#fff; border-radius:18px; font-size:13px; font-weight:500; color:var(--text-sec); cursor:pointer; }
+
+.view-tabs { display:flex; padding:0 8px; border-bottom:1px solid var(--border); background:#fff; }
+.tab { flex:1; padding:12px 0; text-align:center; font-size:12px; font-weight:500; color:var(--text-sec); cursor:pointer; position:relative; text-transform:uppercase; letter-spacing:0.3px; }
+.tab.active { color:var(--g-blue); }
+.tab.active::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; background:var(--g-blue); border-radius:3px 3px 0 0; }
+
+.main { flex:1; overflow-y:auto; background:#fff; position:relative; }
+
+.week-header { display:grid; grid-template-columns:50px repeat(7,1fr); border-bottom:1px solid var(--border); position:sticky; top:0; background:#fff; z-index:5; }
+.week-day-header { padding:8px 4px; text-align:center; border-right:1px solid var(--border); }
+.week-day-header:last-child { border-right:none; }
+.week-day-name { font-size:10px; font-weight:500; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.5px; }
+.week-day-num { font-size:20px; font-weight:400; color:var(--text); margin-top:2px; display:inline-flex; width:32px; height:32px; align-items:center; justify-content:center; border-radius:50%; }
+.week-day-header.today .week-day-name { color:var(--g-blue); }
+.week-day-header.today .week-day-num { background:var(--g-blue); color:white; }
+.week-day-header.closed { background:#fafafa; }
+.week-day-header.closed .week-day-name, .week-day-header.closed .week-day-num { color:#bdc1c6; }
+
+.week-body { position:relative; }
+.hour-row { display:grid; grid-template-columns:50px repeat(7,1fr); border-bottom:1px solid var(--border); min-height:44px; }
+.hour-label { font-size:10px; color:var(--text-sec); padding:2px 6px; text-align:right; border-right:1px solid var(--border); }
+.hour-cell { border-right:1px solid var(--border); position:relative; }
+.hour-cell:last-child { border-right:none; }
+.hour-cell.closed { background:repeating-linear-gradient(45deg, #f5f5f5, #f5f5f5 4px, #fafafa 4px, #fafafa 8px); }
+
+.week-event { position:absolute; left:1px; right:1px; padding:3px 4px; border-radius:3px; color:white; font-size:10px; font-weight:500; cursor:pointer; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); }
+.week-event-title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.week-event-time { font-size:9px; opacity:0.9; }
+
+.chip-blue{background:var(--g-blue);} .chip-red{background:var(--g-red);}
+.chip-green{background:var(--g-green);} .chip-yellow{background:var(--g-yellow);color:#333;}
+.chip-purple{background:var(--g-purple);} .chip-orange{background:var(--g-orange);}
+.chip-teal{background:var(--g-teal);}
+.chip-yellow .week-event-title, .chip-yellow .week-event-time { color:#333; }
+
+.day-view-header { padding:12px 16px; border-bottom:1px solid var(--border); text-align:center; }
+.day-view-date { font-size:18px; }
+.day-view-day { font-size:11px; color:var(--g-blue); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+.day-body { padding:8px 0; position:relative; }
+.day-hour { display:grid; grid-template-columns:56px 1fr; min-height:48px; border-bottom:1px solid #f1f3f4; }
+.day-hour-label { font-size:11px; color:var(--text-sec); padding:4px 8px 4px 16px; text-align:right; }
+.day-event { margin:2px 12px 2px 0; padding:8px 10px; border-radius:6px; color:white; font-size:13px; cursor:pointer; position:absolute; left:56px; right:12px; }
+.day-event-title { font-weight:600; margin-bottom:2px; }
+.day-event-time { font-size:11px; opacity:0.9; }
+
+.fab { position:fixed; bottom:20px; right:16px; width:54px; height:54px; border-radius:16px; border:none; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:20; }
+.fab svg { width:24px; height:24px; }
+
+.side-menu { position:fixed; top:0; left:-300px; width:280px; height:100vh; background:#fff; box-shadow:2px 0 8px rgba(0,0,0,0.1); transition:left 0.25s; z-index:100; overflow-y:auto; }
+.side-menu.open { left:0; }
+.menu-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); opacity:0; pointer-events:none; transition:opacity 0.25s; z-index:99; }
+.menu-overlay.open { opacity:1; pointer-events:auto; }
+.menu-header { padding:20px 16px; border-bottom:1px solid var(--border); }
+.menu-logo { font-size:24px; font-weight:700; }
+.menu-subtitle { font-size:11px; color:var(--text-sec); margin-top:4px; }
+.menu-section { padding:6px 0; border-bottom:1px solid var(--border); }
+.menu-item { display:flex; align-items:center; padding:11px 16px; cursor:pointer; gap:14px; color:var(--text); font-size:14px; }
+.menu-item:hover { background:var(--bg-hover); }
+.menu-item.active { background:#e8f0fe; color:var(--g-blue); font-weight:500; }
+.menu-item svg { width:20px; height:20px; fill:var(--text-sec); flex-shrink:0; }
+.menu-item.active svg { fill:var(--g-blue); }
+.menu-item .menu-badge { margin-left:auto; background:var(--g-red); color:white; font-size:11px; font-weight:bold; min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; }
+.menu-item.pro-premium { background:linear-gradient(135deg, #fff4e0, #e8f5e9); color:#c17900; font-weight:600; }
+
+.page { display:none; flex-direction:column; height:100%; overflow-y:auto; }
+.page.active { display:flex; }
+.page-header { padding:16px; border-bottom:1px solid var(--border); background:#fff; position:sticky; top:0; z-index:5; }
+.page-title { font-size:22px; font-weight:500; }
+.page-subtitle { font-size:13px; color:var(--text-sec); margin-top:4px; }
+.page-content { padding:16px; }
+
+.profile-hero { padding:24px 16px; text-align:center; background:linear-gradient(135deg, #e8f0fe 0%, #e0f2f1 100%); }
+.profile-avatar { width:84px; height:84px; border-radius:50%; color:white; display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:600; margin:0 auto 12px; }
+.profile-avatar-user { background:linear-gradient(135deg, var(--g-blue), var(--g-purple)); }
+.profile-avatar-pro { background:linear-gradient(135deg, var(--g-green), var(--g-teal)); }
+.profile-name { font-size:22px; font-weight:500; }
+.profile-sub { font-size:13px; color:var(--text-sec); margin-top:4px; }
+
+.info-section { padding:12px 0; border-bottom:8px solid var(--bg-soft); }
+.info-section-title { padding:12px 16px 8px; font-size:12px; font-weight:600; color:var(--g-blue); text-transform:uppercase; letter-spacing:0.5px; }
+.info-row { display:flex; padding:10px 16px; gap:14px; }
+.info-label { font-size:11px; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:2px; }
+.info-value { font-size:14px; color:var(--text); }
+.info-content { flex:1; }
+.info-lock { font-size:11px; color:var(--g-green); margin-top:4px; }
+
+.card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; cursor:pointer; display:flex; align-items:center; gap:12px; }
+.card-premium { border:2px solid var(--g-blue); background:linear-gradient(135deg, #f0f7ff 0%, #fff 100%); position:relative; }
+.card-avatar { width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:600; font-size:16px; flex-shrink:0; }
+.card-body { flex:1; min-width:0; }
+.card-title { font-size:15px; font-weight:500; }
+.card-sub { font-size:12px; color:var(--text-sec); margin-top:2px; }
+.card-meta { font-size:11px; color:var(--text-sec); margin-top:3px; }
+.card-badge { background:var(--g-red); color:white; font-size:10px; font-weight:bold; min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; }
+
+.premium-star { position:absolute; top:-8px; right:-8px; background:var(--g-yellow); color:#8A6500; font-size:10px; font-weight:700; padding:4px 8px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.15); }
+
+.msg-preview { display:flex; padding:12px 16px; border-bottom:1px solid var(--border); cursor:pointer; gap:12px; }
+.msg-preview:hover { background:var(--bg-soft); }
+.msg-preview.unread { background:#e8f0fe; }
+.msg-avatar { width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:600; font-size:15px; flex-shrink:0; }
+.msg-body { flex:1; min-width:0; }
+.msg-name { font-size:14px; font-weight:500; display:flex; justify-content:space-between; }
+.msg-time { font-size:11px; color:var(--text-sec); font-weight:400; }
+.msg-text { font-size:13px; color:var(--text-sec); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.msg-preview.unread .msg-text { color:var(--text); font-weight:500; }
+.msg-preview.unread .msg-name { font-weight:700; }
+
+.conv-header { display:flex; align-items:center; padding:12px 16px; gap:12px; border-bottom:1px solid var(--border); background:#fff; position:sticky; top:0; z-index:5; }
+.back-btn { background:transparent; border:none; cursor:pointer; padding:4px; }
+.back-btn svg { width:22px; height:22px; fill:var(--text-sec); }
+.conv-info { flex:1; }
+.conv-name { font-size:15px; font-weight:500; }
+.conv-sub { font-size:11px; color:var(--text-sec); }
+.conv-body { flex:1; overflow-y:auto; padding:16px; background:#f5f5f5; }
+.conv-msg { max-width:85%; padding:10px 14px; border-radius:18px; margin-bottom:8px; font-size:13px; line-height:1.5; }
+.conv-msg.received { background:#fff; color:var(--text); margin-right:auto; border-bottom-left-radius:4px; }
+.conv-msg.sent { background:var(--g-blue); color:white; margin-left:auto; border-bottom-right-radius:4px; }
+.conv-time { font-size:10px; margin-top:4px; opacity:0.7; }
+.conv-timer { background:#fff4e0; border:1px solid var(--g-yellow); padding:10px 14px; border-radius:12px; margin-bottom:10px; font-size:12px; color:#b26a00; display:flex; align-items:center; gap:8px; font-weight:500; }
+
+.slot-list { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+.slot-btn { background:#fff; border:2px solid var(--g-blue); color:var(--g-blue); padding:12px; border-radius:10px; font-size:13px; font-weight:500; cursor:pointer; text-align:left; display:flex; align-items:center; gap:10px; }
+.slot-btn:hover { background:var(--g-blue); color:white; }
+.slot-btn svg { width:18px; height:18px; fill:currentColor; }
+
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:none; align-items:flex-end; z-index:200; }
+.modal-overlay.open { display:flex; }
+.modal { background:#fff; width:100%; border-radius:20px 20px 0 0; max-height:90vh; overflow-y:auto; animation:slideUp 0.3s; }
+@keyframes slideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
+.modal-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:10px auto; }
+.modal-header { display:flex; align-items:center; padding:8px 16px 14px; gap:16px; border-bottom:1px solid var(--border); }
+.modal-title { flex:1; font-size:17px; font-weight:500; }
+.modal-close { border:none; background:transparent; font-size:14px; font-weight:500; padding:8px 12px; border-radius:18px; cursor:pointer; color:var(--text-sec); }
+.modal-body { padding:16px; }
+.event-detail-row { padding:10px 0; border-bottom:1px solid #eee; display:flex; gap:12px; }
+.event-detail-row:last-child { border-bottom:none; }
+.event-detail-row svg { width:18px; height:18px; fill:var(--text-sec); flex-shrink:0; margin-top:1px; }
+.event-detail-label { font-size:11px; color:var(--text-sec); text-transform:uppercase; }
+.event-detail-value { font-size:14px; margin-top:2px; }
+.btn-row { display:flex; gap:10px; padding:16px; border-top:1px solid var(--border); }
+.btn-row button { flex:1; padding:12px; border-radius:10px; font-size:14px; font-weight:500; cursor:pointer; border:none; }
+.btn-primary { background:var(--g-blue); color:white; }
+.btn-danger { background:var(--g-red); color:white; }
+.btn-secondary { background:var(--bg-soft); color:var(--text); }
+.btn-success { background:var(--g-green); color:white; }
+
+.toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 20px; border-radius:24px; font-size:13px; opacity:0; transition:opacity 0.3s; z-index:300; text-align:center; max-width:90%; }
+.toast.show { opacity:1; }
+
+.ai-search { padding:30px 20px; text-align:center; background:#e8f0fe; border-radius:14px; margin:12px 0; }
+.ai-dots { display:flex; justify-content:center; gap:6px; margin:12px 0; }
+.ai-dots span { width:10px; height:10px; border-radius:50%; animation:pulse 1.4s infinite; }
+.ai-dots span:nth-child(1){background:var(--g-blue);}
+.ai-dots span:nth-child(2){background:var(--g-red);animation-delay:0.2s;}
+.ai-dots span:nth-child(3){background:var(--g-yellow);animation-delay:0.4s;}
+.ai-dots span:nth-child(4){background:var(--g-green);animation-delay:0.6s;}
+@keyframes pulse { 0%,100%{transform:scale(0.8);opacity:0.5;} 50%{transform:scale(1.3);opacity:1;} }
+.ai-text { font-size:13px; color:var(--g-blue); font-weight:500; }
+
+/* Dashboard */
+.dash-hero { padding:20px 16px; background:linear-gradient(135deg, #e8f0fe 0%, #e0f2f1 100%); }
+.dash-month-nav { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.dash-month-nav button { background:#fff; border:1px solid var(--border); border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+.dash-month-nav button svg { width:16px; height:16px; fill:var(--text-sec); }
+.dash-month-title { flex:1; font-size:15px; font-weight:600; text-align:center; }
+
+.big-stat { background:#fff; border-radius:14px; padding:18px; text-align:center; }
+.big-stat-value { font-size:32px; font-weight:700; color:var(--g-blue); line-height:1; }
+.big-stat-label { font-size:11px; color:var(--text-sec); margin-top:6px; text-transform:uppercase; letter-spacing:0.5px; }
+.big-stat-sub { font-size:12px; margin-top:8px; }
+
+.stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px; }
+.stat-card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px; }
+.stat-card-label { font-size:11px; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:6px; }
+.stat-card-value { font-size:22px; font-weight:600; line-height:1; }
+.stat-card-sub { font-size:11px; color:var(--text-sec); margin-top:4px; }
+.stat-up { color:var(--g-green); }
+.stat-down { color:var(--g-red); }
+
+.breakdown { background:#fff; border:1px solid var(--border); border-radius:12px; margin:16px; overflow:hidden; }
+.breakdown-title { padding:14px 16px; background:var(--bg-soft); font-size:13px; font-weight:600; color:var(--text); }
+.breakdown-row { display:flex; align-items:center; padding:12px 16px; border-top:1px solid var(--border); gap:12px; }
+.breakdown-bar { flex:1; height:8px; background:#f1f3f4; border-radius:4px; overflow:hidden; }
+.breakdown-bar-fill { height:100%; border-radius:4px; }
+.breakdown-label { font-size:12px; min-width:90px; }
+.breakdown-value { font-size:13px; font-weight:600; min-width:45px; text-align:right; }
+
+.relation-card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; }
+.relation-header { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.relation-info { flex:1; }
+.relation-name { font-size:14px; font-weight:500; }
+.relation-job { font-size:11px; color:var(--text-sec); }
+.relation-tag { font-size:10px; font-weight:600; padding:3px 8px; border-radius:10px; }
+.tag-excellent { background:#e6f4ea; color:#1e8e3e; }
+.tag-good { background:#e8f0fe; color:#1a73e8; }
+.tag-fair { background:#fef7e0; color:#b06000; }
+.tag-issue { background:#fce8e6; color:#c5221f; }
+.relation-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.relation-stat { text-align:center; background:var(--bg-soft); padding:8px; border-radius:8px; }
+.relation-stat-val { font-size:15px; font-weight:600; }
+.relation-stat-lbl { font-size:10px; color:var(--text-sec); margin-top:2px; }
+
+/* Search */
+.search-bar { display:flex; gap:8px; padding:12px 16px; background:#fff; border-bottom:1px solid var(--border); }
+.search-input { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:24px; font-size:14px; background:var(--bg-soft); outline:none; }
+.search-input:focus { border-color:var(--g-blue); background:#fff; }
+.search-btn { padding:10px 16px; border:none; background:var(--g-blue); color:white; border-radius:24px; font-size:13px; font-weight:500; cursor:pointer; }
+
+.search-result { background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px; }
+.search-result.partner { border:2px solid var(--g-blue); position:relative; box-shadow:0 4px 12px rgba(26,115,232,0.15); }
+.partner-badge { background:var(--g-yellow); color:#8A6500; font-size:10px; font-weight:700; padding:4px 10px; border-radius:12px; display:inline-block; margin-bottom:8px; }
+.search-name { font-size:16px; font-weight:600; }
+.search-job { font-size:12px; color:var(--text-sec); margin-top:2px; }
+.search-addr { font-size:12px; color:var(--text-sec); margin-top:6px; display:flex; gap:4px; align-items:center; }
+.search-contact { font-size:12px; margin-top:4px; color:var(--text-sec); }
+.search-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.search-action { padding:8px 12px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--border); background:#fff; color:var(--text); display:flex; align-items:center; gap:4px; }
+.search-action-primary { background:var(--g-blue); color:white; border-color:var(--g-blue); }
+.search-action-ext { background:#fff4e0; color:#b26a00; border-color:var(--g-yellow); }
+.search-invite { font-size:11px; color:var(--g-blue); margin-top:10px; text-align:center; padding:6px; background:#f0f7ff; border-radius:8px; cursor:pointer; }
+
+.premium-screen { padding:20px 16px; }
+.premium-hero { background:linear-gradient(135deg, #fff4e0, #e8f5e9); padding:24px; border-radius:16px; text-align:center; margin-bottom:16px; }
+.premium-title { font-size:22px; font-weight:700; color:#c17900; margin-bottom:8px; }
+.premium-sub { font-size:13px; color:var(--text-sec); }
+.premium-features { background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px; }
+.premium-feat { display:flex; gap:10px; align-items:flex-start; padding:8px 0; font-size:13px; }
+.premium-feat-icon { color:var(--g-green); font-weight:bold; }
+.premium-price { background:var(--g-blue); color:white; padding:16px; border-radius:12px; text-align:center; margin-bottom:12px; }
+.premium-price-big { font-size:28px; font-weight:700; }
+.premium-price-sub { font-size:12px; opacity:0.9; margin-top:4px; }
+.premium-fomo { background:var(--g-red); color:white; padding:12px; border-radius:10px; text-align:center; font-size:13px; font-weight:500; }
+
+/* Visible/Invisible banners for client detail */
+.visible-banner { padding:12px 16px; background:#e6f4ea; color:#1e8e3e; font-size:12px; font-weight:500; }
+.invisible-banner { padding:12px 16px; background:#fce8e6; color:#c5221f; font-size:12px; font-weight:500; }
+
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.hidden { display:none !important; }
+
+/* ═══ CHARLY GUIDED JOURNEY ═══ */
+.charly-step { padding:20px 18px; }
+.charly-question { font-size:18px; font-weight:600; color:var(--text); margin-bottom:6px; line-height:1.35; }
+.charly-hint { font-size:13px; color:var(--text-sec); margin-bottom:18px; }
+.charly-progress { display:flex; gap:4px; padding:14px 18px 0; }
+.charly-progress-dot { flex:1; height:4px; background:#e0e0e0; border-radius:2px; }
+.charly-progress-dot.done { background:var(--g-green); }
+.charly-progress-dot.active { background:var(--g-blue); }
+
+.charly-options { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+.charly-opt-btn { padding:14px 16px; background:#fff; border:2px solid var(--border); border-radius:14px; font-size:15px; color:var(--text); text-align:left; cursor:pointer; display:flex; align-items:center; gap:12px; transition:all 0.15s; }
+.charly-opt-btn:hover { border-color:var(--g-blue); background:#f0f7ff; }
+.charly-opt-btn.selected { border-color:var(--g-blue); background:#e8f0fe; }
+.charly-opt-btn-icon { font-size:22px; }
+
+.day-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; margin-top:10px; }
+.day-chip { padding:14px 4px; background:#fff; border:2px solid var(--border); border-radius:10px; font-size:11px; font-weight:600; color:var(--text-sec); text-align:center; cursor:pointer; text-transform:uppercase; }
+.day-chip.selected { background:var(--g-blue); border-color:var(--g-blue); color:white; }
+
+.hour-bar { background:#fff; border:1px solid var(--border); border-radius:14px; padding:12px; margin-top:14px; }
+.hour-bar-instruction { font-size:13px; color:var(--g-blue); font-weight:500; margin-bottom:10px; text-align:center; padding:8px; background:#e8f0fe; border-radius:8px; }
+.hour-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
+.hour-cell-btn { padding:12px 2px; background:#f8f9fa; border:1px solid #e0e0e0; border-radius:6px; font-size:11px; font-weight:600; color:var(--text); cursor:pointer; text-align:center; }
+.hour-cell-btn:hover { background:#e8f0fe; border-color:var(--g-blue); }
+.hour-cell-btn.start { background:var(--g-green); border-color:var(--g-green); color:white; }
+.hour-cell-btn.end { background:var(--g-red); border-color:var(--g-red); color:white; }
+.hour-cell-btn.between { background:#e8f0fe; border-color:var(--g-blue); color:var(--g-blue); }
+
+.hour-summary { margin-top:12px; padding:10px; background:#e8f5e9; border-radius:8px; font-size:13px; color:#1b5e20; text-align:center; font-weight:500; }
+
+.charly-validate { width:100%; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-top:16px; }
+.charly-validate:disabled { background:#ccc; cursor:not-allowed; }
+
+.charly-back { background:none; border:none; color:var(--g-blue); font-size:13px; cursor:pointer; padding:8px 0; margin-top:8px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <button class="menu-btn" onclick="toggleMenu()">
+    <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+  </button>
+  <div class="logo">
+    <span class="logo-text"><span class="logo-time">TIME</span><span class="logo-cool">COOL</span></span>
+    <div class="dots"><div class="dot dot-b"></div><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+  </div>
+  <div class="header-right">
+    <button class="icon-btn" onclick="navigate('messages')">
+      <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+      <span class="badge" id="headerBadge">0</span>
+    </button>
+    <div class="avatar avatar-user" id="headerAvatar">JD</div>
+  </div>
+</header>
+
+<div class="privacy-badge">
+  <svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+  Chiffrement de bout en bout — vos données restent privées
+</div>
+
+<!-- CALENDAR -->
+<div class="page active" id="page-calendar">
+  <div class="sub-header">
+    <button class="nav-btn" onclick="prevPeriod()"><svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
+    <div class="month-title" id="monthTitle"></div>
+    <button class="nav-btn" onclick="nextPeriod()"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
+    <button class="today-btn" onclick="goToToday()">Auj.</button>
+  </div>
+  <div class="view-tabs">
+    <div class="tab" onclick="switchView('day')">Jour</div>
+    <div class="tab active" onclick="switchView('week')">Semaine</div>
+  </div>
+  <div class="main">
+    <div id="weekView">
+      <div class="week-header" id="weekHeader"></div>
+      <div class="week-body" id="weekBody"></div>
+    </div>
+    <div id="dayView" class="hidden">
+      <div class="day-view-header"><div class="day-view-date" id="dayDate"></div><div class="day-view-day" id="dayName"></div></div>
+      <div class="day-body" id="dayBody"></div>
+    </div>
+  </div>
+  <button class="fab" onclick="openCreateModal()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" stroke="#4285f4" stroke-width="3" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="#34a853" stroke-width="3" stroke-linecap="round"/></svg></button>
+</div>
+
+<!-- PROFILE -->
+<div class="page" id="page-profile"><div class="main"><div id="profileContent"></div></div></div>
+
+<!-- PROS/CLIENTS -->
+<div class="page" id="page-pros">
+  <div class="page-header">
+    <div class="page-title" id="prosTitle">Mes Professionnels</div>
+    <div class="page-subtitle" id="prosSubtitle">Vos professionnels de confiance</div>
+  </div>
+  <div class="search-bar" id="searchBar">
+    <input type="text" class="search-input" id="searchInput" placeholder="🔍 Rechercher un métier (ex: dermatologue)">
+    <button class="search-btn" onclick="doSearch()">Chercher</button>
+  </div>
+  <div class="main"><div class="page-content" id="prosList"></div></div>
+</div>
+
+<!-- MESSAGES -->
+<div class="page" id="page-messages">
+  <div class="page-header">
+    <div class="page-title">Ma Messagerie</div>
+    <div class="page-subtitle">🔒 Chiffrée de bout en bout</div>
+  </div>
+  <div class="main"><div id="messagesList"></div></div>
+</div>
+
+<!-- CONVERSATION -->
+<div class="page" id="page-conv">
+  <div class="conv-header">
+    <button class="back-btn" onclick="navigate('messages')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <div class="msg-avatar" id="convAvatar" style="width:36px;height:36px;font-size:13px;"></div>
+    <div class="conv-info"><div class="conv-name" id="convName"></div><div class="conv-sub">🔒 Chiffré</div></div>
+  </div>
+  <div class="conv-body" id="convBody"></div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="page" id="page-dashboard">
+  <div class="main"><div id="dashContent"></div></div>
+</div>
+
+<!-- PREMIUM -->
+<div class="page" id="page-premium">
+  <div class="page-header">
+    <div class="page-title">Devenir Partenaire</div>
+    <div class="page-subtitle">L'offre réservée aux 1 000 premiers professionnels</div>
+  </div>
+  <div class="main"><div class="premium-screen" id="premiumContent"></div></div>
+</div>
+
+<!-- MES DÉMARCHES -->
+<div class="page" id="page-demarches">
+  <div class="page-header">
+    <div class="page-title">📋 Mes démarches</div>
+    <div class="page-subtitle">Historique des actions réalisées par Charly IA</div>
+  </div>
+  <div class="main"><div id="demarchesList" style="padding:14px;"></div></div>
+</div>
+
+<!-- CONFIGURATION IA -->
+<div class="page" id="page-aiconfig">
+  <div class="page-header">
+    <div class="page-title">🔧 Configuration IA</div>
+    <div class="page-subtitle">Paramètres de Charly IA — Page administrateur</div>
+  </div>
+  <div class="main"><div id="aiconfigContent" style="padding:14px 16px 24px;"></div></div>
+</div>
+
+<!-- SIDE MENU -->
+<div class="menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+<aside class="side-menu" id="sideMenu">
+  <div class="menu-header">
+    <div class="menu-logo"><span class="logo-time">TIME</span><span class="logo-cool">COOL</span></div>
+    <div class="menu-subtitle" id="menuSubtitle">Mode Particulier</div>
+  </div>
+  <div class="menu-section" id="menuItems"></div>
+</aside>
+
+<!-- CREATE EVENT MODAL -->
+<div class="modal-overlay" id="createModal" onclick="if(event.target===this)closeCreateModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeCreateModal()">Annuler</button>
+      <div class="modal-title">Nouveau</div>
+      <button class="modal-close" style="background:var(--g-blue); color:white;" onclick="saveNewEvent()">Enregistrer</button>
+    </div>
+    <div class="modal-body">
+      <div style="padding:10px 0; border-bottom:1px solid #eee;">
+        <div class="info-label">Titre</div>
+        <input type="text" id="newEvtTitle" placeholder="Ajouter un titre" style="width:100%; border:none; outline:none; font-size:16px; padding:6px 0; color:var(--text); background:transparent;">
+      </div>
+      <div style="padding:10px 0; border-bottom:1px solid #eee;">
+        <div class="info-label">Type</div>
+        <select id="newEvtType" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
+          <option value="blue">📋 Personnel</option>
+          <option value="red">🏥 Santé</option>
+          <option value="green">💼 Professionnel</option>
+          <option value="yellow">👨‍👩‍👧 Famille</option>
+          <option value="purple">🏃 Sport / Loisir</option>
+          <option value="teal">🚆 Transport</option>
+          <option value="orange">✂️ Service</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid #eee;">
+        <div style="flex:1;">
+          <div class="info-label">Date</div>
+          <input type="date" id="newEvtDate" value="2026-04-22" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid #eee;">
+        <div style="flex:1;">
+          <div class="info-label">Début</div>
+          <input type="time" id="newEvtStart" value="14:00" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
+        </div>
+        <div style="flex:1;">
+          <div class="info-label">Fin</div>
+          <input type="time" id="newEvtEnd" value="15:00" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
+        </div>
+      </div>
+      <div style="padding:10px 0;">
+        <div class="info-label">Description (optionnel)</div>
+        <textarea id="newEvtDesc" placeholder="Ajouter une note..." style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent; resize:none; min-height:40px;"></textarea>
+      </div>
+      <div style="padding:10px 16px; background:#e8f0fe; border-radius:8px; font-size:11px; color:var(--g-blue); margin-top:10px;">
+        🔒 Cet événement sera chiffré et synchronisé avec votre agenda.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP RDV MODAL -->
+<div class="modal-overlay" id="groupModal" onclick="if(event.target===this)closeGroupModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeGroupModal()">Fermer</button>
+      <div class="modal-title">🎯 RDV de groupe</div>
+    </div>
+    <div class="modal-body" id="groupBody"></div>
+  </div>
+</div>
+
+<!-- SETTINGS PAGE -->
+<div class="page" id="page-settings">
+  <div class="page-header">
+    <div class="page-title" id="settingsTitle">Paramètres</div>
+    <div class="page-subtitle">Configurez votre expérience TimeCool</div>
+  </div>
+  <div class="main"><div class="page-content" id="settingsContent"></div></div>
+</div>
+
+<!-- CHARLY IA - PAGE D'ACCUEIL (PRÉSENTATION DIRECTE) -->
+<div class="page" id="page-assistant">
+  <div class="conv-header">
+    <button class="back-btn" onclick="navigate('calendar')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
+    <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">🔒 Assistant intelligent</div></div>
+    <button onclick="resetCharlyChat()" title="Nouvelle conversation" style="background:transparent; border:none; cursor:pointer; padding:8px; color:var(--text-sec);">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+    </button>
+  </div>
+  <!-- Quick action buttons -->
+  <div id="charlyQuickActions" style="display:flex; gap:6px; padding:10px 12px; background:#fff; border-bottom:1px solid var(--border); overflow-x:auto; -webkit-overflow-scrolling:touch;">
+    <button onclick="charlyQuickAction('agenda')" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">📅 Créer mon agenda</button>
+    <button onclick="charlyQuickAction('rdv')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🩺 Prendre RDV</button>
+    <button onclick="charlyQuickAction('trajet')" style="flex-shrink:0; padding:8px 12px; background:#fef7e0; color:#8a6500; border:1px solid #fbd784; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🚗 Calculer trajet</button>
+    <button onclick="charlyQuickAction('reserver')" style="flex-shrink:0; padding:8px 12px; background:#f3e8fd; color:#6f3fc4; border:1px solid #d4b3f5; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🍽️ Réserver</button>
+    <button onclick="charlyQuickAction('impprevu')" style="flex-shrink:0; padding:8px 12px; background:#fce8e6; color:var(--g-red); border:1px solid #f5b8b3; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⚡ Gérer imprévu</button>
+  </div>
+  <!-- Chat body -->
+  <div class="main" id="charlyChatBody" style="background:#f7f9fc; padding:14px 12px 90px;"></div>
+  <!-- Input bar fixed at bottom -->
+  <div id="charlyInputBar" style="position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--border); padding:10px 12px; display:flex; gap:8px; align-items:flex-end; max-width:480px; margin:0 auto;">
+    <button onclick="charlyMicToggle()" id="charlyMicBtn" title="Parler à Charly" style="flex-shrink:0; width:42px; height:42px; border-radius:50%; background:var(--g-blue); color:white; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+    </button>
+    <textarea id="charlyInput" rows="1" placeholder="Écris à Charly ou utilise le micro…" style="flex:1; padding:10px 14px; border:1.5px solid var(--border); border-radius:20px; font-size:14px; font-family:inherit; resize:none; max-height:120px; outline:none;" oninput="autoResizeCharly(this)" onkeydown="charlyInputKeyDown(event)"></textarea>
+    <button onclick="charlySendMessage()" id="charlySendBtn" title="Envoyer" style="flex-shrink:0; width:42px; height:42px; border-radius:50%; background:var(--g-green); color:white; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- CHARLY IA - PARCOURS GUIDÉ (conservé pour compatibilité v7.3) -->
+<div class="page" id="page-charly-quiz">
+  <div class="conv-header">
+    <button class="back-btn" onclick="navigate('assistant')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
+    <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub">🔒 Parcours guidé</div></div>
+  </div>
+  <div class="charly-progress" id="charlyProgress"></div>
+  <div class="main" id="charlyContent"></div>
+</div>
+
+<!-- EVENT MODAL -->
+<div class="modal-overlay" id="eventModal" onclick="if(event.target===this)closeEventModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeEventModal()">Fermer</button>
+      <div class="modal-title" id="emTitle">Rendez-vous</div>
+    </div>
+    <div class="modal-body" id="emBody"></div>
+    <div class="btn-row" id="emActions"></div>
+  </div>
+</div>
+
+<!-- CLIENT DETAIL MODAL -->
+<div class="modal-overlay" id="clientModal" onclick="if(event.target===this)closeClientModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <button class="modal-close" onclick="closeClientModal()">Fermer</button>
+      <div class="modal-title" id="clientModalTitle">Fiche patient</div>
+    </div>
+    <div id="clientModalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══ STATE ═══
+let mode = 'user';
+let currentPage = 'calendar';
+let viewDate = new Date(2026, 3, 19);
+let today = new Date(2026, 3, 19);
+let currentView = 'week';
+let dashMonth = new Date(2026, 3, 1);
+
+// ═══ DATA ═══
+const userProfile = {
+  firstName:'Jean', lastName:'Dupont', birth:'15/03/1985', age:40, gender:'Homme',
+  email:'jean.dupont@email.fr', phone:'06 12 34 56 78', phoneFix:'01 23 45 67 89',
+  address:'15 avenue des Fleurs', addr2:'Appartement 3B', zip:'75001', city:'Paris',
+  ssn:'1 85 03 75 123 456 78', mutual:'MGEN — 123 456 789', bloodType:'A+', allergies:'Pénicilline',
+  emergency:'Marie Dupont (épouse) — 06 98 76 54 32',
+  cni:'FR 123 456 789', passport:'FR 987 654 321',
+  bank:'BNP Paribas', iban:'FR76 **** **** **** **** 123',
+  job:'Cadre commercial', company:'TechCorp SA',
+  family:'Marié — 2 enfants (Lucas 8 ans, Emma 5 ans)'
+};
+
+const proProfile = {
+  name:'Dr. Thomas Martin', job:'Chirurgien-Dentiste',
+  cabinet:'Cabinet Dentaire Martin', address:'12 rue de la Paix, 75001 Paris',
+  email:'cabinet@dr-martin.fr', phone:'01 42 33 44 55',
+  siret:'123 456 789 00012', rpps:'10 123 456 789',
+  hours:'Lundi, Mardi, Mercredi, Vendredi — 9h-18h',
+  closed:'Jeudi, Samedi, Dimanche'
+};
+
+const userPros = [
+  {id:1, name:'Dr. Thomas Martin', job:'Dentiste', city:'Paris 1er', icon:'🦷', color:'#ea4335'},
+  {id:2, name:'Dr. Sophie Lambert', job:'Ophtalmologue', city:'Paris 8e', icon:'👁️', color:'#1a73e8'},
+  {id:3, name:'Dr. Henri Dubois', job:'Médecin généraliste', city:'Paris 1er', icon:'⚕️', color:'#ea4335'},
+  {id:4, name:'Me. Claire Blanc', job:'Avocate', city:'Paris 16e', icon:'⚖️', color:'#8430ce'},
+  {id:5, name:'M. Lefebvre', job:'Expert-comptable', city:'Paris 9e', icon:'💼', color:'#34a853'},
+  {id:6, name:'Mme. Legrand', job:'Conseillère BNP', city:'Paris 2e', icon:'🏦', color:'#34a853'},
+  {id:7, name:'Marc — Studio Hair', job:'Coiffeur', city:'Paris 1er', icon:'✂️', color:'#f4511e'}
+];
+
+const proClients = [
+  {id:1, name:'Jean Dupont', age:40, ssn:'1 85 03 75 *** *** **', mutual:'MGEN', allergies:'Pénicilline', phone:'06 12 34 56 78', blood:'A+', rdvs:8, punctual:8, noshow:0},
+  {id:2, name:'Marie Leblanc', age:35, ssn:'2 90 05 75 *** *** **', mutual:'MGEN', allergies:'Aucune', phone:'06 22 33 44 55', blood:'O+', rdvs:6, punctual:6, noshow:0},
+  {id:3, name:'Pierre Bernard', age:52, ssn:'1 72 11 75 *** *** **', mutual:'Harmonie', allergies:'Pénicilline ⚠️', phone:'06 33 44 55 66', blood:'B+', rdvs:12, punctual:10, noshow:1},
+  {id:4, name:'Sophie Petit', age:28, ssn:'2 96 08 75 *** *** **', mutual:'MGEN', allergies:'Aucune', phone:'06 44 55 66 77', blood:'A+', rdvs:4, punctual:4, noshow:0},
+  {id:5, name:'Mme Rousseau', age:38, ssn:'2 86 02 75 *** *** **', mutual:'Harmonie', allergies:'Aucune', phone:'06 55 66 77 88', blood:'O+', rdvs:9, punctual:6, noshow:2},
+  {id:6, name:'Thomas Lefèvre', age:60, ssn:'1 64 06 75 *** *** **', mutual:'MGEN', allergies:'Diabétique ⚠️', phone:'06 77 88 99 00', blood:'AB+', rdvs:15, punctual:14, noshow:0}
+];
+
+// USER relations stats (private, computed by TimeCool AI)
+const userRelations = [
+  {proId:1, name:'Dr. Thomas Martin', job:'Dentiste', rdvs:8, punctuality:100, avgDelay:3, tag:'excellent', label:'Excellent'},
+  {proId:2, name:'Dr. Sophie Lambert', job:'Ophtalmologue', rdvs:3, punctuality:100, avgDelay:5, tag:'excellent', label:'Excellent'},
+  {proId:3, name:'Dr. Henri Dubois', job:'Médecin', rdvs:5, punctuality:100, avgDelay:2, tag:'excellent', label:'Excellent'},
+  {proId:4, name:'Me. Claire Blanc', job:'Avocate', rdvs:3, punctuality:100, avgDelay:2, tag:'excellent', label:'Excellent'},
+  {proId:5, name:'M. Lefebvre', job:'Comptable', rdvs:4, punctuality:75, avgDelay:15, tag:'fair', label:'Correct'},
+  {proId:7, name:'Marc — Studio Hair', job:'Coiffeur', rdvs:6, punctuality:50, avgDelay:28, tag:'issue', label:'À surveiller'}
+];
+
+// Events
+let events = generateEvents();
+
+// ═══ CHARLY IA — État global v7.4 ═══
+let charlyIA = {
+  // Configuration (sauvegardée dans localStorage)
+  config: {
+    provider: 'openai',
+    apiKey: '',
+    model: 'gpt-4o-mini',
+    systemPrompt: `Tu es Charly IA, l'assistant intelligent de TIMECOOL.
+
+Ta mission est d'aider l'utilisateur à organiser son temps, son agenda, ses priorités, ses rendez-vous, ses rappels, ses déplacements, ses imprévus et son équilibre personnel/professionnel.
+
+Tu réponds de manière courte, claire et orientée action. Maximum 3-4 phrases par réponse sauf si l'utilisateur demande plus de détails.
+
+Tu poses des questions une par une, jamais plusieurs à la fois.
+
+Quand tu proposes des créneaux d'agenda, formate-les exactement comme ceci :
+[AGENDA]
+08:00-08:30 | Préparation | preparation
+08:30-09:45 | Travail dossier client | travail
+10:00-11:00 | Rendez-vous fixe | rdv
+12:30-13:30 | Déjeuner | dejeuner
+[/AGENDA]
+
+Tu ne réponds pas aux questions hors sujet. Si la demande est hors sujet, tu expliques poliment que tu es spécialisé dans la gestion du temps.
+
+Tu utilises le tutoiement avec l'utilisateur, sauf s'il t'utilise vous.`,
+    enabled: true,
+    maxMessages: 50,
+    maxLength: 500,
+    demoMode: false
+  },
+  // Historique de la conversation
+  history: [],
+  // État de la session courante
+  isLoading: false,
+  // Compteur d'appels
+  callCount: 0
+};
+
+// ═══ MES DÉMARCHES — État global v7.4 ═══
+let demarches = [];
+
+// Charger configuration et démarches depuis localStorage au démarrage
+function loadCharlyIAConfig() {
+  try {
+    const saved = localStorage.getItem('timecool_ai_config');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.assign(charlyIA.config, parsed);
+    }
+    const savedDemarches = localStorage.getItem('timecool_demarches');
+    if (savedDemarches) {
+      demarches = JSON.parse(savedDemarches);
+    }
+    const savedCount = localStorage.getItem('timecool_ai_callcount');
+    if (savedCount) charlyIA.callCount = parseInt(savedCount) || 0;
+  } catch(e) { console.warn('localStorage indisponible:', e); }
+}
+
+function saveCharlyIAConfig() {
+  try {
+    localStorage.setItem('timecool_ai_config', JSON.stringify(charlyIA.config));
+  } catch(e) { console.warn('localStorage indisponible:', e); }
+}
+
+function saveDemarches() {
+  try {
+    localStorage.setItem('timecool_demarches', JSON.stringify(demarches));
+  } catch(e) { console.warn('localStorage indisponible:', e); }
+}
+
+loadCharlyIAConfig();
+
+function generateEvents() {
+  // v7.4 — Agendas vidés pour la démo investisseurs
+  // Charly IA construit l'agenda en direct devant l'investisseur
+  // Seuls quelques événements de démonstration minimaux sont conservés
+  const evts = [];
+
+  // Quelques jalons de démonstration (jour férié, anniversaire) pour montrer que l'agenda fonctionne
+  evts.push({date:'2026-05-01', startH:0, startM:0, endH:23, endM:59, title:'🇫🇷 Fête du Travail', cat:'orange', mode:'user', id:'demo_1', allDay:true});
+  evts.push({date:'2026-05-08', startH:0, startM:0, endH:23, endM:59, title:'🇫🇷 Victoire 1945', cat:'orange', mode:'user', id:'demo_2', allDay:true});
+  evts.push({date:'2026-04-22', startH:9, startM:0, endH:18, endM:0, title:'🎂 Anniversaire Marie', cat:'yellow', mode:'user', id:'demo_3'});
+
+  return evts;
+}
+
+// Messages
+let messages = {
+  user: [
+    {id:1, with:'Dr. Thomas Martin', avatar:'TM', color:'#ea4335', unread:0, icon:'🦷',
+     thread:[{from:'them', text:'Bonjour M. Dupont, confirmation de votre RDV du 22 avril à 14h30.', time:'Lun. 09:30'}]},
+    {id:2, with:'M. Lefebvre — Comptable', avatar:'ML', color:'#34a853', unread:0, icon:'💼',
+     thread:[{from:'them', text:'Confirmation RDV comptable.', time:'Hier'}]}
+  ],
+  pro: [
+    {id:101, with:'Jean Dupont', avatar:'JD', color:'#1a73e8', unread:0, icon:'👤',
+     thread:[{from:'me', text:'Bonjour M. Dupont, confirmation de votre RDV du 22 avril à 14h30.', time:'Lun. 09:30'}]},
+    {id:102, with:'Mme Rousseau', avatar:'MR', color:'#8430ce', unread:0, icon:'👤',
+     thread:[{from:'them', text:'Merci pour le RDV.', time:'Hier'}]}
+  ]
+};
+
+// Menu items per mode
+const menuItems = {
+  user: [
+    {id:'calendar', icon:'🗓️', label:'Mon agenda'},
+    {id:'assistant', icon:'⚡', label:'Charly IA'},
+    {id:'demarches', icon:'📋', label:'Mes démarches'},
+    {id:'dashboard', icon:'📊', label:'Analyse de mon temps'},
+    {id:'pros', icon:'🌐', label:'Mes professionnels'},
+    {id:'messages', icon:'💬', label:'Ma messagerie sécurisée', badge:true},
+    {id:'profile', icon:'👤', label:'Mon profil'},
+    {id:'settings', icon:'⚙️', label:'Paramètres'},
+    {id:'aiconfig', icon:'🔧', label:'Configuration IA'}
+  ],
+  pro: [
+    {id:'calendar', icon:'🗓️', label:'Mon agenda'},
+    {id:'assistant', icon:'⚡', label:'Charly IA'},
+    {id:'demarches', icon:'📋', label:'Mes démarches'},
+    {id:'dashboard', icon:'📊', label:'Analyse de mon temps'},
+    {id:'pros', icon:'👥', label:'Mes clients'},
+    {id:'messages', icon:'💬', label:'Ma messagerie sécurisée', badge:true},
+    {id:'profile', icon:'🏥', label:'Mon cabinet'},
+    {id:'premium', icon:'💎', label:'Devenir Partenaire Premium', premium:true},
+    {id:'settings', icon:'⚙️', label:'Paramètres'},
+    {id:'aiconfig', icon:'🔧', label:'Configuration IA'}
+  ]
+};
+
+const MONTHS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const DAYS_FULL = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const DAYS_SHORT = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+
+function fmt(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function sameDay(a,b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function isProClosed(dayIdx) { return dayIdx===3||dayIdx===5||dayIdx===6; }
+
+// ═══ MODE SWITCH ═══
+function switchMode(m) {
+  mode = m;
+  // v2.0 Public : pas de bandeau de simulation, on skip les éléments du bandeau s'ils n'existent pas
+  const btnUser = document.getElementById('btnModeUser');
+  const btnPro = document.getElementById('btnModePro');
+  if (btnUser) btnUser.classList.toggle('active', m==='user');
+  if (btnPro) btnPro.classList.toggle('active', m==='pro');
+  const avatar = document.getElementById('headerAvatar');
+  if (avatar) {
+    avatar.className = 'avatar ' + (m==='user'?'avatar-user':'avatar-pro');
+    avatar.textContent = m==='user'?'JD':'TM';
+  }
+  const menuSub = document.getElementById('menuSubtitle');
+  if (menuSub) menuSub.textContent = m==='user'?'Jean Dupont — Particulier':'Dr. Martin — Professionnel';
+  renderMenu();
+  updateBadges();
+  // Refresh current page
+  if (currentPage==='calendar') render();
+  else if (currentPage==='profile') renderProfile();
+  else if (currentPage==='pros') renderPros();
+  else if (currentPage==='messages') renderMessages();
+  else if (currentPage==='dashboard') renderDashboard();
+  else if (currentPage==='premium') renderPremium();
+  // Pas de toast en v2.0 puisque le bandeau n'existe plus
+}
+
+function renderMenu() {
+  const items = menuItems[mode];
+  document.getElementById('menuItems').innerHTML = items.map(it => {
+    let extraStyle = '';
+    if (it.id === 'assistant') {
+      extraStyle = 'background:linear-gradient(90deg,#fff4e0,#fff); border-left:3px solid var(--g-yellow);';
+    }
+    return `
+    <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="navigate('${it.id}')">
+      <span style="font-size:20px; flex-shrink:0;">${it.icon}</span>
+      <span>${it.label}</span>
+      ${it.badge?`<span class="menu-badge" id="menuBadge" style="display:none; margin-left:auto;">0</span>`:''}
+    </div>
+  `;}).join('');
+}
+
+// ═══ MENU ═══
+function toggleMenu() {
+  document.getElementById('sideMenu').classList.toggle('open');
+  document.getElementById('menuOverlay').classList.toggle('open');
+}
+
+// ═══ NAVIGATION ═══
+function navigate(page) {
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('sideMenu').classList.remove('open');
+  document.getElementById('menuOverlay').classList.remove('open');
+  if (page==='calendar') render();
+  else if (page==='profile') renderProfile();
+  else if (page==='pros') renderPros();
+  else if (page==='messages') renderMessages();
+  else if (page==='dashboard') renderDashboard();
+  else if (page==='premium') renderPremium();
+}
+
+// ═══ CALENDAR ═══
+function switchView(v) {
+  currentView = v;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab')[v==='day'?0:1].classList.add('active');
+  document.getElementById('weekView').classList.toggle('hidden', v!=='week');
+  document.getElementById('dayView').classList.toggle('hidden', v!=='day');
+  render();
+}
+
+function prevPeriod() { if (currentView==='week') viewDate.setDate(viewDate.getDate()-7); else viewDate.setDate(viewDate.getDate()-1); render(); }
+function nextPeriod() { if (currentView==='week') viewDate.setDate(viewDate.getDate()+7); else viewDate.setDate(viewDate.getDate()+1); render(); }
+function goToToday() { viewDate = new Date(today); render(); }
+
+function render() {
+  document.getElementById('monthTitle').textContent = `${MONTHS[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+  if (currentView==='week') renderWeek(); else renderDay();
+}
+
+function renderWeek() {
+  const header = document.getElementById('weekHeader');
+  const body = document.getElementById('weekBody');
+  header.innerHTML = '<div></div>';
+  body.innerHTML = '';
+  const d0 = new Date(viewDate);
+  const wd = (d0.getDay()+6)%7;
+  d0.setDate(d0.getDate()-wd);
+  const weekDates = [];
+  for (let i=0; i<7; i++) {
+    const d = new Date(d0);
+    d.setDate(d0.getDate()+i);
+    weekDates.push(d);
+    const col = document.createElement('div');
+    col.className = 'week-day-header';
+    if (sameDay(d, today)) col.classList.add('today');
+    if (mode==='pro' && isProClosed(i)) col.classList.add('closed');
+    col.innerHTML = `<div class="week-day-name">${DAYS_SHORT[i]}</div><div class="week-day-num">${d.getDate()}</div>`;
+    header.appendChild(col);
+  }
+  for (let h=8; h<=19; h++) {
+    const row = document.createElement('div');
+    row.className = 'hour-row';
+    row.innerHTML = `<div class="hour-label">${h}:00</div>`;
+    for (let i=0; i<7; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'hour-cell';
+      if (mode==='pro' && isProClosed(i)) cell.classList.add('closed');
+      row.appendChild(cell);
+    }
+    body.appendChild(row);
+  }
+  requestAnimationFrame(() => {
+    const w = body.offsetWidth;
+    const colWidth = (w-50)/7;
+    weekDates.forEach((d, di) => {
+      events.filter(e => e.date===fmt(d) && e.mode===mode).forEach(e => {
+        const sm = (e.startH-8)*60 + e.startM;
+        const dm = (e.endH-e.startH)*60 + (e.endM-e.startM);
+        const evt = document.createElement('div');
+        evt.className = 'week-event chip-'+e.cat;
+        evt.style.top = `${sm*(44/60)}px`;
+        evt.style.height = `${Math.max(dm*(44/60)-2, 20)}px`;
+        evt.style.left = `${50 + di*colWidth + 1}px`;
+        evt.style.width = `${colWidth - 2}px`;
+        evt.innerHTML = `<div class="week-event-title">${e.title}</div><div class="week-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')}</div>`;
+        evt.onclick = () => openEventModal(e);
+        body.appendChild(evt);
+      });
+    });
+  });
+}
+
+function renderDay() {
+  const d = viewDate;
+  document.getElementById('dayDate').textContent = `${DAYS_FULL[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`;
+  document.getElementById('dayName').textContent = sameDay(d, today)?"AUJOURD'HUI":'';
+  const body = document.getElementById('dayBody');
+  body.innerHTML = '';
+  for (let h=8; h<=19; h++) {
+    const row = document.createElement('div');
+    row.className = 'day-hour';
+    row.innerHTML = `<div class="day-hour-label">${h}:00</div><div></div>`;
+    body.appendChild(row);
+  }
+  events.filter(e => e.date===fmt(d) && e.mode===mode).forEach(e => {
+    const sm = (e.startH-8)*60 + e.startM;
+    const dm = (e.endH-e.startH)*60 + (e.endM-e.startM);
+    const evt = document.createElement('div');
+    evt.className = 'day-event chip-'+e.cat;
+    evt.style.top = `${sm*(48/60)+8}px`;
+    evt.style.height = `${Math.max(dm*(48/60)-6, 30)}px`;
+    evt.innerHTML = `<div class="day-event-title">${e.title}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}</div>`;
+    evt.onclick = () => openEventModal(e);
+    body.appendChild(evt);
+  });
+}
+
+// ═══ EVENT MODAL ═══
+let currentEvent = null;
+function openEventModal(e) {
+  currentEvent = e;
+  document.getElementById('emTitle').textContent = e.title;
+  const dateStr = new Date(e.date+'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  const timeStr = `${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}`;
+  document.getElementById('emBody').innerHTML = `
+    <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><div><div class="event-detail-label">Date</div><div class="event-detail-value">${dateStr}</div></div></div>
+    <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg><div><div class="event-detail-label">Horaire</div><div class="event-detail-value">${timeStr}</div></div></div>
+    <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Sécurité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Chiffré E2E</div></div></div>
+  `;
+  const actions = document.getElementById('emActions');
+  if (mode==='user' && e.title.includes('Dr. Martin')) {
+    actions.innerHTML = `<button class="btn-secondary" onclick="closeEventModal()">Fermer</button><button class="btn-danger" onclick="cancelRdv()">Annuler le RDV</button>`;
+  } else {
+    actions.innerHTML = `<button class="btn-secondary" onclick="closeEventModal()" style="flex:1;">Fermer</button>`;
+  }
+  document.getElementById('eventModal').classList.add('open');
+}
+function closeEventModal() { document.getElementById('eventModal').classList.remove('open'); }
+
+function cancelRdv() {
+  closeEventModal();
+  events = events.filter(e => !(e.title.includes('Dr. Martin') && e.mode==='user' && e.date==='2026-04-22'));
+  events = events.filter(e => !(e.mode==='pro' && e.isJean));
+  messages.pro = messages.pro.filter(m => m.with !== 'Jean Dupont');
+  messages.pro.unshift({
+    id: Date.now(), with:'Jean Dupont', avatar:'JD', color:'#1a73e8', unread:1, icon:'👤', isCancellation:true,
+    thread:[
+      {from:'me', text:'Bonjour M. Dupont, confirmation de votre RDV du 22 avril à 14h30.', time:'Lun. 09:30'},
+      {from:'them', text:"Bonjour Dr. Martin, un imprévu m'empêche d'honorer notre rendez-vous d'aujourd'hui 14h30. Pourriez-vous me proposer une nouvelle date ? Merci de votre compréhension.", time:'À l\'instant'}
+    ]
+  });
+  showToast('✅ Annulation envoyée');
+  updateBadges();
+  setTimeout(() => {
+    if (confirm("L'annulation a été envoyée.\nBasculer en Mode Professionnel pour voir la réaction ?")) {
+      switchMode('pro');
+      setTimeout(() => navigate('messages'), 400);
+    }
+  }, 800);
+}
+
+// ═══ PROFILE ═══
+function renderProfile() {
+  const c = document.getElementById('profileContent');
+  if (mode==='user') {
+    const profileId = currentProfile.user;
+    const profileData = profilesData.user[profileId];
+    // Jean has the full details, Marie has her own
+    if (profileId === 'jean') {
+      const p = userProfile;
+      c.innerHTML = `
+        <div class="profile-hero">
+          <div class="profile-avatar profile-avatar-user">JD</div>
+          <div class="profile-name">${p.firstName} ${p.lastName}</div>
+          <div class="profile-sub">${p.age} ans — ${p.city}</div>
+          <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500;">🔒 Profil chiffré E2E</div>
+        </div>
+        <div class="info-section"><div class="info-section-title">📝 Identité</div>
+          ${infoRow('Date de naissance', p.birth)}${infoRow('Genre', p.gender)}</div>
+        <div class="info-section"><div class="info-section-title">📧 Coordonnées</div>
+          ${infoRow('Email', p.email)}${infoRow('Mobile', p.phone)}${infoRow('Adresse', p.address+', '+p.addr2+', '+p.zip+' '+p.city)}</div>
+        <div class="info-section"><div class="info-section-title">🏥 Santé</div>
+          ${infoRow('Sécurité Sociale', p.ssn, true)}${infoRow('Mutuelle', p.mutual, true)}
+          ${infoRow('Groupe sanguin', p.bloodType)}${infoRow('Allergies', p.allergies)}
+          ${infoRow('À prévenir', p.emergency)}</div>
+        <div class="info-section"><div class="info-section-title">🛂 Identité légale</div>
+          ${infoRow('CNI', p.cni, true)}${infoRow('Passeport', p.passport, true)}</div>
+        <div class="info-section"><div class="info-section-title">💳 Bancaire</div>
+          ${infoRow('Banque', p.bank)}${infoRow('IBAN', p.iban, true)}</div>
+        <div class="info-section"><div class="info-section-title">💼 Profession</div>
+          ${infoRow('Métier', p.job)}${infoRow('Entreprise', p.company)}</div>
+        <div class="info-section"><div class="info-section-title">👨‍👩‍👧 Famille</div>
+          ${infoRow('Situation', p.family)}</div>
+        <div style="padding:20px; background:#e8f5e9; margin:16px; border-radius:12px; font-size:12px; color:#1b5e20; text-align:center;">
+          🔒 <b>Chiffrement E2E actif</b><br>Chaque pro ne voit que ce qu'il lui faut — ni plus, ni moins.
+        </div>`;
+    } else {
+      // Marie Dupont profile
+      c.innerHTML = `
+        <div class="profile-hero">
+          <div class="profile-avatar profile-avatar-user" style="background:linear-gradient(135deg, #ea4335, #8430ce);">MD</div>
+          <div class="profile-name">Marie Dupont</div>
+          <div class="profile-sub">38 ans — Paris</div>
+          <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500;">🔒 Profil chiffré E2E</div>
+        </div>
+        <div class="info-section"><div class="info-section-title">📝 Identité</div>
+          ${infoRow('Date de naissance', '22/07/1987')}${infoRow('Genre', 'Femme')}</div>
+        <div class="info-section"><div class="info-section-title">📧 Coordonnées</div>
+          ${infoRow('Email', 'marie.dupont@email.fr')}${infoRow('Mobile', '06 23 45 67 89')}${infoRow('Adresse', '15 avenue des Fleurs, Appt 3B, 75001 Paris')}</div>
+        <div class="info-section"><div class="info-section-title">🏥 Santé</div>
+          ${infoRow('Sécurité Sociale', '2 87 07 75 456 789 12', true)}${infoRow('Mutuelle', 'MGEN — 123 456 790', true)}
+          ${infoRow('Groupe sanguin', 'O+')}${infoRow('Allergies', 'Aucune')}
+          ${infoRow('À prévenir', 'Jean Dupont (époux) — 06 12 34 56 78')}</div>
+        <div class="info-section"><div class="info-section-title">🛂 Identité légale</div>
+          ${infoRow('CNI', 'FR 234 567 890', true)}${infoRow('Passeport', 'FR 876 543 210', true)}</div>
+        <div class="info-section"><div class="info-section-title">💳 Bancaire</div>
+          ${infoRow('Banque', 'BNP Paribas (compte joint)')}${infoRow('IBAN', 'FR76 **** **** **** **** 123', true)}</div>
+        <div class="info-section"><div class="info-section-title">💼 Profession</div>
+          ${infoRow('Métier', 'Responsable RH')}${infoRow('Entreprise', 'DesignCorp')}</div>
+        <div class="info-section"><div class="info-section-title">👨‍👩‍👧 Famille</div>
+          ${infoRow('Situation', 'Mariée — 2 enfants (Lucas 8 ans, Emma 5 ans)')}</div>
+        <div style="padding:20px; background:#e8f5e9; margin:16px; border-radius:12px; font-size:12px; color:#1b5e20; text-align:center;">
+          🔒 <b>Chiffrement E2E actif</b><br>Chaque pro ne voit que ce qu'il lui faut — ni plus, ni moins.
+        </div>`;
+    }
+  } else {
+    const profileId = currentProfile.pro;
+    if (profileId === 'martin') {
+      const p = proProfile;
+      c.innerHTML = `
+        <div class="profile-hero">
+          <div class="profile-avatar profile-avatar-pro">TM</div>
+          <div class="profile-name">${p.name}</div>
+          <div class="profile-sub">${p.job}</div>
+          <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-green); font-weight:500;">💼 Compte Pro</div>
+        </div>
+        <div class="info-section"><div class="info-section-title">🏥 Cabinet</div>
+          ${infoRow('Nom', p.cabinet)}${infoRow('Adresse', p.address)}</div>
+        <div class="info-section"><div class="info-section-title">📧 Contact</div>
+          ${infoRow('Email', p.email)}${infoRow('Téléphone', p.phone)}</div>
+        <div class="info-section"><div class="info-section-title">📋 Identifiants pro</div>
+          ${infoRow('SIRET', p.siret, true)}${infoRow('RPPS', p.rpps, true)}</div>
+        <div class="info-section"><div class="info-section-title">⏰ Horaires</div>
+          ${infoRow('Ouvert', p.hours)}${infoRow('Fermé', p.closed)}</div>`;
+    } else {
+      // Me. Blanc profile
+      c.innerHTML = `
+        <div class="profile-hero">
+          <div class="profile-avatar profile-avatar-pro" style="background:linear-gradient(135deg, #8430ce, #1a73e8);">CB</div>
+          <div class="profile-name">Me. Claire Blanc</div>
+          <div class="profile-sub">Avocate — Droit des affaires</div>
+          <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-green); font-weight:500;">💼 Compte Pro</div>
+        </div>
+        <div class="info-section"><div class="info-section-title">⚖️ Cabinet</div>
+          ${infoRow('Nom', 'Cabinet Blanc & Associés')}${infoRow('Adresse', '45 avenue Victor Hugo, 75016 Paris')}
+          ${infoRow('Spécialités', 'Droit commercial, droit des sociétés, successions')}</div>
+        <div class="info-section"><div class="info-section-title">📧 Contact</div>
+          ${infoRow('Email', 'cabinet@blanc-avocats.fr')}${infoRow('Téléphone', '01 45 67 89 10')}
+          ${infoRow('Site web', 'www.blanc-avocats.fr')}</div>
+        <div class="info-section"><div class="info-section-title">📋 Identifiants pro</div>
+          ${infoRow('SIRET', '987 654 321 00015', true)}
+          ${infoRow('N° Barreau', 'Paris — B 45678', true)}
+          ${infoRow('Assurance RCP', 'AXA Pro — à jour')}</div>
+        <div class="info-section"><div class="info-section-title">⏰ Horaires</div>
+          ${infoRow('Ouvert', 'Lundi au Vendredi — 9h00 à 19h00')}
+          ${infoRow('Fermé', 'Samedi, Dimanche')}
+          ${infoRow('Sur RDV uniquement', 'Consultations en cabinet ou visio')}</div>
+        <div class="info-section"><div class="info-section-title">💳 Coordonnées bancaires</div>
+          ${infoRow('IBAN cabinet', 'FR76 **** **** **** **** 789', true)}</div>`;
+    }
+  }
+}
+
+function infoRow(label, value, sensitive=false) {
+  return `<div class="info-row"><div class="info-content"><div class="info-label">${label}</div><div class="info-value">${value}</div>${sensitive?'<div class="info-lock">🔒 Donnée chiffrée</div>':''}</div></div>`;
+}
+
+// ═══ PROS/CLIENTS ═══
+function renderPros() {
+  const isUser = mode==='user';
+  document.getElementById('prosTitle').textContent = isUser?'Mes Professionnels':'Mes Clients';
+  document.getElementById('prosSubtitle').textContent = isUser?'Vos professionnels de confiance':'🔒 Confidentialité garantie';
+  document.getElementById('searchBar').classList.toggle('hidden', !isUser);
+  const list = document.getElementById('prosList');
+  if (isUser) {
+    list.innerHTML = userPros.map(p => `
+      <div class="card" onclick="showToast('Fiche ${p.name}')">
+        <div class="card-avatar" style="background:${p.color};">${p.icon}</div>
+        <div class="card-body">
+          <div class="card-title">${p.name}</div>
+          <div class="card-sub">${p.job} • ${p.city}</div>
+        </div>
+      </div>`).join('');
+  } else {
+    list.innerHTML = proClients.map(c => `
+      <div class="card" onclick="showClientDetail(${c.id})">
+        <div class="card-avatar" style="background:linear-gradient(135deg, var(--g-blue), var(--g-purple));">${c.name.split(' ').map(n=>n[0]).slice(0,2).join('')}</div>
+        <div class="card-body">
+          <div class="card-title">${c.name}</div>
+          <div class="card-sub">${c.age} ans • ${c.rdvs} RDV</div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+function showClientDetail(id) {
+  const c = proClients.find(x => x.id===id);
+  if (!c) return;
+  document.getElementById('clientModalTitle').textContent = c.name;
+  document.getElementById('clientModalBody').innerHTML = `
+    <div class="visible-banner">✅ VISIBLE POUR VOUS — données nécessaires aux soins dentaires</div>
+    <div style="padding:16px;">
+      ${infoRow('Âge', c.age+' ans')}
+      ${infoRow('N° Sécurité Sociale', c.ssn, true)}
+      ${infoRow('Mutuelle', c.mutual)}
+      ${infoRow('Allergies', c.allergies)}
+      ${infoRow('Groupe sanguin', c.blood)}
+      ${infoRow('Téléphone', c.phone)}
+      ${infoRow('RDV honorés', c.rdvs+'/'+(c.rdvs+c.noshow))}
+    </div>
+    <div class="invisible-banner">❌ INVISIBLE POUR VOUS — données hors de votre champ professionnel</div>
+    <div style="padding:16px; color:var(--text-sec); font-size:13px;">
+      • Passeport / CNI<br>
+      • Coordonnées bancaires / IBAN<br>
+      • Profession et entreprise<br>
+      • Situation familiale<br>
+      • Autres professionnels consultés<br>
+      • Adresse personnelle détaillée
+    </div>
+    <div style="padding:16px; background:#e8f5e9; margin:16px; border-radius:12px; font-size:12px; color:#1b5e20; text-align:center;">
+      🔒 <b>Confidentialité TimeCool</b><br>Chaque pro voit uniquement ce dont il a besoin.
+    </div>`;
+  document.getElementById('clientModal').classList.add('open');
+}
+function closeClientModal() { document.getElementById('clientModal').classList.remove('open'); }
+
+// ═══ SEARCH ═══
+function doSearch() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  if (!q) { renderPros(); return; }
+  // Simulate search results
+  const results = [
+    {name:'Dr. Caroline Vidal', job:'Dermatologue', addr:'8 rue Saint-Honoré, Paris 1er', dist:'1,2 km', phone:'01 42 33 44 55', email:'cabinet@dr-vidal.fr', partner:true, slot:'Mardi 21 avril 14h30'},
+    {name:'Dr. Michel Bernard', job:'Dermatologue', addr:'15 boulevard Haussmann, Paris 9e', dist:'2,8 km', phone:'01 45 66 77 88', email:'contact@dr-bernard.fr', partner:false, doctolib:true},
+    {name:'Dr. Sylvie Lambert', job:'Dermatologue', addr:'22 avenue de l\'Opéra, Paris 1er', dist:'3,1 km', phone:'01 47 88 99 00', email:'dr.lambert@cabinet.fr', partner:false}
+  ];
+  const list = document.getElementById('prosList');
+  list.innerHTML = `
+    <div style="padding:12px; background:#e8f0fe; border-radius:10px; margin-bottom:12px; font-size:12px; color:var(--g-blue);">
+      <b>${results.length} dermatologues trouvés</b> à proximité de votre adresse
+    </div>
+    ${results.map(r => `
+      <div class="search-result ${r.partner?'partner':''}">
+        ${r.partner?'<div class="partner-badge">⭐ PARTENAIRE TIMECOOL</div>':''}
+        <div class="search-name">${r.name}</div>
+        <div class="search-job">${r.job}</div>
+        <div class="search-addr">📍 ${r.addr} (${r.dist})</div>
+        <div class="search-contact">📞 ${r.phone} • 📧 ${r.email}</div>
+        ${r.partner?`<div style="margin-top:8px; font-size:12px; color:var(--g-green); font-weight:500;">⚡ Prochain RDV : ${r.slot}</div>`:''}
+        <div class="search-actions">
+          ${r.partner
+            ? `<button class="search-action search-action-primary" onclick="showToast('RDV en 1 clic — démo')">📅 Prendre RDV en 1 clic</button>`
+            : `<button class="search-action" onclick="showToast('Appel ${r.phone}')">📞 Appeler</button>
+               <button class="search-action" onclick="showToast('Email ${r.email}')">📧 Email</button>
+               ${r.doctolib?`<button class="search-action search-action-ext" onclick="showToast('Lien Doctolib')">🔗 Doctolib</button>`:''}`
+          }
+        </div>
+        ${!r.partner?`<div class="search-invite" onclick="showToast('Invitation envoyée !')">💌 Inviter ce pro à rejoindre TimeCool</div>`:''}
+      </div>
+    `).join('')}
+    <div style="padding:12px; margin-top:12px; font-size:11px; color:var(--text-sec); text-align:center; font-style:italic;">
+      TimeCool s'intègre à votre écosystème — nous n'imposons rien, nous facilitons tout.
+    </div>`;
+}
+
+// ═══ MESSAGES ═══
+function renderMessages() {
+  const msgs = messages[mode];
+  const list = document.getElementById('messagesList');
+  if (!msgs.length) { list.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-sec);">Aucun message</div>'; return; }
+  list.innerHTML = msgs.map(m => `
+    <div class="msg-preview ${m.unread>0?'unread':''}" onclick="openConversation(${m.id})">
+      <div class="msg-avatar" style="background:${m.color};">${m.icon||m.avatar}</div>
+      <div class="msg-body">
+        <div class="msg-name">${m.with}<span class="msg-time">${m.thread[m.thread.length-1].time}</span></div>
+        <div class="msg-text">${m.thread[m.thread.length-1].text.substring(0,60)}${m.thread[m.thread.length-1].text.length>60?'...':''}</div>
+      </div>
+      ${m.unread>0?`<div class="card-badge" style="margin-left:8px;">${m.unread}</div>`:''}
+    </div>`).join('');
+}
+
+function openConversation(id) {
+  const msg = messages[mode].find(m => m.id===id);
+  if (!msg) return;
+  msg.unread = 0;
+  updateBadges();
+  document.getElementById('convAvatar').style.background = msg.color;
+  document.getElementById('convAvatar').textContent = msg.icon||msg.avatar;
+  document.getElementById('convName').textContent = msg.with;
+  const body = document.getElementById('convBody');
+  body.innerHTML = msg.thread.map(t => `
+    <div class="conv-msg ${t.from==='me'?'sent':'received'}">${t.text.replace(/\n/g,'<br>')}<div class="conv-time">${t.time}</div></div>
+  `).join('');
+  if (mode==='pro' && msg.isCancellation && !msg.accepted) {
+    body.innerHTML += `
+      <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
+        <button style="padding:14px; font-size:14px; border:none; cursor:pointer; border-radius:18px; color:white; font-weight:500; background:var(--g-green);" onclick="acceptReprogram(${id})">✅ Accepter et reprogrammer</button>
+        <button style="background:var(--text-sec); padding:14px; font-size:14px; border:none; cursor:pointer; border-radius:18px; color:white; font-weight:500;" onclick="showToast('Refus')">❌ Refuser</button>
+      </div>`;
+  }
+  if (mode==='user' && msg.hasSlots && !msg.slotChosen) {
+    body.innerHTML += `
+      <div class="conv-timer">⏱️ <span id="timerText">Temps restant : 4:58</span></div>
+      <div class="slot-list">
+        ${msg.slots.map((s,i) => `
+          <button class="slot-btn" onclick="chooseSlot(${id},${i})">
+            <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>
+            <div><div style="font-weight:600;">${s.label}</div><div style="font-size:11px; opacity:0.8;">Dr. Martin</div></div>
+          </button>`).join('')}
+      </div>`;
+    startCountdown(id);
+  }
+  body.scrollTop = body.scrollHeight;
+  currentPage = 'conv';
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-conv').classList.add('active');
+}
+
+function acceptReprogram(convId) {
+  const body = document.getElementById('convBody');
+  body.innerHTML += `<div class="ai-search" id="aiSearch"><div style="font-size:24px;">🧠</div><div class="ai-dots"><span></span><span></span><span></span><span></span></div><div class="ai-text">L'IA TimeCool analyse les agendas…</div><div style="font-size:11px; color:var(--text-sec); margin-top:8px;">Consultation confidentielle de l'agenda<br>de M. Dupont en cours…</div></div>`;
+  body.scrollTop = body.scrollHeight;
+  setTimeout(() => {
+    document.getElementById('aiSearch').remove();
+    const slots = [
+      {label:'Mardi 28 avril — 14h00', date:'2026-04-28', h:14, m:0},
+      {label:'Mardi 5 mai — 14h30', date:'2026-05-05', h:14, m:30},
+      {label:'Mardi 12 mai — 14h00', date:'2026-05-12', h:14, m:0}
+    ];
+    body.innerHTML += `
+      <div class="conv-msg sent" style="background:#fff4e0; color:#b26a00;">
+        <div style="font-weight:600; margin-bottom:6px;">💡 3 créneaux compatibles trouvés</div>
+        <div style="font-size:11px;">L'IA a respecté les préférences de M. Dupont (santé mardi 14-15h) ET vos disponibilités.</div>
+        <div class="conv-time">À l'instant</div>
+      </div>
+      <div style="margin-top:8px;">
+        <button style="width:100%; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:18px; font-weight:500; cursor:pointer; font-size:14px;" onclick='sendSlots(${convId}, ${JSON.stringify(slots)})'>📤 Envoyer les 3 créneaux à M. Dupont</button>
+      </div>`;
+    body.scrollTop = body.scrollHeight;
+  }, 2500);
+}
+
+function sendSlots(convId, slots) {
+  const msg = messages.pro.find(m => m.id===convId);
+  msg.accepted = true;
+  const text = `Bonjour M. Dupont, veuillez trouver ci-joint 3 propositions de nouveau rendez-vous à valider dans les 5 minutes afin de garantir la disponibilité des créneaux.\n\n📅 ${slots[0].label}\n📅 ${slots[1].label}\n📅 ${slots[2].label}\n\nCordialement, Dr. Martin.`;
+  msg.thread.push({from:'me', text, time:"À l'instant"});
+  const userConv = messages.user.find(m => m.with==='Dr. Thomas Martin');
+  if (userConv) {
+    userConv.unread = 1;
+    userConv.hasSlots = true;
+    userConv.slots = slots;
+    userConv.thread.push({from:'them', text, time:"À l'instant"});
+  }
+  showToast('✅ Propositions envoyées');
+  updateBadges();
+  setTimeout(() => {
+    if (confirm('Propositions envoyées !\nBasculer en Mode Particulier pour voir la réaction ?')) {
+      switchMode('user');
+      setTimeout(() => { navigate('messages'); setTimeout(() => openConversation(userConv.id), 300); }, 400);
+    }
+  }, 800);
+}
+
+let countdownInterval = null;
+function startCountdown(convId) {
+  clearInterval(countdownInterval);
+  let sec = 298;
+  countdownInterval = setInterval(() => {
+    sec--;
+    const el = document.getElementById('timerText');
+    if (!el) { clearInterval(countdownInterval); return; }
+    const mn = Math.floor(sec/60), sc = sec%60;
+    el.textContent = `Temps restant : ${mn}:${String(sc).padStart(2,'0')}`;
+    if (sec<=0) { clearInterval(countdownInterval); el.textContent = '⏰ Expiré'; }
+  }, 1000);
+}
+
+function chooseSlot(convId, idx) {
+  clearInterval(countdownInterval);
+  const msg = messages.user.find(m => m.id===convId);
+  const slot = msg.slots[idx];
+  msg.slotChosen = slot;
+  events.push({date:slot.date, startH:slot.h, startM:slot.m, endH:slot.h+1, endM:slot.m, title:'🦷 Dr. Martin', cat:'red', mode:'user', id:'u_new'});
+  events.push({date:slot.date, startH:slot.h, startM:slot.m, endH:slot.h+1, endM:slot.m, title:'Jean Dupont', cat:'red', mode:'pro', id:'p_new', isJean:true});
+  msg.thread.push({from:'me', text:`J'ai choisi le créneau du ${slot.label}. Merci !`, time:"À l'instant"});
+  const proConv = messages.pro.find(m => m.with==='Jean Dupont');
+  if (proConv) {
+    proConv.unread = 1;
+    proConv.thread.push({from:'them', text:`J'ai choisi le créneau du ${slot.label}. Merci !`, time:"À l'instant"});
+  }
+  showToast('✅ Nouveau RDV : '+slot.label);
+  updateBadges();
+  setTimeout(() => {
+    if (confirm('RDV confirmé !\nBasculer en Mode Pro pour voir l\'agenda mis à jour ?')) {
+      switchMode('pro');
+      setTimeout(() => { navigate('calendar'); viewDate = new Date(slot.date+'T00:00:00'); render(); }, 400);
+    }
+  }, 800);
+}
+
+// ═══ DASHBOARD ═══
+function renderDashboard() {
+  const c = document.getElementById('dashContent');
+  const monthLabel = `${MONTHS[dashMonth.getMonth()]} ${dashMonth.getFullYear()}`;
+  if (mode==='user') {
+    c.innerHTML = `
+      <div class="dash-hero">
+        <div class="dash-month-nav">
+          <button onclick="prevDashMonth()"><svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
+          <div class="dash-month-title">${monthLabel}</div>
+          <button onclick="nextDashMonth()"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
+        </div>
+        <div class="big-stat">
+          <div class="big-stat-value">6h 12</div>
+          <div class="big-stat-label">Temps économisé ce mois</div>
+          <div class="big-stat-sub stat-up">↓ -87% d'attente en salle</div>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-card-label">RDV honorés</div><div class="stat-card-value">15</div><div class="stat-card-sub">sur 18 prévus</div></div>
+        <div class="stat-card"><div class="stat-card-label">Annulés par moi</div><div class="stat-card-value" style="color:var(--g-yellow);">2</div><div class="stat-card-sub">reprogrammés instantanément</div></div>
+        <div class="stat-card"><div class="stat-card-label">Retards anticipés</div><div class="stat-card-value" style="color:var(--g-blue);">4</div><div class="stat-card-sub">prévenus à l'avance ✨</div></div>
+        <div class="stat-card"><div class="stat-card-label">Temps d'attente</div><div class="stat-card-value" style="color:var(--g-green);">42 min</div><div class="stat-card-sub stat-down">vs 3h avant TimeCool</div></div>
+      </div>
+
+      <div class="breakdown">
+        <div class="breakdown-title">🔒 Ma relation avec mes professionnels <span style="font-weight:400; color:var(--text-sec); font-size:11px;">(données privées)</span></div>
+        ${userRelations.map(r => `
+          <div style="padding:12px 16px; border-top:1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div>
+                <div style="font-size:14px; font-weight:500;">${r.name}</div>
+                <div style="font-size:11px; color:var(--text-sec);">${r.job} • ${r.rdvs} RDV</div>
+              </div>
+              <div class="relation-tag tag-${r.tag}">${r.label}</div>
+            </div>
+            <div class="relation-stats">
+              <div class="relation-stat"><div class="relation-stat-val">${r.punctuality}%</div><div class="relation-stat-lbl">Ponctualité</div></div>
+              <div class="relation-stat"><div class="relation-stat-val">${r.avgDelay} min</div><div class="relation-stat-lbl">Retard moyen</div></div>
+              <div class="relation-stat"><div class="relation-stat-val">${r.rdvs}</div><div class="relation-stat-lbl">RDV honorés</div></div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div style="padding:14px 16px; margin:16px; background:#e8f5e9; border-radius:12px; font-size:12px; color:#1b5e20; text-align:center;">
+        🔒 <b>Ces données sont strictement personnelles</b><br>
+        Elles ne sont jamais partagées, publiées, ni exploitées.<br>
+        TimeCool ne fait aucune note publique.
+      </div>`;
+  } else {
+    c.innerHTML = `
+      <div class="dash-hero">
+        <div class="dash-month-nav">
+          <button onclick="prevDashMonth()"><svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
+          <div class="dash-month-title">${monthLabel}</div>
+          <button onclick="nextDashMonth()"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
+        </div>
+        <div class="big-stat">
+          <div class="big-stat-value">+30%</div>
+          <div class="big-stat-label">Chiffre d'affaires ce mois</div>
+          <div class="big-stat-sub stat-up">11 050 € vs 8 500 € avant</div>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-card-label">Remplissage agenda</div><div class="stat-card-value" style="color:var(--g-green);">95%</div><div class="stat-card-sub stat-up">vs 70% avant</div></div>
+        <div class="stat-card"><div class="stat-card-label">Taux no-show</div><div class="stat-card-value" style="color:var(--g-green);">0,7%</div><div class="stat-card-sub stat-down">vs 30% avant</div></div>
+        <div class="stat-card"><div class="stat-card-label">Nouveaux patients</div><div class="stat-card-value" style="color:var(--g-blue);">7</div><div class="stat-card-sub">via TimeCool</div></div>
+        <div class="stat-card"><div class="stat-card-label">Temps gagné</div><div class="stat-card-value" style="color:var(--g-purple);">12h</div><div class="stat-card-sub">fini les appels</div></div>
+      </div>
+
+      <div class="breakdown">
+        <div class="breakdown-title">📊 Décomposition du gain +30% CA</div>
+        <div class="breakdown-row">
+          <div class="breakdown-label">No-shows évités</div>
+          <div class="breakdown-bar"><div class="breakdown-bar-fill" style="width:33%; background:var(--g-blue);"></div></div>
+          <div class="breakdown-value stat-up">+10%</div>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-label">Nouveaux patients</div>
+          <div class="breakdown-bar"><div class="breakdown-bar-fill" style="width:33%; background:var(--g-green);"></div></div>
+          <div class="breakdown-value stat-up">+10%</div>
+        </div>
+        <div class="breakdown-row">
+          <div class="breakdown-label">Temps réinvesti</div>
+          <div class="breakdown-bar"><div class="breakdown-bar-fill" style="width:33%; background:var(--g-purple);"></div></div>
+          <div class="breakdown-value stat-up">+10%</div>
+        </div>
+      </div>
+
+      <div class="breakdown">
+        <div class="breakdown-title">🔒 Historique avec mes patients <span style="font-weight:400; color:var(--text-sec); font-size:11px;">(données cabinet)</span></div>
+        ${proClients.slice(0,5).map(c => {
+          const punct = Math.round((c.punctual/c.rdvs)*100);
+          const tag = punct>=95?'excellent':punct>=80?'good':punct>=60?'fair':'issue';
+          const label = punct>=95?'Patient modèle':punct>=80?'Bon patient':punct>=60?'Correct':'À surveiller';
+          return `
+            <div style="padding:12px 16px; border-top:1px solid var(--border);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div>
+                  <div style="font-size:14px; font-weight:500;">${c.name}</div>
+                  <div style="font-size:11px; color:var(--text-sec);">${c.age} ans • ${c.rdvs} RDV</div>
+                </div>
+                <div class="relation-tag tag-${tag}">${label}</div>
+              </div>
+              <div class="relation-stats">
+                <div class="relation-stat"><div class="relation-stat-val">${punct}%</div><div class="relation-stat-lbl">Présence</div></div>
+                <div class="relation-stat"><div class="relation-stat-val">${c.punctual}</div><div class="relation-stat-lbl">Honorés</div></div>
+                <div class="relation-stat"><div class="relation-stat-val">${c.noshow}</div><div class="relation-stat-lbl">No-show</div></div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+
+      <div style="padding:14px 16px; margin:16px; background:#fff4e0; border-radius:12px; font-size:12px; color:#8a6500; text-align:center;">
+        💎 <b>Devenez Partenaire Premium</b> pour accéder aux statistiques illimitées<br>
+        <span style="cursor:pointer; text-decoration:underline;" onclick="navigate('premium')">Voir l'offre fondateurs →</span>
+      </div>`;
+  }
+}
+
+function prevDashMonth() { dashMonth.setMonth(dashMonth.getMonth()-1); renderDashboard(); }
+function nextDashMonth() { dashMonth.setMonth(dashMonth.getMonth()+1); renderDashboard(); }
+
+// ═══ PREMIUM ═══
+function renderPremium() {
+  document.getElementById('premiumContent').innerHTML = `
+    <div class="premium-hero">
+      <div class="premium-title">💎 Devenez Partenaire TimeCool</div>
+      <div class="premium-sub">Gagnez plus, travaillez mieux, fidélisez plus</div>
+    </div>
+
+    <div class="premium-features">
+      <div class="premium-feat"><span class="premium-feat-icon">✅</span><div>Retards et annulations gérés en 1 clic</div></div>
+      <div class="premium-feat"><span class="premium-feat-icon">✅</span><div>Fini les 12h/semaine au téléphone</div></div>
+      <div class="premium-feat"><span class="premium-feat-icon">✅</span><div><b>+30% de chiffre d'affaires estimé</b></div></div>
+      <div class="premium-feat"><span class="premium-feat-icon">✅</span><div>Nouveaux patients via l'annuaire TimeCool</div></div>
+      <div class="premium-feat"><span class="premium-feat-icon">✅</span><div>Agenda IA qui s'optimise automatiquement</div></div>
+      <div class="premium-feat"><span class="premium-feat-icon">✅</span><div>Dashboard statistiques complet</div></div>
+      <div class="premium-feat"><span class="premium-feat-icon">✅</span><div>Salles d'attente apaisées — patients informés</div></div>
+    </div>
+
+    <div class="premium-price">
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; opacity:0.9;">Offre Fondateurs</div>
+      <div class="premium-price-big">3 mois gratuits</div>
+      <div class="premium-price-sub">puis 100 €/mois — sans engagement</div>
+    </div>
+
+    <div class="premium-fomo">
+      ⏳ <b>Les 1 000 premiers professionnels</b><br>
+      bénéficieront d'une visibilité prioritaire à vie
+    </div>
+
+    <div style="text-align:center; margin-top:20px; font-size:12px; color:var(--text-sec);">
+      Les premiers arrivés seront les premiers servis<br>
+      Ne laissez pas vos concurrents prendre votre place.
+    </div>
+
+    <button style="width:100%; margin-top:16px; padding:16px; background:linear-gradient(135deg, var(--g-blue), var(--g-green)); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer;" onclick="showToast('🚀 Bienvenue dans TimeCool Premium !')">🚀 Devenir partenaire TimeCool</button>
+  `;
+}
+
+// ═══ UTILITIES ═══
+function updateBadges() {
+  const unread = messages[mode].reduce((s,m) => s+m.unread, 0);
+  const hb = document.getElementById('headerBadge');
+  const mb = document.getElementById('menuBadge');
+  if (hb) { hb.style.display = unread>0?'flex':'none'; hb.textContent = unread; }
+  if (mb) { mb.style.display = unread>0?'flex':'none'; mb.textContent = unread; }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ═══ PROFILES SYSTEM (2 particuliers + 2 pros) ═══
+let currentProfile = { user:'jean', pro:'martin' };
+
+const profilesData = {
+  user: {
+    jean: {
+      name:'Jean Dupont', initials:'JD', age:40, phone:'06 12 34 56 78',
+      email:'jean.dupont@email.fr', address:'15 avenue des Fleurs, Paris 1er'
+    },
+    marie: {
+      name:'Marie Dupont', initials:'MD', age:38, phone:'06 23 45 67 89',
+      email:'marie.dupont@email.fr', address:'15 avenue des Fleurs, Paris 1er'
+    }
+  },
+  pro: {
+    martin: {
+      name:'Dr. Thomas Martin', initials:'TM', job:'Dentiste',
+      cabinet:'Cabinet Dentaire Martin', phone:'01 42 33 44 55'
+    },
+    blanc: {
+      name:'Me. Claire Blanc', initials:'CB', job:'Avocate',
+      cabinet:'Cabinet Blanc & Associés', phone:'01 45 67 89 10'
+    }
+  }
+};
+
+function switchProfile(profileId) {
+  if (mode === 'user') {
+    currentProfile.user = profileId;
+    const p = profilesData.user[profileId];
+    const avatar = document.getElementById('headerAvatar');
+    avatar.textContent = p.initials;
+    document.getElementById('menuSubtitle').textContent = p.name + ' — Particulier';
+  } else {
+    currentProfile.pro = profileId;
+    const p = profilesData.pro[profileId];
+    const avatar = document.getElementById('headerAvatar');
+    avatar.textContent = p.initials;
+    document.getElementById('menuSubtitle').textContent = p.name + ' — Professionnel';
+  }
+  updateProfileSelector();
+  showToast('Profil : ' + (mode==='user'?profilesData.user[profileId].name:profilesData.pro[profileId].name));
+  if (currentPage==='calendar') render();
+  else if (currentPage==='profile') renderProfile();
+}
+
+function updateProfileSelector() {
+  // v2.0 Public : pas de sélecteur de profils, on skip si les éléments n'existent pas
+  const colUser = document.getElementById('profileColUser');
+  const colPro = document.getElementById('profileColPro');
+  if (!colUser || !colPro) return;
+  if (mode === 'user') {
+    colUser.style.display = 'flex';
+    colPro.style.display = 'none';
+    colUser.innerHTML = `
+      <button class="profile-tab ${currentProfile.user==='jean'?'active':''}" data-profile="jean" onclick="switchProfile('jean')">Jean Dupont</button>
+      <button class="profile-tab ${currentProfile.user==='marie'?'active':''}" data-profile="marie" onclick="switchProfile('marie')">Marie Dupont</button>
+    `;
+  } else {
+    colUser.style.display = 'none';
+    colPro.style.display = 'flex';
+    colPro.innerHTML = `
+      <button class="profile-tab ${currentProfile.pro==='martin'?'active':''}" data-profile="martin" onclick="switchProfile('martin')">Dr. Martin</button>
+      <button class="profile-tab ${currentProfile.pro==='blanc'?'active':''}" data-profile="blanc" onclick="switchProfile('blanc')">Me. Blanc</button>
+    `;
+  }
+}
+
+// ═══ CREATE EVENT MODAL ═══
+function openCreateModal() {
+  document.getElementById('newEvtTitle').value = '';
+  document.getElementById('newEvtDesc').value = '';
+  document.getElementById('createModal').classList.add('open');
+}
+function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
+
+function saveNewEvent() {
+  const title = document.getElementById('newEvtTitle').value.trim();
+  const type = document.getElementById('newEvtType').value;
+  const date = document.getElementById('newEvtDate').value;
+  const start = document.getElementById('newEvtStart').value;
+  const end = document.getElementById('newEvtEnd').value;
+  if (!title) { showToast('⚠️ Titre requis'); return; }
+  if (!date || !start || !end) { showToast('⚠️ Date/heures requises'); return; }
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  events.push({
+    date, startH:sh, startM:sm, endH:eh, endM:em,
+    title, cat:type, mode, id:'new_'+Date.now()
+  });
+  closeCreateModal();
+  showToast('✅ Événement créé');
+  if (currentPage==='calendar') render();
+}
+
+// ═══ CHARLY IA — PARCOURS GUIDÉ ═══
+// Each step: { id, type, question, hint, options/days/hours, next, validate }
+
+let charlyState = {
+  situation: null,    // 'student' | 'work' | 'retired' | 'free'
+  steps: [],          // recorded answers — each step now has perDayHours: {mon:{start,end}, tue:{...}}
+  currentStepIdx: 0,
+  pendingDays: [],
+  pendingPerDayHours: {},  // {mon:{start:9,end:12}, tue:{start:14,end:17}, ...}
+  pendingDayCursor: 0,     // which day we're currently asking hours for
+  pendingStart: null,      // start hour for current day
+  pendingEnd: null,        // end hour for current day
+  generatedEvents: [],
+  schoolZone: null,
+  includeVacations: false
+};
+
+// Vacances scolaires officielles 2025-2026 (Ministère de l'Éducation Nationale)
+const SCHOOL_VACATIONS = {
+  // Communes à toutes les zones
+  common: [
+    { name:'Toussaint', start:'2025-10-18', end:'2025-11-03', icon:'🍂' },
+    { name:'Noël', start:'2025-12-20', end:'2026-01-05', icon:'🎄' },
+    { name:'Pont Ascension', start:'2026-05-13', end:'2026-05-18', icon:'🌸' },
+    { name:'Été', start:'2026-07-04', end:'2026-08-31', icon:'☀️' }
+  ],
+  // Spécifique par zone : Hiver et Printemps
+  A: {
+    label:'Zone A — Besançon, Bordeaux, Clermont-Ferrand, Dijon, Grenoble, Limoges, Lyon, Poitiers',
+    short:'Lyon, Bordeaux, Grenoble...',
+    periods:[
+      { name:'Hiver', start:'2026-02-07', end:'2026-02-23', icon:'❄️' },
+      { name:'Printemps', start:'2026-04-04', end:'2026-04-20', icon:'🌷' }
+    ]
+  },
+  B: {
+    label:'Zone B — Aix-Marseille, Amiens, Lille, Nancy-Metz, Nantes, Nice, Normandie, Orléans-Tours, Reims, Rennes, Strasbourg',
+    short:'Marseille, Lille, Nantes, Nice...',
+    periods:[
+      { name:'Hiver', start:'2026-02-14', end:'2026-03-02', icon:'❄️' },
+      { name:'Printemps', start:'2026-04-11', end:'2026-04-27', icon:'🌷' }
+    ]
+  },
+  C: {
+    label:'Zone C — Créteil, Montpellier, Paris, Toulouse, Versailles',
+    short:'Paris, Toulouse, Montpellier...',
+    periods:[
+      { name:'Hiver', start:'2026-02-21', end:'2026-03-09', icon:'❄️' },
+      { name:'Printemps', start:'2026-04-18', end:'2026-05-04', icon:'🌷' }
+    ]
+  }
+};
+
+// Define the student journey — each step asks for days, then hours
+const studentJourney = [
+  { id:'courses', icon:'📚', label:'Tes cours', question:'Tu as cours quels jours ?', hourQuestion:'À quelles heures as-tu généralement cours ?', cat:'green', required:true },
+  { id:'homework', icon:'📝', label:'Tes devoirs', askFirst:'Veux-tu réserver du temps pour tes devoirs ?', question:'Quels jours pour les devoirs ?', hourQuestion:'À quelles heures pour les devoirs ?', cat:'blue' },
+  { id:'sport', icon:'🏃', label:'Le sport', askFirst:'Veux-tu réserver du temps pour le sport ?', question:'Quels jours pour le sport ?', hourQuestion:'À quelles heures pour le sport ?', cat:'purple' },
+  { id:'family', icon:'👨\u200d👩\u200d👧', label:'La famille', askFirst:'As-tu des moments réguliers avec ta famille ?', question:'Quels jours avec la famille ?', hourQuestion:'À quelles heures pour la famille ?', cat:'yellow' },
+  { id:'vacations', icon:'🏖️', label:'Vacances scolaires', special:'vacations' }
+];
+
+const workJourney = [
+  { id:'work', icon:'💼', label:'Ton travail', question:'Tu travailles quels jours ?', hourQuestion:'À quelles heures travailles-tu ?', cat:'green', required:true },
+  { id:'lunch', icon:'🍽️', label:'Pause déjeuner', askFirst:'Veux-tu une pause déjeuner régulière ?', question:'Quels jours ?', hourQuestion:'À quelles heures ?', cat:'orange' },
+  { id:'sport', icon:'🏃', label:'Le sport', askFirst:'Veux-tu réserver du temps pour le sport ?', question:'Quels jours pour le sport ?', hourQuestion:'À quelles heures pour le sport ?', cat:'purple' },
+  { id:'family', icon:'👨\u200d👩\u200d👧', label:'La famille', askFirst:'As-tu des moments réguliers avec ta famille ?', question:'Quels jours en famille ?', hourQuestion:'À quelles heures ?', cat:'yellow' }
+];
+
+const retiredJourney = [
+  { id:'sport', icon:'🏃', label:'Le sport / la marche', askFirst:'Pratiques-tu une activité physique régulière ?', question:'Quels jours ?', hourQuestion:'À quelles heures ?', cat:'purple', required:true },
+  { id:'family', icon:'👨\u200d👩\u200d👧', label:'La famille', askFirst:'As-tu des moments réguliers avec ta famille ?', question:'Quels jours en famille ?', hourQuestion:'À quelles heures ?', cat:'yellow' },
+  { id:'hobby', icon:'🎨', label:'Tes loisirs', askFirst:'Veux-tu réserver du temps pour tes loisirs ?', question:'Quels jours pour les loisirs ?', hourQuestion:'À quelles heures ?', cat:'blue' },
+  { id:'social', icon:'☕', label:'Sorties amis', askFirst:'Veux-tu prévoir des sorties avec des amis ?', question:'Quels jours ?', hourQuestion:'À quelles heures ?', cat:'orange' }
+];
+
+const freeJourney = [
+  { id:'wakeup', icon:'☀️', label:'Tes matinées', askFirst:'Veux-tu structurer tes matinées ?', question:'Quels jours ?', hourQuestion:'À quelles heures ?', cat:'blue' },
+  { id:'sport', icon:'🏃', label:'Le sport', askFirst:'Veux-tu réserver du temps pour le sport ?', question:'Quels jours pour le sport ?', hourQuestion:'À quelles heures ?', cat:'purple' },
+  { id:'family', icon:'👨\u200d👩\u200d👧', label:'La famille', askFirst:'As-tu des moments en famille ?', question:'Quels jours en famille ?', hourQuestion:'À quelles heures ?', cat:'yellow' },
+  { id:'project', icon:'🎯', label:'Tes projets', askFirst:'Veux-tu du temps pour tes projets perso ?', question:'Quels jours ?', hourQuestion:'À quelles heures ?', cat:'teal' }
+];
+
+const journeysByType = { student: studentJourney, work: workJourney, retired: retiredJourney, free: freeJourney };
+
+const DAYS_LIST = [
+  {key:'mon', short:'Lun', full:'Lundi', idx:1},
+  {key:'tue', short:'Mar', full:'Mardi', idx:2},
+  {key:'wed', short:'Mer', full:'Mercredi', idx:3},
+  {key:'thu', short:'Jeu', full:'Jeudi', idx:4},
+  {key:'fri', short:'Ven', full:'Vendredi', idx:5},
+  {key:'sat', short:'Sam', full:'Samedi', idx:6},
+  {key:'sun', short:'Dim', full:'Dimanche', idx:0}
+];
+
+function startAssistant() {
+  charlyState = { situation:null, steps:[], currentStepIdx:0, pendingDays:[], pendingPerDayHours:{}, pendingDayCursor:0, pendingStart:null, pendingEnd:null, generatedEvents:[], schoolZone:null, includeVacations:false };
+  currentPage = 'charly-quiz';
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-charly-quiz').classList.add('active');
+  document.getElementById('sideMenu').classList.remove('open');
+  document.getElementById('menuOverlay').classList.remove('open');
+  // Skip intro screen - go directly to situation question (intro is on home page)
+  renderSituationQuestion();
+}
+
+function renderCharlyIntro() {
+  document.getElementById('charlyProgress').innerHTML = '';
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div style="text-align:center; padding:20px 0 30px;">
+        <div style="width:70px; height:70px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:34px; margin:0 auto 16px;">⚡</div>
+        <div class="charly-question" style="text-align:center;">Commençons par organiser ton agenda</div>
+        <div class="charly-hint" style="text-align:center;">Je vais te poser quelques questions simples.</div>
+      </div>
+      <button class="charly-validate" onclick="renderSituationQuestion()">Commencer</button>
+    </div>
+  `;
+}
+
+function renderSituationQuestion() {
+  document.getElementById('charlyProgress').innerHTML = '';
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div class="charly-question">Quelle est ta situation aujourd'hui ?</div>
+      <div class="charly-hint">Choisis une option.</div>
+      <div class="charly-options">
+        <button class="charly-opt-btn" onclick="chooseSituation('student')">
+          <span class="charly-opt-btn-icon">🎓</span>
+          <span>Je suis étudiant</span>
+        </button>
+        <button class="charly-opt-btn" onclick="chooseSituation('work')">
+          <span class="charly-opt-btn-icon">💼</span>
+          <span>Je travaille</span>
+        </button>
+        <button class="charly-opt-btn" onclick="chooseSituation('retired')">
+          <span class="charly-opt-btn-icon">🌿</span>
+          <span>Je suis retraité</span>
+        </button>
+        <button class="charly-opt-btn" onclick="chooseSituation('free')">
+          <span class="charly-opt-btn-icon">🎯</span>
+          <span>J'organise mon temps librement</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function chooseSituation(type) {
+  charlyState.situation = type;
+  charlyState.currentStepIdx = 0;
+  charlyState.steps = [];
+  renderCurrentStep();
+}
+
+function getJourney() {
+  return journeysByType[charlyState.situation] || studentJourney;
+}
+
+function renderProgress() {
+  const journey = getJourney();
+  const idx = charlyState.currentStepIdx;
+  let html = '';
+  journey.forEach((s, i) => {
+    let cls = '';
+    if (i < idx) cls = 'done';
+    else if (i === idx) cls = 'active';
+    html += `<div class="charly-progress-dot ${cls}"></div>`;
+  });
+  document.getElementById('charlyProgress').innerHTML = html;
+}
+
+function renderCurrentStep() {
+  const journey = getJourney();
+  if (charlyState.currentStepIdx >= journey.length) {
+    finishCharly();
+    return;
+  }
+  renderProgress();
+  const step = journey[charlyState.currentStepIdx];
+  charlyState.pendingDays = [];
+  charlyState.pendingPerDayHours = {};
+  charlyState.pendingDayCursor = 0;
+  charlyState.pendingStart = null;
+  charlyState.pendingEnd = null;
+
+  // Special case: school vacations
+  if (step.special === 'vacations') {
+    renderVacationsQuestion();
+    return;
+  }
+
+  if (step.askFirst) {
+    // Optional step — ask Yes/No first
+    document.getElementById('charlyContent').innerHTML = `
+      <div class="charly-step">
+        <div class="charly-question">${step.icon} ${step.askFirst}</div>
+        <div class="charly-options">
+          <button class="charly-opt-btn" onclick="acceptStep()">
+            <span class="charly-opt-btn-icon">✅</span><span>Oui</span>
+          </button>
+          <button class="charly-opt-btn" onclick="skipStep()">
+            <span class="charly-opt-btn-icon">⏭️</span><span>Non, passer</span>
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    renderDaysQuestion();
+  }
+}
+
+// ═══ VACATIONS QUESTION ═══
+function renderVacationsQuestion() {
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div class="charly-question">🏖️ Veux-tu que je bloque tes vacances scolaires ?</div>
+      <div class="charly-hint">Je connais les dates officielles 2025-2026 par zone.</div>
+      <div class="charly-options">
+        <button class="charly-opt-btn" onclick="acceptVacations()">
+          <span class="charly-opt-btn-icon">✅</span><span>Oui, super idée</span>
+        </button>
+        <button class="charly-opt-btn" onclick="skipVacations()">
+          <span class="charly-opt-btn-icon">⏭️</span><span>Non merci</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function skipVacations() {
+  charlyState.steps.push({ stepId:'vacations', skipped:true });
+  charlyState.includeVacations = false;
+  charlyState.currentStepIdx++;
+  renderCurrentStep();
+}
+
+function acceptVacations() {
+  charlyState.includeVacations = true;
+  // Ask zone
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div class="charly-question">🇫🇷 De quelle zone scolaire dépends-tu ?</div>
+      <div class="charly-hint">Choisis ta zone (les dates d'hiver et de printemps en dépendent).</div>
+      <div class="charly-options">
+        <button class="charly-opt-btn" onclick="pickZone('A')">
+          <span class="charly-opt-btn-icon">🅰️</span>
+          <div style="flex:1; text-align:left;">
+            <div style="font-weight:600;">Zone A</div>
+            <div style="font-size:11px; color:var(--text-sec);">${SCHOOL_VACATIONS.A.short}</div>
+          </div>
+        </button>
+        <button class="charly-opt-btn" onclick="pickZone('B')">
+          <span class="charly-opt-btn-icon">🅱️</span>
+          <div style="flex:1; text-align:left;">
+            <div style="font-weight:600;">Zone B</div>
+            <div style="font-size:11px; color:var(--text-sec);">${SCHOOL_VACATIONS.B.short}</div>
+          </div>
+        </button>
+        <button class="charly-opt-btn" onclick="pickZone('C')">
+          <span class="charly-opt-btn-icon" style="background:#1a73e8; color:white; width:24px; height:24px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700;">C</span>
+          <div style="flex:1; text-align:left;">
+            <div style="font-weight:600;">Zone C</div>
+            <div style="font-size:11px; color:var(--text-sec);">${SCHOOL_VACATIONS.C.short}</div>
+          </div>
+        </button>
+        <button class="charly-opt-btn" onclick="pickZone('?')">
+          <span class="charly-opt-btn-icon">🤷</span>
+          <span>Je ne sais pas</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function pickZone(zone) {
+  if (zone === '?') {
+    // Show city list to detect zone
+    document.getElementById('charlyContent').innerHTML = `
+      <div class="charly-step">
+        <div class="charly-question">📍 Quelle est ta ville ?</div>
+        <div class="charly-hint">Je vais déterminer ta zone automatiquement.</div>
+        <div class="charly-options" style="max-height:340px; overflow-y:auto;">
+          <button class="charly-opt-btn" onclick="pickZone('A')"><span class="charly-opt-btn-icon">📍</span>Lyon</button>
+          <button class="charly-opt-btn" onclick="pickZone('A')"><span class="charly-opt-btn-icon">📍</span>Bordeaux</button>
+          <button class="charly-opt-btn" onclick="pickZone('A')"><span class="charly-opt-btn-icon">📍</span>Grenoble</button>
+          <button class="charly-opt-btn" onclick="pickZone('A')"><span class="charly-opt-btn-icon">📍</span>Clermont-Ferrand</button>
+          <button class="charly-opt-btn" onclick="pickZone('A')"><span class="charly-opt-btn-icon">📍</span>Dijon</button>
+          <button class="charly-opt-btn" onclick="pickZone('B')"><span class="charly-opt-btn-icon">📍</span>Marseille</button>
+          <button class="charly-opt-btn" onclick="pickZone('B')"><span class="charly-opt-btn-icon">📍</span>Lille</button>
+          <button class="charly-opt-btn" onclick="pickZone('B')"><span class="charly-opt-btn-icon">📍</span>Nantes</button>
+          <button class="charly-opt-btn" onclick="pickZone('B')"><span class="charly-opt-btn-icon">📍</span>Nice</button>
+          <button class="charly-opt-btn" onclick="pickZone('B')"><span class="charly-opt-btn-icon">📍</span>Strasbourg</button>
+          <button class="charly-opt-btn" onclick="pickZone('B')"><span class="charly-opt-btn-icon">📍</span>Rennes</button>
+          <button class="charly-opt-btn" onclick="pickZone('C')"><span class="charly-opt-btn-icon">📍</span>Paris</button>
+          <button class="charly-opt-btn" onclick="pickZone('C')"><span class="charly-opt-btn-icon">📍</span>Toulouse</button>
+          <button class="charly-opt-btn" onclick="pickZone('C')"><span class="charly-opt-btn-icon">📍</span>Montpellier</button>
+          <button class="charly-opt-btn" onclick="pickZone('C')"><span class="charly-opt-btn-icon">📍</span>Versailles</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  charlyState.schoolZone = zone;
+  // Show preview of vacations
+  const allPeriods = [
+    ...SCHOOL_VACATIONS.common,
+    ...SCHOOL_VACATIONS[zone].periods
+  ].sort((a,b) => a.start.localeCompare(b.start));
+
+  const periodsHtml = allPeriods.map(p => {
+    const startD = new Date(p.start+'T00:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'short'});
+    const endD = new Date(p.end+'T00:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'short', year:'numeric'});
+    return `<div style="padding:10px 12px; background:#f8f9fa; border-radius:10px; margin-bottom:6px; display:flex; gap:10px; align-items:center;">
+      <span style="font-size:20px;">${p.icon}</span>
+      <div style="flex:1;">
+        <div style="font-size:13px; font-weight:600;">${p.name}</div>
+        <div style="font-size:11px; color:var(--text-sec);">${startD} → ${endD}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div class="charly-question">📅 Voici tes vacances scolaires</div>
+      <div class="charly-hint">Zone ${zone} — année 2025-2026 (source : Ministère de l'Éducation Nationale).</div>
+      <div style="margin-top:14px;">${periodsHtml}</div>
+      <button class="charly-validate" onclick="confirmVacations('${zone}')">Ajouter ces vacances → Continuer</button>
+      <button class="charly-back" onclick="acceptVacations()">← Changer de zone</button>
+    </div>
+  `;
+}
+
+function confirmVacations(zone) {
+  charlyState.steps.push({
+    stepId:'vacations',
+    zone: zone,
+    skipped: false
+  });
+  charlyState.currentStepIdx++;
+  renderCurrentStep();
+}
+
+function acceptStep() { renderDaysQuestion(); }
+
+function skipStep() {
+  charlyState.steps.push({ stepId: getJourney()[charlyState.currentStepIdx].id, skipped:true });
+  charlyState.currentStepIdx++;
+  renderCurrentStep();
+}
+
+function renderDaysQuestion() {
+  const step = getJourney()[charlyState.currentStepIdx];
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div class="charly-question">${step.icon} ${step.question}</div>
+      <div class="charly-hint">Touche les jours concernés (plusieurs choix possibles).</div>
+      <div class="day-grid" id="dayGrid">
+        ${DAYS_LIST.map(d => `<div class="day-chip" data-day="${d.key}" onclick="toggleDay('${d.key}')">${d.short}</div>`).join('')}
+      </div>
+      <button class="charly-validate" id="daysValidate" disabled onclick="renderHoursQuestion()">Continuer →</button>
+    </div>
+  `;
+}
+
+function toggleDay(key) {
+  const idx = charlyState.pendingDays.indexOf(key);
+  if (idx >= 0) charlyState.pendingDays.splice(idx, 1);
+  else charlyState.pendingDays.push(key);
+  document.querySelector(`[data-day="${key}"]`).classList.toggle('selected');
+  document.getElementById('daysValidate').disabled = charlyState.pendingDays.length === 0;
+}
+
+function renderHoursQuestion() {
+  // Reset cursor and start asking hours day-by-day
+  charlyState.pendingDayCursor = 0;
+  charlyState.pendingStart = null;
+  charlyState.pendingEnd = null;
+  renderHoursForCurrentDay();
+}
+
+function renderHoursForCurrentDay() {
+  const step = getJourney()[charlyState.currentStepIdx];
+  const days = charlyState.pendingDays;
+  const cursor = charlyState.pendingDayCursor;
+
+  // If all days done → confirm step
+  if (cursor >= days.length) {
+    confirmStep();
+    return;
+  }
+
+  const dayKey = days[cursor];
+  const dayInfo = DAYS_LIST.find(d => d.key === dayKey);
+  charlyState.pendingStart = null;
+  charlyState.pendingEnd = null;
+
+  // Build hour grid 8h to 20h
+  const hours = [];
+  for (let h=8; h<=20; h++) hours.push(h);
+
+  const isLast = cursor === days.length - 1;
+  const nextLabel = isLast ? 'Valider et continuer →' : `Suivant : ${DAYS_LIST.find(d=>d.key===days[cursor+1]).full} →`;
+
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div style="font-size:11px; color:var(--g-blue); font-weight:600; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Étape ${cursor+1} / ${days.length}</div>
+      <div class="charly-question">${step.icon} ${dayInfo.full} — à quelles heures ?</div>
+      <div class="charly-hint">On ajuste à l'heure près pour le moment.</div>
+      <div class="hour-bar">
+        <div class="hour-bar-instruction" id="hourInstruction">👆 Touche l'heure de <b>début</b></div>
+        <div class="hour-grid" id="hourGrid">
+          ${hours.map(h => `<div class="hour-cell-btn" data-h="${h}" onclick="pickHour(${h})">${h}h</div>`).join('')}
+        </div>
+        <div class="hour-summary" id="hourSummary" style="display:none;"></div>
+      </div>
+      ${cursor === 0 ? `<button class="charly-back" onclick="renderDaysQuestion()">← Modifier les jours</button>` : `<button class="charly-back" onclick="prevDayHours()">← Retour : ${DAYS_LIST.find(d=>d.key===days[cursor-1]).full}</button>`}
+      <button class="charly-validate" id="hoursValidate" disabled onclick="confirmDayHours()">${nextLabel}</button>
+    </div>
+  `;
+
+  // If this day already has hours from previous navigation, restore them
+  if (charlyState.pendingPerDayHours[dayKey]) {
+    const saved = charlyState.pendingPerDayHours[dayKey];
+    charlyState.pendingStart = saved.start;
+    charlyState.pendingEnd = saved.end;
+    updateHourUI();
+    document.getElementById('hourInstruction').innerHTML = '✅ Plage déjà définie. Touche une autre heure pour modifier.';
+  }
+}
+
+function confirmDayHours() {
+  const days = charlyState.pendingDays;
+  const dayKey = days[charlyState.pendingDayCursor];
+  // Save hours for this day
+  charlyState.pendingPerDayHours[dayKey] = {
+    start: charlyState.pendingStart,
+    end: charlyState.pendingEnd
+  };
+  // Move to next day
+  charlyState.pendingDayCursor++;
+  renderHoursForCurrentDay();
+}
+
+function prevDayHours() {
+  // Save current day's hours if filled (so user doesn't lose them)
+  const days = charlyState.pendingDays;
+  const dayKey = days[charlyState.pendingDayCursor];
+  if (charlyState.pendingStart !== null && charlyState.pendingEnd !== null) {
+    charlyState.pendingPerDayHours[dayKey] = {
+      start: charlyState.pendingStart,
+      end: charlyState.pendingEnd
+    };
+  }
+  charlyState.pendingDayCursor--;
+  renderHoursForCurrentDay();
+}
+
+function confirmStep() {
+  const journey = getJourney();
+  const step = journey[charlyState.currentStepIdx];
+  charlyState.steps.push({
+    stepId: step.id,
+    days: [...charlyState.pendingDays],
+    perDayHours: {...charlyState.pendingPerDayHours},
+    label: step.label,
+    icon: step.icon,
+    cat: step.cat
+  });
+  charlyState.currentStepIdx++;
+  renderCurrentStep();
+}
+
+function pickHour(h) {
+  // Click 1 = start, Click 2 = end. Click 3 = reset.
+  if (charlyState.pendingStart === null) {
+    charlyState.pendingStart = h;
+    charlyState.pendingEnd = null;
+    updateHourUI();
+    document.getElementById('hourInstruction').innerHTML = '👆 Maintenant touche l\'heure de <b>fin</b>';
+  } else if (charlyState.pendingEnd === null) {
+    if (h <= charlyState.pendingStart) {
+      // restart
+      charlyState.pendingStart = h;
+      charlyState.pendingEnd = null;
+      updateHourUI();
+      showToast('La fin doit être après le début');
+      return;
+    }
+    charlyState.pendingEnd = h;
+    updateHourUI();
+    document.getElementById('hourInstruction').innerHTML = '✅ Plage sélectionnée. Touche une autre heure pour recommencer.';
+  } else {
+    // reset
+    charlyState.pendingStart = h;
+    charlyState.pendingEnd = null;
+    updateHourUI();
+    document.getElementById('hourInstruction').innerHTML = '👆 Maintenant touche l\'heure de <b>fin</b>';
+  }
+}
+
+function updateHourUI() {
+  const start = charlyState.pendingStart;
+  const end = charlyState.pendingEnd;
+  document.querySelectorAll('.hour-cell-btn').forEach(b => {
+    b.classList.remove('start','end','between');
+    const h = parseInt(b.dataset.h);
+    if (h === start) b.classList.add('start');
+    else if (h === end) b.classList.add('end');
+    else if (start !== null && end !== null && h > start && h < end) b.classList.add('between');
+  });
+  const summary = document.getElementById('hourSummary');
+  const validate = document.getElementById('hoursValidate');
+  if (start !== null && end !== null) {
+    summary.style.display = 'block';
+    summary.textContent = `🕒 ${start}h → ${end}h (${end-start}h par jour)`;
+    validate.disabled = false;
+  } else if (start !== null) {
+    summary.style.display = 'block';
+    summary.textContent = `Début : ${start}h — choisis l'heure de fin`;
+    validate.disabled = true;
+  } else {
+    summary.style.display = 'none';
+    validate.disabled = true;
+  }
+}
+
+function generateEventsFromSteps() {
+  const evts = [];
+  // Génère sur ~6 mois : du 1er avril au 30 septembre 2026 (couvre démo + suite)
+  const startDate = new Date(2026, 3, 1); // 1 April 2026
+  const numDays = 180; // 6 months
+
+  charlyState.steps.forEach(s => {
+    if (s.skipped) return;
+
+    // Special: vacation periods
+    if (s.stepId === 'vacations' && s.zone) {
+      const allPeriods = [
+        ...SCHOOL_VACATIONS.common,
+        ...SCHOOL_VACATIONS[s.zone].periods
+      ];
+      allPeriods.forEach(p => {
+        const start = new Date(p.start + 'T00:00:00');
+        const end = new Date(p.end + 'T00:00:00');
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+          if (d < startDate) continue;
+          const offsetDays = Math.floor((d - startDate)/(1000*60*60*24));
+          if (offsetDays > numDays) continue;
+          evts.push({
+            date: fmt(new Date(d)),
+            startH: 0, startM: 0, endH: 23, endM: 59,
+            title: `${p.icon} Vacances ${p.name}`,
+            cat: 'orange',
+            mode: 'user',
+            id: 'charly_vac_'+evts.length,
+            allDay: true
+          });
+        }
+      });
+      return;
+    }
+
+    // Regular recurring step (per-day hours)
+    if (!s.days || !s.perDayHours) return;
+    for (let i=0; i<numDays; i++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + i);
+      const dayWeek = d.getDay();
+      // Find which dayKey corresponds to this weekday
+      const matchingDayKey = s.days.find(k => DAYS_LIST.find(dl => dl.key === k).idx === dayWeek);
+      if (!matchingDayKey) continue;
+      const hours = s.perDayHours[matchingDayKey];
+      if (!hours || hours.start === null || hours.end === null) continue;
+      evts.push({
+        date: fmt(d),
+        startH: hours.start, startM: 0, endH: hours.end, endM: 0,
+        title: `${s.icon} ${s.label}`,
+        cat: s.cat,
+        mode: 'user',
+        id: 'charly_'+evts.length
+      });
+    }
+  });
+  return evts;
+}
+
+function finishCharly() {
+  document.getElementById('charlyProgress').innerHTML = '';
+  // Generate preview ONLY (do NOT inject yet)
+  const preview = generateEventsFromSteps();
+  charlyState.generatedEvents = preview;
+
+  // Build summary cards
+  const validSteps = charlyState.steps.filter(s => !s.skipped);
+  const cards = validSteps.map(s => {
+    if (s.stepId === 'vacations') {
+      const periods = [...SCHOOL_VACATIONS.common, ...SCHOOL_VACATIONS[s.zone].periods]
+        .sort((a,b) => a.start.localeCompare(b.start));
+      return `<div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:10px;">
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+          <span style="font-size:24px;">🏖️</span>
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:600;">Vacances scolaires</div>
+            <div style="font-size:11px; color:var(--text-sec);">Zone ${s.zone} • ${periods.length} périodes</div>
+          </div>
+        </div>
+        <div style="font-size:11px; color:var(--text-sec); padding-left:34px; line-height:1.6;">
+          ${periods.map(p => `${p.icon} ${p.name}`).join(' · ')}
+        </div>
+      </div>`;
+    }
+    // Per-day hours display
+    const perDayLines = (s.days || []).map(k => {
+      const dayInfo = DAYS_LIST.find(d=>d.key===k);
+      const h = s.perDayHours[k];
+      if (!h || h.start === null) return '';
+      return `${dayInfo.short} ${h.start}h-${h.end}h`;
+    }).filter(Boolean).join(' · ');
+    const numCreated = preview.filter(e => e.title.includes(s.label)).length;
+    return `<div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:10px;">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span style="font-size:24px;">${s.icon}</span>
+        <div style="flex:1;">
+          <div style="font-size:14px; font-weight:600;">${s.label}</div>
+          <div style="font-size:11px; color:var(--text-sec); margin-top:4px; line-height:1.5;">${perDayLines}</div>
+          <div style="font-size:11px; color:var(--g-blue); margin-top:4px;">→ ${numCreated} créneaux générés</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const totalEvents = preview.length;
+
+  document.getElementById('charlyContent').innerHTML = `
+    <div class="charly-step">
+      <div style="text-align:center; padding:8px 0 18px;">
+        <div style="font-size:48px;">📋</div>
+        <div class="charly-question" style="text-align:center; margin-top:8px;">Voici ton agenda type</div>
+        <div class="charly-hint" style="text-align:center;">Je propose <strong>${totalEvents} créneaux</strong> sur les 6 prochains mois.</div>
+      </div>
+      <div style="margin-bottom:14px;">
+        ${cards || '<div style="font-size:12px; color:var(--text-sec); text-align:center; padding:20px;">Aucun créneau régulier configuré.</div>'}
+      </div>
+      <div style="padding:14px; background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; margin-bottom:14px; text-align:center;">
+        <div style="font-size:14px; font-weight:600; color:#8a6500; margin-bottom:4px;">⚠️ Rien n'a encore été ajouté</div>
+        <div style="font-size:12px; color:var(--text-sec);">Veux-tu que j'ajoute ces créneaux à ton agenda ?</div>
+      </div>
+      <button class="charly-validate" style="background:var(--g-green); margin-bottom:8px;" onclick="commitCharlyAgenda()">✅ Oui, ajouter à mon agenda</button>
+      <button class="charly-validate" style="background:#fff; color:var(--text-sec); border:2px solid var(--border); margin-top:0;" onclick="startAssistant()">↻ Recommencer</button>
+      <div style="padding:12px; margin-top:16px; background:#e8f5e9; border-radius:10px; font-size:11px; color:#1b5e20; text-align:center;">
+        🔒 Ces préférences guideront mes propositions futures.<br>— Charly ⚡
+      </div>
+    </div>
+  `;
+}
+
+// Commit the generated agenda to the real events array
+function commitCharlyAgenda() {
+  // Remove any previous Charly events
+  events = events.filter(e => !e.id || !String(e.id).startsWith('charly_'));
+  // Inject new events
+  events.push(...charlyState.generatedEvents);
+  showToast(`✅ ${charlyState.generatedEvents.length} créneaux ajoutés à ton agenda`);
+  setTimeout(() => navigate('calendar'), 600);
+}
+
+// Voice mode (simulated for demo)
+function startCharlyVoice() {
+  showToast('🎤 Mode vocal — fonctionnalité disponible dans la version finale');
+  setTimeout(() => {
+    if (confirm('Mode vocal en cours de développement.\n\nVoulez-vous lancer Charly en mode écrit à la place ?')) {
+      startAssistant();
+    }
+  }, 800);
+}
+
+// Quick suggestions handler
+function charlySuggestion(type) {
+  const messages = {
+    rdv: "📅 Vous avez trop de rendez-vous ? Charly peut analyser votre semaine et identifier ceux qui peuvent être reportés ou groupés.",
+    temps: "⏳ Vous voulez plus de temps libre ? Charly va trouver les plages où vous pouvez créer des moments pour vous.",
+    chaos: "🔄 Votre journée est désorganisée ? Charly va vous proposer une nouvelle organisation optimisée selon vos priorités."
+  };
+  showToast(messages[type] || 'Demande prise en compte');
+  setTimeout(() => {
+    if (confirm('Charly va vous poser quelques questions pour mieux vous comprendre. Continuer ?')) {
+      startAssistant();
+    }
+  }, 1500);
+}
+
+
+
+// ═══ SETTINGS PAGE ═══
+function renderSettings() {
+  document.getElementById('settingsContent').innerHTML = `
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔔 Notifications</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Rappels avant RDV</div><div style="font-size:11px; color:var(--text-sec);">1 heure avant</div></div>
+        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Alertes retards</div><div style="font-size:11px; color:var(--text-sec);">Temps réel</div></div>
+        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Notifications push</div><div style="font-size:11px; color:var(--text-sec);">Activées</div></div>
+        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Sonneries</div><div style="font-size:11px; color:var(--text-sec);">Par défaut</div></div>
+        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🎨 Affichage</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Thème</div><div style="font-size:11px; color:var(--text-sec);">Clair</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Langue</div><div style="font-size:11px; color:var(--text-sec);">Français</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Fuseau horaire</div><div style="font-size:11px; color:var(--text-sec);">Europe/Paris</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier</div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔒 Confidentialité & Sécurité</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:13px; color:var(--g-green); font-weight:500;">🔒 Chiffrement E2E activé</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">Vos données sont invisibles — même pour TimeCool</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Verrouillage par code</div><div style="font-size:11px; color:var(--text-sec);">Désactivé</div></div>
+        <div style="width:40px; height:22px; background:#e0e0e0; border-radius:11px; position:relative;"><div style="position:absolute; left:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Authentification biométrique</div><div style="font-size:11px; color:var(--text-sec);">Empreinte / Face ID</div></div>
+        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">💾 Données & Synchronisation</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div><div style="font-size:14px;">Sauvegarde automatique</div><div style="font-size:11px; color:var(--text-sec);">Quotidienne</div></div>
+        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px;">Exporter mes données</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">Format chiffré .timecool</div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">ℹ️ À propos</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px;">Version</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">TimeCool v5.0 — Démo Investisseurs</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px;">Conditions d'utilisation</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px;">Politique de confidentialité</div>
+      </div>
+    </div>
+
+    <div style="text-align:center; padding:20px; font-size:11px; color:var(--text-sec); font-style:italic;">
+      "Le temps est la seule ressource<br>qu'on ne peut jamais fabriquer"
+    </div>
+  `;
+}
+
+// ═══ GROUP RDV (4 agendas en 1 clic) ═══
+function openGroupRdv() {
+  document.getElementById('groupModal').classList.add('open');
+  document.getElementById('groupBody').innerHTML = `
+    <div style="padding:16px 0;">
+      <div style="font-size:14px; margin-bottom:10px; font-weight:500;">👥 Participants au RDV</div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${['👤 Jean Dupont','👤 Marie Dupont','🦷 Dr. Martin','⚖️ Me. Blanc'].map(p => `
+          <div style="padding:10px 14px; background:#f0f7ff; border:1px solid var(--g-blue); border-radius:10px; font-size:13px; color:var(--g-blue); font-weight:500;">${p}</div>
+        `).join('')}
+      </div>
+      <div style="margin-top:20px; padding:16px; background:#e8f0fe; border-radius:12px;">
+        <div style="font-size:13px; color:var(--g-blue); font-weight:500; margin-bottom:8px;">🧠 Analyse IA TimeCool</div>
+        <div style="font-size:12px; color:var(--text-sec);">L'IA consulte simultanément les 4 agendas de manière confidentielle et cherche un créneau commun compatible avec les préférences de chacun.</div>
+      </div>
+      <button style="width:100%; margin-top:16px; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:12px; font-size:14px; font-weight:500; cursor:pointer;" onclick="runGroupSearch()">🔍 Trouver le créneau commun</button>
+      <div id="groupResult" style="margin-top:16px;"></div>
+    </div>`;
+}
+function closeGroupModal() { document.getElementById('groupModal').classList.remove('open'); }
+
+function runGroupSearch() {
+  const result = document.getElementById('groupResult');
+  result.innerHTML = `
+    <div class="ai-search">
+      <div style="font-size:24px;">🧠</div>
+      <div class="ai-dots"><span></span><span></span><span></span><span></span></div>
+      <div class="ai-text">Synchronisation des 4 agendas…</div>
+      <div style="font-size:11px; color:var(--text-sec); margin-top:8px;">Analyse confidentielle en cours</div>
+    </div>`;
+  setTimeout(() => {
+    result.innerHTML = `
+      <div style="padding:14px; background:#e8f5e9; border:2px solid var(--g-green); border-radius:12px;">
+        <div style="font-size:13px; color:var(--g-green); font-weight:600; margin-bottom:10px;">✅ 2 créneaux communs trouvés</div>
+        <button style="width:100%; padding:12px; background:#fff; border:2px solid var(--g-blue); color:var(--g-blue); border-radius:10px; font-weight:600; cursor:pointer; margin-bottom:8px;" onclick="confirmGroupSlot('Jeudi 30 avril — 10h00')">📅 Jeudi 30 avril — 10h00</button>
+        <button style="width:100%; padding:12px; background:#fff; border:2px solid var(--g-blue); color:var(--g-blue); border-radius:10px; font-weight:600; cursor:pointer;" onclick="confirmGroupSlot('Mardi 5 mai — 14h30')">📅 Mardi 5 mai — 14h30</button>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:10px; text-align:center; font-style:italic;">Créneaux respectant les disponibilités des 4 participants</div>
+      </div>`;
+  }, 2500);
+}
+function confirmGroupSlot(slot) {
+  closeGroupModal();
+  showToast('✅ RDV synchronisé dans les 4 agendas : ' + slot);
+}
+
+// ═══ "PRENDRE RDV" on pros list ═══
+function takeAppointment(proName) {
+  const modal = document.getElementById('createModal');
+  document.getElementById('newEvtTitle').value = '🦷 ' + proName;
+  document.getElementById('newEvtType').value = 'red';
+  showToast('🧠 L\'IA TimeCool cherche un créneau...');
+  setTimeout(() => {
+    const body = document.getElementById('emBody');
+    // Open simpler flow using event modal style
+    document.getElementById('emTitle').textContent = 'Prendre RDV — ' + proName;
+    document.getElementById('emBody').innerHTML = `
+      <div class="ai-search" style="margin:0 0 14px;">
+        <div style="font-size:24px;">🧠</div>
+        <div class="ai-text">Recherche de créneaux compatibles…</div>
+      </div>
+      <div style="padding:8px 0;">
+        <div style="font-size:12px; color:var(--text-sec); margin-bottom:10px;">Créneaux respectant vos préférences :</div>
+        <button style="width:100%; padding:12px; background:#fff; border:2px solid var(--g-blue); color:var(--g-blue); border-radius:10px; font-weight:600; cursor:pointer; margin-bottom:8px;" onclick="confirmAppt('${proName}','Mardi 28 avril — 14h00','2026-04-28',14,0)">📅 Mardi 28 avril — 14h00</button>
+        <button style="width:100%; padding:12px; background:#fff; border:2px solid var(--g-blue); color:var(--g-blue); border-radius:10px; font-weight:600; cursor:pointer; margin-bottom:8px;" onclick="confirmAppt('${proName}','Jeudi 30 avril — 14h30','2026-04-30',14,30)">📅 Jeudi 30 avril — 14h30</button>
+        <button style="width:100%; padding:12px; background:#fff; border:2px solid var(--g-blue); color:var(--g-blue); border-radius:10px; font-weight:600; cursor:pointer;" onclick="confirmAppt('${proName}','Mardi 5 mai — 14h00','2026-05-05',14,0)">📅 Mardi 5 mai — 14h00</button>
+      </div>
+      <div style="margin-top:10px; padding:10px; background:#e8f0fe; border-radius:8px; font-size:11px; color:var(--g-blue); text-align:center;">
+        🔒 Le pro ne voit jamais votre agenda — seulement vos créneaux libres
+      </div>`;
+    document.getElementById('emActions').innerHTML = `<button class="btn-secondary" onclick="closeEventModal()" style="flex:1;">Fermer</button>`;
+    document.getElementById('eventModal').classList.add('open');
+  }, 800);
+}
+
+function confirmAppt(proName, label, date, h, m) {
+  closeEventModal();
+  events.push({
+    date, startH:h, startM:m, endH:h+1, endM:m,
+    title: '🦷 ' + proName, cat:'red', mode:'user', id:'appt_'+Date.now()
+  });
+  showToast('✅ RDV confirmé : ' + label);
+  if (currentPage==='calendar') render();
+}
+
+// ═══ Override renderPros to add "Prendre RDV" button ═══
+function renderPros() {
+  const isUser = mode==='user';
+  document.getElementById('prosTitle').textContent = isUser?'Mes Professionnels':'Mes Clients';
+  document.getElementById('prosSubtitle').textContent = isUser?'Vos professionnels de confiance':'🔒 Confidentialité garantie';
+  document.getElementById('searchBar').classList.toggle('hidden', !isUser);
+  const list = document.getElementById('prosList');
+  if (isUser) {
+    list.innerHTML = `
+      <div style="padding:14px; background:linear-gradient(135deg,#fff4e0,#e8f5e9); border-radius:12px; margin-bottom:14px; cursor:pointer;" onclick="openGroupRdv()">
+        <div style="font-size:14px; font-weight:600; color:#c17900;">🎯 RDV de groupe multi-agendas</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">Synchronisez plusieurs agendas en 1 clic grâce à l'IA TimeCool</div>
+      </div>
+      ${userPros.map(p => `
+        <div class="card" style="cursor:default;">
+          <div class="card-avatar" style="background:${p.color};">${p.icon}</div>
+          <div class="card-body">
+            <div class="card-title">${p.name}</div>
+            <div class="card-sub">${p.job} • ${p.city}</div>
+          </div>
+          <button style="padding:8px 14px; background:var(--g-blue); color:white; border:none; border-radius:18px; font-size:12px; font-weight:500; cursor:pointer; white-space:nowrap;" onclick="takeAppointment('${p.name}')">📅 Prendre RDV</button>
+        </div>`).join('')}`;
+  } else {
+    list.innerHTML = proClients.map(c => `
+      <div class="card" onclick="showClientDetail(${c.id})">
+        <div class="card-avatar" style="background:linear-gradient(135deg, var(--g-blue), var(--g-purple));">${c.name.split(' ').map(n=>n[0]).slice(0,2).join('')}</div>
+        <div class="card-body">
+          <div class="card-title">${c.name}</div>
+          <div class="card-sub">${c.age} ans • ${c.rdvs} RDV</div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+// ═══ Update menu to include Settings ═══
+// (Settings is already included in the main menuItems definition above)
+
+// Override navigate to handle new pages
+const origNavigate = navigate;
+navigate = function(page) {
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('page-' + page);
+  if (el) el.classList.add('active');
+  document.getElementById('sideMenu').classList.remove('open');
+  document.getElementById('menuOverlay').classList.remove('open');
+  if (page==='calendar') render();
+  else if (page==='profile') renderProfile();
+  else if (page==='pros') renderPros();
+  else if (page==='messages') renderMessages();
+  else if (page==='dashboard') renderDashboard();
+  else if (page==='premium') renderPremium();
+  else if (page==='settings') renderSettings();
+  // 'assistant' = Charly home page (just shows static content, no init needed)
+};
+
+// Override switchMode to update profile selector — v2.0 Public : safe DOM access
+const origSwitchMode = switchMode;
+switchMode = function(m) {
+  // v2.0 : on force le mode user, le bandeau pro a été supprimé
+  mode = 'user';
+  const btnUser = document.getElementById('btnModeUser');
+  const btnPro = document.getElementById('btnModePro');
+  if (btnUser) btnUser.classList.toggle('active', true);
+  if (btnPro) btnPro.classList.toggle('active', false);
+  const avatar = document.getElementById('headerAvatar');
+  if (avatar) {
+    avatar.className = 'avatar avatar-user';
+    avatar.textContent = 'JD';
+  }
+  const menuSub = document.getElementById('menuSubtitle');
+  if (menuSub) menuSub.textContent = 'Jean Dupont — Particulier';
+  if (typeof updateProfileSelector === 'function') {
+    try { updateProfileSelector(); } catch(e) {}
+  }
+  renderMenu();
+  updateBadges();
+  if (currentPage==='calendar') render();
+  else if (currentPage==='profile') renderProfile();
+  else if (currentPage==='pros') renderPros();
+  else if (currentPage==='messages') renderMessages();
+  else if (currentPage==='dashboard') renderDashboard();
+  else if (currentPage==='premium') renderPremium();
+  else if (currentPage==='settings') renderSettings();
+};
+
+// ═══════════════════════════════════════════════════════════
+// ═══ CHARLY IA — Système conversationnel + API OpenAI v7.4
+// ═══════════════════════════════════════════════════════════
+
+// ═══ Render Configuration IA page ═══
+function renderAIConfig() {
+  const c = document.getElementById('aiconfigContent');
+  const cfg = charlyIA.config;
+  c.innerHTML = `
+    <div style="background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; padding:14px; margin-bottom:18px;">
+      <div style="display:flex; gap:10px; align-items:flex-start;">
+        <span style="font-size:22px;">⚠️</span>
+        <div style="flex:1; font-size:12px; color:#5f4500; line-height:1.5;">
+          <b>Page administrateur</b><br>
+          Cette page permet de configurer Charly IA (clé API, modèle, prompt). Les valeurs sont sauvegardées localement sur cet appareil uniquement. Pour la version publique de TIMECOOL, cette page sera masquée et la clé sera stockée côté serveur.
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;">
+      <div style="font-size:12px; color:var(--text-sec); text-transform:uppercase; font-weight:600; margin-bottom:10px;">🔌 Fournisseur</div>
+      <select id="aiProvider" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; background:#fff;">
+        <option value="openai" ${cfg.provider==='openai'?'selected':''}>OpenAI (GPT)</option>
+        <option value="anthropic" ${cfg.provider==='anthropic'?'selected':''} disabled>Anthropic (Claude) — bientôt</option>
+        <option value="google" ${cfg.provider==='google'?'selected':''} disabled>Google (Gemini) — bientôt</option>
+      </select>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;">
+      <div style="font-size:12px; color:var(--text-sec); text-transform:uppercase; font-weight:600; margin-bottom:10px;">🔑 Clé API</div>
+      <div style="display:flex; gap:8px;">
+        <input type="password" id="aiApiKey" placeholder="sk-..." value="${cfg.apiKey}" style="flex:1; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font-size:13px; font-family:monospace;">
+        <button onclick="toggleApiKeyVisibility()" id="aiApiKeyToggle" style="padding:10px 14px; background:#f1f3f4; border:1.5px solid var(--border); border-radius:10px; cursor:pointer; font-size:13px;">👁️</button>
+      </div>
+      <div style="font-size:11px; color:var(--text-sec); margin-top:6px;">
+        Récupère ta clé sur <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--g-blue);">platform.openai.com/api-keys</a>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;">
+      <div style="font-size:12px; color:var(--text-sec); text-transform:uppercase; font-weight:600; margin-bottom:10px;">🧠 Modèle IA</div>
+      <select id="aiModel" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; background:#fff;">
+        <option value="gpt-4o-mini" ${cfg.model==='gpt-4o-mini'?'selected':''}>gpt-4o-mini (recommandé — rapide et économique)</option>
+        <option value="gpt-4o" ${cfg.model==='gpt-4o'?'selected':''}>gpt-4o (plus puissant, plus cher)</option>
+        <option value="gpt-3.5-turbo" ${cfg.model==='gpt-3.5-turbo'?'selected':''}>gpt-3.5-turbo (le moins cher)</option>
+      </select>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;">
+      <div style="font-size:12px; color:var(--text-sec); text-transform:uppercase; font-weight:600; margin-bottom:10px;">📝 Prompt système Charly IA</div>
+      <textarea id="aiPrompt" rows="10" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font-size:12px; font-family:inherit; resize:vertical; min-height:140px;">${cfg.systemPrompt}</textarea>
+      <div style="font-size:11px; color:var(--text-sec); margin-top:6px;">
+        Définit la personnalité et les règles de Charly. Modifiable à tout moment.
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px;">
+      <div style="font-size:12px; color:var(--text-sec); text-transform:uppercase; font-weight:600; margin-bottom:14px;">⚙️ Limites & Activation</div>
+
+      <label style="display:flex; align-items:center; gap:12px; padding:8px 0; cursor:pointer;">
+        <input type="checkbox" id="aiEnabled" ${cfg.enabled?'checked':''} style="width:20px; height:20px;">
+        <span style="font-size:14px; flex:1;">Charly IA activé</span>
+      </label>
+
+      <label style="display:flex; align-items:center; gap:12px; padding:8px 0; cursor:pointer;">
+        <input type="checkbox" id="aiDemoMode" ${cfg.demoMode?'checked':''} style="width:20px; height:20px;">
+        <span style="font-size:14px; flex:1;">Mode démonstration (réponses simulées sans appel API)</span>
+      </label>
+
+      <div style="margin-top:14px;">
+        <label style="font-size:13px; color:var(--text); display:block; margin-bottom:6px;">Nombre maximum de messages par session</label>
+        <input type="number" id="aiMaxMessages" value="${cfg.maxMessages}" min="5" max="500" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font-size:14px;">
+      </div>
+
+      <div style="margin-top:14px;">
+        <label style="font-size:13px; color:var(--text); display:block; margin-bottom:6px;">Longueur max des réponses (tokens)</label>
+        <input type="number" id="aiMaxLength" value="${cfg.maxLength}" min="50" max="4000" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font-size:14px;">
+      </div>
+    </div>
+
+    <div style="background:#e8f5e9; border:1px solid #b9e1c4; border-radius:12px; padding:14px; margin-bottom:18px;">
+      <div style="font-size:12px; color:#1b5e20; line-height:1.6;">
+        <b>📊 Statistiques</b><br>
+        Appels API effectués : <b>${charlyIA.callCount}</b><br>
+        Messages dans la session courante : <b>${charlyIA.history.length}</b>
+      </div>
+    </div>
+
+    <button onclick="saveAIConfigForm()" style="width:100%; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:10px;">
+      💾 Enregistrer la configuration
+    </button>
+
+    <button onclick="testCharlyConnection()" style="width:100%; padding:12px; background:#f1f3f4; color:var(--text); border:1.5px solid var(--border); border-radius:14px; font-size:14px; font-weight:500; cursor:pointer; margin-bottom:10px;">
+      🔌 Tester la connexion API
+    </button>
+
+    <button onclick="resetCharlyStats()" style="width:100%; padding:10px; background:transparent; color:var(--text-sec); border:none; font-size:12px; cursor:pointer;">
+      Réinitialiser le compteur d'appels
+    </button>
+  `;
+}
+
+function toggleApiKeyVisibility() {
+  const inp = document.getElementById('aiApiKey');
+  const btn = document.getElementById('aiApiKeyToggle');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁️'; }
+}
+
+function saveAIConfigForm() {
+  charlyIA.config.provider = document.getElementById('aiProvider').value;
+  charlyIA.config.apiKey = document.getElementById('aiApiKey').value.trim();
+  charlyIA.config.model = document.getElementById('aiModel').value;
+  charlyIA.config.systemPrompt = document.getElementById('aiPrompt').value;
+  charlyIA.config.enabled = document.getElementById('aiEnabled').checked;
+  charlyIA.config.demoMode = document.getElementById('aiDemoMode').checked;
+  charlyIA.config.maxMessages = parseInt(document.getElementById('aiMaxMessages').value) || 50;
+  charlyIA.config.maxLength = parseInt(document.getElementById('aiMaxLength').value) || 500;
+  saveCharlyIAConfig();
+  showToast('✅ Configuration enregistrée');
+}
+
+function resetCharlyStats() {
+  if (!confirm('Réinitialiser le compteur d\'appels API ?')) return;
+  charlyIA.callCount = 0;
+  try { localStorage.setItem('timecool_ai_callcount', '0'); } catch(e){}
+  renderAIConfig();
+  showToast('Compteur réinitialisé');
+}
+
+async function testCharlyConnection() {
+  if (!charlyIA.config.apiKey) {
+    showToast('⚠️ Saisis d\'abord ta clé API');
+    return;
+  }
+  showToast('🔌 Test en cours…');
+  try {
+    const reply = await callOpenAI([
+      {role:'system', content:'Tu réponds uniquement par "OK" en un mot.'},
+      {role:'user', content:'Test de connexion'}
+    ]);
+    showToast('✅ Connexion API réussie : ' + (reply || 'OK').substring(0,50));
+  } catch(err) {
+    showToast('❌ Erreur : ' + err.message.substring(0,80));
+  }
+}
+
+// ═══ Render Mes Démarches page ═══
+function renderDemarches() {
+  const c = document.getElementById('demarchesList');
+  if (!demarches.length) {
+    c.innerHTML = `
+      <div style="text-align:center; padding:60px 20px;">
+        <div style="font-size:60px; margin-bottom:16px;">📋</div>
+        <div style="font-size:16px; font-weight:600; color:var(--text); margin-bottom:8px;">Aucune démarche pour l'instant</div>
+        <div style="font-size:13px; color:var(--text-sec); margin-bottom:24px;">Demande à Charly IA de t'aider, et chaque action sera enregistrée ici avec son historique.</div>
+        <button onclick="navigate('assistant')" style="padding:12px 24px; background:var(--g-blue); color:white; border:none; border-radius:24px; font-size:14px; font-weight:600; cursor:pointer;">
+          ⚡ Parler à Charly IA
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Trier par date descendante
+  const sorted = [...demarches].sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  const statusColors = {
+    'preparee': '#5f6368',
+    'en_attente': '#fbbc04',
+    'envoyee': '#1a73e8',
+    'confirmee': '#34a853',
+    'annulee': '#ea4335',
+    'ajoutee': '#9333ea'
+  };
+  const statusLabels = {
+    'preparee': '📝 Préparée',
+    'en_attente': '⏳ En attente',
+    'envoyee': '📨 Envoyée',
+    'confirmee': '✅ Confirmée',
+    'annulee': '❌ Annulée',
+    'ajoutee': '📅 Ajoutée à l\'agenda'
+  };
+
+  c.innerHTML = sorted.map(d => {
+    const dateStr = new Date(d.timestamp).toLocaleString('fr-FR', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+    const color = statusColors[d.status] || '#5f6368';
+    const label = statusLabels[d.status] || d.status;
+    return `
+      <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px;">
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:600; color:var(--text);">${d.icon || '📋'} ${d.title}</div>
+            <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">${dateStr}</div>
+          </div>
+          <span style="display:inline-block; padding:4px 10px; background:${color}22; color:${color}; border-radius:12px; font-size:10px; font-weight:600; white-space:nowrap;">${label}</span>
+        </div>
+        <div style="font-size:12px; color:var(--text-sec); line-height:1.5; margin-top:8px;">${d.summary || ''}</div>
+        ${d.justificatif ? `<div style="margin-top:8px; padding:8px 10px; background:#f1f3f4; border-radius:8px; font-size:11px; color:var(--text-sec);">📎 ${d.justificatif}</div>` : ''}
+        <div style="margin-top:10px; display:flex; gap:6px;">
+          <button onclick="viewDemarcheDetail('${d.id}')" style="padding:6px 12px; background:#e8f0fe; color:var(--g-blue); border:none; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">Voir détail</button>
+          ${d.status === 'preparee' || d.status === 'en_attente' ? `<button onclick="cancelDemarche('${d.id}')" style="padding:6px 12px; background:#fce8e6; color:var(--g-red); border:none; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">Annuler</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function viewDemarcheDetail(id) {
+  const d = demarches.find(x => x.id === id);
+  if (!d) return;
+  alert(`${d.icon || '📋'} ${d.title}\n\n${d.detail || d.summary || 'Aucun détail supplémentaire.'}`);
+}
+
+function cancelDemarche(id) {
+  if (!confirm('Annuler cette démarche ?')) return;
+  const d = demarches.find(x => x.id === id);
+  if (d) { d.status = 'annulee'; saveDemarches(); renderDemarches(); showToast('Démarche annulée'); }
+}
+
+function addDemarche(d) {
+  d.id = d.id || ('dem_' + Date.now() + '_' + Math.floor(Math.random()*1000));
+  d.timestamp = d.timestamp || Date.now();
+  d.status = d.status || 'preparee';
+  demarches.unshift(d);
+  saveDemarches();
+}
+
+// ═══ CHARLY CHAT — Conversation conversationnelle ═══
+function renderCharlyChat() {
+  const body = document.getElementById('charlyChatBody');
+  if (!charlyIA.history.length) {
+    // Welcome message
+    body.innerHTML = `
+      <div style="text-align:center; padding:30px 12px 20px;">
+        <div style="width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:40px; margin:0 auto 14px; box-shadow:0 4px 14px rgba(26,115,232,0.25);">⚡</div>
+        <div style="font-size:18px; font-weight:700; color:var(--text); margin-bottom:8px;">Bonjour, je suis Charly IA</div>
+        <div style="font-size:13px; color:var(--text-sec); line-height:1.5; max-width:300px; margin:0 auto;">
+          Je peux t'aider à remplir ton agenda, organiser ta journée, gérer tes imprévus et préparer certaines démarches.
+          <br><br>
+          <b>Choisis une action ci-dessus ou écris-moi librement.</b>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  body.innerHTML = charlyIA.history.map(m => renderChatMessage(m)).join('');
+  // Scroll to bottom
+  setTimeout(() => { body.scrollTop = body.scrollHeight; }, 50);
+}
+
+function renderChatMessage(m) {
+  if (m.role === 'user') {
+    return `
+      <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+        <div style="max-width:80%; padding:10px 14px; background:var(--g-blue); color:white; border-radius:16px 16px 4px 16px; font-size:14px; line-height:1.4; word-wrap:break-word;">
+          ${escapeHTML(m.content).replace(/\n/g,'<br>')}
+        </div>
+      </div>
+    `;
+  } else if (m.role === 'assistant') {
+    const proposals = extractAgendaProposals(m.content);
+    const cleanContent = m.content.replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, '').trim();
+    let html = `
+      <div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">
+        <div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>
+        <div style="flex:1; max-width:calc(100% - 50px);">
+          <div style="padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+            ${escapeHTML(cleanContent).replace(/\n/g,'<br>') || '...'}
+          </div>
+    `;
+    if (proposals && proposals.length) {
+      html += `
+          <div style="margin-top:10px; padding:12px; background:#f0f7ff; border:1px solid #c8d7ee; border-radius:14px;">
+            <div style="font-size:12px; font-weight:600; color:var(--g-blue); margin-bottom:8px;">📅 Proposition d'agenda</div>
+            ${proposals.map(p => `
+              <div style="padding:8px 0; border-bottom:1px solid rgba(26,115,232,0.1); display:flex; gap:10px; align-items:center;">
+                <span style="font-size:12px; font-weight:600; color:var(--g-blue); min-width:90px;">${p.start}-${p.end}</span>
+                <span style="flex:1; font-size:13px; color:var(--text);">${p.title}</span>
+              </div>
+            `).join('')}
+            <div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;">
+              <button onclick="validateAgendaProposal('${m.tempId || ''}')" style="flex:1; min-width:120px; padding:10px; background:var(--g-green); color:white; border:none; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">✅ Valider mon agenda</button>
+              <button onclick="charlyQuickReply('Modifie : ')" style="flex:1; min-width:80px; padding:10px; background:#fef7e0; color:#8a6500; border:1px solid #fbd784; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">✏️ Modifier</button>
+              <button onclick="charlyQuickReply('Recommence depuis le début')" style="flex:1; min-width:80px; padding:10px; background:#f1f3f4; color:var(--text); border:1.5px solid var(--border); border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">↻ Recommencer</button>
+            </div>
+          </div>
+      `;
+    }
+    html += `
+        </div>
+      </div>
+    `;
+    return html;
+  } else if (m.role === 'system_info') {
+    return `<div style="text-align:center; padding:6px 12px; font-size:11px; color:var(--text-sec); font-style:italic;">${escapeHTML(m.content)}</div>`;
+  }
+  return '';
+}
+
+function escapeHTML(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function extractAgendaProposals(content) {
+  const match = content.match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
+  if (!match) return null;
+  const block = match[1].trim();
+  const lines = block.split('\n').filter(l => l.trim());
+  const proposals = [];
+  lines.forEach(line => {
+    // Format: 08:00-08:30 | Title | category
+    const m2 = line.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?$/);
+    if (m2) {
+      proposals.push({
+        startH: parseInt(m2[1]), startM: parseInt(m2[2]),
+        endH: parseInt(m2[3]), endM: parseInt(m2[4]),
+        start: m2[1]+'h'+(m2[2]==='00'?'':m2[2]),
+        end: m2[3]+'h'+(m2[4]==='00'?'':m2[4]),
+        title: m2[5].trim(),
+        category: (m2[6] || 'green').trim().toLowerCase()
+      });
+    }
+  });
+  return proposals.length ? proposals : null;
+}
+
+function validateAgendaProposal(tempId) {
+  // Find the assistant message
+  const msg = charlyIA.history.find(m => m.role === 'assistant' && m.tempId === tempId);
+  if (!msg) {
+    // Fallback : take last assistant message with proposals
+    const lastWithProp = [...charlyIA.history].reverse().find(m => m.role === 'assistant' && extractAgendaProposals(m.content));
+    if (!lastWithProp) { showToast('Aucune proposition à valider'); return; }
+    return validateAgendaProposalFromMsg(lastWithProp);
+  }
+  validateAgendaProposalFromMsg(msg);
+}
+
+function validateAgendaProposalFromMsg(msg) {
+  const proposals = extractAgendaProposals(msg.content);
+  if (!proposals || !proposals.length) { showToast('Aucune proposition à valider'); return; }
+  const today = new Date();
+  const dateStr = fmt(today);
+  const catMap = {
+    travail:'green', boulot:'green', pro:'green', meeting:'green', reunion:'green',
+    sport:'purple', loisir:'purple', loisirs:'purple',
+    famille:'yellow', enfants:'yellow', personnel:'yellow',
+    rdv:'red', medical:'red', urgent:'red', medecin:'red',
+    repas:'yellow', dejeuner:'yellow', diner:'yellow', petit_dejeuner:'yellow',
+    pause:'orange', repos:'orange',
+    trajet:'blue', deplacement:'blue', voyage:'blue',
+    preparation:'blue', administratif:'blue'
+  };
+  let added = 0;
+  proposals.forEach((p, idx) => {
+    events.push({
+      date: dateStr,
+      startH: p.startH, startM: p.startM,
+      endH: p.endH, endM: p.endM,
+      title: p.title,
+      cat: catMap[p.category] || 'green',
+      mode: mode === 'pro' ? 'pro' : 'user',
+      id: 'charly_ai_' + Date.now() + '_' + idx
+    });
+    added++;
+  });
+  // Add démarche
+  addDemarche({
+    icon:'📅',
+    title:`Création d'agenda — ${added} créneaux`,
+    summary: proposals.map(p => `${p.start}-${p.end} : ${p.title}`).join(' • '),
+    status:'ajoutee',
+    detail:`Charly IA a créé ${added} créneaux dans ton agenda du ${today.toLocaleDateString('fr-FR')}.`
+  });
+  charlyIA.history.push({role:'system_info', content:`✅ ${added} créneaux ajoutés à ton agenda`});
+  renderCharlyChat();
+  showToast(`✅ ${added} créneaux ajoutés à ton agenda`);
+}
+
+function autoResizeCharly(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function charlyInputKeyDown(ev) {
+  if (ev.key === 'Enter' && !ev.shiftKey) {
+    ev.preventDefault();
+    charlySendMessage();
+  }
+}
+
+function charlyQuickReply(text) {
+  document.getElementById('charlyInput').value = text;
+  document.getElementById('charlyInput').focus();
+}
+
+function charlyQuickAction(action) {
+  const prompts = {
+    agenda: "J'aimerais que tu m'aides à créer mon agenda pour aujourd'hui. Pose-moi les questions nécessaires.",
+    rdv: "J'aimerais prendre un rendez-vous. Pose-moi les questions pour préparer ma demande.",
+    trajet: "J'aimerais calculer un trajet. Demande-moi les adresses de départ et d'arrivée et l'heure du rendez-vous.",
+    reserver: "J'aimerais faire une réservation (restaurant ou hôtel). Pose-moi les questions nécessaires.",
+    impprevu: "J'ai un imprévu et je dois réorganiser ma journée. Aide-moi."
+  };
+  const prompt = prompts[action];
+  if (!prompt) return;
+  document.getElementById('charlyInput').value = prompt;
+  charlySendMessage();
+}
+
+async function charlySendMessage() {
+  const inp = document.getElementById('charlyInput');
+  const text = inp.value.trim();
+  if (!text) return;
+  if (charlyIA.isLoading) { showToast('Charly réfléchit déjà…'); return; }
+
+  // Check config
+  if (!charlyIA.config.enabled) {
+    showToast('⚠️ Charly IA est désactivé. Active-le dans Configuration IA.');
+    return;
+  }
+  if (!charlyIA.config.demoMode && !charlyIA.config.apiKey) {
+    showToast('⚠️ Aucune clé API. Configure-la dans Configuration IA.');
+    navigate('aiconfig');
+    return;
+  }
+  if (charlyIA.history.filter(m => m.role==='user').length >= charlyIA.config.maxMessages) {
+    showToast('⚠️ Limite de messages atteinte pour cette session');
+    return;
+  }
+
+  // Add user message
+  charlyIA.history.push({role:'user', content:text});
+  inp.value = '';
+  inp.style.height = 'auto';
+  renderCharlyChat();
+
+  // Show loading
+  charlyIA.isLoading = true;
+  document.getElementById('charlyStatus').textContent = '⏳ Charly réfléchit…';
+  document.getElementById('charlySendBtn').style.opacity = '0.5';
+
+  try {
+    let reply;
+    if (charlyIA.config.demoMode) {
+      // Mode démo : réponse simulée intelligente
+      reply = await simulateDemoReply(text);
+    } else {
+      // Vrai appel API
+      const messages = [
+        {role:'system', content: charlyIA.config.systemPrompt},
+        ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
+      ];
+      reply = await callOpenAI(messages);
+    }
+    const tempId = 'msg_' + Date.now();
+    charlyIA.history.push({role:'assistant', content:reply, tempId});
+    renderCharlyChat();
+  } catch(err) {
+    charlyIA.history.push({role:'system_info', content:`❌ Erreur : ${err.message.substring(0,120)}`});
+    renderCharlyChat();
+    showToast('❌ Erreur API : ' + err.message.substring(0,60));
+  }
+  charlyIA.isLoading = false;
+  document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+  document.getElementById('charlySendBtn').style.opacity = '1';
+}
+
+// ═══ APPEL API OPENAI ═══
+async function callOpenAI(messages) {
+  if (!charlyIA.config.apiKey) throw new Error('Clé API manquante');
+  const url = 'https://api.openai.com/v1/chat/completions';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + charlyIA.config.apiKey
+    },
+    body: JSON.stringify({
+      model: charlyIA.config.model,
+      messages: messages,
+      max_tokens: charlyIA.config.maxLength,
+      temperature: 0.7
+    })
+  });
+  if (!res.ok) {
+    let errMsg = `HTTP ${res.status}`;
+    try { const errJson = await res.json(); errMsg = errJson.error?.message || errMsg; } catch(e){}
+    throw new Error(errMsg);
+  }
+  const data = await res.json();
+  charlyIA.callCount++;
+  try { localStorage.setItem('timecool_ai_callcount', String(charlyIA.callCount)); } catch(e){}
+  return data.choices?.[0]?.message?.content || '(Réponse vide)';
+}
+
+// ═══ MODE DÉMO — réponses simulées ═══
+async function simulateDemoReply(userText) {
+  await new Promise(r => setTimeout(r, 800 + Math.random()*600));
+  const t = userText.toLowerCase();
+  if (t.includes('agenda') || t.includes('organis') || t.includes('journ')) {
+    return `D'accord, je vais t'aider à organiser ta journée. À quelle heure veux-tu commencer ta journée ?\n\nDonne-moi aussi tes priorités principales du jour.`;
+  }
+  if (t.includes('rdv') || t.includes('rendez') || t.includes('médecin') || t.includes('docteur')) {
+    return `Parfait. Pour préparer ta demande de rendez-vous, peux-tu me dire :\n\n1. Quel type de professionnel ? (médecin, dentiste, kiné…)\n2. Le motif du RDV\n3. Tes disponibilités préférées (matin, après-midi, jours)`;
+  }
+  if (t.includes('trajet') || t.includes('itinérair') || t.includes('départ')) {
+    return `Pour calculer ton trajet, j'ai besoin de :\n\n1. Adresse de départ\n2. Adresse d'arrivée\n3. Heure du rendez-vous\n\nJe te proposerai l'heure de départ optimale.`;
+  }
+  if (t.includes('réserv') || t.includes('restaurant') || t.includes('hôtel')) {
+    return `Pour faire une réservation, dis-moi :\n\n1. Type (restaurant, hôtel, autre)\n2. Date et heure souhaitées\n3. Nombre de personnes\n4. Préférences (cuisine, quartier, budget)`;
+  }
+  if (t.includes('imprévu') || t.includes('retard') || t.includes('annul')) {
+    return `Pas de souci, je vais t'aider à réorganiser. Dis-moi :\n\n1. Quel est l'imprévu (retard, annulation, urgence) ?\n2. Sur quel rendez-vous cela impacte ?\n3. Combien de temps de décalage faut-il prévoir ?`;
+  }
+  if (t.match(/\d/) && (t.includes('heur') || t.includes('h') )) {
+    // L'utilisateur donne des horaires → proposer un agenda fictif
+    return `Très bien, voici une proposition d'agenda type pour ta journée :\n\n[AGENDA]\n08:00-08:30 | Préparation du matin | preparation\n08:30-10:00 | Travail prioritaire | travail\n10:00-10:15 | Pause | pause\n10:15-12:00 | Travail dossiers | travail\n12:00-13:30 | Déjeuner | repas\n13:30-15:00 | Réunions / rendez-vous | rdv\n15:00-15:15 | Pause | pause\n15:15-17:00 | Travail collaboratif | travail\n17:00-18:00 | Sport | sport\n18:30-20:00 | Famille | famille\n[/AGENDA]\n\nTu peux valider, modifier ou recommencer.`;
+  }
+  return `Je suis Charly IA, ton assistant TIMECOOL. Je peux t'aider à :\n\n• Créer ton agenda automatiquement\n• Préparer un rendez-vous\n• Calculer un trajet\n• Faire une réservation\n• Gérer un imprévu\n\nUtilise les boutons en haut ou pose-moi ta question.`;
+}
+
+function resetCharlyChat() {
+  if (charlyIA.history.length && !confirm('Effacer la conversation actuelle ?')) return;
+  charlyIA.history = [];
+  renderCharlyChat();
+}
+
+// ═══ MICRO Web Speech API ═══
+let charlyRecognition = null;
+let charlyMicActive = false;
+
+function charlyMicToggle() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('⚠️ Reconnaissance vocale non supportée par ce navigateur');
+    return;
+  }
+  if (charlyMicActive) {
+    if (charlyRecognition) charlyRecognition.stop();
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  charlyRecognition = new SR();
+  charlyRecognition.lang = 'fr-FR';
+  charlyRecognition.continuous = false;
+  charlyRecognition.interimResults = true;
+
+  const btn = document.getElementById('charlyMicBtn');
+  const inp = document.getElementById('charlyInput');
+  charlyMicActive = true;
+  btn.style.background = 'var(--g-red)';
+  btn.style.animation = 'pulse 1s infinite';
+  document.getElementById('charlyStatus').textContent = '🎙️ Je t\'écoute…';
+
+  let finalTranscript = '';
+  charlyRecognition.onresult = function(event) {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalTranscript += transcript;
+      else interim += transcript;
+    }
+    inp.value = (finalTranscript + interim).trim();
+    autoResizeCharly(inp);
+  };
+  charlyRecognition.onerror = function(event) {
+    showToast('❌ Erreur micro : ' + event.error);
+    stopCharlyMic();
+  };
+  charlyRecognition.onend = function() {
+    stopCharlyMic();
+    if (inp.value.trim()) {
+      // Auto-envoi après dictée
+      setTimeout(() => charlySendMessage(), 200);
+    }
+  };
+  charlyRecognition.start();
+}
+
+function stopCharlyMic() {
+  charlyMicActive = false;
+  const btn = document.getElementById('charlyMicBtn');
+  if (btn) {
+    btn.style.background = 'var(--g-blue)';
+    btn.style.animation = '';
+  }
+  document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+}
+
+// ═══ Override navigate pour les nouvelles pages ═══
+const _origNavigate_v74 = navigate;
+navigate = function(page) {
+  _origNavigate_v74(page);
+  if (page === 'demarches') renderDemarches();
+  else if (page === 'aiconfig') renderAIConfig();
+  else if (page === 'assistant') {
+    setTimeout(() => renderCharlyChat(), 50);
+  }
+};
+
+
+updateProfileSelector();
+renderMenu();
+updateBadges();
+render();
+window.addEventListener('resize', () => { if (currentView==='week' && currentPage==='calendar') render(); });
+</script>
+
+</body>
+</html>
