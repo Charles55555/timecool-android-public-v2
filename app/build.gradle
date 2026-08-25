@@ -2,16 +2,40 @@ plugins {
     id 'com.android.application'
 }
 
+/* Signature de release.
+   Les identifiants ne sont jamais dans le dépôt : ils viennent de
+   variables d'environnement alimentées par les secrets GitHub Actions.
+   Si le keystore est absent (build local sans secrets), la config de
+   signature n'est pas appliquée et le build produit un APK non signé
+   plutôt que d'échouer. */
+def keystorePath = System.getenv('KEYSTORE_FILE')
+def hasKeystore = keystorePath != null && !keystorePath.isEmpty() && file(keystorePath).exists()
+
 android {
     namespace 'com.timecool.app'
     compileSdk 34
+
+    signingConfigs {
+        release {
+            if (hasKeystore) {
+                storeFile file(keystorePath)
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
 
     defaultConfig {
         applicationId "com.timecool.app"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "2.0"
+
+        /* versionCode doit STRICTEMENT augmenter à chaque publication,
+           sinon Android refuse la mise à jour par-dessus l'installation
+           existante. En CI il vaut le numéro de run GitHub Actions. */
+        versionCode (System.getenv('VERSION_CODE') ?: '1').toInteger()
+        versionName System.getenv('VERSION_NAME') ?: '2.0'
     }
 
     buildTypes {
@@ -23,6 +47,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig hasKeystore ? signingConfigs.release : null
         }
     }
 
