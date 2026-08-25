@@ -2294,6 +2294,19 @@ let charlyIA = {
 // ═══ MES DÉMARCHES — État global v7.4 ═══
 let demarches = [];
 
+/* Migration des identifiants de modèles Claude obsolètes.
+   Une config déjà enregistrée en localStorage écrase la valeur par défaut :
+   sans ce remappage, les anciennes installations continueraient d'appeler
+   des identifiants périmés. */
+const TC_CLAUDE_MODEL_MIGRATION = {
+  'claude-sonnet-4-20250514': 'claude-sonnet-5',
+  'claude-haiku-4-5-20251001': 'claude-haiku-4-5',
+  'claude-opus-4-5': 'claude-opus-5'
+};
+function tcMigrateClaudeModel(id) {
+  return TC_CLAUDE_MODEL_MIGRATION[id] || id;
+}
+
 // Charger configuration et démarches depuis localStorage au démarrage
 function loadCharlyIAConfig() {
   try {
@@ -2301,6 +2314,11 @@ function loadCharlyIAConfig() {
     if (saved) {
       const parsed = JSON.parse(saved);
       Object.assign(charlyIA.config, parsed);
+      const tcMigrated = tcMigrateClaudeModel(charlyIA.config.claudeModel);
+      if (tcMigrated !== charlyIA.config.claudeModel) {
+        charlyIA.config.claudeModel = tcMigrated;
+        localStorage.setItem('timecool_ai_config', JSON.stringify(charlyIA.config));
+      }
     }
     // v6.4 — Force le nouveau prompt WOW si version ancienne détectée
     const promptVersion = localStorage.getItem('timecool_prompt_version');
@@ -5476,7 +5494,7 @@ function renderAIConfig() {
         <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px;">Modèle Claude (Anthropic)</label>
         <select id="aiClaudeModel" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; background:#fff;">
           <option value="claude-sonnet-5" ${charlyIA.config.claudeModel==='claude-sonnet-5'?'selected':''}>Claude Sonnet 5 (recommandé)</option>
-          <option value="claude-opus-4-5" ${charlyIA.config.claudeModel==='claude-opus-4-5'?'selected':''}>Claude Opus 4.5 (puissant)</option>
+          <option value="claude-opus-5" ${charlyIA.config.claudeModel==='claude-opus-5'?'selected':''}>Claude Opus 5 (puissant)</option>
           <option value="claude-haiku-4-5" ${charlyIA.config.claudeModel==='claude-haiku-4-5'?'selected':''}>Claude Haiku 4.5 (rapide)</option>
         </select>
         <div style="margin-top:6px;">
@@ -5856,7 +5874,7 @@ function handleImportKeysFile(event) {
         const cc = data.charlyConfig;
         if (cc.provider) charlyIA.config.provider = cc.provider;
         if (cc.model) charlyIA.config.model = cc.model;
-        if (cc.claudeModel) charlyIA.config.claudeModel = cc.claudeModel;
+        if (cc.claudeModel) charlyIA.config.claudeModel = tcMigrateClaudeModel(cc.claudeModel);
         if (cc.enabled !== undefined) charlyIA.config.enabled = cc.enabled;
         if (cc.demoMode !== undefined) charlyIA.config.demoMode = cc.demoMode;
         if (cc.openaiKey) charlyIA.config.apiKey = cc.openaiKey;
