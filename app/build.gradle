@@ -11,6 +11,12 @@ plugins {
 def keystorePath = System.getenv('KEYSTORE_FILE')
 def hasKeystore = keystorePath != null && !keystorePath.isEmpty() && file(keystorePath).exists()
 
+/* Résolus ici, hors du DSL : écrits directement dans le bloc
+   defaultConfig, Groovy parserait « versionCode (a ?: b).toInteger() »
+   comme « versionCode(a ?: b).toInteger() » et passerait une chaîne. */
+def resolvedVersionCode = (System.getenv('VERSION_CODE') ?: '1').toInteger()
+def resolvedVersionName = System.getenv('VERSION_NAME') ?: '2.0'
+
 android {
     namespace 'com.timecool.app'
     compileSdk 34
@@ -34,8 +40,8 @@ android {
         /* versionCode doit STRICTEMENT augmenter à chaque publication,
            sinon Android refuse la mise à jour par-dessus l'installation
            existante. En CI il vaut le numéro de run GitHub Actions. */
-        versionCode (System.getenv('VERSION_CODE') ?: '1').toInteger()
-        versionName System.getenv('VERSION_NAME') ?: '2.0'
+        versionCode resolvedVersionCode
+        versionName resolvedVersionName
     }
 
     buildTypes {
@@ -47,7 +53,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig hasKeystore ? signingConfigs.release : null
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
