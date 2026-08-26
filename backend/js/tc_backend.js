@@ -110,6 +110,25 @@ const TC_BACKEND = {
   // ─── Compte ──────────────────────────────────────────────────
 
   /**
+   * Paramètres publics de parcours, décidés par le serveur.
+   * @returns {Object} { verification_obligatoire, mode_test }
+   *
+   * En cas d'échec réseau, on retourne le réglage le plus strict :
+   * mieux vaut demander une vérification de trop que d'en sauter une.
+   */
+  async parametres() {
+    try {
+      const d = await tcAppel('GET', '/parametres', undefined, false);
+      return {
+        verification_obligatoire: d.verification_obligatoire !== false,
+        mode_test: d.mode_test === true
+      };
+    } catch (e) {
+      return { verification_obligatoire: true, mode_test: false };
+    }
+  },
+
+  /**
    * Demande l'envoi d'un code de vérification.
    *
    * @param {'sms'|'email'} canal
@@ -135,10 +154,14 @@ const TC_BACKEND = {
     return d.preuve;
   },
 
-  /** Inscription. Exige la preuve de vérification. Ouvre la session. */
+  /**
+   * Inscription. Ouvre la session et conserve le jeton.
+   * champs.preuve est omis quand le serveur n'exige pas de
+   * vérification préalable.
+   */
   async inscrire(champs) {
     const d = await tcAppel('POST', '/inscription', {
-      preuve: champs.preuve,
+      preuve: champs.preuve || undefined,
       email: champs.email,
       telephone: champs.telephone,
       mot_de_passe: champs.motDePasse,

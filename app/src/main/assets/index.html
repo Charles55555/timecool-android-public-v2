@@ -7355,7 +7355,7 @@ function suggestStrongPassword() {
   showToast('🎲 Mot de passe généré — pense à le noter');
 }
 
-function submitSignup() {
+async function submitSignup() {
   const firstname = document.getElementById('signupFirstname').value.trim();
   const lastname = document.getElementById('signupLastname').value.trim();
   const email = document.getElementById('signupEmail').value.trim();
@@ -7369,7 +7369,9 @@ function submitSignup() {
   if (!email || !email.includes('@')) { showToast('⚠️ Email invalide'); return; }
   if (!phone || phone.length < 8) { showToast('⚠️ Numéro de téléphone invalide'); return; }
   if (!zip || !city) { showToast('⚠️ Code postal et ville requis'); return; }
-  if (!password || password.length < 6) { showToast('⚠️ Mot de passe : min 6 caractères'); return; }
+  // Aligné sur l'exigence du serveur : en deçà, l'API refuserait
+  // l'inscription et l'utilisateur ne comprendrait pas pourquoi.
+  if (!password || password.length < 10) { showToast('⚠️ Mot de passe : 10 caractères minimum'); return; }
   if (!cgu) { showToast('⚠️ Tu dois accepter les CGU'); return; }
 
   pendingSignup = { firstname, lastname, email, phone, zip, city, password, phoneCountry: signupPhoneCountry };
@@ -7379,7 +7381,16 @@ function submitSignup() {
   document.getElementById('verifyPhoneDisplay').textContent = 'Au numéro ' + phoneDisplay;
   document.getElementById('verifyEmailDisplay').textContent = 'À l\'adresse ' + email;
 
-  navigateAuth('auth-verify-method');
+  // C'est le serveur qui décide si la vérification en deux étapes
+  // s'applique. La réactiver plus tard ne demandera donc aucune
+  // republication de l'application.
+  showToast('⏳ Création du compte…');
+  const params = await TC_BACKEND.parametres();
+  if (params.verification_obligatoire) {
+    navigateAuth('auth-verify-method');
+    return;
+  }
+  await tcCreerCompte(null);
 }
 
 /**
@@ -7474,9 +7485,65 @@ function tcVerifFin() {
   if (b) { b.disabled = false; b.style.opacity = ''; b.textContent = 'Vérifier'; }
 }
 
+/**
+ * Crée le compte sur le serveur puis bascule sur l'écran de bienvenue.
+ * Partagée par les deux parcours : avec vérification préalable (preuve
+ * fournie) et sans (preuve nulle, quand le serveur ne l'exige pas).
+ *
+ * @returns {boolean} true si le compte a été créé.
+ */
+async function tcCreerCompte(preuve) {
+  let compte;
+  try {
+    compte = await TC_BACKEND.inscrire({
+      preuve: preuve || null,
+      email: pendingSignup.email,
+      telephone: (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, ''),
+      motDePasse: pendingSignup.password,
+      prenom: pendingSignup.firstname,
+      nom: pendingSignup.lastname,
+      ville: pendingSignup.city,
+      codePostal: pendingSignup.zip,
+      langue: (localStorage.getItem('timecool_language') || 'fr')
+    });
+  } catch (e) {
+    if (e.code === 'compte_existant')  showToast('⚠️ Ce compte existe déjà — connecte-toi plutôt.');
+    else if (e.code === 'delai_depasse') showToast('⏱️ Le serveur met trop de temps. Réessaie.');
+    else if (e.code === 'reseau')        showToast('❌ Serveur injoignable. Réessaie.');
+    else if (e.code === 'mot_de_passe_faible') showToast('⚠️ Mot de passe : 10 caractères minimum.');
+    else showToast('❌ ' + (e.message || 'Création du compte impossible'));
+    return false;
+  }
+
+  // Reflet local du compte. Le mot de passe n'y figure PAS : la
+  // politique de confidentialité interdit de le conserver en clair,
+  // et le serveur en détient l'empreinte Argon2id.
+  const account = {
+    reference: compte.reference,
+    firstname: compte.prenom,
+    lastname: compte.nom,
+    email: compte.email,
+    phone: pendingSignup.phone,
+    phoneCountry: pendingSignup.phoneCountry.dial,
+    zip: compte.code_postal,
+    city: compte.ville,
+    verifiedBy: pendingSignup.verifyMethod || null,
+    createdAt: new Date().toISOString()
+  };
+  saveUserAccount(account);
+  saveUserToAdminList(account);
+
+  // Popup native du navigateur (Chrome/Edge) proposant d'enregistrer le
+  // mot de passe. Il n'est pas conservé par TimeCool.
+  tcOfferPasswordSave(account.email, pendingSignup.password, account.firstname + ' ' + account.lastname);
+
+  document.getElementById('successMessage').innerHTML = `Bonjour <b>${account.firstname}</b> !<br>Bienvenue sur TIMECOOL.`;
+  navigateAuth('auth-success');
+  return true;
+}
+
 async function submitVerifyCode() {
   // Un envoi déjà en cours : on le signale au lieu de sortir en silence.
-  // Un retour muet donnait l'impression que le bouton ne marchait pas.
   if (tcVerifEnCours) { showToast('⏳ Vérification déjà en cours…'); return; }
 
   const inputs = document.querySelectorAll('.code-digit');
@@ -7484,82 +7551,26 @@ async function submitVerifyCode() {
   inputs.forEach(inp => code += inp.value);
   if (code.length !== 6) { showToast('⚠️ Saisis les 6 chiffres'); return; }
 
-  /* Deux façons d'échouer, à ne pas confondre :
-     - le code est faux : on vide les champs, il faut ressaisir ;
-     - tout le reste (réseau, délai dépassé, compte déjà existant) : on
-       laisse la saisie en place, la vider n'aiderait en rien.
-     Le verrou est relâché par le finally, jamais ici : c'est ce qui
-     garantit que le bouton redevient actif quel que soit le chemin. */
-  const echecGarderSaisie = function(msg) { showToast(msg); };
-  const echecViderSaisie = function(msg) {
-    showToast(msg);
-    inputs.forEach(inp => inp.value = '');
-    inputs[0].focus();
-  };
-
   tcVerifDebut();
   try {
-    // Validation côté serveur : le code n'est plus comparé à une
-    // variable JavaScript, et la preuve obtenue autorise la création.
     let preuve;
     try {
       preuve = await TC_BACKEND.validerVerification(pendingSignup.verifRef, code);
     } catch (e) {
-      if (e.code === 'code_incorrect')       return echecViderSaisie('❌ Code incorrect, réessaie');
-      if (e.code === 'trop_de_tentatives')   return echecGarderSaisie('⚠️ Trop d\'essais. Demande un nouveau code.');
-      if (e.code === 'verification_expiree') return echecGarderSaisie('⏰ Code expiré. Demande un nouveau code.');
-      if (e.code === 'delai_depasse')        return echecGarderSaisie('⏱️ Le serveur met trop de temps. Réessaie.');
-      if (e.code === 'reseau')               return echecGarderSaisie('❌ Serveur injoignable. Réessaie.');
-      return echecGarderSaisie('❌ ' + (e.message || 'Vérification impossible'));
-    }
-
-    let compte;
-    try {
-      compte = await TC_BACKEND.inscrire({
-        preuve: preuve,
-        email: pendingSignup.email,
-        telephone: (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, ''),
-        motDePasse: pendingSignup.password,
-        prenom: pendingSignup.firstname,
-        nom: pendingSignup.lastname,
-        ville: pendingSignup.city,
-        codePostal: pendingSignup.zip,
-        langue: (localStorage.getItem('timecool_language') || 'fr')
-      });
-    } catch (e) {
-      // Cas fréquent en phase de test : identité déjà inscrite.
-      if (e.code === 'compte_existant') {
-        return echecGarderSaisie('⚠️ Ce compte existe déjà — connecte-toi plutôt.');
+      // Seul un code réellement faux justifie de vider la saisie.
+      if (e.code === 'code_incorrect') {
+        showToast('❌ Code incorrect, réessaie');
+        inputs.forEach(inp => inp.value = '');
+        inputs[0].focus();
+        return;
       }
-      if (e.code === 'delai_depasse') return echecGarderSaisie('⏱️ Le serveur met trop de temps. Réessaie.');
-      if (e.code === 'reseau')        return echecGarderSaisie('❌ Serveur injoignable. Réessaie.');
-      return echecGarderSaisie('❌ ' + (e.message || 'Création du compte impossible'));
+      if (e.code === 'trop_de_tentatives')   return showToast('⚠️ Trop d\'essais. Demande un nouveau code.');
+      if (e.code === 'verification_expiree') return showToast('⏰ Code expiré. Demande un nouveau code.');
+      if (e.code === 'delai_depasse')        return showToast('⏱️ Le serveur met trop de temps. Réessaie.');
+      if (e.code === 'reseau')               return showToast('❌ Serveur injoignable. Réessaie.');
+      return showToast('❌ ' + (e.message || 'Vérification impossible'));
     }
-
-    // Reflet local du compte. Le mot de passe n'y figure PAS : la
-    // politique de confidentialité interdit de le conserver en clair,
-    // et le serveur en détient l'empreinte Argon2id.
-    const account = {
-      reference: compte.reference,
-      firstname: compte.prenom,
-      lastname: compte.nom,
-      email: compte.email,
-      phone: pendingSignup.phone,
-      phoneCountry: pendingSignup.phoneCountry.dial,
-      zip: compte.code_postal,
-      city: compte.ville,
-      verifiedBy: pendingSignup.verifyMethod,
-      createdAt: new Date().toISOString()
-    };
-    saveUserAccount(account);
-    saveUserToAdminList(account);
-
-    // Popup native du navigateur (Chrome/Edge) proposant d'enregistrer
-    // le mot de passe. Il n'est pas conservé par TimeCool.
-    tcOfferPasswordSave(account.email, pendingSignup.password, account.firstname + ' ' + account.lastname);
-
-    document.getElementById('successMessage').innerHTML = `Bonjour <b>${account.firstname}</b> !<br>Bienvenue sur TIMECOOL.`;
-    navigateAuth('auth-success');
+    await tcCreerCompte(preuve);
   } finally {
     // Quoi qu'il arrive — succès, échec, exception imprévue — le verrou
     // est relâché et le bouton redevient actif.
@@ -9518,6 +9529,25 @@ const TC_BACKEND = {
   // ─── Compte ──────────────────────────────────────────────────
 
   /**
+   * Paramètres publics de parcours, décidés par le serveur.
+   * @returns {Object} { verification_obligatoire, mode_test }
+   *
+   * En cas d'échec réseau, on retourne le réglage le plus strict :
+   * mieux vaut demander une vérification de trop que d'en sauter une.
+   */
+  async parametres() {
+    try {
+      const d = await tcAppel('GET', '/parametres', undefined, false);
+      return {
+        verification_obligatoire: d.verification_obligatoire !== false,
+        mode_test: d.mode_test === true
+      };
+    } catch (e) {
+      return { verification_obligatoire: true, mode_test: false };
+    }
+  },
+
+  /**
    * Demande l'envoi d'un code de vérification.
    *
    * @param {'sms'|'email'} canal
@@ -9543,10 +9573,14 @@ const TC_BACKEND = {
     return d.preuve;
   },
 
-  /** Inscription. Exige la preuve de vérification. Ouvre la session. */
+  /**
+   * Inscription. Ouvre la session et conserve le jeton.
+   * champs.preuve est omis quand le serveur n'exige pas de
+   * vérification préalable.
+   */
   async inscrire(champs) {
     const d = await tcAppel('POST', '/inscription', {
-      preuve: champs.preuve,
+      preuve: champs.preuve || undefined,
       email: champs.email,
       telephone: champs.telephone,
       mot_de_passe: champs.motDePasse,

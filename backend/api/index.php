@@ -188,28 +188,44 @@ switch ($route) {
         $emailNorm = Empreinte::normaliserEmail($email);
 
         /*
-         * Preuve de vérification obligatoire. Sans elle, aucun compte ne
-         * peut être créé : c'est ce qui empêche de s'inscrire avec un
-         * email ou un numéro qui ne vous appartient pas.
+         * Preuve de vérification. Quand elle est exigée, c'est elle qui
+         * empêche de s'inscrire avec un email ou un numéro qui ne vous
+         * appartient pas.
+         *
+         * Le réglage verification_obligatoire permet de la suspendre le
+         * temps des tests. Une preuve valide reste honorée dans les deux
+         * cas : désactiver la contrainte n'invalide pas ce qui a été
+         * réellement vérifié.
          */
-        $preuve = Entree::requis('preuve', 64);
-        $v = Db::un(
-            'SELECT * FROM verifications
-              WHERE preuve_hash = ? AND consomme_le IS NULL
-                AND valide_le IS NOT NULL AND preuve_expire_le > NOW()',
-            [Jeton::hacher($preuve)]
-        );
-        if ($v === null) {
-            Rep::erreur(403, 'verification_requise', 'Vérification absente, expirée ou déjà utilisée.');
+        $v = null;
+        $verifExigee = Conf::get('verification_obligatoire', true) === true;
+        $preuve = Entree::texte('preuve', 64);
+
+        if ($verifExigee && $preuve === null) {
+            Rep::erreur(403, 'verification_requise', 'Vérification préalable obligatoire.');
         }
 
-        // La destination vérifiée doit être celle qu'on inscrit : sinon
-        // on pourrait vérifier son propre numéro puis créer un compte
-        // avec celui de quelqu'un d'autre.
-        $attendue = $v['canal'] === 'email' ? $emailNorm : $telephone;
-        if (!hash_equals($v['destination'], $attendue)) {
-            Rep::erreur(403, 'verification_non_concordante',
-                'La vérification ne correspond pas à l identifiant fourni.');
+        if ($preuve !== null) {
+            $v = Db::un(
+                'SELECT * FROM verifications
+                  WHERE preuve_hash = ? AND consomme_le IS NULL
+                    AND valide_le IS NOT NULL AND preuve_expire_le > NOW()',
+                [Jeton::hacher($preuve)]
+            );
+            if ($v === null) {
+                if ($verifExigee) {
+                    Rep::erreur(403, 'verification_requise', 'Vérification absente, expirée ou déjà utilisée.');
+                }
+            } else {
+                // La destination vérifiée doit être celle qu'on inscrit :
+                // sinon on pourrait vérifier son propre numéro puis créer
+                // un compte avec celui de quelqu'un d'autre.
+                $attendue = $v['canal'] === 'email' ? $emailNorm : $telephone;
+                if (!hash_equals($v['destination'], $attendue)) {
+                    Rep::erreur(403, 'verification_non_concordante',
+                        'La vérification ne correspond pas à l identifiant fourni.');
+                }
+            }
         }
 
         $compte = [
@@ -249,10 +265,14 @@ switch ($route) {
         $id = (int) Db::pdo()->lastInsertId();
 
         // La preuve est consommée : elle ne peut pas servir à créer un
-        // second compte.
-        Db::req('UPDATE verifications SET consomme_le = NOW() WHERE id = ?', [$v['id']]);
-        if ($v['canal'] === 'email') {
-            Db::req('UPDATE comptes SET email_verifie_le = NOW() WHERE id = ?', [$id]);
+        // second compte. Absente quand la vérification est suspendue —
+        // email_verifie_le reste alors NULL, ce qui laisse une trace des
+        // comptes créés sans preuve de possession.
+        if ($v !== null) {
+            Db::req('UPDATE verifications SET consomme_le = NOW() WHERE id = ?', [$v['id']]);
+            if ($v['canal'] === 'email') {
+                Db::req('UPDATE comptes SET email_verifie_le = NOW() WHERE id = ?', [$id]);
+            }
         }
 
         $ligne = Db::un('SELECT * FROM comptes WHERE id = ?', [$id]);
@@ -637,6 +657,17 @@ switch ($route) {
         }
 
         Rep::ok(['enregistre' => true]);
+
+    // ═══════════════════════════════════════════════════════════
+    // PARAMÈTRES PUBLICS
+    // Ce que l'application doit savoir avant d'afficher un écran.
+    // N'expose aucun secret : uniquement des drapeaux de parcours.
+    // ═══════════════════════════════════════════════════════════
+    case 'GET /parametres':
+        Rep::ok([
+            'verification_obligatoire' => Conf::get('verification_obligatoire', true) === true,
+            'mode_test'                => Conf::get('mode_test', false) === true,
+        ]);
 
     // ═══════════════════════════════════════════════════════════
     case 'GET /sante':

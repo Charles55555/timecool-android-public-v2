@@ -45,6 +45,20 @@ return [
     // Durée de validité d'un code d'appairage, en minutes.
     'appairage_minutes' => 10,
 
+    /**
+     * Vérification de l'identifiant à l'inscription (SMS ou email).
+     *
+     * À false, un compte peut être créé directement depuis le
+     * formulaire, sans preuve de possession de l'email ou du numéro.
+     * C'est un affaiblissement réel : n'importe qui peut alors
+     * s'inscrire avec l'identifiant d'un tiers. À REPASSER À true
+     * AVANT LE LANCEMENT PUBLIC.
+     *
+     * Porté par le serveur, donc réactivable sans republier d'APK :
+     * l'application interroge ce réglage via GET /parametres.
+     */
+    'verification_obligatoire' => true,
+
     // Durée de validité d'un code de vérification, en minutes.
     'verification_minutes' => 15,
 
