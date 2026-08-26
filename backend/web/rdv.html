@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Proposition de rendez-vous — TimeCool</title>
+<style>
+  :root {
+    --g-blue:#1a73e8; --g-red:#ea4335; --g-yellow:#fbbc04; --g-green:#34a853;
+    --text:#1a1a2e; --text-sec:#5f6368; --border:#e8eaed; --bg-soft:#f8f9fa;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; background:#f4f6f8; color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { background:#fff; border-radius:20px; box-shadow:0 4px 24px rgba(0,0,0,0.08); max-width:420px; width:100%; padding:28px 24px; }
+  .logo { text-align:center; font-size:26px; font-weight:800; margin-bottom:4px; }
+  .logo .time { color:var(--g-red); } .logo .cool { color:var(--g-yellow); }
+  .dots { display:flex; justify-content:center; gap:5px; margin-bottom:22px; }
+  .dots span { width:6px; height:6px; border-radius:50%; }
+  .dots span:nth-child(1){background:var(--g-blue);} .dots span:nth-child(2){background:var(--g-red);}
+  .dots span:nth-child(3){background:var(--g-yellow);} .dots span:nth-child(4){background:var(--g-green);}
+  .lead { text-align:center; font-size:15px; color:var(--text); line-height:1.5; margin-bottom:22px; }
+  .lead b { color:var(--g-blue); }
+  .slot { display:flex; align-items:center; gap:12px; padding:14px; background:var(--bg-soft); border:1.5px solid var(--border); border-radius:14px; margin-bottom:10px; cursor:pointer; transition:.15s; }
+  .slot:hover { border-color:var(--g-blue); background:#e8f0fe; }
+  .slot .ic { font-size:20px; }
+  .slot .label { font-size:14px; font-weight:600; text-transform:capitalize; }
+  .slot .hh { font-size:12.5px; color:var(--text-sec); margin-top:1px; }
+  .none-btn { width:100%; padding:13px; background:none; border:1.5px solid var(--border); border-radius:12px; color:var(--text-sec); font-size:13px; font-weight:600; cursor:pointer; margin-top:8px; }
+  .foot { text-align:center; font-size:11px; color:#9aa0a6; margin-top:20px; line-height:1.5; }
+  .state { text-align:center; padding:20px 0; }
+  .state .icon { font-size:40px; margin-bottom:12px; }
+  .state .msg { font-size:14px; color:var(--text-sec); line-height:1.6; }
+  .success { font-size:15px; font-weight:600; color:var(--g-green); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><span class="time">TIME</span><span class="cool">COOL</span></div>
+    <div class="dots"><span></span><span></span><span></span><span></span></div>
+    <div id="content">
+      <div class="state"><div class="icon">⏳</div><div class="msg">Chargement de la proposition…</div></div>
+    </div>
+  </div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   TC_BACKEND — page publique, branchée sur api.timecool.fr
+
+   Servie par le même domaine que l'API : aucun enjeu CORS.
+   Seules deux fonctions sont nécessaires ici. Elles traduisent la
+   forme de l'API vers celle qu'attend le rendu de cette page, qui
+   n'a pas été modifié.
+   ══════════════════════════════════════════════════════════════ */
+const TC_API = 'https://api.timecool.fr';
+
+const TC_BACKEND = {
+  /** Retourne null si le lien est absent, expiré ou déjà utilisé. */
+  async fetchRdvLink(token) {
+    const r = await fetch(TC_API + '/rdv/lien?jeton=' + encodeURIComponent(token));
+    if (r.status === 410 || r.status === 404) return null;
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+
+    return {
+      // Prénom seul : le serveur ne stocke pas le nom de famille.
+      organizerName: d.organisateur,
+      slots: (d.creneaux || []).map(function (c) {
+        // « 2026-09-01 14:00:00 » — découpé sans passer par Date(),
+        // pour que l'heure affichée soit celle proposée et non une
+        // conversion vers le fuseau du destinataire.
+        const p = String(c.debut).split(/[ T:]/);
+        return {
+          rang: c.rang,
+          label: c.libelle || (p[2] + '/' + p[1] + '/' + p[0]),
+          h: parseInt(p[3], 10) || 0,
+          m: parseInt(p[4], 10) || 0
+        };
+      })
+    };
+  },
+
+  /** choiceIndex : index 0-based dans slots, ou -1 si aucun ne convient. */
+  async submitRdvChoice(token, choiceIndex) {
+    const rang = choiceIndex === -1
+      ? -1
+      : (_currentData.slots[choiceIndex].rang);
+    const r = await fetch(TC_API + '/rdv/lien/choix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jeton: token, rang: rang })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return true;
+  }
+};
+
+/**
+ * Jeton lu dans le chemin (/rdv/<jeton>), avec repli sur ?token=
+ * pour rester compatible avec un lien de l'ancienne forme.
+ */
+function getToken() {
+  const m = window.location.pathname.match(/\/rdv\/([0-9a-f]{64})/i);
+  if (m) return m[1];
+  return new URLSearchParams(window.location.search).get('token');
+}
+
+function renderSlots(data) {
+  const el = document.getElementById('content');
+  let html = '<div class="lead"><b>' + escapeHTML(data.organizerName) + '</b> te propose un rendez-vous. Choisis le créneau qui te convient :</div>';
+  data.slots.forEach(function(s, i) {
+    const hh = ('0'+s.h).slice(-2) + 'h' + ('0'+s.m).slice(-2);
+    html += '<div class="slot" onclick="chooseSlot(' + i + ')">' +
+      '<span class="ic">🕐</span>' +
+      '<div><div class="label">' + escapeHTML(s.label) + '</div><div class="hh">' + hh + '</div></div>' +
+      '</div>';
+  });
+  html += '<button class="none-btn" onclick="chooseSlot(-1)">Aucun de ces créneaux ne me convient</button>';
+  html += '<div class="foot">🔒 Ce lien est personnel et à usage unique.<br>Aucune inscription, aucune donnée conservée au-delà de ta réponse.</div>';
+  el.innerHTML = html;
+}
+
+function renderState(icon, msg) {
+  document.getElementById('content').innerHTML =
+    '<div class="state"><div class="icon">' + icon + '</div><div class="msg">' + msg + '</div></div>';
+}
+
+function escapeHTML(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+let _currentData = null;
+
+async function init() {
+  const token = getToken();
+  if (!token) { renderState('❌', 'Lien invalide — aucun jeton fourni.'); return; }
+  try {
+    const data = await TC_BACKEND.fetchRdvLink(token);
+    if (!data) { renderState('⏰', 'Ce lien a expiré ou a déjà été utilisé.'); return; }
+    _currentData = data;
+    renderSlots(data);
+  } catch(e) {
+    renderState('⚠️', 'Impossible de charger la proposition.<br>Vérifie ta connexion et réessaie.');
+  }
+}
+
+async function chooseSlot(idx) {
+  const token = getToken();
+  const s = idx === -1 ? null : _currentData.slots[idx];
+  renderState('⏳', 'Enregistrement de ta réponse…');
+  try {
+    await TC_BACKEND.submitRdvChoice(token, idx);
+    if (idx === -1) {
+      renderState('👍', '<span class="success">C\'est noté !</span><br>La personne qui t\'a contacté(e) va te proposer d\'autres créneaux.');
+    } else {
+      renderState('✅', '<span class="success">Rendez-vous confirmé !</span><br>' + escapeHTML(s.label) + ', tu es prévenu(e).');
+    }
+  } catch(e) {
+    renderState('⏰', 'Ce lien a expiré ou a déjà été utilisé.');
+  }
+}
+
+init();
+</script>
+</body>
+</html>

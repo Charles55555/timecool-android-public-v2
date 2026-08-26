@@ -228,19 +228,37 @@ const TC_BACKEND = {
   // ─── Lien de réponse RDV — contact sans application ──────────
 
   /**
-   * @param {Object} payload { contactId, titre, lieu, canal, prenomDestinataire,
-   *                           slots: [{ debut, fin, libelle }] }
+   * @param {Object} payload { contactId, titre, lieu, canal, prenomDestinataire
+   *                           ou contactPrenom, slots }
+   *
+   * Les créneaux sont acceptés sous les deux formes : celle produite par
+   * tcFreeSlots() dans l'application ({ date, h, m, label }) et la forme
+   * directe ({ debut, fin, libelle }). Le site d'appel existant n'a donc
+   * rien à changer.
    */
   async createRdvLink(payload) {
+    const creneaux = (payload.slots || []).map(s => {
+      if (s.debut && s.fin) {
+        return { debut: s.debut, fin: s.fin, libelle: s.libelle ?? s.label ?? null };
+      }
+      // Forme tcFreeSlots : une date, une heure de début, durée d'une heure.
+      const hh = String(s.h).padStart(2, '0');
+      const mm = String(s.m).padStart(2, '0');
+      const finH = String((s.h + 1) % 24).padStart(2, '0');
+      return {
+        debut: s.date + ' ' + hh + ':' + mm + ':00',
+        fin:   s.date + ' ' + finH + ':' + mm + ':00',
+        libelle: s.label ?? null
+      };
+    });
+
     const d = await tcAppel('POST', '/rdv/lien/creer', {
       contact_id: payload.contactId ?? null,
       titre: payload.titre ?? null,
       lieu: payload.lieu ?? null,
       canal: payload.canal || 'sms',
-      prenom_destinataire: payload.prenomDestinataire ?? null,
-      creneaux: (payload.slots || []).map(s => ({
-        debut: s.debut, fin: s.fin, libelle: s.libelle ?? null
-      }))
+      prenom_destinataire: payload.prenomDestinataire ?? payload.contactPrenom ?? null,
+      creneaux: creneaux
     });
     return { token: d.token, url: d.url };
   },

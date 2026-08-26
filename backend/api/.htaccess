@@ -9,6 +9,12 @@
     RewriteCond %{HTTP:Authorization} .
     RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    # Page publique de réponse RDV. Doit précéder la règle générale,
+    # sinon /rdv/<jeton> partirait vers index.php et renverrait un JSON
+    # « route inconnue » au lieu de la page. Le jeton reste dans l'URL :
+    # la page le relit depuis le chemin.
+    RewriteRule ^rdv/[0-9a-f]{64}/?$ rdv.html [L]
+
     # Tout ce qui ne correspond pas à un fichier réel part vers index.php.
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
