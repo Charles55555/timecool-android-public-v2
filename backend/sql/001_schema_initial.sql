@@ -266,6 +266,15 @@ CREATE TABLE convocations (
 -- Une ligne par destinataire. Le décompte de l'organisateur
 -- (« 12 Presents / 2 Absents / 1 sans reponse ») est un simple
 -- GROUP BY sur reponse, sans compteur dénormalisé a maintenir.
+-- destinataire_cle : un index unique sur (convocation_id, contact_id)
+-- ne verrouillerait rien quand contact_id est NULL, MariaDB ne faisant
+-- pas collisionner les NULL. Cette colonne générée produit une clé
+-- unique quel que soit le mode d'identification du destinataire
+-- (« c123 » par contact, « a456 » par compte), et le CHECK garantit
+-- qu'au moins un des deux est renseigné.
+-- Les deux clés étrangères sont en CASCADE : si le compte destinataire
+-- est supprimé, sa réponse disparaît (droit à l'effacement) et la
+-- colonne générée ne peut jamais retomber à NULL.
 CREATE TABLE convocation_reponses (
   id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   convocation_id BIGINT UNSIGNED NOT NULL,
@@ -273,14 +282,20 @@ CREATE TABLE convocation_reponses (
   compte_id      BIGINT UNSIGNED NULL COMMENT 'Si le destinataire est inscrit',
   reponse        ENUM('sans_reponse','present','absent') NOT NULL DEFAULT 'sans_reponse',
   repondu_le     DATETIME        NULL,
+  destinataire_cle VARCHAR(24) AS (
+    CONCAT(IF(contact_id IS NOT NULL, 'c', 'a'), COALESCE(contact_id, compte_id))
+  ) PERSISTENT,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_conv_rep (convocation_id, contact_id),
+  UNIQUE KEY uk_conv_rep (convocation_id, destinataire_cle),
+  KEY ix_conv_rep_contact (contact_id),
   KEY ix_conv_rep_compte (compte_id),
   KEY ix_conv_rep_reponse (convocation_id, reponse),
+  CONSTRAINT ck_conv_rep_destinataire
+    CHECK (contact_id IS NOT NULL OR compte_id IS NOT NULL),
   CONSTRAINT fk_conv_rep_conv FOREIGN KEY (convocation_id)
     REFERENCES convocations (id) ON DELETE CASCADE,
   CONSTRAINT fk_conv_rep_contact FOREIGN KEY (contact_id)
     REFERENCES contacts (id) ON DELETE CASCADE,
   CONSTRAINT fk_conv_rep_compte FOREIGN KEY (compte_id)
-    REFERENCES comptes (id) ON DELETE SET NULL
+    REFERENCES comptes (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;
