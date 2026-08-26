@@ -56,7 +56,7 @@ public class MainActivity extends Activity {
      * serveur, qui verifie l'audience du jeton.
      */
     private static final String GOOGLE_CLIENT_ID =
-        "696652298607-v3muscv74tto7uokr5d1dalbjv62o0nr.apps.googleusercontent.com";
+        "696652298607-q4b7qk6qno95apbfp1fb8r3hnn48rv2o.apps.googleusercontent.com";
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
