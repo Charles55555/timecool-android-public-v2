@@ -6998,8 +6998,29 @@ function loadUserAccount() {
     const saved = localStorage.getItem('timecool_user_account');
     if (saved) userAccount = JSON.parse(saved);
     const sessionActive = localStorage.getItem('timecool_session_active');
-    return userAccount && sessionActive === 'true';
+    const ouvert = userAccount && sessionActive === 'true';
+    // Revalidation en arrière-plan : le drapeau local ne prouve rien,
+    // la session serveur a pu expirer ou être révoquée depuis. Volontairement
+    // non bloquant, pour ne pas retarder l'ouverture de l'application.
+    if (ouvert) tcRevaliderSession();
+    return ouvert;
   } catch(e) { return false; }
+}
+
+/**
+ * Vérifie auprès du serveur que la session est toujours valable.
+ * Si elle ne l'est plus, ramène l'utilisateur à l'écran de connexion.
+ * Une panne réseau ne déconnecte pas : seul un refus du serveur le fait.
+ */
+async function tcRevaliderSession() {
+  try {
+    const compte = await TC_BACKEND.moi();
+    if (compte === null) {
+      try { localStorage.setItem('timecool_session_active', 'false'); } catch(e) {}
+      if (typeof showAuthFlow === 'function') showAuthFlow('auth-welcome');
+      showToast('🔒 Session expirée, reconnecte-toi');
+    }
+  } catch(e) { /* hors ligne : on laisse l'utilisateur travailler */ }
 }
 
 function saveUserAccount(account) {
@@ -7010,13 +7031,17 @@ function saveUserAccount(account) {
   } catch(e) {}
 }
 
-function logoutUser() {
+async function logoutUser() {
   if (!confirm('Déconnexion ?\n\nTu pourras te reconnecter avec ton email et ton mot de passe.')) return;
   // Fermer le menu
   const menu = document.getElementById('sideMenu');
   const overlay = document.getElementById('menuOverlay');
   if (menu) menu.classList.remove('open');
   if (overlay) overlay.classList.remove('open');
+  // Révoque la session côté serveur. Sans cela le jeton restait
+  // valable après une déconnexion, seul un drapeau local changeait.
+  // deconnecter() efface le jeton même si l'appel réseau échoue.
+  try { await TC_BACKEND.deconnecter(); } catch(e) {}
   try {
     localStorage.setItem('timecool_session_active', 'false');
   } catch(e) {}
@@ -7538,15 +7563,28 @@ async function resendCode() {
   document.querySelector('.code-digit[data-idx="0"]').focus();
 }
 
-function submitLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
+/**
+ * Connexion.
+ *
+ * Remplace le « mode démo permissif » qui acceptait n'importe quelle
+ * combinaison email / mot de passe et fabriquait un compte à la volée.
+ * L'authentification est désormais faite par le serveur : le mot de
+ * passe est comparé à une empreinte Argon2id, et rien n'est conservé
+ * en clair sur l'appareil.
+ *
+ * Accepte indifféremment un email ou un numéro de téléphone, le
+ * serveur reconnaissant les deux.
+ */
+async function submitLogin() {
+  const identifiant = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
-  if (!email || !password) { showToast('⚠️ Email et mot de passe requis'); return; }
-  // Vérifier si le compte est bloqué
+  if (!identifiant || !password) { showToast('⚠️ Identifiant et mot de passe requis'); return; }
+
+  // Suspension déclarée localement — confort d'affichage seulement.
+  // La véritable exclusion se fait côté serveur, en clôturant le compte.
   try {
     const users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]');
-    const blockedUser = users.find(u => u.email === email && u.blocked === true);
-    if (blockedUser) {
+    if (users.find(u => u.email === identifiant && u.blocked === true)) {
       showToast('🚫 Compte suspendu');
       setTimeout(() => {
         alert('Votre compte a été suspendu.\n\nPour plus d’informations, contactez-nous à :\ncontact@timecool.fr');
@@ -7555,39 +7593,45 @@ function submitLogin() {
     }
   } catch(e) {}
 
-  // Validation basique de l'email
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  const estEmail = identifiant.includes('@');
+  if (estEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifiant)) {
     showToast('⚠️ Format d\'email invalide');
     return;
   }
-  if (password.length < 4) {
-    showToast('⚠️ Mot de passe trop court (min 4 caractères)');
+
+  showToast('⏳ Connexion…');
+  let compte;
+  try {
+    compte = await TC_BACKEND.connecter(identifiant, password);
+  } catch (e) {
+    // Message unique : ne pas révéler si le compte existe.
+    if (e.code === 'identifiants_invalides') {
+      showToast('❌ Identifiant ou mot de passe incorrect');
+    } else if (e.code === 'reseau') {
+      showToast('❌ Serveur injoignable. Vérifie ta connexion.');
+    } else {
+      showToast('❌ ' + (e.message || 'Connexion impossible'));
+    }
     return;
   }
 
-  // ═══ v5.3 — MODE DÉMO PERMISSIF ═══
-  // En phase de test, on accepte n'importe quelle combinaison email/mot de passe.
-  // Si aucun compte n'existe encore, on en crée un à la volée à partir des infos saisies
-  // pour que l'expérience reste cohérente (avatar, prénom dans le menu, etc.).
-  if (!userAccount) {
-    // Déduire un prénom "présentable" à partir de l'email (avant le @)
-    const emailLocal = email.split('@')[0];
-    const guessedFirstname = emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1).replace(/[._-]/g, ' ').split(' ')[0];
-    userAccount = {
-      firstname: guessedFirstname || 'Utilisateur',
-      lastname: 'Démo',
-      email: email,
-      phone: '',
-      password: password,
-      verified: true,
-      createdAt: new Date().toISOString(),
-      demoMode: true
-    };
-    try { localStorage.setItem('timecool_user_account', JSON.stringify(userAccount)); } catch(e) {}
-  }
+  // Reflet local du compte, sans le mot de passe.
+  userAccount = {
+    reference: compte.reference,
+    firstname: compte.prenom,
+    lastname: compte.nom,
+    email: compte.email,
+    phone: compte.telephone,
+    zip: compte.code_postal,
+    city: compte.ville,
+    verified: true,
+    createdAt: new Date().toISOString()
+  };
+  try {
+    localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
+    localStorage.setItem('timecool_session_active', 'true');
+  } catch(e) {}
 
-  // Connexion OK (mode démo : on accepte même si email/password ne matchent pas l'inscription)
-  try { localStorage.setItem('timecool_session_active', 'true'); } catch(e) {}
   showWelcomeSplash(userAccount.firstname);
 }
 
