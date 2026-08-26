@@ -10505,43 +10505,88 @@ function sendPrevenirMessage(name, text) {
    impossible : bascule sur les 8 contacts d'exemple, pour ne jamais
    planter et pour que l'interface reste testable ici.
    ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   IMPORT DES CONTACTS DU TÉLÉPHONE
+
+   L'ancienne version interrogeait window.Capacitor.Plugins.Contacts.
+   Or cette application n'est pas un projet Capacitor : c'est une
+   WebView Android native. window.Capacitor était donc toujours
+   indéfini, la branche native jamais atteinte, et l'APK retombait
+   systématiquement sur la simulation.
+
+   Le pont TimeCoolNatif est exposé par MainActivity. L'import est
+   asynchrone : Android demande la permission, puis rappelle la page
+   via tcContactsRecus, tcContactsRefuses ou tcContactsErreur.
+   ══════════════════════════════════════════════════════════════ */
+
+function tcEstApplicationNative() {
+  return !!(window.TimeCoolNatif && typeof window.TimeCoolNatif.estNatif === 'function');
+}
+
+/** Appelée par Android une fois les contacts lus. */
+function tcContactsRecus(json) {
+  let bruts;
+  try {
+    bruts = JSON.parse(json);
+  } catch (e) {
+    showToast('❌ Contacts illisibles');
+    return;
+  }
+
+  let ajoutes = 0, ignores = 0;
+  bruts.forEach(function (c, i) {
+    const nom = (c.nom || '').trim();
+    if (!nom) return;
+    // Doublon par nom : le carnet Android renvoie une ligne par numéro,
+    // une même personne peut donc apparaître plusieurs fois.
+    if (contactsList.find(x => x.name === nom)) { ignores++; return; }
+    contactsList.push({
+      id: 'contact_' + Date.now() + '_' + i,
+      name: nom,
+      phone: (c.telephone || '').trim(),
+      email: '',
+      createdAt: new Date().toISOString()
+    });
+    ajoutes++;
+  });
+
+  saveContacts();
+  renderContacts();
+
+  if (ajoutes > 0) {
+    showToast('✅ ' + ajoutes + ' contact' + (ajoutes > 1 ? 's' : '') + ' importé' + (ajoutes > 1 ? 's' : ''));
+  } else if (ignores > 0) {
+    showToast('ℹ️ Contacts déjà présents, rien à ajouter');
+  } else {
+    showToast('ℹ️ Aucun contact trouvé sur le téléphone');
+  }
+}
+
+/** Appelée par Android si l'utilisateur refuse la permission. */
+function tcContactsRefuses() {
+  showToast('⚠️ Accès aux contacts refusé — activable dans les réglages du téléphone');
+}
+
+/** Appelée par Android si la lecture échoue. */
+function tcContactsErreur(detail) {
+  console.warn('Lecture des contacts :', detail);
+  showToast('❌ Lecture des contacts impossible');
+}
+
 async function importPhoneContacts() {
-  // Vrai appareil natif (APK/IPA) : tenter le vrai import
-  if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Contacts) {
+  if (tcEstApplicationNative()) {
+    showToast('⏳ Lecture du carnet d\'adresses…');
     try {
-      const { Contacts } = window.Capacitor.Plugins;
-      const perm = await Contacts.requestPermissions();
-      if (perm.contacts !== 'granted') {
-        showToast('⚠️ Autorisation contacts refusée — active-la dans les réglages du téléphone');
-        return;
-      }
-      const result = await Contacts.getContacts({
-        projection: { name: true, phones: true, emails: true }
-      });
-      const found = (result.contacts || [])
-        .filter(c => c.name && c.name.display)
-        .map(c => ({
-          id: 'contact_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-          name: c.name.display,
-          phone: (c.phones && c.phones[0] && c.phones[0].number) || '',
-          email: (c.emails && c.emails[0] && c.emails[0].address) || '',
-          createdAt: new Date().toISOString()
-        }));
-      let added = 0;
-      found.forEach(s => {
-        if (!contactsList.find(c => c.name === s.name)) { contactsList.push(s); added++; }
-      });
-      saveContacts();
-      renderContacts();
-      showToast(added > 0 ? `✅ ${added} contact${added > 1 ? 's' : ''} importé${added > 1 ? 's' : ''}` : 'ℹ️ Aucun nouveau contact à importer');
-    } catch(e) {
-      console.warn('importPhoneContacts (natif):', e);
-      showToast('❌ Import impossible — réessaie depuis les Paramètres du téléphone');
+      // Retour asynchrone via tcContactsRecus / tcContactsRefuses.
+      window.TimeCoolNatif.demanderContacts();
+    } catch (e) {
+      console.warn('demanderContacts :', e);
+      showToast('❌ Import impossible');
     }
     return;
   }
 
-  // Navigateur web : impossible structurellement, jamais un vrai import ici
+  // Navigateur web : structurellement impossible, jamais un vrai import.
   showSimulationNotice(
     '📱 Importer mes contacts du téléphone\n\n⚠️ Cette fonctionnalité nécessite l\'application Android officielle.\n\nVeux-tu importer 8 contacts d\'exemple pour tester l\'interface ?',
     importDemoContactSamples
