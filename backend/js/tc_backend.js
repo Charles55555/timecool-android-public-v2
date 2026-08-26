@@ -14,6 +14,9 @@
 const TC_API = 'https://api.timecool.fr';
 const TC_JETON_CLE = 'tc_session_jeton';
 
+/** Au-delà, l'appel est abandonné et signalé comme tel. */
+const TC_DELAI_MS = 20000;
+
 function tcJeton() {
   try { return localStorage.getItem(TC_JETON_CLE); } catch (e) { return null; }
 }
@@ -37,17 +40,28 @@ async function tcAppel(methode, chemin, corps, avecAuth = true) {
     if (j) entetes['Authorization'] = 'Bearer ' + j;
   }
 
+  /* Délai d'expiration obligatoire. Sans lui, un réseau mobile qui
+     décroche laisse la promesse fetch en suspens indéfiniment : tout
+     verrou d'interface posé avant l'appel ne serait jamais relâché, et
+     le bouton correspondant resterait mort jusqu'au redémarrage. */
+  const ctrl = new AbortController();
+  const minuteur = setTimeout(function () { ctrl.abort(); }, TC_DELAI_MS);
+
   let reponse;
   try {
     reponse = await fetch(TC_API + chemin, {
       method: methode,
       headers: entetes,
-      body: corps === undefined ? undefined : JSON.stringify(corps)
+      body: corps === undefined ? undefined : JSON.stringify(corps),
+      signal: ctrl.signal
     });
   } catch (e) {
-    const err = new Error('Serveur injoignable');
-    err.code = 'reseau';
+    const expire = (e && e.name === 'AbortError');
+    const err = new Error(expire ? 'Le serveur met trop de temps à répondre' : 'Serveur injoignable');
+    err.code = expire ? 'delai_depasse' : 'reseau';
     throw err;
+  } finally {
+    clearTimeout(minuteur);
   }
 
   let data = {};

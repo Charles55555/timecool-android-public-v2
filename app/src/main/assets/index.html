@@ -7435,6 +7435,9 @@ async function chooseVerifyMethod(method) {
 
   // Reset les inputs
   document.querySelectorAll('.code-digit').forEach(inp => inp.value = '');
+  // Filet de sécurité : on arrive sur un écran neuf, le verrou d'envoi
+  // ne doit pas hériter d'un état resté bloqué à la tentative précédente.
+  tcVerifFin();
   navigateAuth('auth-verify-code');
   setTimeout(() => document.querySelector('.code-digit[data-idx="0"]').focus(), 100);
 }
@@ -7472,7 +7475,9 @@ function tcVerifFin() {
 }
 
 async function submitVerifyCode() {
-  if (tcVerifEnCours) return;
+  // Un envoi déjà en cours : on le signale au lieu de sortir en silence.
+  // Un retour muet donnait l'impression que le bouton ne marchait pas.
+  if (tcVerifEnCours) { showToast('⏳ Vérification déjà en cours…'); return; }
 
   const inputs = document.querySelectorAll('.code-digit');
   let code = '';
@@ -7481,88 +7486,85 @@ async function submitVerifyCode() {
 
   /* Deux façons d'échouer, à ne pas confondre :
      - le code est faux : on vide les champs, il faut ressaisir ;
-     - tout le reste (réseau, compte déjà existant, code expiré) : on
-       laisse la saisie en place. La vider n'aiderait en rien et donnait
-       l'impression que le code s'effaçait tout seul. */
-  const echecGarderSaisie = function(msg) {
-    showToast(msg);
-    tcVerifFin();
-  };
+     - tout le reste (réseau, délai dépassé, compte déjà existant) : on
+       laisse la saisie en place, la vider n'aiderait en rien.
+     Le verrou est relâché par le finally, jamais ici : c'est ce qui
+     garantit que le bouton redevient actif quel que soit le chemin. */
+  const echecGarderSaisie = function(msg) { showToast(msg); };
   const echecViderSaisie = function(msg) {
     showToast(msg);
     inputs.forEach(inp => inp.value = '');
     inputs[0].focus();
-    tcVerifFin();
   };
 
   tcVerifDebut();
-
-  // La validation se fait côté serveur : le code n'est plus comparé
-  // à une variable JavaScript, et la preuve obtenue est ce qui autorise
-  // la création du compte.
-  let preuve;
   try {
-    preuve = await TC_BACKEND.validerVerification(pendingSignup.verifRef, code);
-  } catch (e) {
-    // Seul un code réellement faux justifie de vider la saisie.
-    if (e.code === 'code_incorrect')        return echecViderSaisie('❌ Code incorrect, réessaie');
-    if (e.code === 'trop_de_tentatives')    return echecGarderSaisie('⚠️ Trop d\'essais. Demande un nouveau code.');
-    if (e.code === 'verification_expiree')  return echecGarderSaisie('⏰ Code expiré. Demande un nouveau code.');
-    if (e.code === 'reseau')                return echecGarderSaisie('❌ Serveur injoignable. Réessaie.');
-    return echecGarderSaisie('❌ ' + (e.message || 'Vérification impossible'));
-  }
-
-  // Création du compte sur le serveur.
-  let compte;
-  try {
-    compte = await TC_BACKEND.inscrire({
-      preuve: preuve,
-      email: pendingSignup.email,
-      telephone: (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, ''),
-      motDePasse: pendingSignup.password,
-      prenom: pendingSignup.firstname,
-      nom: pendingSignup.lastname,
-      ville: pendingSignup.city,
-      codePostal: pendingSignup.zip,
-      langue: (localStorage.getItem('timecool_language') || 'fr')
-    });
-  } catch (e) {
-    // Cas fréquent en phase de test : on réessaie avec une identité déjà
-    // inscrite. Le code était bon, la saisie n'a pas à être effacée.
-    if (e.code === 'compte_existant') {
-      return echecGarderSaisie('⚠️ Ce compte existe déjà — connecte-toi plutôt.');
+    // Validation côté serveur : le code n'est plus comparé à une
+    // variable JavaScript, et la preuve obtenue autorise la création.
+    let preuve;
+    try {
+      preuve = await TC_BACKEND.validerVerification(pendingSignup.verifRef, code);
+    } catch (e) {
+      if (e.code === 'code_incorrect')       return echecViderSaisie('❌ Code incorrect, réessaie');
+      if (e.code === 'trop_de_tentatives')   return echecGarderSaisie('⚠️ Trop d\'essais. Demande un nouveau code.');
+      if (e.code === 'verification_expiree') return echecGarderSaisie('⏰ Code expiré. Demande un nouveau code.');
+      if (e.code === 'delai_depasse')        return echecGarderSaisie('⏱️ Le serveur met trop de temps. Réessaie.');
+      if (e.code === 'reseau')               return echecGarderSaisie('❌ Serveur injoignable. Réessaie.');
+      return echecGarderSaisie('❌ ' + (e.message || 'Vérification impossible'));
     }
-    return echecGarderSaisie('❌ ' + (e.message || 'Création du compte impossible'));
+
+    let compte;
+    try {
+      compte = await TC_BACKEND.inscrire({
+        preuve: preuve,
+        email: pendingSignup.email,
+        telephone: (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, ''),
+        motDePasse: pendingSignup.password,
+        prenom: pendingSignup.firstname,
+        nom: pendingSignup.lastname,
+        ville: pendingSignup.city,
+        codePostal: pendingSignup.zip,
+        langue: (localStorage.getItem('timecool_language') || 'fr')
+      });
+    } catch (e) {
+      // Cas fréquent en phase de test : identité déjà inscrite.
+      if (e.code === 'compte_existant') {
+        return echecGarderSaisie('⚠️ Ce compte existe déjà — connecte-toi plutôt.');
+      }
+      if (e.code === 'delai_depasse') return echecGarderSaisie('⏱️ Le serveur met trop de temps. Réessaie.');
+      if (e.code === 'reseau')        return echecGarderSaisie('❌ Serveur injoignable. Réessaie.');
+      return echecGarderSaisie('❌ ' + (e.message || 'Création du compte impossible'));
+    }
+
+    // Reflet local du compte. Le mot de passe n'y figure PAS : la
+    // politique de confidentialité interdit de le conserver en clair,
+    // et le serveur en détient l'empreinte Argon2id.
+    const account = {
+      reference: compte.reference,
+      firstname: compte.prenom,
+      lastname: compte.nom,
+      email: compte.email,
+      phone: pendingSignup.phone,
+      phoneCountry: pendingSignup.phoneCountry.dial,
+      zip: compte.code_postal,
+      city: compte.ville,
+      verifiedBy: pendingSignup.verifyMethod,
+      createdAt: new Date().toISOString()
+    };
+    saveUserAccount(account);
+    saveUserToAdminList(account);
+
+    // Popup native du navigateur (Chrome/Edge) proposant d'enregistrer
+    // le mot de passe. Il n'est pas conservé par TimeCool.
+    tcOfferPasswordSave(account.email, pendingSignup.password, account.firstname + ' ' + account.lastname);
+
+    document.getElementById('successMessage').innerHTML = `Bonjour <b>${account.firstname}</b> !<br>Bienvenue sur TIMECOOL.`;
+    navigateAuth('auth-success');
+  } finally {
+    // Quoi qu'il arrive — succès, échec, exception imprévue — le verrou
+    // est relâché et le bouton redevient actif.
+    tcVerifFin();
   }
-
-  tcVerifFin();
-
-  // Reflet local du compte. Le mot de passe n'y figure PAS : la
-  // politique de confidentialité interdit de le conserver en clair, et
-  // le serveur en détient désormais l'empreinte Argon2id.
-  const account = {
-    reference: compte.reference,
-    firstname: compte.prenom,
-    lastname: compte.nom,
-    email: compte.email,
-    phone: pendingSignup.phone,
-    phoneCountry: pendingSignup.phoneCountry.dial,
-    zip: compte.code_postal,
-    city: compte.ville,
-    verifiedBy: pendingSignup.verifyMethod,
-    createdAt: new Date().toISOString()
-  };
-  saveUserAccount(account);
-  // Sauvegarder dans la liste admin
-  saveUserToAdminList(account);
-
-  // Proposer l'enregistrement du mot de passe dans le gestionnaire natif du navigateur
-  // (Chrome/Edge via l'API Credential Management — nécessite HTTPS, sans effet sur file:// en test local).
-  tcOfferPasswordSave(account.email, pendingSignup.password, account.firstname + ' ' + account.lastname);
-
-  // Mettre à jour le message de succès
-  document.getElementById('successMessage').innerHTML = `Bonjour <b>${account.firstname}</b> !<br>Bienvenue sur TIMECOOL.`;
-  navigateAuth('auth-success');
 }
 
 // Déclenche la popup native "Enregistrer le mot de passe ?" du navigateur (Chrome/Edge).
@@ -9420,6 +9422,9 @@ function isTimeCoolUser(c) {
 const TC_API = 'https://api.timecool.fr';
 const TC_JETON_CLE = 'tc_session_jeton';
 
+/** Au-delà, l'appel est abandonné et signalé comme tel. */
+const TC_DELAI_MS = 20000;
+
 function tcJeton() {
   try { return localStorage.getItem(TC_JETON_CLE); } catch (e) { return null; }
 }
@@ -9443,17 +9448,28 @@ async function tcAppel(methode, chemin, corps, avecAuth = true) {
     if (j) entetes['Authorization'] = 'Bearer ' + j;
   }
 
+  /* Délai d'expiration obligatoire. Sans lui, un réseau mobile qui
+     décroche laisse la promesse fetch en suspens indéfiniment : tout
+     verrou d'interface posé avant l'appel ne serait jamais relâché, et
+     le bouton correspondant resterait mort jusqu'au redémarrage. */
+  const ctrl = new AbortController();
+  const minuteur = setTimeout(function () { ctrl.abort(); }, TC_DELAI_MS);
+
   let reponse;
   try {
     reponse = await fetch(TC_API + chemin, {
       method: methode,
       headers: entetes,
-      body: corps === undefined ? undefined : JSON.stringify(corps)
+      body: corps === undefined ? undefined : JSON.stringify(corps),
+      signal: ctrl.signal
     });
   } catch (e) {
-    const err = new Error('Serveur injoignable');
-    err.code = 'reseau';
+    const expire = (e && e.name === 'AbortError');
+    const err = new Error(expire ? 'Le serveur met trop de temps à répondre' : 'Serveur injoignable');
+    err.code = expire ? 'delai_depasse' : 'reseau';
     throw err;
+  } finally {
+    clearTimeout(minuteur);
   }
 
   let data = {};
