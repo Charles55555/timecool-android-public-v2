@@ -10,9 +10,14 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/lib.php';
+/*
+ * lib.php et config.php vivent hors de la racine web : même si PHP
+ * venait à être désactivé sur le vhost, leur source — donc le mot de
+ * passe de la base et le poivre — ne pourrait pas être servie.
+ */
+require __DIR__ . '/../private/lib.php';
 
-Conf::charger(__DIR__ . '/config.php');
+Conf::charger(__DIR__ . '/../private/config.php');
 Rep::entetes();
 
 // Pré-vol CORS : répondre sans rien exécuter.

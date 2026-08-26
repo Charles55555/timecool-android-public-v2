@@ -1,0 +1,29 @@
+# API TimeCool — routage vers le contrôleur unique.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Apache ne transmet pas toujours l'en-tête Authorization à PHP-FPM.
+    # Sans cette ligne, tous les endpoints authentifiés répondraient 401.
+    SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Tout ce qui ne correspond pas à un fichier réel part vers index.php.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Aucun fichier caché ne doit être servi.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Ceinture et bretelles : ces noms ne doivent plus exister ici, mais si
+# un déploiement les y remettait un jour, ils resteraient inaccessibles.
+<FilesMatch "^(config|lib)\.php$">
+    Require all denied
+</FilesMatch>
+
+Options -Indexes
