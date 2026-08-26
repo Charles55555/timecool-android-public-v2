@@ -7307,11 +7307,35 @@ async function tcGoogleJeton(idToken) {
 
 /** Appelée par Android en cas d'échec ou d'annulation. */
 function tcGoogleErreur(detail) {
-  console.warn('Connexion Google :', detail);
-  if (String(detail).indexOf('Cancell') >= 0 || String(detail).indexOf('UserCanceled') >= 0) {
+  const d = String(detail || '');
+  console.warn('Connexion Google :', d);
+
+  if (d.indexOf('Cancell') >= 0 || d.indexOf('UserCanceled') >= 0) {
     return; // annulation volontaire : rien à signaler
   }
-  showToast('❌ Connexion Google indisponible — utilise ton email');
+
+  /* Un message generique masquait la cause reelle. Les deux echecs
+     frequents ont des remedes opposes, il faut donc les distinguer —
+     et, a defaut, montrer le detail brut plutot que de le perdre. */
+  if (d.indexOf('NoCredential') >= 0) {
+    alert('Connexion Google impossible\n\n'
+      + 'Aucun compte Google utilisable n\'a été proposé.\n\n'
+      + 'Causes possibles :\n'
+      + '• aucun compte Google configuré sur cet appareil ;\n'
+      + '• l\'application n\'est pas reconnue par le projet Google : '
+      + 'le client « Android » doit porter le nom de paquet com.timecool.app '
+      + 'et l\'empreinte SHA-1 de la clé de signature.\n\n'
+      + 'Détail technique :\n' + d);
+    return;
+  }
+  if (d.indexOf('ProviderConfiguration') >= 0 || d.indexOf('Unsupported') >= 0) {
+    alert('Connexion Google indisponible sur cet appareil\n\n'
+      + 'Google Play Services est absent ou trop ancien. C\'est le cas '
+      + 'notamment des émulateurs sans Play Store.\n\n'
+      + 'Détail technique :\n' + d);
+    return;
+  }
+  alert('Connexion Google impossible\n\nDétail technique :\n' + d);
 }
 
 /** Jeton conservé le temps de compléter l'inscription. */

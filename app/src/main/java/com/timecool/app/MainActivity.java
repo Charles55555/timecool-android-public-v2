@@ -18,7 +18,7 @@ import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.exceptions.GetCredentialException;
 
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import java.util.concurrent.Executors;
@@ -241,13 +241,16 @@ public class MainActivity extends Activity {
      * Google. Ici on se contente de l'acheminer.
      */
     private void lancerConnexionGoogle() {
-        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
-            // false : on propose aussi les comptes jamais utilisés avec
-            // TimeCool, sinon une première connexion n'aurait rien à offrir.
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(GOOGLE_CLIENT_ID)
-            .setAutoSelectEnabled(false)
-            .build();
+        /*
+         * GetSignInWithGoogleOption et non GetGoogleIdOption : cette
+         * connexion part d'un appui sur un bouton, donc d'un flux
+         * explicite. GetGoogleIdOption vise l'affichage automatique en
+         * feuille inférieure et renvoie « aucune information
+         * d'identification » quand aucun compte n'est déjà autorisé pour
+         * l'application — ce qui faisait échouer toute première connexion.
+         */
+        GetSignInWithGoogleOption option =
+            new GetSignInWithGoogleOption.Builder(GOOGLE_CLIENT_ID).build();
 
         GetCredentialRequest requete = new GetCredentialRequest.Builder()
             .addCredentialOption(option)
@@ -280,9 +283,18 @@ public class MainActivity extends Activity {
 
                 @Override
                 public void onError(GetCredentialException e) {
-                    // Couvre aussi l'annulation par l'utilisateur, que la
-                    // page doit traiter sans afficher d'echec alarmant.
-                    appelerJs("tcGoogleErreur", e.getClass().getSimpleName());
+                    /*
+                     * Le seul nom de classe ne suffit pas a diagnostiquer :
+                     * Credential Manager renvoie souvent NoCredential la ou
+                     * le vrai probleme est une configuration incorrecte. On
+                     * transmet donc aussi le type et le message.
+                     * Couvre l'annulation par l'utilisateur, que la page
+                     * traite sans afficher d'echec alarmant.
+                     */
+                    String detail = e.getClass().getSimpleName()
+                        + " | " + e.getType()
+                        + " | " + (e.getMessage() == null ? "(sans message)" : e.getMessage());
+                    appelerJs("tcGoogleErreur", detail);
                 }
             }
         );
