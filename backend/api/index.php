@@ -96,9 +96,9 @@ switch ($route) {
         $compte = [
             'reference'           => Jeton::reference(),
             'email'               => $emailNorm,
-            'email_empreinte'     => Empreinte::calculer($emailNorm),
+            'email_empreinte'     => Empreinte::stockable($emailNorm),
             'telephone'           => $telephone,
-            'telephone_empreinte' => Empreinte::calculer($telephone),
+            'telephone_empreinte' => Empreinte::stockable($telephone),
             'mot_de_passe_hash'   => password_hash($motDePasse, algoMotDePasse()),
             'prenom'              => Entree::requis('prenom', 100),
             'nom'                 => Entree::requis('nom', 100),
@@ -209,24 +209,33 @@ switch ($route) {
             Rep::ok(['inscrits' => []]);
         }
 
-        $trous = implode(',', array_fill(0, count($propres), '?'));
+        // L'application transmet des empreintes non poivrées : c'est ici,
+        // et seulement ici, que le poivre est appliqué. Il ne quitte
+        // jamais le serveur.
+        $versClient = [];
+        foreach ($propres as $publique) {
+            $versClient[Empreinte::poivrer($publique)] = $publique;
+        }
+        $poivrees = array_keys($versClient);
+
+        $trous = implode(',', array_fill(0, count($poivrees), '?'));
         $lignes = Db::tous(
             "SELECT reference, prenom, email_empreinte, telephone_empreinte
                FROM comptes
               WHERE cloture_le IS NULL
                 AND (email_empreinte IN ($trous) OR telephone_empreinte IN ($trous))",
-            array_merge($propres, $propres)
+            array_merge($poivrees, $poivrees)
         );
 
-        // Ne renvoie que l'empreinte fournie et le strict nécessaire pour
-        // ouvrir le flux applicatif : référence opaque et prénom.
-        $index = array_flip($propres);
+        // La réponse renvoie l'empreinte telle que le client l'a envoyée,
+        // pour qu'il puisse la rapprocher de son contact, plus le strict
+        // nécessaire à l'ouverture du flux applicatif.
         $inscrits = [];
         foreach ($lignes as $l) {
             foreach (['email_empreinte', 'telephone_empreinte'] as $col) {
-                if (isset($index[$l[$col]])) {
+                if (isset($versClient[$l[$col]])) {
                     $inscrits[] = [
-                        'empreinte' => $l[$col],
+                        'empreinte' => $versClient[$l[$col]],
                         'reference' => $l['reference'],
                         'prenom'    => $l['prenom'],
                     ];

@@ -14,9 +14,6 @@
 const TC_API = 'https://api.timecool.fr';
 const TC_JETON_CLE = 'tc_session_jeton';
 
-/** Poivre public des empreintes — doit être identique à config.php. */
-const TC_POIVRE = 'A_RENSEIGNER';
-
 function tcJeton() {
   try { return localStorage.getItem(TC_JETON_CLE); } catch (e) { return null; }
 }
@@ -66,9 +63,16 @@ async function tcAppel(methode, chemin, corps, avecAuth = true) {
   return data;
 }
 
-/** Empreinte SHA-256 d'un identifiant normalisé, préfixée du poivre. */
+/**
+ * Empreinte SHA-256 d'un identifiant normalisé.
+ *
+ * Volontairement sans secret : l'application est distribuée en APK
+ * public, tout secret qu'elle embarquerait serait extractible. Le
+ * serveur applique son propre poivre — qui ne quitte jamais le serveur —
+ * sur ce qu'il reçoit, avant de stocker et de comparer.
+ */
 async function tcEmpreinte(valeurNormalisee) {
-  const octets = new TextEncoder().encode(TC_POIVRE + '|' + valeurNormalisee);
+  const octets = new TextEncoder().encode(valeurNormalisee);
   const condensat = await crypto.subtle.digest('SHA-256', octets);
   return Array.from(new Uint8Array(condensat))
     .map(o => o.toString(16).padStart(2, '0'))

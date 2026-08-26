@@ -19,10 +19,13 @@ return [
     ],
 
     /**
-     * Poivre applicatif des empreintes d'identifiants.
+     * Poivre serveur des empreintes d'identifiants.
      *
-     * Il est concaténé au téléphone / à l'email avant hachage, ce qui
-     * empêche de retrouver un numéro à partir de la seule base.
+     * L'application transmet un simple SHA-256 de l'identifiant
+     * normalisé, sans secret — elle est distribuée en APK public, donc
+     * tout secret qu'elle embarquerait serait extractible. Le serveur
+     * applique ce poivre sur ce qu'il reçoit, avant stockage et
+     * comparaison. Le poivre ne doit JAMAIS être exposé au client.
      *
      * Générer une fois :  openssl rand -hex 32
      *

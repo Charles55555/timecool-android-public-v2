@@ -176,25 +176,47 @@ final class Empreinte
     }
 
     /**
-     * Empreinte d'un identifiant déjà normalisé.
+     * Empreinte publique : SHA-256 du seul identifiant normalisé.
      *
-     * C'est de la pseudonymisation, pas de l'anonymisation : l'espace des
-     * numéros de téléphone est petit. Le poivre vit hors base pour qu'une
-     * lecture de la seule base ne suffise pas à les retrouver.
+     * C'est exactement ce que l'application calcule et transmet. Elle ne
+     * contient PAS le poivre : l'application est distribuée publiquement
+     * en APK, donc tout secret qu'elle embarquerait serait extractible et
+     * n'offrirait aucune protection réelle.
      */
-    public static function calculer(string $valeurNormalisee): string
+    public static function publique(string $valeurNormalisee): string
     {
-        return hash('sha256', Conf::get('poivre') . '|' . $valeurNormalisee);
+        return hash('sha256', $valeurNormalisee);
+    }
+
+    /**
+     * Poivrage d'une empreinte publique, pour stockage et comparaison.
+     *
+     * Le poivre ne quitte jamais le serveur. Une lecture de la seule base
+     * ne permet donc pas de revenir aux identifiants par force brute, ce
+     * qui serait sinon trivial sur l'espace des numéros de téléphone.
+     *
+     * Cela reste de la pseudonymisation : quiconque détiendrait à la fois
+     * la base et le poivre pourrait les retrouver.
+     */
+    public static function poivrer(string $empreintePublique): string
+    {
+        return hash('sha256', Conf::get('poivre') . '|' . $empreintePublique);
+    }
+
+    /** Chaîne complète, depuis un identifiant en clair jusqu'au stockage. */
+    public static function stockable(string $valeurNormalisee): string
+    {
+        return self::poivrer(self::publique($valeurNormalisee));
     }
 
     public static function email(string $email): string
     {
-        return self::calculer(self::normaliserEmail($email));
+        return self::stockable(self::normaliserEmail($email));
     }
 
     public static function telephone(string $tel): string
     {
-        return self::calculer(self::normaliserTelephone($tel));
+        return self::stockable(self::normaliserTelephone($tel));
     }
 }
 
