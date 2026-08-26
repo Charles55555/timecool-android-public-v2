@@ -19,3 +19,6 @@ release/
 # OS
 .DS_Store
 Thumbs.db
+
+# Configuration serveur : mot de passe de la base et poivre applicatif
+backend/api/config.php
