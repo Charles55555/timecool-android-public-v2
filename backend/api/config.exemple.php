@@ -45,6 +45,27 @@ return [
     // Durée de validité d'un code d'appairage, en minutes.
     'appairage_minutes' => 10,
 
+    // Durée de validité d'un code de vérification, en minutes.
+    'verification_minutes' => 15,
+
+    // Nombre de demandes de code autorisées par destination et par heure.
+    'verification_max_par_heure' => 5,
+
+    /**
+     * Mode test — À REPASSER À false AVANT LE LANCEMENT PUBLIC.
+     *
+     * Aucun service d'envoi (SendGrid, Twilio) n'étant encore branché,
+     * ce réglage fait renvoyer le code de vérification directement dans
+     * la réponse de l'API, pour permettre les tests.
+     *
+     * Il est volontairement porté par le SERVEUR et non par
+     * l'application : l'APK est distribué publiquement, un mode test
+     * embarqué y serait un contournement d'authentification à la portée
+     * de quiconque le décompile. Ici, le basculer à false suffit — sans
+     * republier d'application.
+     */
+    'mode_test' => false,
+
     // Base publique des liens envoyés par SMS / email / WhatsApp.
     'url_publique' => 'https://api.timecool.fr',
 

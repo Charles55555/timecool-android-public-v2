@@ -679,6 +679,12 @@ if (window.pdfjsLib) {
       <div style="font-size:60px; margin-bottom:16px;" id="verifyMethodIcon">📱</div>
       <div style="font-size:16px; font-weight:600; color:var(--text); margin-bottom:8px;">Saisis le code reçu</div>
       <div style="font-size:13px; color:var(--text-sec); line-height:1.5;" id="verifyMethodDestination">Un code à 6 chiffres a été envoyé...</div>
+      <!-- Affiché uniquement si le SERVEUR est en mode test. En production
+           l'API ne renvoie pas le code et ce bloc reste masqué. -->
+      <div id="testCodeBanner" style="display:none; margin:18px auto 0; max-width:280px; padding:12px; background:#fff8e1; border:1.5px solid #fbbc04; border-radius:12px;">
+        <div style="font-size:11px; color:#5f4500; font-weight:600; letter-spacing:.4px;">MODE TEST — AUCUN MESSAGE ENVOYÉ</div>
+        <div id="testCodeValue" style="font-size:28px; font-weight:700; color:#5f4500; letter-spacing:6px; margin-top:4px;"></div>
+      </div>
     </div>
 
     <div style="display:flex; gap:8px; justify-content:center; margin-bottom:24px;">
@@ -6985,7 +6991,6 @@ navigate = function(page) {
 
 let userAccount = null;
 let pendingSignup = null;
-let pendingDemoCode = null;
 
 // Charger compte sauvegardé
 function loadUserAccount() {
@@ -7352,14 +7357,46 @@ function submitSignup() {
   navigateAuth('auth-verify-method');
 }
 
-function chooseVerifyMethod(method) {
-  pendingSignup.verifyMethod = method;
-  // Générer un code à 6 chiffres
-  pendingDemoCode = String(Math.floor(100000 + Math.random() * 900000));
+/**
+ * Affiche le code seulement si le serveur l'a renvoyé, ce qu'il ne fait
+ * qu'en mode test. L'application ne décide de rien : elle montre ce
+ * qu'elle reçoit. En production le champ est absent et rien n'apparaît.
+ */
+function tcAfficherCodeTest(reponse) {
+  const banner = document.getElementById('testCodeBanner');
+  const valeur = document.getElementById('testCodeValue');
+  if (!banner || !valeur) return;
+  if (reponse && reponse.code_test) {
+    valeur.textContent = reponse.code_test;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
 
-  // Code généré côté démo (non affiché à l'écran, réservé aux tests internes)
-  const demoCodeEl = document.getElementById('demoCodeDisplay');
-  if (demoCodeEl) demoCodeEl.textContent = pendingDemoCode;
+async function chooseVerifyMethod(method) {
+  pendingSignup.verifyMethod = method;
+
+  const destination = method === 'sms'
+    ? (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, '')
+    : pendingSignup.email;
+
+  showToast('⏳ Envoi du code…');
+  try {
+    const r = await TC_BACKEND.demanderVerification(method, destination);
+    pendingSignup.verifRef = r.reference;
+    tcAfficherCodeTest(r);
+  } catch (e) {
+    // Auparavant l'échec était muet : l'écran s'affichait quoi qu'il arrive.
+    if (e.code === 'trop_de_demandes') {
+      showToast('⚠️ Trop de demandes. Réessaie dans une heure.');
+    } else if (e.code === 'reseau') {
+      showToast('❌ Serveur injoignable. Vérifie ta connexion.');
+    } else {
+      showToast('❌ ' + (e.message || 'Envoi impossible'));
+    }
+    return;
+  }
 
   // Personnaliser l'écran de saisie
   if (method === 'sms') {
@@ -7389,29 +7426,65 @@ function handleCodeInput(input, idx) {
   }
 }
 
-function submitVerifyCode() {
+async function submitVerifyCode() {
   const inputs = document.querySelectorAll('.code-digit');
   let code = '';
   inputs.forEach(inp => code += inp.value);
   if (code.length !== 6) { showToast('⚠️ Saisis les 6 chiffres'); return; }
 
-  if (code !== pendingDemoCode) {
-    showToast('❌ Code incorrect, réessaie');
+  const echec = function(msg) {
+    showToast(msg);
     inputs.forEach(inp => inp.value = '');
     inputs[0].focus();
-    return;
+  };
+
+  // La validation se fait côté serveur : le code n'est plus comparé
+  // à une variable JavaScript, et la preuve obtenue est ce qui autorise
+  // la création du compte.
+  let preuve;
+  try {
+    preuve = await TC_BACKEND.validerVerification(pendingSignup.verifRef, code);
+  } catch (e) {
+    if (e.code === 'code_incorrect')        return echec('❌ Code incorrect, réessaie');
+    if (e.code === 'trop_de_tentatives')    return echec('⚠️ Trop d\'essais. Demande un nouveau code.');
+    if (e.code === 'verification_expiree')  return echec('⏰ Code expiré. Demande un nouveau code.');
+    if (e.code === 'reseau')                return echec('❌ Serveur injoignable.');
+    return echec('❌ ' + (e.message || 'Vérification impossible'));
   }
 
-  // Code OK → créer le compte
+  // Création du compte sur le serveur.
+  let compte;
+  try {
+    compte = await TC_BACKEND.inscrire({
+      preuve: preuve,
+      email: pendingSignup.email,
+      telephone: (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, ''),
+      motDePasse: pendingSignup.password,
+      prenom: pendingSignup.firstname,
+      nom: pendingSignup.lastname,
+      ville: pendingSignup.city,
+      codePostal: pendingSignup.zip,
+      langue: (localStorage.getItem('timecool_language') || 'fr')
+    });
+  } catch (e) {
+    if (e.code === 'compte_existant') {
+      return echec('⚠️ Un compte existe déjà avec cet email ou ce numéro.');
+    }
+    return echec('❌ ' + (e.message || 'Création du compte impossible'));
+  }
+
+  // Reflet local du compte. Le mot de passe n'y figure PAS : la
+  // politique de confidentialité interdit de le conserver en clair, et
+  // le serveur en détient désormais l'empreinte Argon2id.
   const account = {
-    firstname: pendingSignup.firstname,
-    lastname: pendingSignup.lastname,
-    email: pendingSignup.email,
+    reference: compte.reference,
+    firstname: compte.prenom,
+    lastname: compte.nom,
+    email: compte.email,
     phone: pendingSignup.phone,
     phoneCountry: pendingSignup.phoneCountry.dial,
-    zip: pendingSignup.zip,
-    city: pendingSignup.city,
-    password: pendingSignup.password,
+    zip: compte.code_postal,
+    city: compte.ville,
     verifiedBy: pendingSignup.verifyMethod,
     createdAt: new Date().toISOString()
   };
@@ -7439,13 +7512,30 @@ async function tcOfferPasswordSave(email, password, name) {
   } catch(e) { /* Silencieux : pas bloquant si le navigateur ne supporte pas l'API */ }
 }
 
-function resendCode() {
-  pendingDemoCode = String(Math.floor(100000 + Math.random() * 900000));
-  const demoCodeEl = document.getElementById('demoCodeDisplay');
-  if (demoCodeEl) demoCodeEl.textContent = pendingDemoCode;
+async function resendCode() {
+  if (!pendingSignup || !pendingSignup.verifyMethod) return;
+  const method = pendingSignup.verifyMethod;
+  const destination = method === 'sms'
+    ? (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, '')
+    : pendingSignup.email;
+
+  try {
+    // Nouvelle demande serveur : la précédente référence est abandonnée,
+    // son code ne vaut plus rien.
+    const r = await TC_BACKEND.demanderVerification(method, destination);
+    pendingSignup.verifRef = r.reference;
+    tcAfficherCodeTest(r);
+    showToast('📨 Nouveau code envoyé');
+  } catch (e) {
+    if (e.code === 'trop_de_demandes') {
+      showToast('⚠️ Trop de demandes. Réessaie dans une heure.');
+    } else {
+      showToast('❌ ' + (e.message || 'Envoi impossible'));
+    }
+    return;
+  }
   document.querySelectorAll('.code-digit').forEach(inp => inp.value = '');
   document.querySelector('.code-digit[data-idx="0"]').focus();
-  showToast('📨 Nouveau code envoyé');
 }
 
 function submitLogin() {
@@ -9328,9 +9418,36 @@ const TC_BACKEND = {
 
   // ─── Compte ──────────────────────────────────────────────────
 
-  /** Inscription. Ouvre la session et conserve le jeton. */
+  /**
+   * Demande l'envoi d'un code de vérification.
+   *
+   * @param {'sms'|'email'} canal
+   * @param {string} destination  numéro ou adresse
+   * @returns {Object} { reference, expire_dans_minutes, code_test? }
+   *
+   * code_test n'est présent que si le serveur est en mode test. En
+   * production il est absent, et l'application n'a donc rien à afficher.
+   */
+  async demanderVerification(canal, destination) {
+    return await tcAppel('POST', '/verification/demander', {
+      canal: canal,
+      destination: destination
+    }, false);
+  },
+
+  /** Valide le code et retourne la preuve à présenter à l'inscription. */
+  async validerVerification(reference, code) {
+    const d = await tcAppel('POST', '/verification/valider', {
+      reference: reference,
+      code: code
+    }, false);
+    return d.preuve;
+  },
+
+  /** Inscription. Exige la preuve de vérification. Ouvre la session. */
   async inscrire(champs) {
     const d = await tcAppel('POST', '/inscription', {
+      preuve: champs.preuve,
       email: champs.email,
       telephone: champs.telephone,
       mot_de_passe: champs.motDePasse,

@@ -95,9 +95,36 @@ const TC_BACKEND = {
 
   // ─── Compte ──────────────────────────────────────────────────
 
-  /** Inscription. Ouvre la session et conserve le jeton. */
+  /**
+   * Demande l'envoi d'un code de vérification.
+   *
+   * @param {'sms'|'email'} canal
+   * @param {string} destination  numéro ou adresse
+   * @returns {Object} { reference, expire_dans_minutes, code_test? }
+   *
+   * code_test n'est présent que si le serveur est en mode test. En
+   * production il est absent, et l'application n'a donc rien à afficher.
+   */
+  async demanderVerification(canal, destination) {
+    return await tcAppel('POST', '/verification/demander', {
+      canal: canal,
+      destination: destination
+    }, false);
+  },
+
+  /** Valide le code et retourne la preuve à présenter à l'inscription. */
+  async validerVerification(reference, code) {
+    const d = await tcAppel('POST', '/verification/valider', {
+      reference: reference,
+      code: code
+    }, false);
+    return d.preuve;
+  },
+
+  /** Inscription. Exige la preuve de vérification. Ouvre la session. */
   async inscrire(champs) {
     const d = await tcAppel('POST', '/inscription', {
+      preuve: champs.preuve,
       email: champs.email,
       telephone: champs.telephone,
       mot_de_passe: champs.motDePasse,

@@ -78,6 +78,100 @@ function vueCompte(array $c): array
 switch ($route) {
 
     // ═══════════════════════════════════════════════════════════
+    // VÉRIFICATION — demande d'un code par SMS ou email
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /verification/demander':
+        $canal = Entree::requis('canal', 10);
+        if (!in_array($canal, ['sms', 'email'], true)) {
+            Rep::erreur(400, 'canal_invalide', 'Canal attendu : sms ou email.');
+        }
+        $brut = Entree::requis('destination');
+
+        if ($canal === 'email') {
+            if (!filter_var($brut, FILTER_VALIDATE_EMAIL)) {
+                Rep::erreur(400, 'email_invalide', 'Adresse email invalide.');
+            }
+            $destination = Empreinte::normaliserEmail($brut);
+        } else {
+            $destination = Empreinte::normaliserTelephone($brut);
+            if (!preg_match('/^\+[1-9][0-9]{7,14}$/', $destination)) {
+                Rep::erreur(400, 'telephone_invalide', 'Numéro de téléphone invalide.');
+            }
+        }
+        $destEmpreinte = Empreinte::stockable($destination);
+
+        // Plafond par destination : empêche d'inonder un numéro de SMS
+        // et de balayer les codes en multipliant les demandes.
+        $recentes = Db::un(
+            'SELECT COUNT(*) AS n FROM verifications
+              WHERE destination_empreinte = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 HOUR)',
+            [$destEmpreinte]
+        );
+        if ((int) $recentes['n'] >= (int) Conf::get('verification_max_par_heure', 5)) {
+            Rep::erreur(429, 'trop_de_demandes', 'Trop de demandes. Réessayez dans une heure.');
+        }
+
+        $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $ref     = Jeton::reference();
+        $minutes = (int) Conf::get('verification_minutes', 15);
+        $ip      = $_SERVER['REMOTE_ADDR'] ?? null;
+
+        Db::req(
+            'INSERT INTO verifications (reference, canal, destination, destination_empreinte,
+                 code_hash, ip_creation, expire_le)
+             VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))',
+            [
+                $ref, $canal, $destination, $destEmpreinte,
+                Jeton::hacher($code),
+                $ip !== null ? @inet_pton($ip) : null,
+                $minutes,
+            ]
+        );
+
+        // TODO : brancher l'envoi réel ici — SendGrid pour l'email,
+        // Twilio ou Vonage pour le SMS. Tant que ce n'est pas fait, le
+        // code n'est restitué qu'en mode test.
+        $reponse = ['reference' => $ref, 'expire_dans_minutes' => $minutes];
+        if (Conf::get('mode_test', false) === true) {
+            $reponse['code_test'] = $code;
+            $reponse['avertissement'] = 'Mode test actif : aucun message envoyé.';
+        }
+        Rep::ok($reponse, 201);
+
+    // ═══════════════════════════════════════════════════════════
+    // VÉRIFICATION — validation du code, remise d'une preuve
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /verification/valider':
+        $ref  = Entree::requis('reference', 26);
+        $code = Entree::requis('code', 6);
+
+        $v = Db::un('SELECT * FROM verifications WHERE reference = ?', [$ref]);
+        if ($v === null || $v['consomme_le'] !== null || strtotime($v['expire_le']) < time()) {
+            Rep::erreur(410, 'verification_expiree', 'Cette vérification a expiré. Demandez un nouveau code.');
+        }
+        if ((int) $v['tentatives'] >= 5) {
+            Rep::erreur(429, 'trop_de_tentatives', 'Trop d essais. Demandez un nouveau code.');
+        }
+
+        // La tentative est comptée avant la comparaison : un abandon en
+        // cours de route ne redonne pas d'essai gratuit.
+        Db::req('UPDATE verifications SET tentatives = tentatives + 1 WHERE id = ?', [$v['id']]);
+
+        if (!hash_equals($v['code_hash'], Jeton::hacher($code))) {
+            Rep::erreur(400, 'code_incorrect', 'Code incorrect.');
+        }
+
+        $preuve = Jeton::creer();
+        Db::req(
+            'UPDATE verifications
+                SET valide_le = NOW(), preuve_hash = ?,
+                    preuve_expire_le = DATE_ADD(NOW(), INTERVAL 30 MINUTE)
+              WHERE id = ?',
+            [Jeton::hacher($preuve), $v['id']]
+        );
+        Rep::ok(['preuve' => $preuve, 'canal' => $v['canal']]);
+
+    // ═══════════════════════════════════════════════════════════
     // INSCRIPTION
     // ═══════════════════════════════════════════════════════════
     case 'POST /inscription':
@@ -92,6 +186,31 @@ switch ($route) {
 
         $telephone = Empreinte::normaliserTelephone(Entree::requis('telephone', 20));
         $emailNorm = Empreinte::normaliserEmail($email);
+
+        /*
+         * Preuve de vérification obligatoire. Sans elle, aucun compte ne
+         * peut être créé : c'est ce qui empêche de s'inscrire avec un
+         * email ou un numéro qui ne vous appartient pas.
+         */
+        $preuve = Entree::requis('preuve', 64);
+        $v = Db::un(
+            'SELECT * FROM verifications
+              WHERE preuve_hash = ? AND consomme_le IS NULL
+                AND valide_le IS NOT NULL AND preuve_expire_le > NOW()',
+            [Jeton::hacher($preuve)]
+        );
+        if ($v === null) {
+            Rep::erreur(403, 'verification_requise', 'Vérification absente, expirée ou déjà utilisée.');
+        }
+
+        // La destination vérifiée doit être celle qu'on inscrit : sinon
+        // on pourrait vérifier son propre numéro puis créer un compte
+        // avec celui de quelqu'un d'autre.
+        $attendue = $v['canal'] === 'email' ? $emailNorm : $telephone;
+        if (!hash_equals($v['destination'], $attendue)) {
+            Rep::erreur(403, 'verification_non_concordante',
+                'La vérification ne correspond pas à l identifiant fourni.');
+        }
 
         $compte = [
             'reference'           => Jeton::reference(),
@@ -128,6 +247,14 @@ switch ($route) {
         }
 
         $id = (int) Db::pdo()->lastInsertId();
+
+        // La preuve est consommée : elle ne peut pas servir à créer un
+        // second compte.
+        Db::req('UPDATE verifications SET consomme_le = NOW() WHERE id = ?', [$v['id']]);
+        if ($v['canal'] === 'email') {
+            Db::req('UPDATE comptes SET email_verifie_le = NOW() WHERE id = ?', [$id]);
+        }
+
         $ligne = Db::un('SELECT * FROM comptes WHERE id = ?', [$id]);
 
         Rep::ok([
