@@ -105,8 +105,12 @@ jobs:
 
       # Publie la Release. L'asset garde toujours le même nom, donc
       # l'URL releases/latest/download/timecool.apk reste valable à vie.
+      # workflow_dispatch est accepté au même titre qu'un push : sans
+      # cela, un lancement manuel construisait l'APK sans jamais publier
+      # de Release — seul recours quand GitHub n'a pas déclenché le build
+      # automatique après un push.
       - name: Publier la Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.keystore.outputs.available == 'true'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && steps.keystore.outputs.available == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
