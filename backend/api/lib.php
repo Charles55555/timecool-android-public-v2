@@ -294,6 +294,156 @@ final class Jeton
     }
 }
 
+/**
+ * Vérification des jetons d'identité Google (OpenID Connect).
+ *
+ * La vérification est faite ICI, côté serveur, et non côté application :
+ * un jeton reçu de l'application est une donnée que n'importe qui peut
+ * fabriquer. Sans contrôle de la signature, se connecter sous l'identité
+ * de quelqu'un d'autre serait trivial.
+ */
+final class Google
+{
+    private const JWKS = 'https://www.googleapis.com/oauth2/v3/certs';
+    private const EMETTEURS = ['accounts.google.com', 'https://accounts.google.com'];
+
+    private static function base64url(string $s): string
+    {
+        $r = strtr($s, '-_', '+/');
+        $pad = strlen($r) % 4;
+        if ($pad) {
+            $r .= str_repeat('=', 4 - $pad);
+        }
+        $d = base64_decode($r, true);
+        return $d === false ? '' : $d;
+    }
+
+    /** Longueur DER. */
+    private static function derLong(int $n): string
+    {
+        if ($n < 128) {
+            return chr($n);
+        }
+        $o = '';
+        while ($n > 0) { $o = chr($n & 0xFF) . $o; $n >>= 8; }
+        return chr(0x80 | strlen($o)) . $o;
+    }
+
+    /** Entier DER, avec l'octet nul si le bit de poids fort est à 1. */
+    private static function derEntier(string $bin): string
+    {
+        $bin = ltrim($bin, "\x00");
+        if ($bin === '' ) { $bin = "\x00"; }
+        if (ord($bin[0]) & 0x80) { $bin = "\x00" . $bin; }
+        return "\x02" . self::derLong(strlen($bin)) . $bin;
+    }
+
+    /** Reconstruit une clé publique PEM à partir du modulus et de l'exposant. */
+    private static function pemDepuisJwk(string $n64, string $e64): string
+    {
+        $rsa = "\x30" . self::derLong(
+            strlen(self::derEntier(self::base64url($n64)) . self::derEntier(self::base64url($e64)))
+        ) . self::derEntier(self::base64url($n64)) . self::derEntier(self::base64url($e64));
+
+        // AlgorithmIdentifier rsaEncryption + NULL
+        $algo = "\x30\x0d\x06\x09\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01\x05\x00";
+        $bits = "\x03" . self::derLong(strlen($rsa) + 1) . "\x00" . $rsa;
+        $spki = "\x30" . self::derLong(strlen($algo) + strlen($bits)) . $algo . $bits;
+
+        return "-----BEGIN PUBLIC KEY-----\n"
+             . chunk_split(base64_encode($spki), 64, "\n")
+             . "-----END PUBLIC KEY-----\n";
+    }
+
+    /** Clés publiques Google, mises en cache une heure. */
+    private static function cles(): array
+    {
+        $cache = sys_get_temp_dir() . '/timecool_google_jwks.json';
+        if (is_file($cache) && (time() - filemtime($cache)) < 3600) {
+            $j = json_decode((string) file_get_contents($cache), true);
+            if (is_array($j) && isset($j['keys'])) {
+                return $j['keys'];
+            }
+        }
+        $ch = curl_init(self::JWKS);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $rep = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($rep === false || $code !== 200) {
+            Rep::erreur(503, 'google_injoignable', 'Vérification Google momentanément impossible.');
+        }
+        $j = json_decode((string) $rep, true);
+        if (!is_array($j) || !isset($j['keys'])) {
+            Rep::erreur(503, 'google_reponse_invalide', 'Vérification Google momentanément impossible.');
+        }
+        @file_put_contents($cache, $rep);
+        return $j['keys'];
+    }
+
+    /**
+     * Valide un jeton d'identité et retourne ses revendications.
+     * Interrompt en 401 au moindre doute — jamais de repli permissif.
+     */
+    public static function verifier(string $jeton, array $audiences): array
+    {
+        $parts = explode('.', $jeton);
+        if (count($parts) !== 3) {
+            Rep::erreur(401, 'jeton_google_invalide', 'Jeton Google illisible.');
+        }
+        [$h64, $p64, $s64] = $parts;
+
+        $entete = json_decode(self::base64url($h64), true);
+        // Refus explicite de tout algorithme autre que RS256 : accepter
+        // « none » ou un algorithme symétrique permettrait de forger un
+        // jeton sans posseder la clé privée de Google.
+        if (!is_array($entete) || ($entete['alg'] ?? '') !== 'RS256' || empty($entete['kid'])) {
+            Rep::erreur(401, 'jeton_google_invalide', 'Jeton Google non conforme.');
+        }
+
+        $pem = null;
+        foreach (self::cles() as $k) {
+            if (($k['kid'] ?? '') === $entete['kid'] && ($k['kty'] ?? '') === 'RSA') {
+                $pem = self::pemDepuisJwk($k['n'], $k['e']);
+                break;
+            }
+        }
+        if ($pem === null) {
+            Rep::erreur(401, 'jeton_google_inconnu', 'Clé de signature Google inconnue.');
+        }
+
+        $ok = openssl_verify($h64 . '.' . $p64, self::base64url($s64), $pem, OPENSSL_ALGO_SHA256);
+        if ($ok !== 1) {
+            Rep::erreur(401, 'signature_google_invalide', 'Signature du jeton Google invalide.');
+        }
+
+        $c = json_decode(self::base64url($p64), true);
+        if (!is_array($c)) {
+            Rep::erreur(401, 'jeton_google_invalide', 'Jeton Google illisible.');
+        }
+        if (!in_array($c['iss'] ?? '', self::EMETTEURS, true)) {
+            Rep::erreur(401, 'emetteur_invalide', 'Émetteur du jeton inattendu.');
+        }
+        // L'audience doit être NOTRE identifiant client : sans ce contrôle,
+        // un jeton emis pour une toute autre application serait accepte.
+        if (!in_array((string) ($c['aud'] ?? ''), $audiences, true)) {
+            Rep::erreur(401, 'audience_invalide', 'Ce jeton ne concerne pas TimeCool.');
+        }
+        if (!isset($c['exp']) || (int) $c['exp'] <= time()) {
+            Rep::erreur(401, 'jeton_google_expire', 'Jeton Google expiré.');
+        }
+        if (empty($c['email']) || ($c['email_verified'] ?? false) !== true) {
+            Rep::erreur(401, 'email_google_non_verifie', 'Adresse Google non vérifiée.');
+        }
+
+        return $c;
+    }
+}
+
 final class Auth
 {
     /**

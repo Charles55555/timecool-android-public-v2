@@ -200,8 +200,28 @@ switch ($route) {
         $v = null;
         $verifExigee = Conf::get('verification_obligatoire', true) === true;
         $preuve = Entree::texte('preuve', 64);
+        $googleVerifie = false;
 
-        if ($verifExigee && $preuve === null) {
+        /*
+         * Un jeton Google valide vaut preuve de possession de l'adresse :
+         * Google l'a deja verifiee, et le controle de concordance
+         * ci-dessous garantit qu'il s'agit bien de celle qu'on inscrit.
+         */
+        $preuveGoogle = Entree::texte('preuve_google', 4096);
+        if ($preuveGoogle !== null) {
+            $audiences = Conf::get('google_client_ids', []);
+            if (!is_array($audiences) || $audiences === []) {
+                Rep::erreur(503, 'google_non_configure', 'Connexion Google non configurée.');
+            }
+            $claimsG = Google::verifier($preuveGoogle, $audiences);
+            if (!hash_equals(Empreinte::normaliserEmail((string) $claimsG['email']), $emailNorm)) {
+                Rep::erreur(403, 'verification_non_concordante',
+                    'Le compte Google ne correspond pas à l email fourni.');
+            }
+            $googleVerifie = true;
+        }
+
+        if ($verifExigee && $preuve === null && !$googleVerifie) {
             Rep::erreur(403, 'verification_requise', 'Vérification préalable obligatoire.');
         }
 
@@ -274,6 +294,9 @@ switch ($route) {
                 Db::req('UPDATE comptes SET email_verifie_le = NOW() WHERE id = ?', [$id]);
             }
         }
+        if ($googleVerifie) {
+            Db::req('UPDATE comptes SET email_verifie_le = NOW() WHERE id = ?', [$id]);
+        }
 
         $ligne = Db::un('SELECT * FROM comptes WHERE id = ?', [$id]);
 
@@ -319,6 +342,52 @@ switch ($route) {
         Db::req('UPDATE comptes SET derniere_connexion = NOW() WHERE id = ?', [$c['id']]);
 
         Rep::ok([
+            'compte'  => vueCompte($c),
+            'session' => ouvrirSession((int) $c['id'], Entree::texte('appareil', 160)),
+        ]);
+
+    // ═══════════════════════════════════════════════════════════
+    // CONNEXION AVEC UN COMPTE GOOGLE
+    //
+    // Le jeton est verifie ici, contre les cles publiques de Google.
+    // Un compte existant ouvre une session ; sinon l'application est
+    // invitee a completer l'inscription, notre table exigeant un
+    // telephone, une ville et un code postal que Google ne fournit pas.
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /connexion/google':
+        $idToken = Entree::requis('id_token', 4096);
+        $audiences = Conf::get('google_client_ids', []);
+        if (!is_array($audiences) || $audiences === []) {
+            Rep::erreur(503, 'google_non_configure', 'Connexion Google non configurée.');
+        }
+        $claims = Google::verifier($idToken, $audiences);
+
+        $emailNorm = Empreinte::normaliserEmail((string) $claims['email']);
+        $c = Db::un(
+            'SELECT * FROM comptes WHERE email_empreinte = ? AND cloture_le IS NULL',
+            [Empreinte::stockable($emailNorm)]
+        );
+
+        if ($c === null) {
+            // Pas un echec : l'application enchaine sur le formulaire,
+            // pre-rempli avec ce que Google a deja verifie.
+            Rep::ok([
+                'compte_existant' => false,
+                'prefill' => [
+                    'email'  => $emailNorm,
+                    'prenom' => (string) ($claims['given_name'] ?? ''),
+                    'nom'    => (string) ($claims['family_name'] ?? ''),
+                ],
+            ]);
+        }
+
+        Db::req('UPDATE comptes SET derniere_connexion = NOW() WHERE id = ?', [$c['id']]);
+        // Google a verifie cette adresse : on l'acte si ce n'etait pas fait.
+        if ($c['email_verifie_le'] === null) {
+            Db::req('UPDATE comptes SET email_verifie_le = NOW() WHERE id = ?', [$c['id']]);
+        }
+        Rep::ok([
+            'compte_existant' => true,
             'compte'  => vueCompte($c),
             'session' => ouvrirSession((int) $c['id'], Entree::texte('appareil', 160)),
         ]);

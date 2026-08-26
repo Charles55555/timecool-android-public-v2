@@ -49,6 +49,16 @@ return [
      */
     'cle_chiffrement' => 'A_RENSEIGNER',
 
+    /**
+     * Identifiants clients Google acceptés comme audience des jetons.
+     *
+     * Pour Credential Manager, l'audience du jeton est l'identifiant de
+     * type « Application Web », PAS celui de type « Android ». Ce dernier
+     * doit exister dans le même projet — il autorise l'application par sa
+     * signature — mais ce n'est pas sa valeur qu'on retrouve dans « aud ».
+     */
+    'google_client_ids' => [],
+
     // Durée de validité d'une session de connexion, en jours.
     'session_jours' => 30,
 
