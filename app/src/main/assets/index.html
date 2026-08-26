@@ -696,7 +696,7 @@ if (window.pdfjsLib) {
       <input type="text" maxlength="1" class="code-digit" data-idx="5" oninput="handleCodeInput(this, 5)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
     </div>
 
-    <button onclick="submitVerifyCode()" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:12px;">
+    <button id="btnVerifierCode" onclick="submitVerifyCode()" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:12px;">
       Vérifier
     </button>
 
@@ -7445,23 +7445,57 @@ function handleCodeInput(input, idx) {
     const next = document.querySelector(`.code-digit[data-idx="${idx + 1}"]`);
     if (next) next.focus();
   }
-  // Auto-submit when last digit
+  // Auto-envoi dès le 6e chiffre. La validation passant désormais par le
+  // réseau, tcVerifEnCours empêche que cet auto-envoi et un appui sur
+  // « Vérifier » ne partent tous les deux — chaque envoi consomme une
+  // tentative sur les 5 autorisées.
   if (idx === 5 && input.value) {
     setTimeout(() => submitVerifyCode(), 300);
   }
 }
 
+let tcVerifEnCours = false;
+
+/* Verrou d'envoi. La validation passe par le réseau : sans lui,
+   l'auto-envoi du 6e chiffre et un appui sur « Vérifier » partiraient
+   tous les deux et consommeraient deux des cinq tentatives. */
+function tcVerifDebut() {
+  tcVerifEnCours = true;
+  const b = document.getElementById('btnVerifierCode');
+  if (b) { b.disabled = true; b.style.opacity = '.6'; b.textContent = 'Vérification…'; }
+}
+
+function tcVerifFin() {
+  tcVerifEnCours = false;
+  const b = document.getElementById('btnVerifierCode');
+  if (b) { b.disabled = false; b.style.opacity = ''; b.textContent = 'Vérifier'; }
+}
+
 async function submitVerifyCode() {
+  if (tcVerifEnCours) return;
+
   const inputs = document.querySelectorAll('.code-digit');
   let code = '';
   inputs.forEach(inp => code += inp.value);
   if (code.length !== 6) { showToast('⚠️ Saisis les 6 chiffres'); return; }
 
-  const echec = function(msg) {
+  /* Deux façons d'échouer, à ne pas confondre :
+     - le code est faux : on vide les champs, il faut ressaisir ;
+     - tout le reste (réseau, compte déjà existant, code expiré) : on
+       laisse la saisie en place. La vider n'aiderait en rien et donnait
+       l'impression que le code s'effaçait tout seul. */
+  const echecGarderSaisie = function(msg) {
+    showToast(msg);
+    tcVerifFin();
+  };
+  const echecViderSaisie = function(msg) {
     showToast(msg);
     inputs.forEach(inp => inp.value = '');
     inputs[0].focus();
+    tcVerifFin();
   };
+
+  tcVerifDebut();
 
   // La validation se fait côté serveur : le code n'est plus comparé
   // à une variable JavaScript, et la preuve obtenue est ce qui autorise
@@ -7470,11 +7504,12 @@ async function submitVerifyCode() {
   try {
     preuve = await TC_BACKEND.validerVerification(pendingSignup.verifRef, code);
   } catch (e) {
-    if (e.code === 'code_incorrect')        return echec('❌ Code incorrect, réessaie');
-    if (e.code === 'trop_de_tentatives')    return echec('⚠️ Trop d\'essais. Demande un nouveau code.');
-    if (e.code === 'verification_expiree')  return echec('⏰ Code expiré. Demande un nouveau code.');
-    if (e.code === 'reseau')                return echec('❌ Serveur injoignable.');
-    return echec('❌ ' + (e.message || 'Vérification impossible'));
+    // Seul un code réellement faux justifie de vider la saisie.
+    if (e.code === 'code_incorrect')        return echecViderSaisie('❌ Code incorrect, réessaie');
+    if (e.code === 'trop_de_tentatives')    return echecGarderSaisie('⚠️ Trop d\'essais. Demande un nouveau code.');
+    if (e.code === 'verification_expiree')  return echecGarderSaisie('⏰ Code expiré. Demande un nouveau code.');
+    if (e.code === 'reseau')                return echecGarderSaisie('❌ Serveur injoignable. Réessaie.');
+    return echecGarderSaisie('❌ ' + (e.message || 'Vérification impossible'));
   }
 
   // Création du compte sur le serveur.
@@ -7492,11 +7527,15 @@ async function submitVerifyCode() {
       langue: (localStorage.getItem('timecool_language') || 'fr')
     });
   } catch (e) {
+    // Cas fréquent en phase de test : on réessaie avec une identité déjà
+    // inscrite. Le code était bon, la saisie n'a pas à être effacée.
     if (e.code === 'compte_existant') {
-      return echec('⚠️ Un compte existe déjà avec cet email ou ce numéro.');
+      return echecGarderSaisie('⚠️ Ce compte existe déjà — connecte-toi plutôt.');
     }
-    return echec('❌ ' + (e.message || 'Création du compte impossible'));
+    return echecGarderSaisie('❌ ' + (e.message || 'Création du compte impossible'));
   }
+
+  tcVerifFin();
 
   // Reflet local du compte. Le mot de passe n'y figure PAS : la
   // politique de confidentialité interdit de le conserver en clair, et
