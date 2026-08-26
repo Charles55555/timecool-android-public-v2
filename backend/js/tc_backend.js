@@ -247,6 +247,38 @@ const TC_BACKEND = {
     return resultat;
   },
 
+  // ─── Clés API de l'utilisateur ───────────────────────────────
+
+  /**
+   * Liste des clés enregistrées, SANS leur valeur.
+   * @returns {Array} [{ service, indice, maj_le }]
+   */
+  async listerClesApi() {
+    return (await tcAppel('GET', '/cles-api')).cles;
+  },
+
+  /** Valeur en clair d'une clé. Retourne null si aucune n'est enregistrée. */
+  async lireCleApi(service) {
+    try {
+      const d = await tcAppel('GET', '/cles-api/valeur?service=' + encodeURIComponent(service));
+      return d.valeur;
+    } catch (e) {
+      if (e.code === 'cle_absente') return null;
+      throw e;
+    }
+  },
+
+  /** Enregistre ou remplace la clé d'un service. */
+  async enregistrerCleApi(service, valeur) {
+    const d = await tcAppel('POST', '/cles-api', { service: service, valeur: valeur });
+    return d.indice;
+  },
+
+  async supprimerCleApi(service) {
+    await tcAppel('POST', '/cles-api/supprimer', { service: service });
+    return true;
+  },
+
   // ─── Appairage d'appareils ───────────────────────────────────
 
   async createPairingSession() {

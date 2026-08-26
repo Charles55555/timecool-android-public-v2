@@ -659,6 +659,80 @@ switch ($route) {
         Rep::ok(['enregistre' => true]);
 
     // ═══════════════════════════════════════════════════════════
+    // CLÉS API DE L'UTILISATEUR
+    // Conservées chiffrées, restituées uniquement au titulaire du
+    // compte, authentifié par sa session.
+    // ═══════════════════════════════════════════════════════════
+
+    // Liste sans les valeurs : de quoi afficher l'écran de configuration
+    // sans jamais déchiffrer ni transmettre les clés inutilement.
+    case 'GET /cles-api':
+        $compte = Auth::compte();
+        Rep::ok([
+            'cles' => Db::tous(
+                'SELECT service, indice, maj_le FROM cles_api WHERE compte_id = ? ORDER BY service',
+                [$compte['id']]
+            ),
+        ]);
+
+    // Valeur en clair d'une seule clé, pour que l'application puisse
+    // appeler le service concerné.
+    case 'GET /cles-api/valeur':
+        $compte = Auth::compte();
+        $service = $_GET['service'] ?? '';
+        if (!is_string($service) || !preg_match('/^[a-z0-9_]{2,40}$/', $service)) {
+            Rep::erreur(400, 'service_invalide', 'Service invalide.');
+        }
+        $ligne = Db::un(
+            'SELECT valeur_chiffree FROM cles_api WHERE compte_id = ? AND service = ?',
+            [$compte['id'], $service]
+        );
+        if ($ligne === null) {
+            Rep::erreur(404, 'cle_absente', 'Aucune clé enregistrée pour ce service.');
+        }
+        $clair = Coffre::dechiffrer($ligne['valeur_chiffree']);
+        if ($clair === null) {
+            // Valeur illisible : clé de chiffrement changée, ou donnée
+            // altérée. Le dire franchement plutôt que renvoyer du vide.
+            Rep::erreur(500, 'cle_illisible',
+                'Clé enregistrée illisible. Ressaisissez-la.');
+        }
+        Rep::ok(['service' => $service, 'valeur' => $clair]);
+
+    case 'POST /cles-api':
+        $compte = Auth::compte();
+        $service = Entree::requis('service', 40);
+        if (!preg_match('/^[a-z0-9_]{2,40}$/', $service)) {
+            Rep::erreur(400, 'service_invalide', 'Service invalide.');
+        }
+        $valeur = Entree::corps()['valeur'] ?? null;
+        if (!is_string($valeur) || trim($valeur) === '' || strlen($valeur) > 500) {
+            Rep::erreur(400, 'valeur_invalide', 'Clé absente ou trop longue.');
+        }
+        $valeur = trim($valeur);
+
+        Db::req(
+            'INSERT INTO cles_api (compte_id, service, valeur_chiffree, indice)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE valeur_chiffree = VALUES(valeur_chiffree),
+                                     indice = VALUES(indice)',
+            [
+                $compte['id'],
+                $service,
+                Coffre::chiffrer($valeur),
+                substr($valeur, -4),
+            ]
+        );
+        Rep::ok(['service' => $service, 'indice' => substr($valeur, -4)], 201);
+
+    case 'POST /cles-api/supprimer':
+        $compte = Auth::compte();
+        $service = Entree::requis('service', 40);
+        Db::req('DELETE FROM cles_api WHERE compte_id = ? AND service = ?',
+            [$compte['id'], $service]);
+        Rep::ok();
+
+    // ═══════════════════════════════════════════════════════════
     // PARAMÈTRES PUBLICS
     // Ce que l'application doit savoir avant d'afficher un écran.
     // N'expose aucun secret : uniquement des drapeaux de parcours.

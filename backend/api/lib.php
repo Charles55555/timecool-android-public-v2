@@ -220,6 +220,54 @@ final class Empreinte
     }
 }
 
+/**
+ * Chiffrement des secrets détenus pour le compte des utilisateurs
+ * (leurs clés API). AES-256-GCM : confidentialité et authenticité, une
+ * valeur altérée en base est rejetée au lieu d'être déchiffrée en
+ * silence vers n'importe quoi.
+ */
+final class Coffre
+{
+    private const ALGO = 'aes-256-gcm';
+
+    /** Clé binaire de 32 octets, dérivée de la valeur hexadécimale du config. */
+    private static function cle(): string
+    {
+        $hex = (string) Conf::get('cle_chiffrement', '');
+        if (strlen($hex) !== 64 || !ctype_xdigit($hex)) {
+            Rep::erreur(500, 'chiffrement_indisponible',
+                'Service momentanément indisponible.');
+        }
+        return (string) hex2bin($hex);
+    }
+
+    /** Retourne base64( iv | tag | chiffré ). */
+    public static function chiffrer(string $clair): string
+    {
+        $iv = random_bytes(12); // 96 bits, taille recommandée pour GCM
+        $tag = '';
+        $chiffre = openssl_encrypt($clair, self::ALGO, self::cle(), OPENSSL_RAW_DATA, $iv, $tag);
+        if ($chiffre === false) {
+            Rep::erreur(500, 'chiffrement_echoue', 'Service momentanément indisponible.');
+        }
+        return base64_encode($iv . $tag . $chiffre);
+    }
+
+    /** Retourne null si la valeur est illisible ou a été altérée. */
+    public static function dechiffrer(string $encode): ?string
+    {
+        $brut = base64_decode($encode, true);
+        if ($brut === false || strlen($brut) < 29) {
+            return null;
+        }
+        $iv = substr($brut, 0, 12);
+        $tag = substr($brut, 12, 16);
+        $chiffre = substr($brut, 28);
+        $clair = openssl_decrypt($chiffre, self::ALGO, self::cle(), OPENSSL_RAW_DATA, $iv, $tag);
+        return $clair === false ? null : $clair;
+    }
+}
+
 final class Jeton
 {
     /** Jeton opaque de 32 octets, rendu en hexadécimal. */

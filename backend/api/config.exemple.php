@@ -35,6 +35,20 @@ return [
      */
     'poivre' => 'A_RENSEIGNER',
 
+    /**
+     * Clé de chiffrement des clés API des utilisateurs (AES-256-GCM).
+     * 32 octets en hexadécimal, soit 64 caractères.
+     *
+     * Générer une fois :  openssl rand -hex 32
+     *
+     * ATTENTION : la perdre rend TOUTES les clés API enregistrées
+     * définitivement illisibles — les utilisateurs devraient les
+     * ressaisir. À sauvegarder au même titre que le poivre et le
+     * keystore Android. Distincte du poivre à dessein : deux usages,
+     * deux secrets.
+     */
+    'cle_chiffrement' => 'A_RENSEIGNER',
+
     // Durée de validité d'une session de connexion, en jours.
     'session_jours' => 30,
 

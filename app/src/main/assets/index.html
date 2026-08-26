@@ -2451,6 +2451,77 @@ loadCharlyIAConfig();
   } catch(e) {}
 })();
 
+/* ══════════════════════════════════════════════════════════════
+   SYNCHRONISATION DES CLÉS API AVEC LE SERVEUR
+
+   Les clés vivaient uniquement dans le localStorage : vider le
+   navigateur ou réinstaller l'application les perdait définitivement.
+   Elles sont désormais conservées côté serveur, chiffrées en
+   AES-256-GCM, et rattachées au compte.
+
+   Le tiroir local reste le cache de travail — tout le reste de
+   l'application continue de le lire sans rien changer. Le serveur en
+   est la copie durable.
+   ══════════════════════════════════════════════════════════════ */
+
+function tcLireTiroirCles() {
+  try { return JSON.parse(localStorage.getItem('timecool_api_keys') || '{}'); }
+  catch(e) { return {}; }
+}
+
+function tcEcrireTiroirCles(cles) {
+  try { localStorage.setItem('timecool_api_keys', JSON.stringify(cles)); } catch(e) {}
+  if (cles.openai) charlyIA.config.apiKey = cles.openai;
+  if (cles.anthropic) charlyIA.config.anthropicKey = cles.anthropic;
+}
+
+/** Envoie au serveur les clés présentes localement. Silencieux si hors ligne. */
+async function tcPousserClesVersServeur() {
+  if (!TC_BACKEND.estConnecte()) return;
+  const cles = tcLireTiroirCles();
+  for (const service of Object.keys(cles)) {
+    const valeur = cles[service];
+    if (typeof valeur !== 'string' || !valeur.trim()) continue;
+    try {
+      await TC_BACKEND.enregistrerCleApi(service, valeur.trim());
+    } catch (e) {
+      // Une clé qui n'est pas synchronisée reste utilisable localement :
+      // on n'interrompt pas l'enregistrement pour autant.
+      console.warn('Synchronisation de la clé ' + service + ' :', e.code || e.message);
+    }
+  }
+}
+
+/**
+ * Récupère les clés du serveur et les réinstalle localement.
+ * Le serveur fait autorité : c'est ce qui permet de retrouver ses clés
+ * après une réinstallation ou sur un nouvel appareil.
+ */
+async function tcRecupererClesDuServeur() {
+  if (!TC_BACKEND.estConnecte()) return;
+  let liste;
+  try {
+    liste = await TC_BACKEND.listerClesApi();
+  } catch (e) {
+    return; // hors ligne ou session expirée : on garde le cache local
+  }
+  const cles = tcLireTiroirCles();
+  let recuperees = 0;
+  for (const entree of liste) {
+    if (cles[entree.service]) continue; // déjà en local, on n'écrase pas
+    try {
+      const valeur = await TC_BACKEND.lireCleApi(entree.service);
+      if (valeur) { cles[entree.service] = valeur; recuperees++; }
+    } catch (e) {
+      console.warn('Lecture de la clé ' + entree.service + ' :', e.code || e.message);
+    }
+  }
+  if (recuperees > 0) {
+    tcEcrireTiroirCles(cles);
+    showToast('🔑 ' + recuperees + ' clé' + (recuperees > 1 ? 's' : '') + ' récupérée' + (recuperees > 1 ? 's' : '') + ' depuis ton compte');
+  }
+}
+
 function generateEvents() {
   // v7.4 — Agendas vidés pour la démo investisseurs
   // Charly IA construit l'agenda en direct devant l'investisseur
@@ -5657,6 +5728,9 @@ function saveAllApiKeys() {
 
   try { localStorage.setItem('timecool_api_keys', JSON.stringify(apiKeys)); } catch(e) {}
 
+  // Copie durable côté serveur : les clés ne dépendent plus du navigateur.
+  tcPousserClesVersServeur();
+
   // Le runtime de Charly IA lit charlyIA.config : on le maintient à jour
   // en miroir de ce tiroir unique, sans jamais le considérer comme la source.
   if (apiKeys['openai']) charlyIA.config.apiKey = apiKeys['openai'];
@@ -5881,6 +5955,7 @@ function handleImportKeysFile(event) {
       if (data.apiKeys && Object.keys(data.apiKeys).length > 0) {
         try {
           localStorage.setItem('timecool_api_keys', JSON.stringify(data.apiKeys));
+          tcPousserClesVersServeur();
           imported += Object.keys(data.apiKeys).length;
         } catch(e) {}
       }
@@ -7025,6 +7100,10 @@ function loadUserAccount() {
 async function tcRevaliderSession() {
   try {
     const compte = await TC_BACKEND.moi();
+    if (compte !== null) {
+      // Session valide : on recupere les cles enregistrees sur le compte.
+      tcRecupererClesDuServeur();
+    }
     if (compte === null) {
       try { localStorage.setItem('timecool_session_active', 'false'); } catch(e) {}
       if (typeof showAuthFlow === 'function') showAuthFlow('auth-welcome');
@@ -7397,9 +7476,9 @@ function tcEffacerErreursInscription() {
 
 
 
-/* L'erreur d'un champ dispara�t d�s qu'on le corrige : laisser un
-   message rouge sous un champ d�j� rectifi� est plus d�routant
-   qu'utile. �couteur d�l�gu�, pos� une seule fois. */
+/* L'erreur d'un champ dispara�t d�s qu'on le corrige : laisser un
+   message rouge sous un champ d�j� rectifi� est plus d�routant
+   qu'utile. �couteur d�l�gu�, pos� une seule fois. */
 (function () {
   const zoneDe = {
     signupZip: 'err_signupAdresse',
@@ -9785,6 +9864,38 @@ const TC_BACKEND = {
       }
     }
     return resultat;
+  },
+
+  // ─── Clés API de l'utilisateur ───────────────────────────────
+
+  /**
+   * Liste des clés enregistrées, SANS leur valeur.
+   * @returns {Array} [{ service, indice, maj_le }]
+   */
+  async listerClesApi() {
+    return (await tcAppel('GET', '/cles-api')).cles;
+  },
+
+  /** Valeur en clair d'une clé. Retourne null si aucune n'est enregistrée. */
+  async lireCleApi(service) {
+    try {
+      const d = await tcAppel('GET', '/cles-api/valeur?service=' + encodeURIComponent(service));
+      return d.valeur;
+    } catch (e) {
+      if (e.code === 'cle_absente') return null;
+      throw e;
+    }
+  },
+
+  /** Enregistre ou remplace la clé d'un service. */
+  async enregistrerCleApi(service, valeur) {
+    const d = await tcAppel('POST', '/cles-api', { service: service, valeur: valeur });
+    return d.indice;
+  },
+
+  async supprimerCleApi(service) {
+    await tcAppel('POST', '/cles-api/supprimer', { service: service });
+    return true;
   },
 
   // ─── Appairage d'appareils ───────────────────────────────────
