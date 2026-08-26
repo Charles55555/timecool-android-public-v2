@@ -55,6 +55,25 @@ public class MainActivity extends Activity {
      * Doit rester identique à google_client_ids dans config.php côté
      * serveur, qui verifie l'audience du jeton.
      */
+    /*
+     * Resultat Google en attente de livraison a la page.
+     *
+     * Statiques a dessein : pendant que le selecteur de comptes Google
+     * occupe l'ecran, le systeme peut detruire puis recreer cette
+     * activite. La WebView est alors reconstruite et rechargee depuis
+     * zero — l'utilisateur revient a l'ecran d'accueil, et le callback
+     * ecrirait dans une WebView qui n'existe plus : jeton perdu, aucun
+     * message, aucun appel au serveur.
+     *
+     * En conservant le resultat hors de l'instance, il est livre des que
+     * la page est prete, que ce soit la meme activite ou la suivante.
+     */
+    private static String jetonGoogleEnAttente = null;
+    private static String erreurGoogleEnAttente = null;
+
+    /** La page est-elle chargee et capable de recevoir un appel JS ? */
+    private boolean pagePrete = false;
+
     private static final String GOOGLE_CLIENT_ID =
         "696652298607-q4b7qk6qno95apbfp1fb8r3hnn48rv2o.apps.googleusercontent.com";
 
@@ -98,6 +117,15 @@ public class MainActivity extends Activity {
                     return false;
                 }
                 return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView vue, String url) {
+                // La page est prete : on livre un eventuel resultat Google
+                // arrive pendant qu'elle ne l'etait pas — cas typique d'une
+                // activite recreee pendant le selecteur de comptes.
+                pagePrete = true;
+                livrerResultatGoogle();
             }
         });
 
@@ -174,6 +202,31 @@ public class MainActivity extends Activity {
             return;
         }
         super.onRequestPermissionsResult(requete, permissions, resultats);
+    }
+
+    /**
+     * Livre à la page le résultat Google en attente, s'il y en a un et
+     * si la page est prête. Sans effet dans le cas contraire : le
+     * résultat reste en attente jusqu'au prochain onPageFinished.
+     */
+    private void livrerResultatGoogle() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (!pagePrete || webView == null) {
+                    return;
+                }
+                if (jetonGoogleEnAttente != null) {
+                    String jeton = jetonGoogleEnAttente;
+                    jetonGoogleEnAttente = null;
+                    appelerJs("tcGoogleJeton", jeton);
+                } else if (erreurGoogleEnAttente != null) {
+                    String err = erreurGoogleEnAttente;
+                    erreurGoogleEnAttente = null;
+                    appelerJs("tcGoogleErreur", err);
+                }
+            }
+        });
     }
 
     /** Exécute une fonction JavaScript de la page, sur le thread UI. */
@@ -272,13 +325,18 @@ public class MainActivity extends Activity {
                                 .equals(id.getType())) {
                             GoogleIdTokenCredential g =
                                 GoogleIdTokenCredential.createFrom(((CustomCredential) id).getData());
-                            appelerJs("tcGoogleJeton", g.getIdToken());
+                            // Depose puis livre : si la page n'est pas prete
+                            // — activite recreee pendant le selecteur — le
+                            // jeton attend au lieu d'etre perdu.
+                            jetonGoogleEnAttente = g.getIdToken();
                         } else {
-                            appelerJs("tcGoogleErreur", "type_inattendu");
+                            erreurGoogleEnAttente = "type_inattendu | " + id.getType();
                         }
                     } catch (Exception e) {
-                        appelerJs("tcGoogleErreur", e.getClass().getSimpleName());
+                        erreurGoogleEnAttente = e.getClass().getSimpleName()
+                            + " | " + (e.getMessage() == null ? "(sans message)" : e.getMessage());
                     }
+                    livrerResultatGoogle();
                 }
 
                 @Override
@@ -291,10 +349,10 @@ public class MainActivity extends Activity {
                      * Couvre l'annulation par l'utilisateur, que la page
                      * traite sans afficher d'echec alarmant.
                      */
-                    String detail = e.getClass().getSimpleName()
+                    erreurGoogleEnAttente = e.getClass().getSimpleName()
                         + " | " + e.getType()
                         + " | " + (e.getMessage() == null ? "(sans message)" : e.getMessage());
-                    appelerJs("tcGoogleErreur", detail);
+                    livrerResultatGoogle();
                 }
             }
         );

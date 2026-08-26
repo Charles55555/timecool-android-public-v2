@@ -7297,6 +7297,10 @@ function tcShowGoogleFallbackButton() {
 
 /** Appelée par Android avec le jeton d'identité. */
 async function tcGoogleJeton(idToken) {
+  // Preuve visible que la page a bien recu le jeton : sans elle, un
+  // echec silencieux entre Android et le JavaScript est indiscernable
+  // d'un refus du serveur.
+  showToast('⏳ Vérification du compte Google…');
   try {
     const r = await TC_BACKEND.connecterAvecGoogle(idToken);
 
