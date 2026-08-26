@@ -7,7 +7,21 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.CancellationSignal;
 import android.provider.ContactsContract;
+
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.GetCredentialException;
+
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
+
+import java.util.concurrent.Executors;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
@@ -29,6 +43,20 @@ public class MainActivity extends Activity {
 
     private static final int REQ_FICHIER = 1001;
     private static final int REQ_CONTACTS = 1002;
+
+    /*
+     * Identifiant client Google servant d'audience au jeton d'identité.
+     *
+     * Credential Manager attend ici l'identifiant de type « Application
+     * Web », PAS celui de type « Android ». Ce dernier doit exister dans
+     * le même projet Google Cloud — il autorise l'application par la
+     * signature de son APK — mais ce n'est pas sa valeur qu'on place ici.
+     *
+     * Doit rester identique à google_client_ids dans config.php côté
+     * serveur, qui verifie l'audience du jeton.
+     */
+    private static final String GOOGLE_CLIENT_ID =
+        "696652298607-v3muscv74tto7uokr5d1dalbjv62o0nr.apps.googleusercontent.com";
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -205,6 +233,62 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * Ouvre le sélecteur de comptes Google et transmet le jeton
+     * d'identité à la page.
+     *
+     * Le jeton n'est PAS une preuve en soi côté application : c'est le
+     * serveur qui vérifie sa signature contre les clés publiques de
+     * Google. Ici on se contente de l'acheminer.
+     */
+    private void lancerConnexionGoogle() {
+        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
+            // false : on propose aussi les comptes jamais utilisés avec
+            // TimeCool, sinon une première connexion n'aurait rien à offrir.
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(GOOGLE_CLIENT_ID)
+            .setAutoSelectEnabled(false)
+            .build();
+
+        GetCredentialRequest requete = new GetCredentialRequest.Builder()
+            .addCredentialOption(option)
+            .build();
+
+        CredentialManager gestionnaire = CredentialManager.create(this);
+        gestionnaire.getCredentialAsync(
+            this,
+            requete,
+            new CancellationSignal(),
+            Executors.newSingleThreadExecutor(),
+            new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                @Override
+                public void onResult(GetCredentialResponse reponse) {
+                    try {
+                        Credential id = reponse.getCredential();
+                        if (id instanceof CustomCredential
+                            && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                                .equals(id.getType())) {
+                            GoogleIdTokenCredential g =
+                                GoogleIdTokenCredential.createFrom(((CustomCredential) id).getData());
+                            appelerJs("tcGoogleJeton", g.getIdToken());
+                        } else {
+                            appelerJs("tcGoogleErreur", "type_inattendu");
+                        }
+                    } catch (Exception e) {
+                        appelerJs("tcGoogleErreur", e.getClass().getSimpleName());
+                    }
+                }
+
+                @Override
+                public void onError(GetCredentialException e) {
+                    // Couvre aussi l'annulation par l'utilisateur, que la
+                    // page doit traiter sans afficher d'echec alarmant.
+                    appelerJs("tcGoogleErreur", e.getClass().getSimpleName());
+                }
+            }
+        );
+    }
+
+    /**
      * Surface exposée à la page. Volontairement minimale : uniquement ce
      * dont l'application a besoin, rien de générique.
      */
@@ -225,6 +309,20 @@ public class MainActivity extends Activity {
          * Demande l'accès aux contacts, puis les transmet.
          * La page reçoit le résultat via tcContactsRecus / tcContactsRefuses.
          */
+        /**
+         * Lance la connexion Google. La page reçoit le résultat via
+         * tcGoogleJeton ou tcGoogleErreur.
+         */
+        @JavascriptInterface
+        public void connexionGoogle() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    lancerConnexionGoogle();
+                }
+            });
+        }
+
         @JavascriptInterface
         public void demanderContacts() {
             if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS)

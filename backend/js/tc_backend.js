@@ -162,6 +162,7 @@ const TC_BACKEND = {
   async inscrire(champs) {
     const d = await tcAppel('POST', '/inscription', {
       preuve: champs.preuve || undefined,
+      preuve_google: champs.preuveGoogle || undefined,
       email: champs.email,
       telephone: champs.telephone,
       mot_de_passe: champs.motDePasse,
@@ -186,6 +187,29 @@ const TC_BACKEND = {
     }, false);
     tcPoserJeton(d.session.jeton);
     return d.compte;
+  },
+
+  /**
+   * Connexion avec un jeton d'identité Google.
+   *
+   * Le jeton est vérifié par le SERVEUR, contre les clés publiques de
+   * Google. L'application se contente de l'acheminer.
+   *
+   * @returns {Object} { existant: true, compte } si le compte existe,
+   *                   { existant: false, prefill } sinon — l'inscription
+   *                   doit alors être complétée (téléphone, ville, code
+   *                   postal, que Google ne fournit pas).
+   */
+  async connecterAvecGoogle(idToken) {
+    const d = await tcAppel('POST', '/connexion/google', {
+      id_token: idToken,
+      appareil: navigator.userAgent.slice(0, 160)
+    }, false);
+    if (d.compte_existant === false) {
+      return { existant: false, prefill: d.prefill };
+    }
+    tcPoserJeton(d.session.jeton);
+    return { existant: true, compte: d.compte };
   },
 
   async deconnecter() {

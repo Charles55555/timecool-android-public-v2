@@ -66,4 +66,13 @@ android {
 }
 
 dependencies {
+    /* Connexion Google native.
+       Credential Manager remplace l'ancien Google Sign-In SDK. Cette voie
+       a été retenue plutôt que de servir la page en https:// via
+       WebViewAssetLoader : changer l'origine aurait efface tout le
+       localStorage existant — contacts, RDV et reglages des utilisateurs
+       deja installes. */
+    implementation 'androidx.credentials:credentials:1.3.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
 }

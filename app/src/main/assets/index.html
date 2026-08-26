@@ -7237,91 +7237,101 @@ function tcShowGoogleFallbackButton() {
 }
 
 // ═══ GOOGLE SIGN-IN v6.4 — vrai branchement natif ═══
+/* ══════════════════════════════════════════════════════════════
+   CONNEXION GOOGLE
+
+   La branche native interrogeait Capacitor.Plugins.GoogleAuth, absent
+   de cette application. Elle passe désormais par le pont TimeCoolNatif
+   et Credential Manager.
+
+   Le jeton obtenu n'est pas une preuve côté application : c'est le
+   serveur qui vérifie sa signature contre les clés publiques de Google.
+   ══════════════════════════════════════════════════════════════ */
+
+/** Appelée par Android avec le jeton d'identité. */
+async function tcGoogleJeton(idToken) {
+  try {
+    const r = await TC_BACKEND.connecterAvecGoogle(idToken);
+
+    if (r.existant) {
+      userAccount = {
+        reference: r.compte.reference,
+        firstname: r.compte.prenom,
+        lastname: r.compte.nom,
+        email: r.compte.email,
+        phone: r.compte.telephone,
+        zip: r.compte.code_postal,
+        city: r.compte.ville,
+        verified: true,
+        createdAt: new Date().toISOString()
+      };
+      try {
+        localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
+        localStorage.setItem('timecool_session_active', 'true');
+      } catch(e) {}
+      showWelcomeSplash(userAccount.firstname);
+      return;
+    }
+
+    // Compte inconnu : Google a verifie l'adresse, mais il manque le
+    // telephone, la ville et le code postal, que Google ne fournit pas.
+    tcPreuveGoogle = idToken;
+    const p = r.prefill || {};
+    navigateAuth('auth-signup');
+    setTimeout(function () {
+      const remplir = function (id, v) {
+        const el = document.getElementById(id);
+        if (el && v) el.value = v;
+      };
+      remplir('signupEmail', p.email);
+      remplir('signupFirstname', p.prenom);
+      remplir('signupNom', p.nom);
+      remplir('signupLastname', p.nom);
+      const tel = document.getElementById('signupPhone');
+      if (tel) tel.focus();
+    }, 200);
+    showToast('✅ Compte Google vérifié — complète ton profil');
+
+  } catch (e) {
+    if (e.code === 'audience_invalide') {
+      // Presque toujours le meme cause : identifiant client de type
+      // « Android » la ou Google attend celui de type « Application Web ».
+      showToast('❌ Configuration Google incorrecte (audience du jeton)');
+    } else if (e.code === 'reseau' || e.code === 'delai_depasse') {
+      showToast('❌ Serveur injoignable. Réessaie.');
+    } else {
+      showToast('❌ ' + (e.message || 'Connexion Google impossible'));
+    }
+  }
+}
+
+/** Appelée par Android en cas d'échec ou d'annulation. */
+function tcGoogleErreur(detail) {
+  console.warn('Connexion Google :', detail);
+  if (String(detail).indexOf('Cancell') >= 0 || String(detail).indexOf('UserCanceled') >= 0) {
+    return; // annulation volontaire : rien à signaler
+  }
+  showToast('❌ Connexion Google indisponible — utilise ton email');
+}
+
+/** Jeton conservé le temps de compléter l'inscription. */
+let tcPreuveGoogle = null;
+
 async function signInWithGoogle() {
-  // Vrai appareil natif (APK/IPA) avec le plugin configuré : vraie connexion Google
-  if (window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.GoogleAuth) {
+  if (tcEstApplicationNative() && typeof window.TimeCoolNatif.connexionGoogle === 'function') {
+    showToast('⏳ Connexion Google…');
     try {
-      const { GoogleAuth } = window.Capacitor.Plugins;
-      const user = await GoogleAuth.signIn();
-      const firstName = user.givenName || (user.name ? user.name.split(' ')[0] : '') || 'Utilisateur';
-      const lastName = user.familyName || (user.name ? user.name.split(' ').slice(1).join(' ') : '') || '';
-      completeGoogleSignIn(firstName, lastName, user.email || '');
-    } catch(e) {
-      console.warn('signInWithGoogle (natif):', e);
-      showToast('❌ Connexion Google impossible — réessaie ou utilise ton email');
+      window.TimeCoolNatif.connexionGoogle();
+    } catch (e) {
+      console.warn('connexionGoogle :', e);
+      showToast('❌ Connexion Google impossible');
     }
     return;
   }
 
-  // Navigateur web : vraie connexion Google (Google Identity Services)
-  // dès que TC_GOOGLE_CLIENT_ID est renseigné.
-  if (tcGoogleClientIdReady() && window.google && window.google.accounts && window.google.accounts.id) {
-    try {
-      google.accounts.id.initialize({
-        client_id: TC_GOOGLE_CLIENT_ID,
-        callback: tcHandleGoogleCredentialResponse
-      });
-      google.accounts.id.prompt(function(notification) {
-        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-          tcShowGoogleFallbackButton();
-        }
-      });
-    } catch(e) {
-      console.warn('signInWithGoogle (web):', e);
-      showToast('❌ Connexion Google impossible — réessaie ou utilise ton email');
-    }
-    return;
-  }
-
-  // TC_GOOGLE_CLIENT_ID pas encore renseigné (voir plus haut) :
-  // on garde la simulation visuelle pour pouvoir tester l'écran et l'enchaînement
-  // Phase 1 : simulation visuelle (OAuth réel disponible sur APK avec plugin Capacitor)
-  // Afficher un modal de simulation Google
-  const overlay = document.createElement('div');
-  overlay.id = 'googleSignInOverlay';
-  overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:99999; display:flex; align-items:center; justify-content:center; padding:20px;';
-
-  overlay.innerHTML = `
-    <div style="background:#fff; width:100%; max-width:380px; border-radius:24px; padding:32px 24px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-      <!-- Logo Google -->
-      <svg width="40" height="40" viewBox="0 0 24 24" style="margin-bottom:16px;"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-
-      <div style="font-size:18px; font-weight:700; color:#202124; margin-bottom:6px;">Se connecter</div>
-      <div style="font-size:13px; color:#5f6368; margin-bottom:24px;">Choisir un compte Google</div>
-
-      <!-- Compte Google simulé -->
-      <div onclick="completeGoogleSignIn('Jean', 'Dupont', 'jean.dupont@gmail.com')" style="display:flex; align-items:center; gap:14px; padding:14px 16px; border:1.5px solid #dadce0; border-radius:14px; cursor:pointer; margin-bottom:10px; text-align:left;" onmouseover="this.style.background='#f1f3f4'" onmouseout="this.style.background='transparent'">
-        <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#4285F4,#34A853); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:16px; flex-shrink:0;">J</div>
-        <div>
-          <div style="font-size:14px; font-weight:600; color:#202124;">Jean Dupont</div>
-          <div style="font-size:12px; color:#5f6368;">jean.dupont@gmail.com</div>
-        </div>
-      </div>
-
-      <div onclick="showGoogleEmailInput()" style="display:flex; align-items:center; gap:14px; padding:14px 16px; border:1.5px solid #dadce0; border-radius:14px; cursor:pointer; margin-bottom:20px; text-align:left;" onmouseover="this.style.background='#f1f3f4'" onmouseout="this.style.background='transparent'">
-        <div style="width:40px; height:40px; border-radius:50%; background:#f1f3f4; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">+</div>
-        <div style="font-size:14px; font-weight:500; color:#202124;">Utiliser un autre compte</div>
-      </div>
-
-      <div id="googleEmailForm" style="display:none; margin-bottom:16px;">
-        <input type="email" id="googleEmailInput" placeholder="Votre adresse Gmail" style="width:100%; padding:12px 14px; border:1.5px solid #dadce0; border-radius:10px; font-size:14px; box-sizing:border-box; margin-bottom:8px; outline:none;">
-        <input type="text" id="googleNameInput" placeholder="Votre prénom" style="width:100%; padding:12px 14px; border:1.5px solid #dadce0; border-radius:10px; font-size:14px; box-sizing:border-box; margin-bottom:8px; outline:none;">
-        <button onclick="submitGoogleEmail()" style="width:100%; padding:12px; background:#1a73e8; color:white; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">
-          Continuer
-        </button>
-      </div>
-
-      <div style="font-size:10px; color:#5f6368; line-height:1.5; margin-bottom:16px;">
-        En continuant, vous acceptez les <span onclick="document.getElementById('googleSignInOverlay').remove(); openLegalPage('cgu', 'auth-welcome', true)" style="color:#1a73e8; cursor:pointer; text-decoration:underline;">Conditions d'utilisation</span> et la <span onclick="document.getElementById('googleSignInOverlay').remove(); openLegalPage('privacy', 'auth-welcome', true)" style="color:#1a73e8; cursor:pointer; text-decoration:underline;">Politique de confidentialité</span> de TimeCool.
-      </div>
-
-      <button onclick="document.getElementById('googleSignInOverlay').remove()" style="padding:10px 24px; background:transparent; color:#1a73e8; border:1.5px solid #dadce0; border-radius:20px; font-size:13px; font-weight:600; cursor:pointer;">
-        Annuler
-      </button>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
+  // Navigateur : impossible depuis une page file://, dont l'origine est
+  // « null » et ne peut pas être déclarée dans la console Google.
+  showToast('ℹ️ Connexion Google disponible dans l\'application Android');
 }
 
 function showGoogleEmailInput() {
@@ -7697,6 +7707,7 @@ async function tcCreerCompte(preuve) {
   try {
     compte = await TC_BACKEND.inscrire({
       preuve: preuve || null,
+      preuveGoogle: (typeof tcPreuveGoogle !== 'undefined' && tcPreuveGoogle) || null,
       email: pendingSignup.email,
       telephone: (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, ''),
       motDePasse: pendingSignup.password,
@@ -7730,6 +7741,9 @@ async function tcCreerCompte(preuve) {
     verifiedBy: pendingSignup.verifyMethod || null,
     createdAt: new Date().toISOString()
   };
+  // La preuve Google ne doit pas resservir a une autre inscription.
+  if (typeof tcPreuveGoogle !== 'undefined') tcPreuveGoogle = null;
+
   saveUserAccount(account);
   saveUserToAdminList(account);
 
@@ -9781,6 +9795,7 @@ const TC_BACKEND = {
   async inscrire(champs) {
     const d = await tcAppel('POST', '/inscription', {
       preuve: champs.preuve || undefined,
+      preuve_google: champs.preuveGoogle || undefined,
       email: champs.email,
       telephone: champs.telephone,
       mot_de_passe: champs.motDePasse,
@@ -9805,6 +9820,29 @@ const TC_BACKEND = {
     }, false);
     tcPoserJeton(d.session.jeton);
     return d.compte;
+  },
+
+  /**
+   * Connexion avec un jeton d'identité Google.
+   *
+   * Le jeton est vérifié par le SERVEUR, contre les clés publiques de
+   * Google. L'application se contente de l'acheminer.
+   *
+   * @returns {Object} { existant: true, compte } si le compte existe,
+   *                   { existant: false, prefill } sinon — l'inscription
+   *                   doit alors être complétée (téléphone, ville, code
+   *                   postal, que Google ne fournit pas).
+   */
+  async connecterAvecGoogle(idToken) {
+    const d = await tcAppel('POST', '/connexion/google', {
+      id_token: idToken,
+      appareil: navigator.userAgent.slice(0, 160)
+    }, false);
+    if (d.compte_existant === false) {
+      return { existant: false, prefill: d.prefill };
+    }
+    tcPoserJeton(d.session.jeton);
+    return { existant: true, compte: d.compte };
   },
 
   async deconnecter() {
