@@ -88,7 +88,10 @@ Le domaine `timecool.fr` tourne actuellement en **`plesk-php80-fpm`** (PHP 8.0.3
 | Handler PHP | `plesk-php80-fpm` |
 | HTTPS | Fonctionnel — `https://timecool.fr` répond **200** |
 
-Le domaine est déclaré dans Plesk et sert aujourd'hui un `index.html` de 464 octets (page d'attente). Le répertoire est donc **vierge de toute application**.
+**Le domaine public ne pointe pas ici.** `timecool.fr` résout vers **217.160.0.228**, un hébergement mutualisé IONOS situé sur un compte client distinct de celui du serveur dédié. Le vhost présent dans Plesk sur 82.165.253.73 ne sert qu'une page par défaut Plesk et ne reçoit aucun trafic : le répertoire est vierge de toute application.
+
+Conséquence directe pour la suite : une API déposée dans `/var/www/vhosts/timecool.fr/httpdocs` **ne serait pas joignable** depuis `https://timecool.fr`. Deux issues possibles — rapatrier le domaine sur le serveur dédié, ou créer un sous-domaine (`api.timecool.fr`) avec un enregistrement A vers 82.165.253.73. Dans les deux cas c'est une modification DNS à effectuer sur l'autre compte IONOS.
+
 
 Les deux domaines hébergés sont `timecool.fr` et `denxiad-france.com`.
 
@@ -130,4 +133,5 @@ Des sauvegardes Plesk existent dans `/var/lib/psa/dumps/`. Leur périmètre et l
 3. **PHP 8.0 est en fin de vie** sur `timecool.fr` — le passer en 8.3 avant le lancement public.
 4. **Pas de Node.js** : le backend devra être en PHP, ou il faudra installer Node (via l'extension Node.js de Plesk, pour rester cohérent avec le panneau).
 5. **Vérifier les sauvegardes** avant la première écriture en base.
+6. **Le DNS de `timecool.fr` est le préalable au déploiement** : sans enregistrement pointant vers 82.165.253.73, rien de ce qui sera installé sur ce serveur ne sera accessible publiquement.
 6. **Le DNS de `timecool.fr` est le préalable au déploiement** : sans enregistrement pointant vers 82.165.253.73, rien de ce qui est installé ici ne sera accessible publiquement.
