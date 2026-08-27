@@ -7372,12 +7372,26 @@ async function tcGoogleJeton(idToken) {
 
 /** Appelée par Android en cas d'échec ou d'annulation. */
 function tcGoogleErreur(detail) {
-  tcBalise('2_erreur_android');
   const d = String(detail || '');
   console.warn('Connexion Google :', d);
 
+  /* Le detail part dans la balise : c'est ce qui rend l'echec lisible
+     depuis le journal du serveur, sans dependre de ce que l'utilisateur
+     parvient a lire ou recopier sur son telephone. */
+  tcBalise('2_erreur_android|' + d.slice(0, 160));
+
+  /* Ne RIEN afficher sur une annulation etait une erreur : quand Google
+     refuse une application mal declaree, la fenetre se ferme et
+     Credential Manager rapporte une annulation. L'echec devenait donc
+     totalement muet. */
   if (d.indexOf('Cancell') >= 0 || d.indexOf('UserCanceled') >= 0) {
-    return; // annulation volontaire : rien à signaler
+    alert('Connexion Google interrompue\n\n'
+      + 'Si tu n\'as pas annulé toi-même, c\'est que Google a refusé '
+      + 'l\'application : le client « Android » du projet doit déclarer '
+      + 'le nom de paquet com.timecool.app et l\'empreinte SHA-1 de la '
+      + 'clé de signature.\n\n'
+      + 'Détail technique :\n' + d);
+    return;
   }
 
   /* Un message generique masquait la cause reelle. Les deux echecs
