@@ -7295,11 +7295,25 @@ function tcShowGoogleFallbackButton() {
    serveur qui vérifie sa signature contre les clés publiques de Google.
    ══════════════════════════════════════════════════════════════ */
 
+
+/* Balises de diagnostic du parcours Google.
+   Chaque etape franchie laisse une trace dans le journal d'acces du
+   serveur. Sans elles, un echec entre Android et la page est invisible :
+   ni message, ni requete, aucun moyen de savoir jusqu'ou on est alle.
+   Volontairement muettes et sans await — elles ne doivent jamais
+   modifier le comportement de ce qu'elles observent. */
+function tcBalise(etape) {
+  try {
+    fetch(TC_API + '/sante?etape=' + encodeURIComponent(etape), { cache: 'no-store' })
+      .catch(function () {});
+  } catch (e) { /* jamais bloquant */ }
+}
 /** Appelée par Android avec le jeton d'identité. */
 async function tcGoogleJeton(idToken) {
   // Preuve visible que la page a bien recu le jeton : sans elle, un
   // echec silencieux entre Android et le JavaScript est indiscernable
   // d'un refus du serveur.
+  tcBalise('2_jeton_recu_par_la_page');
   showToast('⏳ Vérification du compte Google…');
   try {
     const r = await TC_BACKEND.connecterAvecGoogle(idToken);
@@ -7358,6 +7372,7 @@ async function tcGoogleJeton(idToken) {
 
 /** Appelée par Android en cas d'échec ou d'annulation. */
 function tcGoogleErreur(detail) {
+  tcBalise('2_erreur_android');
   const d = String(detail || '');
   console.warn('Connexion Google :', d);
 
@@ -7394,6 +7409,7 @@ let tcPreuveGoogle = null;
 
 async function signInWithGoogle() {
   if (tcEstApplicationNative() && typeof window.TimeCoolNatif.connexionGoogle === 'function') {
+    tcBalise('1_bouton_google');
     showToast('⏳ Connexion Google…');
     try {
       window.TimeCoolNatif.connexionGoogle();

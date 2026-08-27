@@ -45,17 +45,6 @@ public class MainActivity extends Activity {
     private static final int REQ_CONTACTS = 1002;
 
     /*
-     * Identifiant client Google servant d'audience au jeton d'identité.
-     *
-     * Credential Manager attend ici l'identifiant de type « Application
-     * Web », PAS celui de type « Android ». Ce dernier doit exister dans
-     * le même projet Google Cloud — il autorise l'application par la
-     * signature de son APK — mais ce n'est pas sa valeur qu'on place ici.
-     *
-     * Doit rester identique à google_client_ids dans config.php côté
-     * serveur, qui verifie l'audience du jeton.
-     */
-    /*
      * Resultat Google en attente de livraison a la page.
      *
      * Statiques a dessein : pendant que le selecteur de comptes Google
@@ -71,9 +60,27 @@ public class MainActivity extends Activity {
     private static String jetonGoogleEnAttente = null;
     private static String erreurGoogleEnAttente = null;
 
+    /**
+     * Activite actuellement vivante.
+     *
+     * Indispensable : rendre seulement le jeton statique ne suffisait
+     * pas. L'ancienne activite, detruite, conservait pagePrete a true et
+     * sa vieille WebView ; elle consommait donc le jeton et l'ecrivait
+     * dans le vide, et la nouvelle n'avait plus rien a livrer.
+     * La livraison passe desormais par l'instance courante, jamais par
+     * celle qui a recu le callback.
+     */
+    private static MainActivity instanceCourante = null;
+
     /** La page est-elle chargee et capable de recevoir un appel JS ? */
     private boolean pagePrete = false;
 
+    /*
+     * Identifiant client Google servant d'audience au jeton d'identite.
+     * Credential Manager attend celui de type « Application Web », pas
+     * celui de type « Android ». Doit rester identique a
+     * google_client_ids dans config.php, qui verifie l'audience.
+     */
     private static final String GOOGLE_CLIENT_ID =
         "696652298607-q4b7qk6qno95apbfp1fb8r3hnn48rv2o.apps.googleusercontent.com";
 
@@ -88,6 +95,9 @@ public class MainActivity extends Activity {
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         );
+
+        // Cette instance devient celle qui recevra les livraisons.
+        instanceCourante = this;
 
         setContentView(R.layout.activity_main);
 
@@ -209,21 +219,27 @@ public class MainActivity extends Activity {
      * si la page est prête. Sans effet dans le cas contraire : le
      * résultat reste en attente jusqu'au prochain onPageFinished.
      */
-    private void livrerResultatGoogle() {
-        runOnUiThread(new Runnable() {
+    private static void livrerResultatGoogle() {
+        final MainActivity active = instanceCourante;
+        // Aucune activite vivante : le resultat reste en attente et sera
+        // livre par le onPageFinished de la prochaine.
+        if (active == null) {
+            return;
+        }
+        active.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (!pagePrete || webView == null) {
+                if (!active.pagePrete || active.webView == null) {
                     return;
                 }
                 if (jetonGoogleEnAttente != null) {
                     String jeton = jetonGoogleEnAttente;
                     jetonGoogleEnAttente = null;
-                    appelerJs("tcGoogleJeton", jeton);
+                    active.appelerJs("tcGoogleJeton", jeton);
                 } else if (erreurGoogleEnAttente != null) {
                     String err = erreurGoogleEnAttente;
                     erreurGoogleEnAttente = null;
-                    appelerJs("tcGoogleErreur", err);
+                    active.appelerJs("tcGoogleErreur", err);
                 }
             }
         });
@@ -405,6 +421,16 @@ public class MainActivity extends Activity {
                 );
             }
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        // Sans cette liberation, la reference statique retiendrait
+        // l'activite detruite en memoire.
+        if (instanceCourante == this) {
+            instanceCourante = null;
+        }
+        super.onDestroy();
     }
 
     @Override
