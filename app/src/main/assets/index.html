@@ -2826,8 +2826,12 @@ function isCategoryVisible(catId) {
 }
 
 function isCalendarVisible(calendarId) {
-  if (!calendarId) return true; // Événements créés avant ce système → toujours visibles
-  const cal = customCalendars.find(c => c.id === calendarId);
+  /* Un evenement sans agenda appartient a l'agenda principal, pas a tous.
+     En renvoyant true, cette fonction les faisait apparaitre dans CHAQUE
+     agenda : un agenda secondaire fraichement cree heritait donc de tous
+     les RDV de l'agenda principal au lieu d'etre vide. */
+  const id = calendarId || 'cal_default';
+  const cal = customCalendars.find(c => c.id === id);
   return !cal || cal.visible !== false;
 }
 
@@ -2846,10 +2850,14 @@ function navigate(page) {
   document.getElementById('page-' + page).classList.add('active');
   document.getElementById('sideMenu').classList.remove('open');
   document.getElementById('menuOverlay').classList.remove('open');
+  if (page === 'contacts' && typeof tcRafraichirBadgesContacts === 'function') {
+    // Verification reelle aupres du serveur, en arriere-plan.
+    tcRafraichirBadgesContacts();
+  }
   if (page !== 'calendar' && _isolatedCalendarName) {
     _isolatedCalendarName = null;
-    updateHeaderAgendaLabel();
   }
+  updateHeaderAgendaLabel();
   if (page === 'calendar' && !_isolatedCalendarName) {
     // Navigation normale (ex. clic sur "Mon agenda") : s'assurer que rien ne reste masqué
     // par une isolation précédente qu'on aurait oublié de lever.
@@ -3278,66 +3286,60 @@ function cancelRdv() {
 function renderProfile() {
   const c = document.getElementById('profileContent');
   if (mode==='user') {
-    const profileId = currentProfile.user;
-    const profileData = profilesData.user[profileId];
-    // Jean has the full details, Marie has her own
-    if (profileId === 'jean') {
-      const p = userProfile;
+    /* ═══ Profil du compte reellement connecte ═══
+       Cet ecran affichait auparavant les donnees codees en dur de la
+       demo investisseurs (Jean Dupont, Marie Dupont), avec numero de
+       securite sociale, IBAN et piece d'identite fictifs. Il ne lisait
+       jamais userAccount : ce n'etait pas une confusion de profil, il
+       n'avait simplement jamais ete branche sur le compte.
+
+       Choix assume : on n'affiche QUE ce que le compte contient
+       reellement. Les rubriques sante, documents et bancaire ont ete
+       retirees plutot que remplies de valeurs vides — l'application ne
+       collecte pas ces donnees a ce stade, et afficher une ligne
+       « Securite Sociale » laisserait croire le contraire, ce que la
+       politique de confidentialite proscrit (principe de minimisation). */
+    if (!userAccount) {
       c.innerHTML = `
         <div class="profile-hero">
-          <div class="profile-avatar profile-avatar-user">JD</div>
-          <div class="profile-name">${p.firstName} ${p.lastName}</div>
-          <div class="profile-sub">${p.age} ans — ${p.city}</div>
-          <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500;">🔒 Profil protégé</div>
+          <div class="profile-avatar profile-avatar-user">?</div>
+          <div class="profile-name">Aucun compte connecté</div>
         </div>
-        <div class="info-section"><div class="info-section-title">📝 Identité</div>
-          ${infoRow('Date de naissance', p.birth)}${infoRow('Genre', p.gender)}</div>
-        <div class="info-section"><div class="info-section-title">📧 Coordonnées</div>
-          ${infoRow('Email', p.email)}${infoRow('Mobile', p.phone)}${infoRow('Adresse', p.address+', '+p.addr2+', '+p.zip+' '+p.city)}</div>
-        <div class="info-section"><div class="info-section-title">🏥 Santé</div>
-          ${infoRow('Sécurité Sociale', p.ssn, true)}${infoRow('Mutuelle', p.mutual, true)}
-          ${infoRow('Groupe sanguin', p.bloodType)}${infoRow('Allergies', p.allergies)}
-          ${infoRow('À prévenir', p.emergency)}</div>
-        <div class="info-section"><div class="info-section-title">🛂 Identité légale</div>
-          ${infoRow('CNI', p.cni, true)}${infoRow('Passeport', p.passport, true)}</div>
-        <div class="info-section"><div class="info-section-title">💳 Bancaire</div>
-          ${infoRow('Banque', p.bank)}${infoRow('IBAN', p.iban, true)}</div>
-        <div class="info-section"><div class="info-section-title">💼 Profession</div>
-          ${infoRow('Métier', p.job)}${infoRow('Entreprise', p.company)}</div>
-        <div class="info-section"><div class="info-section-title">👨‍👩‍👧 Famille</div>
-          ${infoRow('Situation', p.family)}</div>
-        <div style="padding:20px; background:#e8f5e9; margin:16px; border-radius:12px; font-size:12px; color:#1b5e20; text-align:center;">
-          🔒 <b>Accès limité par rôle</b><br>Chaque pro ne voit que ce qu'il lui faut — ni plus, ni moins.
+        <div style="padding:20px; margin:16px; background:var(--bg-soft); border-radius:12px; font-size:13px; color:var(--text-sec); text-align:center; line-height:1.6;">
+          Connecte-toi pour retrouver ton profil.
         </div>`;
-    } else {
-      // Marie Dupont profile
-      c.innerHTML = `
-        <div class="profile-hero">
-          <div class="profile-avatar profile-avatar-user" style="background:linear-gradient(135deg, #ea4335, #8430ce);">MD</div>
-          <div class="profile-name">Marie Dupont</div>
-          <div class="profile-sub">38 ans — Paris</div>
-          <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500;">🔒 Profil protégé</div>
-        </div>
-        <div class="info-section"><div class="info-section-title">📝 Identité</div>
-          ${infoRow('Date de naissance', '22/07/1987')}${infoRow('Genre', 'Femme')}</div>
-        <div class="info-section"><div class="info-section-title">📧 Coordonnées</div>
-          ${infoRow('Email', 'marie.dupont@email.fr')}${infoRow('Mobile', '06 23 45 67 89')}${infoRow('Adresse', '15 avenue des Fleurs, Appt 3B, 75001 Paris')}</div>
-        <div class="info-section"><div class="info-section-title">🏥 Santé</div>
-          ${infoRow('Sécurité Sociale', '2 87 07 75 456 789 12', true)}${infoRow('Mutuelle', 'MGEN — 123 456 790', true)}
-          ${infoRow('Groupe sanguin', 'O+')}${infoRow('Allergies', 'Aucune')}
-          ${infoRow('À prévenir', 'Jean Dupont (époux) — 06 12 34 56 78')}</div>
-        <div class="info-section"><div class="info-section-title">🛂 Identité légale</div>
-          ${infoRow('CNI', 'FR 234 567 890', true)}${infoRow('Passeport', 'FR 876 543 210', true)}</div>
-        <div class="info-section"><div class="info-section-title">💳 Bancaire</div>
-          ${infoRow('Banque', 'BNP Paribas (compte joint)')}${infoRow('IBAN', 'FR76 **** **** **** **** 123', true)}</div>
-        <div class="info-section"><div class="info-section-title">💼 Profession</div>
-          ${infoRow('Métier', 'Responsable RH')}${infoRow('Entreprise', 'DesignCorp')}</div>
-        <div class="info-section"><div class="info-section-title">👨‍👩‍👧 Famille</div>
-          ${infoRow('Situation', 'Mariée — 2 enfants (Lucas 8 ans, Emma 5 ans)')}</div>
-        <div style="padding:20px; background:#e8f5e9; margin:16px; border-radius:12px; font-size:12px; color:#1b5e20; text-align:center;">
-          🔒 <b>Accès limité par rôle</b><br>Chaque pro ne voit que ce qu'il lui faut — ni plus, ni moins.
-        </div>`;
+      return;
     }
+
+    const a = userAccount;
+    const prenom = a.firstname || '';
+    const nom = a.lastname || '';
+    const initiales = ((prenom[0] || '') + (nom[0] || '')).toUpperCase() || '👤';
+    const tel = a.phone ? ((a.phoneCountry ? a.phoneCountry + ' ' : '') + a.phone) : null;
+    const ville = [a.zip, a.city].filter(Boolean).join(' ');
+    const depuis = a.createdAt
+      ? new Date(a.createdAt).toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' })
+      : null;
+    const nonRenseigne = '<span style="color:var(--text-sec); opacity:.7;">Non renseigné</span>';
+
+    c.innerHTML = `
+      <div class="profile-hero">
+        <div class="profile-avatar profile-avatar-user">${initiales}</div>
+        <div class="profile-name">${prenom} ${nom}</div>
+        <div class="profile-sub">${ville || ''}</div>
+        <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500;">🔒 Profil protégé</div>
+      </div>
+      <div class="info-section"><div class="info-section-title">📧 Coordonnées</div>
+        ${infoRow('Email', a.email || nonRenseigne)}
+        ${infoRow('Mobile', tel || nonRenseigne)}
+        ${infoRow('Ville', ville || nonRenseigne)}</div>
+      <div class="info-section"><div class="info-section-title">🔐 Compte</div>
+        ${depuis ? infoRow('Membre depuis', depuis) : ''}
+        ${a.reference ? infoRow('Identifiant', a.reference) : ''}</div>
+      <div style="padding:18px; background:var(--bg-soft); margin:16px; border-radius:12px; font-size:12px; color:var(--text-sec); text-align:center; line-height:1.6;">
+        Ton profil ne contient que ce que tu as saisi à l'inscription.<br>
+        TimeCool ne collecte aucune donnée de santé ni document d'identité.
+      </div>`;
   } else {
     const profileId = currentProfile.pro;
     if (profileId === 'martin') {
@@ -3838,6 +3840,7 @@ function openConversation(id) {
   currentPage = 'conv';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-conv').classList.add('active');
+  if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
   if (currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
     setTimeout(function() { translatePageWithGoogle(currentLanguage, true); }, 120);
   }
@@ -4484,6 +4487,7 @@ function startAssistant() {
   currentPage = 'charly-quiz';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-charly-quiz').classList.add('active');
+  if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
   if (currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
     setTimeout(function() { translatePageWithGoogle(currentLanguage, true); }, 150);
   }
@@ -5517,6 +5521,7 @@ navigate = function(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-' + page);
   if (el) el.classList.add('active');
+  if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
   document.getElementById('sideMenu').classList.remove('open');
   document.getElementById('menuOverlay').classList.remove('open');
   if (page==='calendar') {
@@ -7150,13 +7155,51 @@ async function callAnthropic(messages) {
   });
   if (!res.ok) {
     let errMsg = 'HTTP ' + res.status;
-    try { const errJson = await res.json(); errMsg = errJson.error?.message || errMsg; } catch(e){}
+    let errType = '';
+    try {
+      const errJson = await res.json();
+      errMsg = (errJson.error && errJson.error.message) || errMsg;
+      errType = (errJson.error && errJson.error.type) || '';
+    } catch(e){}
+    console.error('Anthropic ' + res.status + ' [' + errType + '] : ' + errMsg);
     throw new Error('Anthropic : ' + errMsg);
   }
   const data = await res.json();
   charlyIA.callCount++;
   try { localStorage.setItem('timecool_ai_callcount', String(charlyIA.callCount)); } catch(e){}
-  return data.content?.[0]?.text || '(Réponse vide)';
+
+  /* content est un TABLEAU DE BLOCS, pas un texte.
+     L'ancienne lecture — data.content[0].text — supposait que le premier
+     bloc portait la reponse. C'est faux des que le modele produit autre
+     chose en tete : sur Claude Opus 5 le raisonnement adaptatif est actif
+     par defaut, donc content[0] est un bloc « thinking » dont .text vaut
+     undefined. La reponse tombait alors sur « Réponse vide », alors que
+     le texte se trouvait dans un bloc suivant. D'ou un echec avec Claude
+     la ou OpenAI fonctionnait.
+     On concatene donc TOUS les blocs de type text. */
+  const blocs = Array.isArray(data.content) ? data.content : [];
+  const texte = blocs
+    .filter(b => b && b.type === 'text' && typeof b.text === 'string')
+    .map(b => b.text)
+    .join('')
+    .trim();
+
+  if (texte) return texte;
+
+  /* Vide malgre tout : on dit pourquoi au lieu de renvoyer du vide.
+     stop_reason porte la vraie cause, et l'ancien code l'ignorait. */
+  const raison = data.stop_reason || 'inconnue';
+  const detail = (data.stop_details && data.stop_details.category) ? ' (' + data.stop_details.category + ')' : '';
+  console.error('Anthropic : reponse sans bloc texte — stop_reason=' + raison + detail
+    + ' — types de blocs reçus : ' + blocs.map(b => b && b.type).join(', '));
+
+  if (raison === 'refusal') {
+    throw new Error('Claude a refusé de répondre à cette demande.');
+  }
+  if (raison === 'max_tokens') {
+    throw new Error('Réponse trop longue pour la limite configurée — augmente « longueur maximale » dans Configuration IA.');
+  }
+  throw new Error('Claude n\'a renvoyé aucun texte (' + raison + ').');
 }
 
 // ═══ MODE DÉMO — réponses simulées ═══
@@ -7352,6 +7395,7 @@ async function logoutUser() {
 function navigateAuth(pageId) {
   document.querySelectorAll('.auth-page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + pageId).classList.add('active');
+  if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
 
   // La page s'affiche en français : la retraduire si une autre langue est choisie
   if (currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
@@ -9594,9 +9638,16 @@ function isolateCalendarView(calendarId) {
 }
 
 function updateHeaderAgendaLabel() {
+  /* Un agenda secondaire est une extension de l'utilisateur, pas un
+     changement d'identite : sa banniere n'a de sens que dans la vue
+     agenda. Le test porte sur la page reellement active dans le DOM et
+     non sur une variable, car cinq chemins differents changent de page
+     et un seul passait par navigate(). */
+  const surAgenda = !!(document.getElementById('page-calendar')
+    && document.getElementById('page-calendar').classList.contains('active'));
   const el = document.getElementById('headerAgendaLabel');
   if (el) {
-    if (_isolatedCalendarName) {
+    if (_isolatedCalendarName && surAgenda) {
       el.textContent = '📍 ' + _isolatedCalendarName;
       el.style.display = 'block';
     } else {
@@ -9605,7 +9656,7 @@ function updateHeaderAgendaLabel() {
   }
   // Types d'événements : n'a de sens que pour Mon agenda, jamais pour un agenda créé à part
   const menuWrap = document.getElementById('calendarViewMenuWrap');
-  if (menuWrap) menuWrap.style.display = _isolatedCalendarName ? 'none' : '';
+  if (menuWrap) menuWrap.style.display = (_isolatedCalendarName && surAgenda) ? 'none' : '';
 }
 
 async function openCreateCalendarPrompt() {
@@ -9890,13 +9941,55 @@ function confirmRdvContact(contactId, idx) {
   showToast('\u2705 Rendez-vous enregistr\u00e9');
 }
 
+/**
+ * Ce contact utilise-t-il TimeCool ?
+ *
+ * Cette fonction tirait auparavant sa reponse d'un hachage du numero,
+ * marquant environ un contact sur deux comme inscrit \u2014 sans jamais
+ * consulter la base. D'ou des badges \u00ab TIMECOOL \u00bb sur des personnes
+ * n'ayant pas l'application : ce n'etait ni un doublon ni un compte de
+ * test, la verification n'existait tout simplement pas.
+ *
+ * La reponse vient desormais du serveur, via detecterContactsInscrits,
+ * et n'est affichee que lorsqu'elle est CONNUE. Tant qu'aucune
+ * verification n'a eu lieu, on n'affiche pas de badge plutot que d'en
+ * inventer un.
+ */
 function isTimeCoolUser(c) {
   if (!c) return false;
   if (typeof c.isTimeCool === 'boolean') return c.isTimeCool;
-  const key = (c.phone || c.email || c.name || '');
-  let h = 7;
-  for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
-  return (Math.abs(h) % 10) < 5; // ~50 % des contacts simul\u00e9s comme inscrits
+  return false;
+}
+
+/**
+ * Interroge le serveur pour savoir lesquels des contacts sont inscrits,
+ * et memorise le resultat sur chaque fiche. Seules des empreintes
+ * quittent l'appareil \u2014 le carnet n'est jamais transmis en clair.
+ */
+async function tcRafraichirBadgesContacts() {
+  if (!TC_BACKEND.estConnecte() || !Array.isArray(contactsList) || !contactsList.length) return;
+  let inscrits;
+  try {
+    inscrits = await TC_BACKEND.detecterContactsInscrits(
+      contactsList.map(c => ({ id: c.id, email: c.email, telephone: c.phone }))
+    );
+  } catch (e) {
+    // Hors ligne : on laisse les badges dans l'etat connu, sans en inventer.
+    console.warn('Detection des contacts inscrits :', e.code || e.message);
+    return;
+  }
+  let change = false;
+  contactsList.forEach(function (c) {
+    const etait = c.isTimeCool;
+    const trouve = inscrits.get(c.id);
+    c.isTimeCool = !!trouve;
+    if (trouve && trouve.reference) c.referenceCompte = trouve.reference;
+    if (etait !== c.isTimeCool) change = true;
+  });
+  if (change) {
+    saveContacts();
+    if (typeof renderContacts === 'function' && currentPage === 'contacts') renderContacts();
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
