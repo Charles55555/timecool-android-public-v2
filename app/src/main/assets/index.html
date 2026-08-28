@@ -890,7 +890,7 @@ if (window.pdfjsLib) {
     <div class="page-subtitle" id="prosSubtitle">Vos professionnels de confiance</div>
   </div>
   <div class="search-bar" id="searchBar">
-    <input type="text" class="search-input" id="searchInput" placeholder="🔍 Rechercher un métier (ex: dermatologue)">
+    <input type="text" class="search-input" id="prosSearchInput" placeholder="🔍 Rechercher un métier (ex: dermatologue)" onkeydown="if(event.key==='Enter') doSearch();">
     <button class="search-btn" onclick="doSearch()">Chercher</button>
   </div>
   <div class="main"><div class="page-content" id="prosList"></div></div>
@@ -3451,43 +3451,59 @@ function showClientDetail(id) {
 }
 function closeClientModal() { document.getElementById('clientModal').classList.remove('open'); }
 
-// ═══ SEARCH ═══
-function doSearch() {
-  const q = document.getElementById('searchInput').value.trim().toLowerCase();
-  if (!q) { renderPros(); return; }
-  // Simulate search results
-  const results = [
-    {name:'Dr. Caroline Vidal', job:'Dermatologue', addr:'8 rue Saint-Honoré, Paris 1er', dist:'1,2 km', phone:'01 42 33 44 55', email:'cabinet@dr-vidal.fr', partner:true, slot:'Mardi 21 avril 14h30'},
-    {name:'Dr. Michel Bernard', job:'Dermatologue', addr:'15 boulevard Haussmann, Paris 9e', dist:'2,8 km', phone:'01 45 66 77 88', email:'contact@dr-bernard.fr', partner:false, doctolib:true},
-    {name:'Dr. Sylvie Lambert', job:'Dermatologue', addr:'22 avenue de l\'Opéra, Paris 1er', dist:'3,1 km', phone:'01 47 88 99 00', email:'dr.lambert@cabinet.fr', partner:false}
-  ];
+// ═══ SEARCH — Google Places ═══
+/* Cette recherche affichait 3 "dermatologues" fictifs et identiques
+   quelle que soit la requête saisie : `q` était calculé puis jamais
+   utilisé, et l'input lu (document.getElementById('searchInput')) était
+   en réalité celui — homonyme — du modal de recherche globale (RECHERCHE
+   v4.1 plus bas dans la page), pas celui de cet écran. Corrigé : id
+   dédié (prosSearchInput) et vrai appel à Google Places. */
+async function doSearch() {
+  const inputEl = document.getElementById('prosSearchInput');
+  const q = inputEl ? inputEl.value.trim() : '';
   const list = document.getElementById('prosList');
+  if (!q) { renderPros(); return; }
+
+  list.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-sec); font-size:13px;">🔍 Recherche en cours…</div>`;
+
+  let resultats;
+  try {
+    if (!tcCleGoogle()) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+    const position = await tcObtenirPosition();
+    resultats = await tcRecherchePlaces(q, { position, limite: 3 });
+  } catch (err) {
+    list.innerHTML = `
+      <div style="padding:16px; background:#fce8e6; border-radius:10px; font-size:13px; color:#c5221f;">
+        ❌ ${escapeHTML(err.message)}
+      </div>`;
+    return;
+  }
+
+  if (!resultats.length) {
+    list.innerHTML = `
+      <div style="padding:24px; text-align:center; color:var(--text-sec); font-size:13px;">
+        Aucun professionnel trouvé pour « ${escapeHTML(q)} ».
+      </div>`;
+    return;
+  }
+
   list.innerHTML = `
     <div style="padding:12px; background:#e8f0fe; border-radius:10px; margin-bottom:12px; font-size:12px; color:var(--g-blue);">
-      <b>${results.length} dermatologues trouvés</b> à proximité de votre adresse
+      <b>${resultats.length} résultat(s)</b> pour « ${escapeHTML(q)} »
     </div>
-    ${results.map(r => `
-      <div class="search-result ${r.partner?'partner':''}">
-        ${r.partner?'<div class="partner-badge">⭐ PARTENAIRE TIMECOOL</div>':''}
-        <div class="search-name">${r.name}</div>
-        <div class="search-job">${r.job}</div>
-        <div class="search-addr">📍 ${r.addr} (${r.dist})</div>
-        <div class="search-contact">📞 ${r.phone} • 📧 ${r.email}</div>
-        ${r.partner?`<div style="margin-top:8px; font-size:12px; color:var(--g-green); font-weight:500;">⚡ Prochain RDV : ${r.slot}</div>`:''}
+    ${resultats.map(p => `
+      <div class="search-result tc-place-card" data-place="${escapeHTMLSafe(JSON.stringify(p))}">
+        <div class="search-name">${escapeHTML(p.nom)}</div>
+        ${p.note != null ? `<div style="font-size:12px; color:#f9a825; margin:2px 0;">⭐ ${p.note}${p.avisTotal!=null ? ' (' + p.avisTotal + ' avis)' : ''}</div>` : ''}
+        ${p.adresse ? `<div class="search-addr">📍 ${escapeHTML(p.adresse)}</div>` : ''}
+        ${p.telephone ? `<div class="search-contact">📞 ${escapeHTML(p.telephone)}</div>` : ''}
         <div class="search-actions">
-          ${r.partner
-            ? `<button class="search-action search-action-primary" onclick="showToast('RDV en 1 clic — démo')">📅 Prendre RDV en 1 clic</button>`
-            : `<button class="search-action" onclick="showToast('Appel ${r.phone}')">📞 Appeler</button>
-               <button class="search-action" onclick="showToast('Email ${r.email}')">📧 Email</button>
-               ${r.doctolib?`<button class="search-action search-action-ext" onclick="showToast('Lien Doctolib')">🔗 Doctolib</button>`:''}`
-          }
+          <button class="search-action search-action-primary" onclick="tcPlaceCreerRdv(this)">📅 Créer un RDV</button>
+          <button class="search-action" onclick="tcPlaceAjouterContact(this)">➕ Ajouter contact</button>
+          ${p.telephone ? `<button class="search-action" onclick="tcPlaceAppeler(this)">📞 Appeler</button>` : ''}
         </div>
-        ${!r.partner?`<div class="search-invite" onclick="showToast('Invitation envoyée !')">💌 Inviter ce pro à rejoindre TimeCool</div>`:''}
       </div>
-    `).join('')}
-    <div style="padding:12px; margin-top:12px; font-size:11px; color:var(--text-sec); text-align:center; font-style:italic;">
-      TimeCool s'intègre à votre écosystème — nous n'imposons rien, nous facilitons tout.
-    </div>`;
+    `).join('')}`;
 }
 
 // ═══ MESSAGES ═══
@@ -5656,9 +5672,10 @@ function renderAIConfig() {
       ]
     },
     {
-      priority: 4, medal: '🏅', label: 'Priorité 4 — Géolocalisation', color: '#fbbc04', bg: '#fff8e1',
+      priority: 4, medal: '🏅', label: 'Priorité 4 — Géolocalisation & Recherche', color: '#fbbc04', bg: '#fff8e1',
       items: [
-        { id: 'gmaps', name: 'Google Maps Platform', icon: '🗺️', placeholder: 'AIza...', testable: false, url: 'https://console.cloud.google.com' }
+        { id: 'gmaps', name: 'Google Maps Platform', icon: '🗺️', placeholder: 'AIza...', testable: false, url: 'https://console.cloud.google.com', badge: 'Places + Directions + Custom Search' },
+        { id: 'google_cse_cx', name: 'Google Custom Search (cx)', icon: '🔎', placeholder: TC_CSE_CX_PAR_DEFAUT + ' (identifiant du moteur)', testable: false, url: 'https://programmablesearchengine.google.com/controlpanel/all', badge: 'Recherche web de Charly' }
       ]
     },
     {
@@ -6351,6 +6368,15 @@ function renderChatMessage(m) {
     if (proposals && proposals.length && textAfter && !m._followUp) {
       m._followUp = textAfter;
     }
+    // [PLACES] : résultats Google Places, injectés par tcGererRechercheProfessionnel
+    // (jamais générés par le modèle — les données factuelles viennent de Google, pas de Charly).
+    const placesMatch = m.content.match(/\[PLACES\]([\s\S]*?)\[\/PLACES\]/);
+    let placesResultats = null;
+    if (placesMatch) {
+      try { placesResultats = JSON.parse(placesMatch[1]); } catch(e) { placesResultats = null; }
+    }
+    textBefore = textBefore.replace(/\[PLACES\][\s\S]*?\[\/PLACES\]/g, '').trim();
+
     const cleanContent = textBefore.replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, '').replace(/\n{2,}/g, '\n').trim();
 
     // Étendre les proposals si "tous les jours" détecté
@@ -6422,6 +6448,25 @@ function renderChatMessage(m) {
               <button onclick="charlyQuickReply('Modifie : ')" style="flex:1; min-width:80px; padding:10px; background:#fef7e0; color:#8a6500; border:1px solid #fbd784; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">✏️ Modifier</button>
               <button onclick="charlyQuickReply('Recommence depuis le début')" style="flex:1; min-width:80px; padding:10px; background:#f1f3f4; color:var(--text); border:1.5px solid var(--border); border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">↻ Recommencer</button>
             </div>
+          </div>
+      `;
+    }
+    if (placesResultats && placesResultats.length) {
+      html += `
+          <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">
+            ${placesResultats.map(p => `
+              <div class="tc-place-card" data-place="${escapeHTMLSafe(JSON.stringify(p))}" style="padding:12px; background:#fff; border:1px solid var(--border); border-radius:12px;">
+                <div style="font-size:13px; font-weight:700; color:var(--text);">${escapeHTML(p.nom)}</div>
+                ${p.note != null ? `<div style="font-size:12px; color:#f9a825; margin-top:2px;">⭐ ${p.note}${p.avisTotal!=null ? ' (' + p.avisTotal + ' avis)' : ''}</div>` : ''}
+                ${p.adresse ? `<div style="font-size:12px; color:var(--text-sec); margin-top:4px;">📍 ${escapeHTML(p.adresse)}</div>` : ''}
+                ${p.telephone ? `<div style="font-size:12px; color:var(--text-sec); margin-top:2px;">📞 ${escapeHTML(p.telephone)}</div>` : ''}
+                <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+                  <button onclick="tcPlaceCreerRdv(this)" style="flex:1; min-width:110px; padding:8px; background:var(--g-blue); color:#fff; border:none; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">📅 Créer un RDV</button>
+                  <button onclick="tcPlaceAjouterContact(this)" style="flex:1; min-width:110px; padding:8px; background:#f1f3f4; color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">➕ Ajouter contact</button>
+                  ${p.telephone ? `<button onclick="tcPlaceAppeler(this)" style="padding:8px 10px; background:#f1f3f4; color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">📞</button>` : ''}
+                </div>
+              </div>
+            `).join('')}
           </div>
       `;
     }
@@ -6857,6 +6902,146 @@ function charlyQuickAction(action) {
   charlySendMessage();
 }
 
+// ═══ DÉTECTION D'INTENTION — Places / Directions / Custom Search ═══
+// Des listes de déclencheurs, comme _unavailable/_faq ci-dessous : pas
+// une vraie compréhension du langage, mais suffisant pour distinguer
+// une demande explicite d'une simple conversation, sans jamais
+// intercepter une question générale à tort.
+
+const TC_PROFESSIONS = ['médecin','docteur','généraliste','dentiste','dentaire','kiné','kinésithérapeute',
+  'ostéopathe','pharmacie','pharmacien','vétérinaire','opticien','coiffeur','coiffeuse','garagiste',
+  'avocat','notaire','plombier','électricien','psychologue','psychiatre','gynécologue','dermatologue',
+  'cardiologue','ophtalmologue','infirmier','infirmière','sage-femme','orthophoniste','podologue'];
+
+function detecterRechercheProfessionnel(text) {
+  const t = text.toLowerCase();
+  const declencheur = /\b(cherche|trouve|recherche|connais[- ]tu|un bon|une bonne|il me faut|j'ai besoin d'|j’ai besoin d’|propose[- ]?moi)\b/.test(t);
+  if (!declencheur) return null;
+  return TC_PROFESSIONS.find(p => t.includes(p)) || null;
+}
+
+const TC_TRAJET_DECLENCHEURS = ['temps de trajet','combien de temps pour aller','combien de temps pour arriver',
+  'combien de temps pour me rendre','en combien de temps','heure de départ pour','temps pour aller',
+  'temps pour arriver','itinéraire pour','itinéraire jusqu','trajet jusqu','trajet pour aller','trajet pour me rendre'];
+
+function detecterDemandeTrajet(text) {
+  const t = text.toLowerCase();
+  if (!TC_TRAJET_DECLENCHEURS.some(d => t.includes(d))) return null;
+  // (?:^|\s) plutôt que \b : \b se définit via \w, qui en JS ne couvre
+  // pas les lettres accentuées — \bà ne matche jamais après un espace,
+  // espace et « à » étant tous deux "non-mot" pour le moteur regex.
+  const m = text.match(/(?:^|\s)(?:à|vers|chez|jusqu'à|jusqu’à|jusqu'au|jusqu’au)\s+(.+?)[.?!]?$/i);
+  return m ? m[1].trim() : '';
+}
+
+const TC_WEB_DECLENCHEURS = ['cherche sur internet','recherche sur internet','cherche sur le web',
+  'recherche sur le web','cherche sur google','recherche sur google','trouve sur internet',
+  'trouve sur le web','fais une recherche web','fais une recherche internet','recherche web :','recherche internet :'];
+
+function detecterRechercheWeb(text) {
+  const t = text.toLowerCase();
+  const decl = TC_WEB_DECLENCHEURS.find(d => t.includes(d));
+  if (!decl) return null;
+  return text.replace(new RegExp(decl, 'i'), '').replace(/^[\s:,-]+/, '').trim();
+}
+
+/** Pousse le message utilisateur dans l'historique et rafraîchit — évite la répétition dans les 3 handlers. */
+function tcPousserMessageUtilisateur(text) {
+  charlyIA.history.push({role:'user', content:text});
+  const inp = document.getElementById('charlyInput');
+  inp.value = ''; inp.style.height = 'auto';
+  renderCharlyChat();
+}
+
+function tcDefinirStatutCharly(texte, chargement) {
+  const statut = document.getElementById('charlyStatus');
+  if (statut) statut.textContent = texte;
+  charlyIA.isLoading = !!chargement;
+  const btn = document.getElementById('charlySendBtn');
+  if (btn) btn.style.opacity = chargement ? '0.5' : '1';
+}
+
+async function tcGererRechercheProfessionnel(text, profession) {
+  tcPousserMessageUtilisateur(text);
+  tcDefinirStatutCharly('📍 Recherche de « ' + profession + ' » en cours…', true);
+  try {
+    if (!tcCleGoogle()) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+    const position = await tcObtenirPosition();
+    const resultats = await tcRecherchePlaces(profession, { position, limite: 3 });
+    if (!resultats.length) {
+      charlyIA.history.push({role:'assistant', content: `Je n'ai trouvé aucun « ${profession} » ${position ? 'à proximité' : ''}. Essaie une autre recherche, ou précise une ville.`});
+    } else {
+      const intro = position
+        ? `J'ai trouvé ${resultats.length} résultat(s) pour « ${profession} » près de toi :`
+        : `J'ai trouvé ${resultats.length} résultat(s) pour « ${profession} » (position non disponible, tri par pertinence) :`;
+      charlyIA.history.push({role:'assistant', content: intro + '\n[PLACES]' + JSON.stringify(resultats) + '[/PLACES]'});
+    }
+  } catch (err) {
+    charlyIA.history.push({role:'system_info', content: '❌ Erreur recherche Places : ' + err.message.substring(0,150)});
+  }
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  renderCharlyChat();
+}
+
+async function tcGererDemandeTrajet(text, destination) {
+  tcPousserMessageUtilisateur(text);
+  if (!destination) {
+    charlyIA.history.push({role:'assistant', content: "Quelle est l'adresse d'arrivée ? Donne-la moi et je calcule le temps de trajet."});
+    renderCharlyChat();
+    return;
+  }
+  tcDefinirStatutCharly('🚗 Calcul du trajet vers ' + destination + '…', true);
+  try {
+    const estimation = await tcEstimerTrajet(destination);
+    if (estimation === null) {
+      charlyIA.history.push({role:'assistant', content: "Je ne peux pas estimer ce trajet sans ta position de départ — la géolocalisation a été refusée ou n'est pas disponible. Active-la, ou donne-moi ton adresse de départ."});
+    } else if (estimation.aucunItineraire) {
+      charlyIA.history.push({role:'assistant', content: `Je n'ai trouvé aucun itinéraire routier vers « ${destination} ». L'adresse est-elle correcte ?`});
+    } else {
+      const dist = estimation.distanceKm ? ` (${estimation.distanceKm} km)` : '';
+      charlyIA.history.push({role:'assistant', content: `🚗 Vers ${estimation.adresseArrivee}${dist} : compte entre ${estimation.basseMin} et ${estimation.hauteMin} minutes avec le trafic actuel.`});
+    }
+  } catch (err) {
+    charlyIA.history.push({role:'system_info', content: '❌ Erreur trajet : ' + err.message.substring(0,150)});
+  }
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  renderCharlyChat();
+}
+
+async function tcGererRechercheWeb(text, requete) {
+  tcPousserMessageUtilisateur(text);
+  if (!requete) {
+    charlyIA.history.push({role:'assistant', content: "Que veux-tu que je cherche ?"});
+    renderCharlyChat();
+    return;
+  }
+  tcDefinirStatutCharly('🔎 Recherche web en cours…', true);
+  try {
+    const resultats = await tcRechercheWeb(requete);
+    if (!resultats.length) {
+      charlyIA.history.push({role:'assistant', content: `Je n'ai rien trouvé de pertinent sur le web pour « ${requete} ». Essaie de reformuler.`});
+    } else {
+      const extraits = resultats.map((r,i) => `[${i+1}] ${r.titre}\n${r.extrait}`).join('\n\n');
+      const consigne = `Recherche web demandée : « ${requete} ».\nExtraits trouvés par Google Custom Search :\n\n${extraits}\n\nRéponds de façon claire et concise UNIQUEMENT à partir de ces extraits. N'invente aucune information absente des extraits. Ne mentionne pas Google.`;
+      let synthese = null;
+      if (!charlyIA.config.demoMode) {
+        try {
+          synthese = await callAI([
+            {role:'system', content: charlyIA.config.systemPrompt + tcLangInstruction()},
+            {role:'user', content: consigne}
+          ]);
+        } catch (e) { synthese = null; }
+      }
+      const sources = '\n\nSources :\n' + resultats.map(r => '• ' + r.titre + (r.lien ? ' — ' + r.lien : '')).join('\n');
+      charlyIA.history.push({role:'assistant', content: (synthese ? tcReplyOuRepli(synthese) : resultats.map(r=>r.titre+' — '+r.extrait).join('\n')) + sources});
+    }
+  } catch (err) {
+    charlyIA.history.push({role:'system_info', content: '❌ Erreur recherche web : ' + err.message.substring(0,150)});
+  }
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  renderCharlyChat();
+}
+
 async function charlySendMessage() {
   const inp = document.getElementById('charlyInput');
   const text = inp.value.trim();
@@ -6900,6 +7085,33 @@ async function charlySendMessage() {
     return;
   }
 
+  // Ces trois intégrations appellent de vraies API Google, facturables —
+  // hors de propos en mode démo, dont le contrat est justement de n'en
+  // appeler aucune. On les laisse alors retomber sur le flux normal
+  // (réponse simulée, y compris son propre gabarit "trajet"/"rdv").
+  if (!charlyIA.config.demoMode) {
+    // === INTERCEPTION RECHERCHE DE PROFESSIONNEL — Google Places ===
+    const _profession = detecterRechercheProfessionnel(text);
+    if (_profession) {
+      await tcGererRechercheProfessionnel(text, _profession);
+      return;
+    }
+
+    // === INTERCEPTION DEMANDE DE TRAJET — Google Directions ===
+    const _trajetDest = detecterDemandeTrajet(text);
+    if (_trajetDest !== null) {
+      await tcGererDemandeTrajet(text, _trajetDest);
+      return;
+    }
+
+    // === INTERCEPTION RECHERCHE WEB — Google Custom Search ===
+    const _webRequete = detecterRechercheWeb(text);
+    if (_webRequete !== null) {
+      await tcGererRechercheWeb(text, _webRequete);
+      return;
+    }
+  }
+
   // === INTERCEPTION FONCTIONNALITES NON DISPONIBLES ===
   const _unavailable = [
     { keys: ['téléphoner','telephoner','téléphone pour moi','téléphoner pour moi','appel pour moi','appelle pour moi','passer un appel','passe un appel','passer un coup de fil','coup de fil pour moi'],
@@ -6912,8 +7124,8 @@ async function charlySendMessage() {
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['apple calendar','caldav','outlook','synchroniser avec','sync avec'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
-    { keys: ['gps','navigation','itinéraire','waze','google maps','maps'],
-      reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
+    { keys: ['gps','navigation','waze'],
+      reply: 'Le guidage GPS pas à pas n\'est pas encore disponible 🔜 Mais dis-moi « temps de trajet vers [adresse] » et je te donne une estimation avec le trafic en temps réel !' },
     { keys: ['sms','texto','message','whatsapp','envoyer un message','envoie un sms','envoie un texto'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['réveil','réveille','alarm','réveille-moi','réveille moi','me réveiller'],
@@ -7200,6 +7412,193 @@ async function callAnthropic(messages) {
     throw new Error('Réponse trop longue pour la limite configurée — augmente « longueur maximale » dans Configuration IA.');
   }
   throw new Error('Claude n\'a renvoyé aucun texte (' + raison + ').');
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═══ INTÉGRATIONS GOOGLE — Places, Directions, Custom Search ═══
+// ═══════════════════════════════════════════════════════════
+// Les trois API sont couvertes par la même clé « Google Maps Platform »
+// (apiKeys.gmaps, admin > Configuration IA > Priorité 4) — c'est ainsi
+// qu'elle a été créée côté Google Cloud Console, rattachée aux trois API.
+// Seul l'identifiant du moteur Custom Search (cx) est propre au
+// troisième service et vit dans son propre champ admin ; à défaut de
+// saisie il retombe sur le moteur fourni au lancement de la fonction.
+const TC_CSE_CX_PAR_DEFAUT = 'b5384d87b75fc4d3e';
+
+function tcCleGoogle() {
+  let apiKeys = {};
+  try { apiKeys = JSON.parse(localStorage.getItem('timecool_api_keys') || '{}'); } catch(e) {}
+  return (apiKeys.gmaps || '').trim();
+}
+
+function tcCseCx() {
+  let apiKeys = {};
+  try { apiKeys = JSON.parse(localStorage.getItem('timecool_api_keys') || '{}'); } catch(e) {}
+  return (apiKeys.google_cse_cx || '').trim() || TC_CSE_CX_PAR_DEFAUT;
+}
+
+/**
+ * Position actuelle, ou null si indisponible/refusée. Ne rejette
+ * jamais : à chaque appelant de dégrader la fonctionnalité (recherche
+ * sans biais de proximité, trajet impossible à estimer) plutôt que de
+ * planter sur un refus de géolocalisation.
+ *
+ * L'option `timeout` de getCurrentPosition n'est pas fiable partout —
+ * observé en test : sans fournisseur de position, certains WebView ne
+ * rappellent ni le succès ni l'échec, et l'appelant resterait bloqué
+ * indéfiniment sur "Recherche en cours…". Le setTimeout ci-dessous est
+ * la garantie réelle de résolution, indépendante du navigateur.
+ */
+function tcObtenirPosition(timeoutMs) {
+  const delai = timeoutMs || 8000;
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    let reglee = false;
+    const regler = valeur => { if (!reglee) { reglee = true; resolve(valeur); } };
+    setTimeout(() => regler(null), delai);
+    navigator.geolocation.getCurrentPosition(
+      pos => regler({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => regler(null),
+      { enableHighAccuracy: false, timeout: delai, maximumAge: 5 * 60 * 1000 }
+    );
+  });
+}
+
+/**
+ * Recherche de professionnels via l'API Places (New). Renvoie au plus
+ * `limite` résultats {nom, adresse, note, avisTotal, telephone}.
+ * Ne renvoie jamais de résultat inventé : erreur explicite si la clé
+ * manque ou si l'appel échoue, tableau vide si Google n'a rien trouvé.
+ */
+async function tcRecherchePlaces(requete, opts) {
+  opts = opts || {};
+  const cle = tcCleGoogle();
+  if (!cle) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+  const limite = opts.limite || 3;
+
+  const body = {
+    textQuery: requete,
+    languageCode: 'fr',
+    regionCode: 'FR',
+    maxResultCount: limite
+  };
+  if (opts.position) {
+    // rankPreference DISTANCE n'a de sens qu'avec un biais de position :
+    // sans lui Google trie par pertinence, ce qui reste correct en repli.
+    body.locationBias = { circle: { center: { latitude: opts.position.lat, longitude: opts.position.lng }, radius: 20000 } };
+    body.rankPreference = 'DISTANCE';
+  }
+
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': cle,
+      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.internationalPhoneNumber'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    let msg = 'HTTP ' + res.status;
+    try { const j = await res.json(); msg = (j.error && j.error.message) || msg; } catch(e) {}
+    console.error('Places API ' + res.status + ' : ' + msg);
+    throw new Error('Google Places : ' + msg);
+  }
+
+  const data = await res.json();
+  const lieux = Array.isArray(data.places) ? data.places : [];
+  return lieux.slice(0, limite).map(p => ({
+    nom: (p.displayName && p.displayName.text) || 'Sans nom',
+    adresse: p.formattedAddress || null,
+    note: typeof p.rating === 'number' ? p.rating : null,
+    avisTotal: typeof p.userRatingCount === 'number' ? p.userRatingCount : null,
+    telephone: p.nationalPhoneNumber || p.internationalPhoneNumber || null
+  }));
+}
+
+/**
+ * Estimation du temps de trajet vers `destination`, avec trafic temps
+ * réel (Directions API, departure_time=now). Renvoie une FOURCHETTE
+ * {basseMin, hauteMin} — entre le temps hors trafic et le temps avec
+ * trafic actuel majoré de 10 % — jamais un chiffre unique : le trafic
+ * est par nature incertain. Renvoie null si la position de départ est
+ * indisponible (géolocalisation refusée) : jamais de durée inventée.
+ */
+async function tcEstimerTrajet(destination, opts) {
+  opts = opts || {};
+  const cle = tcCleGoogle();
+  if (!cle) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+
+  let origine = opts.origine || null;
+  if (!origine) {
+    const position = await tcObtenirPosition();
+    if (!position) return null;
+    origine = position.lat + ',' + position.lng;
+  }
+
+  const params = new URLSearchParams({
+    origin: origine,
+    destination: destination,
+    mode: 'driving',
+    language: 'fr',
+    region: 'fr',
+    departure_time: 'now',
+    traffic_model: 'best_guess',
+    key: cle
+  });
+
+  const res = await fetch('https://maps.googleapis.com/maps/api/directions/json?' + params.toString());
+  if (!res.ok) throw new Error('Google Directions : HTTP ' + res.status);
+  const data = await res.json();
+
+  if (data.status !== 'OK') {
+    if (data.status === 'ZERO_RESULTS' || data.status === 'NOT_FOUND') return { aucunItineraire: true };
+    console.error('Directions API ' + data.status + ' : ' + (data.error_message || ''));
+    throw new Error('Google Directions : ' + data.status + (data.error_message ? ' — ' + data.error_message : ''));
+  }
+
+  const jambe = data.routes[0] && data.routes[0].legs[0];
+  const sansTrafic = jambe && jambe.duration ? jambe.duration.value : null;
+  if (!jambe || sansTrafic == null) return { aucunItineraire: true };
+  const avecTrafic = jambe.duration_in_traffic ? jambe.duration_in_traffic.value : sansTrafic;
+
+  const basseSec = Math.min(sansTrafic, avecTrafic);
+  const hauteSec = Math.max(sansTrafic, avecTrafic) * 1.1;
+
+  return {
+    basseMin: Math.max(1, Math.round(basseSec / 60)),
+    hauteMin: Math.max(1, Math.round(hauteSec / 60)),
+    distanceKm: jambe.distance ? Math.round(jambe.distance.value / 100) / 10 : null,
+    adresseArrivee: jambe.end_address || destination
+  };
+}
+
+/**
+ * Recherche web générale (Custom Search JSON API). Renvoie au plus 5
+ * résultats {titre, extrait, lien}. Un tableau vide signifie qu'il faut
+ * le dire à l'utilisateur — jamais improviser une réponse à sa place.
+ */
+async function tcRechercheWeb(requete) {
+  const cle = tcCleGoogle();
+  if (!cle) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+  const cx = tcCseCx();
+
+  const params = new URLSearchParams({ key: cle, cx: cx, q: requete, num: '5', hl: 'fr' });
+  const res = await fetch('https://www.googleapis.com/customsearch/v1?' + params.toString());
+  if (!res.ok) {
+    let msg = 'HTTP ' + res.status;
+    try { const j = await res.json(); msg = (j.error && j.error.message) || msg; } catch(e) {}
+    console.error('Custom Search API ' + res.status + ' : ' + msg);
+    throw new Error('Google Custom Search : ' + msg);
+  }
+  const data = await res.json();
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items.slice(0, 5).map(it => ({
+    titre: it.title || '',
+    extrait: it.snippet || '',
+    lien: it.link || ''
+  }));
 }
 
 // ═══ MODE DÉMO — réponses simulées ═══
@@ -11166,6 +11565,47 @@ function createRdvWithContact(contactId) {
       autoResizeCharly(inp);
     }
   }, 200);
+}
+
+/** Lit les données Google Places attachées à la carte contenant le bouton cliqué. */
+function tcLirePlaceDepuisBouton(bouton) {
+  const carte = bouton.closest('.tc-place-card');
+  if (!carte) return null;
+  try { return JSON.parse(carte.dataset.place); } catch(e) { return null; }
+}
+
+function tcPlaceCreerRdv(bouton) {
+  const p = tcLirePlaceDepuisBouton(bouton);
+  if (!p) return;
+  navigate('assistant');
+  setTimeout(() => {
+    const inp = document.getElementById('charlyInput');
+    if (inp) {
+      inp.value = `Crée un rendez-vous chez ${p.nom}${p.adresse ? ', ' + p.adresse : ''}. `;
+      inp.focus();
+      autoResizeCharly(inp);
+    }
+  }, 200);
+}
+
+function tcPlaceAjouterContact(bouton) {
+  const p = tcLirePlaceDepuisBouton(bouton);
+  if (!p) return;
+  contactsList.push({
+    id: 'contact_' + Date.now(),
+    name: p.nom,
+    phone: p.telephone || '',
+    email: '',
+    createdAt: new Date().toISOString()
+  });
+  saveContacts();
+  showToast('✅ ' + p.nom + ' ajouté aux contacts');
+}
+
+function tcPlaceAppeler(bouton) {
+  const p = tcLirePlaceDepuisBouton(bouton);
+  if (!p || !p.telephone) return;
+  window.location.href = 'tel:' + p.telephone.replace(/\s/g, '');
 }
 
 // Override navigate pour la page contacts

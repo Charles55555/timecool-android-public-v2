@@ -9,6 +9,13 @@
          pleinement utilisable si la permission est refusée. -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
 
+    <!-- Position, demandée à l'exécution et uniquement quand la page
+         appelle navigator.geolocation (recherche de professionnels à
+         proximité, estimation de trajet). Un refus dégrade la fonction
+         au lieu de la bloquer : voir tcObtenirPosition() côté JS. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

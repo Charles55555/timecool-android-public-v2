@@ -24,6 +24,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import java.util.concurrent.Executors;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -43,6 +44,11 @@ public class MainActivity extends Activity {
 
     private static final int REQ_FICHIER = 1001;
     private static final int REQ_CONTACTS = 1002;
+    private static final int REQ_LOCALISATION = 1003;
+
+    /** Prompt de géolocalisation en attente d'une réponse à la permission runtime. */
+    private String origineLocalisationEnAttente;
+    private GeolocationPermissions.Callback callbackLocalisationEnAttente;
 
     /*
      * Resultat Google en attente de livraison a la page.
@@ -115,6 +121,10 @@ public class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // Sans ceci, onGeolocationPermissionsShowPrompt n'est jamais
+        // déclenché : la WebView refuse silencieusement toute demande
+        // navigator.geolocation, permission Android accordée ou non.
+        settings.setGeolocationEnabled(true);
 
         // Pont natif : donne à la page l'accès au carnet d'adresses.
         webView.addJavascriptInterface(new PontNatif(), "TimeCoolNatif");
@@ -166,6 +176,39 @@ public class MainActivity extends Activity {
                 }
                 return true;
             }
+
+            /*
+             * Sans cet override, la WebView répond toujours "refusé" à
+             * navigator.geolocation, même quand la permission Android est
+             * déjà accordée : le prompt WebView est un préalable distinct
+             * de la permission système, et les deux doivent être gérés.
+             */
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origine,
+                                                            GeolocationPermissions.Callback callback) {
+                if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED
+                    || checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                        == PackageManager.PERMISSION_GRANTED) {
+                    callback.invoke(origine, true, false);
+                    return;
+                }
+                // Un prompt déjà en attente doit être clos avant d'en ouvrir
+                // un autre, sinon son callback resterait sans réponse.
+                if (callbackLocalisationEnAttente != null) {
+                    callbackLocalisationEnAttente.invoke(
+                        origineLocalisationEnAttente, false, false);
+                }
+                origineLocalisationEnAttente = origine;
+                callbackLocalisationEnAttente = callback;
+                requestPermissions(
+                    new String[] {
+                        android.Manifest.permission.ACCESS_FINE_LOCATION,
+                        android.Manifest.permission.ACCESS_COARSE_LOCATION
+                    },
+                    REQ_LOCALISATION
+                );
+            }
         });
 
         // Charge l'application depuis les assets
@@ -208,6 +251,22 @@ public class MainActivity extends Activity {
                 envoyerContactsALaPage();
             } else {
                 appelerJs("tcContactsRefuses", "");
+            }
+            return;
+        }
+        if (requete == REQ_LOCALISATION) {
+            boolean accorde = false;
+            for (int r : resultats) {
+                if (r == PackageManager.PERMISSION_GRANTED) {
+                    accorde = true;
+                    break;
+                }
+            }
+            if (callbackLocalisationEnAttente != null) {
+                callbackLocalisationEnAttente.invoke(
+                    origineLocalisationEnAttente, accorde, false);
+                callbackLocalisationEnAttente = null;
+                origineLocalisationEnAttente = null;
             }
             return;
         }
