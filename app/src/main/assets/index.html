@@ -230,7 +230,26 @@ body { display:flex; flex-direction:column; }
 .btn-secondary { background:var(--bg-soft); color:var(--text); }
 .btn-success { background:var(--g-green); color:white; }
 
-.toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 20px; border-radius:24px; font-size:13px; opacity:0; transition:opacity 0.3s; z-index:10001; text-align:center; max-width:90%; }
+.toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 20px; border-radius:24px; font-size:13px; opacity:0; transition:opacity 0.3s; z-index:10200; text-align:center; max-width:90%; }
+/* ═══ Modales TimeCool — remplacent confirm/alert/prompt natifs ═══
+   Les boites natives affichaient le chemin technique de la page
+   (file:///android_asset/...) dans leur en-tete, et un habillage
+   systeme etranger a la charte. */
+.tc-mod-ov { position:fixed; inset:0; background:rgba(26,26,46,.55); backdrop-filter:blur(2px); display:flex; align-items:center; justify-content:center; padding:24px; z-index:10100; opacity:0; transition:opacity .18s; }
+.tc-mod-ov.on { opacity:1; }
+.tc-mod { background:#fff; border-radius:20px; box-shadow:0 8px 40px rgba(0,0,0,.22); width:100%; max-width:380px; padding:24px 22px 18px; transform:translateY(10px) scale(.98); transition:transform .18s; max-height:80vh; overflow-y:auto; }
+.tc-mod-ov.on .tc-mod { transform:none; }
+.tc-mod-ic { font-size:34px; text-align:center; margin-bottom:10px; }
+.tc-mod-tt { font-size:16px; font-weight:700; color:var(--text); text-align:center; margin-bottom:8px; }
+.tc-mod-tx { font-size:14px; color:var(--text-sec); line-height:1.55; text-align:center; white-space:pre-line; margin-bottom:18px; }
+.tc-mod-in { width:100%; padding:13px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box; margin-bottom:16px; outline:none; }
+.tc-mod-in:focus { border-color:var(--g-blue); }
+.tc-mod-bt { display:flex; gap:10px; }
+.tc-mod-bt button { flex:1; padding:14px 10px; border:none; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
+.tc-mod-ok { background:var(--g-blue); color:#fff; }
+.tc-mod-ok.danger { background:var(--g-red); }
+.tc-mod-no { background:var(--bg-soft); color:var(--text-sec); border:1.5px solid var(--border) !important; }
+
 .champ-invalide { border-color:#ea4335 !important; background:#fff5f5; }
 .err-champ { display:none; font-size:12px; color:#c5221f; margin-top:5px; line-height:1.4; }
 .err-champ.visible { display:block; }
@@ -3221,10 +3240,10 @@ function saveEventEdit() {
   showToast('✅ Rendez-vous modifié !');
 }
 
-function deleteCurrentEvent() {
+async function deleteCurrentEvent() {
   const e = currentEvent;
   if (!e) return;
-  if (!confirm('Supprimer ce rendez-vous ?')) return;
+  if (!await tcConfirm('Supprimer ce rendez-vous ?')) return;
   events = events.filter(ev => ev !== e);
   closeEventModal();
   saveEventsToStorage();
@@ -3247,8 +3266,8 @@ function cancelRdv() {
   });
   showToast('✅ Annulation envoyée');
   updateBadges();
-  setTimeout(() => {
-    if (FEATURES.MODE_PRO && confirm("L'annulation a été envoyée.\nBasculer en Mode Professionnel pour voir la réaction ?")) {
+  setTimeout(async () => {
+    if (FEATURES.MODE_PRO && await tcConfirm("L'annulation a été envoyée.\nBasculer en Mode Professionnel pour voir la réaction ?")) {
       switchMode('pro');
       setTimeout(() => navigate('messages'), 400);
     }
@@ -3493,7 +3512,7 @@ function closeMsgMenuOnce() {
   document.removeEventListener('click', closeMsgMenuOnce);
 }
 
-function msgAction(a) {
+async function msgAction(a) {
   closeMsgMenuOnce();
   if (a === 'new') { navigate('contacts'); showToast('Choisis un contact pour démarrer'); return; }
   if (a === 'newgroup') { openNewGroupSheet(); return; }
@@ -3503,7 +3522,7 @@ function msgAction(a) {
   if (a === 'notif')    { _msgNotif = !_msgNotif; showToast(_msgNotif ? '🔔 Notifications activées' : '🔕 Notifications coupées'); openMsgSettings(); return; }
   if (a === 'privacy')  { openMsgPrivacy(); return; }
   if (a === 'clear') {
-    if (confirm('Effacer toutes les conversations ? Cette action est définitive.')) {
+    if (await tcConfirm('Effacer toutes les conversations ? Cette action est définitive.')) {
       messages[mode] = [];
       _msgFilter = 'all';
       saveMessagesToStorage();
@@ -3550,8 +3569,8 @@ function openMsgGroupsList() {
   document.body.appendChild(ov);
 }
 
-function deleteGroupFromList(id, el) {
-  if (!confirm('Supprimer ce groupe et ses messages ?')) return;
+async function deleteGroupFromList(id, el) {
+  if (!await tcConfirm('Supprimer ce groupe et ses messages ?')) return;
   messages[mode] = messages[mode].filter(m => m.id !== id);
   saveMessagesToStorage();
   updateBadges();
@@ -3711,9 +3730,9 @@ function msgBlock(id, el) {
   const m = messages[mode].find(x => x.id === id); if (!m) return;
   _closeSheet(el); showToast('🚫 ' + m.with + ' ne peut plus te contacter');
 }
-function msgDelete(id, el) {
+async function msgDelete(id, el) {
   _closeSheet(el);
-  if (!confirm('Supprimer cette conversation ?')) return;
+  if (!await tcConfirm('Supprimer cette conversation ?')) return;
   messages[mode] = messages[mode].filter(x => x.id !== id);
   saveMessagesToStorage();
   updateBadges(); renderMessages(); showToast('Conversation supprimée');
@@ -3862,8 +3881,8 @@ function sendSlots(convId, slots) {
   }
   showToast('✅ Propositions envoyées');
   updateBadges();
-  setTimeout(() => {
-    if (confirm('Propositions envoyées !\nBasculer en Mode Particulier pour voir la réaction ?')) {
+  setTimeout(async () => {
+    if (await tcConfirm('Propositions envoyées !\nBasculer en Mode Particulier pour voir la réaction ?')) {
       switchMode('user');
       setTimeout(() => { navigate('messages'); setTimeout(() => openConversation(userConv.id), 300); }, 400);
     }
@@ -3899,8 +3918,8 @@ function chooseSlot(convId, idx) {
   }
   showToast('✅ Nouveau RDV : '+slot.label);
   updateBadges();
-  setTimeout(() => {
-    if (FEATURES.MODE_PRO && confirm('RDV confirmé !\nBasculer en Mode Pro pour voir l\'agenda mis à jour ?')) {
+  setTimeout(async () => {
+    if (FEATURES.MODE_PRO && await tcConfirm('RDV confirmé !\nBasculer en Mode Pro pour voir l\'agenda mis à jour ?')) {
       switchMode('pro');
       setTimeout(() => { navigate('calendar'); viewDate = new Date(slot.date+'T00:00:00'); render(); }, 400);
     }
@@ -4112,6 +4131,150 @@ function updateBadges() {
   if (mb) { mb.style.display = unread>0?'flex':'none'; mb.textContent = unread; }
 }
 
+
+/* ══════════════════════════════════════════════════════════════
+   MODALES TIMECOOL
+
+   Remplacent les boites natives du navigateur. Ces dernieres
+   affichaient l'origine technique de la page — file:///android_asset/…
+   dans l'APK — dans leur en-tete systeme, ainsi qu'un habillage
+   etranger a la charte, impossible a styler.
+
+   Contrairement aux fonctions natives, celles-ci sont ASYNCHRONES :
+   une modale du DOM ne peut pas bloquer l'execution. Tout appelant
+   doit donc utiliser await, et etre lui-meme async — a defaut, un
+   garde du type « if (!await tcConfirm(...)) return; » recevrait une promesse,
+   toujours vraie, et l'action destructrice s'executerait quand meme.
+   ══════════════════════════════════════════════════════════════ */
+
+function tcModale(options) {
+  return new Promise(function (resolve) {
+    const ov = document.createElement('div');
+    ov.className = 'tc-mod-ov';
+
+    const boite = document.createElement('div');
+    boite.className = 'tc-mod';
+
+    // textContent partout : le message peut contenir un nom saisi par
+    // l'utilisateur, jamais interprete comme du HTML.
+    if (options.icone) {
+      const i = document.createElement('div');
+      i.className = 'tc-mod-ic';
+      i.textContent = options.icone;
+      boite.appendChild(i);
+    }
+    if (options.titre) {
+      const t = document.createElement('div');
+      t.className = 'tc-mod-tt';
+      t.textContent = options.titre;
+      boite.appendChild(t);
+    }
+    if (options.texte) {
+      const p = document.createElement('div');
+      p.className = 'tc-mod-tx';
+      p.textContent = options.texte;
+      boite.appendChild(p);
+    }
+
+    let champ = null;
+    if (options.saisie) {
+      champ = document.createElement('input');
+      champ.type = 'text';
+      champ.className = 'tc-mod-in';
+      champ.value = options.valeur || '';
+      champ.placeholder = options.exemple || '';
+      boite.appendChild(champ);
+    }
+
+    const barre = document.createElement('div');
+    barre.className = 'tc-mod-bt';
+
+    const fermer = function (resultat) {
+      ov.classList.remove('on');
+      setTimeout(function () {
+        if (ov.parentNode) ov.parentNode.removeChild(ov);
+      }, 180);
+      document.removeEventListener('keydown', auClavier, true);
+      resolve(resultat);
+    };
+
+    if (options.annuler !== false) {
+      const non = document.createElement('button');
+      non.className = 'tc-mod-no';
+      non.textContent = options.libelleAnnuler || 'Annuler';
+      non.onclick = function () { fermer(options.saisie ? null : false); };
+      barre.appendChild(non);
+    }
+
+    const oui = document.createElement('button');
+    oui.className = 'tc-mod-ok' + (options.danger ? ' danger' : '');
+    oui.textContent = options.libelleValider || 'Confirmer';
+    oui.onclick = function () {
+      fermer(options.saisie ? champ.value : true);
+    };
+    barre.appendChild(oui);
+    boite.appendChild(barre);
+    ov.appendChild(boite);
+
+    // Un clic hors de la boite equivaut a annuler, comme partout ailleurs
+    // dans l'application.
+    ov.onclick = function (e) {
+      if (e.target === ov) fermer(options.saisie ? null : false);
+    };
+
+    function auClavier(e) {
+      if (e.key === 'Escape') { e.preventDefault(); fermer(options.saisie ? null : false); }
+      else if (e.key === 'Enter' && (options.saisie || !champ)) { e.preventDefault(); oui.click(); }
+    }
+    document.addEventListener('keydown', auClavier, true);
+
+    document.body.appendChild(ov);
+    requestAnimationFrame(function () { ov.classList.add('on'); });
+    setTimeout(function () { if (champ) champ.focus(); else oui.focus(); }, 60);
+  });
+}
+
+/** Remplace confirm(). Retourne une promesse de booleen. */
+function tcConfirm(message, options) {
+  const o = options || {};
+  const lignes = String(message == null ? '' : message).split('\n');
+  return tcModale({
+    icone: o.icone !== undefined ? o.icone : '❓',
+    titre: o.titre !== undefined ? o.titre : lignes[0],
+    texte: o.titre !== undefined ? String(message) : lignes.slice(1).join('\n').trim(),
+    libelleValider: o.libelleValider || 'Confirmer',
+    libelleAnnuler: o.libelleAnnuler || 'Annuler',
+    danger: !!o.danger
+  });
+}
+
+/** Remplace alert(). Retourne une promesse resolue a la fermeture. */
+function tcAlert(message, options) {
+  const o = options || {};
+  const lignes = String(message == null ? '' : message).split('\n');
+  return tcModale({
+    icone: o.icone !== undefined ? o.icone : 'ℹ️',
+    titre: o.titre !== undefined ? o.titre : lignes[0],
+    texte: o.titre !== undefined ? String(message) : lignes.slice(1).join('\n').trim(),
+    annuler: false,
+    libelleValider: o.libelleValider || 'J\'ai compris'
+  });
+}
+
+/** Remplace prompt(). Retourne la saisie, ou null si annule. */
+function tcPrompt(libelle, valeurParDefaut, options) {
+  const o = options || {};
+  const lignes = String(libelle == null ? '' : libelle).split('\n');
+  return tcModale({
+    icone: o.icone !== undefined ? o.icone : '✏️',
+    titre: lignes[0],
+    texte: lignes.slice(1).join('\n').trim(),
+    saisie: true,
+    valeur: valeurParDefaut || '',
+    exemple: o.exemple || '',
+    libelleValider: o.libelleValider || 'Valider'
+  });
+}
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -4982,25 +5145,25 @@ function commitCharlyAgenda() {
 }
 
 // Voice mode (simulated for demo)
-function startCharlyVoice() {
+async function startCharlyVoice() {
   showToast('🎤 Mode vocal — fonctionnalité disponible dans la version finale');
-  setTimeout(() => {
-    if (confirm('Mode vocal en cours de développement.\n\nVoulez-vous lancer Charly en mode écrit à la place ?')) {
+  setTimeout(async () => {
+    if (await tcConfirm('Mode vocal en cours de développement.\n\nVoulez-vous lancer Charly en mode écrit à la place ?')) {
       startAssistant();
     }
   }, 800);
 }
 
 // Quick suggestions handler
-function charlySuggestion(type) {
+async function charlySuggestion(type) {
   const messages = {
     rdv: "📅 Vous avez trop de rendez-vous ? Charly peut analyser votre semaine et identifier ceux qui peuvent être reportés ou groupés.",
     temps: "⏳ Vous voulez plus de temps libre ? Charly va trouver les plages où vous pouvez créer des moments pour vous.",
     chaos: "🔄 Votre journée est désorganisée ? Charly va vous proposer une nouvelle organisation optimisée selon vos priorités."
   };
   showToast(messages[type] || 'Demande prise en compte');
-  setTimeout(() => {
-    if (confirm('Charly va vous poser quelques questions pour mieux vous comprendre. Continuer ?')) {
+  setTimeout(async () => {
+    if (await tcConfirm('Charly va vous poser quelques questions pour mieux vous comprendre. Continuer ?')) {
       startAssistant();
     }
   }, 1500);
@@ -5907,8 +6070,8 @@ function togglePromptEditor() {
   if (arrow) arrow.textContent = open ? '▼ Afficher' : '▲ Masquer';
 }
 
-function resetSystemPromptDefault() {
-  if (!confirm('Réinitialiser le prompt système Charly IA aux valeurs par défaut ?\n\nCela permet de corriger les bugs de format ([EVENT] au lieu de [AGENDA] par exemple).\n\nTes modifications personnelles seront perdues.')) return;
+async function resetSystemPromptDefault() {
+  if (!await tcConfirm('Réinitialiser le prompt système Charly IA aux valeurs par défaut ?\n\nCela permet de corriger les bugs de format ([EVENT] au lieu de [AGENDA] par exemple).\n\nTes modifications personnelles seront perdues.')) return;
   document.getElementById('aiPrompt').value = TC_DEFAULT_SYSTEM_PROMPT;
   charlyIA.config.systemPrompt = TC_DEFAULT_SYSTEM_PROMPT;
   saveCharlyIAConfig();
@@ -6016,8 +6179,8 @@ function handleImportKeysFile(event) {
   reader.readAsText(file);
 }
 
-function resetCharlyStats() {
-  if (!confirm('Réinitialiser le compteur d\'appels API ?')) return;
+async function resetCharlyStats() {
+  if (!await tcConfirm('Réinitialiser le compteur d\'appels API ?')) return;
   charlyIA.callCount = 0;
   try { localStorage.setItem('timecool_ai_callcount', '0'); } catch(e){}
   renderAIConfig();
@@ -6105,11 +6268,11 @@ function renderDemarches() {
 function viewDemarcheDetail(id) {
   const d = demarches.find(x => x.id === id);
   if (!d) return;
-  alert(`${d.icon || '📋'} ${d.title}\n\n${d.detail || d.summary || 'Aucun détail supplémentaire.'}`);
+  tcAlert(`${d.icon || '📋'} ${d.title}\n\n${d.detail || d.summary || 'Aucun détail supplémentaire.'}`);
 }
 
-function cancelDemarche(id) {
-  if (!confirm('Annuler cette démarche ?')) return;
+async function cancelDemarche(id) {
+  if (!await tcConfirm('Annuler cette démarche ?')) return;
   const d = demarches.find(x => x.id === id);
   if (d) { d.status = 'annulee'; saveDemarches(); renderDemarches(); showToast('Démarche annulée'); }
 }
@@ -7038,8 +7201,8 @@ async function simulateDemoReply(userText) {
   return `Je suis Charly IA, ton assistant TIMECOOL. Je peux t'aider à :\n\n• Créer ton agenda automatiquement\n• Préparer un rendez-vous\n• Calculer un trajet\n• Faire une réservation\n• Gérer un imprévu\n\nUtilise les boutons en haut ou pose-moi ta question.`;
 }
 
-function resetCharlyChat() {
-  if (charlyIA.history.length && !confirm('Effacer la conversation actuelle ?')) return;
+async function resetCharlyChat() {
+  if (charlyIA.history.length && !await tcConfirm('Effacer la conversation actuelle ?')) return;
   charlyIA.history = [];
   renderCharlyChat();
 }
@@ -7168,7 +7331,7 @@ function saveUserAccount(account) {
 }
 
 async function logoutUser() {
-  if (!confirm('Déconnexion ?\n\nTu pourras te reconnecter avec ton email et ton mot de passe.')) return;
+  if (!await tcConfirm('Déconnexion ?\n\nTu pourras te reconnecter avec ton email et ton mot de passe.')) return;
   // Fermer le menu
   const menu = document.getElementById('sideMenu');
   const overlay = document.getElementById('menuOverlay');
@@ -7385,7 +7548,7 @@ function tcGoogleErreur(detail) {
      Credential Manager rapporte une annulation. L'echec devenait donc
      totalement muet. */
   if (d.indexOf('Cancell') >= 0 || d.indexOf('UserCanceled') >= 0) {
-    alert('Connexion Google interrompue\n\n'
+    tcAlert('Connexion Google interrompue\n\n'
       + 'Si tu n\'as pas annulé toi-même, c\'est que Google a refusé '
       + 'l\'application : le client « Android » du projet doit déclarer '
       + 'le nom de paquet com.timecool.app et l\'empreinte SHA-1 de la '
@@ -7398,7 +7561,7 @@ function tcGoogleErreur(detail) {
      frequents ont des remedes opposes, il faut donc les distinguer —
      et, a defaut, montrer le detail brut plutot que de le perdre. */
   if (d.indexOf('NoCredential') >= 0) {
-    alert('Connexion Google impossible\n\n'
+    tcAlert('Connexion Google impossible\n\n'
       + 'Aucun compte Google utilisable n\'a été proposé.\n\n'
       + 'Causes possibles :\n'
       + '• aucun compte Google configuré sur cet appareil ;\n'
@@ -7409,13 +7572,13 @@ function tcGoogleErreur(detail) {
     return;
   }
   if (d.indexOf('ProviderConfiguration') >= 0 || d.indexOf('Unsupported') >= 0) {
-    alert('Connexion Google indisponible sur cet appareil\n\n'
+    tcAlert('Connexion Google indisponible sur cet appareil\n\n'
       + 'Google Play Services est absent ou trop ancien. C\'est le cas '
       + 'notamment des émulateurs sans Play Store.\n\n'
       + 'Détail technique :\n' + d);
     return;
   }
-  alert('Connexion Google impossible\n\nDétail technique :\n' + d);
+  tcAlert('Connexion Google impossible\n\nDétail technique :\n' + d);
 }
 
 /** Jeton conservé le temps de compléter l'inscription. */
@@ -7958,7 +8121,7 @@ async function submitLogin() {
     if (users.find(u => u.email === identifiant && u.blocked === true)) {
       showToast('🚫 Compte suspendu');
       setTimeout(() => {
-        alert('Votre compte a été suspendu.\n\nPour plus d’informations, contactez-nous à :\ncontact@timecool.fr');
+        tcAlert('Votre compte a été suspendu.\n\nPour plus d’informations, contactez-nous à :\ncontact@timecool.fr');
       }, 300);
       return;
     }
@@ -8916,15 +9079,15 @@ function renderBirthdays() {
   `;
 }
 
-function addBirthday() {
-  const name = prompt('Prénom et nom de la personne :');
+async function addBirthday() {
+  const name = await tcPrompt('Prénom et nom de la personne :');
   if (!name || !name.trim()) return;
-  const date = prompt('Date de naissance (format JJ/MM/AAAA ou JJ/MM) :');
+  const date = await tcPrompt('Date de naissance (format JJ/MM/AAAA ou JJ/MM) :');
   if (!date) return;
   const m = date.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?$/);
-  if (!m) { alert('Format invalide. Utilise JJ/MM ou JJ/MM/AAAA'); return; }
+  if (!m) { tcAlert('Format invalide. Utilise JJ/MM ou JJ/MM/AAAA'); return; }
   const day = parseInt(m[1]), month = parseInt(m[2]), year = m[3] ? parseInt(m[3]) : null;
-  if (day < 1 || day > 31 || month < 1 || month > 12) { alert('Date invalide'); return; }
+  if (day < 1 || day > 31 || month < 1 || month > 12) { tcAlert('Date invalide'); return; }
   const dateStr = `${year || 2000}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   birthdays.push({
     id: 'bday_' + Date.now(),
@@ -8937,8 +9100,8 @@ function addBirthday() {
   showToast('🎂 Anniversaire ajouté');
 }
 
-function deleteBirthday(id) {
-  if (!confirm('Supprimer cet anniversaire ?')) return;
+async function deleteBirthday(id) {
+  if (!await tcConfirm('Supprimer cet anniversaire ?')) return;
   birthdays = birthdays.filter(b => b.id !== id);
   saveBirthdays();
   renderBirthdays();
@@ -9159,17 +9322,17 @@ function renderTasks() {
   `;
 }
 
-function addTask() {
-  const title = prompt('Titre de la tâche :');
+async function addTask() {
+  const title = await tcPrompt('Titre de la tâche :');
   if (!title || !title.trim()) return;
-  const dueDate = prompt('Date d\'échéance (JJ/MM/AAAA, ou laisse vide) :');
+  const dueDate = await tcPrompt('Date d\'échéance (JJ/MM/AAAA, ou laisse vide) :');
   let dueDateISO = null;
   if (dueDate && dueDate.trim()) {
     const m = dueDate.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (m) {
       dueDateISO = `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
     } else {
-      alert('Format de date invalide. Tâche ajoutée sans date.');
+      tcAlert('Format de date invalide. Tâche ajoutée sans date.');
     }
   }
   tasksList.push({
@@ -9194,8 +9357,8 @@ function toggleTask(id) {
   renderTasks();
 }
 
-function deleteTask(id) {
-  if (!confirm('Supprimer cette tâche ?')) return;
+async function deleteTask(id) {
+  if (!await tcConfirm('Supprimer cette tâche ?')) return;
   tasksList = tasksList.filter(t => t.id !== id);
   saveTasks();
   renderTasks();
@@ -9445,8 +9608,8 @@ function updateHeaderAgendaLabel() {
   if (menuWrap) menuWrap.style.display = _isolatedCalendarName ? 'none' : '';
 }
 
-function openCreateCalendarPrompt() {
-  const name = prompt('Nom du nouvel agenda (ex : "Agenda scolaire d\'Élodie") :');
+async function openCreateCalendarPrompt() {
+  const name = await tcPrompt('Nom du nouvel agenda (ex : "Agenda scolaire d\'Élodie") :');
   if (!name || !name.trim()) return;
   const usedColors = customCalendars.map(c => c.color);
   const color = TC_CALENDAR_COLORS.find(cl => !usedColors.includes(cl)) || TC_CALENDAR_COLORS[customCalendars.length % TC_CALENDAR_COLORS.length];
@@ -9463,14 +9626,14 @@ function openCreateCalendarPrompt() {
   showToast('✅ Agenda "' + name.trim() + '" créé et enregistré — retrouve-le dans la liste ci-dessous');
 }
 
-function deleteCustomCalendar(id) {
+async function deleteCustomCalendar(id) {
   const cal = getCalendarById(id);
   if (!cal || cal.isDefault) return;
   const count = events.filter(e => e.calendarId === id).length;
   const msg = count > 0
     ? 'Supprimer "' + cal.name + '" ? ' + count + ' rendez-vous seront transférés vers "Mon agenda".'
     : 'Supprimer l\'agenda "' + cal.name + '" ?';
-  if (!confirm(msg)) return;
+  if (!await tcConfirm(msg)) return;
   events.forEach(e => { if (e.calendarId === id) e.calendarId = 'cal_default'; });
   saveEventsToStorage();
   customCalendars = customCalendars.filter(c => c.id !== id);
@@ -10354,9 +10517,9 @@ function setSimulationMessagesHidden(on) {
    `message` : le texte à afficher tel quel dans un confirm()
    `onProceed` : l'action à exécuter si l'utilisateur (ou le réglage
                  "masqué") valide qu'on continue quand même */
-function showSimulationNotice(message, onProceed) {
+async function showSimulationNotice(message, onProceed) {
   if (areSimulationMessagesHidden()) { onProceed(); return; }
-  if (confirm(message)) onProceed();
+  if (await tcConfirm(message)) onProceed();
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -10447,7 +10610,7 @@ function prevenirModifierHeure() {
   openEditEventModal();
 }
 
-function prevenirAnnuler(withNewSlot) {
+async function prevenirAnnuler(withNewSlot) {
   if (!_prevenirEventRef) return;
   const ev = _prevenirEventRef;
   const name = _prevenirName;
@@ -10467,7 +10630,7 @@ function prevenirAnnuler(withNewSlot) {
   }
 
   _closeAllSheets();
-  if (!confirm('Envoyer ce message à ' + name + ' et annuler le rendez-vous ?\n\n« ' + text + ' »')) return;
+  if (!await tcConfirm('Envoyer ce message à ' + name + ' et annuler le rendez-vous ?\n\n« ' + text + ' »')) return;
 
   const idx = events.indexOf(ev);
   if (idx > -1) events.splice(idx, 1);
@@ -10873,11 +11036,11 @@ function importDemoContactSamples() {
     showToast('✅ 8 contacts d\'exemple importés');
 }
 
-function addContactManually() {
-  const name = prompt('Nom complet du contact :');
+async function addContactManually() {
+  const name = await tcPrompt('Nom complet du contact :');
   if (!name || !name.trim()) return;
-  const phone = prompt('Téléphone (facultatif, ex: +33 6 12 34 56 78) :') || '';
-  const email = prompt('Email (facultatif) :') || '';
+  const phone = await tcPrompt('Téléphone (facultatif, ex: +33 6 12 34 56 78) :') || '';
+  const email = await tcPrompt('Email (facultatif) :') || '';
   contactsList.push({
     id: 'contact_' + Date.now(),
     name: name.trim(),
@@ -10890,8 +11053,8 @@ function addContactManually() {
   showToast('✅ Contact ajouté');
 }
 
-function deleteContact(id) {
-  if (!confirm('Supprimer ce contact ?')) return;
+async function deleteContact(id) {
+  if (!await tcConfirm('Supprimer ce contact ?')) return;
   contactsList = contactsList.filter(c => c.id !== id);
   saveContacts();
   renderContacts();
@@ -11483,8 +11646,8 @@ function toggleDispoCat(catId) {
   renderDispo();
 }
 
-function deleteDispoPlage(catId, idx) {
-  if (!confirm('Supprimer cette plage de disponibilit\u00e9\u00a0?')) return;
+async function deleteDispoPlage(catId, idx) {
+  if (!await tcConfirm('Supprimer cette plage de disponibilit\u00e9\u00a0?')) return;
   _dispoData[catId].splice(idx, 1);
   saveDispo();
   renderDispo();
@@ -12280,7 +12443,7 @@ function importTimeCoolData(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     let backup;
     try { backup = JSON.parse(e.target.result); } catch(err) {
       showToast('❌ Fichier de sauvegarde invalide');
@@ -12296,7 +12459,7 @@ function importTimeCoolData(event) {
     }
 
     const dateBackup = new Date(backup.exportDate).toLocaleDateString('fr-FR');
-    if (!confirm('Restaurer la sauvegarde du ' + dateBackup + ' ?\nCela remplacera tes données actuelles.')) {
+    if (!await tcConfirm('Restaurer la sauvegarde du ' + dateBackup + ' ?\nCela remplacera tes données actuelles.')) {
       event.target.value = '';
       return;
     }
@@ -12418,8 +12581,8 @@ function closeAdminPin() {
   updatePinDots();
 }
 
-function resetAdminPin() {
-  if (confirm('Réinitialiser le code PIN admin ? Le prochain code saisi deviendra le nouveau PIN.')) {
+async function resetAdminPin() {
+  if (await tcConfirm('Réinitialiser le code PIN admin ? Le prochain code saisi deviendra le nouveau PIN.')) {
     localStorage.removeItem('tc_admin_pin');
     _pinValue = '';
     updatePinDots();
