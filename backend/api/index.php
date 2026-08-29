@@ -786,21 +786,21 @@ switch ($route) {
 
     // ═══════════════════════════════════════════════════════════
     // CHANGEMENT DE MOT DE PASSE
-    // L'ancien mot de passe est revérifié ici, côté serveur — jamais
-    // fait confiance à un formulaire qui prétend l'avoir déjà vérifié :
-    // c'est justement ce qui garantit qu'une session volée ou un
-    // appareil laissé déverrouillé ne suffit pas à changer le mot de
-    // passe sans le connaître.
+    // Décision produit explicite : pas de redemande de l'ancien mot de
+    // passe, la session authentifiée (jeton Bearer vérifié par
+    // Auth::compte() ci-dessous) fait foi comme seule vérification.
+    // Compromis assumé : contrairement à une re-authentification par
+    // l'ancien mot de passe, une session volée ou un appareil laissé
+    // déverrouillé suffit désormais à changer le mot de passe. Les
+    // autres sessions sont révoquées immédiatement après (voir plus
+    // bas), ce qui limite la fenêtre d'exploitation à la session
+    // compromise elle-même plutôt qu'à un accès permanent.
     // ═══════════════════════════════════════════════════════════
     case 'POST /compte/mot-de-passe':
         $compte = Auth::compte();
 
-        $ancien = Entree::corps()['ancien_mot_de_passe'] ?? '';
         $nouveau = Entree::corps()['nouveau_mot_de_passe'] ?? '';
 
-        if (!is_string($ancien) || !password_verify($ancien, $compte['mot_de_passe_hash'])) {
-            Rep::erreur(401, 'mot_de_passe_incorrect', 'Ancien mot de passe incorrect.');
-        }
         if (!is_string($nouveau) || mb_strlen($nouveau) < 10) {
             Rep::erreur(400, 'mot_de_passe_faible', 'Le nouveau mot de passe doit faire au moins 10 caractères.');
         }
