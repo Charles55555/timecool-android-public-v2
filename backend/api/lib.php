@@ -480,17 +480,39 @@ final class Google
  */
 final class Sms
 {
+    /**
+     * Vrai seulement si les 3 identifiants Twilio ont été renseignés avec
+     * de vraies valeurs — pas laissés à 'A_RENSEIGNER' (valeur par défaut
+     * de config.exemple.php) ni vides.
+     *
+     * Sert à déclencher automatiquement le mode test de la vérification
+     * (voir case 'POST /verification/demander' dans index.php) tant que
+     * Twilio n'est pas encore branché, sans bascule à retirer à la main :
+     * dès que config.php contient de vraies valeurs, cette méthode répond
+     * vrai et le mode test cesse de lui-même.
+     */
+    public static function estConfigure(): bool
+    {
+        foreach (['twilio_account_sid', 'twilio_auth_token', 'twilio_numero_expediteur'] as $cle) {
+            $valeur = Conf::get($cle);
+            if (!is_string($valeur) || $valeur === '' || $valeur === 'A_RENSEIGNER') {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static function envoyer(string $numeroE164, string $message): void
     {
-        $sid     = Conf::get('twilio_account_sid');
-        $jeton   = Conf::get('twilio_auth_token');
-        $depuis  = Conf::get('twilio_numero_expediteur');
-        if (!$sid || !$jeton || !$depuis) {
+        if (!self::estConfigure()) {
             throw new RuntimeException(
                 'Twilio non configuré : renseigner twilio_account_sid, twilio_auth_token '
                 . 'et twilio_numero_expediteur dans config.php.'
             );
         }
+        $sid    = Conf::get('twilio_account_sid');
+        $jeton  = Conf::get('twilio_auth_token');
+        $depuis = Conf::get('twilio_numero_expediteur');
 
         $ch = curl_init("https://api.twilio.com/2010-04-01/Accounts/{$sid}/Messages.json");
         curl_setopt_array($ch, [

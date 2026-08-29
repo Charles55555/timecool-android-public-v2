@@ -113,7 +113,31 @@ switch ($route) {
             Rep::erreur(429, 'trop_de_demandes', 'Trop de demandes. Réessayez dans une heure.');
         }
 
-        $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        /*
+         * Mode test automatique — PAS une bascule à retirer à la main.
+         *
+         * Tant qu'aucun fournisseur réel n'est branché pour le canal
+         * demandé (Twilio pour le SMS ; aucun fournisseur d'email
+         * n'existe encore aujourd'hui, cf. Sms dans lib.php), l'envoi
+         * réel est de toute façon impossible : on simule alors avec un
+         * code fixe et documenté plutôt que d'échouer silencieusement ou
+         * de bloquer les tests.
+         *
+         * Le code est fixe (pas besoin de lire la réponse serveur pour
+         * connaître sa valeur) et distinct du vrai code, aléatoire, généré
+         * dès que le canal est réellement configuré.
+         *
+         * Dès que config.php contient de vraies valeurs Twilio,
+         * Sms::estConfigure() répond vrai et ce bloc n'est plus jamais
+         * emprunté pour le SMS — sans qu'il y ait quoi que ce soit à
+         * modifier ici. Pour l'email, il faudra qu'un jour une classe
+         * Email::envoyer() apparaisse ici au même titre que Sms.
+         */
+        $canalConfigure = $canal === 'sms' && Sms::estConfigure();
+        $modeTest       = !$canalConfigure;
+        $codeTestFixe   = '000000';
+        $code           = $modeTest ? $codeTestFixe : str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
         $ref     = Jeton::reference();
         $minutes = (int) Conf::get('verification_minutes', 15);
         $ip      = $_SERVER['REMOTE_ADDR'] ?? null;
@@ -130,22 +154,19 @@ switch ($route) {
             ]
         );
 
-        // Envoi réel — SMS via Twilio (voir la classe Sms dans lib.php).
-        // TODO distinct, non couvert ici : l'email n'a encore aucun
-        // fournisseur branché (SendGrid ou équivalent).
         $reponse = ['reference' => $ref, 'expire_dans_minutes' => $minutes];
-        if (Conf::get('mode_test', false) === true) {
+        if ($modeTest) {
             $reponse['code_test'] = $code;
-            $reponse['avertissement'] = 'Mode test actif : aucun message envoyé.';
-        } elseif ($canal === 'sms') {
+            $reponse['avertissement'] = $canal === 'sms'
+                ? "Mode test : Twilio n'est pas encore configuré côté serveur — utilise le code {$code}."
+                : "Mode test : l'envoi d'email n'est pas encore disponible côté serveur — utilise le code {$code}.";
+        } else {
             try {
                 Sms::envoyer($destination, "Votre code de vérification TimeCool : {$code} (valable {$minutes} minutes).");
             } catch (Throwable $e) {
                 error_log('TimeCool SMS verification: ' . $e->getMessage());
                 Rep::erreur(502, 'envoi_echoue', 'Envoi du SMS impossible pour le moment. Réessayez.');
             }
-        } else {
-            Rep::erreur(503, 'envoi_indisponible', 'Envoi par email pas encore disponible — utilisez le SMS.');
         }
         Rep::ok($reponse, 201);
 
@@ -936,7 +957,11 @@ switch ($route) {
     case 'GET /parametres':
         Rep::ok([
             'verification_obligatoire' => Conf::get('verification_obligatoire', true) === true,
-            'mode_test'                => Conf::get('mode_test', false) === true,
+            // Reflète le mode test AUTOMATIQUE de la vérification (voir
+            // 'POST /verification/demander') : vrai tant que Twilio n'est
+            // pas configuré. Purement informatif — l'application ne s'en
+            // sert pas, elle se fie au champ code_test de la réponse.
+            'mode_test' => !Sms::estConfigure(),
         ]);
 
     // ═══════════════════════════════════════════════════════════

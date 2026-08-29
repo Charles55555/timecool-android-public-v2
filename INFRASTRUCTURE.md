@@ -187,4 +187,4 @@ doit renvoyer `200`.
 
 Restent non résolus, à traiter avant lancement public (voir aussi section 7) :
 - PHP 8.0 sur `timecool.fr` à passer en 8.3.
-- `google_client_ids`, service d'envoi SMS/email (SendGrid/Twilio) et repasser `verification_obligatoire`/`mode_test` aux bonnes valeurs dans `config.php` avant l'ouverture publique.
+- `google_client_ids`, identifiants Twilio (`twilio_account_sid`/`twilio_auth_token`/`twilio_numero_expediteur`) et service d'envoi email (SendGrid ou équivalent, pas encore branché) dans `config.php` avant l'ouverture publique. Renseigner les identifiants Twilio suffit à faire disparaître le mode test SMS de lui-même — voir `Sms::estConfigure()` dans `lib.php` ; `verification_obligatoire` reste à repasser à `true` séparément.

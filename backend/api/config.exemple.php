@@ -101,19 +101,23 @@ return [
     'verification_max_par_heure' => 5,
 
     /**
-     * Mode test — À REPASSER À false AVANT LE LANCEMENT PUBLIC.
+     * Pas de réglage "mode test" ici : il est automatique, pas un
+     * booléen à repasser à la main avant le lancement.
      *
-     * Aucun service d'envoi (SendGrid, Twilio) n'étant encore branché,
-     * ce réglage fait renvoyer le code de vérification directement dans
-     * la réponse de l'API, pour permettre les tests.
+     * Tant que 'twilio_account_sid' / 'twilio_auth_token' /
+     * 'twilio_numero_expediteur' ci-dessus valent 'A_RENSEIGNER' (ou
+     * sont vides), POST /verification/demander ne peut de toute façon
+     * rien envoyer : il simule alors l'envoi avec un code fixe ("000000")
+     * renvoyé dans sa réponse, plutôt que d'échouer. Idem pour l'email,
+     * faute de fournisseur branché à ce jour (voir Sms dans lib.php).
+     * Dès que les vraies valeurs Twilio sont renseignées, le SMS repasse
+     * automatiquement en envoi réel — rien à modifier ni à retirer ici.
      *
-     * Il est volontairement porté par le SERVEUR et non par
-     * l'application : l'APK est distribué publiquement, un mode test
-     * embarqué y serait un contournement d'authentification à la portée
-     * de quiconque le décompile. Ici, le basculer à false suffit — sans
-     * republier d'application.
+     * Volontairement porté par le SERVEUR et non par l'application :
+     * l'APK est distribué publiquement, un mode test embarqué y serait un
+     * contournement d'authentification à la portée de quiconque le
+     * décompile.
      */
-    'mode_test' => false,
 
     // Base publique des liens envoyés par SMS / email / WhatsApp.
     'url_publique' => 'https://api.timecool.fr',
