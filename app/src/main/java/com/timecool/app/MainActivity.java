@@ -2,13 +2,18 @@ package com.timecool.app;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
+import android.os.Environment;
 import android.provider.ContactsContract;
+import android.provider.MediaStore;
+import android.util.Base64;
 
 import androidx.credentials.Credential;
 import androidx.credentials.CredentialManager;
@@ -35,6 +40,10 @@ import android.webkit.WebViewClient;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+
 public class MainActivity extends Activity {
 
     private WebView webView;
@@ -45,10 +54,16 @@ public class MainActivity extends Activity {
     private static final int REQ_FICHIER = 1001;
     private static final int REQ_CONTACTS = 1002;
     private static final int REQ_LOCALISATION = 1003;
+    private static final int REQ_EXPORT_FICHIER = 1004;
 
     /** Prompt de géolocalisation en attente d'une réponse à la permission runtime. */
     private String origineLocalisationEnAttente;
     private GeolocationPermissions.Callback callbackLocalisationEnAttente;
+
+    /** Export de fichier en attente d'une réponse à la permission runtime (Android ≤ 9). */
+    private String exportEnAttenteNom;
+    private String exportEnAttenteContenu;
+    private String exportEnAttenteMime;
 
     /*
      * Resultat Google en attente de livraison a la page.
@@ -270,6 +285,17 @@ public class MainActivity extends Activity {
             }
             return;
         }
+        if (requete == REQ_EXPORT_FICHIER) {
+            boolean accorde = resultats.length > 0
+                && resultats[0] == PackageManager.PERMISSION_GRANTED;
+            boolean ok = accorde
+                && ecrireFichierReellement(exportEnAttenteNom, exportEnAttenteContenu, exportEnAttenteMime);
+            appelerJs("tcExportFichierResultat", ok ? "true" : "false");
+            exportEnAttenteNom = null;
+            exportEnAttenteContenu = null;
+            exportEnAttenteMime = null;
+            return;
+        }
         super.onRequestPermissionsResult(requete, permissions, resultats);
     }
 
@@ -451,6 +477,25 @@ public class MainActivity extends Activity {
         }
 
         /**
+         * Version et horodatage du build réellement installé, pour que
+         * la page ne les affiche jamais codés en dur — versionName et
+         * BUILD_TIME viennent tous deux du CI (voir build.gradle et
+         * build-apk.yml) et changent automatiquement à chaque publication.
+         */
+        @JavascriptInterface
+        public String obtenirInfosVersion() {
+            JSONObject infos = new JSONObject();
+            try {
+                infos.put("version", BuildConfig.VERSION_NAME);
+                infos.put("versionCode", BuildConfig.VERSION_CODE);
+                infos.put("buildTime", BuildConfig.BUILD_TIME);
+            } catch (Exception e) {
+                // JSONObject.put ne lève que sur une clé absente : ne peut pas arriver ici.
+            }
+            return infos.toString();
+        }
+
+        /**
          * Demande l'accès aux contacts, puis les transmet.
          * La page reçoit le résultat via tcContactsRecus / tcContactsRefuses.
          */
@@ -479,6 +524,94 @@ public class MainActivity extends Activity {
                     REQ_CONTACTS
                 );
             }
+        }
+
+        /**
+         * Écrit réellement un fichier dans le dossier Téléchargements et
+         * livre le résultat à la page via tcExportFichierResultat.
+         *
+         * Avant ce pont, "Sauvegarder mes clés" reposait sur <a download>
+         * pointant vers une URL blob: — un mécanisme purement navigateur.
+         * Dans la WebView, aucun DownloadListener n'était enregistré et
+         * WebView ne sait de toute façon pas résoudre un blob: en dehors
+         * d'un vrai navigateur : le clic ne déclenchait donc AUCUNE
+         * écriture, mais le message de succès s'affichait quand même —
+         * il ne dépendait que du clic JS, jamais d'une confirmation réelle.
+         */
+        @JavascriptInterface
+        public void ecrireFichierTelechargement(final String nomFichier,
+                                                 final String contenuBase64,
+                                                 final String mime) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                            && checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                != PackageManager.PERMISSION_GRANTED) {
+                        exportEnAttenteNom = nomFichier;
+                        exportEnAttenteContenu = contenuBase64;
+                        exportEnAttenteMime = mime;
+                        requestPermissions(
+                            new String[] { android.Manifest.permission.WRITE_EXTERNAL_STORAGE },
+                            REQ_EXPORT_FICHIER
+                        );
+                        return;
+                    }
+                    boolean ok = ecrireFichierReellement(nomFichier, contenuBase64, mime);
+                    appelerJs("tcExportFichierResultat", ok ? "true" : "false");
+                }
+            });
+        }
+    }
+
+    /**
+     * Décode le contenu base64 et l'écrit dans le dossier public
+     * Téléchargements. À partir d'Android 10 (Q), via MediaStore — aucune
+     * permission requise. En dessous, écriture directe dans le dossier
+     * public (permission déjà vérifiée par l'appelant).
+     */
+    private boolean ecrireFichierReellement(String nomFichier, String contenuBase64, String mime) {
+        byte[] donnees;
+        try {
+            donnees = Base64.decode(contenuBase64, Base64.DEFAULT);
+        } catch (Exception e) {
+            return false;
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues valeurs = new ContentValues();
+                valeurs.put(MediaStore.Downloads.DISPLAY_NAME, nomFichier);
+                valeurs.put(MediaStore.Downloads.MIME_TYPE, mime);
+                valeurs.put(MediaStore.Downloads.IS_PENDING, 1);
+                Uri uri = getContentResolver().insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, valeurs);
+                if (uri == null) {
+                    return false;
+                }
+                try (OutputStream sortie = getContentResolver().openOutputStream(uri)) {
+                    if (sortie == null) {
+                        return false;
+                    }
+                    sortie.write(donnees);
+                }
+                valeurs.clear();
+                valeurs.put(MediaStore.Downloads.IS_PENDING, 0);
+                getContentResolver().update(uri, valeurs, null, null);
+                return true;
+            } else {
+                File dossier = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS);
+                if (!dossier.exists() && !dossier.mkdirs()) {
+                    return false;
+                }
+                File fichier = new File(dossier, nomFichier);
+                try (FileOutputStream sortie = new FileOutputStream(fichier)) {
+                    sortie.write(donnees);
+                }
+                return true;
+            }
+        } catch (Exception e) {
+            return false;
         }
     }
 

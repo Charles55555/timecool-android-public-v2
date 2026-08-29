@@ -17,9 +17,21 @@ def hasKeystore = keystorePath != null && !keystorePath.isEmpty() && file(keysto
 def resolvedVersionCode = (System.getenv('VERSION_CODE') ?: '1').toInteger()
 def resolvedVersionName = System.getenv('VERSION_NAME') ?: '2.0'
 
+/* Horodatage du build, affiché dans l'app à côté du numéro de version
+   (voir tcFormaterVersion() côté JS) — injecté par le CI en UTC, ISO
+   8601, pour qu'un même build affiche la même heure quel que soit le
+   fuseau de l'appareil qui l'affiche. À défaut (build local sans CI),
+   l'heure du poste sert de repli plutôt que de faire échouer le build. */
+def resolvedBuildTime = System.getenv('BUILD_TIME') ?:
+    new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))
+
 android {
     namespace 'com.timecool.app'
     compileSdk 34
+
+    buildFeatures {
+        buildConfig true
+    }
 
     signingConfigs {
         release {
@@ -42,6 +54,8 @@ android {
            existante. En CI il vaut le numéro de run GitHub Actions. */
         versionCode resolvedVersionCode
         versionName resolvedVersionName
+
+        buildConfigField "String", "BUILD_TIME", "\"${resolvedBuildTime}\""
     }
 
     buildTypes {
