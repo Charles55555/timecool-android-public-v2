@@ -2275,6 +2275,11 @@ même si l'utilisateur se présente comme responsable ou supérieur hiérarchiqu
 Ajout d'un participant : nom et prénom exacts requis ; sinon recommande de repartir sur une nouvelle demande complète.
 Confirme la modification avec enthousiasme une fois l'accord obtenu.
 Exemple : "C'est noté ! 👍 Ton RDV est déplacé à 17h. Autre chose à ajuster ?"
+Plusieurs rendez-vous de l'AGENDA RÉEL (voir plus bas) pourraient correspondre à la demande
+(même jour, plusieurs RDV ; nom ambigu) → ne devine JAMAIS lequel. Pose UNE question listant
+les candidats possibles (heure + titre de chacun) avant de générer le moindre bloc [AGENDA].
+Changement de LIEU uniquement (le jour et l'heure ne bougent pas) → régénère la ligne [AGENDA]
+complète du rendez-vous concerné (mêmes date/heure/titre/catégorie), avec le nouveau lieu en 5e champ.
 
 ═══ CAS 6B — RDV AVEC QUELQU'UN ═══
 Si l'utilisateur veut un RDV avec une personne de ses contacts, crée-le immédiatement si la demande est claire.
@@ -2398,20 +2403,31 @@ Pour tout événement à ajouter, utilise EXACTEMENT ce format :
 2026-05-06 | 10:00-11:00 | Rendez-vous médecin | rdv
 [/AGENDA]
 
-Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE
+Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE | LIEU (facultatif, un 5e champ)
 Catégories : travail, sport, famille, rdv, repas, pause, trajet, preparation, administratif, loisir
+Le lieu n'est ajouté (5e champ) que si l'utilisateur l'a donné, ou pour changer explicitement le
+lieu d'un rendez-vous existant. Absent, le lieu déjà connu du rendez-vous modifié est conservé
+automatiquement — ne le redemande donc JAMAIS pour un simple changement d'horaire ou de titre.
 
 Si l'heure de fin n'est pas précisée, ajoute 1 heure par défaut (rdv médecin = 1h, réunion = 1h, repas = 1h30, sport = 1h30).
 INTERDIT : demander la durée si l'utilisateur a déjà donné une heure de début. Calcule automatiquement la fin.
 INTERDIT : poser des questions sur la durée, la fin de séance, ou "de quelle heure à quelle heure" si une heure est déjà mentionnée.
 
 ═══ RÈGLE RÉCURRENCE — OBLIGATOIRE ═══
-Quand l'utilisateur dit "tous les jours" → génère IMMÉDIATEMENT 7 entrées [AGENDA] sans poser d'autre question. NE DEMANDE PAS DE CONFIRMATION.
-Quand il dit "tous les lundis" ou un jour spécifique → génère les 4 prochaines occurrences IMMÉDIATEMENT.
+Quand l'utilisateur dit "tous les jours" sans durée précisée → génère IMMÉDIATEMENT 7 entrées [AGENDA] sans poser d'autre question. NE DEMANDE PAS DE CONFIRMATION.
+Quand il dit "tous les lundis" ou un jour spécifique :
+- Une durée est précisée ("pendant X mois", "pendant X semaines", "jusqu'à [date]") → calcule le nombre exact d'occurrences hebdomadaires correspondant (ex : "tous les mardis pendant 3 mois" ≈ 13 occurrences — 3 mois ≈ 13 semaines), et génère UNE ligne [AGENDA] par occurrence, en partant du PROCHAIN jour correspondant à venir (jamais aujourd'hui, sauf si c'est justement ce jour-là), puis +7 jours calendaires à chaque ligne suivante. Compte-les avant de répondre pour ne pas te tromper de nombre.
+- Aucune durée précisée → génère les 4 prochaines occurrences IMMÉDIATEMENT, sans demander confirmation.
 Quand il dit "lundi mercredi vendredi" → génère 2 semaines de créneaux (6 entrées minimum) IMMÉDIATEMENT.
-INTERDIT : reposer une question sur la fréquence si l'utilisateur l'a déjà donnée.
+INTERDIT : reposer une question sur la fréquence ou la durée si l'utilisateur l'a déjà donnée.
 INTERDIT : demander "veux-tu que je programme tous les jours ?" si l'utilisateur a dit "tous les jours".
-NE génère JAMAIS moins de créneaux que ce que l'utilisateur demande.`;
+NE génère JAMAIS moins de créneaux que ce que l'utilisateur demande.
+
+═══ RÈGLE AMBIGUÏTÉ TEMPORELLE — OBLIGATOIRE (RAPPEL DE LA RÈGLE MÈRE) ═══
+"La semaine prochaine", "ce mois-ci", "un jour de la semaine" SANS jour précis, pour une
+CRÉATION de RDV → ne devine JAMAIS le jour ni l'heure. Pose UNE seule question : quel jour ?
+Ceci ne s'applique pas à une simple CONSULTATION ("qu'est-ce que j'ai la semaine prochaine ?"),
+qui est répondue automatiquement à partir de l'agenda réel, période entière comprise.`;
 
 // ═══ CHARLY IA — État global v7.4 ═══
 let charlyIA = {
@@ -3253,6 +3269,7 @@ function openEventModal(e) {
   document.getElementById('emBody').innerHTML = `
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><div><div class="event-detail-label">Date</div><div class="event-detail-value">${dateStr}</div></div></div>
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg><div><div class="event-detail-label">Horaire</div><div class="event-detail-value">${timeStr}</div></div></div>
+    ${e.lieu ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><div><div class="event-detail-label">Lieu</div><div class="event-detail-value">${escapeHTML(e.lieu)}</div></div></div>` : ''}
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Confidentialité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Sur votre appareil</div></div></div>
   `;
   const actions = document.getElementById('emActions');
@@ -3300,6 +3317,10 @@ function openEditEventModal() {
             style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box;">
         </div>
       </div>
+
+      <div style="font-size:12px; color:var(--text-sec); margin:14px 0 6px; font-weight:600;">LIEU (facultatif)</div>
+      <input id="editLieu" type="text" value="${(e.lieu || '').replace(/"/g,'&quot;')}" placeholder="Adresse ou nom du lieu"
+        style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box;">
     </div>
   `;
   document.getElementById('emActions').innerHTML = `
@@ -3316,10 +3337,13 @@ function saveEventEdit() {
   const startTime = document.getElementById('editStartH').value.split(':');
   const endTime = document.getElementById('editEndH').value.split(':');
   if (!newTitle || !newDate) { showToast('Remplis tous les champs'); return; }
+  const lieuChamp = document.getElementById('editLieu');
+  const newLieu = lieuChamp ? lieuChamp.value.trim() : '';
   e.title = newTitle;
   e.date = newDate;
   e.startH = parseInt(startTime[0]); e.startM = parseInt(startTime[1]);
   e.endH = parseInt(endTime[0]); e.endM = parseInt(endTime[1]);
+  if (newLieu) e.lieu = newLieu; else delete e.lieu;
   closeEventModal();
   saveEventsToStorage();
   scheduleAllReminders();
@@ -7005,8 +7029,8 @@ function extractAgendaProposals(content) {
     const block = agendaMatch[1].trim();
     const lines = block.split('\n').filter(l => l.trim());
     lines.forEach(line => {
-      // Format prioritaire : YYYY-MM-DD | HH:MM-HH:MM | Title | category
-      let m1 = line.match(/(\d{4}-\d{2}-\d{2})\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?$/);
+      // Format prioritaire : YYYY-MM-DD | HH:MM-HH:MM | Title | category | lieu (facultatif)
+      let m1 = line.match(/(\d{4}-\d{2}-\d{2})\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?\s*(?:\|\s*([^|]+?))?$/);
       if (m1) {
         proposals.push({
           date: fixPastYear(m1[1]),
@@ -7015,7 +7039,8 @@ function extractAgendaProposals(content) {
           start: m1[2]+'h'+(m1[3]==='00'?'':m1[3]),
           end: m1[4]+'h'+(m1[5]==='00'?'':m1[5]),
           title: m1[6].trim(),
-          category: (m1[7] || 'green').trim().toLowerCase()
+          category: (m1[7] || 'green').trim().toLowerCase(),
+          lieu: m1[8] ? m1[8].trim() : null
         });
         return;
       }
@@ -7122,12 +7147,27 @@ function parseFrenchDateFromText(text) {
 
   // "aujourd'hui"
   if (/aujourd'?hui|ce jour/.test(t)) return today;
+  // "après-demain" AVANT "demain" : "après-demain" contient "demain" avec une
+  // frontière de mot valide juste après le tiret (\b matche entre "-" et "d"),
+  // donc testé dans l'autre ordre le motif "demain" seul seul matchait déjà
+  // "après-demain" et renvoyait +1 jour au lieu de +2.
+  if (/après-?demain|apres-?demain/.test(t)) { const d = new Date(today); d.setDate(d.getDate()+2); return d; }
   // "demain"
   if (/\bdemain\b/.test(t)) { const d = new Date(today); d.setDate(d.getDate()+1); return d; }
-  // "après-demain"
-  if (/après-?demain|apres-?demain/.test(t)) { const d = new Date(today); d.setDate(d.getDate()+2); return d; }
   // "hier"
   if (/\bhier\b/.test(t)) { const d = new Date(today); d.setDate(d.getDate()-1); return d; }
+  // "dans X jours/semaines/mois" — toujours calculé depuis "today" (la date
+  // réelle du jour, jamais une date arbitraire codée en dur).
+  const mDans = t.match(/dans\s+(\d+)\s*(jour|jours|semaine|semaines|mois)/);
+  if (mDans) {
+    const n = parseInt(mDans[1]);
+    const unite = mDans[2];
+    const d = new Date(today);
+    if (/mois/.test(unite)) d.setMonth(d.getMonth() + n);
+    else if (/semaine/.test(unite)) d.setDate(d.getDate() + n * 7);
+    else d.setDate(d.getDate() + n);
+    return d;
+  }
   // "lundi prochain", "mardi prochain"…
   for (const [jour, idx] of Object.entries(joursMap)) {
     if (new RegExp(`\\b${jour}\\s+prochain`).test(t)) {
@@ -7257,35 +7297,49 @@ function validateAgendaProposalFromMsg(msg) {
       dateStr = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
     }
 
-    // Si modification : supprimer les anciens événements Charly IA sur la même date
+    // Si modification : supprimer l'ancien événement Charly IA remplacé par cette proposition
+    let lieuHerite = null;
     if (isModification) {
       const evMode = mode === 'pro' ? 'pro' : 'user';
-      // Stratégie 1 : supprimer tous les événements Charly IA sur la même date
+      // Stratégie 1 : au plus UN événement Charly IA supprimé sur la même
+      // date, par nouvelle proposition — jamais plus. Sans cette limite,
+      // 3 rendez-vous Charly IA existants ce jour-là disparaissaient tous
+      // pour la moindre modification d'un seul d'entre eux (perte de
+      // données silencieuse) ; ici, au pire un remplacement 1-pour-1.
       let removed = 0;
       for (let i = events.length - 1; i >= 0; i--) {
         const ev = events[i];
         if (ev.mode !== evMode) continue;
         if (ev.date !== dateStr) continue;
         if (ev.id && ev.id.startsWith('charly_ai_')) {
+          lieuHerite = ev.lieu || null;
           events.splice(i, 1);
           removed++;
+          break;
         }
       }
-      // Stratégie 2 : si rien supprimé sur cette date, chercher sur toutes dates (déplacement de jour)
+      // Stratégie 2 : si rien supprimé sur cette date, chercher sur toutes
+      // dates (déplacement de jour) — au plus UN événement là aussi, même raison.
       if (removed === 0) {
         for (let i = events.length - 1; i >= 0; i--) {
           const ev = events[i];
           if (ev.mode !== evMode) continue;
           if (ev.id && ev.id.startsWith('charly_ai_')) {
+            lieuHerite = ev.lieu || null;
             events.splice(i, 1);
             removed++;
-            if (removed >= proposals.length) break;
+            break;
           }
         }
       }
     }
 
     datesUsed.add(dateStr);
+    // Le lieu explicite de la proposition prime ; à défaut (modification
+    // d'horaire seule, sans lieu redonné), celui de l'ancien RDV remplacé
+    // est repris — sinon il aurait fallu re-préciser un lieu déjà connu à
+    // chaque simple déplacement d'heure.
+    const lieuFinal = p.lieu || lieuHerite || null;
     events.push({
       date: dateStr,
       startH: p.startH, startM: p.startM,
@@ -7293,7 +7347,8 @@ function validateAgendaProposalFromMsg(msg) {
       title: p.title,
       cat: catMap[p.category] || 'green',
       mode: mode === 'pro' ? 'pro' : 'user',
-      id: 'charly_ai_' + Date.now() + '_' + idx
+      id: 'charly_ai_' + Date.now() + '_' + idx,
+      ...(lieuFinal ? { lieu: lieuFinal } : {})
     });
     added++;
   });
@@ -7495,6 +7550,346 @@ function tcDefinirStatutCharly(texte, chargement) {
   if (btn) btn.style.opacity = chargement ? '0.5' : '1';
 }
 
+/* ══════════════════════════════════════════════════════════════
+   GESTION DÉTERMINISTE DE L'AGENDA — CONSULTATION & SUPPRESSION
+   ══════════════════════════════════════════════════════════════
+   Le LLM ne voit jamais le contenu réel de `events` (voir
+   tcAgendaSnapshotPourIA plus bas, qui corrige ça pour les cas non
+   couverts ici) : le laisser énumérer ou compter des rendez-vous de
+   tête l'expose à en halluciner, en oublier, ou à mal évaluer un
+   conflit — exactement le bug rapporté ("tu as déjà un rendez-vous
+   demain de 15h à 16h" alors que l'agenda du lendemain était vide).
+   Ces deux fonctions interceptent donc AVANT tout appel LLM, sur le
+   même principe que Places/Directions/Recherche web plus haut : la
+   réponse vient uniquement d'un calcul sur les vraies données.
+   ══════════════════════════════════════════════════════════════ */
+
+function tcISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function tcComparerEvenements(a, b) {
+  const ka = a.date + String(a.startH).padStart(2,'0') + String(a.startM).padStart(2,'0');
+  const kb = b.date + String(b.startH).padStart(2,'0') + String(b.startM).padStart(2,'0');
+  return ka < kb ? -1 : (ka > kb ? 1 : 0);
+}
+
+function tcFormaterDateHumaine(dateStr) {
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const label = new Date(y, mo-1, d).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function tcFormaterHeure(e) {
+  if (e.allDay) return 'toute la journée';
+  const s = String(e.startH).padStart(2,'0') + 'h' + (e.startM ? String(e.startM).padStart(2,'0') : '');
+  const f = String(e.endH).padStart(2,'0') + 'h' + (e.endM ? String(e.endM).padStart(2,'0') : '');
+  return s + ' à ' + f;
+}
+
+/**
+ * Bornes [début, fin] (Date, à minuit) d'une période nommée dans le
+ * texte, calculées à partir de la date réelle du jour — jamais une
+ * date arbitraire. `fin` vaut null pour une période d'un seul jour.
+ */
+function tcPeriodeAgenda(text) {
+  const t = text.toLowerCase();
+  const now = new Date();
+  const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ajouterJours = (d, n) => { const r = new Date(d); r.setDate(r.getDate()+n); return r; };
+  // Semaine calendaire Lundi(0)..Dimanche(6), cohérent avec DAYS_SHORT/DAYS_FULL de l'app.
+  const indexSemaineLundi = (d) => (d.getDay() + 6) % 7;
+
+  if (/après-?demain|apres-?demain/.test(t)) {
+    const d = ajouterJours(debutJour, 2);
+    return { debut: d, fin: null, label: 'après-demain' };
+  }
+  if (/\bdemain\b/.test(t)) {
+    const d = ajouterJours(debutJour, 1);
+    return { debut: d, fin: null, label: 'demain' };
+  }
+  if (/aujourd'?hui|ce jour/.test(t)) {
+    return { debut: debutJour, fin: null, label: "aujourd'hui" };
+  }
+  if (/semaine prochaine|la semaine qui vient/.test(t)) {
+    const finSemaineActuelle = ajouterJours(debutJour, 6 - indexSemaineLundi(debutJour));
+    const debut = ajouterJours(finSemaineActuelle, 1);
+    return { debut, fin: ajouterJours(debut, 6), label: 'la semaine prochaine' };
+  }
+  if (/cette semaine/.test(t)) {
+    return { debut: debutJour, fin: ajouterJours(debutJour, 6 - indexSemaineLundi(debutJour)), label: 'cette semaine' };
+  }
+  if (/mois prochain/.test(t)) {
+    const debut = new Date(now.getFullYear(), now.getMonth()+1, 1);
+    const fin = new Date(now.getFullYear(), now.getMonth()+2, 0);
+    return { debut, fin, label: 'le mois prochain' };
+  }
+  if (/ce mois-?ci|\bce mois\b/.test(t)) {
+    const fin = new Date(now.getFullYear(), now.getMonth()+1, 0);
+    return { debut: debutJour, fin, label: 'ce mois-ci' };
+  }
+  return null;
+}
+
+/**
+ * Reconnaît une consultation d'agenda formulée en langage naturel et
+ * renvoie l'intention à traiter, ou null si la phrase ne correspond à
+ * aucun cas géré ici (repli sur le LLM, désormais grounded — voir
+ * tcAgendaSnapshotPourIA).
+ */
+function detecterConsultationAgenda(text) {
+  const t = text.toLowerCase().trim();
+  // Une création/modification/suppression peut mentionner les mêmes mots de
+  // période ("demain", "cette semaine") : jamais une consultation dans ce cas.
+  if (/\b(ajoute|crée|cree|planifie|prends?[- ]?(un|moi)|réserve|reserve|annule|annuler|supprime|supprimer|efface|effacer|enlève|enleve|déplace|deplace|décale|decale|repousse|avance|reprogramme)\b/.test(t)) return null;
+
+  if (/\b(prochain (rdv|rendez-vous)|mon prochain (rdv|rendez-vous))\b/.test(t)) {
+    return { type: 'prochain' };
+  }
+
+  const mContact = t.match(/(?:rdv|rendez-vous)\s+avec\s+([a-zà-ÿ' -]+?)[\s?!.]*$/i);
+  if (mContact && mContact[1].trim()) {
+    return { type: 'contact', contact: mContact[1].trim() };
+  }
+
+  const declencheurPeriode = /\b(qu'est-ce que j'ai|qu'ai-je|qu est ce que j ai|mon planning|mes rdv|mes rendez-vous|montre[- ]moi mon agenda|qu'est-ce qu'il y a|qu'est ce qu'il y a)\b/;
+  const periode = tcPeriodeAgenda(t);
+  if (declencheurPeriode.test(t)) {
+    return { type: 'periode', periode: periode || { debut: new Date(new Date().setHours(0,0,0,0)), fin: null, label: null } };
+  }
+  // Une période seule, mais uniquement si formulée en question explicite
+  // ("cette semaine ?", "et demain ?") — jamais sur une simple mention de
+  // date/heure sans "?", qui est bien plus probablement le début d'une
+  // création de RDV ("demain à 15h, dentiste", l'exemple donné à
+  // l'utilisateur lui-même) : dans ce cas on laisse filer vers le LLM,
+  // désormais ancré sur le vrai agenda (tcAgendaSnapshotPourIA).
+  if (periode && text.includes('?') && text.trim().split(/\s+/).length <= 6) {
+    return { type: 'periode', periode };
+  }
+  return null;
+}
+
+async function tcGererConsultationAgenda(text, intent) {
+  tcPousserMessageUtilisateur(text);
+  tcDefinirStatutCharly('📅 Consultation de ton agenda…', true);
+  await new Promise(r => setTimeout(r, 350));
+
+  const evs = events.filter(e => e.mode === mode);
+  let reply;
+
+  if (intent.type === 'prochain') {
+    const now = new Date();
+    const nowStr = tcISO(now);
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    const upcoming = evs.filter(e => e.date > nowStr || (e.date === nowStr && (e.allDay || (e.startH*60+e.startM) >= nowMin)))
+      .sort(tcComparerEvenements);
+    reply = upcoming.length
+      ? `Ton prochain rendez-vous : ${upcoming[0].title}, ${tcFormaterDateHumaine(upcoming[0].date)} ${tcFormaterHeure(upcoming[0])}.`
+      : "Tu n'as aucun rendez-vous à venir dans ton agenda ! 🎉 Tu veux qu'on planifie quelque chose ?";
+  } else if (intent.type === 'contact') {
+    const nomLower = intent.contact.toLowerCase();
+    const todayStr = tcISO(new Date());
+    const matches = evs.filter(e => e.title && e.title.toLowerCase().includes(nomLower) && e.date >= todayStr).sort(tcComparerEvenements);
+    if (!matches.length) {
+      reply = `Sauf erreur de ma part, je ne vois aucun rendez-vous à venir avec "${intent.contact}" dans ton agenda.`;
+    } else {
+      const lignes = matches.map(e => `• ${tcFormaterDateHumaine(e.date)} ${tcFormaterHeure(e)} — ${e.title}`).join('\n');
+      reply = (matches.length > 1 ? `Tu as ${matches.length} rendez-vous avec "${intent.contact}" :\n` : `Tu as un rendez-vous avec "${intent.contact}" :\n`) + lignes;
+    }
+  } else {
+    const { debut, fin, label } = intent.periode;
+    const debutStr = tcISO(debut);
+    const finStr = fin ? tcISO(fin) : debutStr;
+    const matches = evs.filter(e => e.date >= debutStr && e.date <= finStr).sort(tcComparerEvenements);
+    if (!matches.length) {
+      reply = `Tu es libre ${label || 'sur cette période'} ! 🎉 Tu veux qu'on planifie quelque chose ?`;
+    } else {
+      const lignes = matches.map(e => `• ${tcFormaterDateHumaine(e.date)} ${tcFormaterHeure(e)} — ${e.title}`).join('\n');
+      reply = `Voici ce que tu as ${label || 'sur cette période'} (${matches.length}) :\n${lignes}`;
+    }
+  }
+
+  charlyIA.history.push({role: 'assistant', content: reply});
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  renderCharlyChat();
+}
+
+/**
+ * Reconnaît une demande de suppression/annulation de RDV formulée à
+ * l'impératif ("annule…", "supprime…") — jamais une question sur le
+ * fonctionnement ("comment annuler un rdv ?"), qui reste gérée par la
+ * FAQ existante.
+ */
+function detecterSuppressionRdv(text) {
+  const t = text.toLowerCase();
+  if (/\bcomment\b/.test(t)) return null;
+  if (!/\b(annule|annuler|supprime|supprimer|efface|effacer|enlève|enleve|enlever)\b/.test(t)) return null;
+  if (!/\b(rdv|rendez-vous|rendez vous|agenda|journée|journee|semaine)\b/.test(t)) return null;
+  return true;
+}
+
+let _tcSuppressionEnAttente = null;
+
+async function tcGererSuppressionRdv(text) {
+  tcPousserMessageUtilisateur(text);
+  tcDefinirStatutCharly('🗑️ Recherche du rendez-vous…', true);
+  await new Promise(r => setTimeout(r, 350));
+
+  const t = text.toLowerCase();
+  let candidats = events.filter(e => e.mode === mode);
+  let filtreApplique = false;
+
+  // Filtre par contact si un nom de la liste de contacts apparaît dans le texte.
+  const contact = contactsList.find(c => c.name && t.includes(c.name.toLowerCase()));
+  if (contact) {
+    candidats = candidats.filter(e => e.title && e.title.toLowerCase().includes(contact.name.toLowerCase()));
+    filtreApplique = true;
+  }
+
+  // Filtre par date/période mentionnée dans le texte.
+  const periode = tcPeriodeAgenda(t);
+  if (periode) {
+    const debutStr = tcISO(periode.debut);
+    const finStr = periode.fin ? tcISO(periode.fin) : debutStr;
+    candidats = candidats.filter(e => e.date >= debutStr && e.date <= finStr);
+    filtreApplique = true;
+  } else {
+    const dateParsee = parseFrenchDateFromText(text);
+    if (dateParsee) {
+      const dStr = tcISO(dateParsee);
+      candidats = candidats.filter(e => e.date === dStr);
+      filtreApplique = true;
+    }
+  }
+
+  // Filtre par mot du titre (ex : "mon rdv chez le dentiste" -> "dentiste"),
+  // uniquement si aucun filtre contact/date/période n'a déjà tranché — un
+  // nom de contact ou une date explicite prime toujours sur un mot-clé
+  // approximatif du titre.
+  if (!filtreApplique) {
+    const motsVides = new Set(['annule','annuler','supprime','supprimer','efface','effacer',
+      'enleve','enlève','enlever','mon','ma','mes','les','des','une','avec','pour','chez',
+      'tous','toutes','rdv','rendez','vous','rendez-vous','svp','stp']);
+    const motsMessage = t.split(/[^a-zà-ÿ0-9-]+/).filter(w => w.length >= 3 && !motsVides.has(w));
+    if (motsMessage.length) {
+      const parTitre = candidats.filter(e => e.title && motsMessage.some(w => e.title.toLowerCase().includes(w)));
+      if (parTitre.length) {
+        candidats = parTitre;
+        filtreApplique = true;
+      }
+    }
+  }
+
+  candidats = candidats.slice().sort(tcComparerEvenements);
+
+  let reply;
+  if (!candidats.length) {
+    reply = filtreApplique
+      ? "Sauf erreur de ma part, je ne vois aucun rendez-vous correspondant dans ton agenda. Peux-tu préciser ?"
+      : "Sauf erreur de ma part, je ne vois aucun rendez-vous dans ton agenda. Peux-tu préciser lequel tu veux annuler ?";
+    charlyIA.history.push({role: 'assistant', content: reply});
+  } else if (!filtreApplique && candidats.length > 1) {
+    // Aucune précision de date/contact et plusieurs RDV existent : jamais deviner, on demande la période.
+    reply = "Sauf erreur de ma part, tu as plusieurs rendez-vous dans ton agenda. Peux-tu préciser lequel (date, heure ou nom) ou quelle période annuler ?";
+    charlyIA.history.push({role: 'assistant', content: reply});
+  } else {
+    // Un ou plusieurs RDV identifiés sans ambiguïté (filtre contact/date/période appliqué) : confirmation avant suppression.
+    _tcSuppressionEnAttente = candidats;
+    const lignes = candidats.map(e => `• ${e.title} — ${tcFormaterDateHumaine(e.date)} ${tcFormaterHeure(e)}`).join('\n');
+    const intro = candidats.length > 1
+      ? `Tu veux annuler ces ${candidats.length} rendez-vous ?`
+      : 'Tu veux annuler ce rendez-vous ?';
+    const html = `⚠️ <b>${intro}</b><br><br>${escapeHTMLSafe(lignes).replace(/\n/g,'<br>')}<br><br>Cette action est définitive.`;
+    charlyIA.history.push({role: 'system_info', content: html, isHTML: true});
+    renderCharlyChat();
+    setTimeout(() => {
+      const lastMsg = document.querySelector('#charlyChatBody > div:last-child');
+      if (!lastMsg) return;
+      const actionsDiv = document.createElement('div');
+      actionsDiv.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; margin:10px auto; max-width:90%;';
+      actionsDiv.innerHTML = `
+        <button onclick="tcConfirmerSuppressionRdv()" style="flex:1; min-width:120px; padding:10px; background:#fce8e6; color:#c5221f; border:1.5px solid #f5b8b3; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">🗑️ Oui, annuler</button>
+        <button onclick="tcAnnulerSuppressionRdv()" style="flex:1; min-width:80px; padding:10px; background:#f1f3f4; color:var(--text); border:1.5px solid var(--border); border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">❌ Non</button>
+      `;
+      lastMsg.appendChild(actionsDiv);
+    }, 100);
+    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    return;
+  }
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  renderCharlyChat();
+}
+
+function tcConfirmerSuppressionRdv() {
+  const cible = _tcSuppressionEnAttente;
+  if (!cible || !cible.length) return;
+  const ids = new Set(cible.map(e => e.id));
+  let n = 0;
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (ids.has(events[i].id)) { events.splice(i, 1); n++; }
+  }
+  _tcSuppressionEnAttente = null;
+  saveEventsToStorage();
+  addDemarche({
+    icon: '🗑️',
+    title: `Annulation — ${n} rendez-vous`,
+    summary: cible.map(e => e.title).join(' • '),
+    status: 'annulee',
+    categorie: 'rdv',
+    detail: `Charly IA a annulé ${n} rendez-vous après confirmation explicite : ${cible.map(e => `${e.title} (${e.date})`).join(', ')}.`
+  });
+  charlyIA.history.push({role: 'system_info', content: `✅ ${n} rendez-vous annulé${n>1?'s':''}.`});
+  renderCharlyChat();
+  if (currentPage === 'calendar') render();
+  showToast('✅ Rendez-vous annulé' + (n>1?'s':''));
+}
+
+function tcAnnulerSuppressionRdv() {
+  _tcSuppressionEnAttente = null;
+  charlyIA.history.push({role: 'system_info', content: "❌ Annulation abandonnée, rien n'a été touché."});
+  renderCharlyChat();
+}
+
+/**
+ * Instantané compact et réel de l'agenda de l'utilisateur, injecté dans
+ * le contexte envoyé au LLM à chaque message — seule source de vérité
+ * autorisée pour juger d'un conflit, répondre à une consultation non
+ * couverte par tcGererConsultationAgenda, ou identifier un rendez-vous
+ * à modifier. Sans cet ancrage, le modèle n'a AUCUNE visibilité sur les
+ * vrais rendez-vous et ne peut que deviner — c'est la cause racine du
+ * bug rapporté (un faux conflit annoncé un jour réellement libre).
+ */
+function tcAgendaSnapshotPourIA() {
+  const now = new Date();
+  const debutStr = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+  const finDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  finDate.setDate(finDate.getDate() + 400);
+  const finStr = tcISO(finDate);
+  const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+
+  const evs = events.filter(e => e.mode === mode && e.date >= debutStr && e.date <= finStr).sort(tcComparerEvenements);
+  const MAX = 200;
+  const tronque = evs.length > MAX;
+  const liste = evs.slice(0, MAX).map(e => {
+    const [y, mo, d] = e.date.split('-').map(Number);
+    const jour = jours[new Date(y, mo-1, d).getDay()];
+    const heure = e.allDay ? '(journée entière)' : `${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')}-${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}`;
+    return `${e.date} (${jour}) ${heure} — ${e.title}`;
+  }).join('\n');
+
+  return `═══════════════════════════════════════
+AGENDA RÉEL DE L'UTILISATEUR (SOURCE DE VÉRITÉ UNIQUE)
+═══════════════════════════════════════
+${evs.length === 0 ? 'Aucun rendez-vous enregistré actuellement.' : liste}
+${tronque ? `\n… et ${evs.length - MAX} de plus, non affichés ici (période trop large — invite l'utilisateur à préciser une période plus courte).` : ''}
+
+⚠️ RÈGLE ABSOLUE : cette liste est la SEULE source valable pour juger d'un conflit d'horaire,
+répondre à une consultation d'agenda, ou identifier quel rendez-vous modifier ou annuler.
+Ne dis JAMAIS qu'un rendez-vous existe s'il n'apparaît pas ci-dessus, et ne dis JAMAIS qu'un
+créneau est pris si la liste ne montre rien à cette date et cette heure — dans ce cas
+l'utilisateur est libre, ne l'invente jamais.`;
+}
+
 async function tcGererRechercheProfessionnel(text, profession, lieu) {
   tcPousserMessageUtilisateur(text);
   tcDefinirStatutCharly('📍 Recherche de « ' + profession + (lieu ? ' à ' + lieu : '') + ' » en cours…', true);
@@ -7650,6 +8045,21 @@ async function charlySendMessage() {
     const _reply = _sal + ' ! 😊 Je suis Charly, ton assistant TimeCool. J’espère que tu vas bien ! Qu’est-ce que je peux faire pour toi aujourd’hui ?';
     charlyIA.history.push({role:'assistant', content:_reply});
     renderCharlyChat();
+    return;
+  }
+
+  // === INTERCEPTION SUPPRESSION DE RDV — jamais laissée au LLM, toujours
+  // une confirmation explicite avant toute suppression réelle ===
+  if (detecterSuppressionRdv(text)) {
+    await tcGererSuppressionRdv(text);
+    return;
+  }
+
+  // === INTERCEPTION CONSULTATION D'AGENDA — réponse garantie à partir des
+  // vraies données, jamais générée de tête par le LLM ===
+  const _consultation = detecterConsultationAgenda(text);
+  if (_consultation) {
+    await tcGererConsultationAgenda(text, _consultation);
     return;
   }
 
@@ -7812,7 +8222,7 @@ ${tY}-${tM}-${tD} | 15:00-16:00 | Rendez-vous banque | rdv
 JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY-MM-DD.`;
 
       const messages = [
-        {role:'system', content: charlyIA.config.systemPrompt + '\n\n' + dateContext + tcLangInstruction()},
+        {role:'system', content: charlyIA.config.systemPrompt + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
         ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
       ];
       reply = await callOpenAI(messages);
@@ -10011,7 +10421,7 @@ ${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | rdv
 [/AGENDA]`;
 
       const messages = [
-        {role:'system', content: charlyIA.config.systemPrompt + '\n\n' + dateContext + tcLangInstruction()},
+        {role:'system', content: charlyIA.config.systemPrompt + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
         ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
       ];
       reply = await callOpenAI(messages);
@@ -10071,23 +10481,20 @@ validateAgendaProposalFromMsg = function(msg) {
     t.includes('pas a ') || t.includes('erreur')
   );
 
-  // Si modification : supprimer tous les événements Charly IA sur les dates concernées
+  // Si modification : la fonction d'origine sait déjà supprimer, sur les
+  // dates concernées, les événements créés par Charly IA (id préfixé
+  // "charly_ai_") avant de recréer la version corrigée — voir plus bas
+  // dans ce fichier. On ne fait ICI que sauter la vérification de
+  // conflit, pour ne pas signaler comme "conflit" l'événement que
+  // l'utilisateur est justement en train de corriger.
+  // Ancien comportement (retiré) : cette fonction supprimait ELLE-MÊME,
+  // ici, TOUT événement de la date — sans distinction d'origine, y
+  // compris des rendez-vous créés manuellement, importés, ou des jalons
+  // (anniversaire, jour férié) — dès qu'un mot aussi courant que
+  // "change" ou "avance" apparaissait dans l'un des 3 derniers messages.
+  // Bug de perte de données corrigé : on délègue entièrement au
+  // nettoyage ciblé de la fonction d'origine.
   if (isModif) {
-    const evMode = mode === 'pro' ? 'pro' : 'user';
-    // Collecter les dates des nouvelles propositions
-    const now = new Date();
-    proposals.forEach(p => {
-      if (!p.date) return;
-      // Supprimer tous les événements sur cette date pour ce mode
-      for (let i = events.length - 1; i >= 0; i--) {
-        const ev = events[i];
-        if (ev.mode !== evMode) continue;
-        if (ev.date === p.date) {
-          events.splice(i, 1);
-        }
-      }
-    });
-    // Appeler directement sans vérification de conflits
     _origValidateAgendaProposalFromMsg(msg);
     return;
   }
