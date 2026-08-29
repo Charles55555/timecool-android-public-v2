@@ -452,6 +452,75 @@ final class Google
     }
 }
 
+/**
+ * Envoi de SMS réel via l'API Twilio.
+ *
+ * ═══ USAGE NORMAL — comment déclencher un SMS en production ═══
+ * Un seul point d'entrée : Sms::envoyer($numeroE164, $message). C'est le
+ * bloc de base pour tout envoi automatisé futur — rappel de RDV, code de
+ * vérification (voir case 'POST /verification/demander' plus bas, déjà
+ * branché), notification de changement, etc. Toujours depuis le SERVEUR,
+ * jamais depuis l'app : voir l'avertissement de configuration ci-dessous.
+ *
+ * ═══ CONFIGURATION REQUISE (backend/private/config.php, jamais commité) ═══
+ * 'twilio_account_sid'       => Account SID (console.twilio.com, page d'accueil)
+ * 'twilio_auth_token'        => Auth Token (même page)
+ * 'twilio_numero_expediteur' => numéro Twilio au format E.164, ex. '+33755530123'
+ *
+ * ⚠️ Le champ "Twilio (SMS)" de l'écran Configuration IA (côté app, dans
+ * localStorage) n'alimente PAS ces 3 valeurs et n'est lu par aucun code —
+ * c'est un simple espace réservé dans une liste de fournisseurs futurs.
+ * Un identifiant Twilio est un secret serveur à part entière (Account SID
+ * + Auth Token), jamais un secret embarquable dans l'app : contrairement
+ * à une clé Google Maps ou LLM (restreignable par app/domaine), un Auth
+ * Token qui fuiterait depuis un APK décompilé permettrait d'envoyer des
+ * SMS illimités aux frais du compte, depuis n'importe où. D'où sa place
+ * ici, dans config.php, au même titre que le poivre et la clé de
+ * chiffrement — jamais dans le JS distribué publiquement.
+ */
+final class Sms
+{
+    public static function envoyer(string $numeroE164, string $message): void
+    {
+        $sid     = Conf::get('twilio_account_sid');
+        $jeton   = Conf::get('twilio_auth_token');
+        $depuis  = Conf::get('twilio_numero_expediteur');
+        if (!$sid || !$jeton || !$depuis) {
+            throw new RuntimeException(
+                'Twilio non configuré : renseigner twilio_account_sid, twilio_auth_token '
+                . 'et twilio_numero_expediteur dans config.php.'
+            );
+        }
+
+        $ch = curl_init("https://api.twilio.com/2010-04-01/Accounts/{$sid}/Messages.json");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => http_build_query([
+                'To'   => $numeroE164,
+                'From' => $depuis,
+                'Body' => $message,
+            ]),
+            CURLOPT_USERPWD        => $sid . ':' . $jeton,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $repBrute   = curl_exec($ch);
+        $codeHttp   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $erreurCurl = curl_error($ch);
+        curl_close($ch);
+
+        if ($repBrute === false) {
+            throw new RuntimeException('Twilio : échec réseau — ' . $erreurCurl);
+        }
+        $rep = json_decode((string) $repBrute, true);
+        if ($codeHttp < 200 || $codeHttp >= 300) {
+            $detail = is_array($rep) && isset($rep['message']) ? (string) $rep['message'] : ('HTTP ' . $codeHttp);
+            throw new RuntimeException('Twilio : ' . $detail);
+        }
+    }
+}
+
 final class Auth
 {
     /**

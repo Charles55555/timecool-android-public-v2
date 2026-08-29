@@ -59,6 +59,17 @@ return [
      */
     'google_client_ids' => [],
 
+    /**
+     * Twilio — envoi de SMS réel (voir la classe Sms dans lib.php pour
+     * l'usage et pourquoi ces 3 valeurs vivent ici, jamais dans l'app).
+     *   - twilio_account_sid       : console.twilio.com, page d'accueil
+     *   - twilio_auth_token        : même page
+     *   - twilio_numero_expediteur : numéro Twilio, format E.164 ('+33...')
+     */
+    'twilio_account_sid' => 'A_RENSEIGNER',
+    'twilio_auth_token' => 'A_RENSEIGNER',
+    'twilio_numero_expediteur' => 'A_RENSEIGNER',
+
     // Durée de validité d'une session de connexion, en jours.
     'session_jours' => 30,
 

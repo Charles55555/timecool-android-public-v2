@@ -130,13 +130,22 @@ switch ($route) {
             ]
         );
 
-        // TODO : brancher l'envoi réel ici — SendGrid pour l'email,
-        // Twilio ou Vonage pour le SMS. Tant que ce n'est pas fait, le
-        // code n'est restitué qu'en mode test.
+        // Envoi réel — SMS via Twilio (voir la classe Sms dans lib.php).
+        // TODO distinct, non couvert ici : l'email n'a encore aucun
+        // fournisseur branché (SendGrid ou équivalent).
         $reponse = ['reference' => $ref, 'expire_dans_minutes' => $minutes];
         if (Conf::get('mode_test', false) === true) {
             $reponse['code_test'] = $code;
             $reponse['avertissement'] = 'Mode test actif : aucun message envoyé.';
+        } elseif ($canal === 'sms') {
+            try {
+                Sms::envoyer($destination, "Votre code de vérification TimeCool : {$code} (valable {$minutes} minutes).");
+            } catch (Throwable $e) {
+                error_log('TimeCool SMS verification: ' . $e->getMessage());
+                Rep::erreur(502, 'envoi_echoue', 'Envoi du SMS impossible pour le moment. Réessayez.');
+            }
+        } else {
+            Rep::erreur(503, 'envoi_indisponible', 'Envoi par email pas encore disponible — utilisez le SMS.');
         }
         Rep::ok($reponse, 201);
 
@@ -172,6 +181,30 @@ switch ($route) {
             [Jeton::hacher($preuve), $v['id']]
         );
         Rep::ok(['preuve' => $preuve, 'canal' => $v['canal']]);
+
+    // ═══════════════════════════════════════════════════════════
+    // ⚠️ TEMPORAIRE — TEST TWILIO, À RETIRER APRÈS VÉRIFICATION ⚠️
+    // Point d'entrée volontairement minimal : ni numéro ni message ne
+    // sont pris en paramètre (donc pas d'oracle d'envoi vers un numéro
+    // arbitraire) — seulement pour confirmer que la config Twilio
+    // (twilio_account_sid / twilio_auth_token / twilio_numero_expediteur
+    // dans config.php) fonctionne bout en bout. Authentifié malgré tout
+    // par prudence (Auth::compte()). À supprimer une fois le SMS de test
+    // reçu et confirmé — ou, si conservé plus longtemps que prévu, au
+    // minimum restreindre à un compte admin identifié.
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /test/sms-twilio':
+        Auth::compte();
+        try {
+            Sms::envoyer(
+                Empreinte::normaliserTelephone('06 07 78 66 26'),
+                'Test TimeCool : intégration Twilio fonctionnelle.'
+            );
+        } catch (Throwable $e) {
+            error_log('TimeCool SMS test: ' . $e->getMessage());
+            Rep::erreur(502, 'envoi_echoue', 'Envoi Twilio impossible : ' . $e->getMessage());
+        }
+        Rep::ok(['envoye' => true]);
 
     // ═══════════════════════════════════════════════════════════
     // INSCRIPTION
