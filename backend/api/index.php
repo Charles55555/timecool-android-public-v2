@@ -728,6 +728,43 @@ switch ($route) {
         Rep::ok(['enregistre' => true]);
 
     // ═══════════════════════════════════════════════════════════
+    // CHANGEMENT DE MOT DE PASSE
+    // L'ancien mot de passe est revérifié ici, côté serveur — jamais
+    // fait confiance à un formulaire qui prétend l'avoir déjà vérifié :
+    // c'est justement ce qui garantit qu'une session volée ou un
+    // appareil laissé déverrouillé ne suffit pas à changer le mot de
+    // passe sans le connaître.
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /compte/mot-de-passe':
+        $compte = Auth::compte();
+
+        $ancien = Entree::corps()['ancien_mot_de_passe'] ?? '';
+        $nouveau = Entree::corps()['nouveau_mot_de_passe'] ?? '';
+
+        if (!is_string($ancien) || !password_verify($ancien, $compte['mot_de_passe_hash'])) {
+            Rep::erreur(401, 'mot_de_passe_incorrect', 'Ancien mot de passe incorrect.');
+        }
+        if (!is_string($nouveau) || mb_strlen($nouveau) < 10) {
+            Rep::erreur(400, 'mot_de_passe_faible', 'Le nouveau mot de passe doit faire au moins 10 caractères.');
+        }
+
+        Db::req(
+            'UPDATE comptes SET mot_de_passe_hash = ? WHERE id = ?',
+            [password_hash($nouveau, algoMotDePasse()), $compte['id']]
+        );
+
+        // Les autres sessions ouvertes (autres appareils) sont révoquées :
+        // un mot de passe qui change doit fermer tout accès obtenu avec
+        // l'ancien, la session courante exceptée.
+        Db::req(
+            'UPDATE sessions SET revoque_le = NOW()
+              WHERE compte_id = ? AND id != ? AND revoque_le IS NULL',
+            [$compte['id'], $compte['session_id']]
+        );
+
+        Rep::ok(['change' => true]);
+
+    // ═══════════════════════════════════════════════════════════
     // CLÉS API DE L'UTILISATEUR
     // Conservées chiffrées, restituées uniquement au titulaire du
     // compte, authentifié par sa session.

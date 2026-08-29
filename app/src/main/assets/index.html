@@ -969,9 +969,16 @@ if (window.pdfjsLib) {
 
 <!-- CONFIGURATION IA -->
 <div class="page" id="page-aiconfig">
-  <div class="page-header">
-    <div class="page-title">🔧 Configuration IA</div>
-    <div class="page-subtitle">Paramètres de Charly IA — Page administrateur</div>
+  <div class="page-header" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <div>
+      <div class="page-title">🔧 Configuration IA</div>
+      <div class="page-subtitle">Paramètres de Charly IA — Page administrateur</div>
+    </div>
+    <!-- Le tirer-vers-le-bas ne déclenche aucun rafraîchissement dans
+         cette WebView (aucun ne l'implémente) : ce bouton est le seul
+         moyen de recharger cette page sans revenir en arrière puis
+         y renaviguer. -->
+    <button onclick="refreshAiconfigPage()" title="Actualiser" aria-label="Actualiser" style="flex-shrink:0; width:38px; height:38px; border:1.5px solid var(--border); background:#fff; border-radius:10px; font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🔄</button>
   </div>
   <div class="main"><div id="aiconfigContent" style="padding:14px 16px 24px;"></div></div>
 </div>
@@ -1826,6 +1833,44 @@ const TC_USER_ID = getStableUserId();
    ══════════════════════════════════════════════════════════════ */
 const TC_APP_VERSION = '10.5.54';
 const TC_AUTO_UPDATE_KEY = 'tc_auto_update';
+
+/* ══════════════════════════════════════════════════════════════
+   VERSION + DATE/HEURE DE BUILD DE L'APK RÉELLEMENT INSTALLÉ
+   Sans rapport avec TC_APP_VERSION ci-dessus (mécanisme de version.json
+   pour un contenu web hébergé, inutilisé tant qu'aucun serveur ne sert
+   cette page). Ici il s'agit de versionName/l'horodatage du build APK,
+   injectés par le CI dans BuildConfig (voir build-apk.yml et
+   build.gradle) puis lus via le pont natif — jamais codés en dur, pour
+   qu'ils reflètent toujours le build réellement installé plutôt qu'une
+   valeur qui se périme à la publication suivante.
+   ══════════════════════════════════════════════════════════════ */
+function tcInfosVersion() {
+  if (window.TimeCoolNatif && window.TimeCoolNatif.obtenirInfosVersion) {
+    try {
+      const infos = JSON.parse(window.TimeCoolNatif.obtenirInfosVersion());
+      return { version: infos.version || null, buildTime: infos.buildTime || null };
+    } catch (e) { /* repli ci-dessous */ }
+  }
+  return { version: null, buildTime: null };
+}
+
+/** Format unique, à réutiliser partout où une version s'affiche : "v2.0.28 — 29/08/2026 14h32". */
+function tcFormaterVersion() {
+  const { version, buildTime } = tcInfosVersion();
+  if (!version) return 'Aperçu navigateur — build réel visible uniquement dans l’application';
+  let dateStr = '';
+  if (buildTime) {
+    const d = new Date(buildTime);
+    if (!isNaN(d.getTime())) {
+      const jj = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      dateStr = ' — ' + jj + '/' + mm + '/' + d.getFullYear() + ' ' + hh + 'h' + mi;
+    }
+  }
+  return 'v' + version + dateStr;
+}
 
 function loadAutoUpdatePref() {
   try { return localStorage.getItem(TC_AUTO_UPDATE_KEY) !== '0'; } catch(e) { return true; }
@@ -3293,12 +3338,16 @@ function renderProfile() {
        jamais userAccount : ce n'etait pas une confusion de profil, il
        n'avait simplement jamais ete branche sur le compte.
 
-       Choix assume : on n'affiche QUE ce que le compte contient
-       reellement. Les rubriques sante, documents et bancaire ont ete
-       retirees plutot que remplies de valeurs vides — l'application ne
-       collecte pas ces donnees a ce stade, et afficher une ligne
-       « Securite Sociale » laisserait croire le contraire, ce que la
-       politique de confidentialite proscrit (principe de minimisation). */
+       Le correctif initial avait aussi retire les rubriques Identite,
+       Sante, Identite legale, Bancaire, Profession et Famille — pas
+       seulement leurs valeurs fictives. Elles sont restaurees ici, mais
+       chaque champ reste facultatif : userAccount ne porte aujourd'hui
+       que prenom/nom/email/telephone/code postal/ville (voir le
+       formulaire d'inscription), donc tout le reste affiche
+       « Non renseigne » plutot qu'une valeur inventee — jamais de
+       fictif. La decision de retirer definitivement certains champs
+       sensibles (sante, IBAN, piece d'identite) se prendra separement,
+       une fois qu'il sera decide s'ils doivent devenir editables. */
     if (!userAccount) {
       c.innerHTML = `
         <div class="profile-hero">
@@ -3329,16 +3378,37 @@ function renderProfile() {
         <div class="profile-sub">${ville || ''}</div>
         <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500;">🔒 Profil protégé</div>
       </div>
+      <div class="info-section"><div class="info-section-title">📝 Identité</div>
+        ${infoRow('Date de naissance', a.birth || nonRenseigne)}
+        ${infoRow('Genre', a.gender || nonRenseigne)}</div>
       <div class="info-section"><div class="info-section-title">📧 Coordonnées</div>
         ${infoRow('Email', a.email || nonRenseigne)}
         ${infoRow('Mobile', tel || nonRenseigne)}
         ${infoRow('Ville', ville || nonRenseigne)}</div>
+      <div class="info-section"><div class="info-section-title">🏥 Santé</div>
+        ${infoRow('Sécurité Sociale', a.ssn || nonRenseigne, !!a.ssn)}
+        ${infoRow('Mutuelle', a.mutual || nonRenseigne, !!a.mutual)}
+        ${infoRow('Groupe sanguin', a.bloodType || nonRenseigne)}
+        ${infoRow('Allergies', a.allergies || nonRenseigne)}
+        ${infoRow('À prévenir', a.emergency || nonRenseigne)}</div>
+      <div class="info-section"><div class="info-section-title">🛂 Identité légale</div>
+        ${infoRow('CNI', a.cni || nonRenseigne, !!a.cni)}
+        ${infoRow('Passeport', a.passport || nonRenseigne, !!a.passport)}</div>
+      <div class="info-section"><div class="info-section-title">💳 Bancaire</div>
+        ${infoRow('Banque', a.bank || nonRenseigne)}
+        ${infoRow('IBAN', a.iban || nonRenseigne, !!a.iban)}</div>
+      <div class="info-section"><div class="info-section-title">💼 Profession</div>
+        ${infoRow('Métier', a.job || nonRenseigne)}
+        ${infoRow('Entreprise', a.company || nonRenseigne)}</div>
+      <div class="info-section"><div class="info-section-title">👨‍👩‍👧 Famille</div>
+        ${infoRow('Situation', a.family || nonRenseigne)}
+        ${infoRow('Enfants', a.children || nonRenseigne)}</div>
       <div class="info-section"><div class="info-section-title">🔐 Compte</div>
         ${depuis ? infoRow('Membre depuis', depuis) : ''}
         ${a.reference ? infoRow('Identifiant', a.reference) : ''}</div>
       <div style="padding:18px; background:var(--bg-soft); margin:16px; border-radius:12px; font-size:12px; color:var(--text-sec); text-align:center; line-height:1.6;">
-        Ton profil ne contient que ce que tu as saisi à l'inscription.<br>
-        TimeCool ne collecte aucune donnée de santé ni document d'identité.
+        Ton profil n'affiche que ce que tu as réellement saisi.<br>
+        Les rubriques encore « Non renseigné » ne sont pas éditables pour le moment.
       </div>`;
   } else {
     const profileId = currentProfile.pro;
@@ -4293,6 +4363,100 @@ function tcPrompt(libelle, valeurParDefaut, options) {
     exemple: o.exemple || '',
     libelleValider: o.libelleValider || 'Valider'
   });
+}
+
+/**
+ * Formulaire de changement de mot de passe : ancien, puis nouveau saisi
+ * deux fois pour confirmation. Construit à la main plutôt qu'avec
+ * tcModale() — celle-ci ne porte qu'un seul champ, il en faut trois ici,
+ * tous masqués (type=password, jamais en clair). Retourne
+ * { ancien, nouveau }, ou null si annulé.
+ */
+function ouvrirModaleChangementMotDePasse() {
+  return new Promise(function (resolve) {
+    const ov = document.createElement('div');
+    ov.className = 'tc-mod-ov';
+    const boite = document.createElement('div');
+    boite.className = 'tc-mod';
+
+    const titre = document.createElement('div');
+    titre.className = 'tc-mod-tt';
+    titre.textContent = '🔒 Modifier mon mot de passe';
+    boite.appendChild(titre);
+
+    function champMdp(placeholder, autocomplete) {
+      const i = document.createElement('input');
+      i.type = 'password';
+      i.className = 'tc-mod-in';
+      i.placeholder = placeholder;
+      i.autocomplete = autocomplete;
+      boite.appendChild(i);
+      return i;
+    }
+    const inAncien = champMdp('Mot de passe actuel', 'current-password');
+    const inNouveau = champMdp('Nouveau mot de passe (10 caractères min.)', 'new-password');
+    const inConfirm = champMdp('Confirme le nouveau mot de passe', 'new-password');
+
+    const erreur = document.createElement('div');
+    erreur.style.cssText = 'color:var(--g-red); font-size:12px; margin:-8px 0 12px; text-align:center; min-height:14px;';
+    boite.appendChild(erreur);
+
+    const barre = document.createElement('div');
+    barre.className = 'tc-mod-bt';
+
+    const fermer = function (resultat) {
+      ov.classList.remove('on');
+      setTimeout(function () { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 180);
+      document.removeEventListener('keydown', auClavier, true);
+      resolve(resultat);
+    };
+
+    const non = document.createElement('button');
+    non.className = 'tc-mod-no';
+    non.textContent = 'Annuler';
+    non.onclick = function () { fermer(null); };
+    barre.appendChild(non);
+
+    const oui = document.createElement('button');
+    oui.className = 'tc-mod-ok';
+    oui.textContent = 'Modifier';
+    oui.onclick = function () {
+      const ancien = inAncien.value;
+      const nouveau = inNouveau.value;
+      const confirmation = inConfirm.value;
+      if (!ancien) { erreur.textContent = 'Saisis ton mot de passe actuel.'; return; }
+      if (nouveau.length < 10) { erreur.textContent = 'Le nouveau mot de passe doit faire au moins 10 caractères.'; return; }
+      if (nouveau !== confirmation) { erreur.textContent = 'Les deux saisies du nouveau mot de passe ne correspondent pas.'; return; }
+      fermer({ ancien: ancien, nouveau: nouveau });
+    };
+    barre.appendChild(oui);
+    boite.appendChild(barre);
+    ov.appendChild(boite);
+
+    ov.onclick = function (e) { if (e.target === ov) fermer(null); };
+    function auClavier(e) {
+      if (e.key === 'Escape') { e.preventDefault(); fermer(null); }
+      else if (e.key === 'Enter') { e.preventDefault(); oui.click(); }
+    }
+    document.addEventListener('keydown', auClavier, true);
+
+    document.body.appendChild(ov);
+    requestAnimationFrame(function () { ov.classList.add('on'); });
+    setTimeout(function () { inAncien.focus(); }, 60);
+  });
+}
+
+async function tcModifierMotDePasse() {
+  const saisie = await ouvrirModaleChangementMotDePasse();
+  if (!saisie) return;
+  try {
+    await TC_BACKEND.changerMotDePasse(saisie.ancien, saisie.nouveau);
+    showToast('✅ Mot de passe modifié');
+  } catch (e) {
+    if (e.code === 'mot_de_passe_incorrect') showToast('❌ Ancien mot de passe incorrect');
+    else if (e.code === 'mot_de_passe_faible') showToast('❌ Nouveau mot de passe trop court (10 caractères minimum)');
+    else showToast('❌ ' + (e.message || 'Échec du changement de mot de passe'));
+  }
 }
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -5263,7 +5427,7 @@ function renderSettings() {
       <div onclick="checkForUpdates(true)" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
         <div>
           <div style="font-size:14px; font-weight:500;">Vérifier les mises à jour</div>
-          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Version actuelle : ${TC_APP_VERSION}</div>
+          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Version actuelle : ${tcFormaterVersion()}</div>
         </div>
         <div style="font-size:13px; color:#1a73e8;">🔄 Vérifier</div>
       </div>
@@ -5385,7 +5549,7 @@ function renderSettings() {
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">ℹ️ À propos</div>
       <div style="padding:12px 16px; border-top:1px solid var(--border);">
         <div style="font-size:14px;">Version</div>
-        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">TimeCool V10.5.104</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">${tcFormaterVersion()}</div>
       </div>
       <div style="padding:12px 16px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="openLegalPage('cgu', 'settings', false)">
         <div style="font-size:14px;">Conditions d'utilisation</div>
@@ -5394,6 +5558,21 @@ function renderSettings() {
       <div style="padding:12px 16px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="openLegalPage('privacy', 'settings', false)">
         <div style="font-size:14px;">Politique de confidentialité</div>
         <div style="color:var(--text-sec); font-size:18px;">›</div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔐 Compte & sécurité</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px;">Identifiant</div>
+        <div style="font-size:12px; color:var(--text-sec); margin-top:4px; font-family:monospace; user-select:all;">${(userAccount && userAccount.reference) ? escapeHTMLSafe(userAccount.reference) : 'Non disponible'}</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <div>
+          <div style="font-size:14px;">Mot de passe</div>
+          <div style="font-size:12px; color:var(--text-sec); margin-top:4px; letter-spacing:2px;">••••••••</div>
+        </div>
+        <button onclick="tcModifierMotDePasse()" style="flex-shrink:0; padding:9px 14px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;">Modifier mon mot de passe</button>
       </div>
     </div>
 
@@ -5760,6 +5939,7 @@ function renderAIConfig() {
         Ces clés sont sauvegardées localement sur cet appareil uniquement. En production, elles seront stockées côté serveur sécurisé (backend TIMECOOL).
       </div>
     </div>
+    <div style="text-align:right; font-size:10px; color:var(--text-sec); margin:-10px 2px 14px;">${tcFormaterVersion()}</div>
 
     ${sectionsHTML}
 
@@ -6101,10 +6281,71 @@ async function resetSystemPromptDefault() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ═══ TÉLÉCHARGEMENT DE FICHIER — natif dans l'APK, navigateur en repli
+// ═══════════════════════════════════════════════════════════
+// <a download> pointant vers une URL blob: ne déclenche AUCUN
+// téléchargement dans la WebView de l'APK (ni DownloadListener
+// enregistré, ni résolution d'URL blob: possible en dehors d'un vrai
+// navigateur) — c'est pourquoi l'export de clés affichait un succès
+// sans jamais rien écrire sur l'appareil. Le pont natif écrit
+// réellement le fichier dans Téléchargements et confirme le résultat ;
+// hors de l'APK (dev/navigateur), le mécanisme blob + <a download>
+// fonctionne réellement et reste utilisé tel quel.
+
+/** Résolveur de la promesse en attente d'une confirmation native (un seul export à la fois). */
+window._tcTelechargementResolve = null;
+
+function tcTexteVersBase64(texte) {
+  const octets = new TextEncoder().encode(texte);
+  let binaire = '';
+  octets.forEach(o => { binaire += String.fromCharCode(o); });
+  return btoa(binaire);
+}
+
+/** Rappelé par MainActivity.ecrireFichierTelechargement() une fois l'écriture terminée (ou refusée/échouée). */
+function tcExportFichierResultat(succes) {
+  if (window._tcTelechargementResolve) {
+    window._tcTelechargementResolve(succes === true || succes === 'true');
+    window._tcTelechargementResolve = null;
+  }
+}
+
+function tcTelechargerFichier(nomFichier, contenu, mime) {
+  return new Promise(resolve => {
+    if (window.TimeCoolNatif && window.TimeCoolNatif.ecrireFichierTelechargement) {
+      window._tcTelechargementResolve = resolve;
+      try {
+        window.TimeCoolNatif.ecrireFichierTelechargement(nomFichier, tcTexteVersBase64(contenu), mime || 'application/octet-stream');
+      } catch (e) {
+        window._tcTelechargementResolve = null;
+        console.error('Export fichier natif : ' + e.message);
+        resolve(false);
+      }
+      return;
+    }
+    try {
+      const blob = new Blob([contenu], { type: mime || 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomFichier;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      resolve(true);
+    } catch (e) {
+      console.error('Export fichier navigateur : ' + e.message);
+      resolve(false);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
 // ═══ EXPORT / IMPORT CLÉS API v6.2
 // ═══════════════════════════════════════════════════════════
 
-function exportApiKeys() {
+async function exportApiKeys() {
   // Récupérer toutes les clés sauvegardées
   let apiKeys = {};
   try { apiKeys = JSON.parse(localStorage.getItem('timecool_api_keys') || '{}'); } catch(e) {}
@@ -6128,19 +6369,21 @@ function exportApiKeys() {
     }
   };
 
-  // Créer le fichier JSON et le télécharger
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
   const dateStr = new Date().toISOString().slice(0, 10);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'TimeCool_Cles_API_' + dateStr + '.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const ok = await tcTelechargerFichier(
+    'TimeCool_Cles_API_' + dateStr + '.json',
+    JSON.stringify(exportData, null, 2),
+    'application/json'
+  );
 
-  showToast('✅ Clés exportées — garde ce fichier en lieu sûr !');
+  // Le succès ne s'affiche qu'après confirmation réelle de l'écriture —
+  // jusqu'ici affiché inconditionnellement, sans lien avec ce qui s'était
+  // (ou pas) réellement passé.
+  if (ok) {
+    showToast('✅ Clés exportées — garde ce fichier en lieu sûr !');
+  } else {
+    showToast('❌ Échec de l\'export — le fichier n\'a pas pu être créé.');
+  }
 }
 
 function importApiKeys() {
@@ -7715,7 +7958,7 @@ const _origNavigate_v74 = navigate;
 navigate = function(page) {
   _origNavigate_v74(page);
   if (page === 'demarches') renderDemarches();
-  else if (page === 'aiconfig') renderAIConfig();
+  else if (page === 'aiconfig') { _adminCurrentTab = 'config'; renderAIConfig(); }
   else if (page === 'assistant') {
     setTimeout(() => renderCharlyChat(), 50);
   }
@@ -10583,6 +10826,18 @@ const TC_BACKEND = {
   },
 
   /**
+   * Changement du mot de passe. L'ancien est revérifié par le SERVEUR,
+   * jamais côté client — un formulaire qui l'aurait « déjà vérifié »
+   * ne prouve rien, seule la vérification contre le hash stocké compte.
+   */
+  async changerMotDePasse(ancienMotDePasse, nouveauMotDePasse) {
+    await tcAppel('POST', '/compte/mot-de-passe', {
+      ancien_mot_de_passe: ancienMotDePasse,
+      nouveau_mot_de_passe: nouveauMotDePasse
+    });
+  },
+
+  /**
    * Connexion avec un jeton d'identité Google.
    *
    * Le jeton est vérifié par le SERVEUR, contre les clés publiques de
@@ -11707,6 +11962,13 @@ function saveUserToAdminList(user) {
         lastname: user.lastname || '',
         email: user.email || '',
         phone: user.phone || '',
+        // Toujours demandés au moment de l'inscription — y compris pour
+        // un compte Google, qui ne fournit ni l'un ni l'autre : le
+        // formulaire de finalisation les redemande dans ce cas (voir
+        // tcGoogleJeton). Vides ici seulement pour un compte antérieur
+        // à leur ajout ; l'affichage le dit alors explicitement.
+        zip: user.zip || '',
+        city: user.city || '',
         registeredAt: new Date().toISOString()
       });
       localStorage.setItem(TC_USERS_KEY, JSON.stringify(users));
@@ -11714,12 +11976,28 @@ function saveUserToAdminList(user) {
   } catch(e) {}
 }
 
+let _adminCurrentTab = 'config';
+
 function adminShowTab(tab) {
-  if (tab === 'users') {
+  _adminCurrentTab = tab === 'users' ? 'users' : 'config';
+  if (_adminCurrentTab === 'users') {
     renderUsersTab();
   } else {
     renderAIConfig();
   }
+}
+
+/** Ré-appelle le rendu du tiroir courant (Config IA ou Utilisateurs) sans perdre le scroll. */
+function refreshAiconfigPage() {
+  const main = document.querySelector('#page-aiconfig .main');
+  const scrollTop = main ? main.scrollTop : 0;
+  if (_adminCurrentTab === 'users') {
+    renderUsersTab();
+  } else {
+    renderAIConfig();
+  }
+  if (main) main.scrollTop = scrollTop;
+  showToast('🔄 Page actualisée');
 }
 
 function renderUsersTab() {
@@ -11757,7 +12035,8 @@ function renderUsersTab() {
             </div>
             <div style="font-size:15px; font-weight:600; color:#1a1a2e; margin-bottom:4px;">${u.firstname} ${u.lastname}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📧 ${u.email || '—'}</div>
-            <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">📱 ${u.phone || '—'}</div>
+            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📱 ${u.phone || '—'}</div>
+            <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">📍 ${u.zip ? (u.zip + ' ' + (u.city || '')).trim() : '<span style="opacity:.7;">Non renseigné</span>'}</div>
             <button onclick="toggleBlockUser(${u.id - 1})" style="width:100%; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fce8e6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
               ${isBlocked ? '✅ Débloquer le compte' : '🚫 Bloquer le compte'}
             </button>
@@ -11767,11 +12046,57 @@ function renderUsersTab() {
 
   c.innerHTML = banner + `
     <div style="padding:0 0 8px;">
-      <div style="font-size:18px; font-weight:700; color:#1a1a2e; margin-bottom:4px;">👥 Utilisateurs inscrits</div>
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px;">
+        <div style="font-size:18px; font-weight:700; color:#1a1a2e;">👥 Utilisateurs inscrits</div>
+        <button onclick="exportUsersCsv()" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⬇️ Export CSV</button>
+      </div>
       <div style="font-size:13px; color:#5f6368; margin-bottom:16px;">${users.length} utilisateur${users.length > 1 ? 's' : ''} enregistré${users.length > 1 ? 's' : ''}</div>
       ${userRows}
     </div>
   `;
+}
+
+/**
+ * Export CSV de tous les utilisateurs inscrits, triable par ville/code
+ * postal dans Excel ou Google Sheets.
+ *
+ * Séparateur point-virgule plutôt que virgule : Excel en localisation
+ * française (celle visée ici, comme le reste de l'app) n'interprète un
+ * CSV à virgules qu'à la condition d'une ligne d'en-tête "sep=,", et
+ * scinde mal les colonnes sans elle — le point-virgule est ce qu'Excel
+ * FR attend nativement. Un BOM UTF-8 est ajouté pour que les accents
+ * s'affichent correctement dès l'ouverture, plutôt que d'apparaître
+ * corrompus.
+ */
+async function exportUsersCsv() {
+  let users = [];
+  try { users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]'); } catch(e) {}
+  if (!users.length) { showToast('Aucun utilisateur à exporter'); return; }
+
+  const echapperCsv = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const colonnes = ['Nom', 'Prénom', 'Email', 'Téléphone', 'Code postal', 'Ville', 'Date d\'inscription'];
+  const lignes = [colonnes.map(echapperCsv).join(';')];
+
+  users.forEach(u => {
+    const d = u.registeredAt ? new Date(u.registeredAt) : null;
+    const dateStr = (d && !isNaN(d.getTime()))
+      ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear()
+      : '';
+    lignes.push([
+      u.lastname || '',
+      u.firstname || '',
+      u.email || '',
+      u.phone || '',
+      u.zip || 'Non renseigné',
+      u.city || 'Non renseigné',
+      dateStr
+    ].map(echapperCsv).join(';'));
+  });
+
+  const contenu = '\uFEFF' + lignes.join('\r\n');
+  const dateFichier = new Date().toISOString().slice(0, 10);
+  const ok = await tcTelechargerFichier('TimeCool_Utilisateurs_' + dateFichier + '.csv', contenu, 'text/csv');
+  showToast(ok ? '✅ Export CSV créé — ' + users.length + ' utilisateur(s)' : '❌ Échec de l\'export CSV');
 }
 
 
@@ -12915,20 +13240,14 @@ function isValidBackup(backup) {
   return true;
 }
 
-function exportTimeCoolData() {
+// Même bug, même remède que l'export des clés API (voir tcTelechargerFichier) :
+// <a download> vers une URL blob: n'écrit rien dans l'APK — seul le pont
+// natif écrit réellement le fichier, dont le succès n'est confirmé qu'après coup.
+async function exportTimeCoolData() {
   const backup = buildBackupPayload();
-  const json = JSON.stringify(backup, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
-  a.href = url;
-  a.download = `timecool_backup_${dateStr}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('✅ Sauvegarde exportée !');
+  const ok = await tcTelechargerFichier(`timecool_backup_${dateStr}.json`, JSON.stringify(backup, null, 2), 'application/json');
+  showToast(ok ? '✅ Sauvegarde exportée !' : '❌ Échec de l\'export — le fichier n\'a pas pu être créé.');
 }
 
 /* Sauvegarde locale automatique (silencieuse) — pas un fichier téléchargé

@@ -50,6 +50,7 @@ jobs:
         run: |
           echo "name=${APP_VERSION_BASE}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       # Le keystore est stocké en secret, encodé en base64. Il est écrit
       # dans RUNNER_TEMP (hors du workspace) pour qu'il ne puisse jamais
@@ -75,6 +76,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           VERSION_NAME: ${{ steps.version.outputs.name }}
           VERSION_CODE: ${{ steps.version.outputs.code }}
+          BUILD_TIME: ${{ steps.version.outputs.build_time }}
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
         run: ./gradlew assembleRelease --stacktrace
 
