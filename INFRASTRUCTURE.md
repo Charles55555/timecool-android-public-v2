@@ -135,3 +135,56 @@ Des sauvegardes Plesk existent dans `/var/lib/psa/dumps/`. Leur périmètre et l
 5. **Vérifier les sauvegardes** avant la première écriture en base.
 6. **Le DNS de `timecool.fr` est le préalable au déploiement** : sans enregistrement pointant vers 82.165.253.73, rien de ce qui sera installé sur ce serveur ne sera accessible publiquement.
 6. **Le DNS de `timecool.fr` est le préalable au déploiement** : sans enregistrement pointant vers 82.165.253.73, rien de ce qui est installé ici ne sera accessible publiquement.
+
+---
+
+## 8. Chantier de mise en production — 29 août 2026
+
+Les trois points bloquants identifiés en section 4 sont réglés. Réalisé par Charly en SSH depuis son PC, étape par étape, avec vérifications indépendantes (DNS public, lecture du code) faites depuis une session Claude Code cloud — voir point "Limitation réseau" ci-dessous pour pourquoi c'est elle et pas la session qui a exécuté.
+
+### DNS — résolu
+
+`timecool.fr`, `www.timecool.fr` et `api.timecool.fr` pointent tous les trois vers `82.165.253.73`. La zone DNS se gère depuis le panneau client IONOS (my.ionos.fr), indépendamment de Plesk sur le serveur dédié — deux systèmes d'authentification distincts, à ne pas confondre. `api.timecool.fr` existait déjà avant ce chantier, il n'a pas eu besoin d'être créé.
+
+### Base de données — créée
+
+Base `timecool`, créée via Plesk (jamais en SQL direct, pour rester dans le périmètre de sauvegarde du panneau). Utilisateur dédié `timecool_app`, droits vérifiés par `SHOW GRANTS FOR 'timecool_app'@'localhost';` — limités strictement à `timecool`, jamais `multi_vendor`.
+
+Commande Plesk qui fonctionne sur cette version (les options `-domain` et `-type` sont obligatoires, une première tentative sans elles avait échoué) :
+```
+plesk bin database --create-dbuser NOM_UTILISATEUR -domain NOM_DOMAINE -database NOM_BASE -type mysql -passwd 'MOT_DE_PASSE'
+```
+
+### Backend PHP — déployé
+
+Disposition des fichiers, dictée par le code lui-même (`index.php` fait `require __DIR__ . '/../private/lib.php'`) :
+
+```
+/var/www/vhosts/timecool.fr/
+  httpdocs/
+    api/
+      index.php
+      .htaccess
+      rdv.html
+  private/                    ← hors zone web, jamais servi même si PHP est mal configuré
+    lib.php
+    config.php
+```
+
+`config.php` (copié depuis `backend/api/config.exemple.php`, jamais commité) contient trois secrets renseignés **directement sur le serveur, jamais transmis dans un chat** : `mot_de_passe` (utilisateur `timecool_app`), `poivre` et `cle_chiffrement` (deux valeurs *distinctes*, générées chacune par `openssl rand -hex 32`). Permissions `chmod 640`, propriétaire `timecool.fr_qj0vt3q1c4:psacln` (nom d'utilisateur système à revérifier avec `ls -la /var/www/vhosts/timecool.fr/` s'il a pu changer).
+
+Vérification de bon fonctionnement :
+```
+curl -sk -o /dev/null -w '%{http_code}\n' https://api.timecool.fr/parametres
+```
+doit renvoyer `200`.
+
+### ⚠️ Limitation réseau — confirmée, définitive
+
+**Aucune session Claude Code cloud ne peut atteindre ce serveur**, quels que soient les identifiants fournis (root SSH, compte Plesk dédié à `timecool.fr`, même scindé de `denxiad-france.com`). Testé et confirmé sur SSH (22), Plesk (8443) et HTTPS (443) : le trafic sortant du bac à sable passe par un proxy qui répond explicitement `403 host_not_allowed` pour ce serveur — un refus net, pas une histoire de identifiants ou de permissions.
+
+**Conséquence pratique pour toute tâche serveur future** : elle doit être exécutée par Charly en SSH direct depuis son PC (`root@82.165.253.73`, clé `~/.ssh/timecool_ionos`), guidé commande par commande par Claude Code — jamais tentée en autonome depuis une session cloud, quelle que soit la façon dont l'accès est proposé.
+
+Restent non résolus, à traiter avant lancement public (voir aussi section 7) :
+- PHP 8.0 sur `timecool.fr` à passer en 8.3.
+- `google_client_ids`, service d'envoi SMS/email (SendGrid/Twilio) et repasser `verification_obligatoire`/`mode_test` aux bonnes valeurs dans `config.php` avant l'ouverture publique.
