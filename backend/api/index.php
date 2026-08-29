@@ -77,6 +77,41 @@ function vueCompte(array $c): array
     ];
 }
 
+/**
+ * ⚠️ VÉRIFICATION 2FA (SMS/EMAIL) SUSPENDUE TEMPORAIREMENT — décision du
+ * 29/08/2026, à réévaluer fin septembre 2026.
+ *
+ * Twilio n'est pas encore configuré et aucun fournisseur email n'est
+ * branché (voir Sms::estConfigure() dans lib.php) : l'étape de
+ * vérification tourne donc uniquement en mode test (code fixe "000000",
+ * voir 'POST /verification/demander' plus bas), ce qui ralentit les
+ * tests d'inscription sans apporter de sécurité réelle pour l'instant.
+ * Le parcours d'inscription saute donc cette étape le temps que SMS et
+ * email deviennent opérationnels.
+ *
+ * Rien n'est supprimé : l'endpoint /verification/demander, /valider, la
+ * classe Sms et son mode test restent pleinement fonctionnels et
+ * inchangés — seule cette constante empêche le parcours d'inscription de
+ * s'en servir, en court-circuitant 'verification_obligatoire' de
+ * config.php pour les deux endroits qui le lisent ('GET /parametres',
+ * qui dit à l'application si l'écran de code doit s'afficher, et
+ * 'POST /inscription', qui dit si le serveur l'exige).
+ *
+ * POUR RÉACTIVER : repasser cette constante à false. Le comportement
+ * redevient alors entièrement piloté par 'verification_obligatoire' dans
+ * config.php, sans aucun autre changement de code.
+ */
+const VERIFICATION_2FA_SUSPENDUE = true;
+
+/** Vrai si l'inscription doit exiger une vérification SMS/email préalable. */
+function verificationObligatoire(): bool
+{
+    if (VERIFICATION_2FA_SUSPENDUE) {
+        return false;
+    }
+    return Conf::get('verification_obligatoire', true) === true;
+}
+
 switch ($route) {
 
     // ═══════════════════════════════════════════════════════════
@@ -248,13 +283,15 @@ switch ($route) {
          * empêche de s'inscrire avec un email ou un numéro qui ne vous
          * appartient pas.
          *
-         * Le réglage verification_obligatoire permet de la suspendre le
-         * temps des tests. Une preuve valide reste honorée dans les deux
-         * cas : désactiver la contrainte n'invalide pas ce qui a été
-         * réellement vérifié.
+         * Le réglage verification_obligatoire (voir verificationObligatoire()
+         * en haut de ce fichier, actuellement forcée à false par
+         * VERIFICATION_2FA_SUSPENDUE) permet de la suspendre le temps des
+         * tests. Une preuve valide reste honorée dans les deux cas :
+         * désactiver la contrainte n'invalide pas ce qui a été réellement
+         * vérifié.
          */
         $v = null;
-        $verifExigee = Conf::get('verification_obligatoire', true) === true;
+        $verifExigee = verificationObligatoire();
         $preuve = Entree::texte('preuve', 64);
         $googleVerifie = false;
 
@@ -956,7 +993,7 @@ switch ($route) {
     // ═══════════════════════════════════════════════════════════
     case 'GET /parametres':
         Rep::ok([
-            'verification_obligatoire' => Conf::get('verification_obligatoire', true) === true,
+            'verification_obligatoire' => verificationObligatoire(),
             // Reflète le mode test AUTOMATIQUE de la vérification (voir
             // 'POST /verification/demander') : vrai tant que Twilio n'est
             // pas configuré. Purement informatif — l'application ne s'en
