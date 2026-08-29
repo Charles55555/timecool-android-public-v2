@@ -1981,6 +1981,37 @@ function closeLegalPage() {
 }
 
 // ═══ v5.2 — Toggle visibilité mot de passe ═══
+/**
+ * Bouton œil sur la ligne "Mot de passe" affichée dans Paramètres > Compte
+ * & sécurité (pas dans la modale de changement — voir togglePasswordVisibility
+ * ci-dessous pour celle-là). Ajouté pour la cohérence visuelle demandée avec
+ * le reste de l'app, mais avec une différence assumée et documentée : le mot
+ * de passe en clair de l'utilisateur n'est JAMAIS connu de l'application une
+ * fois connectée — seul le serveur conserve son empreinte Argon2id (voir
+ * Auth::compte() côté backend). Il n'y a donc rien de réel à révéler ici.
+ * Prétendre en afficher un serait un mensonge de sécurité (faux sentiment
+ * que l'app "connaît" le mot de passe) : basculer affiche un message
+ * honnête à la place, jamais une valeur inventée.
+ */
+function tcBasculerAffichageMotDePasseFictif(btn) {
+  const texte = document.getElementById('mdpAffichageTexte');
+  if (!texte) return;
+  const eyeShow = btn.querySelector('.eye-show');
+  const eyeHide = btn.querySelector('.eye-hide');
+  const estMasque = texte.textContent.includes('•');
+  if (estMasque) {
+    texte.textContent = "Jamais stocké en clair, même ici — c'est voulu 🔒";
+    texte.style.letterSpacing = 'normal';
+    if (eyeShow) eyeShow.style.display = 'none';
+    if (eyeHide) eyeHide.style.display = 'block';
+  } else {
+    texte.textContent = '••••••••';
+    texte.style.letterSpacing = '2px';
+    if (eyeShow) eyeShow.style.display = 'block';
+    if (eyeHide) eyeHide.style.display = 'none';
+  }
+}
+
 function togglePasswordVisibility(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;
@@ -4461,7 +4492,13 @@ function ouvrirModaleChangementMotDePasse() {
       boite.appendChild(conteneur);
       return conteneur.querySelector('input');
     }
-    const inAncien = champMdp('Mot de passe actuel', 'current-password');
+    // Pas de champ "mot de passe actuel" : la session déjà authentifiée
+    // (jeton Bearer vérifié par Auth::compte() côté serveur) est une
+    // vérification suffisante que c'est bien le titulaire du compte qui
+    // agit — le faire retaper alourdit l'UX sans renforcer la sécurité
+    // dans ce cas précis (contrairement à un changement d'email, par
+    // exemple, où l'ancien mot de passe aurait un rôle de confirmation
+    // distinct).
     const inNouveau = champMdp('Nouveau mot de passe (10 caractères min.)', 'new-password');
     const inConfirm = champMdp('Confirme le nouveau mot de passe', 'new-password');
 
@@ -4489,13 +4526,11 @@ function ouvrirModaleChangementMotDePasse() {
     oui.className = 'tc-mod-ok';
     oui.textContent = 'Modifier';
     oui.onclick = function () {
-      const ancien = inAncien.value;
       const nouveau = inNouveau.value;
       const confirmation = inConfirm.value;
-      if (!ancien) { erreur.textContent = 'Saisis ton mot de passe actuel.'; return; }
       if (nouveau.length < 10) { erreur.textContent = 'Le nouveau mot de passe doit faire au moins 10 caractères.'; return; }
       if (nouveau !== confirmation) { erreur.textContent = 'Les deux saisies du nouveau mot de passe ne correspondent pas.'; return; }
-      fermer({ ancien: ancien, nouveau: nouveau });
+      fermer({ nouveau: nouveau });
     };
     barre.appendChild(oui);
     boite.appendChild(barre);
@@ -4510,7 +4545,7 @@ function ouvrirModaleChangementMotDePasse() {
 
     document.body.appendChild(ov);
     requestAnimationFrame(function () { ov.classList.add('on'); });
-    setTimeout(function () { inAncien.focus(); }, 60);
+    setTimeout(function () { inNouveau.focus(); }, 60);
   });
 }
 
@@ -4518,7 +4553,7 @@ async function tcModifierMotDePasse() {
   const saisie = await ouvrirModaleChangementMotDePasse();
   if (!saisie) return;
   try {
-    await TC_BACKEND.changerMotDePasse(saisie.ancien, saisie.nouveau);
+    await TC_BACKEND.changerMotDePasse(saisie.nouveau);
     showToast('✅ Mot de passe modifié');
     // Jamais le mot de passe lui-même dans le journal — seulement le fait
     // qu'il a changé, avec l'horodatage : c'est justement ce qui permet
@@ -5820,11 +5855,15 @@ function renderSettingsInterne() {
         <div style="font-size:14px;">Identifiant de connexion</div>
         <div style="font-size:12px; color:var(--text-sec); margin-top:4px; user-select:all;">${(userAccount && userAccount.email) ? escapeHTMLSafe(userAccount.email) : 'Non disponible'}</div>
       </div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <div style="flex:1; min-width:0;">
           <div style="font-size:14px;">Mot de passe</div>
-          <div style="font-size:12px; color:var(--text-sec); margin-top:4px; letter-spacing:2px;">••••••••</div>
+          <div id="mdpAffichageTexte" style="font-size:12px; color:var(--text-sec); margin-top:4px; letter-spacing:2px;">••••••••</div>
         </div>
+        <button type="button" onclick="tcBasculerAffichageMotDePasseFictif(this)" aria-label="Afficher / masquer le mot de passe" style="flex-shrink:0; background:transparent; border:none; padding:8px; cursor:pointer; color:var(--text-sec); display:flex; align-items:center; justify-content:center;">
+          <svg class="eye-show" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+          <svg class="eye-hide" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:none;"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+        </button>
         <button onclick="tcModifierMotDePasse()" style="flex-shrink:0; padding:9px 14px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;">Modifier mon mot de passe</button>
       </div>
       ${tcRenderBiometrieToggle()}
@@ -7020,6 +7059,13 @@ function renderChatMessage(m) {
           </div>
       `;
     }
+    if (m.trajetAjout) {
+      html += `
+          <div class="tc-trajet-card" data-trajet="${escapeHTMLSafe(JSON.stringify(m.trajetAjout))}" style="margin-top:10px;">
+            <button onclick="tcTrajetAjouterAgenda(this)" style="width:100%; padding:10px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">📅 Ajouter à mon agenda</button>
+          </div>
+      `;
+    }
     html += `
         </div>
       </div>
@@ -7472,6 +7518,19 @@ function charlyQuickAction(action) {
     startAssistant();
     return;
   }
+  // Trajet : déclenche directement le flux structuré déterministe — passer
+  // par charlySendMessage() exigerait que ce texte canné matche un
+  // déclencheur de detecterDemandeTrajet ou, à défaut, retombe sur le LLM
+  // (jamais garanti de bien réagir). Le clic exprime déjà une intention
+  // sans ambiguïté : inutile de repasser par la détection de texte libre.
+  // En mode démo, ce flux appellerait tout de même Google Directions au
+  // terme des 3 questions — hors de propos ici (voir plus bas dans ce
+  // fichier) : on laisse alors le texte canné suivre le chemin habituel,
+  // qui retombe sur la réponse simulée dédiée au trajet.
+  if (action === 'trajet' && !charlyIA.config.demoMode) {
+    tcDemarrerCalculTrajet("J'aimerais calculer un trajet.");
+    return;
+  }
   const prompts = {
     rdv: "J'aimerais prendre un rendez-vous. Pose-moi les questions pour préparer ma demande.",
     trajet: "J'aimerais calculer un trajet. Demande-moi les adresses de départ et d'arrivée et l'heure du rendez-vous.",
@@ -7530,7 +7589,13 @@ const TC_TRAJET_DECLENCHEURS = ['temps de trajet','temps de route','durée du tr
   'heure de départ pour','heure de depart pour','temps pour aller','temps pour arriver',
   'temps pour y aller','temps pour y arriver','itinéraire pour','itineraire pour','itinéraire jusqu',
   'itineraire jusqu','trajet jusqu','trajet pour aller','trajet pour me rendre','trajet pour y aller',
-  'longtemps pour aller','longtemps pour arriver','longtemps pour y aller','longtemps pour y arriver'];
+  'longtemps pour aller','longtemps pour arriver','longtemps pour y aller','longtemps pour y arriver',
+  // Intention générique, sans adresse ni destination donnée dans le même
+  // message (ex : bouton "🚗 Calculer trajet") — déclenche le flux
+  // structuré en 3 questions plutôt que le calcul immédiat ci-dessous.
+  'calculer un trajet','calculer le trajet','calcule un trajet','calcule le trajet',
+  'estimer un trajet','estimer le trajet','estimation de trajet','estimation d\'un trajet',
+  'calculer mon trajet','calcule mon trajet'];
 
 /**
  * Segment ressemblant à une adresse française ("3 bis rue Léon Jost
@@ -8000,6 +8065,132 @@ async function tcGererDemandeTrajet(text, destination) {
   renderCharlyChat();
 }
 
+/* ══════════════════════════════════════════════════════════════
+   CALCUL DE TRAJET STRUCTURÉ — bouton "🚗 Calculer trajet" et
+   intention générique ("j'aimerais calculer un trajet") sans adresse
+   fournie dans le même message.
+   Contrairement à tcGererDemandeTrajet ci-dessus (adresse d'arrivée
+   déjà donnée en une seule phrase, départ pris par géolocalisation —
+   flux rapide conservé tel quel), celui-ci pose explicitement les 3
+   questions du cahier des charges : adresse de départ, adresse
+   d'arrivée, heure du rendez-vous — puis calcule aussi l'heure de
+   départ conseillée et propose d'ajouter le trajet à l'agenda.
+   `_tcTrajetEtapes` non-null signifie « une réponse est attendue » :
+   charlySendMessage doit alors router tout message suivant ici en
+   priorité, avant tout autre intercepteur.
+   ══════════════════════════════════════════════════════════════ */
+let _tcTrajetEtapes = null;
+
+function tcDemarrerCalculTrajet(text) {
+  tcPousserMessageUtilisateur(text || "J'aimerais calculer un trajet.");
+  _tcTrajetEtapes = { depart: null, arrivee: null };
+  charlyIA.history.push({role: 'assistant', content: "D'accord ! Quelle est ton adresse de départ ? (tu peux aussi dire « ma position actuelle »)"});
+  renderCharlyChat();
+}
+
+async function tcRepondreEtapeTrajet(text) {
+  tcPousserMessageUtilisateur(text);
+  const t = text.trim();
+  if (!t) { renderCharlyChat(); return; }
+
+  if (_tcTrajetEtapes.depart === null) {
+    _tcTrajetEtapes.depart = t;
+    charlyIA.history.push({role: 'assistant', content: "Et l'adresse d'arrivée ?"});
+    renderCharlyChat();
+    return;
+  }
+  if (_tcTrajetEtapes.arrivee === null) {
+    _tcTrajetEtapes.arrivee = t;
+    charlyIA.history.push({role: 'assistant', content: 'À quelle heure est ton rendez-vous ? (ex : 14h30)'});
+    renderCharlyChat();
+    return;
+  }
+  // Dernière étape : l'heure du rendez-vous.
+  const m = t.match(/(\d{1,2})\s*[h:]\s*(\d{0,2})/);
+  if (!m) {
+    charlyIA.history.push({role: 'assistant', content: "Je n'ai pas compris l'heure — donne-la au format « 14h30 » par exemple."});
+    renderCharlyChat();
+    return;
+  }
+  const heureRdv = { h: Math.min(23, parseInt(m[1])), m: Math.min(59, parseInt(m[2] || '0')) };
+  const { depart, arrivee } = _tcTrajetEtapes;
+  _tcTrajetEtapes = null;
+  await tcFinaliserCalculTrajet(depart, arrivee, heureRdv);
+}
+
+async function tcFinaliserCalculTrajet(depart, arrivee, heureRdv) {
+  tcDefinirStatutCharly('🚗 Calcul du trajet vers ' + arrivee + '…', true);
+  try {
+    const positionActuelle = /position actuelle|ma position|où je suis|ou je suis|ici\b/i.test(depart);
+    const estimation = await tcEstimerTrajet(arrivee, positionActuelle ? {} : { origine: depart });
+    if (estimation === null) {
+      charlyIA.history.push({role: 'assistant', content: "Je ne peux pas estimer ce trajet sans ta position — la géolocalisation a été refusée ou n'est pas disponible. Redonne-moi plutôt une adresse de départ précise."});
+    } else if (estimation.aucunItineraire) {
+      charlyIA.history.push({role: 'assistant', content: "Je n'ai trouvé aucun itinéraire routier entre ces deux adresses. Sont-elles correctes ?"});
+    } else {
+      const now = new Date();
+      const dateRdv = new Date(now.getFullYear(), now.getMonth(), now.getDate(), heureRdv.h, heureRdv.m, 0, 0);
+      const dateDepart = new Date(dateRdv.getTime() - estimation.hauteMin * 60000);
+      const heureRdvStr = String(heureRdv.h).padStart(2, '0') + 'h' + String(heureRdv.m).padStart(2, '0');
+      const heureDepartStr = String(dateDepart.getHours()).padStart(2, '0') + 'h' + String(dateDepart.getMinutes()).padStart(2, '0');
+      const dist = estimation.distanceKm ? ` (${estimation.distanceKm} km)` : '';
+
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const ajout = {
+        date: dateStr,
+        startH: dateDepart.getHours(), startM: dateDepart.getMinutes(),
+        endH: heureRdv.h, endM: heureRdv.m,
+        titre: 'Trajet vers ' + estimation.adresseArrivee,
+        lieu: estimation.adresseArrivee
+      };
+
+      charlyIA.history.push({
+        role: 'assistant',
+        content: `🚗 Trajet vers ${estimation.adresseArrivee}${dist} : entre ${estimation.basseMin} et ${estimation.hauteMin} minutes avec le trafic actuel.\n\nPour ton rendez-vous de ${heureRdvStr}, pars vers ${heureDepartStr} au plus tard.`,
+        trajetAjout: ajout
+      });
+
+      addDemarche({
+        icon: '🚗',
+        title: `Trajet vers ${estimation.adresseArrivee}`,
+        summary: `Entre ${estimation.basseMin} et ${estimation.hauteMin} min avec le trafic actuel${dist} — départ conseillé ${heureDepartStr} pour un RDV à ${heureRdvStr}.`,
+        status: 'calcul',
+        categorie: 'charly',
+        detail: `Charly IA a estimé le temps de trajet de "${depart}" vers "${estimation.adresseArrivee}" — entre ${estimation.basseMin} et ${estimation.hauteMin} minutes avec le trafic actuel. Départ conseillé : ${heureDepartStr} pour un rendez-vous à ${heureRdvStr}.`
+      });
+    }
+  } catch (err) {
+    charlyIA.history.push({role: 'system_info', content: '❌ Erreur trajet : ' + err.message.substring(0, 150)});
+  }
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  renderCharlyChat();
+}
+
+/** Bouton "Ajouter à mon agenda" sous la réponse de calcul de trajet — crée le créneau de départ conseillé. */
+function tcTrajetAjouterAgenda(btn) {
+  const carte = btn.closest('.tc-trajet-card');
+  if (!carte) return;
+  let info;
+  try { info = JSON.parse(carte.dataset.trajet); } catch (e) { return; }
+  events.push({
+    date: info.date,
+    startH: info.startH, startM: info.startM,
+    endH: info.endH, endM: info.endM,
+    title: info.titre,
+    cat: 'trajet',
+    mode: mode === 'pro' ? 'pro' : 'user',
+    id: 'charly_ai_' + Date.now(),
+    lieu: info.lieu
+  });
+  saveEventsToStorage();
+  if (currentPage === 'calendar') render();
+  showToast('✅ Trajet ajouté à ton agenda !');
+  btn.disabled = true;
+  btn.textContent = '✅ Ajouté à l\'agenda';
+  btn.style.opacity = '0.7';
+  btn.style.cursor = 'default';
+}
+
 async function tcGererRechercheWeb(text, requete) {
   tcPousserMessageUtilisateur(text);
   if (!requete) {
@@ -8054,6 +8245,19 @@ async function charlySendMessage() {
     showToast('⚠️ Charly IA est désactivé. Active-le dans Configuration IA.');
     return;
   }
+
+  // === RÉPONSE À UNE QUESTION DU FLUX DE CALCUL DE TRAJET EN COURS ===
+  // Priorité absolue, avant même la vérification de clé API du fournisseur
+  // IA : ce flux n'appelle jamais le LLM (seulement Google Directions à la
+  // toute fin), une clé IA absente ne doit donc jamais bloquer la réponse
+  // à une question déjà posée. Si Charly attend une réponse (adresse de
+  // départ, d'arrivée, ou heure du RDV), tout message suivant EST cette
+  // réponse, jamais une nouvelle intention à réinterpréter ailleurs.
+  if (_tcTrajetEtapes) {
+    await tcRepondreEtapeTrajet(text);
+    return;
+  }
+
   const activeKey = charlyIA.config.provider === 'anthropic'
     ? charlyIA.config.anthropicKey
     : charlyIA.config.apiKey;
@@ -8116,7 +8320,16 @@ async function charlySendMessage() {
     // === INTERCEPTION DEMANDE DE TRAJET — Google Directions ===
     const _trajetDest = detecterDemandeTrajet(text);
     if (_trajetDest !== null) {
-      await tcGererDemandeTrajet(text, _trajetDest);
+      if (_trajetDest) {
+        // Adresse d'arrivée déjà donnée dans le même message ("trajet
+        // jusqu'à la Tour Eiffel") : flux rapide existant, départ pris
+        // par géolocalisation.
+        await tcGererDemandeTrajet(text, _trajetDest);
+      } else {
+        // Intention générique sans adresse ("j'aimerais calculer un
+        // trajet") : flux structuré en 3 questions (départ, arrivée, heure).
+        tcDemarrerCalculTrajet(text);
+      }
       return;
     }
 
@@ -8655,11 +8868,16 @@ async function simulateDemoReply(userText) {
   if (t.includes('agenda') || t.includes('organis') || t.includes('journ')) {
     return `D'accord, je vais t'aider à organiser ta journée. À quelle heure veux-tu commencer ta journée ?\n\nDonne-moi aussi tes priorités principales du jour.`;
   }
-  if (t.includes('rdv') || t.includes('rendez') || t.includes('médecin') || t.includes('docteur')) {
-    return `Parfait. Pour préparer ta demande de rendez-vous, peux-tu me dire :\n\n1. Quel type de professionnel ? (médecin, dentiste, kiné…)\n2. Le motif du RDV\n3. Tes disponibilités préférées (matin, après-midi, jours)`;
-  }
+  // Le trajet est vérifié AVANT rdv/rendez : le texte canné du bouton
+  // "Calculer trajet" mentionne lui-même "l'heure du rendez-vous", et
+  // matchait donc à tort la branche RDV ci-dessous si elle passait en
+  // premier — Charly proposait alors de préparer un rendez-vous au lieu
+  // de demander les adresses de départ/arrivée.
   if (t.includes('trajet') || t.includes('itinérair') || t.includes('départ')) {
     return `Pour calculer ton trajet, j'ai besoin de :\n\n1. Adresse de départ\n2. Adresse d'arrivée\n3. Heure du rendez-vous\n\nJe te proposerai l'heure de départ optimale.`;
+  }
+  if (t.includes('rdv') || t.includes('rendez') || t.includes('médecin') || t.includes('docteur')) {
+    return `Parfait. Pour préparer ta demande de rendez-vous, peux-tu me dire :\n\n1. Quel type de professionnel ? (médecin, dentiste, kiné…)\n2. Le motif du RDV\n3. Tes disponibilités préférées (matin, après-midi, jours)`;
   }
   if (t.includes('réserv') || t.includes('restaurant') || t.includes('hôtel')) {
     return `Pour faire une réservation, dis-moi :\n\n1. Type (restaurant, hôtel, autre)\n2. Date et heure souhaitées\n3. Nombre de personnes\n4. Préférences (cuisine, quartier, budget)`;
@@ -11738,9 +11956,11 @@ const TC_BACKEND = {
    * jamais côté client — un formulaire qui l'aurait « déjà vérifié »
    * ne prouve rien, seule la vérification contre le hash stocké compte.
    */
-  async changerMotDePasse(ancienMotDePasse, nouveauMotDePasse) {
+  async changerMotDePasse(nouveauMotDePasse) {
+    // Pas d'ancien mot de passe transmis : la session authentifiée
+    // (jeton Bearer) suffit côté serveur, voir Auth::compte() dans
+    // backend/api/index.php.
     await tcAppel('POST', '/compte/mot-de-passe', {
-      ancien_mot_de_passe: ancienMotDePasse,
       nouveau_mot_de_passe: nouveauMotDePasse
     });
   },
