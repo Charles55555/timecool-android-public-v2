@@ -3,9 +3,13 @@ package com.timecool.app;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.hardware.biometrics.BiometricManager;
+import android.hardware.biometrics.BiometricPrompt;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -13,14 +17,19 @@ import android.os.CancellationSignal;
 import android.os.Environment;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
+import androidx.credentials.CreateCredentialResponse;
+import androidx.credentials.CreatePasswordRequest;
 import androidx.credentials.Credential;
 import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
 import androidx.credentials.CustomCredential;
 import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.CreateCredentialException;
 import androidx.credentials.exceptions.GetCredentialException;
 
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
@@ -43,6 +52,12 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.security.KeyStore;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 
 public class MainActivity extends Activity {
 
@@ -64,6 +79,10 @@ public class MainActivity extends Activity {
     private String exportEnAttenteNom;
     private String exportEnAttenteContenu;
     private String exportEnAttenteMime;
+
+    /** Alias de la clé Keystore protégeant le jeton de session pour la connexion biométrique. */
+    private static final String ALIAS_CLE_BIOMETRIE = "timecool_biometrie_jeton";
+    private static final String PREFS_BIOMETRIE = "timecool_biometrie";
 
     /*
      * Resultat Google en attente de livraison a la page.
@@ -561,6 +580,279 @@ public class MainActivity extends Activity {
                     appelerJs("tcExportFichierResultat", ok ? "true" : "false");
                 }
             });
+        }
+
+        /**
+         * Propose d'enregistrer l'identifiant et le mot de passe dans le
+         * gestionnaire d'identifiants système — même bibliothèque que la
+         * connexion Google (Credential Manager), mais CreatePasswordRequest
+         * plutôt que GetCredentialRequest : on y dépose un identifiant au
+         * lieu d'y en lire un.
+         *
+         * Purement une proposition à l'utilisateur, portée par la boîte
+         * système elle-même : un refus, une fermeture ou une erreur n'a
+         * aucune conséquence applicative, la connexion a déjà réussi avant
+         * cet appel. Rien n'est donc remonté à la page dans ces cas.
+         */
+        @JavascriptInterface
+        public void enregistrerIdentifiants(final String identifiant, final String motDePasse) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    CreatePasswordRequest requete = new CreatePasswordRequest(identifiant, motDePasse);
+                    CredentialManager gestionnaire = CredentialManager.create(MainActivity.this);
+                    gestionnaire.createCredentialAsync(
+                        MainActivity.this,
+                        requete,
+                        new CancellationSignal(),
+                        Executors.newSingleThreadExecutor(),
+                        new CredentialManagerCallback<CreateCredentialResponse, CreateCredentialException>() {
+                            @Override
+                            public void onResult(CreateCredentialResponse reponse) {
+                                // Rien à faire : la boîte système a déjà tout géré.
+                            }
+
+                            @Override
+                            public void onError(CreateCredentialException e) {
+                                // Refus, fermeture ou absence de gestionnaire compatible —
+                                // pas une erreur applicative, rien à signaler à la page.
+                            }
+                        }
+                    );
+                }
+            });
+        }
+
+        /**
+         * La connexion biométrique repose sur android.hardware.biometrics.*
+         * et android.security.keystore.*, absentes avant Android 11 (API 30) —
+         * voir BiometrieR ci-dessous pour pourquoi ce contrôle doit rester
+         * ici plutôt que dans la classe qui les utilise réellement.
+         */
+        @JavascriptInterface
+        public boolean biometrieDisponible() {
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && BiometrieR.disponible(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void activerBiometrie(final String jeton) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                appelerJs("tcBiometrieActivation", "false");
+                return;
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    BiometrieR.activer(MainActivity.this, jeton);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void desactiverBiometrie() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                BiometrieR.desactiver(MainActivity.this);
+            }
+        }
+
+        @JavascriptInterface
+        public void deverrouillerBiometrie() {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                appelerJs("tcBiometrieEchec", "");
+                return;
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    BiometrieR.deverrouiller(MainActivity.this);
+                }
+            });
+        }
+    }
+
+    /**
+     * Regroupe tout ce qui touche à android.hardware.biometrics.* et
+     * android.security.keystore.* — classes absentes avant Android 11
+     * (API 30), qui casseraient le chargement de l'application sur un
+     * appareil plus ancien si elles étaient référencées directement
+     * dans PontNatif : le vérificateur de classes d'Android peut
+     * résoudre les classes référencées par une méthode même sur un
+     * chemin jamais emprunté. Isolées dans leur propre classe, elles ne
+     * sont chargées que si cette classe l'est elle-même — jamais avant
+     * le contrôle Build.VERSION.SDK_INT fait par chaque appelant.
+     *
+     * Le jeton de session (pas le mot de passe) est chiffré par une clé
+     * conservée dans l'Android Keystore, configurée pour n'être
+     * utilisable qu'après une authentification biométrique fraîche
+     * (setUserAuthenticationRequired + setUserAuthenticationParameters).
+     * Le déchiffrement, donc la reconnexion, n'est ainsi possible qu'en
+     * repassant par une empreinte ou un visage reconnu par le capteur —
+     * jamais en lisant simplement le fichier de préférences.
+     */
+    private static final class BiometrieR {
+
+        static boolean disponible(Context contexte) {
+            BiometricManager gestionnaire = contexte.getSystemService(BiometricManager.class);
+            if (gestionnaire == null) {
+                return false;
+            }
+            return gestionnaire.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                == BiometricManager.BIOMETRIC_SUCCESS;
+        }
+
+        private static SecretKey obtenirOuCreerCle() throws Exception {
+            KeyStore magasin = KeyStore.getInstance("AndroidKeyStore");
+            magasin.load(null);
+            if (magasin.containsAlias(ALIAS_CLE_BIOMETRIE)) {
+                return (SecretKey) magasin.getKey(ALIAS_CLE_BIOMETRIE, null);
+            }
+            KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
+                    ALIAS_CLE_BIOMETRIE,
+                    KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setUserAuthenticationRequired(true)
+                .setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
+                .build();
+            KeyGenerator generateur = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+            generateur.init(spec);
+            return generateur.generateKey();
+        }
+
+        /**
+         * Premier réglage : authentifie, puis chiffre et dépose le jeton
+         * fourni. Répondu à la page via tcBiometrieActivation(true|false).
+         */
+        static void activer(final MainActivity activite, final String jeton) {
+            try {
+                SecretKey cle = obtenirOuCreerCle();
+                final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+                cipher.init(Cipher.ENCRYPT_MODE, cle);
+
+                BiometricPrompt.Builder builder = new BiometricPrompt.Builder(activite)
+                    .setTitle("Activer la connexion biométrique")
+                    .setSubtitle("Confirme ton identité pour protéger ta prochaine connexion rapide")
+                    .setNegativeButton("Annuler", activite.getMainExecutor(), new android.content.DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(android.content.DialogInterface dialogue, int bouton) {
+                            activite.appelerJs("tcBiometrieActivation", "false");
+                        }
+                    })
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+
+                builder.build().authenticate(
+                    new BiometricPrompt.CryptoObject(cipher),
+                    new CancellationSignal(),
+                    activite.getMainExecutor(),
+                    new BiometricPrompt.AuthenticationCallback() {
+                        @Override
+                        public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult resultat) {
+                            try {
+                                Cipher c = resultat.getCryptoObject().getCipher();
+                                byte[] chiffre = c.doFinal(jeton.getBytes("UTF-8"));
+                                byte[] iv = c.getIV();
+                                SharedPreferences prefs = activite.getSharedPreferences(PREFS_BIOMETRIE, Context.MODE_PRIVATE);
+                                prefs.edit()
+                                    .putString("jeton_chiffre", Base64.encodeToString(chiffre, Base64.NO_WRAP))
+                                    .putString("iv", Base64.encodeToString(iv, Base64.NO_WRAP))
+                                    .apply();
+                                activite.appelerJs("tcBiometrieActivation", "true");
+                            } catch (Exception e) {
+                                activite.appelerJs("tcBiometrieActivation", "false");
+                            }
+                        }
+
+                        @Override
+                        public void onAuthenticationError(int codeErreur, CharSequence messageErreur) {
+                            activite.appelerJs("tcBiometrieActivation", "false");
+                        }
+
+                        @Override
+                        public void onAuthenticationFailed() {
+                            // Empreinte non reconnue : le prompt système reste ouvert
+                            // pour un nouvel essai, rien à faire ici.
+                        }
+                    }
+                );
+            } catch (Exception e) {
+                activite.appelerJs("tcBiometrieActivation", "false");
+            }
+        }
+
+        /** Synchrone et sans prompt : supprime la clé et le jeton chiffré déposé. */
+        static void desactiver(MainActivity activite) {
+            try {
+                KeyStore magasin = KeyStore.getInstance("AndroidKeyStore");
+                magasin.load(null);
+                if (magasin.containsAlias(ALIAS_CLE_BIOMETRIE)) {
+                    magasin.deleteEntry(ALIAS_CLE_BIOMETRIE);
+                }
+            } catch (Exception e) {
+                // Au pire la clé orpheline sera simplement recréée à la prochaine activation.
+            }
+            activite.getSharedPreferences(PREFS_BIOMETRIE, Context.MODE_PRIVATE).edit().clear().apply();
+        }
+
+        /**
+         * Authentifie puis déchiffre le jeton déposé lors de activer().
+         * Répond via tcBiometrieDeverrouille(jeton) ou tcBiometrieEchec().
+         */
+        static void deverrouiller(final MainActivity activite) {
+            SharedPreferences prefs = activite.getSharedPreferences(PREFS_BIOMETRIE, Context.MODE_PRIVATE);
+            final String jetonChiffreB64 = prefs.getString("jeton_chiffre", null);
+            String ivB64 = prefs.getString("iv", null);
+            if (jetonChiffreB64 == null || ivB64 == null) {
+                activite.appelerJs("tcBiometrieEchec", "");
+                return;
+            }
+            try {
+                SecretKey cle = obtenirOuCreerCle();
+                byte[] iv = Base64.decode(ivB64, Base64.NO_WRAP);
+                final Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+                cipher.init(Cipher.DECRYPT_MODE, cle, new GCMParameterSpec(128, iv));
+
+                BiometricPrompt.Builder builder = new BiometricPrompt.Builder(activite)
+                    .setTitle("Déverrouiller TimeCool")
+                    .setSubtitle("Confirme ton identité pour te reconnecter")
+                    .setNegativeButton("Annuler", activite.getMainExecutor(), new android.content.DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(android.content.DialogInterface dialogue, int bouton) {
+                            activite.appelerJs("tcBiometrieEchec", "");
+                        }
+                    })
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG);
+
+                builder.build().authenticate(
+                    new BiometricPrompt.CryptoObject(cipher),
+                    new CancellationSignal(),
+                    activite.getMainExecutor(),
+                    new BiometricPrompt.AuthenticationCallback() {
+                        @Override
+                        public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult resultat) {
+                            try {
+                                Cipher c = resultat.getCryptoObject().getCipher();
+                                byte[] chiffre = Base64.decode(jetonChiffreB64, Base64.NO_WRAP);
+                                byte[] jetonBrut = c.doFinal(chiffre);
+                                activite.appelerJs("tcBiometrieDeverrouille", new String(jetonBrut, "UTF-8"));
+                            } catch (Exception e) {
+                                activite.appelerJs("tcBiometrieEchec", "");
+                            }
+                        }
+
+                        @Override
+                        public void onAuthenticationError(int codeErreur, CharSequence messageErreur) {
+                            activite.appelerJs("tcBiometrieEchec", "");
+                        }
+
+                        @Override
+                        public void onAuthenticationFailed() {
+                            // Empreinte non reconnue : le prompt système reste ouvert pour un nouvel essai.
+                        }
+                    }
+                );
+            } catch (Exception e) {
+                activite.appelerJs("tcBiometrieEchec", "");
+            }
         }
     }
 

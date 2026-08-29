@@ -72,6 +72,8 @@ function vueCompte(array $c): array
         'pays'        => $c['pays'],
         'langue'      => $c['langue'],
         'fuseau'      => $c['fuseau'],
+        'provenance'        => $c['provenance'] ?? null,
+        'provenance_detail' => $c['provenance_detail'] ?? null,
     ];
 }
 
@@ -559,7 +561,7 @@ switch ($route) {
     case 'GET /cles/recuperer':
         Auth::compte();
         $ref = $_GET['reference'] ?? '';
-        if (!is_string($ref) || !preg_match('/^[0-9A-Z]{26}$/', $ref)) {
+        if (!is_string($ref) || !preg_match('/^[0-9A-Z]{12}$/', $ref)) {
             Rep::erreur(400, 'reference_invalide', 'Référence de compte invalide.');
         }
         $cles = Db::tous(
@@ -724,6 +726,61 @@ switch ($route) {
             }
             throw $e;
         }
+
+        Rep::ok(['enregistre' => true]);
+
+    // ═══════════════════════════════════════════════════════════
+    // COMPTE COURANT
+    // Restitue le compte à partir du seul jeton de session — utilisé
+    // notamment après un déverrouillage biométrique, où l'appareil n'a
+    // que le jeton (déchiffré localement) et doit reconstituer le
+    // compte affiché sans redemander identifiant ni mot de passe.
+    // ═══════════════════════════════════════════════════════════
+    case 'GET /compte':
+        $compte = Auth::compte();
+        Rep::ok(['compte' => vueCompte($compte)]);
+
+    // ═══════════════════════════════════════════════════════════
+    // PROVENANCE ("Comment as-tu connu TimeCool ?")
+    // Réponse facultative proposée une seule fois après l'inscription,
+    // à but statistique (analyse des canaux d'acquisition côté admin).
+    // Enregistrable une seule fois : un appel ultérieur écrase la
+    // réponse précédente plutôt que d'empiler un historique, ce champ
+    // ne représentant qu'un instantané, pas un journal.
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /compte/provenance':
+        $compte = Auth::compte();
+
+        $provenances = [
+            'ami_famille', 'collegue',
+            'facebook', 'instagram', 'linkedin', 'snapchat', 'tiktok', 'twitter_x', 'youtube',
+            'presse_blog', 'google_recherche', 'google_ia', 'publicite_ligne',
+            'app_store', 'google_play',
+            'salon_evenement', 'autre',
+        ];
+
+        $provenance = Entree::corps()['provenance'] ?? '';
+        if (!is_string($provenance) || !in_array($provenance, $provenances, true)) {
+            Rep::erreur(400, 'provenance_invalide', 'Provenance inconnue.');
+        }
+
+        $detail = Entree::corps()['provenance_detail'] ?? null;
+        if ($provenance !== 'autre') {
+            $detail = null;
+        } elseif ($detail !== null) {
+            if (!is_string($detail)) {
+                Rep::erreur(400, 'detail_invalide', 'Précision invalide.');
+            }
+            $detail = mb_substr(trim($detail), 0, 200);
+            if ($detail === '') {
+                $detail = null;
+            }
+        }
+
+        Db::req(
+            'UPDATE comptes SET provenance = ?, provenance_detail = ? WHERE id = ?',
+            [$provenance, $detail, $compte['id']]
+        );
 
         Rep::ok(['enregistre' => true]);
 
