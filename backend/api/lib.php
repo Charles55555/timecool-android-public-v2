@@ -282,12 +282,20 @@ final class Jeton
         return hash('sha256', $jeton);
     }
 
-    /** Identifiant public opaque, compatible avec la colonne CHAR(26). */
+    /**
+     * Identifiant public opaque du compte, compatible avec la colonne
+     * CHAR(12). 12 caractères sur un alphabet de 32 symboles (sans 0/O,
+     * 1/I/L, U — ambigus à l'oral ou à la recopie) donnent 32^12, soit
+     * environ 1,15 × 10^18 combinaisons : trop grand pour qu'une
+     * collision ait une chance réaliste de se produire à l'échelle de
+     * cette application, tout en restant nettement plus court à lire
+     * ou recopier que les 26 caractères précédents.
+     */
     public static function reference(): string
     {
         $alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
         $out = '';
-        for ($i = 0; $i < 26; $i++) {
+        for ($i = 0; $i < 12; $i++) {
             $out .= $alphabet[random_int(0, 31)];
         }
         return $out;

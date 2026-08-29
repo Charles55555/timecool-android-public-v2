@@ -768,6 +768,10 @@ if (window.pdfjsLib) {
       Se connecter
     </button>
 
+    <!-- Rempli par tcAfficherBoutonBiometrie() si la connexion biométrique
+         est activée sur cet appareil — vide sinon, sans rien à afficher. -->
+    <div id="biometrieLoginZone" style="margin-bottom:12px;"></div>
+
     <!-- Séparateur -->
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
       <div style="flex:1; height:1px; background:var(--border);"></div>
@@ -799,6 +803,24 @@ if (window.pdfjsLib) {
     <button onclick="finishAuthSuccess()" style="width:100%; padding:18px; background:var(--g-blue); color:white; border:none; border-radius:16px; font-size:16px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(26,115,232,0.3);">
       Commencer →
     </button>
+  </div>
+</div>
+
+<!-- Page Provenance (facultative, une seule fois après l'inscription) -->
+<div class="page auth-page" id="page-auth-provenance" style="background:#f7f9fc; min-height:100vh;">
+  <div style="padding:50px 24px 40px;">
+    <div style="text-align:center; margin-bottom:6px; font-size:34px;">🧭</div>
+    <div style="font-size:20px; font-weight:700; color:var(--text); text-align:center; margin-bottom:6px;">Comment as-tu connu TimeCool ?</div>
+    <div style="font-size:13px; color:var(--text-sec); text-align:center; margin-bottom:8px;">Facultatif — ça nous aide à savoir ce qui fonctionne.</div>
+
+    <div id="provenanceOptions"></div>
+
+    <div id="provenanceAutreZone" style="display:none; margin:14px 0 0;">
+      <input id="provenanceAutreDetail" type="text" maxlength="200" placeholder="Précise si tu veux (facultatif)" style="width:100%; padding:12px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; box-sizing:border-box;">
+      <button onclick="tcValiderProvenanceAutre()" style="width:100%; margin-top:10px; padding:14px; background:var(--g-blue); color:#fff; border:none; border-radius:12px; font-size:15px; font-weight:600; cursor:pointer;">Valider</button>
+    </div>
+
+    <button onclick="tcPasserProvenance()" style="width:100%; margin-top:20px; padding:14px; background:transparent; color:var(--text-sec); border:none; font-size:14px; font-weight:600; cursor:pointer;">Passer →</button>
   </div>
 </div>
 
@@ -4396,14 +4418,24 @@ function ouvrirModaleChangementMotDePasse() {
     titre.textContent = '🔒 Modifier mon mot de passe';
     boite.appendChild(titre);
 
+    // Bouton oeil afficher/masquer — même composant que sur les champs
+    // mot de passe d'inscription/connexion (togglePasswordVisibility),
+    // plutôt qu'un nouveau mécanisme pour ce seul écran.
+    let _champMdpSeq = 0;
     function champMdp(placeholder, autocomplete) {
-      const i = document.createElement('input');
-      i.type = 'password';
-      i.className = 'tc-mod-in';
-      i.placeholder = placeholder;
-      i.autocomplete = autocomplete;
-      boite.appendChild(i);
-      return i;
+      const id = 'mdpModaleChamp_' + (_champMdpSeq++);
+      const conteneur = document.createElement('div');
+      conteneur.style.position = 'relative';
+      conteneur.style.marginBottom = '16px';
+      conteneur.innerHTML = `
+        <input type="password" id="${id}" class="tc-mod-in" placeholder="${placeholder}" autocomplete="${autocomplete}" style="margin-bottom:0; padding-right:48px;">
+        <button type="button" onclick="togglePasswordVisibility('${id}', this)" aria-label="Afficher / masquer le mot de passe" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:transparent; border:none; padding:8px; cursor:pointer; color:var(--text-sec); display:flex; align-items:center; justify-content:center;">
+          <svg class="eye-show" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+          <svg class="eye-hide" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:none;"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+        </button>
+      `;
+      boite.appendChild(conteneur);
+      return conteneur.querySelector('input');
     }
     const inAncien = champMdp('Mot de passe actuel', 'current-password');
     const inNouveau = champMdp('Nouveau mot de passe (10 caractères min.)', 'new-password');
@@ -4481,6 +4513,133 @@ async function tcModifierMotDePasse() {
     else showToast('❌ ' + (e.message || 'Échec du changement de mot de passe'));
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   CONNEXION BIOMÉTRIQUE RAPIDE
+   Le jeton de session — jamais le mot de passe — est chiffré côté
+   natif par une clé Android Keystore utilisable uniquement après une
+   authentification biométrique fraîche (voir BiometrieR dans
+   MainActivity.java). Cet écran JS ne voit jamais le contenu chiffré :
+   il ne fait que déclencher le prompt et recevoir le jeton en clair
+   une fois l'authentification réussie.
+   Sans effet hors de l'APK, ou sur un appareil/OS trop ancien
+   (Android 11 minimum côté natif) — le bouton et le réglage restent
+   alors simplement absents plutôt que de proposer une fonctionnalité
+   qui échouerait à coup sûr.
+   ══════════════════════════════════════════════════════════════ */
+const TC_BIOMETRIE_ACTIVE_KEY = 'tc_biometrie_active';
+
+function tcBiometrieDisponibleNatif() {
+  return !!(window.TimeCoolNatif && window.TimeCoolNatif.biometrieDisponible && window.TimeCoolNatif.biometrieDisponible());
+}
+
+function tcBiometrieActiveePourCetAppareil() {
+  try { return localStorage.getItem(TC_BIOMETRIE_ACTIVE_KEY) === '1'; } catch (e) { return false; }
+}
+
+/** Rendu du bouton de déverrouillage rapide sur l'écran de connexion — vide si non applicable. */
+function tcAfficherBoutonBiometrie() {
+  const zone = document.getElementById('biometrieLoginZone');
+  if (!zone) return;
+  if (!tcBiometrieActiveePourCetAppareil() || !tcBiometrieDisponibleNatif()) {
+    zone.innerHTML = '';
+    return;
+  }
+  zone.innerHTML = `
+    <button type="button" onclick="tcDemanderDeverrouillageBiometrie()" style="width:100%; padding:14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue); border-radius:14px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+      🔓 Déverrouiller avec biométrie
+    </button>
+  `;
+}
+
+function tcDemanderDeverrouillageBiometrie() {
+  if (window.TimeCoolNatif && window.TimeCoolNatif.deverrouillerBiometrie) {
+    window.TimeCoolNatif.deverrouillerBiometrie();
+  }
+}
+
+/** Rappelé par le pont natif après une authentification biométrique réussie, avec le jeton déchiffré. */
+async function tcBiometrieDeverrouille(jeton) {
+  if (!jeton) { tcBiometrieEchec(); return; }
+  tcPoserJeton(jeton);
+  try {
+    const d = await tcAppel('GET', '/compte');
+    userAccount = {
+      reference: d.compte.reference,
+      firstname: d.compte.prenom,
+      lastname: d.compte.nom,
+      email: d.compte.email,
+      phone: d.compte.telephone,
+      zip: d.compte.code_postal,
+      city: d.compte.ville,
+      verified: true,
+      createdAt: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
+      localStorage.setItem('timecool_session_active', 'true');
+    } catch (e) {}
+    showWelcomeSplash(userAccount.firstname);
+  } catch (e) {
+    // Jeton chiffré valide mais session expirée/révoquée côté serveur —
+    // seule une reconnexion normale peut en obtenir un nouveau.
+    tcPoserJeton(null);
+    showToast('❌ Session expirée — reconnecte-toi avec ton mot de passe.');
+  }
+}
+
+/** Rappelé par le pont natif sur refus, annulation ou échec du déverrouillage. */
+function tcBiometrieEchec() {
+  // Rien à afficher : l'utilisateur reste simplement sur l'écran de
+  // connexion normal, qu'il peut utiliser comme si le bouton n'existait pas.
+}
+
+/** Rappelé par le pont natif après la tentative d'activation (premier réglage). */
+function tcBiometrieActivation(succes) {
+  const ok = succes === true || succes === 'true';
+  try { localStorage.setItem(TC_BIOMETRIE_ACTIVE_KEY, ok ? '1' : '0'); } catch (e) {}
+  showToast(ok ? '✅ Connexion biométrique activée' : '❌ Activation annulée ou impossible');
+  if (currentPage === 'settings') renderSettings();
+}
+
+function tcBasculerBiometrie(active) {
+  if (active) {
+    const jeton = tcJeton();
+    if (!jeton || !window.TimeCoolNatif || !window.TimeCoolNatif.activerBiometrie) {
+      showToast('❌ Connexion biométrique indisponible');
+      renderSettings();
+      return;
+    }
+    window.TimeCoolNatif.activerBiometrie(jeton);
+  } else {
+    if (window.TimeCoolNatif && window.TimeCoolNatif.desactiverBiometrie) {
+      window.TimeCoolNatif.desactiverBiometrie();
+    }
+    try { localStorage.setItem(TC_BIOMETRIE_ACTIVE_KEY, '0'); } catch (e) {}
+    showToast('🔓 Connexion biométrique désactivée');
+    renderSettings();
+  }
+}
+
+/** Ligne de réglage insérée dans Paramètres > Compte & sécurité — vide si l'appareil ne le permet pas. */
+function tcRenderBiometrieToggle() {
+  if (!tcBiometrieDisponibleNatif()) return '';
+  const active = tcBiometrieActiveePourCetAppareil();
+  return `
+    <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px;">
+      <div style="flex:1;">
+        <div style="font-size:14px;">Connexion biométrique</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Se reconnecter avec ton empreinte ou ton visage, sans retaper le mot de passe</div>
+      </div>
+      <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+        <input type="checkbox" ${active ? 'checked' : ''} onchange="tcBasculerBiometrie(this.checked)" style="opacity:0; width:0; height:0;">
+        <span style="position:absolute; inset:0; background:${active ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
+        <span style="position:absolute; height:18px; width:18px; left:${active ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+      </label>
+    </div>
+  `;
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -5586,9 +5745,18 @@ function renderSettings() {
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔐 Compte & sécurité</div>
+      <!-- Deux notions distinctes, auparavant confondues sous un seul
+           "Identifiant" qui n'affichait que la référence technique :
+           la référence (interne, informative, jamais tapée par
+           l'utilisateur) et l'identifiant de connexion (l'email
+           réellement saisi pour se connecter). -->
       <div style="padding:12px 16px; border-top:1px solid var(--border);">
-        <div style="font-size:14px;">Identifiant</div>
+        <div style="font-size:14px;">Référence client</div>
         <div style="font-size:12px; color:var(--text-sec); margin-top:4px; font-family:monospace; user-select:all;">${(userAccount && userAccount.reference) ? escapeHTMLSafe(userAccount.reference) : 'Non disponible'}</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px;">Identifiant de connexion</div>
+        <div style="font-size:12px; color:var(--text-sec); margin-top:4px; user-select:all;">${(userAccount && userAccount.email) ? escapeHTMLSafe(userAccount.email) : 'Non disponible'}</div>
       </div>
       <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px;">
         <div>
@@ -5597,6 +5765,7 @@ function renderSettings() {
         </div>
         <button onclick="tcModifierMotDePasse()" style="flex-shrink:0; padding:9px 14px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;">Modifier mon mot de passe</button>
       </div>
+      ${tcRenderBiometrieToggle()}
     </div>
 
     <div style="text-align:center; padding:20px; font-size:11px; color:var(--text-sec); font-style:italic;">
@@ -8209,6 +8378,7 @@ function navigateAuth(pageId) {
   document.querySelectorAll('.auth-page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + pageId).classList.add('active');
   if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
+  if (pageId === 'auth-login') tcAfficherBoutonBiometrie();
 
   // La page s'affiche en français : la retraduire si une autre langue est choisie
   if (currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
@@ -9023,7 +9193,26 @@ async function submitLogin() {
     localStorage.setItem('timecool_session_active', 'true');
   } catch(e) {}
 
+  // Uniquement après une connexion email/mot de passe réelle — jamais
+  // après Google Sign-In, qui a déjà son propre mécanisme de
+  // reconnexion via Credential Manager.
+  tcProposerEnregistrementIdentifiants(identifiant, password);
+
   showWelcomeSplash(userAccount.firstname);
+}
+
+/**
+ * Propose d'enregistrer l'identifiant et le mot de passe dans le
+ * gestionnaire d'identifiants du système, pour une reconnexion plus
+ * rapide la prochaine fois. Sans effet hors de l'APK ; dans l'APK, la
+ * boîte système gère seule l'acceptation ou le refus — rien ici n'a
+ * besoin de savoir laquelle des deux s'est produite.
+ */
+function tcProposerEnregistrementIdentifiants(identifiant, motDePasse) {
+  if (window.TimeCoolNatif && window.TimeCoolNatif.enregistrerIdentifiants) {
+    try { window.TimeCoolNatif.enregistrerIdentifiants(identifiant, motDePasse); }
+    catch (e) { console.error('Enregistrement identifiants : ' + e.message); }
+  }
 }
 
 // ═══ v5.4 — Splash de bienvenue chaleureux (corrigé en v5.5 — pas de flash) ═══
@@ -9210,6 +9399,109 @@ function initCalendarSwipe() {
 setTimeout(initCalendarSwipe, 200);
 
 function finishAuthSuccess() {
+  navigateAuth('auth-provenance');
+  tcAfficherProvenance();
+}
+
+// ═══════════════════════════════════════════════════════════
+// PROVENANCE — "Comment as-tu connu TimeCool ?"
+// Écran facultatif affiché une seule fois, juste après l'inscription
+// et avant le premier accès à l'agenda. Une réponse choisie ou "Passer"
+// mènent toutes les deux à hideAuthFlow() : ce n'est jamais bloquant.
+// ═══════════════════════════════════════════════════════════
+
+const TC_PROVENANCE_CATEGORIES = [
+  { titre: 'Bouche-à-oreille', options: [
+    { id: 'ami_famille', label: 'Ami / famille' },
+    { id: 'collegue', label: 'Collègue de travail' },
+  ]},
+  { titre: 'Réseaux sociaux', options: [
+    { id: 'facebook', label: 'Facebook' },
+    { id: 'instagram', label: 'Instagram' },
+    { id: 'linkedin', label: 'LinkedIn' },
+    { id: 'snapchat', label: 'Snapchat' },
+    { id: 'tiktok', label: 'TikTok' },
+    { id: 'twitter_x', label: 'X (Twitter)' },
+    { id: 'youtube', label: 'YouTube' },
+  ]},
+  { titre: 'Recherche & web', options: [
+    { id: 'presse_blog', label: 'Article de presse / blog' },
+    { id: 'google_recherche', label: 'Google (recherche)' },
+    { id: 'google_ia', label: 'Google AI Overviews / IA' },
+    { id: 'publicite_ligne', label: 'Publicité en ligne' },
+  ]},
+  { titre: "Stores d'applications", options: [
+    { id: 'app_store', label: 'App Store (recherche directe)' },
+    { id: 'google_play', label: 'Google Play (recherche directe)' },
+  ]},
+  { titre: 'Autre', options: [
+    { id: 'salon_evenement', label: 'Salon / événement professionnel' },
+    { id: 'autre', label: 'Autre' },
+  ]},
+];
+
+const TC_PROVENANCE_LABELS = {};
+TC_PROVENANCE_CATEGORIES.forEach(cat => cat.options.forEach(o => { TC_PROVENANCE_LABELS[o.id] = o.label; }));
+
+/**
+ * Libellé lisible (texte brut, non échappé) de la provenance d'un
+ * utilisateur de la liste admin locale — utilisé tel quel en CSV ;
+ * échapper via escapeHTMLSafe() au moment de l'insérer en HTML.
+ */
+function tcLibelleProvenance(u) {
+  if (!u || !u.provenance || !TC_PROVENANCE_LABELS[u.provenance]) return 'Non renseigné';
+  const label = TC_PROVENANCE_LABELS[u.provenance];
+  return (u.provenance === 'autre' && u.provenanceDetail) ? (label + ' — ' + u.provenanceDetail) : label;
+}
+
+function tcAfficherProvenance() {
+  const zone = document.getElementById('provenanceOptions');
+  if (!zone) return;
+  const autreZone = document.getElementById('provenanceAutreZone');
+  if (autreZone) autreZone.style.display = 'none';
+  const detailChamp = document.getElementById('provenanceAutreDetail');
+  if (detailChamp) detailChamp.value = '';
+
+  zone.innerHTML = TC_PROVENANCE_CATEGORIES.map(cat => `
+    <div style="font-size:12px; font-weight:700; color:var(--text-sec); text-transform:uppercase; letter-spacing:.4px; margin:16px 0 8px;">${escapeHTMLSafe(cat.titre)}</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      ${cat.options.map(o => `
+        <button onclick="tcChoisirProvenance('${o.id}')" style="width:100%; text-align:left; padding:13px 16px; border:1.5px solid var(--border); border-radius:12px; background:#fff; font-size:14px; font-weight:500; color:var(--text); cursor:pointer;">${escapeHTMLSafe(o.label)}</button>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function tcChoisirProvenance(id) {
+  if (id === 'autre') {
+    const zone = document.getElementById('provenanceAutreZone');
+    const champ = document.getElementById('provenanceAutreDetail');
+    if (zone) zone.style.display = 'block';
+    if (champ) champ.focus();
+    return;
+  }
+  tcEnvoyerProvenance(id, null);
+}
+
+function tcValiderProvenanceAutre() {
+  const champ = document.getElementById('provenanceAutreDetail');
+  const detail = champ ? champ.value.trim() : '';
+  tcEnvoyerProvenance('autre', detail || null);
+}
+
+function tcPasserProvenance() {
+  hideAuthFlow();
+}
+
+async function tcEnvoyerProvenance(id, detail) {
+  // Facultatif par nature : un échec réseau ne doit jamais empêcher
+  // l'utilisateur d'entrer dans l'app, on l'ignore silencieusement.
+  try {
+    await tcAppel('POST', '/compte/provenance', { provenance: id, provenance_detail: detail });
+  } catch (e) {}
+  if (userAccount && userAccount.email) {
+    updateUserProvenanceInAdminList(userAccount.email, id, detail);
+  }
   hideAuthFlow();
 }
 
@@ -12140,8 +12432,30 @@ function saveUserToAdminList(user) {
         // à leur ajout ; l'affichage le dit alors explicitement.
         zip: user.zip || '',
         city: user.city || '',
+        // Renseignée juste après, sur l'écran "Comment as-tu connu
+        // TimeCool ?" (facultatif) — absente ici si l'inscription
+        // n'est pas encore allée jusque-là.
+        provenance: '',
+        provenanceDetail: '',
         registeredAt: new Date().toISOString()
       });
+      localStorage.setItem(TC_USERS_KEY, JSON.stringify(users));
+    }
+  } catch(e) {}
+}
+
+/**
+ * Associe la réponse à "Comment as-tu connu TimeCool ?" à l'utilisateur
+ * déjà présent dans la liste locale admin (créé un peu plus tôt par
+ * saveUserToAdminList, avant que cet écran facultatif ne soit répondu).
+ */
+function updateUserProvenanceInAdminList(email, provenance, detail) {
+  try {
+    let users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]');
+    const u = users.find(u => u.email === email);
+    if (u) {
+      u.provenance = provenance || '';
+      u.provenanceDetail = detail || '';
       localStorage.setItem(TC_USERS_KEY, JSON.stringify(users));
     }
   } catch(e) {}
@@ -12207,7 +12521,8 @@ function renderUsersTab() {
             <div style="font-size:15px; font-weight:600; color:#1a1a2e; margin-bottom:4px;">${u.firstname} ${u.lastname}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📧 ${u.email || '—'}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📱 ${u.phone || '—'}</div>
-            <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">📍 ${u.zip ? (u.zip + ' ' + (u.city || '')).trim() : '<span style="opacity:.7;">Non renseigné</span>'}</div>
+            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📍 ${u.zip ? (u.zip + ' ' + (u.city || '')).trim() : '<span style="opacity:.7;">Non renseigné</span>'}</div>
+            <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">🧭 ${escapeHTMLSafe(tcLibelleProvenance(u))}</div>
             <button onclick="toggleBlockUser(${u.id - 1})" style="width:100%; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fce8e6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
               ${isBlocked ? '✅ Débloquer le compte' : '🚫 Bloquer le compte'}
             </button>
@@ -12245,7 +12560,7 @@ async function exportUsersCsv() {
   if (!users.length) { showToast('Aucun utilisateur à exporter'); return; }
 
   const echapperCsv = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const colonnes = ['Nom', 'Prénom', 'Email', 'Téléphone', 'Code postal', 'Ville', 'Date d\'inscription'];
+  const colonnes = ['Nom', 'Prénom', 'Email', 'Téléphone', 'Code postal', 'Ville', 'Provenance', 'Date d\'inscription'];
   const lignes = [colonnes.map(echapperCsv).join(';')];
 
   users.forEach(u => {
@@ -12260,6 +12575,7 @@ async function exportUsersCsv() {
       u.phone || '',
       u.zip || 'Non renseigné',
       u.city || 'Non renseigné',
+      tcLibelleProvenance(u),
       dateStr
     ].map(echapperCsv).join(';'));
   });

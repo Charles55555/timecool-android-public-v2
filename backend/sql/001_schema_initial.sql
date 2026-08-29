@@ -29,7 +29,7 @@ SET NAMES utf8mb4;
 -- ───────────────────────────────────────────────────────────────
 CREATE TABLE comptes (
   id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  reference           CHAR(26)        NOT NULL COMMENT 'Identifiant public opaque (ULID)',
+  reference           CHAR(12)        NOT NULL COMMENT 'Identifiant public opaque (32^12 combinaisons)',
   email               VARCHAR(255)    NOT NULL,
   email_empreinte     CHAR(64)        NOT NULL,
   telephone           VARCHAR(20)     NOT NULL COMMENT 'Format E.164',
@@ -44,6 +44,8 @@ CREATE TABLE comptes (
   fuseau              VARCHAR(64)     NOT NULL DEFAULT 'Europe/Paris',
   email_verifie_le    DATETIME        NULL,
   derniere_connexion  DATETIME        NULL,
+  provenance          VARCHAR(40)     NULL COMMENT 'Reponse a "Comment as-tu connu TimeCool ?", facultative',
+  provenance_detail   VARCHAR(200)    NULL COMMENT 'Precision libre, uniquement pour provenance=autre',
   cloture_le          DATETIME        NULL COMMENT 'Cloture demandee par utilisateur',
   cree_le             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   maj_le              DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
