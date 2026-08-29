@@ -4554,7 +4554,20 @@ async function tcModifierMotDePasse() {
 const TC_BIOMETRIE_ACTIVE_KEY = 'tc_biometrie_active';
 
 function tcBiometrieDisponibleNatif() {
-  return !!(window.TimeCoolNatif && window.TimeCoolNatif.biometrieDisponible && window.TimeCoolNatif.biometrieDisponible());
+  // Appel natif synchrone : contrairement aux appels enveloppés dans les
+  // handlers async de ce fichier, celui-ci s'exécute à CHAQUE rendu de
+  // Paramètres, y compris le tout premier. Sans ce try/catch, une
+  // exception levée côté Android (WebView/OEM ne l'avalant pas
+  // proprement) remonte jusqu'ici et fait avorter tout le template
+  // literal de renderSettings() avant l'affectation à innerHTML — d'où
+  // un écran de Paramètres resté vide plutôt qu'une simple absence du
+  // réglage biométrique.
+  try {
+    return !!(window.TimeCoolNatif && window.TimeCoolNatif.biometrieDisponible && window.TimeCoolNatif.biometrieDisponible());
+  } catch (e) {
+    console.error('tcBiometrieDisponibleNatif : appel natif en échec, biométrie masquée —', e);
+    return false;
+  }
 }
 
 function tcBiometrieActiveePourCetAppareil() {
@@ -5563,6 +5576,31 @@ async function charlySuggestion(type) {
 
 // ═══ SETTINGS PAGE ═══
 function renderSettings() {
+  // Filet de sécurité : ce template literal interpole plusieurs appels au
+  // pont natif (tcFormaterVersion, tcRenderBiometrieToggle...). Si l'un
+  // d'eux lève malgré tout une exception, tout le literal avorte AVANT
+  // l'affectation à innerHTML — l'écran de Paramètres reste alors
+  // silencieusement vide plutôt que d'afficher quoi que ce soit (bug
+  // rapporté en v2.0.36). Un message explicite vaut mieux qu'un blanc.
+  try {
+    renderSettingsInterne();
+  } catch (e) {
+    console.error('renderSettings a échoué, repli affiché à la place d\'un écran vide —', e);
+    const zone = document.getElementById('settingsContent');
+    if (zone) {
+      zone.innerHTML = `
+        <div style="text-align:center; padding:40px 20px; color:var(--text-sec);">
+          <div style="font-size:32px; margin-bottom:12px;">⚠️</div>
+          <div style="font-size:14px; margin-bottom:6px;">Impossible d'afficher les paramètres pour le moment.</div>
+          <div style="font-size:12px;">Réessaie, ou redémarre l'application si le problème persiste.</div>
+          <button onclick="renderSettings()" style="margin-top:16px; padding:10px 18px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">🔄 Réessayer</button>
+        </div>
+      `;
+    }
+  }
+}
+
+function renderSettingsInterne() {
   document.getElementById('settingsContent').innerHTML = `
 
 
