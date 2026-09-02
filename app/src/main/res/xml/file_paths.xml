@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Seul le sous-dossier des mises a jour est expose, pas tout le cache :
+     le FileProvider ne doit ouvrir que ce qui est strictement necessaire. -->
+<paths>
+    <cache-path name="maj" path="maj/"/>
+</paths>

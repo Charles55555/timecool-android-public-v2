@@ -89,4 +89,11 @@ dependencies {
     implementation 'androidx.credentials:credentials:1.3.0'
     implementation 'androidx.credentials:credentials-play-services-auth:1.3.0'
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+
+    /* FileProvider, pour remettre l APK telecharge a l installateur
+       d Android sous forme d URI content://. Arrive deja de facon
+       transitive par credentials, mais une dependance utilisee
+       directement doit etre declaree : une mise a jour de credentials
+       pourrait sinon la faire disparaitre sans prevenir. */
+    implementation 'androidx.core:core:1.13.1'
 }

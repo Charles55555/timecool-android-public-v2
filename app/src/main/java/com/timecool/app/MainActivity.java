@@ -762,6 +762,86 @@ public class MainActivity extends Activity {
          * voir BiometrieR ci-dessous pour pourquoi ce contrôle doit rester
          * ici plutôt que dans la classe qui les utilise réellement.
          */
+        /**
+         * Telecharge l'APK indique et ouvre l'installateur d'Android.
+         *
+         * Le telechargement se fait hors du fil principal : sur reseau
+         * lent il bloquerait l'interface plusieurs secondes. La page est
+         * informee de l'avancement, puis du resultat, car un echec
+         * silencieux laisserait l'utilisateur devant un bouton sans effet.
+         */
+        @JavascriptInterface
+        public void telechargerEtInstallerMaj(final String url) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    java.io.File apk = null;
+                    try {
+                        java.io.File dossier = new java.io.File(getCacheDir(), "maj");
+                        if (!dossier.exists() && !dossier.mkdirs()) {
+                            throw new java.io.IOException("dossier de mise a jour impossible a creer");
+                        }
+                        // Un telechargement precedent interrompu laisserait un
+                        // fichier tronque, que l'installateur rejetterait.
+                        apk = new java.io.File(dossier, "timecool-maj.apk");
+                        if (apk.exists() && !apk.delete()) {
+                            throw new java.io.IOException("ancien fichier impossible a supprimer");
+                        }
+
+                        java.net.HttpURLConnection co =
+                            (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                        co.setInstanceFollowRedirects(true);  // GitHub redirige vers son CDN
+                        co.setConnectTimeout(20000);
+                        co.setReadTimeout(60000);
+                        co.connect();
+                        if (co.getResponseCode() / 100 != 2) {
+                            throw new java.io.IOException("HTTP " + co.getResponseCode());
+                        }
+
+                        final int total = co.getContentLength();
+                        java.io.InputStream entree = co.getInputStream();
+                        java.io.FileOutputStream sortie = new java.io.FileOutputStream(apk);
+                        byte[] tampon = new byte[16384];
+                        int lu, cumul = 0, dernierPourcent = -1;
+                        while ((lu = entree.read(tampon)) != -1) {
+                            sortie.write(tampon, 0, lu);
+                            cumul += lu;
+                            if (total > 0) {
+                                final int pct = (int) ((cumul * 100L) / total);
+                                // Un appel par pour-cent : sans ce filtre on
+                                // saturerait la WebView de messages.
+                                if (pct != dernierPourcent) {
+                                    dernierPourcent = pct;
+                                    appelerJs("tcMajProgression", String.valueOf(pct));
+                                }
+                            }
+                        }
+                        sortie.close();
+                        entree.close();
+                        co.disconnect();
+
+                        if (apk.length() == 0) {
+                            throw new java.io.IOException("fichier vide");
+                        }
+
+                        android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                            MainActivity.this, getPackageName() + ".fileprovider", apk);
+                        Intent i = new Intent(Intent.ACTION_VIEW);
+                        i.setDataAndType(uri, "application/vnd.android.package-archive");
+                        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(i);
+                        appelerJs("tcMajPrete", "");
+                    } catch (Exception e) {
+                        if (apk != null && apk.exists()) {
+                            apk.delete();
+                        }
+                        appelerJs("tcMajEchec", e.getClass().getSimpleName());
+                    }
+                }
+            }).start();
+        }
+
         @JavascriptInterface
         public boolean biometrieDisponible() {
             return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && BiometrieR.disponible(MainActivity.this);

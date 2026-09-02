@@ -1936,35 +1936,114 @@ function setAutoUpdatePref(on) {
   showToast(on ? '✅ Mise à jour automatique activée' : '⛔ Mise à jour automatique désactivée');
 }
 
+/* Depot public : l API repond sans authentification, aucun jeton n est
+   embarque dans l application. */
+const TC_MAJ_API = 'https://api.github.com/repos/Charles55555/timecool-android-public-v2/releases/latest';
+const TC_MAJ_APK = 'https://github.com/Charles55555/timecool-android-public-v2/releases/latest/download/timecool.apk';
+
+let _tcMajEnCours = false;
+
+/** Compare deux versions « 2.0.51 ». Renvoie true si b est plus recente que a. */
+function tcVersionPlusRecente(a, b) {
+  const na = String(a || '').replace(/^v/, '').split('.').map(Number);
+  const nb = String(b || '').replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < Math.max(na.length, nb.length); i++) {
+    const x = na[i] || 0, y = nb[i] || 0;
+    if (y > x) return true;
+    if (y < x) return false;
+  }
+  return false;
+}
+
 async function checkForUpdates(manual) {
   const zone = document.getElementById('updateBannerZone');
+  const { version: locale } = tcInfosVersion();
+
+  // Hors de l APK il n y a rien a installer : la page web est toujours a
+  // jour, elle est rechargee depuis le serveur a chaque visite.
+  if (!window.TimeCoolNatif || !window.TimeCoolNatif.telechargerEtInstallerMaj) {
+    if (manual) showToast('ℹ️ Mise à jour disponible uniquement dans l’application');
+    return;
+  }
+
+  let distante;
   try {
-    const res = await fetch('version.json', { cache: 'no-store' });
-    if (!res.ok) throw new Error('no version file');
-    const data = await res.json();
-    const remote = (data.version || '').trim();
-    if (!remote || remote === TC_APP_VERSION) {
-      if (manual) showToast('✅ Tu as déjà la dernière version (' + TC_APP_VERSION + ')');
-      return;
-    }
-    // Une version plus récente existe
-    if (loadAutoUpdatePref()) {
-      showToast('🔄 Nouvelle version ' + remote + ' — installation…');
-      setTimeout(() => location.reload(true), 1200);
-    } else if (zone) {
-      zone.innerHTML = `
-        <div style="margin:12px 16px; padding:12px 14px; background:#e8f0fe; border:1px solid #c6dafc; border-radius:12px;">
-          <div style="font-size:12.5px; font-weight:700; color:#1a3d6e; margin-bottom:6px;">🔄 Nouvelle version disponible (${remote})</div>
-          <button onclick="location.reload(true)" style="width:100%; padding:10px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">Mettre à jour maintenant</button>
-        </div>`;
-    }
-  } catch(e) {
-    // Pas de serveur, ou pas de fichier version.json : silence total, comportement normal aujourd'hui
-    if (manual) showToast('ℹ️ Vérification impossible pour l\'instant (app en mode local)');
+    const res = await fetch(TC_MAJ_API, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    distante = ((await res.json()).tag_name || '').replace(/^v/, '');
+  } catch (e) {
+    // Hors ligne, ou GitHub injoignable : on ne dit rien lors de la
+    // verification automatique, elle se represente au prochain demarrage.
+    if (manual) showToast('❌ Vérification impossible — vérifie ta connexion');
+    return;
+  }
+
+  if (!distante || !tcVersionPlusRecente(locale, distante)) {
+    if (manual) showToast('✅ Tu as déjà la dernière version (v' + (locale || '?') + ')');
+    return;
+  }
+
+  if (loadAutoUpdatePref()) {
+    tcLancerMaj(distante);
+    return;
+  }
+  if (zone) {
+    zone.innerHTML =
+      '<div style="margin:12px 16px; padding:12px 14px; background:#e8f0fe; border:1px solid #c6dafc; border-radius:12px;">' +
+        '<div style="font-size:12.5px; font-weight:700; color:#1a3d6e; margin-bottom:6px;">🔄 Nouvelle version disponible (v' + distante + ')</div>' +
+        '<button onclick="tcLancerMaj(\'' + distante + '\')" style="width:100%; padding:10px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">Mettre à jour maintenant</button>' +
+      '</div>';
   }
 }
 
-// Vérification silencieuse au démarrage — sans effet tant qu'il n'y a pas de serveur
+/** Telecharge puis remet l APK a l installateur d Android. */
+function tcLancerMaj(version) {
+  if (_tcMajEnCours) return;   // Double appui : un seul telechargement.
+  _tcMajEnCours = true;
+  const zone = document.getElementById('updateBannerZone');
+  if (zone) {
+    zone.innerHTML =
+      '<div style="margin:12px 16px; padding:12px 14px; background:#e8f0fe; border:1px solid #c6dafc; border-radius:12px;">' +
+        '<div id="tcMajTexte" style="font-size:12.5px; font-weight:600; color:#1a3d6e;">⬇️ Téléchargement de la v' + version + '…</div>' +
+        '<div style="margin-top:8px; height:6px; background:#c6dafc; border-radius:3px; overflow:hidden;">' +
+          '<div id="tcMajBarre" style="height:100%; width:0%; background:var(--g-blue); transition:width .2s;"></div>' +
+        '</div>' +
+      '</div>';
+  }
+  showToast('⬇️ Téléchargement de la mise à jour…');
+  try {
+    window.TimeCoolNatif.telechargerEtInstallerMaj(TC_MAJ_APK);
+  } catch (e) {
+    _tcMajEnCours = false;
+    showToast('❌ Mise à jour impossible');
+  }
+}
+
+/** Appelees par MainActivity pendant le telechargement. */
+function tcMajProgression(pct) {
+  const barre = document.getElementById('tcMajBarre');
+  if (barre) barre.style.width = Math.max(0, Math.min(100, parseInt(pct, 10) || 0)) + '%';
+}
+
+function tcMajPrete() {
+  _tcMajEnCours = false;
+  const t = document.getElementById('tcMajTexte');
+  if (t) t.textContent = '✅ Téléchargement terminé — suis les instructions à l’écran';
+  showToast('✅ Prêt à installer');
+}
+
+function tcMajEchec(raison) {
+  _tcMajEnCours = false;
+  const zone = document.getElementById('updateBannerZone');
+  if (zone) {
+    zone.innerHTML =
+      '<div style="margin:12px 16px; padding:12px 14px; background:#fce8e6; border:1px solid #f5c6c2; border-radius:12px; font-size:12.5px; color:#a50e0e;">' +
+        '❌ Téléchargement impossible' + (raison ? ' (' + raison + ')' : '') + '. Réessaie plus tard.' +
+      '</div>';
+  }
+  showToast('❌ Téléchargement impossible');
+}
+
 window.addEventListener('load', function() { setTimeout(() => checkForUpdates(false), 1500); });
 
 let mode = 'user';
