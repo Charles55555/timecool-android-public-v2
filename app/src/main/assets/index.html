@@ -22,6 +22,7 @@
   --cat-amis:#9334EA;       --cat-amis-bg:#f3e8fd;
   --cat-sport:#34A853;      --cat-sport-bg:#e8f5e9;
   --cat-personnel:#00ACC1;  --cat-personnel-bg:#e0f7fa;
+  --cat-voyages:#E8710A;    --cat-voyages-bg:#fff0e6;
 }
 html,body { font-family:'Google Sans',Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); height:100%; overflow:hidden; -webkit-font-smoothing:antialiased; }
 body { display:flex; flex-direction:column; }
@@ -2227,6 +2228,10 @@ async function loadEventsFromStorage() {
         endH: Number(await tcDecrypt(e.endH)),
         endM: Number(await tcDecrypt(e.endM))
       })));
+      // Agendas enregistres avant l unification : leurs categories
+      // portaient un nom de couleur. Sans cette conversion ils
+      // s afficheraient en gris, la couleur etant introuvable.
+      userEvents.forEach(function (e) { e.cat = tcCatNormalisee(e.cat); });
       // Fusionner avec les events démo existants
       const demoEvents = events.filter(e => e.mode !== 'user' && !(e.id && e.id.startsWith('charly_ai_')));
       events = [...demoEvents, ...userEvents];
@@ -2937,18 +2942,76 @@ function renderMenu() {
   document.getElementById('menuItems').innerHTML = navItems + logoutBtn + createCalendarBtn + categoriesHTML;
 }
 
+/* Code couleur officiel des categories. Miroir exact des variables CSS
+   --cat-* declarees dans :root, pour que le JS et le CSS ne puissent pas
+   diverger. Reutilisable partout dans l'app : ne jamais recopier une de
+   ces valeurs en dur. */
+var TC_COULEURS_CATEGORIES = {
+  travail:   { color: '#3B7DEA', bg: '#e8f0fe' },
+  sante:     { color: '#EA4335', bg: '#fce8e6' },
+  famille:   { color: '#F9AB00', bg: '#fff8e1' },
+  amis:      { color: '#9334EA', bg: '#f3e8fd' },
+  sport:     { color: '#34A853', bg: '#e8f5e9' },
+  personnel: { color: '#00ACC1', bg: '#e0f7fa' },
+  // Propre a l agenda : aucun equivalent dans Mes disponibilites, on ne
+  // se rend pas disponible « pour un trajet ».
+  voyages:   { color: '#E8710A', bg: '#fff0e6' }
+};
+
+/* Anciens identifiants d agenda, ou la couleur SERVAIT d identifiant
+   ('green', 'yellow'...). Conserves pour relire les evenements deja
+   enregistres : sans cette table, un agenda existant perdrait ses
+   couleurs a la mise a jour. */
+const TC_AGENDA_ALIAS = {
+  green: 'travail', yellow: 'famille', purple: 'amis',
+  red: 'sante', blue: 'voyages', orange: 'personnel'
+};
+
+/** Ramene un identifiant de categorie, ancien ou nouveau, a sa forme actuelle. */
+function tcCatNormalisee(cat) {
+  if (!cat) return 'travail';
+  return TC_AGENDA_ALIAS[cat] || cat;
+}
+
+/* L'ordre de ce tableau est l'ordre d'affichage a l'ecran. */
+var DISPO_CATEGORIES = [
+  { id: 'travail',   icon: '\ud83d\udcbc', label: 'Pour mon travail' },
+  { id: 'sante',     icon: '\ud83c\udfe5', label: 'Pour ma sant\u00e9' },
+  { id: 'famille',   icon: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67', label: 'Pour ma famille' },
+  { id: 'amis',      icon: '\ud83c\udf89', label: 'Pour mes amis et loisirs' },
+  { id: 'sport',     icon: '\ud83c\udfcb\ufe0f', label: 'Pour mon sport' },
+  { id: 'personnel', icon: '\u2600\ufe0f', label: 'Pour mon temps \u00e0 moi' }
+].map(function (cat) {
+  var c = TC_COULEURS_CATEGORIES[cat.id];
+  cat.color = c.color;
+  cat.bg = c.bg;
+  return cat;
+});
+
 // ═══ Catégories d'agenda (style Google Agenda) ═══
+/* Les libelles et l ordre reprennent Mes disponibilites, pour qu une
+   categorie soit reconnaissable d une page a l autre. Les couleurs ne
+   sont plus ecrites ici : elles viennent de TC_COULEURS_CATEGORIES,
+   source unique. « Sport & Loisirs » a ete scinde, le sport et les
+   loisirs ayant deux couleurs officielles distinctes. */
 const AGENDA_CATEGORIES = [
-  { id: 'green', label: 'Travail', color: '#34a853', visible: true },
-  { id: 'yellow', label: 'Famille', color: '#fbbc04', visible: true },
-  { id: 'purple', label: 'Sport & Loisirs', color: '#9333ea', visible: true },
-  { id: 'red', label: 'RDV médicaux', color: '#ea4335', visible: true },
-  { id: 'blue', label: 'Voyages & Trajets', color: '#1a73e8', visible: true },
-  { id: 'orange', label: 'Pauses & Détente', color: '#ff9800', visible: true }
-];
+  { id: 'travail',   label: 'Travail',            visible: true },
+  { id: 'sante',     label: 'Santé',              visible: true },
+  { id: 'famille',   label: 'Famille',            visible: true },
+  { id: 'amis',      label: 'Amis & Loisirs',     visible: true },
+  { id: 'sport',     label: 'Sport',              visible: true },
+  { id: 'personnel', label: 'Temps à moi',        visible: true },
+  { id: 'voyages',   label: 'Voyages & Trajets',  visible: true }
+].map(function (c) {
+  c.color = TC_COULEURS_CATEGORIES[c.id].color;
+  c.bg = TC_COULEURS_CATEGORIES[c.id].bg;
+  return c;
+});
 
 function loadCategoryVisibility() {
   try {
+    // Les cles enregistrees peuvent porter d anciens identifiants ;
+    // tcCatNormalisee est appliquee a la lecture, plus bas.
     const saved = localStorage.getItem('timecool_categories');
     if (saved) {
       const visibilities = JSON.parse(saved);
@@ -3247,9 +3310,10 @@ function renderMonth() {
   }
 }
 
+/** Couleur d une categorie d agenda. Accepte les anciens identifiants. */
 function catColor(cat) {
-  const cats = { green:'#34a853', yellow:'#fbbc04', purple:'#9333ea', red:'#ea4335', blue:'#1a73e8', orange:'#ff9800' };
-  return cats[cat] || '#5f6368';
+  const c = TC_COULEURS_CATEGORIES[tcCatNormalisee(cat)];
+  return c ? c.color : '#5f6368';
 }
 
 function escapeHTMLSafe(str) {
@@ -7399,15 +7463,18 @@ function validateAgendaProposalFromMsg(msg) {
     }
   }
 
+  // Identifiants de AGENDA_CATEGORIES. Le sport a desormais sa propre
+  // categorie : il etait auparavant range avec les loisirs.
   const catMap = {
-    travail:'green', boulot:'green', pro:'green', meeting:'green', reunion:'green',
-    sport:'purple', loisir:'purple', loisirs:'purple',
-    famille:'yellow', enfants:'yellow', personnel:'yellow',
-    rdv:'red', medical:'red', urgent:'red', medecin:'red',
-    repas:'yellow', dejeuner:'yellow', diner:'yellow', petit_dejeuner:'yellow',
-    pause:'orange', repos:'orange',
-    trajet:'blue', deplacement:'blue', voyage:'blue',
-    preparation:'blue', administratif:'blue'
+    travail:'travail', boulot:'travail', pro:'travail', meeting:'travail',
+    reunion:'travail', preparation:'travail', administratif:'travail',
+    sport:'sport',
+    loisir:'amis', loisirs:'amis', amis:'amis',
+    famille:'famille', enfants:'famille',
+    repas:'famille', dejeuner:'famille', diner:'famille', petit_dejeuner:'famille',
+    rdv:'sante', medical:'sante', urgent:'sante', medecin:'sante', sante:'sante',
+    personnel:'personnel', pause:'personnel', repos:'personnel',
+    trajet:'voyages', deplacement:'voyages', voyage:'voyages'
   };
   // Détecter si c'est une modification (message contient "déplace", "modifie", "change", "annule")
   const lastUserMsgs = charlyIA.history.filter(m => m.role === 'user').slice(-3).map(m => m.content.toLowerCase());
@@ -11713,7 +11780,10 @@ function renderContactsListHTML(contacts) {
 /* ===== Demande de RDV \u2014 simulation sur la fiche contact =====
    Les cr\u00e9neaux sont calcul\u00e9s sur TES trous r\u00e9els. En production ils viendront
    des disponibilit\u00e9s du contact, crois\u00e9es avec les tiennes c\u00f4t\u00e9 serveur. */
-const CT_CAT_MAP = { travail:'green', sante:'red', famille:'yellow', amis:'purple', personnel:'orange' };
+// Les identifiants de categorie sont desormais les memes partout :
+// cette table n a plus rien a traduire, elle reste comme garde-fou.
+const CT_CAT_MAP = { travail:'travail', sante:'sante', famille:'famille',
+                     amis:'amis', sport:'sport', personnel:'personnel' };
 
 function tcFreeSlots(n) {
   const HOURS = [9, 10.5, 14, 15.5, 17];
@@ -11774,7 +11844,7 @@ function confirmRdvContact(contactId, idx) {
   if (!s) return;
 
   const firstCat = (c.categories && c.categories.length) ? c.categories[0] : null;
-  const cat = firstCat ? (CT_CAT_MAP[firstCat] || 'blue') : 'blue';
+  const cat = firstCat ? (CT_CAT_MAP[firstCat] || 'travail') : 'travail';
 
   events.push({
     date: s.date, startH: s.h, startM: s.m, endH: s.h + 1, endM: s.m,
@@ -13852,33 +13922,7 @@ async function translatePageWithGoogle(targetLang, silent) {
 // === MES DISPONIBILITES ===
 var TC_DISPO_KEY = 'timecool_disponibilites';
 
-/* Code couleur officiel des categories. Miroir exact des variables CSS
-   --cat-* declarees dans :root, pour que le JS et le CSS ne puissent pas
-   diverger. Reutilisable partout dans l'app : ne jamais recopier une de
-   ces valeurs en dur. */
-var TC_COULEURS_CATEGORIES = {
-  travail:   { color: '#3B7DEA', bg: '#e8f0fe' },
-  sante:     { color: '#EA4335', bg: '#fce8e6' },
-  famille:   { color: '#F9AB00', bg: '#fff8e1' },
-  amis:      { color: '#9334EA', bg: '#f3e8fd' },
-  sport:     { color: '#34A853', bg: '#e8f5e9' },
-  personnel: { color: '#00ACC1', bg: '#e0f7fa' }
-};
 
-/* L'ordre de ce tableau est l'ordre d'affichage a l'ecran. */
-var DISPO_CATEGORIES = [
-  { id: 'travail',   icon: '\ud83d\udcbc', label: 'Pour mon travail' },
-  { id: 'sante',     icon: '\ud83c\udfe5', label: 'Pour ma sant\u00e9' },
-  { id: 'famille',   icon: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67', label: 'Pour ma famille' },
-  { id: 'amis',      icon: '\ud83c\udf89', label: 'Pour mes amis et loisirs' },
-  { id: 'sport',     icon: '\ud83c\udfcb\ufe0f', label: 'Pour mon sport' },
-  { id: 'personnel', icon: '\u2600\ufe0f', label: 'Pour mon temps \u00e0 moi' }
-].map(function (cat) {
-  var c = TC_COULEURS_CATEGORIES[cat.id];
-  cat.color = c.color;
-  cat.bg = c.bg;
-  return cat;
-});
 
 var JOURS_LABELS = ['L','M','M','J','V','S','D'];
 var JOURS_FULL = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
