@@ -6016,17 +6016,6 @@ function renderSettingsInterne() {
         </div>
         <div style="font-size:13px; color:#1a73e8;">🔄 Vérifier</div>
       </div>
-      <div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div style="flex:1;">
-          <div style="font-size:14px; font-weight:500;">Messages de simulation</div>
-          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Masquer les messages "fonctionnalité pas encore branchée"</div>
-        </div>
-        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
-          <input type="checkbox" id="hideSimToggle" ${areSimulationMessagesHidden() ? 'checked' : ''} onchange="setSimulationMessagesHidden(this.checked); tcMajVisuelInterrupteur(this)" style="opacity:0; width:0; height:0;">
-          <span style="position:absolute; inset:0; background:${areSimulationMessagesHidden() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
-          <span style="position:absolute; height:18px; width:18px; left:${areSimulationMessagesHidden() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
-        </label>
-      </div>
     </div>
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
@@ -12705,24 +12694,14 @@ function renderContactsList() {
    par cette seule fonction, pour que l'interrupteur des Paramètres
    les coupe TOUS d'un coup, sans avoir à en retrouver un par un.
    ══════════════════════════════════════════════════════════════ */
-const TC_HIDE_SIM_KEY = 'tc_hide_simulation_messages';
+/* Avertit qu une fonctionnalite n est qu une simulation, puis execute
+   l action si l utilisateur accepte.
 
-function areSimulationMessagesHidden() {
-  try { return localStorage.getItem(TC_HIDE_SIM_KEY) === '1'; } catch(e) { return false; }
-}
-
-function setSimulationMessagesHidden(on) {
-  try { localStorage.setItem(TC_HIDE_SIM_KEY, on ? '1' : '0'); } catch(e) {}
-  showToast(on ? '🔕 Messages de simulation masqués' : '🔔 Messages de simulation réaffichés');
-}
-
-/* Affiche (ou saute, si l'utilisateur les a masqués) un message qui
-   explique qu'une fonctionnalité n'est encore qu'une simulation.
-   `message` : le texte à afficher tel quel dans un confirm()
-   `onProceed` : l'action à exécuter si l'utilisateur (ou le réglage
-                 "masqué") valide qu'on continue quand même */
+   Un reglage permettait autrefois de masquer ces avertissements, du
+   temps ou l application en comptait beaucoup. Il n en restait qu un
+   seul, et le reglage n avait plus d effet visible : il a ete retire
+   des Parametres et l avertissement est redevenu inconditionnel. */
 async function showSimulationNotice(message, onProceed) {
-  if (areSimulationMessagesHidden()) { onProceed(); return; }
   if (await tcConfirm(message)) onProceed();
 }
 
