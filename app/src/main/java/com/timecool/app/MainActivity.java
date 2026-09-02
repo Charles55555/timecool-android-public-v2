@@ -337,7 +337,7 @@ public class MainActivity extends Activity {
                 requeteCameraEnAttente = null;
             }
             if (!accorde) {
-                appelerJs(tcCameraRefusee, );
+                appelerJs("tcCameraRefusee", "");
             }
             return;
         }
