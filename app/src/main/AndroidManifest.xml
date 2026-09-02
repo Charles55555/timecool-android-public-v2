@@ -17,6 +17,14 @@
     <!-- Installation de la mise a jour depuis l'application. Sans elle,
          Android refuse l'intent d'installation sans aucun message. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
+    <!-- Rappels de rendez-vous. POST_NOTIFICATIONS n'existe qu'a partir
+         d'Android 13 ; en dessous la notification s'affiche sans rien
+         demander. SCHEDULE_EXACT_ALARM permet l'heure precise ; si elle
+         est refusee, on retombe sur une alarme approchee plutot que de
+         ne rien programmer. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <!-- Position, demandée à l'exécution et uniquement quand la page
@@ -64,6 +72,13 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
         </provider>
+
+        <!-- Reveille par AlarmManager a l'heure du rappel, application
+             fermee comprise. Non exporte : rien d'exterieur ne doit
+             pouvoir declencher une fausse notification. -->
+        <receiver
+            android:name=".RappelReceiver"
+            android:exported="false"/>
     </application>
 
 </manifest>

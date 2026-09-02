@@ -72,6 +72,11 @@ public class MainActivity extends Activity {
     private static final int REQ_LOCALISATION = 1003;
     private static final int REQ_EXPORT_FICHIER = 1004;
     private static final int REQ_CAMERA = 1005;
+    private static final int REQ_NOTIFICATIONS = 1006;
+
+    /* Identifiants des rappels programmes. Necessaires pour les annuler :
+       AlarmManager n offre aucun moyen de lister ses propres alarmes. */
+    private final java.util.HashSet<Integer> idsRappels = new java.util.HashSet<>();
 
     /** Demande de camera venue de la WebView, en attente de la reponse Android. */
     private PermissionRequest requeteCameraEnAttente;
@@ -289,8 +294,40 @@ public class MainActivity extends Activity {
             }
         });
 
+        creerCanauxNotification();
+
         // Charge l'application depuis les assets
         webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    /**
+     * Deux canaux plutot qu un seul : le son d un canal ne peut plus etre
+     * modifie apres sa creation. Le reglage « Sonneries » choisit donc le
+     * canal a utiliser, au lieu d essayer de changer celui en place.
+     */
+    private void creerCanauxNotification() {
+        android.app.NotificationManager gestionnaire =
+            (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (gestionnaire == null) {
+            return;
+        }
+        android.app.NotificationChannel sonore = new android.app.NotificationChannel(
+            RappelReceiver.CANAL_SONORE,
+            "Rappels de rendez-vous",
+            android.app.NotificationManager.IMPORTANCE_HIGH
+        );
+        sonore.setDescription("Alerte avant chaque rendez-vous de votre agenda");
+        gestionnaire.createNotificationChannel(sonore);
+
+        android.app.NotificationChannel silencieux = new android.app.NotificationChannel(
+            RappelReceiver.CANAL_SILENCIEUX,
+            "Rappels de rendez-vous (silencieux)",
+            android.app.NotificationManager.IMPORTANCE_DEFAULT
+        );
+        silencieux.setDescription("Rappels sans son ni vibration");
+        silencieux.setSound(null, null);
+        silencieux.enableVibration(false);
+        gestionnaire.createNotificationChannel(silencieux);
     }
 
     @Override
@@ -322,6 +359,12 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int requete, String[] permissions, int[] resultats) {
+        if (requete == REQ_NOTIFICATIONS) {
+            boolean accorde = resultats.length > 0
+                && resultats[0] == PackageManager.PERMISSION_GRANTED;
+            appelerJs("tcNotificationsReponse", accorde ? "true" : "false");
+            return;
+        }
         if (requete == REQ_CAMERA) {
             boolean accorde = resultats.length > 0
                 && resultats[0] == PackageManager.PERMISSION_GRANTED;
@@ -840,6 +883,122 @@ public class MainActivity extends Activity {
                     }
                 }
             }).start();
+        }
+
+        /**
+         * Les notifications sont-elles autorisees pour l application ?
+         * Avant Android 13 la question ne se pose pas.
+         */
+        @JavascriptInterface
+        public boolean notificationsAutorisees() {
+            if (Build.VERSION.SDK_INT < 33) {
+                return true;
+            }
+            return checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                == PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public void demanderPermissionNotifications() {
+            if (Build.VERSION.SDK_INT < 33 || notificationsAutorisees()) {
+                appelerJs("tcNotificationsReponse", "true");
+                return;
+            }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    requestPermissions(
+                        new String[] { "android.permission.POST_NOTIFICATIONS" },
+                        REQ_NOTIFICATIONS
+                    );
+                }
+            });
+        }
+
+        /**
+         * Programme les rappels des prochains rendez-vous.
+         *
+         * `rappelsJson` : tableau d objets { id, quand (ms), titre, texte }.
+         * Toute programmation precedente est annulee d abord : sans cela
+         * un rendez-vous deplace declencherait deux notifications, a
+         * l ancienne et a la nouvelle heure.
+         */
+        @JavascriptInterface
+        public void programmerRappels(final String rappelsJson, final boolean silencieux) {
+            try {
+                annulerRappels();
+
+                JSONArray liste = new JSONArray(rappelsJson);
+                android.app.AlarmManager alarmes =
+                    (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+                if (alarmes == null) {
+                    return;
+                }
+
+                // Une alarme exacte demande une permission qui peut etre
+                // refusee. Plutot que d abandonner le rappel, on se rabat
+                // sur une alarme approchee : quelques minutes de decalage
+                // valent mieux qu aucun rappel.
+                boolean exactPossible = true;
+                if (Build.VERSION.SDK_INT >= 31) {
+                    exactPossible = alarmes.canScheduleExactAlarms();
+                }
+
+                int programmes = 0;
+                long maintenant = System.currentTimeMillis();
+                for (int i = 0; i < liste.length() && i < 60; i++) {
+                    JSONObject r = liste.getJSONObject(i);
+                    long quand = r.optLong("quand", 0L);
+                    // Un rappel deja passe ne doit pas se declencher
+                    // immediatement au prochain enregistrement.
+                    if (quand <= maintenant) {
+                        continue;
+                    }
+
+                    Intent i2 = new Intent(MainActivity.this, RappelReceiver.class);
+                    i2.putExtra(RappelReceiver.EXTRA_ID, r.optInt("id", i));
+                    i2.putExtra(RappelReceiver.EXTRA_TITRE, r.optString("titre", ""));
+                    i2.putExtra(RappelReceiver.EXTRA_TEXTE, r.optString("texte", ""));
+                    i2.putExtra(RappelReceiver.EXTRA_SILENCIEUX, silencieux);
+
+                    PendingIntent pi = PendingIntent.getBroadcast(
+                        MainActivity.this, r.optInt("id", i), i2,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                    );
+
+                    if (exactPossible) {
+                        alarmes.setExactAndAllowWhileIdle(
+                            android.app.AlarmManager.RTC_WAKEUP, quand, pi);
+                    } else {
+                        alarmes.setWindow(
+                            android.app.AlarmManager.RTC_WAKEUP, quand, 600000L, pi);
+                    }
+                    idsRappels.add(r.optInt("id", i));
+                    programmes++;
+                }
+                appelerJs("tcRappelsProgrammes", String.valueOf(programmes));
+            } catch (Exception e) {
+                appelerJs("tcRappelsEchec", e.getClass().getSimpleName());
+            }
+        }
+
+        /** Annule tous les rappels precedemment programmes. */
+        @JavascriptInterface
+        public void annulerRappels() {
+            android.app.AlarmManager alarmes =
+                (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            if (alarmes == null) {
+                return;
+            }
+            for (Integer id : idsRappels) {
+                Intent i = new Intent(MainActivity.this, RappelReceiver.class);
+                PendingIntent pi = PendingIntent.getBroadcast(
+                    MainActivity.this, id, i,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                );
+                alarmes.cancel(pi);
+            }
+            idsRappels.clear();
         }
 
         @JavascriptInterface

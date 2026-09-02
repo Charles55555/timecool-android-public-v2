@@ -1943,6 +1943,187 @@ function loadAutoUpdatePref() {
  * Repeindre plutot que re-rendre toute la page : un nouveau rendu
  * ramenerait l utilisateur en haut de l ecran des reglages.
  */
+/* ══════════════════════════════════════════════════════════════
+   RAPPELS DE RENDEZ-VOUS
+   Notifications locales, programmees par Android. Aucun serveur : le
+   telephone se reveille tout seul a l heure dite, meme hors ligne.
+   ══════════════════════════════════════════════════════════════ */
+const TC_RAPPELS_KEY = 'tc_rappels_actifs';
+const TC_RAPPEL_DELAI_KEY = 'tc_rappel_delai';
+const TC_SONNERIES_KEY = 'tc_sonneries';
+
+const TC_DELAIS_RAPPEL = [
+  { minutes: 10,   label: '10 minutes avant' },
+  { minutes: 30,   label: '30 minutes avant' },
+  { minutes: 60,   label: '1 heure avant' },
+  { minutes: 120,  label: '2 heures avant' },
+  { minutes: 1440, label: 'La veille' }
+];
+
+function tcRappelsActifs() {
+  try { return localStorage.getItem(TC_RAPPELS_KEY) === '1'; } catch (e) { return false; }
+}
+
+function tcSonneriesActives() {
+  // Le son est le comportement attendu par defaut d un rappel.
+  try { return localStorage.getItem(TC_SONNERIES_KEY) !== '0'; } catch (e) { return true; }
+}
+
+function tcDelaiRappel() {
+  try {
+    const v = parseInt(localStorage.getItem(TC_RAPPEL_DELAI_KEY), 10);
+    return TC_DELAIS_RAPPEL.some(d => d.minutes === v) ? v : 60;
+  } catch (e) { return 60; }
+}
+
+function tcDelaiRappelTexte() {
+  const v = tcDelaiRappel();
+  const d = TC_DELAIS_RAPPEL.find(x => x.minutes === v);
+  return d ? d.label : '1 heure avant';
+}
+
+async function tcBasculerRappels(actif) {
+  if (!actif) {
+    try { localStorage.setItem(TC_RAPPELS_KEY, '0'); } catch (e) {}
+    if (window.TimeCoolNatif && window.TimeCoolNatif.annulerRappels) {
+      window.TimeCoolNatif.annulerRappels();
+    }
+    showToast('🔕 Rappels désactivés');
+    return;
+  }
+
+  if (!window.TimeCoolNatif || !window.TimeCoolNatif.programmerRappels) {
+    showToast('ℹ️ Les rappels nécessitent l’application Android');
+    renderSettings();
+    return;
+  }
+
+  // La permission est demandee au moment ou l utilisateur active le
+  // reglage, pas au premier lancement : le refus est bien plus frequent
+  // quand on ne comprend pas encore a quoi sert la demande.
+  if (!window.TimeCoolNatif.notificationsAutorisees()) {
+    window.TimeCoolNatif.demanderPermissionNotifications();
+    return;   // La suite se joue dans tcNotificationsReponse.
+  }
+
+  try { localStorage.setItem(TC_RAPPELS_KEY, '1'); } catch (e) {}
+  tcProgrammerRappels();
+}
+
+/** Appelee par MainActivity apres la boite de dialogue Android. */
+function tcNotificationsReponse(accorde) {
+  if (accorde === 'true' || accorde === true) {
+    try { localStorage.setItem(TC_RAPPELS_KEY, '1'); } catch (e) {}
+    tcProgrammerRappels();
+    showToast('🔔 Rappels activés');
+  } else {
+    try { localStorage.setItem(TC_RAPPELS_KEY, '0'); } catch (e) {}
+    showToast('⚠️ Notifications refusées — rappels impossibles');
+  }
+  renderSettings();
+}
+
+function tcBasculerSonneries(actif) {
+  try { localStorage.setItem(TC_SONNERIES_KEY, actif ? '1' : '0'); } catch (e) {}
+  showToast(actif ? '🔊 Son activé' : '🔇 Rappels silencieux');
+  // Le canal de notification change : les rappels deja programmes
+  // doivent etre reprogrammes pour en tenir compte.
+  if (tcRappelsActifs()) tcProgrammerRappels();
+}
+
+function tcChoisirDelaiRappel() {
+  const actuel = tcDelaiRappel();
+  const ov = document.createElement('div');
+  ov.className = 'msg-sheet-ov';
+  // .auth-page vaut 9999 : une fenetre ouverte au-dessus doit depasser
+  // cette valeur, sinon elle s affiche derriere sans erreur.
+  ov.style.zIndex = '10050';
+  ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = '<div class="msg-sheet">' +
+    '<div class="msg-sheet-h">⏰ Délai du rappel</div>' +
+    TC_DELAIS_RAPPEL.map(function (d) {
+      const choisi = d.minutes === actuel;
+      return '<div onclick="tcAppliquerDelaiRappel(' + d.minutes + ')" style="padding:14px 20px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; border-top:1px solid #f1f3f4; font-size:14px; color:' + (choisi ? 'var(--g-blue)' : 'var(--text)') + '; font-weight:' + (choisi ? '600' : '400') + ';">' +
+        '<span>' + d.label + '</span>' +
+        (choisi ? '<span>✓</span>' : '') +
+      '</div>';
+    }).join('') +
+    '<div style="padding:14px 20px;"></div>' +
+  '</div>';
+  document.body.appendChild(ov);
+}
+
+function tcAppliquerDelaiRappel(minutes) {
+  try { localStorage.setItem(TC_RAPPEL_DELAI_KEY, String(minutes)); } catch (e) {}
+  const ov = document.querySelector('.msg-sheet-ov');
+  if (ov) ov.remove();
+  if (tcRappelsActifs()) tcProgrammerRappels();
+  showToast('⏰ Rappel ' + tcDelaiRappelTexte().toLowerCase());
+  renderSettings();
+}
+
+/**
+ * Transmet a Android les rendez-vous a venir.
+ *
+ * Limite a 7 jours : au-dela, l agenda aura probablement change et les
+ * alarmes seront reprogrammees d ici la. Cela evite aussi de saturer le
+ * systeme, qui plafonne le nombre d alarmes par application.
+ */
+function tcProgrammerRappels() {
+  if (!tcRappelsActifs()) return;
+  if (!window.TimeCoolNatif || !window.TimeCoolNatif.programmerRappels) return;
+
+  const delai = tcDelaiRappel() * 60000;
+  const maintenant = Date.now();
+  const limite = maintenant + 7 * 24 * 3600 * 1000;
+  const rappels = [];
+
+  (events || []).forEach(function (e, index) {
+    if (!e || e.mode !== 'user' || !e.date) return;
+    const [an, mois, jour] = String(e.date).split('-').map(Number);
+    if (!an || !mois || !jour) return;
+    const debut = new Date(an, mois - 1, jour, e.startH || 0, e.startM || 0).getTime();
+    if (isNaN(debut) || debut > limite) return;
+    const quand = debut - delai;
+    if (quand <= maintenant) return;   // Rappel deja passe.
+
+    const heure = String(e.startH).padStart(2, '0') + 'h' + String(e.startM).padStart(2, '0');
+    rappels.push({
+      // Identifiant stable et positif : deux rendez-vous ne doivent pas
+      // se remplacer mutuellement dans AlarmManager.
+      id: Math.abs(tcHachageId(String(e.id || index))) % 100000,
+      quand: quand,
+      titre: e.title || 'Rendez-vous',
+      texte: 'À ' + heure + ' — ' + tcDelaiRappelTexte().toLowerCase()
+    });
+  });
+
+  try {
+    window.TimeCoolNatif.programmerRappels(JSON.stringify(rappels), !tcSonneriesActives());
+  } catch (e) {
+    console.warn('programmerRappels :', e);
+  }
+}
+
+/** Petit hachage stable, pour transformer un identifiant texte en entier. */
+function tcHachageId(texte) {
+  let h = 0;
+  for (let i = 0; i < texte.length; i++) {
+    h = ((h << 5) - h) + texte.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+
+function tcRappelsProgrammes(n) {
+  console.log('Rappels programmés :', n);
+}
+
+function tcRappelsEchec(raison) {
+  showToast('⚠️ Programmation des rappels impossible');
+  console.warn('Rappels :', raison);
+}
+
 function tcMajVisuelInterrupteur(input) {
   if (!input || !input.parentElement) return;
   const spans = input.parentElement.querySelectorAll('span');
@@ -2372,6 +2553,10 @@ async function saveEventsToStorage() {
       endM: await tcEncrypt(String(e.endM))
     })));
     localStorage.setItem(TC_EVENTS_KEY, JSON.stringify(encrypted));
+    // L agenda a change : les rappels programmes ne correspondent plus.
+    // Sans cette reprogrammation, un rendez-vous deplace ou supprime
+    // continuerait de sonner a son ancienne heure.
+    if (typeof tcProgrammerRappels === 'function') tcProgrammerRappels();
   } catch(err) { console.warn('Sauvegarde events:', err); }
 }
 
@@ -6054,21 +6239,32 @@ function renderSettingsInterne() {
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔔 Notifications</div>
       <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div><div style="font-size:14px;">Rappels avant RDV</div><div style="font-size:11px; color:var(--text-sec);">1 heure avant</div></div>
-        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+        <div style="flex:1;">
+          <div style="font-size:14px;">Rappels avant RDV</div>
+          <div style="font-size:11px; color:var(--text-sec);" id="rappelDelaiTexte">${tcDelaiRappelTexte()}</div>
+        </div>
+        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+          <input type="checkbox" id="rappelsToggle" ${tcRappelsActifs() ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerRappels(this.checked)" style="opacity:0; width:0; height:0;">
+          <span style="position:absolute; inset:0; background:${tcRappelsActifs() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
+          <span style="position:absolute; height:18px; width:18px; left:${tcRappelsActifs() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+        </label>
+      </div>
+      <div onclick="tcChoisirDelaiRappel()" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div><div style="font-size:14px;">Délai du rappel</div><div style="font-size:11px; color:var(--text-sec);">Combien de temps avant le rendez-vous</div></div>
+        <div style="font-size:13px; color:#1a73e8;">${tcDelaiRappelTexte()} ›</div>
       </div>
       <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div><div style="font-size:14px;">Alertes retards</div><div style="font-size:11px; color:var(--text-sec);">Temps réel</div></div>
-        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
+        <div style="flex:1;">
+          <div style="font-size:14px;">Sonneries</div>
+          <div style="font-size:11px; color:var(--text-sec);">${tcSonneriesActives() ? 'Son et vibration' : 'Silencieux'}</div>
+        </div>
+        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+          <input type="checkbox" id="sonneriesToggle" ${tcSonneriesActives() ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerSonneries(this.checked)" style="opacity:0; width:0; height:0;">
+          <span style="position:absolute; inset:0; background:${tcSonneriesActives() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
+          <span style="position:absolute; height:18px; width:18px; left:${tcSonneriesActives() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+        </label>
       </div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div><div style="font-size:14px;">Notifications push</div><div style="font-size:11px; color:var(--text-sec);">Activées</div></div>
-        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
-      </div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div><div style="font-size:14px;">Sonneries</div><div style="font-size:11px; color:var(--text-sec);">Par défaut</div></div>
-        <div style="width:40px; height:22px; background:var(--g-blue); border-radius:11px; position:relative;"><div style="position:absolute; right:2px; top:2px; width:18px; height:18px; background:white; border-radius:50%;"></div></div>
-      </div>
+    </div>
     </div>
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
