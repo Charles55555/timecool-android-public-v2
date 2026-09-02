@@ -1048,7 +1048,7 @@ if (window.pdfjsLib) {
 <div class="page" id="page-holidays">
   <div class="page-header">
     <div class="page-title">🇫🇷 Jours fériés</div>
-    <div class="page-subtitle">Calendrier officiel 2026 — France et fêtes religieuses</div>
+    <div class="page-subtitle">Jours fériés français et fêtes religieuses</div>
   </div>
   <div class="main"><div id="holidaysList" style="padding:14px;"></div></div>
 </div>
@@ -11488,28 +11488,61 @@ function tcMoisHebreuCorrespond(lu, attendu) {
   return propre === 'Adar' || propre === 'Adar II';
 }
 
-function tcFetesJuives(an) {
+/**
+ * Compare deux noms de mois d un calendrier non gregorien.
+ *
+ * Intl ecrit « Dhuʻl-Hijjah » avec une virgule culbutee, « Rabiʻ I »
+ * avec un chiffre romain, et ces graphies varient d une version d ICU a
+ * l autre. On compare donc des formes reduites aux lettres et chiffres :
+ * « Rabiʻ II » et « Rabi II » donnent tous deux « rabiii ».
+ *
+ * La comparaison est stricte, jamais par prefixe : « Dhu » designerait
+ * a la fois Dhuʻl-Qiʻdah et Dhuʻl-Hijjah, et la fete tomberait deux fois.
+ */
+function tcNomMoisReduit(nom) {
+  return String(nom).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Parcourt une annee gregorienne et retient les jours correspondant aux
+ * dates recherchees dans un autre calendrier.
+ *
+ * `cibles` : [{ jour, mois, name, emoji, type }]
+ * `temoin` : { date, mois } — date de controle dont on connait le mois,
+ *            pour verifier que le calendrier est bien pris en charge.
+ *            Sans cela un moteur qui l ignore retombe silencieusement
+ *            sur le gregorien et produirait des dates fausses.
+ */
+function tcFetesCalendrier(an, calendrier, cibles, temoin) {
   let format;
   try {
-    format = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long' });
-    // Un navigateur sans calendrier hebraique retomberait sur le
-    // gregorien sans prevenir : on verifie sur une date connue.
-    const controle = format.formatToParts(new Date(2026, 8, 12));
-    const moisControle = controle.find(p => p.type === 'month').value;
-    if (!/Tishri/i.test(moisControle)) return [];
+    format = new Intl.DateTimeFormat('en-u-ca-' + calendrier, { day: 'numeric', month: 'long' });
+    if (format.resolvedOptions().calendar !== calendrier) return [];
+    const c = format.formatToParts(temoin.date);
+    const moisTemoin = c.find(p => p.type === 'month').value;
+    if (tcNomMoisReduit(moisTemoin) !== tcNomMoisReduit(temoin.mois)) return [];
   } catch (e) {
-    return [];   // Fetes juives absentes plutot qu erronees.
+    return [];   // Fetes omises plutot qu affichees fausses.
   }
+
+  const reduites = cibles.map(function (c) {
+    return { jour: c.jour, mois: tcNomMoisReduit(c.mois), modele: c };
+  });
 
   const trouvees = [];
   const d = new Date(an, 0, 1);
   while (d.getFullYear() === an) {
     const parts = format.formatToParts(d);
     const jour = parseInt(parts.find(p => p.type === 'day').value, 10);
-    const mois = parts.find(p => p.type === 'month').value;
-    TC_FETES_HEBRAIQUES.forEach(function (f) {
-      if (f.jour === jour && tcMoisHebreuCorrespond(mois, f.mois)) {
-        trouvees.push({ date: tcIsoDate(d), name: f.name, type: 'religieux-juif', emoji: f.emoji });
+    const mois = tcNomMoisReduit(parts.find(p => p.type === 'month').value);
+    reduites.forEach(function (c) {
+      if (c.jour === jour && c.mois === mois) {
+        trouvees.push({
+          date: tcIsoDate(d),
+          name: c.modele.name,
+          type: c.modele.type,
+          emoji: c.modele.emoji
+        });
       }
     });
     d.setDate(d.getDate() + 1);
@@ -11517,27 +11550,153 @@ function tcFetesJuives(an) {
   return trouvees;
 }
 
+/* Fetes musulmanes. Le calendrier um al-qura est celui des administrations
+   et des logiciels ; l observance reelle depend de l observation de la
+   lune et peut decaler d un jour. La page le dit a l utilisateur plutot
+   que de laisser croire a une date certaine. */
+function tcFetesMusulmanes(an) {
+  return tcFetesCalendrier(an, 'islamic-umalqura', [
+    { jour: 1,  mois: 'Muharram',     name: 'Nouvel An musulman',    emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 10, mois: 'Muharram',     name: 'Achoura',               emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 12, mois: 'Rabi I',       name: 'Mawlid',                emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 1,  mois: 'Ramadan',      name: 'Début du Ramadan',      emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 1,  mois: 'Shawwal',      name: 'Aïd el-Fitr',           emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 10, mois: 'Dhul-Hijjah',  name: 'Aïd el-Adha',           emoji: '🌙', type: 'religieux-musulman' }
+  ], { date: new Date(2026, 1, 18), mois: 'Ramadan' });
+}
+
+/* Vesak : pleine lune du quatrieme mois lunaire chinois. Les traditions
+   theravada d Asie du Sud-Est suivent d autres calculs et peuvent
+   differer de quelques semaines. */
+function tcFetesBouddhistes(an) {
+  return tcFetesCalendrier(an, 'chinese', [
+    { jour: 15, mois: 'Fourth Month', name: 'Vesak', emoji: '☸️', type: 'religieux-bouddhiste' }
+  ], { date: new Date(2026, 4, 31), mois: 'Fourth Month' });
+}
+
+/** Paques julienne, suivie par les Eglises orthodoxes (Meeus). */
+function tcPaquesOrthodoxe(an) {
+  const a = an % 4, b = an % 7, c = an % 19;
+  const d = (19 * c + 15) % 30;
+  const e = (2 * a + 4 * b - d + 34) % 7;
+  const mois = Math.floor((d + e + 114) / 31);
+  const jour = ((d + e + 114) % 31) + 1;
+  // Le resultat est une date julienne : l ecart avec le gregorien est
+  // de 13 jours de 1900 a 2099.
+  return new Date(an, mois - 1, jour + 13);
+}
+
+/* Fetes chretiennes qui ne sont pas deja des jours feries en France, et
+   fetes orthodoxes. Celles qui sont feriees (Paques lundi, Ascension,
+   Pentecote lundi, Assomption, Toussaint, Noel) restent dans la liste
+   des feries, pour ne pas apparaitre deux fois. */
+function tcFetesChretiennes(an) {
+  const p = tcPaques(an);
+  const po = tcPaquesOrthodoxe(an);
+  return [
+    { date: an + '-01-06', name: 'Épiphanie', type: 'religieux-chretien', emoji: '⭐' },
+    { date: an + '-01-07', name: 'Noël orthodoxe', type: 'religieux-orthodoxe', emoji: '☦️' },
+    { date: tcIsoDate(tcDatePlus(p, -46)), name: 'Mercredi des Cendres', type: 'religieux-chretien', emoji: '✝️' },
+    { date: tcIsoDate(tcDatePlus(p, -2)),  name: 'Vendredi Saint', type: 'religieux-chretien', emoji: '✝️' },
+    { date: tcIsoDate(p), name: 'Pâques', type: 'religieux-chretien', emoji: '✝️' },
+    { date: tcIsoDate(po), name: 'Pâques orthodoxe', type: 'religieux-orthodoxe', emoji: '☦️' },
+    { date: tcIsoDate(tcDatePlus(p, 49)), name: 'Pentecôte', type: 'religieux-chretien', emoji: '✝️' },
+    { date: an + '-12-08', name: 'Immaculée Conception', type: 'religieux-chretien', emoji: '✝️' }
+  ];
+}
+
+function tcFetesJuives(an) {
+  return tcFetesCalendrier(an, 'hebrew', [
+    // Pourim se celebre le 14 Adar II les annees embolismiques, qui
+    // comptent deux mois d Adar. La comparaison stricte des noms suffit
+    // a l exclure d Adar I.
+    { jour: 14, mois: 'Adar II',  name: 'Pourim',              emoji: '✡️', type: 'religieux-juif' },
+    { jour: 14, mois: 'Adar',     name: 'Pourim',              emoji: '✡️', type: 'religieux-juif' },
+    { jour: 15, mois: 'Nisan',    name: 'Pessah (1er jour)',   emoji: '✡️', type: 'religieux-juif' },
+    { jour: 21, mois: 'Nisan',    name: 'Pessah (7e jour)',    emoji: '✡️', type: 'religieux-juif' },
+    { jour: 6,  mois: 'Sivan',    name: 'Chavouot',            emoji: '✡️', type: 'religieux-juif' },
+    { jour: 1,  mois: 'Tishri',   name: 'Roch Hachana',        emoji: '✡️', type: 'religieux-juif' },
+    { jour: 10, mois: 'Tishri',   name: 'Yom Kippour',         emoji: '✡️', type: 'religieux-juif' },
+    { jour: 15, mois: 'Tishri',   name: 'Souccot (1er jour)',  emoji: '✡️', type: 'religieux-juif' },
+    { jour: 25, mois: 'Kislev',   name: 'Hanoucca (1er jour)', emoji: '🕎', type: 'religieux-juif' }
+  ], { date: new Date(2026, 8, 12), mois: 'Tishri' });
+}
+
 /** Tous les jours feries et fetes d une annee, tries par date. */
 function tcJoursFeries(an) {
   return tcFeriesFrancais(an)
+    .concat(tcFetesChretiennes(an))
     .concat(tcFetesJuives(an))
+    .concat(tcFetesMusulmanes(an))
+    .concat(tcFetesBouddhistes(an))
     .sort(function (a, b) { return a.date.localeCompare(b.date); });
+}
+
+/* Traditions affichables, avec leur apparence. L ordre est celui du
+   filtre a l ecran. */
+const TC_TRADITIONS = [
+  { type: 'férié',                 label: 'Fériés',     court: 'Férié',     icone: '🇫🇷', couleur: '#1a73e8', fond: '#e8f0fe' },
+  { type: 'religieux-chretien',    label: 'Chrétien',   court: 'Chrétien',  icone: '✝️',  couleur: '#8430ce', fond: '#f3e8fd' },
+  { type: 'religieux-orthodoxe',   label: 'Orthodoxe',  court: 'Orthodoxe', icone: '☦️',  couleur: '#0b8043', fond: '#e6f4ea' },
+  { type: 'religieux-juif',        label: 'Juif',       court: 'Juif',      icone: '✡️',  couleur: '#9334ea', fond: '#f3e8fd' },
+  { type: 'religieux-musulman',    label: 'Musulman',   court: 'Musulman',  icone: '🌙',  couleur: '#00796b', fond: '#e0f2f1' },
+  { type: 'religieux-bouddhiste',  label: 'Bouddhiste', court: 'Bouddhiste',icone: '☸️',  couleur: '#e8710a', fond: '#fff0e6' }
+];
+
+const TC_TRADITIONS_KEY = 'tc_traditions_masquees';
+
+function tcTraditionsMasquees() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TC_TRADITIONS_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
+}
+
+function tcBasculerTradition(type) {
+  const masquees = tcTraditionsMasquees();
+  const i = masquees.indexOf(type);
+  if (i >= 0) masquees.splice(i, 1); else masquees.push(type);
+  try { localStorage.setItem(TC_TRADITIONS_KEY, JSON.stringify(masquees)); } catch (e) {}
+  renderHolidays();
+}
+
+function tcTradition(type) {
+  return TC_TRADITIONS.find(function (t) { return t.type === type; }) || TC_TRADITIONS[0];
 }
 
 function renderHolidays() {
   const c = document.getElementById('holidaysList');
   const todayD = new Date();
-  const todayStr = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,'0')}-${String(todayD.getDate()).padStart(2,'0')}`;
+  const an = todayD.getFullYear();
+  const todayStr = `${an}-${String(todayD.getMonth()+1).padStart(2,'0')}-${String(todayD.getDate()).padStart(2,'0')}`;
   // L annee affichee suit la date du jour : la page reste juste au
   // passage a la nouvelle annee, sans mise a jour de l application.
-  const sorted = tcJoursFeries(todayD.getFullYear());
+  const toutes = tcJoursFeries(an);
+  const masquees = tcTraditionsMasquees();
+  const sorted = toutes.filter(h => masquees.indexOf(h.type) < 0);
   const upcoming = sorted.filter(h => h.date >= todayStr);
   const past = sorted.filter(h => h.date < todayStr);
 
+  // Une tradition dont aucune fete n a pu etre calculee — moteur sans
+  // le calendrier correspondant — n a pas a figurer dans le filtre.
+  const presentes = TC_TRADITIONS.filter(t => toutes.some(h => h.type === t.type));
+
+  const filtre = presentes.map(function (t) {
+    const actif = masquees.indexOf(t.type) < 0;
+    return '<button onclick="tcBasculerTradition(\'' + t.type + '\')" style="flex-shrink:0; padding:6px 12px; border-radius:16px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; border:1px solid ' + (actif ? t.couleur : '#e8eaed') + '; background:' + (actif ? t.fond : '#fff') + '; color:' + (actif ? t.couleur : '#9aa0a6') + ';"><span data-notranslate>' + t.icone + '</span> ' + t.label + '</button>';
+  }).join('');
+
+  const musulmanesVisibles = sorted.some(h => h.type === 'religieux-musulman');
+
   c.innerHTML = `
-    <div style="background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; padding:12px 14px; margin-bottom:18px; font-size:12px; color:#5f4500; line-height:1.5;">
-      📅 <b>Calendrier 2026</b> — Jours fériés français et fêtes religieuses juives.
+    <div style="background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; padding:12px 14px; margin-bottom:14px; font-size:12px; color:#5f4500; line-height:1.5;">
+      📅 <b>Calendrier ${an}</b> — Jours fériés français et fêtes des principales traditions religieuses.
+      ${musulmanesVisibles ? '<br>🌙 Les dates musulmanes suivent le calendrier um al-qura ; l’observation de la lune peut les décaler d’un jour.' : ''}
     </div>
+    <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:12px; margin-bottom:4px; -webkit-overflow-scrolling:touch;">${filtre}</div>
+    ${sorted.length === 0 ? `
+      <div style="text-align:center; padding:40px 20px; color:#9aa0a6; font-size:13px;">Aucune tradition sélectionnée.<br>Touchez un filtre ci-dessus pour afficher des dates.</div>
+    ` : ''}
     ${upcoming.length > 0 ? `
       <div style="font-size:12px; font-weight:700; color:var(--text-sec); text-transform:uppercase; padding:0 4px 8px; letter-spacing:0.5px;">📌 À venir</div>
       ${upcoming.map(h => renderHolidayItem(h, todayD)).join('')}
@@ -11554,10 +11713,13 @@ function renderHolidayItem(h, todayD, isPast=false) {
   const date = new Date(y, mo-1, d);
   const daysUntil = Math.ceil((date - todayD) / (1000*60*60*24));
   const dateStr = date.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
-  const typeColor = h.type === 'férié' ? '#1a73e8' : '#9333ea';
-  const typeBg = h.type === 'férié' ? '#e8f0fe' : '#f3e8fd';
-  const typeIcon  = h.type === 'férié' ? '🇫🇷' : '✡️';
-  const typeLabel = h.type === 'férié' ? 'Férié' : 'Religieux';
+  // Chaque tradition a sa couleur et son icone : « Religieux » en violet
+  // pour tout le monde ne disait pas de quelle fete il s agissait.
+  const trad = tcTradition(h.type);
+  const typeColor = trad.couleur;
+  const typeBg = trad.fond;
+  const typeIcon = trad.icone;
+  const typeLabel = trad.court;
   let badge = '';
   if (!isPast) {
     if (daysUntil === 0) badge = '<span style="font-size:10px; padding:3px 8px; background:#ea4335; color:white; border-radius:8px; font-weight:600;">AUJOURD\'HUI</span>';
@@ -11571,7 +11733,7 @@ function renderHolidayItem(h, todayD, isPast=false) {
         <div style="font-size:11px; color:var(--text-sec); margin-top:2px; text-transform:capitalize;">${dateStr}</div>
       </div>
       <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
-        <span style="font-size:10px; padding:3px 8px; background:${typeBg}; color:${typeColor}; border-radius:8px; font-weight:600; white-space:nowrap;"><span data-notranslate>${typeIcon}</span> <span data-tc-src="${h.type === 'férié' ? 'Jour férié' : 'Fête religieuse'}">${typeLabel}</span></span>
+        <span style="font-size:10px; padding:3px 8px; background:${typeBg}; color:${typeColor}; border-radius:8px; font-weight:600; white-space:nowrap;"><span data-notranslate>${typeIcon}</span> <span data-tc-src="${trad.label}">${typeLabel}</span></span>
         ${badge}
       </div>
     </div>
