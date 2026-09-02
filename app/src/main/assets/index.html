@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#ffffff">
-<title>TIMECOOL VERSION COMPLETE V10.5.104 v6.4.6</title>
+<title>TimeCool — Votre agenda intelligent</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 :root {
@@ -1722,9 +1722,10 @@ if (window.pdfjsLib) {
     <span style="flex:1;">Se déconnecter</span>
   </div>
 
-  <!-- Footer version -->
-  <div style="padding:8px 20px; background:var(--bg-soft); font-size:10px; color:var(--text-sec); text-align:center;">
-    TimeCool V10.5.104
+  <!-- Rempli par refreshAccountMenu() a chaque ouverture. Le numero
+       etait auparavant ecrit en dur et ne correspondait a rien. -->
+  <div id="accountMenuVersion" data-notranslate style="padding:8px 20px; background:var(--bg-soft); font-size:10px; color:var(--text-sec); text-align:center;">
+    TimeCool
   </div>
 </div>
 
@@ -10113,6 +10114,12 @@ function closeAccountMenu() {
 }
 
 function refreshAccountMenu() {
+  // Version reelle : meme source que les Parametres. Renseignee avant le
+  // garde ci-dessous, pour rester affichee meme si le bloc identite du
+  // menu venait a manquer.
+  const versionEl = document.getElementById('accountMenuVersion');
+  if (versionEl) versionEl.textContent = 'TimeCool ' + tcFormaterVersion();
+
   const avatarEl = document.getElementById('accountMenuAvatar');
   const nameEl = document.getElementById('accountMenuName');
   const emailEl = document.getElementById('accountMenuEmail');
