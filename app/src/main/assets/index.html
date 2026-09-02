@@ -3639,6 +3639,17 @@ function renderMonth() {
     };
 
     let html = `<div class="month-day-number">${cellDate.getDate()}</div>`;
+    const fetesJour = tcFetesDuJour(cellDateStr);
+    if (fetesJour.length > 0) {
+      html += '<div class="month-day-events">';
+      fetesJour.forEach(function (h) {
+        const t = tcTradition(h.type);
+        html += '<div class="month-event-pill" style="background:' + t.fond
+          + '; color:' + t.couleur + '; font-weight:600;">' + h.emoji + ' '
+          + escapeHTMLSafe(h.name) + '</div>';
+      });
+      html += '</div>';
+    }
     if (dayEvents.length > 0) {
       html += '<div class="month-day-events">';
       const maxShown = 3;
@@ -3707,6 +3718,21 @@ function renderWeek() {
     const weekNum = Math.ceil(((viewDate - jan1) / 86400000 + jan1.getDay() + 1) / 7);
     if (weekNum % 2 === 0 && !sameDay(d, today)) col.classList.add('current-week');
     col.innerHTML = `<div class="week-day-name" data-notranslate>${tcDayShort(i)}</div><div class="week-day-num" data-notranslate>${d.getDate()}</div>`;
+    // Colonne etroite : un point de couleur suffit, le nom de la fete
+    // serait illisible. Le detail reste en vue Jour.
+    const fetes = tcFetesDuJour(fmt(d));
+    if (fetes.length) {
+      const points = document.createElement('div');
+      points.style.cssText = 'display:flex; gap:2px; justify-content:center; margin-top:2px;';
+      points.title = fetes.map(function (h) { return h.name; }).join(', ');
+      fetes.slice(0, 3).forEach(function (h) {
+        const p = document.createElement('span');
+        p.style.cssText = 'width:5px; height:5px; border-radius:50%; background:'
+          + tcTradition(h.type).couleur + ';';
+        points.appendChild(p);
+      });
+      col.appendChild(points);
+    }
     header.appendChild(col);
   }
   for (let h=agendaStartH; h<=agendaEndH; h++) {
@@ -3748,12 +3774,38 @@ function renderWeek() {
   });
 }
 
+/**
+ * Bandeau d une fete affichee dans l agenda.
+ *
+ * Volontairement non cliquable et sans rappel : ces dates ne sont pas
+ * des rendez-vous de l utilisateur, il ne peut ni les modifier ni les
+ * supprimer — seulement se desabonner de la tradition.
+ */
+function tcBandeauFete(h) {
+  const t = tcTradition(h.type);
+  const el = document.createElement('div');
+  el.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 10px;'
+    + ' margin:0 8px 6px; border-radius:8px; font-size:12px; font-weight:600;'
+    + ' background:' + t.fond + '; color:' + t.couleur
+    + '; border-left:3px solid ' + t.couleur + ';';
+  el.innerHTML = '<span data-notranslate>' + h.emoji + '</span><span>'
+    + escapeHTMLSafe(h.name) + '</span>';
+  return el;
+}
+
 function renderDay() {
   const d = viewDate;
   document.getElementById('dayDate').textContent = `${DAYS_FULL[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`;
   document.getElementById('dayName').textContent = sameDay(d, today)?"AUJOURD'HUI":'';
   const body = document.getElementById('dayBody');
   body.innerHTML = '';
+
+  // Les fetes sont des reperes de journee, pas des creneaux horaires :
+  // elles s affichent en bandeau, au-dessus de la grille des heures.
+  tcFetesDuJour(fmt(d)).forEach(function (h) {
+    body.appendChild(tcBandeauFete(h));
+  });
+
   for (let h=agendaStartH; h<=agendaEndH; h++) {
     const row = document.createElement('div');
     row.className = 'day-hour';
@@ -11725,6 +11777,55 @@ const TC_TRADITIONS = [
   { type: 'religieux-bouddhiste',  label: 'Bouddhiste', court: 'Bouddhiste',icone: '☸️',  couleur: '#e8710a', fond: '#fff0e6' }
 ];
 
+/* ── Fetes affichees dans l agenda ────────────────────────────────
+   Un abonnement, pas une copie. Les dates etant calculees, rien n est
+   enregistre : l annee suivante s affiche toute seule, et les
+   sauvegardes de l utilisateur ne contiennent que ses propres donnees. */
+const TC_AGENDA_FETES_KEY = 'tc_fetes_dans_agenda';
+
+function tcTraditionsAgenda() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TC_AGENDA_FETES_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
+}
+
+function tcFeteDansAgenda(type) {
+  return tcTraditionsAgenda().indexOf(type) >= 0;
+}
+
+function tcBasculerFeteAgenda(type) {
+  const l = tcTraditionsAgenda();
+  const i = l.indexOf(type);
+  if (i >= 0) l.splice(i, 1); else l.push(type);
+  try { localStorage.setItem(TC_AGENDA_FETES_KEY, JSON.stringify(l)); } catch (e) {}
+  const t = tcTradition(type);
+  showToast(i >= 0
+    ? '📅 ' + t.label + ' retiré de l’agenda'
+    : '📅 ' + t.label + ' ajouté à l’agenda');
+  renderHolidays();
+  if (typeof render === 'function' && currentPage === 'calendar') render();
+}
+
+/* Le calcul balaie l annee jour par jour : on garde le resultat, sinon
+   il serait refait a chaque changement de vue et de mois. */
+const _tcCacheFetes = {};
+
+function tcFetesDuJour(dateStr) {
+  const abonnees = tcTraditionsAgenda();
+  if (!abonnees.length) return [];
+  const an = parseInt(dateStr.slice(0, 4), 10);
+  if (!_tcCacheFetes[an]) {
+    _tcCacheFetes[an] = {};
+    tcJoursFeries(an).forEach(function (h) {
+      (_tcCacheFetes[an][h.date] = _tcCacheFetes[an][h.date] || []).push(h);
+    });
+  }
+  return (_tcCacheFetes[an][dateStr] || []).filter(function (h) {
+    return abonnees.indexOf(h.type) >= 0;
+  });
+}
+
 const TC_TRADITIONS_KEY = 'tc_traditions_masquees';
 
 function tcTraditionsMasquees() {
@@ -11770,12 +11871,29 @@ function renderHolidays() {
 
   const musulmanesVisibles = sorted.some(h => h.type === 'religieux-musulman');
 
+  const abonnements = presentes.map(function (t) {
+    const dansAgenda = tcFeteDansAgenda(t.type);
+    return '<div onclick="tcBasculerFeteAgenda(\'' + t.type + '\')" style="display:flex; align-items:center; gap:10px; padding:11px 14px; border-top:1px solid var(--border); cursor:pointer;">'
+      + '<span data-notranslate style="font-size:16px;">' + t.icone + '</span>'
+      + '<span style="flex:1; font-size:13.5px; color:var(--text);">' + t.label + '</span>'
+      + '<span style="font-size:12px; font-weight:600; color:' + (dansAgenda ? t.couleur : '#9aa0a6') + ';">'
+      + (dansAgenda ? '✓ Dans l’agenda' : '+ Ajouter') + '</span>'
+      + '</div>';
+  }).join('');
+
   c.innerHTML = `
     <div style="background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; padding:12px 14px; margin-bottom:14px; font-size:12px; color:#5f4500; line-height:1.5;">
       📅 <b>Calendrier ${an}</b> — Jours fériés français et fêtes des principales traditions religieuses.
       ${musulmanesVisibles ? '<br>🌙 Les dates musulmanes suivent le calendrier um al-qura ; l’observation de la lune peut les décaler d’un jour.' : ''}
     </div>
     <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:12px; margin-bottom:4px; -webkit-overflow-scrolling:touch;">${filtre}</div>
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:12px 14px; background:var(--bg-soft);">
+        <div style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--text-sec); letter-spacing:0.4px;">📅 Afficher dans mon agenda</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:3px; line-height:1.4;">Ces dates apparaissent dans vos vues Jour, Semaine et Mois. Rien n’est enregistré : elles se mettent à jour toutes seules chaque année, et ne déclenchent aucun rappel.</div>
+      </div>
+      ${abonnements}
+    </div>
     ${sorted.length === 0 ? `
       <div style="text-align:center; padding:40px 20px; color:#9aa0a6; font-size:13px;">Aucune tradition sélectionnée.<br>Touchez un filtre ci-dessus pour afficher des dates.</div>
     ` : ''}
