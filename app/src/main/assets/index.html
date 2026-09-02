@@ -13122,12 +13122,24 @@ function tcContactsRecus(json) {
     if (!nom) return;
     // Doublon par nom : le carnet Android renvoie une ligne par numéro,
     // une même personne peut donc apparaître plusieurs fois.
-    if (contactsList.find(x => x.name === nom)) { ignores++; return; }
+    const existant = contactsList.find(x => x.name === nom);
+    if (existant) {
+      // Fiche deja presente : on la complete au lieu de l ignorer. Les
+      // carnets importes avant que l e-mail soit lu n en portaient pas,
+      // et leur titulaire restait indetectable comme inscrit.
+      let complete = false;
+      if (!existant.email && c.email) { existant.email = c.email.trim(); complete = true; }
+      if (!existant.phone && c.telephone) { existant.phone = c.telephone.trim(); complete = true; }
+      if (complete) { ajoutes++; } else { ignores++; }
+      return;
+    }
     contactsList.push({
       id: 'contact_' + Date.now() + '_' + i,
       name: nom,
       phone: (c.telephone || '').trim(),
-      email: '',
+      // Renseigne depuis le carnet Android. Etait force a vide, ce qui
+      // rendait indetectable tout contact inscrit avec son e-mail.
+      email: (c.email || '').trim(),
       createdAt: new Date().toISOString()
     });
     ajoutes++;

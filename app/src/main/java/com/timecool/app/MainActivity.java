@@ -433,9 +433,58 @@ public class MainActivity extends Activity {
         JSONArray sortie = new JSONArray();
         Cursor c = null;
         try {
+            /*
+             * Les e-mails vivent dans une table distincte des numeros :
+             * une seule requete ne peut pas ramener les deux. On indexe
+             * donc d'abord les adresses par CONTACT_ID, puis on les
+             * rattache pendant le parcours des numeros.
+             *
+             * Sans cette premiere passe, un contact n'etait transmis
+             * qu'avec son numero. La detection des inscrits ne pouvait
+             * alors rapprocher que par telephone, et un compte cree avec
+             * une adresse e-mail restait invisible dans le carnet, sans
+             * erreur ni indice.
+             */
+            java.util.HashMap<String, String> emailsParContact = new java.util.HashMap<>();
+            Cursor ce = null;
+            try {
+                ce = getContentResolver().query(
+                    ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+                    new String[] {
+                        ContactsContract.CommonDataKinds.Email.CONTACT_ID,
+                        ContactsContract.CommonDataKinds.Email.ADDRESS
+                    },
+                    null, null, null
+                );
+                if (ce != null) {
+                    int iId = ce.getColumnIndex(ContactsContract.CommonDataKinds.Email.CONTACT_ID);
+                    int iAdr = ce.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS);
+                    while (ce.moveToNext()) {
+                        String id = iId >= 0 ? ce.getString(iId) : null;
+                        String adr = iAdr >= 0 ? ce.getString(iAdr) : null;
+                        if (id == null || adr == null || adr.trim().isEmpty()) {
+                            continue;
+                        }
+                        // Premiere adresse rencontree seulement : la
+                        // detection n'en exploite qu'une par contact.
+                        if (!emailsParContact.containsKey(id)) {
+                            emailsParContact.put(id, adr.trim());
+                        }
+                    }
+                }
+            } catch (Exception ignore) {
+                // Carnet sans e-mails, ou fournisseur restrictif : on
+                // continue avec les seuls numeros plutot que d'echouer.
+            } finally {
+                if (ce != null) {
+                    ce.close();
+                }
+            }
+
             c = getContentResolver().query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 new String[] {
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
                     ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                     ContactsContract.CommonDataKinds.Phone.NUMBER
                 },
@@ -443,19 +492,40 @@ public class MainActivity extends Activity {
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
             );
             if (c != null) {
+                int iId = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID);
                 int iNom = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
                 int iTel = c.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
                 while (c.moveToNext()) {
                     String nom = iNom >= 0 ? c.getString(iNom) : null;
                     String tel = iTel >= 0 ? c.getString(iTel) : null;
+                    String id = iId >= 0 ? c.getString(iId) : null;
                     if (nom == null || nom.trim().isEmpty()) {
                         continue;
                     }
+                    String email = id != null ? emailsParContact.get(id) : null;
                     JSONObject o = new JSONObject();
                     o.put("nom", nom.trim());
                     o.put("telephone", tel == null ? "" : tel.trim());
+                    o.put("email", email == null ? "" : email);
                     sortie.put(o);
+                    if (id != null) {
+                        emailsParContact.remove(id);
+                    }
                 }
+            }
+
+            /*
+             * Un contact sans numero n'apparait pas dans la table des
+             * telephones : sans cette seconde passe, une fiche ne
+             * portant qu'une adresse e-mail serait absente du carnet
+             * transmis, donc jamais detectee comme inscrite.
+             */
+            for (java.util.Map.Entry<String, String> reste : emailsParContact.entrySet()) {
+                JSONObject o = new JSONObject();
+                o.put("nom", reste.getValue());
+                o.put("telephone", "");
+                o.put("email", reste.getValue());
+                sortie.put(o);
             }
         } catch (Exception e) {
             appelerJs("tcContactsErreur", e.getClass().getSimpleName());
