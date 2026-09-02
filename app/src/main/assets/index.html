@@ -12,6 +12,16 @@
   --g-purple:#8430ce; --g-teal:#00acc1; --g-orange:#f4511e;
   --text:#202124; --text-sec:#5f6368; --border:#dadce0;
   --bg:#fff; --bg-soft:#f8f9fa; --bg-hover:#f1f3f4;
+
+  /* Code couleur officiel des categories TimeCool.
+     Source unique : le JS lit ces memes valeurs via TC_COULEURS_CATEGORIES.
+     Ne jamais ecrire une de ces couleurs en dur ailleurs. */
+  --cat-travail:#3B7DEA;    --cat-travail-bg:#e8f0fe;
+  --cat-sante:#EA4335;      --cat-sante-bg:#fce8e6;
+  --cat-famille:#F9AB00;    --cat-famille-bg:#fff8e1;
+  --cat-amis:#9334EA;       --cat-amis-bg:#f3e8fd;
+  --cat-sport:#34A853;      --cat-sport-bg:#e8f5e9;
+  --cat-personnel:#00ACC1;  --cat-personnel-bg:#e0f7fa;
 }
 html,body { font-family:'Google Sans',Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); height:100%; overflow:hidden; -webkit-font-smoothing:antialiased; }
 body { display:flex; flex-direction:column; }
@@ -1329,7 +1339,7 @@ if (window.pdfjsLib) {
       <h2 style="font-size:16px; font-weight:600; color:var(--text); margin-top:22px; margin-bottom:8px;">11. Sécurité</h2>
       <ul style="font-size:14px; color:var(--text); margin-left:20px;">
         <li>Chiffrement de bout en bout (E2E) sur les contenus sensibles — en développement, non encore actif.</li>
-        <li>Mots de passe jamais stockés en clair.</li>
+        <li>Mots de passe jamais stockés en clair sur nos serveurs : seule une empreinte Argon2id y est conservée. Une copie du vôtre est en revanche gardée sur votre appareil, pour vous permettre de le consulter dans Paramètres ; elle est effacée à la déconnexion et n'est jamais transmise.</li>
         <li>Accès administrateurs limités, tracés et sécurisés.</li>
         <li>Prestataires techniques avec garanties de sécurité suffisantes.</li>
         <li>Procédures RGPD applicables en cas de violation (notification CNIL si requis).</li>
@@ -1980,11 +1990,38 @@ function closeLegalPage() {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   MÉMORISATION LOCALE DU MOT DE PASSE
+   Le serveur ne conserve qu'une empreinte Argon2id et ne peut donc
+   jamais renvoyer le mot de passe. Pour que la ligne "Mot de passe"
+   des Paramètres puisse l'afficher, on retient sur l'appareil la
+   valeur saisie par l'utilisateur lui-même, aux trois seuls moments
+   où l'application la voit : inscription, connexion, changement.
+   Rien n'est envoyé au serveur, dont le stockage reste inchangé.
+   Même portée que l'appel natif enregistrerIdentifiants() déjà en
+   place : la donnée ne quitte pas l'appareil. Effacée à la
+   déconnexion.
+   ══════════════════════════════════════════════════════════════ */
+const TC_MDP_LOCAL_KEY = 'tc_mdp_local';
+
+function tcMemoriserMotDePasse(motDePasse) {
+  if (!motDePasse) return;
+  try { localStorage.setItem(TC_MDP_LOCAL_KEY, motDePasse); } catch (e) {}
+}
+
+/** Chaîne vide si rien n'est mémorisé — connexion Google, session
+ *  ouverte avant cette version, ou déverrouillage biométrique (qui
+ *  restaure un jeton, jamais le mot de passe). */
+function tcLireMotDePasseMemorise() {
+  try { return localStorage.getItem(TC_MDP_LOCAL_KEY) || ''; } catch (e) { return ''; }
+}
+
+function tcOublierMotDePasse() {
+  try { localStorage.removeItem(TC_MDP_LOCAL_KEY); } catch (e) {}
+}
+
 // ═══ Toggle visibilité mot de passe ═══
-// Utilisé par les champs de saisie : inscription, connexion et modale de
-// changement de mot de passe. La ligne "Mot de passe" des Paramètres n'a pas
-// d'œil : elle n'affiche qu'un gabarit, l'application ne détient pas le mot
-// de passe de l'utilisateur.
+// Champs de saisie : inscription, connexion, modale de changement.
 function togglePasswordVisibility(inputId, btn) {
   const input = document.getElementById(inputId);
   if (!input) return;
@@ -2000,6 +2037,32 @@ function togglePasswordVisibility(inputId, btn) {
     if (eyeHide) eyeHide.style.display = 'none';
   }
 }
+
+/** Œil de la ligne "Mot de passe" dans Paramètres : affiche la valeur
+ *  mémorisée sur l'appareil, la remasque au second clic. */
+function tcBasculerAffichageMotDePasse(btn) {
+  const texte = document.getElementById('mdpAffichageTexte');
+  if (!texte) return;
+  const eyeShow = btn.querySelector('.eye-show');
+  const eyeHide = btn.querySelector('.eye-hide');
+  const estMasque = texte.dataset.visible !== '1';
+  if (estMasque) {
+    texte.textContent = tcLireMotDePasseMemorise();
+    texte.style.letterSpacing = 'normal';
+    texte.style.fontFamily = 'monospace';
+    texte.dataset.visible = '1';
+    if (eyeShow) eyeShow.style.display = 'none';
+    if (eyeHide) eyeHide.style.display = 'block';
+  } else {
+    texte.textContent = '••••••••';
+    texte.style.letterSpacing = '2px';
+    texte.style.fontFamily = '';
+    texte.dataset.visible = '0';
+    if (eyeShow) eyeShow.style.display = 'block';
+    if (eyeHide) eyeHide.style.display = 'none';
+  }
+}
+
 let currentPage = 'calendar';
 let viewDate = new Date();
 let today = new Date();
@@ -4527,6 +4590,7 @@ async function tcModifierMotDePasse() {
   if (!saisie) return;
   try {
     await TC_BACKEND.changerMotDePasse(saisie.nouveau);
+    tcMemoriserMotDePasse(saisie.nouveau);
     showToast('✅ Mot de passe modifié');
     // Jamais le mot de passe lui-même dans le journal — seulement le fait
     // qu'il a changé, avec l'horodatage : c'est justement ce qui permet
@@ -5831,8 +5895,13 @@ function renderSettingsInterne() {
       <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <div style="flex:1; min-width:0;">
           <div style="font-size:14px;">Mot de passe</div>
-          <div style="font-size:12px; color:var(--text-sec); margin-top:4px; letter-spacing:2px;">••••••••</div>
+          <div id="mdpAffichageTexte" data-visible="0" style="font-size:12px; color:var(--text-sec); margin-top:4px; letter-spacing:2px; word-break:break-all;">••••••••</div>
         </div>
+        ${tcLireMotDePasseMemorise() ? `
+        <button type="button" onclick="tcBasculerAffichageMotDePasse(this)" aria-label="Afficher / masquer le mot de passe" style="flex-shrink:0; background:transparent; border:none; padding:8px; cursor:pointer; color:var(--text-sec); display:flex; align-items:center; justify-content:center;">
+          <svg class="eye-show" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+          <svg class="eye-hide" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:none;"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+        </button>` : ''}
         <button onclick="tcModifierMotDePasse()" style="flex-shrink:0; padding:9px 14px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;">Modifier mon mot de passe</button>
       </div>
       ${tcRenderBiometrieToggle()}
@@ -9004,6 +9073,9 @@ async function logoutUser() {
   try {
     localStorage.setItem('timecool_session_active', 'false');
   } catch(e) {}
+  // Le mot de passe retenu pour l'affichage ne doit pas survivre à la
+  // déconnexion : le prochain utilisateur de l'appareil le verrait.
+  tcOublierMotDePasse();
   showAuthFlow('auth-welcome');
   showToast('👋 À bientôt !');
 }
@@ -9656,9 +9728,10 @@ async function tcCreerCompte(preuve) {
     return false;
   }
 
-  // Reflet local du compte. Le mot de passe n'y figure PAS : la
-  // politique de confidentialité interdit de le conserver en clair,
-  // et le serveur en détient l'empreinte Argon2id.
+  // Reflet local du compte. Le mot de passe n'y figure pas : il est
+  // retenu séparément par tcMemoriserMotDePasse() pour l'affichage
+  // dans Paramètres, et effacé à la déconnexion. Le serveur, lui, n'en
+  // détient toujours que l'empreinte Argon2id.
   const account = {
     reference: compte.reference,
     firstname: compte.prenom,
@@ -9680,6 +9753,8 @@ async function tcCreerCompte(preuve) {
   // Popup native du navigateur (Chrome/Edge) proposant d'enregistrer le
   // mot de passe. Il n'est pas conservé par TimeCool.
   tcOfferPasswordSave(account.email, pendingSignup.password, account.firstname + ' ' + account.lastname);
+  // Retenu sur l'appareil pour l'affichage dans Paramètres.
+  tcMemoriserMotDePasse(pendingSignup.password);
 
   document.getElementById('successMessage').innerHTML = `Bonjour <b>${account.firstname}</b> !<br>Bienvenue sur TIMECOOL.`;
   navigateAuth('auth-success');
@@ -9832,6 +9907,10 @@ async function submitLogin() {
   // après Google Sign-In, qui a déjà son propre mécanisme de
   // reconnexion via Credential Manager.
   tcProposerEnregistrementIdentifiants(identifiant, password);
+  // Retenu sur l'appareil pour l'affichage dans Paramètres (voir
+  // tcMemoriserMotDePasse). Même condition que ci-dessus : jamais
+  // après Google Sign-In, qui n'a pas de mot de passe à retenir.
+  tcMemoriserMotDePasse(password);
 
   showWelcomeSplash(userAccount.firstname);
 }
@@ -13518,13 +13597,33 @@ async function translatePageWithGoogle(targetLang, silent) {
 // === MES DISPONIBILITES ===
 var TC_DISPO_KEY = 'timecool_disponibilites';
 
+/* Code couleur officiel des categories. Miroir exact des variables CSS
+   --cat-* declarees dans :root, pour que le JS et le CSS ne puissent pas
+   diverger. Reutilisable partout dans l'app : ne jamais recopier une de
+   ces valeurs en dur. */
+var TC_COULEURS_CATEGORIES = {
+  travail:   { color: '#3B7DEA', bg: '#e8f0fe' },
+  sante:     { color: '#EA4335', bg: '#fce8e6' },
+  famille:   { color: '#F9AB00', bg: '#fff8e1' },
+  amis:      { color: '#9334EA', bg: '#f3e8fd' },
+  sport:     { color: '#34A853', bg: '#e8f5e9' },
+  personnel: { color: '#00ACC1', bg: '#e0f7fa' }
+};
+
+/* L'ordre de ce tableau est l'ordre d'affichage a l'ecran. */
 var DISPO_CATEGORIES = [
-  { id: 'travail',   icon: '\ud83d\udcbc', label: 'Pour mon travail',           color: '#1a73e8', bg: '#e8f0fe' },
-  { id: 'sante',     icon: '\ud83c\udfe5', label: 'Pour ma sant\u00e9',             color: '#ea4335', bg: '#fce8e6' },
-  { id: 'famille',   icon: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67', label: 'Pour ma famille',           color: '#fbbc04', bg: '#fff8e1' },
-  { id: 'amis',      icon: '\ud83c\udf89', label: 'Pour mes amis et loisirs',  color: '#8430ce', bg: '#f3e8fd' },
-  { id: 'personnel', icon: '\u2600\ufe0f', label: 'Pour mon temps libre',      color: '#34a853', bg: '#e8f5e9' }
-];
+  { id: 'travail',   icon: '\ud83d\udcbc', label: 'Pour mon travail' },
+  { id: 'sante',     icon: '\ud83c\udfe5', label: 'Pour ma sant\u00e9' },
+  { id: 'famille',   icon: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67', label: 'Pour ma famille' },
+  { id: 'amis',      icon: '\ud83c\udf89', label: 'Pour mes amis et loisirs' },
+  { id: 'sport',     icon: '\ud83c\udfcb\ufe0f', label: 'Pour mon sport' },
+  { id: 'personnel', icon: '\u2600\ufe0f', label: 'Pour mon temps \u00e0 moi' }
+].map(function (cat) {
+  var c = TC_COULEURS_CATEGORIES[cat.id];
+  cat.color = c.color;
+  cat.bg = c.bg;
+  return cat;
+});
 
 var JOURS_LABELS = ['L','M','M','J','V','S','D'];
 var JOURS_FULL = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
@@ -13534,11 +13633,17 @@ var _dispoOpenCat = null;
 var _dispoEditForm = null;
 
 function loadDispo() {
+  _dispoData = {};
   try {
     var saved = localStorage.getItem(TC_DISPO_KEY);
-    if (saved) { _dispoData = JSON.parse(saved); return; }
-  } catch(e) {}
-  _dispoData = { travail: [], sante: [], famille: [], amis: [], personnel: [] };
+    if (saved) _dispoData = JSON.parse(saved) || {};
+  } catch(e) { _dispoData = {}; }
+  // Les cles manquantes sont completees a partir de DISPO_CATEGORIES : un
+  // utilisateur ayant enregistre des plages avant l'ajout d'une categorie
+  // recupere la nouvelle sans migration ni perte de ses donnees.
+  DISPO_CATEGORIES.forEach(function(cat) {
+    if (!Array.isArray(_dispoData[cat.id])) _dispoData[cat.id] = [];
+  });
 }
 
 function saveDispo() {
