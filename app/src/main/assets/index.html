@@ -782,6 +782,15 @@ if (window.pdfjsLib) {
          est activée sur cet appareil — vide sinon, sans rien à afficher. -->
     <div id="biometrieLoginZone" style="margin-bottom:12px;"></div>
 
+    <!-- Liaison depuis un appareil deja connecte. Affiche uniquement hors
+         de l'APK : dans l'application le telephone EST l'appareil de
+         reference, il n'a personne a qui demander l'approbation. -->
+    <div id="lienAppairageZone" style="margin-bottom:12px; display:none;">
+      <button type="button" onclick="openDevicePairing()" style="width:100%; padding:14px; background:none; border:1.5px solid var(--border); color:var(--text); border-radius:14px; font-size:14px; font-weight:600; cursor:pointer;">
+        📱 Me connecter depuis mon téléphone
+      </button>
+    </div>
+
     <!-- Séparateur -->
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
       <div style="flex:1; height:1px; background:var(--border);"></div>
@@ -4624,6 +4633,19 @@ async function tcModifierMotDePasse() {
    qui échouerait à coup sûr.
    ══════════════════════════════════════════════════════════════ */
 const TC_BIOMETRIE_ACTIVE_KEY = 'tc_biometrie_active';
+
+/**
+ * Le bouton de liaison n'a de sens que hors de l'APK : dans
+ * l'application, le telephone est l'appareil de reference. Sur le web,
+ * c'est au contraire le seul moyen d'entrer sans retaper son mot de
+ * passe. La detection repose sur l'absence du pont natif, jamais sur
+ * l'agent utilisateur, qu'un navigateur peut usurper.
+ */
+function tcAfficherLienAppairage() {
+  const zone = document.getElementById('lienAppairageZone');
+  if (!zone) return;
+  zone.style.display = window.TimeCoolNatif ? 'none' : 'block';
+}
 
 function tcBiometrieDisponibleNatif() {
   // Appel natif synchrone : contrairement aux appels enveloppés dans les
@@ -9085,7 +9107,7 @@ function navigateAuth(pageId) {
   document.querySelectorAll('.auth-page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + pageId).classList.add('active');
   if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
-  if (pageId === 'auth-login') tcAfficherBoutonBiometrie();
+  if (pageId === 'auth-login') { tcAfficherBoutonBiometrie(); tcAfficherLienAppairage(); }
 
   // La page s'affiche en français : la retraduire si une autre langue est choisie
   if (currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
@@ -12696,18 +12718,92 @@ function openDevicePairing() {
 async function startPairingAsNewDevice() {
   const zone = document.getElementById('pairingStatusZone');
   zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px;"><div style="font-size:13px; color:var(--text-sec);">Génération du code…</div></div>';
+  let session;
   try {
-    const { code } = await TC_BACKEND.createPairingSession();
-    zone.innerHTML =
-      '<div style="text-align:center; padding:6px 20px 20px;">' +
-        '<div style="font-size:32px; font-weight:800; letter-spacing:6px; color:var(--g-blue); margin-bottom:8px;">' + code + '</div>' +
-        '<div style="font-size:11.5px; color:var(--text-sec);">Entre ce code sur ton téléphone, dans TimeCool → Paramètres → Lier un nouvel appareil.</div>' +
-      '</div>';
-    // À BRANCHER en vrai : interroger TC_BACKEND.checkPairingStatus toutes les 3s
-    // jusqu'à approbation, puis charger les données du compte sur cet appareil.
-  } catch(e) {
-    zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; color:#9aa0a6;">⏳ Cette fonctionnalité sera bientôt disponible.</div>';
+    session = await TC_BACKEND.createPairingSession();
+  } catch (e) {
+    zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; color:#9aa0a6;">❌ ' + (e.message || 'Génération du code impossible') + '</div>';
+    return;
   }
+
+  zone.innerHTML =
+    '<div style="text-align:center; padding:6px 20px 20px;">' +
+      '<div style="font-size:32px; font-weight:800; letter-spacing:6px; color:var(--g-blue); margin-bottom:8px;">' + session.code + '</div>' +
+      '<div style="font-size:11.5px; color:var(--text-sec); line-height:1.5;">Sur ton téléphone : TimeCool → menu → <b>Lier un nouvel appareil</b>, puis saisis ce code.</div>' +
+      '<div id="pairingAttente" style="margin-top:12px; font-size:11.5px; color:#9aa0a6;">⏳ En attente de validation…</div>' +
+    '</div>';
+
+  tcSuivreAppairage(session.sessionId, session.expire_dans_minutes || 10);
+}
+
+/**
+ * Interroge le serveur toutes les 3 s jusqu'à ce que l'autre appareil
+ * approuve le code, ou que celui-ci expire.
+ *
+ * S'arrête aussi dès que la fenêtre est fermée : sans cette garde, le
+ * minuteur continuerait à tourner en arrière-plan après que
+ * l'utilisateur a abandonné, et tenterait d'écrire dans un DOM disparu.
+ */
+function tcSuivreAppairage(sessionId, minutes) {
+  const echeance = Date.now() + minutes * 60000;
+
+  const minuteur = setInterval(async function () {
+    if (!document.getElementById('devicePairingOv')) { clearInterval(minuteur); return; }
+
+    if (Date.now() > echeance) {
+      clearInterval(minuteur);
+      const att = document.getElementById('pairingAttente');
+      if (att) att.innerHTML = '⌛ Code expiré. <span onclick="startPairingAsNewDevice()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">En générer un nouveau</span>';
+      return;
+    }
+
+    let etat;
+    try {
+      etat = await TC_BACKEND.checkPairingStatus(sessionId);
+    } catch (e) {
+      return; // Coupure réseau passagère : on retentera au prochain tour.
+    }
+
+    if (etat.statut === 'expire') {
+      clearInterval(minuteur);
+      const att = document.getElementById('pairingAttente');
+      if (att) att.innerHTML = '⌛ Code expiré. <span onclick="startPairingAsNewDevice()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">En générer un nouveau</span>';
+      return;
+    }
+
+    if (etat.statut === 'approuve') {
+      clearInterval(minuteur);
+      tcOuvrirSessionAppairee(etat.compte);
+    }
+  }, 3000);
+}
+
+/**
+ * Entrée dans l'application après un appairage approuve. Reproduit
+ * exactement l'état pose par une connexion classique — le jeton lui-même
+ * a deja ete conserve par checkPairingStatus.
+ */
+function tcOuvrirSessionAppairee(compte) {
+  userAccount = {
+    reference: compte.reference,
+    firstname: compte.prenom,
+    lastname: compte.nom,
+    email: compte.email,
+    phone: compte.telephone,
+    zip: compte.code_postal,
+    city: compte.ville,
+    verified: true,
+    createdAt: new Date().toISOString()
+  };
+  try {
+    localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
+    localStorage.setItem('timecool_session_active', 'true');
+  } catch (e) {}
+
+  const ov = document.getElementById('devicePairingOv');
+  if (ov) ov.remove();
+  showToast('✅ Appareil lié');
+  showWelcomeSplash(userAccount.firstname);
 }
 
 async function approvePairingCode() {
