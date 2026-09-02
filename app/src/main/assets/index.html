@@ -11550,19 +11550,101 @@ function tcFetesCalendrier(an, calendrier, cibles, temoin) {
   return trouvees;
 }
 
-/* Fetes musulmanes. Le calendrier um al-qura est celui des administrations
-   et des logiciels ; l observance reelle depend de l observation de la
-   lune et peut decaler d un jour. La page le dit a l utilisateur plutot
-   que de laisser croire a une date certaine. */
+/* ── Calendrier musulman tabulaire ────────────────────────────────
+   Calcule sans Intl : le WebView d Android n embarque pas toujours le
+   calendrier um al-qura, et les fetes disparaissaient alors de la page
+   sans que rien ne l explique.
+
+   Le calendrier tabulaire s ecarte d au plus un jour de l um al-qura —
+   le meme ordre de grandeur que l observation de la lune, deja signale
+   a l utilisateur. */
+
+/** Jour julien d une date gregorienne (a midi). */
+function tcJourJulien(an, mois, jour) {
+  const a = Math.floor((14 - mois) / 12);
+  const y = an + 4800 - a;
+  const m = mois + 12 * a - 3;
+  return jour + Math.floor((153 * m + 2) / 5) + 365 * y
+    + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
+}
+
+/** Date gregorienne correspondant a un jour julien. */
+function tcDepuisJourJulien(jj) {
+  const a = jj + 32044;
+  const b = Math.floor((4 * a + 3) / 146097);
+  const c = a - Math.floor((146097 * b) / 4);
+  const d = Math.floor((4 * c + 3) / 1461);
+  const e = c - Math.floor((1461 * d) / 4);
+  const m = Math.floor((5 * e + 2) / 153);
+  return new Date(
+    100 * b + d - 4800 + Math.floor(m / 10),
+    (m + 3 - 12 * Math.floor(m / 10)) - 1,
+    e - Math.floor((153 * m + 2) / 5) + 1
+  );
+}
+
+/** Date gregorienne d un jour/mois/annee du calendrier musulman tabulaire. */
+function tcDateHegirienne(anH, moisH, jourH) {
+  const jj = jourH + Math.ceil(29.5 * (moisH - 1)) + (anH - 1) * 354
+    + Math.floor((3 + 11 * anH) / 30) + 1948439 - 1;
+  return tcDepuisJourJulien(jj);
+}
+
+/** Annee hegirienne approximative correspondant a une annee gregorienne. */
+function tcAnneeHegirienne(an) {
+  return Math.floor((an - 622) * 33 / 32) + 1;
+}
+
+/* Les six reperes retenus, par mois du calendrier musulman. */
+const TC_FETES_MUSULMANES = [
+  { mois: 1,  jour: 1,  name: 'Nouvel An musulman', emoji: '🌙' },
+  { mois: 1,  jour: 10, name: 'Achoura',            emoji: '🌙' },
+  { mois: 3,  jour: 12, name: 'Mawlid',             emoji: '🌙' },
+  { mois: 9,  jour: 1,  name: 'Début du Ramadan',   emoji: '🌙' },
+  { mois: 10, jour: 1,  name: 'Aïd el-Fitr',        emoji: '🌙' },
+  { mois: 12, jour: 10, name: 'Aïd el-Adha',        emoji: '🌙' }
+];
+
+/**
+ * Fetes musulmanes d une annee gregorienne.
+ *
+ * On balaie trois annees hegiriennes autour de la cible : l annee
+ * musulmane etant plus courte d environ onze jours, une meme fete peut
+ * tomber deux fois dans la meme annee gregorienne — deux Ramadans
+ * commencent ainsi en 2030.
+ */
 function tcFetesMusulmanes(an) {
-  return tcFetesCalendrier(an, 'islamic-umalqura', [
-    { jour: 1,  mois: 'Muharram',     name: 'Nouvel An musulman',    emoji: '🌙', type: 'religieux-musulman' },
-    { jour: 10, mois: 'Muharram',     name: 'Achoura',               emoji: '🌙', type: 'religieux-musulman' },
-    { jour: 12, mois: 'Rabi I',       name: 'Mawlid',                emoji: '🌙', type: 'religieux-musulman' },
-    { jour: 1,  mois: 'Ramadan',      name: 'Début du Ramadan',      emoji: '🌙', type: 'religieux-musulman' },
-    { jour: 1,  mois: 'Shawwal',      name: 'Aïd el-Fitr',           emoji: '🌙', type: 'religieux-musulman' },
-    { jour: 10, mois: 'Dhul-Hijjah',  name: 'Aïd el-Adha',           emoji: '🌙', type: 'religieux-musulman' }
+  // Le calendrier um al-qura d Intl est la reference des administrations.
+  // Quand le navigateur le connait, on l utilise ; sinon on calcule.
+  const parIntl = tcFetesCalendrier(an, 'islamic-umalqura', [
+    { jour: 1,  mois: 'Muharram',    name: 'Nouvel An musulman', emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 10, mois: 'Muharram',    name: 'Achoura',            emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 12, mois: 'Rabi I',      name: 'Mawlid',             emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 1,  mois: 'Ramadan',     name: 'Début du Ramadan',   emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 1,  mois: 'Shawwal',     name: 'Aïd el-Fitr',        emoji: '🌙', type: 'religieux-musulman' },
+    { jour: 10, mois: 'Dhul-Hijjah', name: 'Aïd el-Adha',        emoji: '🌙', type: 'religieux-musulman' }
   ], { date: new Date(2026, 1, 18), mois: 'Ramadan' });
+  if (parIntl.length) return parIntl;
+
+  const base = tcAnneeHegirienne(an);
+  const trouvees = [];
+  // Deux annees hegiriennes de part et d autre : l annee musulmane etant
+  // plus courte de onze jours, une meme fete peut tomber deux fois dans
+  // la meme annee gregorienne, et l approximation de depart peut glisser.
+  for (let h = base - 2; h <= base + 2; h++) {
+    TC_FETES_MUSULMANES.forEach(function (f) {
+      const d = tcDateHegirienne(h, f.mois, f.jour);
+      if (d.getFullYear() === an) {
+        trouvees.push({
+          date: tcIsoDate(d),
+          name: f.name,
+          type: 'religieux-musulman',
+          emoji: f.emoji
+        });
+      }
+    });
+  }
+  return trouvees;
 }
 
 /* Vesak : pleine lune du quatrieme mois lunaire chinois. Les traditions
