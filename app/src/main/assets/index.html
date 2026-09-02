@@ -11411,33 +11411,126 @@ async function deleteBirthday(id) {
 }
 
 // ═══ JOURS FÉRIÉS ═══
-const HOLIDAYS_FR_2026 = [
-  { date: '2026-01-01', name: 'Jour de l\'An', type: 'férié', emoji: '🎉' },
-  { date: '2026-04-06', name: 'Lundi de Pâques', type: 'férié', emoji: '🐰' },
-  { date: '2026-05-01', name: 'Fête du Travail', type: 'férié', emoji: '🌷' },
-  { date: '2026-05-08', name: 'Victoire 1945', type: 'férié', emoji: '🇫🇷' },
-  { date: '2026-05-14', name: 'Ascension', type: 'férié', emoji: '⛪' },
-  { date: '2026-05-25', name: 'Lundi de Pentecôte', type: 'férié', emoji: '⛪' },
-  { date: '2026-07-14', name: 'Fête Nationale', type: 'férié', emoji: '🇫🇷' },
-  { date: '2026-08-15', name: 'Assomption', type: 'férié', emoji: '⛪' },
-  { date: '2026-11-01', name: 'Toussaint', type: 'férié', emoji: '🕯️' },
-  { date: '2026-11-11', name: 'Armistice 1918', type: 'férié', emoji: '🌺' },
-  { date: '2026-12-25', name: 'Noël', type: 'férié', emoji: '🎄' },
-  { date: '2026-03-03', name: 'Pourim', type: 'religieux-juif', emoji: '✡️' },
-  { date: '2026-04-02', name: 'Pessah (1er jour)', type: 'religieux-juif', emoji: '✡️' },
-  { date: '2026-04-08', name: 'Pessah (7e jour)', type: 'religieux-juif', emoji: '✡️' },
-  { date: '2026-05-22', name: 'Chavouot', type: 'religieux-juif', emoji: '✡️' },
-  { date: '2026-09-12', name: 'Roch Hachana', type: 'religieux-juif', emoji: '✡️' },
-  { date: '2026-09-21', name: 'Yom Kippour', type: 'religieux-juif', emoji: '✡️' },
-  { date: '2026-09-26', name: 'Souccot (1er jour)', type: 'religieux-juif', emoji: '✡️' },
-  { date: '2026-12-04', name: 'Hanoucca (1er jour)', type: 'religieux-juif', emoji: '🕎' }
+/* ── Jours feries : calcules, jamais ecrits en dur ────────────────
+   Une table annuelle se perime en silence. Ici tout se deduit de
+   l annee demandee, donc la page reste juste sans intervention. */
+
+/** Dimanche de Paques (algorithme de Meeus, calendrier gregorien). */
+function tcPaques(an) {
+  const a = an % 19, b = Math.floor(an / 100), c = an % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mois = Math.floor((h + l - 7 * m + 114) / 31);
+  const jour = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(an, mois - 1, jour);
+}
+
+function tcIsoDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function tcDatePlus(d, n) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+/** Les onze jours feries legaux francais pour une annee donnee. */
+function tcFeriesFrancais(an) {
+  const p = tcPaques(an);
+  return [
+    { date: an + '-01-01', name: 'Jour de l\'An', type: 'férié', emoji: '🎉' },
+    { date: tcIsoDate(tcDatePlus(p, 1)), name: 'Lundi de Pâques', type: 'férié', emoji: '🐰' },
+    { date: an + '-05-01', name: 'Fête du Travail', type: 'férié', emoji: '🌷' },
+    { date: an + '-05-08', name: 'Victoire 1945', type: 'férié', emoji: '🇫🇷' },
+    { date: tcIsoDate(tcDatePlus(p, 39)), name: 'Ascension', type: 'férié', emoji: '⛪' },
+    { date: tcIsoDate(tcDatePlus(p, 50)), name: 'Lundi de Pentecôte', type: 'férié', emoji: '⛪' },
+    { date: an + '-07-14', name: 'Fête Nationale', type: 'férié', emoji: '🇫🇷' },
+    { date: an + '-08-15', name: 'Assomption', type: 'férié', emoji: '⛪' },
+    { date: an + '-11-01', name: 'Toussaint', type: 'férié', emoji: '🕯️' },
+    // Le bleuet n a pas d emoji ; la medaille evoque la commemoration
+    // mieux qu une fleur exotique.
+    { date: an + '-11-11', name: 'Armistice 1918', type: 'férié', emoji: '🎖️' },
+    { date: an + '-12-25', name: 'Noël', type: 'férié', emoji: '🎄' }
+  ];
+}
+
+/* Fetes juives, reperees par leur date hebraique. Le navigateur sait
+   convertir depuis le calendrier hebraique : on parcourt l annee et on
+   retient les jours qui correspondent. Plus lourd qu une table, mais
+   juste pour toutes les annees, sans rien a maintenir.
+
+   Les dates retenues sont celles du JOUR de la fete. Chacune commence
+   en realite la veille au coucher du soleil : c est une convention
+   assumee, la meme pour toutes les entrees. */
+const TC_FETES_HEBRAIQUES = [
+  { jour: 14, mois: 'Adar',   name: 'Pourim',              emoji: '✡️' },
+  { jour: 15, mois: 'Nisan',  name: 'Pessah (1er jour)',   emoji: '✡️' },
+  { jour: 21, mois: 'Nisan',  name: 'Pessah (7e jour)',    emoji: '✡️' },
+  { jour: 6,  mois: 'Sivan',  name: 'Chavouot',            emoji: '✡️' },
+  { jour: 1,  mois: 'Tishri', name: 'Roch Hachana',        emoji: '✡️' },
+  { jour: 10, mois: 'Tishri', name: 'Yom Kippour',         emoji: '✡️' },
+  { jour: 15, mois: 'Tishri', name: 'Souccot (1er jour)',  emoji: '✡️' },
+  { jour: 25, mois: 'Kislev', name: 'Hanoucca (1er jour)', emoji: '🕎' }
 ];
+
+/**
+ * Le mois hebraique lu correspond-il a celui attendu ?
+ *
+ * Une annee embolismique compte deux mois d Adar. Pourim se celebre
+ * alors le 14 Adar II, jamais en Adar I : une correspondance par simple
+ * prefixe faisait apparaitre la fete deux fois, a un mois d intervalle.
+ */
+function tcMoisHebreuCorrespond(lu, attendu) {
+  if (attendu !== 'Adar') return lu.indexOf(attendu) === 0;
+  const propre = lu.trim();
+  return propre === 'Adar' || propre === 'Adar II';
+}
+
+function tcFetesJuives(an) {
+  let format;
+  try {
+    format = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long' });
+    // Un navigateur sans calendrier hebraique retomberait sur le
+    // gregorien sans prevenir : on verifie sur une date connue.
+    const controle = format.formatToParts(new Date(2026, 8, 12));
+    const moisControle = controle.find(p => p.type === 'month').value;
+    if (!/Tishri/i.test(moisControle)) return [];
+  } catch (e) {
+    return [];   // Fetes juives absentes plutot qu erronees.
+  }
+
+  const trouvees = [];
+  const d = new Date(an, 0, 1);
+  while (d.getFullYear() === an) {
+    const parts = format.formatToParts(d);
+    const jour = parseInt(parts.find(p => p.type === 'day').value, 10);
+    const mois = parts.find(p => p.type === 'month').value;
+    TC_FETES_HEBRAIQUES.forEach(function (f) {
+      if (f.jour === jour && tcMoisHebreuCorrespond(mois, f.mois)) {
+        trouvees.push({ date: tcIsoDate(d), name: f.name, type: 'religieux-juif', emoji: f.emoji });
+      }
+    });
+    d.setDate(d.getDate() + 1);
+  }
+  return trouvees;
+}
+
+/** Tous les jours feries et fetes d une annee, tries par date. */
+function tcJoursFeries(an) {
+  return tcFeriesFrancais(an)
+    .concat(tcFetesJuives(an))
+    .sort(function (a, b) { return a.date.localeCompare(b.date); });
+}
 
 function renderHolidays() {
   const c = document.getElementById('holidaysList');
   const todayD = new Date();
   const todayStr = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,'0')}-${String(todayD.getDate()).padStart(2,'0')}`;
-  const sorted = [...HOLIDAYS_FR_2026].sort((a, b) => a.date.localeCompare(b.date));
+  // L annee affichee suit la date du jour : la page reste juste au
+  // passage a la nouvelle annee, sans mise a jour de l application.
+  const sorted = tcJoursFeries(todayD.getFullYear());
   const upcoming = sorted.filter(h => h.date >= todayStr);
   const past = sorted.filter(h => h.date < todayStr);
 
