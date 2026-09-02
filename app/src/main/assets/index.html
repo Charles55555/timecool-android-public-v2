@@ -13601,6 +13601,51 @@ function refreshAiconfigPage() {
   showToast('🔄 Page actualisée');
 }
 
+/* Tri de la liste des inscrits. Le choix n est pas conserve entre deux
+   ouvertures : c est un outil de consultation, pas un reglage. */
+let _tcTriUsers = 'date_desc';
+
+const TC_TRIS_USERS = [
+  { id: 'date_desc',  label: 'Plus récents' },
+  { id: 'date_asc',   label: 'Plus anciens' },
+  { id: 'alpha',      label: 'A → Z' },
+  { id: 'provenance', label: 'Provenance' }
+];
+
+function tcTrierUsers(users) {
+  const copie = users.slice();   // Jamais trier le tableau d origine.
+  const nom = (u) => ((u.lastname || '') + ' ' + (u.firstname || '')).trim().toLowerCase();
+  const quand = (u) => {
+    const t = new Date(u.registeredAt).getTime();
+    return isNaN(t) ? 0 : t;   // Date absente ou illisible : rangee en dernier.
+  };
+
+  switch (_tcTriUsers) {
+    case 'date_asc':
+      return copie.sort((a, b) => quand(a) - quand(b));
+    case 'alpha':
+      // localeCompare : sans lui, « Élodie » passerait apres « Zoe ».
+      return copie.sort((a, b) => nom(a).localeCompare(nom(b), 'fr'));
+    case 'provenance':
+      return copie.sort((a, b) => {
+        const pa = tcLibelleProvenance(a), pb = tcLibelleProvenance(b);
+        // « Non renseigne » toujours en fin de liste, quel que soit
+        // l ordre alphabetique, pour ne pas noyer les provenances utiles.
+        const va = pa === 'Non renseigné' ? 1 : 0;
+        const vb = pb === 'Non renseigné' ? 1 : 0;
+        if (va !== vb) return va - vb;
+        return pa.localeCompare(pb, 'fr') || nom(a).localeCompare(nom(b), 'fr');
+      });
+    default:
+      return copie.sort((a, b) => quand(b) - quand(a));
+  }
+}
+
+function tcChangerTriUsers(id) {
+  _tcTriUsers = id;
+  renderUsersTab();
+}
+
 function renderUsersTab() {
   const c = document.getElementById('aiconfigContent');
   if (!c) return;
@@ -13623,7 +13668,7 @@ function renderUsersTab() {
 
   const userRows = users.length === 0
     ? '<div style="text-align:center; padding:40px; color:#9aa0a6; font-size:14px;">Aucun utilisateur inscrit pour le moment</div>'
-    : users.map(u => {
+    : tcTrierUsers(users).map(u => {
         const d = new Date(u.registeredAt);
         const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
         const isBlocked = u.blocked === true;
@@ -13652,7 +13697,14 @@ function renderUsersTab() {
         <div style="font-size:18px; font-weight:700; color:#1a1a2e;">👥 Utilisateurs inscrits</div>
         <button onclick="exportUsersCsv()" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⬇️ Export CSV</button>
       </div>
-      <div style="font-size:13px; color:#5f6368; margin-bottom:16px;">${users.length} utilisateur${users.length > 1 ? 's' : ''} enregistré${users.length > 1 ? 's' : ''}</div>
+      <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">${users.length} utilisateur${users.length > 1 ? 's' : ''} enregistré${users.length > 1 ? 's' : ''}</div>
+      ${users.length > 1 ? `
+      <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:10px; margin-bottom:6px; -webkit-overflow-scrolling:touch;">
+        <span style="flex-shrink:0; align-self:center; font-size:12px; color:#9aa0a6; margin-right:2px;">Trier :</span>
+        ${TC_TRIS_USERS.map(t => `
+          <button onclick="tcChangerTriUsers('${t.id}')" style="flex-shrink:0; padding:6px 12px; border-radius:16px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; border:1px solid ${_tcTriUsers === t.id ? 'var(--cat-travail)' : '#e8eaed'}; background:${_tcTriUsers === t.id ? 'var(--cat-travail)' : '#fff'}; color:${_tcTriUsers === t.id ? '#fff' : '#5f6368'};">${t.label}</button>
+        `).join('')}
+      </div>` : ''}
       ${userRows}
     </div>
   `;
