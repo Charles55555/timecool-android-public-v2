@@ -40,6 +40,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -70,6 +71,10 @@ public class MainActivity extends Activity {
     private static final int REQ_CONTACTS = 1002;
     private static final int REQ_LOCALISATION = 1003;
     private static final int REQ_EXPORT_FICHIER = 1004;
+    private static final int REQ_CAMERA = 1005;
+
+    /** Demande de camera venue de la WebView, en attente de la reponse Android. */
+    private PermissionRequest requeteCameraEnAttente;
 
     /** Prompt de géolocalisation en attente d'une réponse à la permission runtime. */
     private String origineLocalisationEnAttente;
@@ -212,6 +217,45 @@ public class MainActivity extends Activity {
             }
 
             /*
+             * Sans cet override, la WebView refuse toute demande de camera
+             * de la page : getUserMedia echoue silencieusement et le
+             * scanner de QR reste noir, sans erreur exploitable.
+             *
+             * Deux autorisations distinctes sont necessaires : celle
+             * d'Android (permission systeme) et celle de la WebView. On
+             * n'accorde la seconde qu'une fois la premiere obtenue.
+             */
+            @Override
+            public void onPermissionRequest(final PermissionRequest requete) {
+                boolean veutCamera = false;
+                for (String r : requete.getResources()) {
+                    if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) {
+                        veutCamera = true;
+                        break;
+                    }
+                }
+                if (!veutCamera) {
+                    requete.deny();
+                    return;
+                }
+                if (checkSelfPermission(android.Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) {
+                    requete.grant(new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+                    return;
+                }
+                // Une demande deja en attente doit etre refusee avant d'en
+                // ouvrir une autre, sinon son callback resterait sans reponse.
+                if (requeteCameraEnAttente != null) {
+                    requeteCameraEnAttente.deny();
+                }
+                requeteCameraEnAttente = requete;
+                requestPermissions(
+                    new String[] { android.Manifest.permission.CAMERA },
+                    REQ_CAMERA
+                );
+            }
+
+            /*
              * Sans cet override, la WebView répond toujours "refusé" à
              * navigator.geolocation, même quand la permission Android est
              * déjà accordée : le prompt WebView est un préalable distinct
@@ -278,6 +322,25 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int requete, String[] permissions, int[] resultats) {
+        if (requete == REQ_CAMERA) {
+            boolean accorde = resultats.length > 0
+                && resultats[0] == PackageManager.PERMISSION_GRANTED;
+            if (requeteCameraEnAttente != null) {
+                if (accorde) {
+                    requeteCameraEnAttente.grant(
+                        new String[] { PermissionRequest.RESOURCE_VIDEO_CAPTURE });
+                } else {
+                    // Toujours repondre, y compris sur refus : sans cela la
+                    // page attendrait indefiniment un flux qui ne viendra pas.
+                    requeteCameraEnAttente.deny();
+                }
+                requeteCameraEnAttente = null;
+            }
+            if (!accorde) {
+                appelerJs(tcCameraRefusee, );
+            }
+            return;
+        }
         if (requete == REQ_CONTACTS) {
             boolean accorde = resultats.length > 0
                 && resultats[0] == PackageManager.PERMISSION_GRANTED;

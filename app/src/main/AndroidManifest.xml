@@ -9,6 +9,12 @@
          pleinement utilisable si la permission est refusée. -->
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
 
+    <!-- Lecture du QR code d'appairage affiche par TimeCool Web.
+         La camera n'est pas requise : un appareil sans camera installe
+         quand meme l'application et saisit le code a 6 chiffres. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+
     <!-- Position, demandée à l'exécution et uniquement quand la page
          appelle navigator.geolocation (recherche de professionnels à
          proximité, estimation de trajet). Un refus dégrade la fonction

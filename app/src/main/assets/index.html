@@ -1697,6 +1697,15 @@ if (window.pdfjsLib) {
     <span style="color:var(--text-sec); font-size:16px;">›</span>
   </div>
 
+  <!-- Egalement accessible depuis Parametres. Duplique ici volontairement :
+       lier son ordinateur est le geste d un nouvel utilisateur, il ne doit
+       pas avoir a le chercher. -->
+  <div onclick="closeAccountMenu(); openDevicePairing();" style="padding:14px 20px; cursor:pointer; display:flex; align-items:center; gap:14px; font-size:14px; color:var(--text); border-top:1px solid #f1f3f4;" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='transparent'">
+    <span style="font-size:20px; width:24px; text-align:center;">🖥️</span>
+    <span style="flex:1;">Lier un nouvel appareil</span>
+    <span style="color:var(--text-sec); font-size:16px;">›</span>
+  </div>
+
   <div onclick="closeAccountMenu(); openLegalPage('privacy', 'calendar', false);" style="padding:14px 20px; cursor:pointer; display:flex; align-items:center; gap:14px; font-size:14px; color:var(--text); border-top:1px solid #f1f3f4;" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background='transparent'">
     <span style="font-size:20px; width:24px; text-align:center;">🛡️</span>
     <span style="flex:1;">Confidentialité</span>
@@ -3766,6 +3775,10 @@ function openMsgSettings() {
     '<div class="msg-sheet-i" onclick="_closeAllSheets();openMsgHelp()"><span>❓</span>Aide &amp; contact</div>' +
     '</div>';
   document.body.appendChild(ov);
+  // Le scanner n a de sens que dans l APK : c est le navigateur qui
+  // affiche le QR, et il n a pas la camera arriere d un telephone.
+  const zs = document.getElementById('scanQRZone');
+  if (zs) zs.style.display = window.TimeCoolNatif ? 'block' : 'none';
 }
 
 function openMsgGroupsList() {
@@ -12710,6 +12723,9 @@ function openDevicePairing() {
     '<div style="padding:0 20px 16px; font-size:12px; color:var(--text-sec); line-height:1.5;">Ouvre TimeCool sur ton PC ou Mac dans un navigateur, puis choisis une option ci-dessous.</div>' +
 
     '<div style="padding:0 20px 10px;"><button onclick="startPairingAsNewDevice()" style="width:100%; padding:13px; background:var(--g-blue); color:#fff; border:none; border-radius:12px; font-size:13.5px; font-weight:700; cursor:pointer;">📺 Ce PC est le nouvel appareil — afficher mon code</button></div>' +
+    '<div id="scanQRZone" style="padding:0 20px 10px; display:none;">' +
+      '<button onclick="tcOuvrirScannerQR()" style="width:100%; padding:13px; background:none; border:1.5px solid var(--g-blue); color:var(--g-blue); border-radius:12px; font-size:13.5px; font-weight:700; cursor:pointer;">📷 Scanner le QR de l’ordinateur</button>' +
+    '</div>' +
     '<div style="padding:0 20px 6px; text-align:center; font-size:11px; color:#9aa0a6;">— ou —</div>' +
     '<div style="padding:0 20px 20px;">' +
       '<input type="text" id="pairingCodeInput" placeholder="Code à 6 chiffres affiché sur l\'autre appareil" maxlength="6" style="width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:16px; font-family:inherit; text-align:center; letter-spacing:3px; margin-bottom:8px;">' +
@@ -12718,6 +12734,38 @@ function openDevicePairing() {
     '<div id="pairingStatusZone"></div>' +
     '</div>';
   document.body.appendChild(ov);
+}
+
+/* Les deux bibliotheques QR ne sont chargees qu a l ouverture de l ecran
+   d appairage : les embarquer dans la page couterait 150 Ko a chaque
+   demarrage pour une fonction utilisee une fois par appareil. */
+const TC_QR_LIBS = { gen: 'qrgen.min.js', lect: 'jsqr.min.js' };
+const _tcLibs = {};
+
+function tcChargerLib(fichier) {
+  if (_tcLibs[fichier]) return _tcLibs[fichier];
+  _tcLibs[fichier] = new Promise(function (ok, ko) {
+    const sc = document.createElement('script');
+    sc.src = fichier;
+    sc.onload = ok;
+    sc.onerror = function () { delete _tcLibs[fichier]; ko(new Error('lib absente')); };
+    document.head.appendChild(sc);
+  });
+  return _tcLibs[fichier];
+}
+
+/** Dessine le code d appairage en QR. Silencieux en cas d echec : le code
+ *  a 6 chiffres reste affiche au-dessus, l appairage marche sans le QR. */
+async function tcDessinerQR(conteneur, texte) {
+  try {
+    await tcChargerLib(TC_QR_LIBS.gen);
+    const qr = qrcode(0, 'M');
+    qr.addData(texte);
+    qr.make();
+    conteneur.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+    const svg = conteneur.querySelector('svg');
+    if (svg) { svg.style.width = '180px'; svg.style.height = '180px'; }
+  } catch (e) { conteneur.innerHTML = ''; }
 }
 
 async function startPairingAsNewDevice() {
@@ -12735,8 +12783,12 @@ async function startPairingAsNewDevice() {
     '<div style="text-align:center; padding:6px 20px 20px;">' +
       '<div style="font-size:32px; font-weight:800; letter-spacing:6px; color:var(--g-blue); margin-bottom:8px;">' + session.code + '</div>' +
       '<div style="font-size:11.5px; color:var(--text-sec); line-height:1.5;">Sur ton téléphone : TimeCool → menu → <b>Lier un nouvel appareil</b>, puis saisis ce code.</div>' +
+      '<div id="pairingQR" style="display:flex; justify-content:center; margin:14px 0 4px;"></div>' +
       '<div id="pairingAttente" style="margin-top:12px; font-size:11.5px; color:#9aa0a6;">⏳ En attente de validation…</div>' +
     '</div>';
+
+  const zoneQR = document.getElementById('pairingQR');
+  if (zoneQR) tcDessinerQR(zoneQR, session.code);
 
   tcSuivreAppairage(session.sessionId, session.expire_dans_minutes || 10);
 }
@@ -12809,6 +12861,96 @@ function tcOuvrirSessionAppairee(compte) {
   if (ov) ov.remove();
   showToast('✅ Appareil lié');
   showWelcomeSplash(userAccount.firstname);
+}
+
+/* Scanner de QR, cote telephone. Ouvre la camera arriere, lit l image
+   8 fois par seconde et approuve des qu un code a 6 chiffres est reconnu.
+   Le flux ne quitte jamais l appareil : la lecture est locale. */
+let _tcFlux = null;
+let _tcScanTimer = null;
+
+async function tcOuvrirScannerQR() {
+  const zone = document.getElementById('pairingStatusZone');
+  if (!zone) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('❌ Caméra indisponible sur cet appareil');
+    return;
+  }
+
+  zone.innerHTML =
+    '<div style="padding:6px 20px 20px;">' +
+      '<div style="position:relative; border-radius:14px; overflow:hidden; background:#000;">' +
+        '<video id="tcScanVideo" playsinline muted style="width:100%; display:block;"></video>' +
+        '<div style="position:absolute; inset:14%; border:3px solid rgba(255,255,255,.85); border-radius:12px; pointer-events:none;"></div>' +
+      '</div>' +
+      '<div style="text-align:center; margin-top:10px; font-size:12px; color:var(--text-sec);">Vise le QR affiché sur l’écran de ton ordinateur</div>' +
+      '<button onclick="tcFermerScanner()" style="width:100%; margin-top:10px; padding:11px; background:none; border:1.5px solid var(--border); border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">Annuler</button>' +
+    '</div>';
+
+  let lire;
+  try {
+    await tcChargerLib(TC_QR_LIBS.lect);
+    lire = window.jsQR;
+  } catch (e) { tcScanEchec('Lecteur de QR indisponible'); return; }
+
+  try {
+    _tcFlux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  } catch (e) {
+    tcScanEchec('Accès à la caméra refusé — saisis le code à 6 chiffres');
+    return;
+  }
+
+  const video = document.getElementById('tcScanVideo');
+  if (!video) { tcFermerScanner(); return; }
+  video.srcObject = _tcFlux;
+  await video.play().catch(function () {});
+
+  const toile = document.createElement('canvas');
+  const ctx = toile.getContext('2d', { willReadFrequently: true });
+
+  _tcScanTimer = setInterval(function () {
+    if (!video.videoWidth) return;
+    toile.width = video.videoWidth;
+    toile.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, toile.width, toile.height);
+    let res;
+    try {
+      res = lire(ctx.getImageData(0, 0, toile.width, toile.height).data, toile.width, toile.height);
+    } catch (e) { return; }
+    if (!res || !res.data) return;
+    const m = res.data.match(/[0-9]{6}/);
+    if (!m) return;
+    tcFermerScanner();
+    tcApprouverCodeScanne(m[0]);
+  }, 125);
+}
+
+function tcScanEchec(message) {
+  tcFermerScanner();
+  const zone = document.getElementById('pairingStatusZone');
+  if (zone) zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; color:#9aa0a6;">' + message + '</div>';
+}
+
+/** Libere la camera. Sans cela le voyant reste allume et le flux tourne. */
+function tcFermerScanner() {
+  if (_tcScanTimer) { clearInterval(_tcScanTimer); _tcScanTimer = null; }
+  if (_tcFlux) { _tcFlux.getTracks().forEach(function (t) { t.stop(); }); _tcFlux = null; }
+}
+
+async function tcApprouverCodeScanne(code) {
+  const zone = document.getElementById('pairingStatusZone');
+  try {
+    await TC_BACKEND.approvePairing(code);
+    if (zone) zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:13px; color:var(--g-green); font-weight:600;">✅ Appareil lié avec succès</div>';
+    showToast('✅ Appareil lié');
+  } catch (e) {
+    if (zone) zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; color:#9aa0a6;">❌ ' + (e.message || 'Code invalide ou expiré') + '</div>';
+  }
+}
+
+/** Appelee par MainActivity quand Android refuse la permission camera. */
+function tcCameraRefusee() {
+  tcScanEchec('Accès à la caméra refusé — saisis le code à 6 chiffres');
 }
 
 async function approvePairingCode() {
