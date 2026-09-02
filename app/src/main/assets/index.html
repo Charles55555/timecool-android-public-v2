@@ -11786,7 +11786,7 @@ const TC_TRADITIONS = [
   { type: 'férié',                 label: 'Fériés',     court: 'Férié',     icone: '🇫🇷', couleur: '#1a73e8', fond: '#e8f0fe' },
   { type: 'religieux-chretien',    label: 'Chrétien',   court: 'Chrétien',  icone: '✝️',  couleur: '#8430ce', fond: '#f3e8fd' },
   { type: 'religieux-orthodoxe',   label: 'Orthodoxe',  court: 'Orthodoxe', icone: '☦️',  couleur: '#0b8043', fond: '#e6f4ea' },
-  { type: 'religieux-juif',        label: 'Juif',       court: 'Juif',      icone: '✡️',  couleur: '#9334ea', fond: '#f3e8fd' },
+  { type: 'religieux-juif',        label: 'Hébraïque',  court: 'Hébraïque',      icone: '✡️',  couleur: '#9334ea', fond: '#f3e8fd' },
   { type: 'religieux-musulman',    label: 'Musulman',   court: 'Musulman',  icone: '🌙',  couleur: '#00796b', fond: '#e0f2f1' },
   { type: 'religieux-bouddhiste',  label: 'Bouddhiste', court: 'Bouddhiste',icone: '☸️',  couleur: '#e8710a', fond: '#fff0e6' }
 ];
@@ -11866,13 +11866,23 @@ function renderHolidays() {
   const todayD = new Date();
   const an = todayD.getFullYear();
   const todayStr = `${an}-${String(todayD.getMonth()+1).padStart(2,'0')}-${String(todayD.getDate()).padStart(2,'0')}`;
-  // L annee affichee suit la date du jour : la page reste juste au
-  // passage a la nouvelle annee, sans mise a jour de l application.
-  const toutes = tcJoursFeries(an);
+  // Douze mois glissants, pas l annee civile. Les fetes d une tradition
+  // ne sont pas reparties dans l annee : les six fetes musulmanes de 2026
+  // tombent toutes entre fevrier et aout, donc des septembre la tradition
+  // paraissait vide alors que sa prochaine date — Ramadan, fevrier 2027 —
+  // existait deja. On prend l annee en cours et la suivante, puis on coupe
+  // a un an devant.
+  const horizon = new Date(todayD.getFullYear() + 1, todayD.getMonth(), todayD.getDate());
+  const horizonStr = `${horizon.getFullYear()}-${String(horizon.getMonth()+1).padStart(2,'0')}-${String(horizon.getDate()).padStart(2,'0')}`;
+  const toutes = tcJoursFeries(an).concat(tcJoursFeries(an + 1));
   const masquees = tcTraditionsMasquees();
   const sorted = toutes.filter(h => masquees.indexOf(h.type) < 0);
-  const upcoming = sorted.filter(h => h.date >= todayStr);
-  const past = sorted.filter(h => h.date < todayStr);
+  const upcoming = sorted.filter(h => h.date >= todayStr && h.date < horizonStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  // Les passes restent bornes a l annee en cours : au-dela, la liste
+  // s allonge sans rien apprendre.
+  const past = sorted.filter(h => h.date < todayStr)
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   // Une tradition dont aucune fete n a pu etre calculee — moteur sans
   // le calendrier correspondant — n a pas a figurer dans le filtre.
@@ -11897,7 +11907,7 @@ function renderHolidays() {
 
   c.innerHTML = `
     <div style="background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; padding:12px 14px; margin-bottom:14px; font-size:12px; color:#5f4500; line-height:1.5;">
-      📅 <b>Calendrier ${an}</b> — Jours fériés français et fêtes des principales traditions religieuses.
+      📅 <b>Les 12 prochains mois</b> — Jours fériés français et fêtes des principales traditions religieuses.
       ${musulmanesVisibles ? '<br>🌙 Les dates musulmanes suivent le calendrier um al-qura ; l’observation de la lune peut les décaler d’un jour.' : ''}
     </div>
     <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:12px; margin-bottom:4px; -webkit-overflow-scrolling:touch;">${filtre}</div>
@@ -11926,7 +11936,12 @@ function renderHolidayItem(h, todayD, isPast=false) {
   const [y, mo, d] = h.date.split('-').map(Number);
   const date = new Date(y, mo-1, d);
   const daysUntil = Math.ceil((date - todayD) / (1000*60*60*24));
-  const dateStr = date.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  // L annee n est affichee que lorsqu elle differe de l annee en cours :
+  // la fenetre glissante deborde sur l annee suivante, et « lundi 8 février »
+  // sans millesime laisserait croire a une date deja passee.
+  const opts = {weekday:'long', day:'numeric', month:'long'};
+  if (y !== todayD.getFullYear()) opts.year = 'numeric';
+  const dateStr = date.toLocaleDateString('fr-FR', opts);
   // Chaque tradition a sa couleur et son icone : « Religieux » en violet
   // pour tout le monde ne disait pas de quelle fete il s agissait.
   const trad = tcTradition(h.type);
