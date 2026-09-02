@@ -3718,20 +3718,34 @@ function renderWeek() {
     const weekNum = Math.ceil(((viewDate - jan1) / 86400000 + jan1.getDay() + 1) / 7);
     if (weekNum % 2 === 0 && !sameDay(d, today)) col.classList.add('current-week');
     col.innerHTML = `<div class="week-day-name" data-notranslate>${tcDayShort(i)}</div><div class="week-day-num" data-notranslate>${d.getDate()}</div>`;
-    // Colonne etroite : un point de couleur suffit, le nom de la fete
-    // serait illisible. Le detail reste en vue Jour.
+    // Le nom de la fete, pas un simple point : celui-ci obligeait a
+    // ouvrir la vue Jour pour savoir de quoi il s agissait. La colonne
+    // est etroite, le texte est donc petit et coupe si besoin — mais il
+    // reste lisible, et la journee entiere s ouvre au toucher.
     const fetes = tcFetesDuJour(fmt(d));
+    fetes.slice(0, 2).forEach(function (h) {
+      const t = tcTradition(h.type);
+      const chip = document.createElement('div');
+      chip.style.cssText = 'margin:2px 2px 0; padding:1px 3px; border-radius:4px;'
+        + ' font-size:8.5px; font-weight:700; line-height:1.25; text-align:center;'
+        + ' overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'
+        + ' background:' + t.couleur + '; color:#fff;';
+      chip.title = h.name;
+      chip.textContent = h.name;
+      col.appendChild(chip);
+    });
+    if (fetes.length > 2) {
+      const reste = document.createElement('div');
+      reste.style.cssText = 'font-size:8px; color:var(--text-sec); text-align:center; margin-top:1px;';
+      reste.textContent = '+' + (fetes.length - 2);
+      col.appendChild(reste);
+    }
+    // L en-tete devient cliquable des qu il porte une fete : c est le
+    // geste naturel pour en lire le nom complet.
     if (fetes.length) {
-      const points = document.createElement('div');
-      points.style.cssText = 'display:flex; gap:2px; justify-content:center; margin-top:2px;';
-      points.title = fetes.map(function (h) { return h.name; }).join(', ');
-      fetes.slice(0, 3).forEach(function (h) {
-        const p = document.createElement('span');
-        p.style.cssText = 'width:5px; height:5px; border-radius:50%; background:'
-          + tcTradition(h.type).couleur + ';';
-        points.appendChild(p);
-      });
-      col.appendChild(points);
+      col.style.cursor = 'pointer';
+      const jour = new Date(d);
+      col.onclick = function () { viewDate = jour; switchView('day', true); };
     }
     header.appendChild(col);
   }
