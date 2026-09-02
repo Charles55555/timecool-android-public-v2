@@ -12699,6 +12699,11 @@ function openDevicePairing() {
   const ov = document.createElement('div');
   ov.className = 'msg-sheet-ov';
   ov.id = 'devicePairingOv';
+  // .msg-sheet-ov vaut 60, mais .auth-page vaut 9999 : ouverte depuis
+  // l'ecran de connexion, la fenetre passait DERRIERE lui. On la place
+  // au-dessus de l'authentification, sous les modales (10100) et les
+  // toasts (10200). Reglage local : la classe partagee ne bouge pas.
+  ov.style.zIndex = '10050';
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
   ov.innerHTML = '<div class="msg-sheet">' +
     '<div class="msg-sheet-h">🖥️ Lier un nouvel appareil</div>' +
