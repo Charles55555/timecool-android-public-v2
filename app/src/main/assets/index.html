@@ -1932,6 +1932,26 @@ function loadAutoUpdatePref() {
   try { return localStorage.getItem(TC_AUTO_UPDATE_KEY) !== '0'; } catch(e) { return true; }
 }
 
+/**
+ * Repeint un interrupteur a bascule apres un changement d etat.
+ *
+ * L apparence est portee par deux <span> frere de la case a cocher : la
+ * piste et le bouton. Leur style etant calcule au rendu de la page, il
+ * faut les mettre a jour a la main, sinon l interrupteur reste fige
+ * dans sa position d origine.
+ *
+ * Repeindre plutot que re-rendre toute la page : un nouveau rendu
+ * ramenerait l utilisateur en haut de l ecran des reglages.
+ */
+function tcMajVisuelInterrupteur(input) {
+  if (!input || !input.parentElement) return;
+  const spans = input.parentElement.querySelectorAll('span');
+  if (spans.length < 2) return;
+  const actif = input.checked;
+  spans[0].style.background = actif ? 'var(--g-blue)' : '#ccc';
+  spans[1].style.left = actif ? '23px' : '3px';
+}
+
 function setAutoUpdatePref(on) {
   try { localStorage.setItem(TC_AUTO_UPDATE_KEY, on ? '1' : '0'); } catch(e) {}
   showToast(on ? '✅ Mise à jour automatique activée' : '⛔ Mise à jour automatique désactivée');
@@ -5001,7 +5021,7 @@ function tcRenderBiometrieToggle() {
         <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Se reconnecter avec ton empreinte ou ton visage, sans retaper le mot de passe</div>
       </div>
       <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
-        <input type="checkbox" ${active ? 'checked' : ''} onchange="tcBasculerBiometrie(this.checked)" style="opacity:0; width:0; height:0;">
+        <input type="checkbox" ${active ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerBiometrie(this.checked)" style="opacity:0; width:0; height:0;">
         <span style="position:absolute; inset:0; background:${active ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
         <span style="position:absolute; height:18px; width:18px; left:${active ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
       </label>
@@ -5984,7 +6004,7 @@ function renderSettingsInterne() {
           <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Installe les nouvelles versions sans confirmation</div>
         </div>
         <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
-          <input type="checkbox" id="autoUpdateToggle" ${loadAutoUpdatePref() ? 'checked' : ''} onchange="setAutoUpdatePref(this.checked)" style="opacity:0; width:0; height:0;">
+          <input type="checkbox" id="autoUpdateToggle" ${loadAutoUpdatePref() ? 'checked' : ''} onchange="setAutoUpdatePref(this.checked); tcMajVisuelInterrupteur(this)" style="opacity:0; width:0; height:0;">
           <span style="position:absolute; inset:0; background:${loadAutoUpdatePref() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
           <span style="position:absolute; height:18px; width:18px; left:${loadAutoUpdatePref() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
         </label>
@@ -6002,7 +6022,7 @@ function renderSettingsInterne() {
           <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Masquer les messages "fonctionnalité pas encore branchée"</div>
         </div>
         <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
-          <input type="checkbox" id="hideSimToggle" ${areSimulationMessagesHidden() ? 'checked' : ''} onchange="setSimulationMessagesHidden(this.checked)" style="opacity:0; width:0; height:0;">
+          <input type="checkbox" id="hideSimToggle" ${areSimulationMessagesHidden() ? 'checked' : ''} onchange="setSimulationMessagesHidden(this.checked); tcMajVisuelInterrupteur(this)" style="opacity:0; width:0; height:0;">
           <span style="position:absolute; inset:0; background:${areSimulationMessagesHidden() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
           <span style="position:absolute; height:18px; width:18px; left:${areSimulationMessagesHidden() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
         </label>
