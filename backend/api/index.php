@@ -354,7 +354,9 @@ switch ($route) {
             : Empreinte::telephone($identifiant);
         $colonne = $estEmail ? 'email_empreinte' : 'telephone_empreinte';
 
-        $c = Db::un("SELECT * FROM comptes WHERE $colonne = ? AND cloture_le IS NULL", [$empreinte]);
+        // Les comptes clos sont chargés eux aussi : le tri se fait plus
+        // bas, une fois le mot de passe vérifié.
+        $c = Db::un("SELECT * FROM comptes WHERE $colonne = ?", [$empreinte]);
 
         // Réponse identique que le compte existe ou non, et vérification
         // menée dans les deux cas : ni le message ni le temps de réponse
@@ -366,6 +368,23 @@ switch ($route) {
         );
         if ($c === null || !$valide) {
             Rep::erreur(401, 'identifiants_invalides', 'Identifiant ou mot de passe incorrect.');
+        }
+
+        /*
+         * Mot de passe correct : c est le propriétaire du compte. On peut
+         * donc lui dire pourquoi il n entre pas — un tiers, lui, n a
+         * jamais atteint cette ligne.
+         *
+         * Auparavant un compte clos recevait « identifiant ou mot de
+         * passe incorrect », et son propriétaire cherchait une faute de
+         * frappe qui n existait pas.
+         */
+        if ($c['bloque_le'] !== null) {
+            Rep::erreur(403, 'compte_suspendu',
+                'Votre compte a été suspendu. Écrivez à contact@timecool.fr.');
+        }
+        if ($c['cloture_le'] !== null) {
+            Rep::erreur(403, 'compte_cloture', 'Ce compte a été clôturé.');
         }
 
         if (password_needs_rehash($c['mot_de_passe_hash'], algoMotDePasse())) {
@@ -494,6 +513,90 @@ switch ($route) {
             }
         }
         Rep::ok(['inscrits' => $inscrits]);
+
+    // ═══════════════════════════════════════════════════════════
+    // ESPACE ADMINISTRATEUR
+    // La liste des inscrits vit ici, et nulle part ailleurs.
+    // ═══════════════════════════════════════════════════════════
+    case 'GET /admin/utilisateurs':
+        $moi = Auth::compte();
+        if ((int) ($moi['admin'] ?? 0) !== 1) {
+            Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
+        }
+        Rep::ok(['utilisateurs' => Db::tous(
+            'SELECT reference, prenom, nom, email, telephone, ville, code_postal,
+                    provenance, provenance_detail, cree_le, derniere_connexion, bloque_le
+               FROM comptes
+              ORDER BY cree_le DESC'
+        )]);
+
+    case 'POST /admin/bloquer':
+        $moi = Auth::compte();
+        if ((int) ($moi['admin'] ?? 0) !== 1) {
+            Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
+        }
+        $ref = Entree::requis('reference', 26);
+        if (!preg_match('/^[0-9A-Z]{12,26}$/', $ref)) {
+            Rep::erreur(400, 'reference_invalide', 'Référence de compte invalide.');
+        }
+        if (hash_equals($moi['reference'], $ref)) {
+            Rep::erreur(400, 'auto_blocage', 'Vous ne pouvez pas bloquer votre propre compte.');
+        }
+        $bloquer = ($corpsB = Entree::corps())['bloquer'] ?? null;
+        if (!is_bool($bloquer)) {
+            Rep::erreur(400, 'champ_manquant', 'Champ bloquer attendu : true ou false.');
+        }
+
+        /*
+         * Le blocage passe par cloture_le : c est la colonne que la
+         * connexion, la connexion Google, la vérification de session et
+         * la recherche de contacts consultent déjà. Rien à ajouter
+         * ailleurs, donc rien à oublier.
+         *
+         * bloque_le note que la fermeture vient de l administrateur, et
+         * non de la personne elle-même — sans quoi un déblocage
+         * rouvrirait un compte que son propriétaire avait clos.
+         */
+        $maj = Db::req(
+            $bloquer
+                ? 'UPDATE comptes SET bloque_le = NOW(), cloture_le = NOW()
+                    WHERE reference = ? AND cloture_le IS NULL'
+                : 'UPDATE comptes SET bloque_le = NULL, cloture_le = NULL
+                    WHERE reference = ? AND bloque_le IS NOT NULL',
+            [$ref]
+        );
+        if ($maj->rowCount() === 0) {
+            Rep::erreur(404, 'compte_introuvable', 'Compte inconnu, ou déjà dans cet état.');
+        }
+
+        // Les sessions ouvertes tombent tout de suite : sans cela,
+        // l appareil déjà connecté continuerait de fonctionner jusqu à
+        // l expiration de son jeton.
+        if ($bloquer) {
+            Db::req(
+                'UPDATE sessions
+                    SET revoque_le = NOW()
+                  WHERE revoque_le IS NULL
+                    AND compte_id = (SELECT id FROM comptes WHERE reference = ?)',
+                [$ref]
+            );
+        }
+        Rep::ok(['bloque' => $bloquer]);
+
+    /* « Comment avez-vous connu TimeCool ? » — la réponse était gardée
+       dans le navigateur de la personne, donc invisible partout
+       ailleurs. Chacun renseigne la sienne, sur son propre compte. */
+    case 'POST /compte/provenance':
+        $moi = Auth::compte();
+        Db::req(
+            'UPDATE comptes SET provenance = ?, provenance_detail = ? WHERE id = ?',
+            [
+                Entree::texte('provenance', 40),
+                Entree::texte('provenance_detail', 160),
+                $moi['id'],
+            ]
+        );
+        Rep::ok();
 
     // ═══════════════════════════════════════════════════════════
     // APPAIRAGE D'APPAREILS — TC_BACKEND.createPairingSession

@@ -10275,7 +10275,6 @@ async function tcCreerCompte(preuve) {
   if (typeof tcPreuveGoogle !== 'undefined') tcPreuveGoogle = null;
 
   saveUserAccount(account);
-  saveUserToAdminList(account);
 
   // Popup native du navigateur (Chrome/Edge) proposant d'enregistrer le
   // mot de passe. Il n'est pas conservé par TimeCool.
@@ -10378,18 +10377,10 @@ async function submitLogin() {
   const password = document.getElementById('loginPassword').value;
   if (!identifiant || !password) { showToast('⚠️ Identifiant et mot de passe requis'); return; }
 
-  // Suspension déclarée localement — confort d'affichage seulement.
-  // La véritable exclusion se fait côté serveur, en clôturant le compte.
-  try {
-    const users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]');
-    if (users.find(u => u.email === identifiant && u.blocked === true)) {
-      showToast('🚫 Compte suspendu');
-      setTimeout(() => {
-        tcAlert('Votre compte a été suspendu.\n\nPour plus d’informations, contactez-nous à :\ncontact@timecool.fr');
-      }, 300);
-      return;
-    }
-  } catch(e) {}
+  // La suspension n'est plus déclarée ici : elle se lit sur le serveur,
+  // qui refuse la connexion et le dit — voir l'erreur compte_suspendu.
+  // Le contrôle local ne valait que sur l'appareil de l'administrateur,
+  // c'est-à-dire jamais sur celui de la personne concernée.
 
   const estEmail = identifiant.includes('@');
   if (estEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifiant)) {
@@ -10746,9 +10737,6 @@ async function tcEnvoyerProvenance(id, detail) {
   try {
     await tcAppel('POST', '/compte/provenance', { provenance: id, provenance_detail: detail });
   } catch (e) {}
-  if (userAccount && userAccount.email) {
-    updateUserProvenanceInAdminList(userAccount.email, id, detail);
-  }
   hideAuthFlow();
 }
 
@@ -13608,6 +13596,21 @@ const TC_BACKEND = {
     return { statut: d.statut };
   },
 
+  // ─── Espace administrateur ───────────────────────────────────
+
+  /** Tous les comptes, du plus récent au plus ancien. 403 si le compte
+   *  connecté n'est pas administrateur. */
+  async listerUtilisateurs() {
+    const d = await tcAppel('GET', '/admin/utilisateurs');
+    return Array.isArray(d.utilisateurs) ? d.utilisateurs : [];
+  },
+
+  async bloquerUtilisateur(reference, bloquer) {
+    const d = await tcAppel('POST', '/admin/bloquer',
+      { reference: reference, bloquer: !!bloquer });
+    return !!d.bloque;
+  },
+
   // ─── Clés publiques ──────────────────────────────────────────
 
   async publierClePublique(cleJwk) {
@@ -15116,54 +15119,56 @@ function finishOnboarding(destination) {
 setTimeout(checkOnboarding, 500);
 
 
-// === ONGLET UTILISATEURS ADMIN ===
-const TC_USERS_KEY = 'tc_registered_users';
+/* ══════════════════════════════════════════════════════════════
+   ONGLET UTILISATEURS ADMIN
 
-function saveUserToAdminList(user) {
-  try {
-    let users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]');
-    // Vérifier si l'email existe déjà
-    if (!users.find(u => u.email === user.email)) {
-      users.push({
-        id: users.length + 1,
-        firstname: user.firstname || '',
-        lastname: user.lastname || '',
-        email: user.email || '',
-        phone: user.phone || '',
-        // Toujours demandés au moment de l'inscription — y compris pour
-        // un compte Google, qui ne fournit ni l'un ni l'autre : le
-        // formulaire de finalisation les redemande dans ce cas (voir
-        // tcGoogleJeton). Vides ici seulement pour un compte antérieur
-        // à leur ajout ; l'affichage le dit alors explicitement.
-        zip: user.zip || '',
-        city: user.city || '',
-        // Renseignée juste après, sur l'écran "Comment as-tu connu
-        // TimeCool ?" (facultatif) — absente ici si l'inscription
-        // n'est pas encore allée jusque-là.
-        provenance: '',
-        provenanceDetail: '',
-        registeredAt: new Date().toISOString()
-      });
-      localStorage.setItem(TC_USERS_KEY, JSON.stringify(users));
-    }
-  } catch(e) {}
+   La liste vient du serveur, et de nulle part ailleurs. Elle était
+   auparavant tenue dans le navigateur de celui qui inscrivait : elle ne
+   pouvait donc contenir que les comptes créés sur CET appareil-là. Deux
+   personnes inscrites depuis leur propre téléphone n'y figuraient
+   jamais — alors que leur inscription avait parfaitement fonctionné.
+   ══════════════════════════════════════════════════════════════ */
+
+let _tcUsersServeur = [];
+let _tcUsersEtat = 'chargement';   // chargement | pret | refus | erreur
+let _tcUsersMessage = '';
+
+/** Ligne du serveur ramenée à la forme attendue par l'affichage. */
+function tcUserDepuisServeur(u, i) {
+  return {
+    id: i + 1,
+    reference: u.reference,
+    firstname: u.prenom || '',
+    lastname: u.nom || '',
+    email: u.email || '',
+    phone: u.telephone || '',
+    zip: u.code_postal || '',
+    city: u.ville || '',
+    provenance: u.provenance || '',
+    provenanceDetail: u.provenance_detail || '',
+    // MySQL rend « 2026-09-03 07:49:12 ». Sans le T, certains moteurs
+    // rendent une date invalide, et le tri par date s'effondre.
+    registeredAt: (u.cree_le || '').replace(' ', 'T'),
+    blocked: !!u.bloque_le
+  };
 }
 
-/**
- * Associe la réponse à "Comment as-tu connu TimeCool ?" à l'utilisateur
- * déjà présent dans la liste locale admin (créé un peu plus tôt par
- * saveUserToAdminList, avant que cet écran facultatif ne soit répondu).
- */
-function updateUserProvenanceInAdminList(email, provenance, detail) {
+async function tcChargerUtilisateurs() {
+  _tcUsersEtat = 'chargement';
+  renderUsersTab();
   try {
-    let users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]');
-    const u = users.find(u => u.email === email);
-    if (u) {
-      u.provenance = provenance || '';
-      u.provenanceDetail = detail || '';
-      localStorage.setItem(TC_USERS_KEY, JSON.stringify(users));
-    }
-  } catch(e) {}
+    _tcUsersServeur = await TC_BACKEND.listerUtilisateurs();
+    _tcUsersEtat = 'pret';
+  } catch (e) {
+    _tcUsersServeur = [];
+    // Un compte sans droit administrateur n'est pas une panne : le dire
+    // autrement qu'une coupure réseau, sinon on cherche au mauvais
+    // endroit.
+    const msg = (e && e.message) ? String(e.message) : '';
+    _tcUsersEtat = /administrateur|acces_refuse|403/i.test(msg) ? 'refus' : 'erreur';
+    _tcUsersMessage = msg || 'Liste indisponible';
+  }
+  renderUsersTab();
 }
 
 let _adminCurrentTab = 'config';
@@ -15171,7 +15176,7 @@ let _adminCurrentTab = 'config';
 function adminShowTab(tab) {
   _adminCurrentTab = tab === 'users' ? 'users' : 'config';
   if (_adminCurrentTab === 'users') {
-    renderUsersTab();
+    tcChargerUtilisateurs();
   } else {
     renderAIConfig();
   }
@@ -15182,7 +15187,7 @@ function refreshAiconfigPage() {
   const main = document.querySelector('#page-aiconfig .main');
   const scrollTop = main ? main.scrollTop : 0;
   if (_adminCurrentTab === 'users') {
-    renderUsersTab();
+    tcChargerUtilisateurs();
   } else {
     renderAIConfig();
   }
@@ -15239,8 +15244,7 @@ function renderUsersTab() {
   const c = document.getElementById('aiconfigContent');
   if (!c) return;
 
-  let users = [];
-  try { users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]'); } catch(e) {}
+  const users = _tcUsersServeur.map(tcUserDepuisServeur);
 
   const banner = window._adminAccess ? `
     <div style="background:#1a73e8; color:white; padding:12px 16px; border-radius:12px; margin-bottom:12px;">
@@ -15255,8 +15259,17 @@ function renderUsersTab() {
     </div>
   ` : '';
 
-  const userRows = users.length === 0
-    ? '<div style="text-align:center; padding:40px; color:#9aa0a6; font-size:14px;">Aucun utilisateur inscrit pour le moment</div>'
+  const vide = function (texte) {
+    return '<div style="text-align:center; padding:40px 20px; color:#9aa0a6; font-size:13.5px; line-height:1.6;">'
+      + texte + '</div>';
+  };
+  const userRows =
+      _tcUsersEtat === 'chargement' ? vide('Chargement de la liste…')
+    : _tcUsersEtat === 'refus' ? vide('Ce compte n’a pas l’accès administrateur.<br>'
+        + 'La liste des inscrits est réservée au compte désigné sur le serveur.')
+    : _tcUsersEtat === 'erreur' ? vide('❌ ' + escapeHTMLSafe(_tcUsersMessage)
+        + '<br><span onclick="tcChargerUtilisateurs()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">Réessayer</span>')
+    : users.length === 0 ? vide('Aucun utilisateur inscrit pour le moment')
     : tcTrierUsers(users).map(u => {
         const d = new Date(u.registeredAt);
         const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
@@ -15273,7 +15286,7 @@ function renderUsersTab() {
             <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📱 ${u.phone || '—'}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📍 ${u.zip ? (u.zip + ' ' + (u.city || '')).trim() : '<span style="opacity:.7;">Non renseigné</span>'}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">🧭 ${escapeHTMLSafe(tcLibelleProvenance(u))}</div>
-            <button onclick="toggleBlockUser(${u.id - 1})" style="width:100%; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fce8e6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+            <button onclick="toggleBlockUser('${u.reference}', ${!u.blocked})" style="width:100%; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fce8e6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
               ${isBlocked ? '✅ Débloquer le compte' : '🚫 Bloquer le compte'}
             </button>
           </div>
@@ -15284,7 +15297,10 @@ function renderUsersTab() {
     <div style="padding:0 0 8px;">
       <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px;">
         <div style="font-size:18px; font-weight:700; color:#1a1a2e;">👥 Utilisateurs inscrits</div>
-        <button onclick="exportUsersCsv()" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⬇️ Export CSV</button>
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <button onclick="tcChargerUtilisateurs()" style="padding:8px 12px; background:#fff; color:#5f6368; border:1px solid #e8eaed; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">↻ Actualiser</button>
+          <button onclick="exportUsersCsv()" style="padding:8px 12px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⬇️ Export CSV</button>
+        </div>
       </div>
       <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">${users.length} utilisateur${users.length > 1 ? 's' : ''} enregistré${users.length > 1 ? 's' : ''}</div>
       ${users.length > 1 ? `
@@ -15312,8 +15328,7 @@ function renderUsersTab() {
  * corrompus.
  */
 async function exportUsersCsv() {
-  let users = [];
-  try { users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]'); } catch(e) {}
+  const users = _tcUsersServeur.map(tcUserDepuisServeur);
   if (!users.length) { showToast('Aucun utilisateur à exporter'); return; }
 
   const echapperCsv = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
@@ -15344,16 +15359,30 @@ async function exportUsersCsv() {
 }
 
 
-function toggleBlockUser(idx) {
+/**
+ * Bloque ou débloque un compte, sur le serveur.
+ *
+ * Le bouton n'écrivait qu'un drapeau dans CE navigateur-ci : la
+ * personne bloquée continuait d'utiliser TimeCool sans s'apercevoir de
+ * rien. Le blocage ferme désormais le compte et révoque ses sessions
+ * ouvertes.
+ */
+async function toggleBlockUser(reference, bloquer) {
+  const quoi = bloquer ? 'Bloquer' : 'Débloquer';
+  if (!await tcConfirm(bloquer
+      ? 'La personne ne pourra plus se connecter, et ses appareils déjà connectés seront déconnectés. C’est réversible.'
+      : 'La personne pourra de nouveau se connecter.',
+      { titre: quoi + ' ce compte ?', danger: bloquer, libelleValider: quoi })) return;
+
   try {
-    let users = JSON.parse(localStorage.getItem(TC_USERS_KEY) || '[]');
-    if (!users[idx]) return;
-    users[idx].blocked = !users[idx].blocked;
-    localStorage.setItem(TC_USERS_KEY, JSON.stringify(users));
-    const action = users[idx].blocked ? 'bloqué' : 'débloqué';
-    showToast((users[idx].blocked ? '🚫' : '✅') + ' Compte ' + action);
-    renderUsersTab();
-  } catch(e) {}
+    await TC_BACKEND.bloquerUtilisateur(reference, bloquer);
+    showToast(bloquer ? '🚫 Compte bloqué' : '✅ Compte débloqué');
+  } catch (e) {
+    showToast('❌ ' + (e.message || 'Action impossible'));
+  }
+  // Dans les deux cas on relit le serveur : c'est lui qui fait foi, pas
+  // ce que l'écran croyait savoir.
+  tcChargerUtilisateurs();
 }
 
 // === IMPORT ICS (iCalendar) ===
