@@ -3829,6 +3829,12 @@ function tcReperesDuJour(dateStr) {
       fond: '#fce8e6'
     });
   });
+  // Une tache n a de place dans l agenda que si elle porte une
+  // echeance, et cochee elle n a plus a l encombrer.
+  tasksList.forEach(function (t) {
+    if (!t.agenda || t.done || t.dueDate !== dateStr) return;
+    l.push({ emoji: '✅', nom: t.title, couleur: '#34A853', fond: '#e8f5e9' });
+  });
   return l;
 }
 
@@ -11463,9 +11469,11 @@ function tcBasculerAnniversaireAgenda(id) {
  * d une faute de frappe. tcModale() ne porte qu un seul champ, la boite
  * est donc construite ici.
  *
- * Retourne { prenom, nom, jour, mois, annee }, ou null si annule.
+ * Sert aussi bien a creer qu a modifier : passer la fiche existante
+ * pre-remplit les champs. Retourne { prenom, nom, jour, mois, annee },
+ * ou null si annule.
  */
-function ouvrirFormulaireAnniversaire() {
+function ouvrirFormulaireAnniversaire(existant) {
   return new Promise(function (resolve) {
     const ov = document.createElement('div');
     ov.className = 'tc-mod-ov';
@@ -11479,7 +11487,7 @@ function ouvrirFormulaireAnniversaire() {
 
     const titre = document.createElement('div');
     titre.className = 'tc-mod-tt';
-    titre.textContent = 'Nouvel anniversaire';
+    titre.textContent = existant ? 'Modifier l’anniversaire' : 'Nouvel anniversaire';
     boite.appendChild(titre);
 
     function etiquette(txt) {
@@ -11534,6 +11542,17 @@ function ouvrirFormulaireAnniversaire() {
     ligne.appendChild(mois);
     ligne.appendChild(annee);
     boite.appendChild(ligne);
+
+    // Modification : on repart de ce qui est enregistre. Une fiche
+    // ancienne ne portait qu un nom complet — il atterrit dans le
+    // prenom, ou il peut enfin etre corrige.
+    if (existant) {
+      prenom.value = existant.prenom || existant.name || '';
+      nom.value = existant.nomFamille || '';
+      jour.value = String(parseInt(existant.date.slice(8, 10), 10));
+      mois.value = String(parseInt(existant.date.slice(5, 7), 10));
+      annee.value = existant.year ? String(existant.year) : '';
+    }
 
     const aide = document.createElement('div');
     aide.style.cssText = 'font-size:11px; color:var(--text-sec); text-align:left; margin-top:6px;';
@@ -11661,7 +11680,7 @@ function renderBirthdays() {
       <div style="background:#fff; border:1px solid var(--border); border-radius:14px; margin-bottom:10px; overflow:hidden;">
         <div style="display:flex; gap:14px; align-items:center; padding:14px 16px;">
           <div style="width:46px; height:46px; border-radius:50%; background:linear-gradient(135deg, #fbbc04, #ea4335); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0;">🎂</div>
-          <div style="flex:1; min-width:0;">
+          <div onclick="editBirthday('${b.id}')" style="flex:1; min-width:0; cursor:pointer;">
             <div style="font-size:15px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHTMLSafe(b.name)}</div>
             <div style="font-size:12px; color:var(--text-sec); margin-top:2px; text-transform:capitalize;">${dateStr}</div>
             <div style="font-size:11px; color:${couleur}; font-weight:600; margin-top:3px;">${quand}${age !== null && age > 0 ? `<span style="color:var(--text-sec); font-weight:400;"> · ${age} ans</span>` : ''}</div>
@@ -11702,25 +11721,44 @@ function renderBirthdays() {
   `;
 }
 
-async function addBirthday() {
-  const f = await ouvrirFormulaireAnniversaire();
-  if (!f) return;
-  // Annee de reference quand elle est inconnue : 2000 est bissextile,
-  // un 29 fevrier saisi sans annee reste donc une date valide.
-  const dateStr = (f.annee || 2000) + '-' + String(f.mois).padStart(2, '0')
+/* Annee de reference quand elle est inconnue : 2000 est bissextile, un
+   29 fevrier saisi sans annee reste donc une date valide. */
+function tcDateDepuisFormulaire(f) {
+  return (f.annee || 2000) + '-' + String(f.mois).padStart(2, '0')
     + '-' + String(f.jour).padStart(2, '0');
+}
+
+async function addBirthday() {
+  const f = await ouvrirFormulaireAnniversaire(null);
+  if (!f) return;
   birthdays.push({
     id: 'bday_' + Date.now(),
     name: (f.prenom + ' ' + f.nom).trim(),
     prenom: f.prenom,
     nomFamille: f.nom,
-    date: dateStr,
+    date: tcDateDepuisFormulaire(f),
     year: f.annee,
     agenda: false
   });
   saveBirthdays();
   renderBirthdays();
   showToast('🎂 Anniversaire ajouté');
+}
+
+async function editBirthday(id) {
+  const b = birthdays.find(function (x) { return x.id === id; });
+  if (!b) return;
+  const f = await ouvrirFormulaireAnniversaire(b);
+  if (!f) return;
+  b.name = (f.prenom + ' ' + f.nom).trim();
+  b.prenom = f.prenom;
+  b.nomFamille = f.nom;
+  b.date = tcDateDepuisFormulaire(f);
+  b.year = f.annee;
+  saveBirthdays();
+  renderBirthdays();
+  if (typeof render === 'function' && currentPage === 'calendar') render();
+  showToast('🎂 Anniversaire modifié');
 }
 
 async function deleteBirthday(id) {
@@ -12305,23 +12343,231 @@ function saveTasks() {
 }
 loadTasks();
 
+/* Tri de la liste, retenu d un passage a l autre. Les taches terminees
+   restent en bas quel que soit le tri : ce sont les autres qu on vient
+   consulter. */
+const TC_TRI_TACHES_KEY = 'tc_tri_taches';
+
+function tcTriTaches() {
+  try { return localStorage.getItem(TC_TRI_TACHES_KEY) === 'alpha' ? 'alpha' : 'date'; }
+  catch (e) { return 'date'; }
+}
+
+function tcDefinirTriTaches(mode) {
+  try { localStorage.setItem(TC_TRI_TACHES_KEY, mode); } catch (e) {}
+  renderTasks();
+}
+
+/**
+ * Affiche ou retire une tache de l agenda.
+ *
+ * Sans echeance il n y a pas de jour ou l afficher : le bouton n est
+ * alors pas propose, et une echeance effacee retire la tache d office.
+ */
+function tcBasculerTacheAgenda(id) {
+  const t = tasksList.find(function (x) { return x.id === id; });
+  if (!t || !t.dueDate) return;
+  t.agenda = !t.agenda;
+  saveTasks();
+  renderTasks();
+  if (typeof render === 'function' && currentPage === 'calendar') render();
+  showToast(t.agenda ? '📅 « ' + t.title + ' » ajoutée à l’agenda'
+                     : '📅 « ' + t.title + ' » retirée de l’agenda');
+}
+
+/**
+ * Formulaire de tache : titre, note et echeance dans une seule boite.
+ *
+ * Remplace deux questions enchainees ou l echeance devait etre tapee au
+ * format JJ/MM/AAAA — une faute de frappe faisait perdre la date sans
+ * perdre la tache, et la note n etait jamais accessible.
+ *
+ * Sert aussi bien a creer qu a modifier : passer la tache existante
+ * pre-remplit les champs. Retourne { titre, note, echeance }, ou null.
+ */
+function ouvrirFormulaireTache(existante) {
+  return new Promise(function (resolve) {
+    const ov = document.createElement('div');
+    ov.className = 'tc-mod-ov';
+    const boite = document.createElement('div');
+    boite.className = 'tc-mod';
+
+    const ic = document.createElement('div');
+    ic.className = 'tc-mod-ic';
+    ic.textContent = '✅';
+    boite.appendChild(ic);
+
+    const titre = document.createElement('div');
+    titre.className = 'tc-mod-tt';
+    titre.textContent = existante ? 'Modifier la tâche' : 'Nouvelle tâche';
+    boite.appendChild(titre);
+
+    function etiquette(txt) {
+      const l = document.createElement('div');
+      l.style.cssText = 'font-size:11px; font-weight:600; color:var(--text-sec);'
+        + ' text-align:left; margin:12px 0 5px;';
+      l.textContent = txt;
+      boite.appendChild(l);
+    }
+    function champ(type, exemple, valeur) {
+      const i = document.createElement('input');
+      i.type = type;
+      i.className = 'tc-mod-in';
+      i.placeholder = exemple;
+      i.value = valeur || '';
+      i.style.margin = '0';
+      boite.appendChild(i);
+      return i;
+    }
+
+    etiquette('Que faut-il faire ?');
+    const cTitre = champ('text', 'Acheter du pain', existante ? existante.title : '');
+    etiquette('Note (facultatif)');
+    const cNote = champ('text', 'À la boulangerie du coin', existante ? existante.notes : '');
+    etiquette('Échéance (facultative)');
+    // type=date ouvre le selecteur du telephone : aucun format a taper.
+    // La saisie libre reste possible sur un moteur qui ne le connait
+    // pas, d ou la verification du format plus bas.
+    const cDate = champ('date', 'AAAA-MM-JJ', existante ? existante.dueDate : '');
+
+    const aide = document.createElement('div');
+    aide.style.cssText = 'font-size:11px; color:var(--text-sec); text-align:left; margin-top:6px;';
+    aide.textContent = 'Sans échéance, la tâche reste dans la liste sans date.';
+    boite.appendChild(aide);
+
+    const erreur = document.createElement('div');
+    erreur.style.cssText = 'font-size:11.5px; color:#ea4335; font-weight:600;'
+      + ' text-align:left; margin-top:8px; display:none;';
+    boite.appendChild(erreur);
+
+    const barre = document.createElement('div');
+    barre.className = 'tc-mod-bt';
+
+    const fermer = function (resultat) {
+      ov.classList.remove('on');
+      setTimeout(function () { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 180);
+      document.removeEventListener('keydown', auClavier, true);
+      resolve(resultat);
+    };
+
+    const non = document.createElement('button');
+    non.className = 'tc-mod-no';
+    non.textContent = 'Annuler';
+    non.onclick = function () { fermer(null); };
+    barre.appendChild(non);
+
+    const oui = document.createElement('button');
+    oui.className = 'tc-mod-ok';
+    oui.textContent = 'Enregistrer';
+    oui.onclick = function () {
+      const t = cTitre.value.trim();
+      const d = cDate.value.trim();
+      const dire = function (msg, ou) {
+        erreur.textContent = msg;
+        erreur.style.display = 'block';
+        if (ou) ou.focus();
+      };
+      if (!t) return dire('Donnez un titre à la tâche.', cTitre);
+      if (d) {
+        const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return dire('Date invalide. Format attendu : AAAA-MM-JJ.', cDate);
+        // Une date recomposee qui ne redonne pas la saisie initiale
+        // etait impossible : 2026-02-31 devient le 3 mars.
+        const v = new Date(+m[1], +m[2] - 1, +m[3]);
+        if (v.getFullYear() !== +m[1] || v.getMonth() !== +m[2] - 1 || v.getDate() !== +m[3]) {
+          return dire('Cette date n’existe pas.', cDate);
+        }
+      }
+      fermer({ titre: t, note: cNote.value.trim(), echeance: d || null });
+    };
+    barre.appendChild(oui);
+
+    boite.appendChild(barre);
+    ov.appendChild(boite);
+    ov.onclick = function (e) { if (e.target === ov) fermer(null); };
+
+    function auClavier(e) {
+      if (e.key === 'Escape') { e.preventDefault(); fermer(null); }
+      else if (e.key === 'Enter') { e.preventDefault(); oui.click(); }
+    }
+    document.addEventListener('keydown', auClavier, true);
+
+    document.body.appendChild(ov);
+    requestAnimationFrame(function () { ov.classList.add('on'); });
+    setTimeout(function () { cTitre.focus(); }, 60);
+  });
+}
+
 function renderTasks() {
   const c = document.getElementById('tasksContent');
   if (!c) return;
   const todayD = new Date();
-  const todayStr = fmt(todayD);
+  const minuit = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+  const tri = tcTriTaches();
 
-  // Trier : non terminées d'abord (par date d'échéance), puis terminées
-  const sorted = [...tasksList].sort((a, b) => {
+  // Termine en dernier dans tous les cas : ce sont les taches restantes
+  // qu on vient voir. Le tri choisi ne departage que celles-la.
+  const sorted = tasksList.slice().sort(function (a, b) {
     if (a.done !== b.done) return a.done ? 1 : -1;
+    if (tri === 'alpha') {
+      return a.title.localeCompare(b.title, 'fr', { sensitivity: 'base' });
+    }
+    // Sans echeance, une tache n a pas de rang dans le temps : elle
+    // passe derriere celles qui en ont une.
     if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
     if (a.dueDate) return -1;
     if (b.dueDate) return 1;
     return 0;
   });
 
+  const boutonTri = function (mode, libelle) {
+    const actif = tri === mode;
+    return '<button onclick="tcDefinirTriTaches(\'' + mode + '\')"'
+      + ' style="flex:1; padding:7px 10px; border:none; border-radius:9px;'
+      + ' font-size:12px; font-weight:600; cursor:pointer; background:'
+      + (actif ? '#fff' : 'transparent') + '; color:'
+      + (actif ? 'var(--g-blue)' : 'var(--text-sec)') + '; box-shadow:'
+      + (actif ? '0 1px 3px rgba(0,0,0,0.12)' : 'none') + ';">' + libelle + '</button>';
+  };
+
+  const carte = function (t) {
+    let echeance = '';
+    let couleur = 'var(--text-sec)';
+    if (t.dueDate && !t.done) {
+      const y = +t.dueDate.slice(0, 4), mo = +t.dueDate.slice(5, 7), d = +t.dueDate.slice(8, 10);
+      const due = new Date(y, mo - 1, d);
+      const jours = Math.round((due - minuit) / 86400000);
+      const dStr = due.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
+      if (jours < 0) { echeance = '⚠️ En retard — ' + dStr; couleur = '#ea4335'; }
+      else if (jours === 0) { echeance = '🔥 Pour aujourd’hui'; couleur = '#ea4335'; }
+      else if (jours === 1) { echeance = '📅 Pour demain'; couleur = '#f9ab00'; }
+      else if (jours <= 7) { echeance = '📅 ' + dStr + ' (dans ' + jours + 'j)'; couleur = '#f9ab00'; }
+      else { echeance = '📅 ' + dStr; }
+    }
+    return `
+      <div style="background:#fff; border:1px solid var(--border); border-radius:12px; margin-bottom:8px; overflow:hidden; ${t.done ? 'opacity:0.55;' : ''}">
+        <div style="display:flex; gap:12px; align-items:center; padding:12px 14px;">
+          <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask('${t.id}')" style="width:22px; height:22px; flex-shrink:0; cursor:pointer; accent-color:var(--g-green);">
+          <div onclick="editTask('${t.id}')" style="flex:1; min-width:0; cursor:pointer;">
+            <div style="font-size:14px; font-weight:500; color:var(--text); ${t.done ? 'text-decoration:line-through;' : ''}">${escapeHTMLSafe(t.title)}</div>
+            ${echeance ? `<div style="font-size:11px; color:${couleur}; font-weight:500; margin-top:3px;">${echeance}</div>` : ''}
+            ${t.notes ? `<div style="font-size:11px; color:var(--text-sec); margin-top:3px;">${escapeHTMLSafe(t.notes)}</div>` : ''}
+          </div>
+          <button onclick="deleteTask('${t.id}')" style="padding:6px 4px; background:transparent; border:none; cursor:pointer; font-size:16px;">🗑️</button>
+        </div>
+        ${t.dueDate && !t.done ? `
+          <div onclick="tcBasculerTacheAgenda('${t.id}')" style="display:flex; align-items:center; gap:8px; padding:10px 14px; border-top:1px solid var(--border); cursor:pointer; background:var(--bg-soft);">
+            <span data-notranslate style="font-size:14px;">📅</span>
+            <span style="flex:1; font-size:12.5px; color:var(--text-sec);">Afficher dans mon agenda</span>
+            <span style="font-size:12px; font-weight:600; color:${t.agenda ? '#34a853' : '#9aa0a6'};">${t.agenda ? '✓ Dans l’agenda' : '+ Ajouter'}</span>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  };
+
   c.innerHTML = `
-    <button onclick="addTask()" style="width:100%; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:8px;">
+    <button onclick="addTask()" style="width:100%; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px; display:flex; align-items:center; justify-content:center; gap:8px;">
       <span style="font-size:18px;">+</span> Ajouter une tâche
     </button>
 
@@ -12331,32 +12577,12 @@ function renderTasks() {
         <div style="font-size:15px; font-weight:600; color:var(--text); margin-bottom:6px;">Aucune tâche pour l'instant</div>
         <div style="font-size:12px; color:var(--text-sec);">Ajoute des tâches à faire avec ou sans date d'échéance.</div>
       </div>
-    ` : sorted.map(t => {
-      let dueLabel = '';
-      let dueColor = 'var(--text-sec)';
-      if (t.dueDate && !t.done) {
-        const [y, mo, d] = t.dueDate.split('-').map(Number);
-        const due = new Date(y, mo-1, d);
-        const daysUntil = Math.ceil((due - todayD) / (1000*60*60*24));
-        const dStr = due.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'short'});
-        if (daysUntil < 0) { dueLabel = `⚠️ En retard — ${dStr}`; dueColor = '#ea4335'; }
-        else if (daysUntil === 0) { dueLabel = `🔥 Pour aujourd'hui`; dueColor = '#ea4335'; }
-        else if (daysUntil === 1) { dueLabel = `📅 Pour demain`; dueColor = '#fbbc04'; }
-        else if (daysUntil <= 7) { dueLabel = `📅 ${dStr} (dans ${daysUntil}j)`; dueColor = '#fbbc04'; }
-        else { dueLabel = `📅 ${dStr}`; dueColor = 'var(--text-sec)'; }
-      }
-      return `
-        <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px; display:flex; gap:12px; align-items:center; ${t.done?'opacity:0.55;':''}">
-          <input type="checkbox" ${t.done?'checked':''} onchange="toggleTask('${t.id}')" style="width:22px; height:22px; flex-shrink:0; cursor:pointer; accent-color:var(--g-green);">
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:14px; font-weight:500; color:var(--text); ${t.done?'text-decoration:line-through;':''}">${escapeHTMLSafe(t.title)}</div>
-            ${dueLabel ? `<div style="font-size:11px; color:${dueColor}; font-weight:500; margin-top:3px;">${dueLabel}</div>` : ''}
-            ${t.notes ? `<div style="font-size:11px; color:var(--text-sec); margin-top:3px;">${escapeHTMLSafe(t.notes)}</div>` : ''}
-          </div>
-          <button onclick="deleteTask('${t.id}')" style="padding:6px 8px; background:transparent; border:none; cursor:pointer; color:var(--text-sec); font-size:16px;">🗑️</button>
-        </div>
-      `;
-    }).join('')}
+    ` : `
+      <div style="display:flex; gap:4px; background:var(--bg-soft); border-radius:11px; padding:4px; margin-bottom:14px;">
+        ${boutonTri('date', '📅 Par échéance')}${boutonTri('alpha', '🔤 A → Z')}
+      </div>
+      ${sorted.map(carte).join('')}
+    `}
 
     <div style="margin-top:24px; padding:14px; background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; font-size:11px; color:#5f4500; line-height:1.5;">
       💡 <b>Astuce</b> : Les tâches sont différentes des événements de l'agenda. Utilise les tâches pour les choses à faire (acheter du pain, appeler le médecin) et l'agenda pour les RDV à heure fixe.
@@ -12365,24 +12591,15 @@ function renderTasks() {
 }
 
 async function addTask() {
-  const title = await tcPrompt('Titre de la tâche :');
-  if (!title || !title.trim()) return;
-  const dueDate = await tcPrompt('Date d\'échéance (JJ/MM/AAAA, ou laisse vide) :');
-  let dueDateISO = null;
-  if (dueDate && dueDate.trim()) {
-    const m = dueDate.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-    if (m) {
-      dueDateISO = `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-    } else {
-      tcAlert('Format de date invalide. Tâche ajoutée sans date.');
-    }
-  }
+  const f = await ouvrirFormulaireTache(null);
+  if (!f) return;
   tasksList.push({
     id: 'task_' + Date.now(),
-    title: title.trim(),
-    dueDate: dueDateISO,
+    title: f.titre,
+    dueDate: f.echeance,
     done: false,
-    notes: '',
+    notes: f.note,
+    agenda: false,
     createdAt: new Date().toISOString()
   });
   saveTasks();
@@ -12390,20 +12607,40 @@ async function addTask() {
   showToast('✅ Tâche ajoutée');
 }
 
+async function editTask(id) {
+  const t = tasksList.find(function (x) { return x.id === id; });
+  if (!t) return;
+  const f = await ouvrirFormulaireTache(t);
+  if (!f) return;
+  t.title = f.titre;
+  t.notes = f.note;
+  t.dueDate = f.echeance;
+  // Plus d echeance, plus de jour ou l afficher : la tache quitte
+  // l agenda d elle-meme plutot que d y rester sans date.
+  if (!t.dueDate) t.agenda = false;
+  saveTasks();
+  renderTasks();
+  if (typeof render === 'function' && currentPage === 'calendar') render();
+  showToast('✅ Tâche modifiée');
+}
+
 function toggleTask(id) {
-  const task = tasksList.find(t => t.id === id);
+  const task = tasksList.find(function (t) { return t.id === id; });
   if (!task) return;
   task.done = !task.done;
   task.completedAt = task.done ? new Date().toISOString() : null;
   saveTasks();
   renderTasks();
+  // Une tache cochee n a plus a encombrer l agenda.
+  if (typeof render === 'function' && currentPage === 'calendar') render();
 }
 
 async function deleteTask(id) {
   if (!await tcConfirm('Supprimer cette tâche ?')) return;
-  tasksList = tasksList.filter(t => t.id !== id);
+  tasksList = tasksList.filter(function (t) { return t.id !== id; });
   saveTasks();
   renderTasks();
+  if (typeof render === 'function' && currentPage === 'calendar') render();
 }
 
 // ═══════════════════════════════════════════════════════════
