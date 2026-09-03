@@ -2586,18 +2586,11 @@ async function loadEventsFromStorage() {
   } catch(err) { console.warn('Chargement events:', err); }
 }
 
-function saveTasksToStorage() {
-  try {
-    localStorage.setItem(TC_TASKS_KEY, JSON.stringify(tasksList));
-  } catch(err) { console.warn('Sauvegarde tasks:', err); }
-}
-
-function loadTasksFromStorage() {
-  try {
-    const saved = localStorage.getItem(TC_TASKS_KEY);
-    if (saved) tasksList = JSON.parse(saved);
-  } catch(err) { console.warn('Chargement tasks:', err); }
-}
+/* Conservees pour leurs appelants — le demarrage et la restauration de
+   sauvegarde. Elles deleguent : deux implementations de la meme chose
+   sont precisement ce qui avait cree la divergence de cles. */
+function saveTasksToStorage() { saveTasks(); }
+function loadTasksFromStorage() { loadTasks(); }
 
 // Events
 let events = generateEvents();
@@ -12332,14 +12325,26 @@ navigate = function(page) {
 // ═══════════════════════════════════════════════════════════
 
 let tasksList = [];
+/* Une seule cle, TC_TASKS_KEY. Deux ont coexiste : la page ecrivait
+   « timecool_tasks » tandis que le demarrage relisait TC_TASKS_KEY, que
+   seule une restauration de sauvegarde alimentait. Les taches du jour
+   etaient donc ecrasees a chaque lancement des lors qu une sauvegarde
+   avait ete restauree une fois. */
 function loadTasks() {
   try {
-    const saved = localStorage.getItem('timecool_tasks');
+    // « timecool_tasks » porte les taches reelles, puisque c est elle que
+    // la page ecrivait : on la reprend, puis on l efface pour de bon.
+    const ancienne = localStorage.getItem('timecool_tasks');
+    const saved = ancienne || localStorage.getItem(TC_TASKS_KEY);
     if (saved) tasksList = JSON.parse(saved);
-  } catch(e) {}
+    if (ancienne !== null) {
+      localStorage.setItem(TC_TASKS_KEY, ancienne);
+      localStorage.removeItem('timecool_tasks');
+    }
+  } catch (e) {}
 }
 function saveTasks() {
-  try { localStorage.setItem('timecool_tasks', JSON.stringify(tasksList)); } catch(e) {}
+  try { localStorage.setItem(TC_TASKS_KEY, JSON.stringify(tasksList)); } catch (e) {}
 }
 loadTasks();
 
@@ -13551,26 +13556,54 @@ const TC_BACKEND = {
 
   // ─── Appairage d'appareils ───────────────────────────────────
 
-  async createPairingSession() {
-    const d = await tcAppel('POST', '/appairage/creer', {}, false);
-    return { code: d.code, sessionId: d.sessionId };
+  /**
+   * @param {Object|null} clePublique Moitié publique de la paire de cet
+   *   appareil, que le téléphone utilisera pour chiffrer l'agenda. Sans
+   *   elle l'appairage a lieu, mais rien n'est transféré.
+   */
+  async createPairingSession(clePublique) {
+    const d = await tcAppel('POST', '/appairage/creer',
+      clePublique ? { cle_publique: clePublique } : {}, false);
+    return {
+      code: d.code,
+      sessionId: d.sessionId,
+      expire_dans_minutes: d.expire_dans_minutes
+    };
   },
 
+  /** Rend la clé publique de l'appareil qui attend, s'il en a déposé une. */
   async approvePairing(code) {
-    await tcAppel('POST', '/appairage/approuver', { code: code });
+    const d = await tcAppel('POST', '/appairage/approuver', { code: code });
+    return { clePublique: d.cle_publique || null };
+  },
+
+  /** Dépose l'agenda chiffré à destination de l'appareil qui attend.
+   *  Le serveur ne fait que le relayer : il n'en détient aucune clé. */
+  async deposerDonneesAppairage(code, clePublique, paquet) {
+    await tcAppel('POST', '/appairage/donnees', {
+      code: code,
+      cle_publique: clePublique,
+      paquet: paquet
+    });
     return true;
   },
 
   /**
    * Interroge l'état de l'appairage depuis le nouvel appareil.
    * Une fois approuvé, la session est ouverte et le jeton conservé.
-   * @returns {'attente'|'expire'|'approuve'}
+   * @returns {'attente'|'transfert'|'expire'|'approuve'} — « transfert »
+   *   signifie approuvé, mais l'agenda chiffré n'est pas encore arrivé.
    */
   async checkPairingStatus(sessionId) {
     const d = await tcAppel('GET', '/appairage/statut?sessionId=' + encodeURIComponent(sessionId), undefined, false);
     if (d.statut === 'approuve') {
       tcPoserJeton(d.session.jeton);
-      return { statut: 'approuve', compte: d.compte };
+      return {
+        statut: 'approuve',
+        compte: d.compte,
+        paquet: d.paquet || null,
+        paquetCle: d.paquet_cle || null
+      };
     }
     return { statut: d.statut };
   },
@@ -14076,46 +14109,286 @@ function saveConvocations() {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   APPAIRAGE MULTI-APPAREILS — style WhatsApp Web
-   Voir la conversation du 22/08 : version web/PC de TimeCool,
-   synchronisée avec le mobile via un code à usage unique.
-   Comme pour la convocation de groupe, ce fichier étant déjà un
-   seul HTML/CSS/JS, la "version PC" est en réalité le même fichier
-   ouvert dans un navigateur d'ordinateur — pas une app séparée à
-   construire depuis zéro. Ce qui manque, c'est uniquement le lien
-   entre les deux appareils, géré ici via TC_BACKEND.
+   APPAIRAGE MULTI-APPAREILS
+
+   Le téléphone est la source de vérité, le navigateur en est le
+   reflet. Le code à six chiffres AUTORISE l'appairage ; il ne protège
+   rien — un million de combinaisons se parcourt en quelques secondes.
+   Les données voyagent donc dans un canal chiffré à part, décrit plus
+   bas, dont le serveur ne détient aucune clé.
    ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Illustration de l'écran d'appairage : un agenda TimeCool et quelques
+ * rendez-vous qui flottent autour.
+ *
+ * Dessinée dans la page plutôt que chargée comme image : rien à
+ * télécharger, elle suit le thème, et ses couleurs sont celles des
+ * catégories de rendez-vous — pas une palette de plus.
+ */
+function tcIllustrationAgenda() {
+  const C = TC_COULEURS_CATEGORIES;
+  const bloc = function (x, y, h, cat) {
+    const c = C[cat];
+    return '<rect x="' + x + '" y="' + y + '" width="46" height="' + h + '" rx="4" fill="' + c.bg + '"/>'
+      + '<rect x="' + x + '" y="' + y + '" width="3" height="' + h + '" rx="1.5" fill="' + c.color + '"/>'
+      + '<rect x="' + (x + 8) + '" y="' + (y + 5) + '" width="28" height="3" rx="1.5" fill="' + c.color + '" opacity=".55"/>'
+      + (h > 18 ? '<rect x="' + (x + 8) + '" y="' + (y + 12) + '" width="18" height="3" rx="1.5" fill="' + c.color + '" opacity=".3"/>' : '');
+  };
+  // Les cartes qui flottent : un point de couleur et deux lignes, comme
+  // un rendez-vous vu de loin.
+  const carte = function (x, y, cat, classe) {
+    const c = C[cat];
+    return '<g class="tc-flot ' + classe + '">'
+      + '<rect x="' + x + '" y="' + y + '" width="58" height="30" rx="8" fill="#fff" stroke="' + c.color + '" stroke-width="1.5"/>'
+      + '<circle cx="' + (x + 12) + '" cy="' + (y + 15) + '" r="5" fill="' + c.color + '"/>'
+      + '<rect x="' + (x + 22) + '" y="' + (y + 9) + '" width="26" height="3.5" rx="1.75" fill="#c4c9ce"/>'
+      + '<rect x="' + (x + 22) + '" y="' + (y + 17) + '" width="17" height="3.5" rx="1.75" fill="#dadde0"/>'
+      + '</g>';
+  };
+
+  return ''
+    + '<style>'
+    + '@keyframes tcFlotte{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}'
+    + '.tc-flot{animation:tcFlotte 3.4s ease-in-out infinite}'
+    + '.tc-f2{animation-delay:.8s}.tc-f3{animation-delay:1.7s}'
+    + '@media (prefers-reduced-motion:reduce){.tc-flot{animation:none}}'
+    + '</style>'
+    + '<svg viewBox="0 0 320 200" width="100%" style="max-width:300px; display:block; margin:0 auto;"'
+    + ' role="img" aria-label="Un agenda TimeCool et ses rendez-vous">'
+    + '<ellipse cx="160" cy="187" rx="92" ry="6" fill="' + C.travail.color + '" opacity=".09"/>'
+    // Pied et écran
+    + '<path d="M108 166h104l12 12H96z" fill="#dce7fa"/>'
+    + '<rect x="150" y="158" width="20" height="10" fill="#c7d8f6"/>'
+    + '<rect x="60" y="24" width="200" height="136" rx="12" fill="#fff" stroke="' + C.travail.color + '" stroke-width="3"/>'
+    + '<path d="M60 36a12 12 0 0 1 12-12h176a12 12 0 0 1 12 12v7H60z" fill="' + C.travail.color + '"/>'
+    + '<circle cx="72" cy="33" r="2.3" fill="#fff" opacity=".85"/>'
+    + '<circle cx="81" cy="33" r="2.3" fill="#fff" opacity=".85"/>'
+    + '<circle cx="90" cy="33" r="2.3" fill="#fff" opacity=".85"/>'
+    // Colonne des heures et lignes de la grille
+    + '<rect x="68" y="56" width="12" height="3" rx="1.5" fill="#e3e6e9"/>'
+    + '<rect x="68" y="82" width="12" height="3" rx="1.5" fill="#e3e6e9"/>'
+    + '<rect x="68" y="108" width="12" height="3" rx="1.5" fill="#e3e6e9"/>'
+    + '<rect x="68" y="134" width="12" height="3" rx="1.5" fill="#e3e6e9"/>'
+    + '<line x1="88" y1="53" x2="250" y2="53" stroke="#f1f3f4" stroke-width="1.5"/>'
+    + '<line x1="88" y1="79" x2="250" y2="79" stroke="#f1f3f4" stroke-width="1.5"/>'
+    + '<line x1="88" y1="105" x2="250" y2="105" stroke="#f1f3f4" stroke-width="1.5"/>'
+    + '<line x1="88" y1="131" x2="250" y2="131" stroke="#f1f3f4" stroke-width="1.5"/>'
+    // Les rendez-vous
+    + bloc(92, 50, 24, 'travail')
+    + bloc(92, 100, 16, 'sport')
+    + bloc(146, 62, 28, 'sante')
+    + bloc(146, 112, 20, 'famille')
+    + bloc(200, 48, 22, 'amis')
+    + bloc(200, 92, 30, 'personnel')
+    // Ce qui flotte autour
+    + carte(6, 44, 'voyages', 'tc-f1')
+    + carte(252, 96, 'sport', 'tc-f2')
+    + carte(24, 128, 'famille', 'tc-f3')
+    + '</svg>';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TRANSFERT DE L'AGENDA D'UN APPAREIL À L'AUTRE
+
+   Chaque appareil fabrique une paire de clés (ECDH P-256) et n'envoie
+   que la moitié publique. Chacun calcule alors, de son côté, la même
+   clé AES à partir de sa moitié privée et de la publique de l'autre :
+   cette clé n'est jamais transmise et ne peut pas être recalculée
+   depuis ce qui transite.
+
+   Le serveur relaie donc un paquet qu'il ne peut pas lire, et l'efface
+   dès qu'il est livré.
+   ══════════════════════════════════════════════════════════════ */
+
+const TC_ECDH = { name: 'ECDH', namedCurve: 'P-256' };
+
+async function tcNouvellePaireTransfert() {
+  const paire = await crypto.subtle.generateKey(TC_ECDH, false, ['deriveKey']);
+  return {
+    privee: paire.privateKey,
+    publique: await crypto.subtle.exportKey('jwk', paire.publicKey)
+  };
+}
+
+/** La clé commune aux deux appareils — calculée, jamais échangée. */
+async function tcCleCommune(privee, publiqueJwk) {
+  const pub = await crypto.subtle.importKey('jwk', publiqueJwk, TC_ECDH, false, []);
+  return crypto.subtle.deriveKey({ name: 'ECDH', public: pub }, privee,
+    { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+function tcVersBase64(octets) {
+  const u = new Uint8Array(octets);
+  let s = '';
+  // Par tranches : passer un agenda entier d'un seul coup à
+  // String.fromCharCode dépasse la taille maximale de la pile d'appels.
+  for (let i = 0; i < u.length; i += 8192) {
+    s += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+  }
+  return btoa(s);
+}
+
+function tcDepuisBase64(txt) {
+  const bin = atob(txt);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+
+async function tcChiffrerPaquet(cle, objet) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const chiffre = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cle,
+    new TextEncoder().encode(JSON.stringify(objet)));
+  // L'IV précède le message : il n'a pas à être secret, seulement unique.
+  const tout = new Uint8Array(12 + chiffre.byteLength);
+  tout.set(iv, 0);
+  tout.set(new Uint8Array(chiffre), 12);
+  return tcVersBase64(tout);
+}
+
+async function tcDechiffrerPaquet(cle, base64) {
+  const tout = tcDepuisBase64(base64);
+  const clair = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: tout.subarray(0, 12) },
+    cle, tout.subarray(12));
+  return JSON.parse(new TextDecoder().decode(clair));
+}
+
+/* Les réglages qui suivent l'utilisateur. Ni la clé de chiffrement de
+   l'appareil, ni le jeton de session, ni la biométrie : ils ne veulent
+   rien dire ailleurs. */
+const TC_REGLAGES_TRANSFERES = [
+  TC_AGENDA_FETES_KEY, TC_TRADITIONS_KEY, TC_TRI_ANNIV_KEY, TC_TRI_TACHES_KEY
+];
+
+/**
+ * Ce que le téléphone envoie.
+ *
+ * Les rendez-vous partent EN CLAIR dans le paquet — et non tels qu'ils
+ * sont stockés. Ils sont chiffrés en local avec la clé de cet
+ * appareil-ci, qui ne vaut nulle part ailleurs : recopiés tels quels,
+ * ils seraient illisibles à l'arrivée. Ils ne quittent pas le téléphone
+ * en clair pour autant, le paquet entier étant chiffré ensuite.
+ */
+function tcRassemblerDonnees() {
+  const reglages = {};
+  TC_REGLAGES_TRANSFERES.forEach(function (k) {
+    const v = localStorage.getItem(k);
+    if (v !== null) reglages[k] = v;
+  });
+  return {
+    version: 1,
+    cree_le: new Date().toISOString(),
+    evenements: events.filter(function (e) {
+      return e.mode === 'user' || (e.id && e.id.indexOf('charly_ai_') === 0);
+    }),
+    taches: tasksList,
+    anniversaires: birthdays,
+    reglages: reglages
+  };
+}
+
+/** Installe l'agenda reçu. saveEventsToStorage() le rechiffre aussitôt
+ *  avec la clé de CET appareil. Retourne ce qui a été repris. */
+async function tcInstallerDonnees(p) {
+  if (!p || p.version !== 1) throw new Error('Paquet illisible');
+  const bilan = { evenements: 0, taches: 0, anniversaires: 0 };
+
+  if (Array.isArray(p.evenements)) {
+    // Les rendez-vous de démonstration restent : ce sont ceux de
+    // l'utilisateur, et eux seuls, qui sont remplacés.
+    const demo = events.filter(function (e) {
+      return e.mode !== 'user' && !(e.id && e.id.indexOf('charly_ai_') === 0);
+    });
+    events = demo.concat(p.evenements);
+    await saveEventsToStorage();
+    bilan.evenements = p.evenements.length;
+  }
+  if (Array.isArray(p.taches)) {
+    tasksList = p.taches;
+    saveTasks();
+    bilan.taches = p.taches.length;
+  }
+  if (Array.isArray(p.anniversaires)) {
+    birthdays = p.anniversaires;
+    saveBirthdays();
+    bilan.anniversaires = p.anniversaires.length;
+  }
+  if (p.reglages) {
+    Object.keys(p.reglages).forEach(function (k) {
+      // Liste blanche : un paquet malformé ne peut écrire que là où on
+      // l'attend, jamais sur une autre clé du stockage.
+      if (TC_REGLAGES_TRANSFERES.indexOf(k) < 0) return;
+      try { localStorage.setItem(k, String(p.reglages[k])); } catch (e) {}
+    });
+  }
+  return bilan;
+}
+
+/* ── Les deux écrans ──────────────────────────────────────────────
+   Le rôle de chaque appareil ne se demande plus : dans un navigateur on
+   est forcément celui qui arrive, dans l'application le téléphone est
+   celui qui approuve. Le menu qui posait la question à chaque fois
+   n'avait qu'une seule bonne réponse. */
+
 function openDevicePairing() {
   const ov = document.createElement('div');
   ov.className = 'msg-sheet-ov';
   ov.id = 'devicePairingOv';
   // .msg-sheet-ov vaut 60, mais .auth-page vaut 9999 : ouverte depuis
-  // l'ecran de connexion, la fenetre passait DERRIERE lui. On la place
+  // l'écran de connexion, la fenêtre passait DERRIÈRE lui. On la place
   // au-dessus de l'authentification, sous les modales (10100) et les
-  // toasts (10200). Reglage local : la classe partagee ne bouge pas.
+  // toasts (10200). Réglage local : la classe partagée ne bouge pas.
   ov.style.zIndex = '10050';
-  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
-  ov.innerHTML = '<div class="msg-sheet">' +
-    '<div class="msg-sheet-h">🖥️ Lier un nouvel appareil</div>' +
-    '<div style="padding:0 20px 16px; font-size:12px; color:var(--text-sec); line-height:1.5;">Ouvre TimeCool sur ton PC ou Mac dans un navigateur, puis choisis une option ci-dessous.</div>' +
-
-    '<div style="padding:0 20px 10px;"><button onclick="startPairingAsNewDevice()" style="width:100%; padding:13px; background:var(--g-blue); color:#fff; border:none; border-radius:12px; font-size:13.5px; font-weight:700; cursor:pointer;">📺 Ce PC est le nouvel appareil — afficher mon code</button></div>' +
-    '<div id="scanQRZone" style="padding:0 20px 10px; display:none;">' +
-      '<button onclick="tcOuvrirScannerQR()" style="width:100%; padding:13px; background:none; border:1.5px solid var(--g-blue); color:var(--g-blue); border-radius:12px; font-size:13.5px; font-weight:700; cursor:pointer;">📷 Scanner le QR de l’ordinateur</button>' +
-    '</div>' +
-    '<div style="padding:0 20px 6px; text-align:center; font-size:11px; color:#9aa0a6;">— ou —</div>' +
-    '<div style="padding:0 20px 20px;">' +
-      '<input type="text" id="pairingCodeInput" placeholder="Code à 6 chiffres affiché sur l\'autre appareil" maxlength="6" style="width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:16px; font-family:inherit; text-align:center; letter-spacing:3px; margin-bottom:8px;">' +
-      '<button onclick="approvePairingCode()" style="width:100%; padding:13px; background:none; border:1.5px solid var(--g-blue); color:var(--g-blue); border-radius:12px; font-size:13.5px; font-weight:700; cursor:pointer;">✅ Approuver ce code depuis mon compte</button>' +
-    '</div>' +
-    '<div id="pairingStatusZone"></div>' +
-    '</div>';
+  ov.onclick = function (e) { if (e.target === ov) tcFermerAppairage(); };
+  ov.innerHTML = window.TimeCoolNatif ? tcVueApprobation() : tcVueNouvelAppareil();
   document.body.appendChild(ov);
+  if (!window.TimeCoolNatif) startPairingAsNewDevice();
 }
 
-/* Les deux bibliotheques QR ne sont chargees qu a l ouverture de l ecran
-   d appairage : les embarquer dans la page couterait 150 Ko a chaque
-   demarrage pour une fonction utilisee une fois par appareil. */
+function tcFermerAppairage() {
+  tcFermerScanner();
+  const ov = document.getElementById('devicePairingOv');
+  if (ov) ov.remove();
+}
+
+/** Côté navigateur : l'illustration, le code, et l'attente. */
+function tcVueNouvelAppareil() {
+  return '<div class="msg-sheet" style="max-height:92vh; overflow-y:auto;">'
+    + '<div style="padding:22px 20px 6px;">' + tcIllustrationAgenda() + '</div>'
+    + '<div style="padding:14px 24px 0; text-align:center;">'
+      + '<div style="font-size:17px; font-weight:700; color:var(--text);">Retrouvez votre agenda ici</div>'
+      + '<div style="font-size:12.5px; color:var(--text-sec); line-height:1.5; margin-top:6px;">'
+      + 'Saisissez ce code dans TimeCool sur votre téléphone. Vos rendez-vous, tâches et anniversaires seront recopiés sur cet appareil.</div>'
+    + '</div>'
+    + '<div id="pairingStatusZone"></div>'
+    + '</div>';
+}
+
+/** Côté téléphone : c'est lui qui approuve, et qui envoie. */
+function tcVueApprobation() {
+  return '<div class="msg-sheet">'
+    + '<div class="msg-sheet-h">📱 Lier un nouvel appareil</div>'
+    + '<div style="padding:0 20px 16px; font-size:12.5px; color:var(--text-sec); line-height:1.5;">'
+    + 'Ouvrez TimeCool sur votre ordinateur ou dans un autre navigateur. Un code à six chiffres y apparaît : saisissez-le ici.</div>'
+    + '<div style="padding:0 20px 12px;">'
+      + '<input type="text" id="pairingCodeInput" inputmode="numeric" maxlength="6" placeholder="000000"'
+      + ' style="width:100%; padding:14px; border:1.5px solid var(--border); border-radius:12px; font-size:26px; font-family:inherit; font-weight:800; text-align:center; letter-spacing:10px; color:var(--g-blue);">'
+    + '</div>'
+    + '<div style="padding:0 20px 10px;">'
+      + '<button onclick="approvePairingCode()" style="width:100%; padding:13px; background:var(--g-blue); color:#fff; border:none; border-radius:12px; font-size:13.5px; font-weight:700; cursor:pointer;">Lier cet appareil</button>'
+    + '</div>'
+    + '<div style="padding:0 20px 6px; text-align:center; font-size:11px; color:#9aa0a6;">— ou —</div>'
+    + '<div style="padding:0 20px 20px;">'
+      + '<button onclick="tcOuvrirScannerQR()" style="width:100%; padding:13px; background:none; border:1.5px solid var(--g-blue); color:var(--g-blue); border-radius:12px; font-size:13.5px; font-weight:700; cursor:pointer;">📷 Scanner le code QR</button>'
+    + '</div>'
+    + '<div id="pairingStatusZone"></div>'
+    + '</div>';
+}
+
+/* Les deux bibliothèques QR ne sont chargées qu'à l'ouverture de l'écran
+   d'appairage : les embarquer dans la page coûterait 150 Ko à chaque
+   démarrage pour une fonction utilisée une fois par appareil. */
 const TC_QR_LIBS = { gen: 'qrgen.min.js', lect: 'jsqr.min.js' };
 const _tcLibs = {};
 
@@ -14131,8 +14404,8 @@ function tcChargerLib(fichier) {
   return _tcLibs[fichier];
 }
 
-/** Dessine le code d appairage en QR. Silencieux en cas d echec : le code
- *  a 6 chiffres reste affiche au-dessus, l appairage marche sans le QR. */
+/** Dessine le code d'appairage en QR. Silencieux en cas d'échec : le code
+ *  à 6 chiffres reste affiché au-dessus, l'appairage marche sans le QR. */
 async function tcDessinerQR(conteneur, texte) {
   try {
     await tcChargerLib(TC_QR_LIBS.gen);
@@ -14141,28 +14414,60 @@ async function tcDessinerQR(conteneur, texte) {
     qr.make();
     conteneur.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
     const svg = conteneur.querySelector('svg');
-    if (svg) { svg.style.width = '180px'; svg.style.height = '180px'; }
+    if (svg) { svg.style.width = '150px'; svg.style.height = '150px'; }
   } catch (e) { conteneur.innerHTML = ''; }
 }
 
+function tcBasculerQR() {
+  const z = document.getElementById('pairingQRBloc');
+  const b = document.getElementById('pairingQRBouton');
+  if (!z || !b) return;
+  const ouvert = z.style.display !== 'none';
+  z.style.display = ouvert ? 'none' : 'block';
+  b.textContent = ouvert ? 'Afficher le code QR à scanner' : 'Masquer le code QR';
+}
+
+/* La paire de clés du navigateur, pour la durée de cet appairage. La
+   moitié privée n'est jamais exportable ni transmise : elle disparaît
+   avec la page. */
+let _tcPaireTransfert = null;
+
 async function startPairingAsNewDevice() {
   const zone = document.getElementById('pairingStatusZone');
-  zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px;"><div style="font-size:13px; color:var(--text-sec);">Génération du code…</div></div>';
+  if (!zone) return;
+  zone.innerHTML = '<div style="text-align:center; padding:18px 20px 24px; font-size:13px; color:var(--text-sec);">Génération du code…</div>';
+
+  // Sans paire de clés — moteur trop ancien — l'appairage a encore lieu,
+  // mais sans transfert. Mieux vaut lier l'appareil que ne rien faire.
+  _tcPaireTransfert = null;
+  try { _tcPaireTransfert = await tcNouvellePaireTransfert(); }
+  catch (e) { console.warn('Transfert indisponible sur ce moteur :', e); }
+
   let session;
   try {
-    session = await TC_BACKEND.createPairingSession();
+    session = await TC_BACKEND.createPairingSession(
+      _tcPaireTransfert ? _tcPaireTransfert.publique : null);
   } catch (e) {
-    zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; color:#9aa0a6;">❌ ' + (e.message || 'Génération du code impossible') + '</div>';
+    zone.innerHTML = '<div style="text-align:center; padding:18px 20px 24px; font-size:12.5px; color:#9aa0a6;">❌ '
+      + escapeHTMLSafe(e.message || 'Génération du code impossible') + '</div>';
     return;
   }
 
   zone.innerHTML =
-    '<div style="text-align:center; padding:6px 20px 20px;">' +
-      '<div style="font-size:32px; font-weight:800; letter-spacing:6px; color:var(--g-blue); margin-bottom:8px;">' + session.code + '</div>' +
-      '<div style="font-size:11.5px; color:var(--text-sec); line-height:1.5;">Sur ton téléphone : TimeCool → menu → <b>Lier un nouvel appareil</b>, puis saisis ce code.</div>' +
-      '<div id="pairingQR" style="display:flex; justify-content:center; margin:14px 0 4px;"></div>' +
-      '<div id="pairingAttente" style="margin-top:12px; font-size:11.5px; color:#9aa0a6;">⏳ En attente de validation…</div>' +
-    '</div>';
+    '<div style="text-align:center; padding:16px 20px 22px;">'
+      + '<div style="display:inline-block; padding:12px 20px; border:2px dashed var(--border); border-radius:14px;">'
+        + '<div style="font-size:34px; font-weight:800; letter-spacing:8px; color:var(--g-blue); font-variant-numeric:tabular-nums;">'
+        + escapeHTMLSafe(session.code) + '</div>'
+      + '</div>'
+      + '<div style="font-size:11.5px; color:var(--text-sec); line-height:1.5; margin-top:12px;">'
+        + 'Sur votre téléphone : <b>menu → Lier un nouvel appareil</b>'
+      + '</div>'
+      + '<div id="pairingAttente" style="margin-top:14px; font-size:12px; color:#9aa0a6;">⏳ En attente de validation…</div>'
+      + '<div id="pairingQRBouton" onclick="tcBasculerQR()" style="margin-top:16px; font-size:11.5px; color:var(--g-blue); font-weight:600; cursor:pointer;">Afficher le code QR à scanner</div>'
+      + '<div id="pairingQRBloc" style="display:none; margin-top:10px;">'
+        + '<div id="pairingQR" style="display:flex; justify-content:center;"></div>'
+      + '</div>'
+    + '</div>';
 
   const zoneQR = document.getElementById('pairingQR');
   if (zoneQR) tcDessinerQR(zoneQR, session.code);
@@ -14180,16 +14485,15 @@ async function startPairingAsNewDevice() {
  */
 function tcSuivreAppairage(sessionId, minutes) {
   const echeance = Date.now() + minutes * 60000;
+  const perime = function () {
+    const att = document.getElementById('pairingAttente');
+    if (att) att.innerHTML = '⌛ Code expiré. <span onclick="startPairingAsNewDevice()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">En générer un nouveau</span>';
+  };
 
   const minuteur = setInterval(async function () {
     if (!document.getElementById('devicePairingOv')) { clearInterval(minuteur); return; }
 
-    if (Date.now() > echeance) {
-      clearInterval(minuteur);
-      const att = document.getElementById('pairingAttente');
-      if (att) att.innerHTML = '⌛ Code expiré. <span onclick="startPairingAsNewDevice()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">En générer un nouveau</span>';
-      return;
-    }
+    if (Date.now() > echeance) { clearInterval(minuteur); perime(); return; }
 
     let etat;
     try {
@@ -14198,18 +14502,83 @@ function tcSuivreAppairage(sessionId, minutes) {
       return; // Coupure réseau passagère : on retentera au prochain tour.
     }
 
-    if (etat.statut === 'expire') {
-      clearInterval(minuteur);
+    if (etat.statut === 'expire') { clearInterval(minuteur); perime(); return; }
+
+    // Le téléphone a approuvé et prépare l'envoi : on le dit, plutôt que
+    // de laisser « En attente de validation » alors que c'est fait.
+    if (etat.statut === 'transfert') {
       const att = document.getElementById('pairingAttente');
-      if (att) att.innerHTML = '⌛ Code expiré. <span onclick="startPairingAsNewDevice()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">En générer un nouveau</span>';
+      if (att) att.innerHTML = '📥 Récupération de votre agenda…';
       return;
     }
 
     if (etat.statut === 'approuve') {
       clearInterval(minuteur);
+      let bilan = null;
+      if (etat.paquet && etat.paquetCle && _tcPaireTransfert) {
+        try {
+          const cle = await tcCleCommune(_tcPaireTransfert.privee, etat.paquetCle);
+          bilan = await tcInstallerDonnees(await tcDechiffrerPaquet(cle, etat.paquet));
+        } catch (e) {
+          // Le compte est lié quand même : c'est l'agenda qui manque, pas
+          // l'accès. Le dire franchement plutôt que d'ouvrir une page
+          // vide sans explication.
+          console.warn('Transfert illisible :', e);
+          showToast('⚠️ Agenda non transféré — l’appareil est lié');
+        }
+      }
       tcOuvrirSessionAppairee(etat.compte);
+      if (bilan) {
+        showToast('📥 ' + bilan.evenements + ' rendez-vous repris');
+        if (typeof renderMenu === 'function') renderMenu();
+        if (typeof updateBadges === 'function') updateBadges();
+        if (typeof render === 'function') render();
+      }
     }
   }, 3000);
+}
+
+/**
+ * Côté téléphone : approuve le code, puis envoie l'agenda chiffré.
+ *
+ * Les deux étapes sont distinctes dans les messages : un envoi qui
+ * échoue ne doit pas laisser croire que l'appairage a échoué, alors que
+ * l'appareil est bel et bien lié.
+ */
+async function tcLierPuisEnvoyer(code) {
+  const zone = document.getElementById('pairingStatusZone');
+  const dire = function (couleur, texte) {
+    if (zone) {
+      zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; font-weight:600; color:'
+        + couleur + ';">' + texte + '</div>';
+    }
+  };
+
+  let rep;
+  try {
+    rep = await TC_BACKEND.approvePairing(code);
+  } catch (e) {
+    dire('#9aa0a6', '❌ ' + escapeHTMLSafe(e.message || 'Code invalide ou expiré'));
+    return;
+  }
+
+  if (!rep.clePublique) {
+    dire('var(--g-green)', '✅ Appareil lié');
+    showToast('✅ Appareil lié');
+    return;
+  }
+
+  dire('var(--text-sec)', '⏳ Envoi de votre agenda…');
+  try {
+    const paire = await tcNouvellePaireTransfert();
+    const cle = await tcCleCommune(paire.privee, rep.clePublique);
+    const paquet = await tcChiffrerPaquet(cle, tcRassemblerDonnees());
+    await TC_BACKEND.deposerDonneesAppairage(code, paire.publique, paquet);
+    dire('var(--g-green)', '✅ Appareil lié — agenda transmis');
+    showToast('✅ Agenda transmis');
+  } catch (e) {
+    dire('#f9ab00', '✅ Appareil lié, mais l’agenda n’a pas pu être envoyé.<br>Réessayez avec un nouveau code.');
+  }
 }
 
 /**
@@ -14314,15 +14683,11 @@ function tcFermerScanner() {
   if (_tcFlux) { _tcFlux.getTracks().forEach(function (t) { t.stop(); }); _tcFlux = null; }
 }
 
+/* Code lu au QR ou saisi à la main : même suite d'opérations. Les deux
+   chemins divergeaient, et seul celui du clavier affichait « bientôt
+   disponible » alors que la fonction marchait. */
 async function tcApprouverCodeScanne(code) {
-  const zone = document.getElementById('pairingStatusZone');
-  try {
-    await TC_BACKEND.approvePairing(code);
-    if (zone) zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:13px; color:var(--g-green); font-weight:600;">✅ Appareil lié avec succès</div>';
-    showToast('✅ Appareil lié');
-  } catch (e) {
-    if (zone) zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; color:#9aa0a6;">❌ ' + (e.message || 'Code invalide ou expiré') + '</div>';
-  }
+  await tcLierPuisEnvoyer(code);
 }
 
 /** Appelee par MainActivity quand Android refuse la permission camera. */
@@ -14331,15 +14696,10 @@ function tcCameraRefusee() {
 }
 
 async function approvePairingCode() {
-  const code = document.getElementById('pairingCodeInput').value.trim();
-  const zone = document.getElementById('pairingStatusZone');
-  if (code.length !== 6) { showToast('⚠️ Le code doit comporter 6 chiffres'); return; }
-  try {
-    await TC_BACKEND.approvePairing(code);
-    zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:13px; color:var(--g-green); font-weight:600;">✅ Appareil lié avec succès</div>';
-  } catch(e) {
-    zone.innerHTML = '<div style="text-align:center; padding:10px 20px 20px; font-size:12.5px; color:#9aa0a6;">⏳ Cette fonctionnalité sera bientôt disponible.</div>';
-  }
+  const champ = document.getElementById('pairingCodeInput');
+  const code = (champ ? champ.value : '').replace(/\D/g, '');
+  if (code.length !== 6) { showToast('⚠️ Le code comporte six chiffres'); return; }
+  await tcLierPuisEnvoyer(code);
 }
 
 function openConvocationSheet() {

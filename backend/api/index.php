@@ -500,15 +500,31 @@ switch ($route) {
     // ═══════════════════════════════════════════════════════════
     case 'POST /appairage/creer':
         $minutes = (int) Conf::get('appairage_minutes', 10);
+
+        // Cle publique du nouvel appareil, facultative : sans elle
+        // l appairage fonctionne comme avant, mais sans transfert de
+        // donnees. Une version ancienne de l application reste donc
+        // compatible.
+        $cleNouvelAppareil = Entree::corps()['cle_publique'] ?? null;
+        $cleJson = null;
+        if ($cleNouvelAppareil !== null) {
+            if (!is_array($cleNouvelAppareil)) {
+                Rep::erreur(400, 'cle_invalide', 'Champ cle_publique invalide.');
+            }
+            $cleJson = json_encode($cleNouvelAppareil, JSON_UNESCAPED_UNICODE);
+            if (strlen($cleJson) > 2000) {
+                Rep::erreur(400, 'cle_invalide', 'Clé publique trop volumineuse.');
+            }
+        }
         // Un code court est deviné facilement : il expire vite et ne vaut
         // que pour un appairage, jamais pour une connexion.
         for ($essai = 0; $essai < 8; $essai++) {
             $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             try {
                 Db::req(
-                    'INSERT INTO appairages (code, expire_le)
-                     VALUES (?, DATE_ADD(NOW(), INTERVAL ? MINUTE))',
-                    [$code, $minutes]
+                    'INSERT INTO appairages (code, cle_publique, expire_le)
+                     VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))',
+                    [$code, $cleJson, $minutes]
                 );
                 Rep::ok([
                     'code'      => $code,
@@ -538,6 +554,52 @@ switch ($route) {
         if ($maj->rowCount() === 0) {
             Rep::erreur(404, 'code_invalide', 'Code inconnu, déjà utilisé ou expiré.');
         }
+
+        // La clé publique du navigateur est rendue ici : c est avec elle
+        // que le téléphone chiffrera les données. Nulle si l autre
+        // appareil n en a pas déposé — l appairage se fait alors sans
+        // transfert.
+        $att = Db::un('SELECT cle_publique FROM appairages WHERE code = ?', [$code]);
+        Rep::ok([
+            'cle_publique' => ($att && $att['cle_publique'] !== null)
+                ? json_decode($att['cle_publique'], true)
+                : null,
+        ]);
+
+    /* Dépôt des données chiffrées, depuis le téléphone qui vient
+       d approuver. Le contenu est opaque pour le serveur : il est
+       chiffré avec une clé dérivée de la clé publique du navigateur,
+       dont la moitié privée n a jamais quitté celui-ci. */
+    case 'POST /appairage/donnees':
+        $compte = Auth::compte();
+        $code = Entree::requis('code', 6);
+        $corps = Entree::corps();
+        $paquet = $corps['paquet'] ?? null;
+        $cleSource = $corps['cle_publique'] ?? null;
+        if (!is_string($paquet) || $paquet === '' || !is_array($cleSource)) {
+            Rep::erreur(400, 'paquet_invalide', 'Champs paquet et cle_publique requis.');
+        }
+        // Au-delà de cette taille il ne s agit plus d un agenda.
+        $maxPaquet = (int) Conf::get('appairage_paquet_max', 4000000);
+        if (strlen($paquet) > $maxPaquet) {
+            Rep::erreur(413, 'paquet_trop_gros', 'Données trop volumineuses pour le transfert.');
+        }
+
+        $depot = Db::req(
+            'UPDATE appairages
+                SET paquet = ?, paquet_cle = ?, paquet_le = NOW()
+              WHERE code = ? AND statut = "approuve" AND compte_id = ?
+                AND expire_le > NOW()',
+            [
+                $paquet,
+                json_encode($cleSource, JSON_UNESCAPED_UNICODE),
+                $code,
+                $compte['id'],
+            ]
+        );
+        if ($depot->rowCount() === 0) {
+            Rep::erreur(404, 'appairage_inconnu', 'Appairage inconnu, expiré ou déjà consommé.');
+        }
         Rep::ok();
 
     // TC_BACKEND.checkPairingStatus — depuis le nouvel appareil.
@@ -558,9 +620,24 @@ switch ($route) {
             Rep::ok(['statut' => $expire ? 'expire' : 'attente']);
         }
 
+        // Approuvé, mais les données n ont pas encore été déposées : on
+        // laisse au téléphone le temps de les envoyer. Sans cette
+        // attente, le navigateur consommerait la session aussitôt et
+        // s ouvrirait sur un agenda vide. Passé ce délai on lie quand
+        // même — mieux vaut un appareil lié sans données qu un écran
+        // bloqué.
+        if ($a['paquet'] === null
+            && $a['cle_publique'] !== null
+            && (time() - strtotime($a['approuve_le']))
+               < (int) Conf::get('appairage_transfert_secondes', 25)) {
+            Rep::ok(['statut' => 'transfert']);
+        }
+
         // Approuvé : le code est consommé et échangé contre une session.
         // Il ne peut jamais servir deux fois.
-        Db::req('UPDATE appairages SET statut = "annule" WHERE id = ?', [$id]);
+        // Le paquet est effacé en même temps : il est livré une fois, et
+        // ne subsiste pas en base une seconde de plus que nécessaire.
+        Db::req('UPDATE appairages SET statut = "annule", paquet = NULL WHERE id = ?', [$id]);
         $c = Db::un('SELECT * FROM comptes WHERE id = ?', [$a['compte_id']]);
         if ($c === null) {
             Rep::erreur(410, 'compte_absent', 'Le compte associé n existe plus.');
@@ -569,6 +646,10 @@ switch ($route) {
             'statut'  => 'approuve',
             'compte'  => vueCompte($c),
             'session' => ouvrirSession((int) $c['id'], Entree::texte('appareil', 160)),
+            'paquet'  => $a['paquet'],
+            'paquet_cle' => $a['paquet_cle'] !== null
+                ? json_decode($a['paquet_cle'], true)
+                : null,
         ]);
 
     // ═══════════════════════════════════════════════════════════
