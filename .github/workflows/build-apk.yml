@@ -38,7 +38,16 @@ jobs:
           gradle-version: '8.7'
 
       - name: Generate Gradle wrapper jar
-        run: gradle wrapper --gradle-version=8.7 --distribution-type=bin
+        run: |
+          # Le depot Maven repond parfois « 429 Too Many Requests ».
+          # On retente plutot que d echouer sur un incident passager.
+          for essai in 1 2 3; do
+            gradle wrapper --gradle-version=8.7 --distribution-type=bin && exit 0
+            echo "Tentative $essai en echec, nouvelle tentative dans 45 s."
+            sleep 45
+          done
+          echo "Trois tentatives en echec." >&2
+          exit 1
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -78,7 +87,16 @@ jobs:
           VERSION_CODE: ${{ steps.version.outputs.code }}
           BUILD_TIME: ${{ steps.version.outputs.build_time }}
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
-        run: ./gradlew assembleRelease --stacktrace
+        run: |
+          # Le depot Maven repond parfois « 429 Too Many Requests ».
+          # On retente plutot que d echouer sur un incident passager.
+          for essai in 1 2 3; do
+            ./gradlew assembleRelease --stacktrace && exit 0
+            echo "Tentative $essai en echec, nouvelle tentative dans 45 s."
+            sleep 45
+          done
+          echo "Trois tentatives en echec." >&2
+          exit 1
 
       # Nom de fichier volontairement fixe : l'URL permanente
       # releases/latest/download/timecool.apk en dépend.
