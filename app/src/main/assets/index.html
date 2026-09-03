@@ -14210,8 +14210,84 @@ const TC_SYNC_TYPES = {
     lire: function () { return typeof contactsList === 'undefined' ? [] : contactsList; },
     id: function (o) { return o.id; },
     poser: function (liste) { contactsList = liste; saveContacts(); }
+  },
+  /*
+   * Les réglages, une clé à la fois.
+   *
+   * Un seul bloc aurait suffi à les faire circuler, mais changer le
+   * thème sur le téléphone pendant qu'on change la langue sur le web
+   * aurait fait perdre l'un des deux. Chaque réglage suit donc son
+   * propre chemin, exactement comme un rendez-vous.
+   */
+  reglage: {
+    lire: function () {
+      const l = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!tcCleReglage(k)) continue;
+        const v = localStorage.getItem(k);
+        if (v === null) continue;
+        // Au-delà de cette taille, ce n'est plus un réglage : l'historique
+        // des conversations, par exemple. Le serveur refuse les éléments
+        // trop gros, et un refus ferait échouer TOUT l'envoi — un thème
+        // ne partirait plus parce qu'une conversation est trop longue.
+        // Ces contenus voyagent à l'appairage, pas ici.
+        if (v.length > TC_SYNC_REGLAGE_MAX) continue;
+        l.push({ id: k, v: v });
+      }
+      return l;
+    },
+    id: function (o) { return o.id; },
+    poser: function (liste) {
+      const voulus = {};
+      liste.forEach(function (o) { voulus[o.id] = o.v; });
+
+      // Un réglage effacé ailleurs doit l'être ici : la liste reçue dit
+      // ce qui existe, pas seulement ce qui a changé.
+      const ici = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (tcCleReglage(k)) ici.push(k);
+      }
+      ici.forEach(function (k) {
+        if (!(k in voulus)) { try { localStorage.removeItem(k); } catch (e) {} }
+      });
+
+      Object.keys(voulus).forEach(function (k) {
+        try { localStorage.setItem(k, voulus[k]); } catch (e) {}
+      });
+
+      /*
+       * Des modules entiers ne lisent leurs réglages qu'au démarrage.
+       * Tenir la liste de ceux qu'il faudrait rappeler la ferait se
+       * périmer à la première fonction ajoutée : on rafraîchit donc ce
+       * qui se voit immédiatement, et le reste prend effet au prochain
+       * affichage de l'écran concerné.
+       */
+      if (typeof applyTheme === 'function' && voulus.tc_theme
+          && voulus.tc_theme !== currentTheme) {
+        try { applyTheme(voulus.tc_theme); } catch (e) {}
+      }
+    }
   }
 };
+
+/* Taille au-delà de laquelle un contenu n'est plus un réglage. */
+const TC_SYNC_REGLAGE_MAX = 100000;
+
+/* Ces clés portent des données déjà synchronisées objet par objet.
+   Les faire voyager AUSSI comme réglages ferait s'affronter deux
+   mécanismes sur la même donnée : le bloc entier écraserait des
+   modifications venues d'un autre appareil. */
+const TC_SYNC_DEJA_SYNCHRONISE = [
+  'tc_user_events', 'tc_user_tasks', 'timecool_birthdays', 'timecool_contacts'
+];
+
+/** Une clé est-elle un réglage à synchroniser ? */
+function tcCleReglage(k) {
+  if (!tcCleTransferable(k)) return false;
+  return TC_SYNC_DEJA_SYNCHRONISE.indexOf(k) < 0;
+}
 
 /**
  * Empreinte d'un objet, insensible à l'ordre des champs.
