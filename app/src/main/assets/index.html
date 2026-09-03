@@ -13612,6 +13612,13 @@ const TC_BACKEND = {
     };
   },
 
+  /** Le numéro atteint par le compte, et rien d'autre. Assez léger
+   *  pour être demandé chaque seconde. */
+  async syncVersionServeur() {
+    const d = await tcAppel('GET', '/sync/version');
+    return d.version || 0;
+  },
+
   /** Ce que cet appareil a modifié. Un contenu nul vaut suppression. */
   async syncPousser(elements) {
     const d = await tcAppel('POST', '/sync', { elements: elements });
@@ -14169,7 +14176,6 @@ function saveConvocations() {
 
 const TC_SYNC_VERSION_KEY = 'tc_sync_version';
 const TC_SYNC_EMPREINTES_KEY = 'tc_sync_empreintes';
-const TC_SYNC_PERIODE = 12000;
 
 /**
  * Les familles d'objets synchronisées.
@@ -14470,6 +14476,7 @@ async function tcSyncTour() {
   if (_tcSyncEnCours) return;
   if (!tcJeton() || !tcSyncCompte()) return;   // pas de session : rien à faire
   _tcSyncEnCours = true;
+  _tcDernierTourComplet = Date.now();
   try {
     const recus = await tcSyncTirer();
     await tcSyncPousser();
@@ -14508,17 +14515,80 @@ function tcSyncBientot() {
   }, 1500);
 }
 
+/* Rythme de la sonde. Une seconde tant que quelqu'un se sert de
+   l'application, quinze dès qu'elle est laissée de côté. */
+const TC_SONDE_ACTIVE = 1000;
+const TC_SONDE_REPOS = 15000;
+
+/* Même sans rien de neuf annoncé, un tour complet de temps en temps
+   rattrape un curseur qui aurait dérivé — une réponse perdue, un
+   enregistrement local refusé. */
+const TC_SYNC_FILET = 60000;
+
+let _tcDerniereAction = Date.now();
+let _tcDernierTourComplet = 0;
+let _tcSonde = null;
+
+/** L'application est-elle sous les yeux de quelqu'un ? */
+function tcSyncActif() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return false;
+  return (Date.now() - _tcDerniereAction) < 90000;
+}
+
+/**
+ * Demande le numéro du serveur, et ne déclenche un vrai tour que s'il a
+ * bougé.
+ *
+ * Le compteur ne redescend jamais : une différence signifie qu'il y a
+ * du nouveau — venu d'un autre appareil, ou nos propres écritures qui
+ * n'ont pas encore fait leur retour.
+ */
+async function tcSyncSonde() {
+  if (_tcSyncEnCours) return;
+  if (!tcJeton() || !tcSyncCompte()) return;
+  try {
+    if (Date.now() - _tcDernierTourComplet > TC_SYNC_FILET) {
+      await tcSyncTour();
+      return;
+    }
+    if (await TC_BACKEND.syncVersionServeur() !== tcSyncEtat().version) {
+      await tcSyncTour();
+    }
+  } catch (e) {
+    // Hors ligne : le prochain passage retentera. Rien n'est perdu.
+  }
+}
+
+function tcSyncPlanifier() {
+  if (_tcSonde) clearTimeout(_tcSonde);
+  _tcSonde = setTimeout(async function () {
+    await tcSyncSonde();
+    tcSyncPlanifier();
+  }, tcSyncActif() ? TC_SONDE_ACTIVE : TC_SONDE_REPOS);
+}
+
 function tcSyncDemarrer() {
   if (_tcSyncMinuteur) return;
+  _tcSyncMinuteur = true;
   tcSyncTour();
-  _tcSyncMinuteur = setInterval(function () {
-    // Onglet caché : inutile de tenir le réseau et la batterie éveillés.
-    if (document.visibilityState !== 'hidden') tcSyncTour();
-  }, TC_SYNC_PERIODE);
-  // Au retour sur l'onglet, on rattrape tout de suite plutôt que
-  // d'attendre le prochain tour.
+  tcSyncPlanifier();
+
+  // Toute action de l'utilisateur relance le rythme rapide. Sans le
+  // replanifier ici, on attendrait la fin du délai lent en cours —
+  // jusqu'à quinze secondes après avoir touché l'écran.
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) {
+    document.addEventListener(ev, function () {
+      const dormait = !tcSyncActif();
+      _tcDerniereAction = Date.now();
+      if (dormait) tcSyncPlanifier();
+    }, { passive: true, capture: true });
+  });
+
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') tcSyncTour();
+    if (document.visibilityState !== 'visible') return;
+    _tcDerniereAction = Date.now();
+    tcSyncTour();
+    tcSyncPlanifier();
   });
   window.addEventListener('online', function () { tcSyncTour(); });
 }

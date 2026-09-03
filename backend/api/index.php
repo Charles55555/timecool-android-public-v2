@@ -519,6 +519,17 @@ switch ($route) {
     // ═══════════════════════════════════════════════════════════
 
     /*
+     * Le numero atteint par ce compte, et rien d autre.
+     *
+     * Interrogee tres souvent, elle doit couter le moins possible : une
+     * seule colonne, deja chargee par la verification de session. Aucun
+     * acces a la table des elements.
+     */
+    case 'GET /sync/version':
+        $compte = Auth::compte();
+        Rep::ok(['version' => (int) $compte['compteur_sync']]);
+
+    /*
      * Ce qui a changé depuis la version que l'appareil connaît.
      *
      * Les suppressions sont rendues elles aussi, marquées : sans cela un
