@@ -13598,11 +13598,28 @@ const TC_BACKEND = {
 
   // ─── Espace administrateur ───────────────────────────────────
 
-  /** Tous les comptes, du plus récent au plus ancien. 403 si le compte
-   *  connecté n'est pas administrateur. */
+  /** Tous les comptes, du plus récent au plus ancien, plus sa propre
+   *  référence — l'écran doit savoir quelle fiche est la sienne. 403 si
+   *  le compte connecté n'est pas administrateur. */
   async listerUtilisateurs() {
     const d = await tcAppel('GET', '/admin/utilisateurs');
-    return Array.isArray(d.utilisateurs) ? d.utilisateurs : [];
+    return {
+      utilisateurs: Array.isArray(d.utilisateurs) ? d.utilisateurs : [],
+      moi: d.moi || null
+    };
+  },
+
+  /** Suppression définitive. Contrairement au blocage, elle libère
+   *  l'email et le téléphone, qui sont uniques en base. */
+  async supprimerUtilisateur(reference) {
+    await tcAppel('POST', '/admin/supprimer', { reference: reference });
+    return true;
+  },
+
+  async designerAdministrateur(reference, administrateur) {
+    const d = await tcAppel('POST', '/admin/administrateur',
+      { reference: reference, administrateur: !!administrateur });
+    return !!d.administrateur;
   },
 
   async bloquerUtilisateur(reference, bloquer) {
@@ -15130,6 +15147,7 @@ setTimeout(checkOnboarding, 500);
    ══════════════════════════════════════════════════════════════ */
 
 let _tcUsersServeur = [];
+let _tcUsersMoi = null;            // sa propre référence de compte
 let _tcUsersEtat = 'chargement';   // chargement | pret | refus | erreur
 let _tcUsersMessage = '';
 
@@ -15149,7 +15167,9 @@ function tcUserDepuisServeur(u, i) {
     // MySQL rend « 2026-09-03 07:49:12 ». Sans le T, certains moteurs
     // rendent une date invalide, et le tri par date s'effondre.
     registeredAt: (u.cree_le || '').replace(' ', 'T'),
-    blocked: !!u.bloque_le
+    blocked: !!u.bloque_le,
+    admin: !!Number(u.admin),
+    estMoi: !!_tcUsersMoi && u.reference === _tcUsersMoi
   };
 }
 
@@ -15157,7 +15177,9 @@ async function tcChargerUtilisateurs() {
   _tcUsersEtat = 'chargement';
   renderUsersTab();
   try {
-    _tcUsersServeur = await TC_BACKEND.listerUtilisateurs();
+    const rep = await TC_BACKEND.listerUtilisateurs();
+    _tcUsersServeur = rep.utilisateurs;
+    _tcUsersMoi = rep.moi;
     _tcUsersEtat = 'pret';
   } catch (e) {
     _tcUsersServeur = [];
@@ -15279,6 +15301,7 @@ function renderUsersTab() {
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
               <span style="background:#e8f0fe; color:#1a73e8; font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px;">#${u.id}</span>
               ${isBlocked ? '<span style="background:#fce8e6; color:#ea4335; font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px;">🚫 BLOQUÉ</span>' : ''}
+              ${u.admin ? '<span style="background:#fff4e0; color:#a56a00; font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px;">⭐ ADMIN</span>' : ''}
               <span style="font-size:11px; color:#9aa0a6;">${dateStr}</span>
             </div>
             <div style="font-size:15px; font-weight:600; color:#1a1a2e; margin-bottom:4px;">${u.firstname} ${u.lastname}</div>
@@ -15286,9 +15309,21 @@ function renderUsersTab() {
             <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📱 ${u.phone || '—'}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📍 ${u.zip ? (u.zip + ' ' + (u.city || '')).trim() : '<span style="opacity:.7;">Non renseigné</span>'}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">🧭 ${escapeHTMLSafe(tcLibelleProvenance(u))}</div>
-            <button onclick="toggleBlockUser('${u.reference}', ${!u.blocked})" style="width:100%; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fce8e6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
-              ${isBlocked ? '✅ Débloquer le compte' : '🚫 Bloquer le compte'}
-            </button>
+            ${u.estMoi ? `
+              <div style="text-align:center; padding:9px; background:#e8f0fe; color:#1a73e8; border-radius:8px; font-size:12.5px; font-weight:600;">C’est votre compte</div>
+            ` : `
+              <div style="display:flex; gap:8px;">
+                <button onclick="toggleBlockUser('${u.reference}', ${!u.blocked})" style="flex:1; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fef7f6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+                  ${isBlocked ? '✅ Débloquer' : '🚫 Bloquer'}
+                </button>
+                <button onclick="supprimerUtilisateur('${u.reference}')" style="flex:1; padding:8px; background:#fce8e6; color:#c5221f; border:1px solid #f5b8b3; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;">
+                  🗑️ Supprimer
+                </button>
+              </div>
+              <div onclick="tcDesignerAdmin('${u.reference}', ${!u.admin})" style="text-align:center; margin-top:9px; font-size:12px; font-weight:600; color:${u.admin ? '#9aa0a6' : 'var(--g-blue)'}; cursor:pointer;">
+                ${u.admin ? 'Retirer l’accès administrateur' : '⭐ Donner l’accès administrateur'}
+              </div>
+            `}
           </div>
         `;
       }).join('');
@@ -15386,6 +15421,70 @@ async function toggleBlockUser(reference, bloquer) {
   }
   // Dans les deux cas on relit le serveur : c'est lui qui fait foi, pas
   // ce que l'écran croyait savoir.
+  tcChargerUtilisateurs();
+}
+
+/**
+ * Supprime définitivement un compte.
+ *
+ * Bloquer ne suffit pas toujours : l'email et le téléphone sont uniques
+ * en base, et une clôture les garde immobilisés. Seule la disparition
+ * de la ligne permet de réinscrire quelqu'un avec la même adresse.
+ *
+ * La confirmation demande d'écrire le prénom. Un simple « Confirmer »
+ * se touche par réflexe, et il n'y a rien à annuler ensuite.
+ */
+async function supprimerUtilisateur(reference) {
+  const u = _tcUsersServeur.find(function (x) { return x.reference === reference; });
+  if (!u) return;
+  const prenom = String(u.prenom || '').trim();
+  if (!prenom) { showToast('❌ Fiche incomplète'); return; }
+
+  const saisie = await tcPrompt(
+    'Supprimer définitivement ce compte ?\n'
+    + (u.prenom || '') + ' ' + (u.nom || '') + ' — ' + (u.email || '') + '\n\n'
+    + 'Ses contacts, ses groupes et les rendez-vous qu’il a organisés partent '
+    + 'avec lui. Son agenda, lui, reste sur son téléphone.\n\n'
+    + 'Écrivez « ' + prenom + ' » pour confirmer.',
+    '', { icone: '🗑️', exemple: prenom, libelleValider: 'Supprimer' });
+
+  if (saisie === null) return;
+  if (saisie.trim().toLowerCase() !== prenom.toLowerCase()) {
+    showToast('Suppression annulée — le prénom ne correspond pas');
+    return;
+  }
+
+  try {
+    await TC_BACKEND.supprimerUtilisateur(reference);
+    showToast('🗑️ Compte supprimé');
+  } catch (e) {
+    showToast('❌ ' + (e.message || 'Suppression impossible'));
+  }
+  tcChargerUtilisateurs();
+}
+
+/** Donne ou retire l'accès à la liste des inscrits. */
+async function tcDesignerAdmin(reference, donner) {
+  const u = _tcUsersServeur.find(function (x) { return x.reference === reference; });
+  if (!u) return;
+  const qui = ((u.prenom || '') + ' ' + (u.nom || '')).trim();
+
+  if (!await tcConfirm(donner
+      ? qui + ' pourra voir la liste des inscrits, bloquer et supprimer des comptes.'
+      : qui + ' n’aura plus accès à la liste des inscrits.',
+      {
+        icone: '⭐',
+        titre: donner ? 'Donner l’accès administrateur ?' : 'Retirer l’accès administrateur ?',
+        danger: !donner,
+        libelleValider: donner ? 'Donner' : 'Retirer'
+      })) return;
+
+  try {
+    await TC_BACKEND.designerAdministrateur(reference, donner);
+    showToast(donner ? '⭐ Accès administrateur donné' : 'Accès administrateur retiré');
+  } catch (e) {
+    showToast('❌ ' + (e.message || 'Action impossible'));
+  }
   tcChargerUtilisateurs();
 }
 

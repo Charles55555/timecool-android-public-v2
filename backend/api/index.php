@@ -523,12 +523,19 @@ switch ($route) {
         if ((int) ($moi['admin'] ?? 0) !== 1) {
             Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
         }
-        Rep::ok(['utilisateurs' => Db::tous(
-            'SELECT reference, prenom, nom, email, telephone, ville, code_postal,
-                    provenance, provenance_detail, cree_le, derniere_connexion, bloque_le
-               FROM comptes
-              ORDER BY cree_le DESC'
-        )]);
+        Rep::ok([
+            'utilisateurs' => Db::tous(
+                'SELECT reference, prenom, nom, email, telephone, ville, code_postal,
+                        provenance, provenance_detail, cree_le, derniere_connexion,
+                        bloque_le, admin
+                   FROM comptes
+                  ORDER BY cree_le DESC'
+            ),
+            // Sa propre référence, pour que l écran sache quelle fiche est
+            // la sienne : ni le blocage ni la suppression ne doivent lui
+            // être proposés dessus.
+            'moi' => $moi['reference'],
+        ]);
 
     case 'POST /admin/bloquer':
         $moi = Auth::compte();
@@ -582,6 +589,67 @@ switch ($route) {
             );
         }
         Rep::ok(['bloque' => $bloquer]);
+
+    case 'POST /admin/supprimer':
+        $moi = Auth::compte();
+        if ((int) ($moi['admin'] ?? 0) !== 1) {
+            Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
+        }
+        $ref = Entree::requis('reference', 26);
+        if (!preg_match('/^[0-9A-Z]{12,26}$/', $ref)) {
+            Rep::erreur(400, 'reference_invalide', 'Référence de compte invalide.');
+        }
+        if (hash_equals($moi['reference'], $ref)) {
+            Rep::erreur(400, 'auto_suppression', 'Vous ne pouvez pas supprimer votre propre compte.');
+        }
+
+        /*
+         * Une seule ligne suffit : sessions, contacts, groupes, rendez-vous
+         * organisés, appairages et clés portent tous une clé étrangère en
+         * ON DELETE CASCADE. Rien à effacer à la main, donc rien à oublier.
+         *
+         * Définitif, et c est le but : l email et le téléphone sont uniques
+         * en base, et seule la disparition de la ligne les libère. Une
+         * clôture, elle, les garde immobilisés.
+         *
+         * L agenda de la personne reste sur son téléphone : il n a jamais
+         * été stocké ici.
+         */
+        $sup = Db::req('DELETE FROM comptes WHERE reference = ?', [$ref]);
+        if ($sup->rowCount() === 0) {
+            Rep::erreur(404, 'compte_introuvable', 'Compte inconnu.');
+        }
+        Rep::ok();
+
+    case 'POST /admin/administrateur':
+        $moi = Auth::compte();
+        if ((int) ($moi['admin'] ?? 0) !== 1) {
+            Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
+        }
+        $ref = Entree::requis('reference', 26);
+        if (!preg_match('/^[0-9A-Z]{12,26}$/', $ref)) {
+            Rep::erreur(400, 'reference_invalide', 'Référence de compte invalide.');
+        }
+        $donner = Entree::corps()['administrateur'] ?? null;
+        if (!is_bool($donner)) {
+            Rep::erreur(400, 'champ_manquant', 'Champ administrateur attendu : true ou false.');
+        }
+        // Se retirer le droit à soi-même pourrait ne laisser aucun
+        // administrateur, et il faudrait alors repasser par la base pour
+        // en désigner un. Il en reste donc toujours au moins un.
+        if (hash_equals($moi['reference'], $ref)) {
+            Rep::erreur(400, 'auto_retrait',
+                'Vous ne pouvez pas modifier votre propre accès administrateur.');
+        }
+        $maj = Db::req(
+            'UPDATE comptes SET admin = ? WHERE reference = ? AND cloture_le IS NULL',
+            [$donner ? 1 : 0, $ref]
+        );
+        if ($maj->rowCount() === 0) {
+            Rep::erreur(404, 'compte_introuvable',
+                'Compte inconnu, clôturé, ou déjà dans cet état.');
+        }
+        Rep::ok(['administrateur' => $donner]);
 
     /* « Comment avez-vous connu TimeCool ? » — la réponse était gardée
        dans le navigateur de la personne, donc invisible partout
