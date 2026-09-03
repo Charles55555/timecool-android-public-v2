@@ -2557,6 +2557,7 @@ async function saveEventsToStorage() {
     // Sans cette reprogrammation, un rendez-vous deplace ou supprime
     // continuerait de sonner a son ancienne heure.
     if (typeof tcProgrammerRappels === 'function') tcProgrammerRappels();
+    if (typeof tcSyncBientot === 'function') tcSyncBientot();
   } catch(err) { console.warn('Sauvegarde events:', err); }
 }
 
@@ -11407,6 +11408,7 @@ function loadBirthdays() {
 }
 function saveBirthdays() {
   try { localStorage.setItem('timecool_birthdays', JSON.stringify(birthdays)); } catch(e) {}
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
 }
 loadBirthdays();
 
@@ -12333,6 +12335,7 @@ function loadTasks() {
 }
 function saveTasks() {
   try { localStorage.setItem(TC_TASKS_KEY, JSON.stringify(tasksList)); } catch (e) {}
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
 }
 loadTasks();
 
@@ -12933,6 +12936,7 @@ function loadContacts() {
 }
 function saveContacts() {
   try { localStorage.setItem('timecool_contacts', JSON.stringify(contactsList)); } catch(e) {}
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
 }
 loadContacts();
 
@@ -13596,6 +13600,24 @@ const TC_BACKEND = {
     return { statut: d.statut };
   },
 
+  // ─── Synchronisation entre appareils ─────────────────────────
+
+  /** Ce qui a changé depuis la version connue de cet appareil. */
+  async syncTirer(depuis) {
+    const d = await tcAppel('GET', '/sync?depuis=' + encodeURIComponent(depuis || 0));
+    return {
+      elements: Array.isArray(d.elements) ? d.elements : [],
+      version: d.version || 0,
+      suite: !!d.suite
+    };
+  },
+
+  /** Ce que cet appareil a modifié. Un contenu nul vaut suppression. */
+  async syncPousser(elements) {
+    const d = await tcAppel('POST', '/sync', { elements: elements });
+    return { version: d.version || 0 };
+  },
+
   // ─── Espace administrateur ───────────────────────────────────
 
   /** Tous les comptes, du plus récent au plus ancien, plus sa propre
@@ -14129,6 +14151,303 @@ function saveConvocations() {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   SYNCHRONISATION ENTRE APPAREILS
+
+   Ce qu'on crée sur le mobile apparaît sur le web, et l'inverse.
+
+   Aucun crochet posé sur les fonctions d'enregistrement : à chaque
+   tour, l'état courant est comparé à une empreinte de ce qui a déjà été
+   envoyé. Poser des crochets obligerait à en placer un partout où une
+   donnée est modifiée — il en manquerait un, et cette modification-là
+   ne partirait jamais, sans la moindre erreur visible. La comparaison,
+   elle, ne peut rien oublier.
+
+   Le serveur attribue un numéro croissant à chaque écriture. L'appareil
+   dit « j'en suis à N », le serveur ne renvoie que la suite : on ne
+   retélécharge jamais ce qu'on a déjà.
+   ══════════════════════════════════════════════════════════════ */
+
+const TC_SYNC_VERSION_KEY = 'tc_sync_version';
+const TC_SYNC_EMPREINTES_KEY = 'tc_sync_empreintes';
+const TC_SYNC_PERIODE = 12000;
+
+/**
+ * Les familles d'objets synchronisées.
+ *
+ * `lire` rend ce qui existe ici, `poser` remplace la liste, `id` donne
+ * l'identifiant stable d'un objet. Ajouter une famille demande trois
+ * lignes ici et rien ailleurs — ni côté serveur, ni en base.
+ */
+const TC_SYNC_TYPES = {
+  rdv: {
+    // Les rendez-vous de démonstration ne quittent pas l'appareil : ce
+    // ne sont pas les données de l'utilisateur.
+    lire: function () {
+      return events.filter(function (e) {
+        return e.mode === 'user' || (e.id && e.id.indexOf('charly_ai_') === 0);
+      });
+    },
+    id: function (o) { return o.id; },
+    poser: function (liste) {
+      const demo = events.filter(function (e) {
+        return e.mode !== 'user' && !(e.id && e.id.indexOf('charly_ai_') === 0);
+      });
+      events = demo.concat(liste);
+      return saveEventsToStorage();
+    }
+  },
+  tache: {
+    lire: function () { return tasksList; },
+    id: function (o) { return o.id; },
+    poser: function (liste) { tasksList = liste; saveTasks(); }
+  },
+  anniversaire: {
+    lire: function () { return birthdays; },
+    id: function (o) { return o.id; },
+    poser: function (liste) { birthdays = liste; saveBirthdays(); }
+  },
+  contact: {
+    lire: function () { return typeof contactsList === 'undefined' ? [] : contactsList; },
+    id: function (o) { return o.id; },
+    poser: function (liste) { contactsList = liste; saveContacts(); }
+  }
+};
+
+/**
+ * Empreinte d'un objet, insensible à l'ordre des champs.
+ *
+ * Un aller-retour par le serveur peut réordonner les clés d'un objet
+ * JSON. Sans cette mise en forme, l'objet reviendrait « différent » et
+ * repartirait aussitôt — une boucle sans fin, invisible.
+ */
+function tcSyncCanon(o) {
+  if (o === null || typeof o !== 'object') return JSON.stringify(o);
+  if (Array.isArray(o)) return '[' + o.map(tcSyncCanon).join(',') + ']';
+  return '{' + Object.keys(o).sort().map(function (k) {
+    return JSON.stringify(k) + ':' + tcSyncCanon(o[k]);
+  }).join(',') + '}';
+}
+
+/** FNV-1a 32 bits : assez pour repérer un changement, et rapide sur
+ *  plusieurs milliers d'objets à chaque tour. */
+function tcSyncEmpreinte(o) {
+  const t = tcSyncCanon(o);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < t.length; i++) {
+    h ^= t.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(36);
+}
+
+/** Le compte auquel appartient l'état de synchronisation. */
+function tcSyncCompte() {
+  if (typeof userAccount === 'undefined' || !userAccount) return null;
+  return userAccount.reference || userAccount.email || null;
+}
+
+/* Le curseur et les empreintes appartiennent à UN compte. S'il change,
+   on repart de zéro plutôt que de mélanger deux agendas sur le même
+   appareil. */
+function tcSyncEtat() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TC_SYNC_VERSION_KEY) || 'null');
+    if (!v || v.compte !== tcSyncCompte()) return { version: 0, neuf: true };
+    return { version: v.version || 0, neuf: false };
+  } catch (e) { return { version: 0, neuf: true }; }
+}
+
+function tcSyncPoserVersion(version) {
+  try {
+    localStorage.setItem(TC_SYNC_VERSION_KEY,
+      JSON.stringify({ compte: tcSyncCompte(), version: version }));
+  } catch (e) {}
+}
+
+function tcSyncEmpreintes() {
+  if (tcSyncEtat().neuf) return {};
+  try { return JSON.parse(localStorage.getItem(TC_SYNC_EMPREINTES_KEY) || '{}'); }
+  catch (e) { return {}; }
+}
+
+function tcSyncPoserEmpreintes(e) {
+  try { localStorage.setItem(TC_SYNC_EMPREINTES_KEY, JSON.stringify(e)); } catch (e2) {}
+}
+
+/**
+ * Applique ce que le serveur a renvoyé.
+ *
+ * Les empreintes sont mises à jour au passage : sans cela, ce qu'on
+ * vient de recevoir serait considéré comme une modification locale et
+ * renvoyé au serveur au tour suivant.
+ */
+async function tcSyncAppliquer(elements) {
+  const parType = {};
+  elements.forEach(function (e) {
+    if (!TC_SYNC_TYPES[e.type]) return;   // type inconnu de cette version
+    (parType[e.type] = parType[e.type] || []).push(e);
+  });
+
+  const empreintes = tcSyncEmpreintes();
+  let recus = 0;
+
+  const types = Object.keys(parType);
+  for (let n = 0; n < types.length; n++) {
+    const type = types[n];
+    const t = TC_SYNC_TYPES[type];
+    const liste = (t.lire() || []).slice();
+    const rang = {};
+    liste.forEach(function (o, i) { rang[t.id(o)] = i; });
+    let touche = false;
+
+    parType[type].forEach(function (e) {
+      const cle = type + ':' + e.uid;
+      const i = rang[e.uid];
+      if (e.supprime) {
+        if (i !== undefined) { liste[i] = null; touche = true; }
+        delete empreintes[cle];
+      } else if (e.contenu) {
+        if (i !== undefined) liste[i] = e.contenu; else liste.push(e.contenu);
+        empreintes[cle] = tcSyncEmpreinte(e.contenu);
+        touche = true;
+      }
+      recus++;
+    });
+
+    if (touche) {
+      await t.poser(liste.filter(function (x) { return x !== null; }));
+    }
+  }
+
+  tcSyncPoserEmpreintes(empreintes);
+  return recus;
+}
+
+/** Récupère tout ce qui a changé depuis le dernier passage. */
+async function tcSyncTirer() {
+  let version = tcSyncEtat().version;
+  let recus = 0;
+  // Le premier chargement d'un gros agenda arrive en plusieurs pages.
+  // La borne évite une boucle sans fin si le serveur répondait mal.
+  for (let page = 0; page < 40; page++) {
+    const d = await TC_BACKEND.syncTirer(version);
+    if (d.elements.length) recus += await tcSyncAppliquer(d.elements);
+    version = d.version;
+    tcSyncPoserVersion(version);
+    if (!d.suite) break;
+  }
+  return recus;
+}
+
+/** Envoie ce qui a changé ici. */
+async function tcSyncPousser() {
+  const connues = tcSyncEmpreintes();
+  const presentes = {};
+  const aEnvoyer = [];
+
+  Object.keys(TC_SYNC_TYPES).forEach(function (type) {
+    const t = TC_SYNC_TYPES[type];
+    (t.lire() || []).forEach(function (o) {
+      const uid = t.id(o);
+      if (!uid) return;   // objet sans identifiant : rien à quoi le rattacher
+      const cle = type + ':' + uid;
+      const emp = tcSyncEmpreinte(o);
+      presentes[cle] = emp;
+      if (connues[cle] !== emp) aEnvoyer.push({ type: type, uid: uid, contenu: o });
+    });
+  });
+
+  // Connu au tour précédent et absent maintenant : supprimé ici. On
+  // l'annonce, sinon l'autre appareil le renverrait indéfiniment.
+  Object.keys(connues).forEach(function (cle) {
+    if (presentes[cle] !== undefined) return;
+    const i = cle.indexOf(':');
+    aEnvoyer.push({ type: cle.slice(0, i), uid: cle.slice(i + 1), contenu: null });
+  });
+
+  if (!aEnvoyer.length) return 0;
+
+  // Par lots : le serveur en refuse plus de 500, et un envoi plus court
+  // repart de moins loin après une coupure.
+  for (let i = 0; i < aEnvoyer.length; i += 200) {
+    await TC_BACKEND.syncPousser(aEnvoyer.slice(i, i + 200));
+  }
+
+  /*
+   * Le curseur n'avance PAS ici, volontairement.
+   *
+   * Le faire sauter à la version rendue par le serveur ferait manquer
+   * ce qu'un autre appareil aurait écrit entre-temps. Nos propres
+   * écritures nous reviendront donc une fois au prochain tour : les
+   * appliquer ne change rien, et leurs empreintes correspondent déjà.
+   */
+  tcSyncPoserEmpreintes(presentes);
+  return aEnvoyer.length;
+}
+
+let _tcSyncEnCours = false;
+let _tcSyncMinuteur = null;
+let _tcSyncBientot = null;
+
+/** Un tour complet : on lit d'abord, on écrit ensuite. */
+async function tcSyncTour() {
+  if (_tcSyncEnCours) return;
+  if (!tcJeton() || !tcSyncCompte()) return;   // pas de session : rien à faire
+  _tcSyncEnCours = true;
+  try {
+    const recus = await tcSyncTirer();
+    await tcSyncPousser();
+    if (recus > 0) {
+      // Le serveur a apporté du nouveau : les écrans doivent le montrer.
+      if (typeof renderMenu === 'function') renderMenu();
+      if (typeof updateBadges === 'function') updateBadges();
+      if (typeof render === 'function') render();
+      if (typeof currentPage !== 'undefined') {
+        if (currentPage === 'tasks' && typeof renderTasks === 'function') renderTasks();
+        if (currentPage === 'birthdays' && typeof renderBirthdays === 'function') renderBirthdays();
+        if (currentPage === 'contacts' && typeof renderContactsList === 'function') renderContactsList();
+      }
+    }
+  } catch (e) {
+    // Hors ligne, ou serveur indisponible : on retentera au prochain
+    // tour. Les modifications locales restent en attente, rien n'est
+    // perdu — c'est ce qui rend l'application utilisable dans le métro.
+    console.warn('Synchronisation reportée :', e && e.message ? e.message : e);
+  } finally {
+    _tcSyncEnCours = false;
+  }
+}
+
+/**
+ * Un tour bientôt, après une modification locale.
+ *
+ * Regroupé : enregistrer un rendez-vous déclenche plusieurs écritures
+ * successives, et il serait absurde d'envoyer autant de requêtes.
+ */
+function tcSyncBientot() {
+  if (_tcSyncBientot) clearTimeout(_tcSyncBientot);
+  _tcSyncBientot = setTimeout(function () {
+    _tcSyncBientot = null;
+    tcSyncTour();
+  }, 1500);
+}
+
+function tcSyncDemarrer() {
+  if (_tcSyncMinuteur) return;
+  tcSyncTour();
+  _tcSyncMinuteur = setInterval(function () {
+    // Onglet caché : inutile de tenir le réseau et la batterie éveillés.
+    if (document.visibilityState !== 'hidden') tcSyncTour();
+  }, TC_SYNC_PERIODE);
+  // Au retour sur l'onglet, on rattrape tout de suite plutôt que
+  // d'attendre le prochain tour.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') tcSyncTour();
+  });
+  window.addEventListener('online', function () { tcSyncTour(); });
+}
+
+/* ══════════════════════════════════════════════════════════════
    APPAIRAGE MULTI-APPAREILS
 
    Le téléphone est la source de vérité, le navigateur en est le
@@ -14315,7 +14634,13 @@ const TC_JAMAIS_TRANSFERE = [
   'tc_user_events',            // TC_EVENTS_KEY — voir « evenements »
   'tc_user_tasks',             // TC_TASKS_KEY   — voir « taches »
   'timecool_tasks',            // ancienne clé, migrée au démarrage
-  'timecool_birthdays'         // voir « anniversaires »
+  'timecool_birthdays',        // voir « anniversaires »
+  // Ou en est CET appareil dans la synchronisation. Recopie ailleurs,
+  // le curseur ferait sauter tout ce qui precede, et les empreintes
+  // feraient croire que tout a deja ete envoye : l agenda du nouvel
+  // appareil ne partirait jamais, et rien ne lui reviendrait.
+  'tc_sync_version',           // TC_SYNC_VERSION_KEY
+  'tc_sync_empreintes'         // TC_SYNC_EMPREINTES_KEY
 ];
 
 /** Une clé a-t-elle le droit de voyager ? */
@@ -14683,6 +15008,11 @@ async function tcLierPuisEnvoyer(code) {
  * exactement l'état pose par une connexion classique — le jeton lui-même
  * a deja ete conserve par checkPairingStatus.
  */
+function tcDemarrerSyncApresConnexion() {
+  if (typeof tcSyncDemarrer === 'function') tcSyncDemarrer();
+  else if (typeof tcSyncTour === 'function') tcSyncTour();
+}
+
 function tcOuvrirSessionAppairee(compte) {
   userAccount = {
     reference: compte.reference,
@@ -15163,6 +15493,9 @@ updateProfileSelector();
   updateBadges();
   render();
   applyTheme(currentTheme); // v5.9 — appliquer le thème sauvegardé
+  // Après le chargement local, pas avant : la synchronisation compare
+  // ce qui est ici à ce qui est là-bas, encore faut-il l'avoir lu.
+  if (typeof tcSyncDemarrer === 'function') tcSyncDemarrer();
 })();
 
 // === ONBOARDING ===

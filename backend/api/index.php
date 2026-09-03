@@ -515,6 +515,126 @@ switch ($route) {
         Rep::ok(['inscrits' => $inscrits]);
 
     // ═══════════════════════════════════════════════════════════
+    // SYNCHRONISATION ENTRE APPAREILS
+    // ═══════════════════════════════════════════════════════════
+
+    /*
+     * Ce qui a changé depuis la version que l'appareil connaît.
+     *
+     * Les suppressions sont rendues elles aussi, marquées : sans cela un
+     * rendez-vous effacé sur un téléphone serait ressuscité par le PC
+     * qui l'a encore.
+     */
+    case 'GET /sync':
+        $compte = Auth::compte();
+        $depuis = isset($_GET['depuis']) && ctype_digit((string) $_GET['depuis'])
+            ? (int) $_GET['depuis'] : 0;
+
+        // Une page à la fois : un premier chargement de plusieurs
+        // milliers d'objets ne doit pas tenir dans une seule réponse.
+        $lot = 500;
+        $lignes = Db::tous(
+            'SELECT type, uid, contenu, version, supprime
+               FROM elements
+              WHERE compte_id = ? AND version > ?
+              ORDER BY version
+              LIMIT ' . ($lot + 1),
+            [$compte['id'], $depuis]
+        );
+        $suite = count($lignes) > $lot;
+        if ($suite) {
+            array_pop($lignes);
+        }
+
+        $elements = [];
+        foreach ($lignes as $l) {
+            $elements[] = [
+                'type'     => $l['type'],
+                'uid'      => $l['uid'],
+                'contenu'  => $l['contenu'] === null ? null : json_decode($l['contenu'], true),
+                'version'  => (int) $l['version'],
+                'supprime' => (int) $l['supprime'] === 1,
+            ];
+        }
+
+        Rep::ok([
+            'elements' => $elements,
+            // Version atteinte par ce lot. L appareil la garde et la
+            // renvoie au prochain appel.
+            'version'  => $elements === []
+                ? (int) $compte['compteur_sync']
+                : $elements[count($elements) - 1]['version'],
+            'suite'    => $suite,
+        ]);
+
+    /*
+     * Ce que l'appareil a modifié.
+     *
+     * Le dernier qui écrit gagne, OBJET PAR OBJET. Deux appareils qui
+     * modifient deux rendez-vous différents ne s'écrasent donc jamais —
+     * ce qui serait le cas si l'agenda voyageait d'un bloc.
+     */
+    case 'POST /sync':
+        $compte = Auth::compte();
+        $entrants = Entree::corps()['elements'] ?? null;
+        if (!is_array($entrants)) {
+            Rep::erreur(400, 'elements_manquants', 'Champ elements attendu.');
+        }
+        if (count($entrants) > 500) {
+            Rep::erreur(413, 'lot_trop_grand', 'Envoyez au plus 500 éléments à la fois.');
+        }
+
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            // Le compteur est verrouillé le temps de la transaction :
+            // deux appareils qui écrivent en même temps obtiennent des
+            // numéros distincts, jamais le même.
+            $c = Db::un('SELECT compteur_sync FROM comptes WHERE id = ? FOR UPDATE',
+                [$compte['id']]);
+            $version = (int) $c['compteur_sync'];
+
+            $appliques = [];
+            foreach ($entrants as $e) {
+                if (!is_array($e)) {
+                    continue;
+                }
+                $type = $e['type'] ?? '';
+                $uid  = $e['uid'] ?? '';
+                if (!is_string($type) || !preg_match('/^[a-z_]{2,40}$/', $type)
+                    || !is_string($uid) || $uid === '' || strlen($uid) > 64) {
+                    Rep::erreur(400, 'element_invalide', 'Type ou identifiant invalide.');
+                }
+                $supprime = array_key_exists('contenu', $e) && $e['contenu'] === null;
+                $contenu = $supprime ? null : json_encode($e['contenu'], JSON_UNESCAPED_UNICODE);
+                if (!$supprime && strlen((string) $contenu) > 262144) {
+                    Rep::erreur(413, 'element_trop_gros', 'Élément trop volumineux.');
+                }
+
+                $version++;
+                Db::req(
+                    'INSERT INTO elements (compte_id, type, uid, contenu, version, supprime)
+                     VALUES (?, ?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE
+                       contenu = VALUES(contenu),
+                       version = VALUES(version),
+                       supprime = VALUES(supprime)',
+                    [$compte['id'], $type, $uid, $contenu, $version, $supprime ? 1 : 0]
+                );
+                $appliques[] = ['type' => $type, 'uid' => $uid, 'version' => $version];
+            }
+
+            Db::req('UPDATE comptes SET compteur_sync = ? WHERE id = ?',
+                [$version, $compte['id']]);
+            $pdo->commit();
+        } catch (Throwable $err) {
+            $pdo->rollBack();
+            throw $err;
+        }
+
+        Rep::ok(['version' => $version, 'appliques' => $appliques]);
+
+    // ═══════════════════════════════════════════════════════════
     // ESPACE ADMINISTRATEUR
     // La liste des inscrits vit ici, et nulle part ailleurs.
     // ═══════════════════════════════════════════════════════════
