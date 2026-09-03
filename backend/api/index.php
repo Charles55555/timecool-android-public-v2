@@ -651,21 +651,6 @@ switch ($route) {
         }
         Rep::ok(['administrateur' => $donner]);
 
-    /* « Comment avez-vous connu TimeCool ? » — la réponse était gardée
-       dans le navigateur de la personne, donc invisible partout
-       ailleurs. Chacun renseigne la sienne, sur son propre compte. */
-    case 'POST /compte/provenance':
-        $moi = Auth::compte();
-        Db::req(
-            'UPDATE comptes SET provenance = ?, provenance_detail = ? WHERE id = ?',
-            [
-                Entree::texte('provenance', 40),
-                Entree::texte('provenance_detail', 160),
-                $moi['id'],
-            ]
-        );
-        Rep::ok();
-
     // ═══════════════════════════════════════════════════════════
     // APPAIRAGE D'APPAREILS — TC_BACKEND.createPairingSession
     // ═══════════════════════════════════════════════════════════

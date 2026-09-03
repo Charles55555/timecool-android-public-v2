@@ -14274,12 +14274,74 @@ async function tcDechiffrerPaquet(cle, base64) {
   return JSON.parse(new TextDecoder().decode(clair));
 }
 
-/* Les réglages qui suivent l'utilisateur. Ni la clé de chiffrement de
-   l'appareil, ni le jeton de session, ni la biométrie : ils ne veulent
-   rien dire ailleurs. */
-const TC_REGLAGES_TRANSFERES = [
-  TC_AGENDA_FETES_KEY, TC_TRADITIONS_KEY, TC_TRI_ANNIV_KEY, TC_TRI_TACHES_KEY
+/**
+ * Ce qui ne quitte jamais l'appareil.
+ *
+ * Écrit en clair plutôt qu'en constantes : la liste est consultée depuis
+ * un endroit du fichier où plusieurs de ces constantes ne sont pas
+ * encore initialisées, et une référence trop tôt vaudrait `undefined` —
+ * la clé passerait alors sans qu'on s'en aperçoive. La suite de
+ * vérification compare cette liste aux constantes réelles.
+ *
+ * — la clé de chiffrement locale : recopiée ailleurs, elle rendrait
+ *   illisibles les données des DEUX appareils
+ * — jeton, biométrie, mot de passe local, code PIN : propres à ce
+ *   matériel-ci, et à personne d'autre
+ * — état des sauvegardes et des mises à jour : sans objet ailleurs
+ * — compte et session : posés par l'appairage lui-même
+ * — cache de traduction : il se reconstruit seul, et il est volumineux
+ * — rendez-vous, tâches, anniversaires : ils voyagent en clair dans le
+ *   paquet, par leurs propres champs. Les rendez-vous stockés sont
+ *   chiffrés avec la clé de cet appareil : les recopier tels quels
+ *   donnerait des lignes vides à l'arrivée.
+ */
+const TC_JAMAIS_TRANSFERE = [
+  'tc_device_crypto_key',      // TC_DEVICE_KEY_STORAGE
+  'tc_device_user_id',         // TC_DEVICE_ID_KEY
+  'tc_session_jeton',          // TC_JETON_CLE
+  'tc_biometrie_active',       // TC_BIOMETRIE_ACTIVE_KEY
+  'tc_mdp_local',              // TC_MDP_LOCAL_KEY
+  'tc_admin_pin',              // _ADMIN_PIN_KEY
+  'tc_permissions_shown',      // TC_PERMISSIONS_KEY
+  'tc_maj_retour',             // TC_MAJ_RETOUR_KEY
+  'tc_auto_backup_last',       // TC_AUTO_BACKUP_LAST
+  'tc_last_auto_backup_at',    // TC_LAST_AUTO_BACKUP_KEY
+  'tc_backup_history',         // TC_BACKUP_HISTORY_KEY
+  'tc_translate_cache',        // TC_TRANSLATE_KEY
+  'timecool_ai_callcount',
+  'tc_user_account',
+  'timecool_user_account',
+  'timecool_session_active',
+  'tc_user_events',            // TC_EVENTS_KEY — voir « evenements »
+  'tc_user_tasks',             // TC_TASKS_KEY   — voir « taches »
+  'timecool_tasks',            // ancienne clé, migrée au démarrage
+  'timecool_birthdays'         // voir « anniversaires »
 ];
+
+/** Une clé a-t-elle le droit de voyager ? */
+function tcCleTransferable(k) {
+  if (typeof k !== 'string') return false;
+  // Seul ce que TimeCool écrit lui-même est concerné.
+  if (k.indexOf('tc_') !== 0 && k.indexOf('timecool_') !== 0) return false;
+  return TC_JAMAIS_TRANSFERE.indexOf(k) < 0;
+}
+
+/**
+ * Tous les réglages et contenus de l'appareil, sauf ce qui doit rester.
+ *
+ * Balayer le stockage plutôt qu'énumérer les clés attendues : une
+ * énumération oublierait chaque fonction ajoutée ensuite, en silence.
+ */
+function tcReglagesTransferables() {
+  const r = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!tcCleTransferable(k)) continue;
+    const v = localStorage.getItem(k);
+    if (v !== null) r[k] = v;
+  }
+  return r;
+}
 
 /**
  * Ce que le téléphone envoie.
@@ -14291,11 +14353,6 @@ const TC_REGLAGES_TRANSFERES = [
  * en clair pour autant, le paquet entier étant chiffré ensuite.
  */
 function tcRassemblerDonnees() {
-  const reglages = {};
-  TC_REGLAGES_TRANSFERES.forEach(function (k) {
-    const v = localStorage.getItem(k);
-    if (v !== null) reglages[k] = v;
-  });
   return {
     version: 1,
     cree_le: new Date().toISOString(),
@@ -14304,7 +14361,7 @@ function tcRassemblerDonnees() {
     }),
     taches: tasksList,
     anniversaires: birthdays,
-    reglages: reglages
+    reglages: tcReglagesTransferables()
   };
 }
 
@@ -14312,7 +14369,7 @@ function tcRassemblerDonnees() {
  *  avec la clé de CET appareil. Retourne ce qui a été repris. */
 async function tcInstallerDonnees(p) {
   if (!p || p.version !== 1) throw new Error('Paquet illisible');
-  const bilan = { evenements: 0, taches: 0, anniversaires: 0 };
+  const bilan = { evenements: 0, taches: 0, anniversaires: 0, reglages: 0, refuses: 0 };
 
   if (Array.isArray(p.evenements)) {
     // Les rendez-vous de démonstration restent : ce sont ceux de
@@ -14336,10 +14393,18 @@ async function tcInstallerDonnees(p) {
   }
   if (p.reglages) {
     Object.keys(p.reglages).forEach(function (k) {
-      // Liste blanche : un paquet malformé ne peut écrire que là où on
-      // l'attend, jamais sur une autre clé du stockage.
-      if (TC_REGLAGES_TRANSFERES.indexOf(k) < 0) return;
-      try { localStorage.setItem(k, String(p.reglages[k])); } catch (e) {}
+      // Le même filtre qu'au départ, appliqué à l'arrivée : un paquet
+      // malformé ne peut écraser ni la clé de chiffrement de cet
+      // appareil, ni son jeton, ni quoi que ce soit hors de TimeCool.
+      if (!tcCleTransferable(k)) return;
+      try {
+        localStorage.setItem(k, String(p.reglages[k]));
+        bilan.reglages++;
+      } catch (e) {
+        // Stockage plein : on garde ce qui est déjà passé plutôt que
+        // d'abandonner l'ensemble.
+        bilan.refuses++;
+      }
     });
   }
   return bilan;
@@ -14549,10 +14614,22 @@ function tcSuivreAppairage(sessionId, minutes) {
       }
       tcOuvrirSessionAppairee(etat.compte);
       if (bilan) {
-        showToast('📥 ' + bilan.evenements + ' rendez-vous repris');
-        if (typeof renderMenu === 'function') renderMenu();
-        if (typeof updateBadges === 'function') updateBadges();
-        if (typeof render === 'function') render();
+        showToast('📥 ' + bilan.evenements + ' rendez-vous, '
+          + bilan.reglages + ' réglages repris');
+        /*
+         * Rechargement plutôt qu'un rafraîchissement des écrans.
+         *
+         * Le paquet vient de réécrire des dizaines de réglages que des
+         * modules entiers — thème, langue, catégories, disponibilités,
+         * clés API, Charly IA — n'ont lus qu'une fois, au démarrage.
+         * Les rappeler un par un reviendrait à tenir une liste qui se
+         * périmerait à la première fonction ajoutée. Repartir de zéro
+         * garantit que tout est pris en compte, sans rien énumérer.
+         *
+         * Le compte et le jeton étant déjà posés, l'application revient
+         * connectée.
+         */
+        setTimeout(function () { location.reload(); }, 1200);
       }
     }
   }, 3000);
