@@ -15302,8 +15302,12 @@ function renderUsersTab() {
           <button onclick="exportUsersCsv()" style="padding:8px 12px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⬇️ Export CSV</button>
         </div>
       </div>
-      <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">${users.length} utilisateur${users.length > 1 ? 's' : ''} enregistré${users.length > 1 ? 's' : ''}</div>
-      ${users.length > 1 ? `
+      <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">${
+        _tcUsersEtat === 'pret'
+          ? users.length + ' utilisateur' + (users.length > 1 ? 's' : '') + ' enregistré' + (users.length > 1 ? 's' : '')
+          : _tcUsersEtat === 'chargement' ? '…' : '—'
+      }</div>
+      ${_tcUsersEtat === 'pret' && users.length > 1 ? `
       <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:10px; margin-bottom:6px; -webkit-overflow-scrolling:touch;">
         <span style="flex-shrink:0; align-self:center; font-size:12px; color:#9aa0a6; margin-right:2px;">Trier :</span>
         ${TC_TRIS_USERS.map(t => `
