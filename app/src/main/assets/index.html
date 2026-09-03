@@ -2603,7 +2603,8 @@ const TC_DEFAULT_SYSTEM_PROMPT = `Tu es Charly, l'assistant intelligent de TIMEC
 ═══ PERSONNALITÉ ET TON ═══
 Tu es chaleureux, humain, bienveillant et efficace. Tu tutoies toujours l'utilisateur.
 Tu réponds MAXIMUM 3 lignes — jamais plus, sauf si l'utilisateur demande des détails.
-Tu termines TOUJOURS par une action proposée ou une question courte.
+Tu termines par une action proposée ou une question courte — SAUF quand tu viens
+d'exécuter la demande : dans ce cas tu confirmes simplement ce que tu as fait.
 Tu poses UNE seule question à la fois, jamais plusieurs.
 En cas de doute ou d'incompréhension, utilise la formule "Sauf erreur de ma part".
 
@@ -2611,6 +2612,11 @@ En cas de doute ou d'incompréhension, utilise la formule "Sauf erreur de ma par
 Tu exécutes UNIQUEMENT si la demande est claire, nette et précise.
 Sinon tu poses UNE SEULE question, jamais plus.
 Tu NE SUPPOSES et NE DEVINES jamais.
+
+Une demande qui donne l'objet, le jour et l'heure EST claire : tu l'exécutes,
+tu ne demandes aucune confirmation. "Demain 10h, dentiste" se crée, point.
+Demander confirmation d'une demande déjà claire est une faute aussi grave
+que deviner ce qui n'a pas été dit.
 
 ═══ PÉRIMÈTRE AUTORISÉ ═══
 Tu traites uniquement : salutations, prise de RDV, annulation de RDV, modification/déplacement de RDV,
@@ -2639,7 +2645,11 @@ Puis génère le bloc [AGENDA] avec tous les événements récurrents sur les 7 
 NE génère PAS de bloc [AGENDA] intermédiaire pendant les questions — attends d'avoir tout collecté.
 
 ═══ CAS 2C — CRÉATION DE RDV : CAS PARTICULIERS ═══
-Chevauchement avec un RDV existant → signale-le et propose un autre créneau.
+Un autre rendez-vous le MÊME JOUR n'est PAS un conflit. Deux rendez-vous se
+chevauchent uniquement si leurs plages horaires se croisent réellement.
+Exemple : on te demande 10h alors qu'il y a déjà quelque chose à 15h → aucun
+chevauchement, tu crées le rendez-vous sans poser de question.
+Chevauchement RÉEL (les horaires se croisent) → signale-le et propose un autre créneau.
 Heure non précisée → propose 2-3 créneaux libres du jour demandé.
 Contact introuvable → signale-le, propose de l'ajouter ou de vérifier l'orthographe.
 Date déjà passée → signale-le, demande une date à venir.
@@ -2869,7 +2879,10 @@ let charlyIA = {
     anthropicKey: '',
     model: 'gpt-4o-mini',
     claudeModel: 'claude-sonnet-5',
-    systemPrompt: TC_DEFAULT_SYSTEM_PROMPT,
+    // Nul tant que rien n'a été modifié à la main : le prompt utilisé
+    // vient alors du code, et suit donc chaque correction. Voir
+    // tcPromptSysteme().
+    systemPrompt: null,
     enabled: true,
     maxMessages: 50,
     maxLength: 500,
@@ -2899,6 +2912,11 @@ function tcMigrateClaudeModel(id) {
   return TC_CLAUDE_MODEL_MIGRATION[id] || id;
 }
 
+/* Change de valeur à chaque fois qu'il faut jeter les copies gardées
+   par les appareils. */
+const TC_PROMPT_VERSION_KEY = 'timecool_prompt_version';
+const TC_PROMPT_VERSION = 'v7-prompt-non-recopie';
+
 // Charger configuration et démarches depuis localStorage au démarrage
 function loadCharlyIAConfig() {
   try {
@@ -2912,14 +2930,22 @@ function loadCharlyIAConfig() {
         localStorage.setItem('timecool_ai_config', JSON.stringify(charlyIA.config));
       }
     }
-    // v6.4 — Force le nouveau prompt WOW si version ancienne détectée
-    const promptVersion = localStorage.getItem('timecool_prompt_version');
-    if (promptVersion !== 'v6.4') {
-      // Réinitialiser le prompt avec la nouvelle version
-      charlyIA.config.systemPrompt = charlyIA.config.systemPrompt.includes('CAS 1 — SALUTATIONS')
-        ? charlyIA.config.systemPrompt  // Déjà le bon prompt
-        : getDefaultPromptV64();        // Forcer le nouveau
-      localStorage.setItem('timecool_prompt_version', 'v6.4');
+    /*
+     * Une fois, on jette la copie du prompt gardée par cet appareil.
+     *
+     * La migration précédente prétendait forcer la nouvelle version ;
+     * elle appelait une fonction qui rendait la version en place. Elle
+     * ne faisait rien, et aucune correction de prompt n'a atteint les
+     * appareils déjà installés.
+     *
+     * Ce que quelqu'un aurait écrit à la main dans l'écran
+     * d'administration est perdu ici, une seule fois. C'est le prix
+     * pour repartir du prompt du code — et à partir de maintenant,
+     * seule une modification volontaire sera conservée.
+     */
+    if (localStorage.getItem(TC_PROMPT_VERSION_KEY) !== TC_PROMPT_VERSION) {
+      charlyIA.config.systemPrompt = null;
+      localStorage.setItem(TC_PROMPT_VERSION_KEY, TC_PROMPT_VERSION);
       localStorage.setItem('timecool_ai_config', JSON.stringify(charlyIA.config));
     }
     const savedDemarches = localStorage.getItem('timecool_demarches');
@@ -2931,14 +2957,37 @@ function loadCharlyIAConfig() {
   } catch(e) { console.warn('localStorage indisponible:', e); }
 }
 
+/**
+ * Le prompt réellement envoyé au modèle.
+ *
+ * Celui du code, sauf si quelqu'un l'a modifié à la main dans l'écran
+ * d'administration. Conserver une copie du prompt par défaut dans
+ * l'appareil a fait durer plusieurs défauts de comportement : la
+ * correction était bien dans la nouvelle version, mais l'appareil
+ * continuait d'utiliser la copie qu'il gardait.
+ */
+/**
+ * Ce qu'il faut retenir d'un texte saisi dans l'écran d'administration.
+ *
+ * Un texte identique au défaut n'est PAS une modification : le
+ * conserver figerait de nouveau le prompt sur cet appareil, et les
+ * corrections suivantes ne l'atteindraient plus.
+ */
+function tcPromptPersonnalise(texte) {
+  const t = (texte || '').trim();
+  if (!t || t === TC_DEFAULT_SYSTEM_PROMPT.trim()) return null;
+  return texte;
+}
+
+function tcPromptSysteme() {
+  const perso = charlyIA.config.systemPrompt;
+  return (typeof perso === 'string' && perso.trim()) ? perso : TC_DEFAULT_SYSTEM_PROMPT;
+}
+
 function saveCharlyIAConfig() {
   try {
     localStorage.setItem('timecool_ai_config', JSON.stringify(charlyIA.config));
   } catch(e) { console.warn('localStorage indisponible:', e); }
-}
-
-function getDefaultPromptV64() {
-  return charlyIA.config.systemPrompt;
 }
 
 function saveDemarches() {
@@ -6866,7 +6915,7 @@ function renderAIConfig() {
         <div style="font-size:11px; color:var(--text-sec); margin-bottom:10px; line-height:1.5;">
           C'est ce texte qui définit la personnalité, le ton et les règles de Charly IA. Modifie-le avec précaution — une phrase mal formulée peut changer tout son comportement.
         </div>
-        <textarea id="aiPrompt" style="width:100%; min-height:220px; padding:10px; border:1.5px solid var(--border); border-radius:10px; font-size:11.5px; font-family:monospace; line-height:1.5; resize:vertical;">${charlyIA.config.systemPrompt || ''}</textarea>
+        <textarea id="aiPrompt" style="width:100%; min-height:220px; padding:10px; border:1.5px solid var(--border); border-radius:10px; font-size:11.5px; font-family:monospace; line-height:1.5; resize:vertical;">${escapeHTMLSafe(tcPromptSysteme())}</textarea>
         <button onclick="resetSystemPromptDefault()" style="width:100%; margin-top:10px; padding:11px; background:#f8f9fa; border:1px solid var(--border); border-radius:10px; font-size:12.5px; color:var(--text-sec); cursor:pointer;">↺ Réinitialiser aux valeurs par défaut</button>
         <div style="margin-top:8px; font-size:10.5px; color:#9aa0a6; text-align:center;">
           Ce texte est inclus dans « Enregistrer les modifications de cette page », en bas.
@@ -6971,7 +7020,7 @@ function saveAllApiKeys() {
 
   // Prompt système (« éduquer Charly IA »)
   const promptEl = document.getElementById('aiPrompt');
-  if (promptEl && promptEl.value.trim()) charlyIA.config.systemPrompt = promptEl.value;
+  if (promptEl) charlyIA.config.systemPrompt = tcPromptPersonnalise(promptEl.value);
 
   // Les champs rapides d'OpenAI/Anthropic alimentent le MÊME tiroir,
   // avant l'écriture — plus de clé perdue dans un tiroir annexe.
@@ -7110,7 +7159,7 @@ function saveAIConfigForm() {
   charlyIA.config.provider = document.getElementById('aiProvider').value;
   charlyIA.config.apiKey = document.getElementById('aiApiKey').value.trim();
   charlyIA.config.model = document.getElementById('aiModel').value;
-  charlyIA.config.systemPrompt = document.getElementById('aiPrompt').value;
+  charlyIA.config.systemPrompt = tcPromptPersonnalise(document.getElementById('aiPrompt').value);
   charlyIA.config.enabled = document.getElementById('aiEnabled').checked;
   charlyIA.config.demoMode = document.getElementById('aiDemoMode').checked;
   charlyIA.config.maxMessages = parseInt(document.getElementById('aiMaxMessages').value) || 50;
@@ -7131,7 +7180,8 @@ function togglePromptEditor() {
 async function resetSystemPromptDefault() {
   if (!await tcConfirm('Réinitialiser le prompt système Charly IA aux valeurs par défaut ?\n\nCela permet de corriger les bugs de format ([EVENT] au lieu de [AGENDA] par exemple).\n\nTes modifications personnelles seront perdues.')) return;
   document.getElementById('aiPrompt').value = TC_DEFAULT_SYSTEM_PROMPT;
-  charlyIA.config.systemPrompt = TC_DEFAULT_SYSTEM_PROMPT;
+  // Nul, et non une copie : l'appareil suivra les corrections à venir.
+  charlyIA.config.systemPrompt = null;
   saveCharlyIAConfig();
   showToast('✅ Prompt par défaut restauré. Sauvegarde activée.');
 }
@@ -8776,7 +8826,7 @@ async function tcGererRechercheWeb(text, requete) {
       if (!charlyIA.config.demoMode) {
         try {
           synthese = await callAI([
-            {role:'system', content: charlyIA.config.systemPrompt + tcLangInstruction()},
+            {role:'system', content: tcPromptSysteme() + tcLangInstruction()},
             {role:'user', content: consigne}
           ]);
         } catch (e) { synthese = null; }
@@ -9039,7 +9089,7 @@ ${tY}-${tM}-${tD} | 15:00-16:00 | Rendez-vous banque | rdv
 JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY-MM-DD.`;
 
       const messages = [
-        {role:'system', content: charlyIA.config.systemPrompt + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
+        {role:'system', content: tcPromptSysteme() + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
         ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
       ];
       reply = await callOpenAI(messages);
@@ -11247,7 +11297,7 @@ ${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | rdv
 [/AGENDA]`;
 
       const messages = [
-        {role:'system', content: charlyIA.config.systemPrompt + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
+        {role:'system', content: tcPromptSysteme() + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
         ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
       ];
       reply = await callOpenAI(messages);
