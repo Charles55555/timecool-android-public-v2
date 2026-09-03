@@ -3639,14 +3639,13 @@ function renderMonth() {
     };
 
     let html = `<div class="month-day-number">${cellDate.getDate()}</div>`;
-    const fetesJour = tcFetesDuJour(cellDateStr);
-    if (fetesJour.length > 0) {
+    const reperesJour = tcReperesDuJour(cellDateStr);
+    if (reperesJour.length > 0) {
       html += '<div class="month-day-events">';
-      fetesJour.forEach(function (h) {
-        const t = tcTradition(h.type);
-        html += '<div class="month-event-pill" style="background:' + t.fond
-          + '; color:' + t.couleur + '; font-weight:600;">' + h.emoji + ' '
-          + escapeHTMLSafe(h.name) + '</div>';
+      reperesJour.forEach(function (r) {
+        html += '<div class="month-event-pill" style="background:' + r.fond
+          + '; color:' + r.couleur + '; font-weight:600;">' + r.emoji + ' '
+          + escapeHTMLSafe(r.nom) + '</div>';
       });
       html += '</div>';
     }
@@ -3722,16 +3721,15 @@ function renderWeek() {
     // ouvrir la vue Jour pour savoir de quoi il s agissait. La colonne
     // est etroite, le texte est donc petit et coupe si besoin — mais il
     // reste lisible, et la journee entiere s ouvre au toucher.
-    const fetes = tcFetesDuJour(fmt(d));
-    fetes.slice(0, 2).forEach(function (h) {
-      const t = tcTradition(h.type);
+    const fetes = tcReperesDuJour(fmt(d));
+    fetes.slice(0, 2).forEach(function (r) {
       const chip = document.createElement('div');
       chip.style.cssText = 'margin:2px 2px 0; padding:1px 3px; border-radius:4px;'
         + ' font-size:8.5px; font-weight:700; line-height:1.25; text-align:center;'
         + ' overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'
-        + ' background:' + t.couleur + '; color:#fff;';
-      chip.title = h.name;
-      chip.textContent = h.name;
+        + ' background:' + r.couleur + '; color:#fff;';
+      chip.title = r.nom;
+      chip.textContent = r.nom;
       col.appendChild(chip);
     });
     if (fetes.length > 2) {
@@ -3740,7 +3738,7 @@ function renderWeek() {
       reste.textContent = '+' + (fetes.length - 2);
       col.appendChild(reste);
     }
-    // L en-tete devient cliquable des qu il porte une fete : c est le
+    // L en-tete devient cliquable des qu il porte un repere : c est le
     // geste naturel pour en lire le nom complet.
     if (fetes.length) {
       col.style.cursor = 'pointer';
@@ -3789,22 +3787,49 @@ function renderWeek() {
 }
 
 /**
- * Bandeau d une fete affichee dans l agenda.
+ * Bandeau d un repere de journee.
  *
- * Volontairement non cliquable et sans rappel : ces dates ne sont pas
- * des rendez-vous de l utilisateur, il ne peut ni les modifier ni les
- * supprimer — seulement se desabonner de la tradition.
+ * Volontairement non cliquable et sans rappel : ce ne sont pas des
+ * rendez-vous de l utilisateur, il ne peut ni les modifier ni les
+ * supprimer ici — seulement retirer la tradition ou la personne.
  */
-function tcBandeauFete(h) {
-  const t = tcTradition(h.type);
+function tcBandeauRepere(r) {
   const el = document.createElement('div');
   el.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 10px;'
     + ' margin:0 8px 6px; border-radius:8px; font-size:12px; font-weight:600;'
-    + ' background:' + t.fond + '; color:' + t.couleur
-    + '; border-left:3px solid ' + t.couleur + ';';
-  el.innerHTML = '<span data-notranslate>' + h.emoji + '</span><span>'
-    + escapeHTMLSafe(h.name) + '</span>';
+    + ' background:' + r.fond + '; color:' + r.couleur
+    + '; border-left:3px solid ' + r.couleur + ';';
+  el.innerHTML = '<span data-notranslate>' + r.emoji + '</span><span>'
+    + escapeHTMLSafe(r.nom) + '</span>';
   return el;
+}
+
+/**
+ * Ce qui marque une journee sans occuper de creneau : fetes des
+ * traditions suivies, anniversaires ajoutes a l agenda.
+ *
+ * Les vues Jour, Semaine et Mois n ont pas a savoir d ou vient chaque
+ * repere : elles recoivent une forme unique { emoji, nom, couleur, fond }.
+ */
+function tcReperesDuJour(dateStr) {
+  const l = tcFetesDuJour(dateStr).map(function (h) {
+    const t = tcTradition(h.type);
+    return { emoji: h.emoji, nom: h.name, couleur: t.couleur, fond: t.fond };
+  });
+  // Un anniversaire se repete chaque annee : seuls le mois et le jour
+  // comptent, l annee de naissance ne sert qu a calculer l age.
+  const mmjj = dateStr.slice(5);
+  birthdays.forEach(function (b) {
+    if (!b.agenda || b.date.slice(5) !== mmjj) return;
+    const age = b.year ? parseInt(dateStr.slice(0, 4), 10) - b.year : null;
+    l.push({
+      emoji: '🎂',
+      nom: b.name + (age !== null && age > 0 ? ' (' + age + ' ans)' : ''),
+      couleur: '#EA4335',
+      fond: '#fce8e6'
+    });
+  });
+  return l;
 }
 
 function renderDay() {
@@ -3814,10 +3839,10 @@ function renderDay() {
   const body = document.getElementById('dayBody');
   body.innerHTML = '';
 
-  // Les fetes sont des reperes de journee, pas des creneaux horaires :
-  // elles s affichent en bandeau, au-dessus de la grille des heures.
-  tcFetesDuJour(fmt(d)).forEach(function (h) {
-    body.appendChild(tcBandeauFete(h));
+  // Ces reperes ne sont pas des creneaux horaires : ils s affichent en
+  // bandeau, au-dessus de la grille des heures.
+  tcReperesDuJour(fmt(d)).forEach(function (r) {
+    body.appendChild(tcBandeauRepere(r));
   });
 
   for (let h=agendaStartH; h<=agendaEndH; h++) {
@@ -11398,48 +11423,277 @@ function saveBirthdays() {
 }
 loadBirthdays();
 
+/* Tri de la liste. Le choix est retenu : le refaire a chaque ouverture
+   de la page serait une corvee. */
+const TC_TRI_ANNIV_KEY = 'tc_tri_anniversaires';
+
+function tcTriAnniversaires() {
+  try { return localStorage.getItem(TC_TRI_ANNIV_KEY) === 'alpha' ? 'alpha' : 'date'; }
+  catch (e) { return 'date'; }
+}
+
+function tcDefinirTriAnniversaires(mode) {
+  try { localStorage.setItem(TC_TRI_ANNIV_KEY, mode); } catch (e) {}
+  renderBirthdays();
+}
+
+/**
+ * Ajoute ou retire une personne de l agenda.
+ *
+ * Rien n est copie dans les evenements : la date se recalcule chaque
+ * annee a partir du jour et du mois enregistres, exactement comme pour
+ * les fetes. Une personne retiree ne laisse donc aucune trace.
+ */
+function tcBasculerAnniversaireAgenda(id) {
+  const b = birthdays.find(function (x) { return x.id === id; });
+  if (!b) return;
+  b.agenda = !b.agenda;
+  saveBirthdays();
+  renderBirthdays();
+  if (typeof render === 'function' && currentPage === 'calendar') render();
+  showToast(b.agenda ? '📅 ' + b.name + ' ajouté à l’agenda'
+                     : '📅 ' + b.name + ' retiré de l’agenda');
+}
+
+/**
+ * Formulaire d anniversaire : prenom, nom et date dans une seule boite.
+ *
+ * Deux questions enchainees demandaient de taper « 12/09/1990 » a la
+ * main, sans retour possible sur la premiere reponse et sans rattrapage
+ * d une faute de frappe. tcModale() ne porte qu un seul champ, la boite
+ * est donc construite ici.
+ *
+ * Retourne { prenom, nom, jour, mois, annee }, ou null si annule.
+ */
+function ouvrirFormulaireAnniversaire() {
+  return new Promise(function (resolve) {
+    const ov = document.createElement('div');
+    ov.className = 'tc-mod-ov';
+    const boite = document.createElement('div');
+    boite.className = 'tc-mod';
+
+    const ic = document.createElement('div');
+    ic.className = 'tc-mod-ic';
+    ic.textContent = '🎂';
+    boite.appendChild(ic);
+
+    const titre = document.createElement('div');
+    titre.className = 'tc-mod-tt';
+    titre.textContent = 'Nouvel anniversaire';
+    boite.appendChild(titre);
+
+    function etiquette(txt) {
+      const l = document.createElement('div');
+      l.style.cssText = 'font-size:11px; font-weight:600; color:var(--text-sec);'
+        + ' text-align:left; margin:12px 0 5px;';
+      l.textContent = txt;
+      boite.appendChild(l);
+    }
+    function texte(exemple) {
+      const i = document.createElement('input');
+      i.type = 'text';
+      i.className = 'tc-mod-in';
+      i.placeholder = exemple;
+      i.style.margin = '0';
+      boite.appendChild(i);
+      return i;
+    }
+
+    etiquette('Prénom');
+    const prenom = texte('Marie');
+    etiquette('Nom');
+    const nom = texte('Dupont');
+    etiquette('Date de naissance');
+
+    const ligne = document.createElement('div');
+    ligne.style.cssText = 'display:flex; gap:6px;';
+
+    // Des listes plutot qu une saisie libre : aucun format a deviner,
+    // aucune date impossible a taper, et le clavier ne s ouvre pas.
+    const jour = document.createElement('select');
+    jour.className = 'tc-mod-in';
+    jour.style.cssText = 'margin:0; flex:0 0 78px;';
+    jour.appendChild(new Option('Jour', ''));
+    for (let d = 1; d <= 31; d++) jour.appendChild(new Option(String(d), String(d)));
+
+    const MOIS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const mois = document.createElement('select');
+    mois.className = 'tc-mod-in';
+    mois.style.cssText = 'margin:0; flex:1; min-width:0;';
+    mois.appendChild(new Option('Mois', ''));
+    MOIS_FR.forEach(function (m, i) { mois.appendChild(new Option(m, String(i + 1))); });
+
+    const annee = document.createElement('input');
+    annee.type = 'number';
+    annee.className = 'tc-mod-in';
+    annee.placeholder = 'Année';
+    annee.style.cssText = 'margin:0; flex:0 0 88px;';
+
+    ligne.appendChild(jour);
+    ligne.appendChild(mois);
+    ligne.appendChild(annee);
+    boite.appendChild(ligne);
+
+    const aide = document.createElement('div');
+    aide.style.cssText = 'font-size:11px; color:var(--text-sec); text-align:left; margin-top:6px;';
+    aide.textContent = 'L’année est facultative : sans elle, l’âge ne sera pas affiché.';
+    boite.appendChild(aide);
+
+    const erreur = document.createElement('div');
+    erreur.style.cssText = 'font-size:11.5px; color:#ea4335; font-weight:600;'
+      + ' text-align:left; margin-top:8px; display:none;';
+    boite.appendChild(erreur);
+
+    const barre = document.createElement('div');
+    barre.className = 'tc-mod-bt';
+
+    const fermer = function (resultat) {
+      ov.classList.remove('on');
+      setTimeout(function () { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 180);
+      document.removeEventListener('keydown', auClavier, true);
+      resolve(resultat);
+    };
+
+    const non = document.createElement('button');
+    non.className = 'tc-mod-no';
+    non.textContent = 'Annuler';
+    non.onclick = function () { fermer(null); };
+    barre.appendChild(non);
+
+    const oui = document.createElement('button');
+    oui.className = 'tc-mod-ok';
+    oui.textContent = 'Enregistrer';
+    oui.onclick = function () {
+      const p = prenom.value.trim();
+      const n = nom.value.trim();
+      const j = parseInt(jour.value, 10);
+      const m = parseInt(mois.value, 10);
+      const a = annee.value.trim() ? parseInt(annee.value, 10) : null;
+      const dire = function (msg, champ) {
+        erreur.textContent = msg;
+        erreur.style.display = 'block';
+        if (champ) champ.focus();
+      };
+      if (!p) return dire('Le prénom est nécessaire.', prenom);
+      if (!j || !m) return dire('Choisissez un jour et un mois.', jour);
+      // Le 31 février n existe pas : la liste des jours va jusqu a 31
+      // quel que soit le mois, c est ici qu on refuse l impossible. Le
+      // 29 février passe, l annee de naissance etant facultative.
+      const PAR_MOIS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      if (j > PAR_MOIS[m - 1]) {
+        return dire('Le ' + j + ' ' + MOIS_FR[m - 1].toLowerCase() + ' n’existe pas.', jour);
+      }
+      if (a !== null) {
+        const max = new Date().getFullYear();
+        if (isNaN(a) || a < 1900 || a > max) {
+          return dire('L’année doit être comprise entre 1900 et ' + max + '.', annee);
+        }
+        if (m === 2 && j === 29 && (a % 4 !== 0 || (a % 100 === 0 && a % 400 !== 0))) {
+          return dire(a + ' n’est pas une année bissextile.', annee);
+        }
+      }
+      fermer({ prenom: p, nom: n, jour: j, mois: m, annee: a });
+    };
+    barre.appendChild(oui);
+
+    boite.appendChild(barre);
+    ov.appendChild(boite);
+    ov.onclick = function (e) { if (e.target === ov) fermer(null); };
+
+    function auClavier(e) {
+      if (e.key === 'Escape') { e.preventDefault(); fermer(null); }
+      else if (e.key === 'Enter') { e.preventDefault(); oui.click(); }
+    }
+    document.addEventListener('keydown', auClavier, true);
+
+    document.body.appendChild(ov);
+    requestAnimationFrame(function () { ov.classList.add('on'); });
+    setTimeout(function () { prenom.focus(); }, 60);
+  });
+}
+
 function renderBirthdays() {
   const c = document.getElementById('birthdaysList');
   const todayD = new Date();
-  // Calculer les prochains anniversaires triés
-  const sorted = birthdays.map(b => {
-    const [y, mo, d] = b.date.split('-').map(Number);
-    let nextDate = new Date(todayD.getFullYear(), mo-1, d);
-    if (nextDate < new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate())) {
-      nextDate.setFullYear(todayD.getFullYear() + 1);
-    }
-    const daysUntil = Math.ceil((nextDate - todayD) / (1000*60*60*24));
-    return { ...b, nextDate, daysUntil };
-  }).sort((a, b) => a.daysUntil - b.daysUntil);
+  const minuit = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate());
+
+  const liste = birthdays.map(function (b) {
+    const mo = parseInt(b.date.slice(5, 7), 10);
+    const d = parseInt(b.date.slice(8, 10), 10);
+    const prochaine = new Date(minuit.getFullYear(), mo - 1, d);
+    if (prochaine < minuit) prochaine.setFullYear(minuit.getFullYear() + 1);
+    return Object.assign({}, b, {
+      prochaine: prochaine,
+      jours: Math.round((prochaine - minuit) / 86400000)
+    });
+  });
+
+  const tri = tcTriAnniversaires();
+  if (tri === 'alpha') {
+    liste.sort(function (a, b) {
+      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+    });
+  } else {
+    liste.sort(function (a, b) { return a.jours - b.jours; });
+  }
+
+  const boutonTri = function (mode, libelle) {
+    const actif = tri === mode;
+    return '<button onclick="tcDefinirTriAnniversaires(\'' + mode + '\')"'
+      + ' style="flex:1; padding:7px 10px; border:none; border-radius:9px;'
+      + ' font-size:12px; font-weight:600; cursor:pointer; background:'
+      + (actif ? '#fff' : 'transparent') + '; color:'
+      + (actif ? 'var(--g-blue)' : 'var(--text-sec)') + '; box-shadow:'
+      + (actif ? '0 1px 3px rgba(0,0,0,0.12)' : 'none') + ';">' + libelle + '</button>';
+  };
+
+  const carte = function (b) {
+    const dateStr = b.prochaine.toLocaleDateString('fr-FR',
+      { weekday: 'long', day: 'numeric', month: 'long' });
+    const quand = b.jours === 0 ? '🎉 Aujourd’hui !'
+      : b.jours === 1 ? 'Demain' : 'Dans ' + b.jours + ' jours';
+    const couleur = b.jours <= 7 ? '#ea4335' : b.jours <= 30 ? '#f9ab00' : 'var(--text-sec)';
+    // L age annonce est celui qu elle aura ce jour-la, pas celui d
+    // aujourd hui : c est bien la date a venir qui figure au-dessus.
+    const age = b.year ? b.prochaine.getFullYear() - b.year : null;
+    return `
+      <div style="background:#fff; border:1px solid var(--border); border-radius:14px; margin-bottom:10px; overflow:hidden;">
+        <div style="display:flex; gap:14px; align-items:center; padding:14px 16px;">
+          <div style="width:46px; height:46px; border-radius:50%; background:linear-gradient(135deg, #fbbc04, #ea4335); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0;">🎂</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:15px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHTMLSafe(b.name)}</div>
+            <div style="font-size:12px; color:var(--text-sec); margin-top:2px; text-transform:capitalize;">${dateStr}</div>
+            <div style="font-size:11px; color:${couleur}; font-weight:600; margin-top:3px;">${quand}${age !== null && age > 0 ? `<span style="color:var(--text-sec); font-weight:400;"> · ${age} ans</span>` : ''}</div>
+          </div>
+          <button onclick="deleteBirthday('${b.id}')" style="padding:6px 4px; background:transparent; border:none; cursor:pointer; font-size:17px;">🗑️</button>
+        </div>
+        <div onclick="tcBasculerAnniversaireAgenda('${b.id}')" style="display:flex; align-items:center; gap:8px; padding:10px 16px; border-top:1px solid var(--border); cursor:pointer; background:var(--bg-soft);">
+          <span data-notranslate style="font-size:14px;">📅</span>
+          <span style="flex:1; font-size:12.5px; color:var(--text-sec);">Afficher dans mon agenda</span>
+          <span style="font-size:12px; font-weight:600; color:${b.agenda ? '#ea4335' : '#9aa0a6'};">${b.agenda ? '✓ Dans l’agenda' : '+ Ajouter'}</span>
+        </div>
+      </div>
+    `;
+  };
 
   c.innerHTML = `
-    <button onclick="addBirthday()" style="width:100%; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:18px; display:flex; align-items:center; justify-content:center; gap:8px;">
+    <button onclick="addBirthday()" style="width:100%; padding:14px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px; display:flex; align-items:center; justify-content:center; gap:8px;">
       <span style="font-size:18px;">+</span> Ajouter un anniversaire
     </button>
 
-    ${sorted.length === 0 ? `
+    ${liste.length === 0 ? `
       <div style="text-align:center; padding:40px 20px;">
         <div style="font-size:50px; margin-bottom:14px;">🎂</div>
         <div style="font-size:15px; font-weight:600; color:var(--text); margin-bottom:6px;">Aucun anniversaire enregistré</div>
         <div style="font-size:12px; color:var(--text-sec);">Ajoute les anniversaires de tes proches pour ne plus jamais les oublier.</div>
       </div>
-    ` : sorted.map(b => {
-      const dateStr = b.nextDate.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
-      const daysLabel = b.daysUntil === 0 ? '🎉 Aujourd\'hui !' : b.daysUntil === 1 ? 'Demain' : `Dans ${b.daysUntil} jours`;
-      const daysColor = b.daysUntil <= 7 ? '#ea4335' : b.daysUntil <= 30 ? '#fbbc04' : 'var(--text-sec)';
-      const age = b.year ? `${todayD.getFullYear() - b.year} ans` : '';
-      return `
-        <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px; display:flex; gap:14px; align-items:center;">
-          <div style="width:48px; height:48px; border-radius:50%; background:linear-gradient(135deg, #fbbc04, #ea4335); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">🎂</div>
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:15px; font-weight:600; color:var(--text);">${b.name} ${age ? `<span style="font-size:11px; color:var(--text-sec); font-weight:400;">— ${age}</span>` : ''}</div>
-            <div style="font-size:12px; color:var(--text-sec); margin-top:2px; text-transform:capitalize;">${dateStr}</div>
-            <div style="font-size:11px; color:${daysColor}; font-weight:600; margin-top:3px;">${daysLabel}</div>
-          </div>
-          <button onclick="deleteBirthday('${b.id}')" style="padding:6px 8px; background:transparent; border:none; cursor:pointer; color:var(--text-sec); font-size:18px;">🗑️</button>
-        </div>
-      `;
-    }).join('')}
+    ` : `
+      <div style="display:flex; gap:4px; background:var(--bg-soft); border-radius:11px; padding:4px; margin-bottom:14px;">
+        ${boutonTri('date', '📅 Par date')}${boutonTri('alpha', '🔤 A → Z')}
+      </div>
+      ${liste.map(carte).join('')}
+    `}
 
     <div style="margin-top:24px; padding:14px; background:#f0f7ff; border:1px solid #c8d7ee; border-radius:12px; font-size:11px; color:#1a3d6e; line-height:1.5;">
       💡 <b>Astuce</b> : Charly IA peut aussi ajouter des anniversaires automatiquement quand tu lui parles.<br>
@@ -11449,20 +11703,20 @@ function renderBirthdays() {
 }
 
 async function addBirthday() {
-  const name = await tcPrompt('Prénom et nom de la personne :');
-  if (!name || !name.trim()) return;
-  const date = await tcPrompt('Date de naissance (format JJ/MM/AAAA ou JJ/MM) :');
-  if (!date) return;
-  const m = date.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?$/);
-  if (!m) { tcAlert('Format invalide. Utilise JJ/MM ou JJ/MM/AAAA'); return; }
-  const day = parseInt(m[1]), month = parseInt(m[2]), year = m[3] ? parseInt(m[3]) : null;
-  if (day < 1 || day > 31 || month < 1 || month > 12) { tcAlert('Date invalide'); return; }
-  const dateStr = `${year || 2000}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const f = await ouvrirFormulaireAnniversaire();
+  if (!f) return;
+  // Annee de reference quand elle est inconnue : 2000 est bissextile,
+  // un 29 fevrier saisi sans annee reste donc une date valide.
+  const dateStr = (f.annee || 2000) + '-' + String(f.mois).padStart(2, '0')
+    + '-' + String(f.jour).padStart(2, '0');
   birthdays.push({
     id: 'bday_' + Date.now(),
-    name: name.trim(),
+    name: (f.prenom + ' ' + f.nom).trim(),
+    prenom: f.prenom,
+    nomFamille: f.nom,
     date: dateStr,
-    year: year
+    year: f.annee,
+    agenda: false
   });
   saveBirthdays();
   renderBirthdays();
@@ -11471,9 +11725,10 @@ async function addBirthday() {
 
 async function deleteBirthday(id) {
   if (!await tcConfirm('Supprimer cet anniversaire ?')) return;
-  birthdays = birthdays.filter(b => b.id !== id);
+  birthdays = birthdays.filter(function (b) { return b.id !== id; });
   saveBirthdays();
   renderBirthdays();
+  if (typeof render === 'function' && currentPage === 'calendar') render();
 }
 
 // ═══ JOURS FÉRIÉS ═══
