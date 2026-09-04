@@ -6,6 +6,11 @@ servi sur `timecool.fr/app/` et embarqué dans l'APK.
 
 Charles est le porteur du projet. Réponses en français.
 
+**Lire `JOURNAL.md` avant de commencer**, et y noter ce qu'on entame et
+ce qu'on laisse. Plusieurs sessions travaillent sur ce dépôt : le
+04/09/2026, deux d'entre elles ont corrigé le même défaut en parallèle
+sans le savoir.
+
 ---
 
 ## 1. Comment travailler avec lui
