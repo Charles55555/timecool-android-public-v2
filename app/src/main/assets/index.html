@@ -610,21 +610,26 @@ if (window.pdfjsLib) {
   <div style="padding:24px 24px 40px;">
     <div style="font-size:13px; color:var(--text-sec); margin-bottom:24px;">Étape 1 sur 2 — Vos informations</div>
 
+    <!-- Un vrai <form> : sans lui, aucun gestionnaire de mots de passe ne
+         propose d'enregistrer quoi que ce soit. C'est l'envoi du
+         formulaire qui déclenche la proposition, chez tous. -->
+    <form id="signupForm" onsubmit="event.preventDefault(); submitSignup(); return false;" autocomplete="on">
+
     <div style="margin-bottom:16px;">
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Prénom *</label>
-      <input type="text" id="signupFirstname" placeholder="Ex: Charly" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+      <input type="text" id="signupFirstname" name="prenom" autocomplete="given-name" placeholder="Ex: Charly" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
       <div class="err-champ" id="err_signupFirstname"></div>
     </div>
 
     <div style="margin-bottom:16px;">
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Nom *</label>
-      <input type="text" id="signupLastname" placeholder="Ex: Dupont" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+      <input type="text" id="signupLastname" name="nom" autocomplete="family-name" placeholder="Ex: Dupont" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
       <div class="err-champ" id="err_signupLastname"></div>
     </div>
 
     <div style="margin-bottom:16px;">
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Email *</label>
-      <input type="email" id="signupEmail" placeholder="exemple@email.com" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+      <input type="email" id="signupEmail" name="username" autocomplete="username" placeholder="exemple@email.com" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
       <div class="err-champ" id="err_signupEmail"></div>
     </div>
 
@@ -632,7 +637,7 @@ if (window.pdfjsLib) {
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Téléphone *</label>
       <div style="display:flex; gap:8px;">
         <div id="signupPhoneCountryBtn" onclick="openPhoneCountryPicker()" style="padding:14px 12px; border:1.5px solid var(--border); border-radius:12px; background:#f1f3f4; font-size:15px; display:flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;">🇫🇷 +33 <span style="font-size:10px; color:var(--text-sec); margin-left:2px;">▾</span></div>
-        <input type="tel" id="signupPhone" placeholder="6 12 34 56 78" style="flex:1; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+        <input type="tel" id="signupPhone" name="tel" autocomplete="tel-national" placeholder="6 12 34 56 78" style="flex:1; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
       </div>
       <div class="err-champ" id="err_signupPhone"></div>
     </div>
@@ -640,8 +645,8 @@ if (window.pdfjsLib) {
     <div style="margin-bottom:16px;">
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Adresse *</label>
       <div style="display:flex; gap:10px;">
-        <input type="text" id="signupZip" placeholder="Code postal" maxlength="10" style="width:38%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
-        <input type="text" id="signupCity" placeholder="Ville" style="flex:1; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+        <input type="text" id="signupZip" name="cp" autocomplete="postal-code" placeholder="Code postal" maxlength="10" style="width:38%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+        <input type="text" id="signupCity" name="ville" autocomplete="address-level2" placeholder="Ville" style="flex:1; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
       </div>
       <div class="err-champ" id="err_signupAdresse"></div>
     </div>
@@ -649,7 +654,7 @@ if (window.pdfjsLib) {
     <div style="margin-bottom:24px;">
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Mot de passe *</label>
       <div style="position:relative;">
-        <input type="password" id="signupPassword" placeholder="Minimum 10 caractères" style="width:100%; padding:14px 48px 14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+        <input type="password" id="signupPassword" name="new-password" autocomplete="new-password" placeholder="Minimum 10 caractères" style="width:100%; padding:14px 48px 14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
         <button type="button" onclick="togglePasswordVisibility('signupPassword', this)" aria-label="Afficher / masquer le mot de passe" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:transparent; border:none; padding:8px; cursor:pointer; color:var(--text-sec); display:flex; align-items:center; justify-content:center;">
           <svg class="eye-show" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
           <svg class="eye-hide" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="display:none;"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
@@ -667,9 +672,11 @@ if (window.pdfjsLib) {
       <div class="err-champ" id="err_signupCgu"></div>
     </div>
 
-    <button onclick="submitSignup()" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(26,115,232,0.3);">
+    <button type="submit" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(26,115,232,0.3);">
       Continuer →
     </button>
+
+    </form>
   </div>
 </div>
 
@@ -760,15 +767,17 @@ if (window.pdfjsLib) {
       <div style="font-size:13px; color:var(--text-sec);">Connecte-toi à ton compte TIMECOOL.</div>
     </div>
 
+    <form id="loginForm" onsubmit="event.preventDefault(); submitLogin(); return false;" autocomplete="on">
+
     <div style="margin-bottom:16px;">
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Email</label>
-      <input type="email" id="loginEmail" placeholder="exemple@email.com" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+      <input type="email" id="loginEmail" name="username" autocomplete="username" placeholder="exemple@email.com" style="width:100%; padding:14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
     </div>
 
     <div style="margin-bottom:24px;">
       <label style="font-size:12px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:500;">Mot de passe</label>
       <div style="position:relative;">
-        <input type="password" id="loginPassword" placeholder="Mot de passe" style="width:100%; padding:14px 48px 14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
+        <input type="password" id="loginPassword" name="password" autocomplete="current-password" placeholder="Mot de passe" style="width:100%; padding:14px 48px 14px 16px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box;">
         <button type="button" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Afficher / masquer le mot de passe" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:transparent; border:none; padding:8px; cursor:pointer; color:var(--text-sec); display:flex; align-items:center; justify-content:center;">
           <svg class="eye-show" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
           <svg class="eye-hide" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="display:none;"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
@@ -776,9 +785,11 @@ if (window.pdfjsLib) {
       </div>
     </div>
 
-    <button onclick="submitLogin()" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:12px; box-shadow:0 4px 14px rgba(26,115,232,0.3);">
+    <button type="submit" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:12px; box-shadow:0 4px 14px rgba(26,115,232,0.3);">
       Se connecter
     </button>
+
+    </form>
 
     <!-- Rempli par tcAfficherBoutonBiometrie() si la connexion biométrique
          est activée sur cet appareil — vide sinon, sans rien à afficher. -->
@@ -10329,7 +10340,8 @@ async function tcCreerCompte(preuve) {
 
   // Popup native du navigateur (Chrome/Edge) proposant d'enregistrer le
   // mot de passe. Il n'est pas conservé par TimeCool.
-  tcOfferPasswordSave(account.email, pendingSignup.password, account.firstname + ' ' + account.lastname);
+  tcProposerEnregistrementIdentifiants(account.email, pendingSignup.password,
+    (account.firstname + ' ' + account.lastname).trim());
   // Retenu sur l'appareil pour l'affichage dans Paramètres.
   tcMemoriserMotDePasse(pendingSignup.password);
 
@@ -10376,13 +10388,26 @@ async function submitVerifyCode() {
 
 // Déclenche la popup native "Enregistrer le mot de passe ?" du navigateur (Chrome/Edge).
 // Firefox/Safari gèrent cette détection automatiquement via le formulaire, sans appel JS nécessaire.
+/**
+ * Complément pour Chromium, et rien d'autre.
+ *
+ * navigator.credentials.store() n'existe que chez Chrome et Edge. Sur
+ * iPhone — où tous les navigateurs utilisent le moteur de Safari — et
+ * sur Firefox, cet appel ne fait rien. Ce n'est donc PAS le mécanisme
+ * principal : celui-ci, c'est le <form> avec ses attributs autocomplete,
+ * que tous les gestionnaires savent lire.
+ *
+ * Aucun gestionnaire ne propose quoi que ce soit dans l'APK : la page y
+ * est servie depuis le fichier local, hors de tout site. C'est la
+ * biométrie qui y tient ce rôle.
+ */
 async function tcOfferPasswordSave(email, password, name) {
   try {
     if (window.PasswordCredential) {
       const cred = new PasswordCredential({ id: email, password: password, name: name });
       await navigator.credentials.store(cred);
     }
-  } catch(e) { /* Silencieux : pas bloquant si le navigateur ne supporte pas l'API */ }
+  } catch (e) { /* Silencieux : le formulaire reste le mécanisme principal */ }
 }
 
 async function resendCode() {
@@ -10475,7 +10500,8 @@ async function submitLogin() {
   // Uniquement après une connexion email/mot de passe réelle — jamais
   // après Google Sign-In, qui a déjà son propre mécanisme de
   // reconnexion via Credential Manager.
-  tcProposerEnregistrementIdentifiants(identifiant, password);
+  tcProposerEnregistrementIdentifiants(identifiant, password,
+    (userAccount.firstname + ' ' + userAccount.lastname).trim());
   // Retenu sur l'appareil pour l'affichage dans Paramètres (voir
   // tcMemoriserMotDePasse). Même condition que ci-dessus : jamais
   // après Google Sign-In, qui n'a pas de mot de passe à retenir.
@@ -10491,11 +10517,26 @@ async function submitLogin() {
  * boîte système gère seule l'acceptation ou le refus — rien ici n'a
  * besoin de savoir laquelle des deux s'est produite.
  */
-function tcProposerEnregistrementIdentifiants(identifiant, motDePasse) {
+/**
+ * Propose d'enregistrer les identifiants, quel que soit l'endroit où
+ * l'application tourne.
+ *
+ * Dans l'APK : le gestionnaire d'Android, par le pont natif.
+ * Dans un navigateur : le <form> et ses attributs autocomplete font
+ * l'essentiel du travail à l'envoi ; l'appel ci-dessous n'est qu'un
+ * renfort pour Chrome et Edge, les seuls à implémenter cette API.
+ *
+ * Appelée aussi bien après une inscription qu'après une connexion —
+ * sans quoi un mot de passe changé n'aurait jamais été proposé à la
+ * mise à jour.
+ */
+function tcProposerEnregistrementIdentifiants(identifiant, motDePasse, nom) {
   if (window.TimeCoolNatif && window.TimeCoolNatif.enregistrerIdentifiants) {
     try { window.TimeCoolNatif.enregistrerIdentifiants(identifiant, motDePasse); }
     catch (e) { console.error('Enregistrement identifiants : ' + e.message); }
+    return;
   }
+  tcOfferPasswordSave(identifiant, motDePasse, nom || identifiant);
 }
 
 // ═══ v5.4 — Splash de bienvenue chaleureux (corrigé en v5.5 — pas de flash) ═══
