@@ -29,6 +29,52 @@ Voir la section 8 de `CLAUDE.md`. Rien de tout cela n'est fait.
 
 ## 05/09/2026
 
+**Valide par Charles en fin de journee :** isolation des donnees entre
+comptes sur un meme appareil, et prise de rendez-vous d'un agenda a
+l'autre, inscrite dans les deux agendas. « tout fonctionne ».
+
+**Prise de rendez-vous reelle entre deux comptes.** L'ecran promettait
+« creneaux proposes par Julian » alors qu'ils venaient de l'agenda du
+DEMANDEUR, et confirmer n'inscrivait le rendez-vous que chez lui. Le
+destinataire ne recevait rien. Desormais : ses creneaux a lui, ou une
+demande dans les deux messageries s'il n'a rien configure — et le
+demandeur ne peut pas distinguer un agenda plein d'un acces bloque.
+
+**Messagerie entre comptes.** Elle n'existait pas cote serveur. Un
+message est deux lignes dans `elements`, une par compte : la
+synchronisation les transporte deja, rien de neuf cote appareils.
+
+**Trois defauts de perte de donnees, tous corriges :**
+
+1. Un compte qui s'ouvrait heritait des donnees locales du precedent et
+   les poussait sur le serveur comme siennes. Fuite d'un compte vers un
+   autre sur appareil partage. Menage a chaque changement de compte,
+   plus un nettoyage unique pour les appareils deja pollues.
+2. La synchronisation annoncait une suppression des qu'un objet connu
+   disparaissait de la liste locale. Une disparition passagere effacait
+   donc definitivement, chez tous les appareils. Avec 3285 contacts,
+   tout le carnet. Une famille qui passe de cinq objets a zero n'est
+   plus jamais annoncee comme supprimee.
+3. `tc_conversations` etait reclamee par deux mecanismes a la fois — la
+   famille « conversation » et le bloc « reglages ». La messagerie
+   restait vide par intermittence.
+
+**Les cles API sont heritees de l'administrateur.** Elles se
+propageaient par accident, via le stockage local de l'appareil partage.
+Couper ce partage aurait laisse les nouveaux comptes sans assistant.
+
+**navigate() : trois comportements morts.** Surchargee quatre fois, la
+premiere surcharge ne rappelait pas l'originale. La detection des
+contacts inscrits, la sortie du mode agenda isole et le retablissement
+des agendas masques ne s'executaient plus. Zero appel a
+/contacts/detecter en 24 h, contre 4000 a la synchronisation.
+
+**Divers :** bouton de mise a jour dans l'en-tete ; bouton d'inscription
+fixe en bas de l'ecran (sticky ne retenait rien, il etait le dernier
+enfant de son parent) ; `min-height:100vh` retire des conteneurs en
+position fixe, qui depassaient l'ecran sur mobile ; une seule demande de
+rendez-vous en attente a la fois, expirant a sept jours.
+
 **Enregistrement du mot de passe : validé par Charles.** Chrome propose
 bien la fenêtre après connexion sur `timecool.fr/app/`. Sujet clos.
 
@@ -42,6 +88,10 @@ sur un autre hébergement IONOS (195.36.145.100), et Google le citait
 comme source sur TimeCool. Fichiers retirés par Charles, le domaine
 renvoie 403. Aucune donnée sensible n'était exposée. L'index de Google
 mettra quelques jours à se mettre à jour.
+
+**Lecon du jour, deux fois payee :** corriger un mecanisme ne repare pas
+les donnees deja abimees. Il faut regarder l'etat reel, pas seulement le
+code.
 
 ## 04/09/2026
 
