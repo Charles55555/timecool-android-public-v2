@@ -792,6 +792,17 @@ switch ($route) {
          * message : trois essais, et le destinataire recevait trois fois
          * la même chose. On reprend celle qui attend déjà.
          */
+        // Les demandes restées sans réponse au-delà du délai sont
+        // abandonnées : sinon la première d'entre elles bloquerait pour
+        // toujours toute nouvelle demande vers cette personne.
+        $jours = (int) Conf::get('rdv_demande_jours', 7);
+        Db::req(
+            'UPDATE rdv SET statut = "expire"
+              WHERE organisateur_id = ? AND invite_compte_id = ? AND statut = "attente"
+                AND cree_le < DATE_SUB(NOW(), INTERVAL ? DAY)',
+            [$moi['id'], $cible['id'], $jours]
+        );
+
         $enAttente = Db::un(
             'SELECT id, cree_le FROM rdv
               WHERE organisateur_id = ? AND invite_compte_id = ? AND statut = "attente"
