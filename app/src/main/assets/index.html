@@ -14635,9 +14635,18 @@ const TC_SYNC_REGLAGE_MAX = 100000;
 /* Ces clés portent des données déjà synchronisées objet par objet.
    Les faire voyager AUSSI comme réglages ferait s'affronter deux
    mécanismes sur la même donnée : le bloc entier écraserait des
-   modifications venues d'un autre appareil. */
+   modifications venues d'un autre appareil.
+
+   TOUTE famille ajoutée à TC_SYNC_TYPES doit avoir sa clé de stockage
+   ici. L'oubli ne produit aucune erreur — seulement des données qui
+   disparaissent par intermittence, selon lequel des deux mécanismes
+   écrit en dernier. Un test le vérifie désormais. */
 const TC_SYNC_DEJA_SYNCHRONISE = [
-  'tc_user_events', 'tc_user_tasks', 'timecool_birthdays', 'timecool_contacts'
+  'tc_user_events', 'tc_user_tasks', 'timecool_birthdays', 'timecool_contacts',
+  // Écrite par le serveur, jamais par l'appareil. Laissée ici, la
+  // famille « réglage » la remontait comme un bloc et écrasait les
+  // conversations reçues : la messagerie restait vide.
+  'tc_conversations'
 ];
 
 /** Une clé est-elle un réglage à synchroniser ? */

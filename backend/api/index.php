@@ -827,8 +827,9 @@ switch ($route) {
                 // Au deuxième clic rien n'est reparti : le dire, plutôt
                 // que d'annoncer un envoi qui n'a pas eu lieu.
                 'message' => $reprise
-                    ? 'Ta demande est déjà partie dans la messagerie de ' . $cible['prenom']
-                        . '. Tu peux la retrouver dans ta messagerie, en attendant sa réponse.'
+                    ? $cible['prenom'] . " n'a pas encore configuré son agenda TimeCool. "
+                        . "En attendant tu peux consulter ta messagerie pour confirmer que "
+                        . "nous lui avons envoyé un message pour le tenir informé."
                     : 'Son agenda est complet ou pas encore configuré. Ta demande de '
                         . 'rendez-vous est partie dans la messagerie de ' . $cible['prenom']
                         . ', et tu peux la retrouver dans ta messagerie.',
