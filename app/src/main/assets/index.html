@@ -13252,61 +13252,113 @@ function tcFreeSlots(n) {
   return out;
 }
 
-function requestRdvContact(contactId) {
-  const c = contactsList.find(x => x.id === contactId);
+/**
+ * Demande de rendez-vous à un contact qui a un compte TimeCool.
+ *
+ * Les créneaux venaient auparavant de l'agenda du DEMANDEUR, sous le
+ * titre « créneaux proposés par… », et confirmer n'inscrivait le
+ * rendez-vous que chez lui. Le destinataire ne recevait rien.
+ *
+ * Tout passe désormais par le serveur : c'est l'agenda du destinataire
+ * qui fournit les créneaux, et l'inscription se fait des deux côtés.
+ */
+async function requestRdvContact(contactId) {
+  const c = contactsList.find(function (x) { return x.id === contactId; });
   const zone = document.getElementById('rdvzone_' + contactId);
   if (!c || !zone) return;
-  if (zone.innerHTML.trim()) { zone.innerHTML = ''; return; } // second clic = replier
+  if (zone.innerHTML.trim()) { zone.innerHTML = ''; return; }   // second clic = replier
 
-  const prenom = (c.name || '').split(' ')[0];
-  const slots = tcFreeSlots(3);
-  if (!slots.length) {
-    zone.innerHTML = '<div class="ct-blocked" style="background:#fff8e1;border-color:#fbbc04;color:#5f4500;">\u26A0\uFE0F<div>Aucun cr\u00e9neau libre dans les 15 prochains jours.</div></div>';
+  const encadre = function (fond, bordure, couleur, html) {
+    zone.innerHTML = '<div style="margin-top:12px; padding:12px 14px; background:' + fond
+      + '; border:1px solid ' + bordure + '; border-radius:12px; font-size:12.5px;'
+      + ' line-height:1.5; color:' + couleur + ';">' + html + '</div>';
+  };
+
+  if (!c.referenceCompte) {
+    encadre('#fff8e1', '#fbbc04', '#5f4500',
+      escapeHTMLSafe((c.name || '').split(' ')[0])
+      + ' n’a pas encore de compte TimeCool. Ouvre la page Contacts pour actualiser,'
+      + ' ou invite-le depuis la messagerie.');
     return;
   }
 
+  encadre('#f8f9fa', 'var(--border)', 'var(--text-sec)', '⏳ Envoi de ta demande…');
+
+  let r;
+  try {
+    r = await TC_BACKEND.demanderRdv(c.referenceCompte);
+  } catch (e) {
+    encadre('#fce8e6', '#f5b8b3', '#c5221f',
+      '❌ ' + escapeHTMLSafe(e.message || 'Demande impossible pour le moment.'));
+    return;
+  }
+
+  // Agenda plein, non configuré ou accès bloqué : le serveur rend la
+  // même réponse dans les trois cas, et le demandeur ne peut pas les
+  // distinguer.
+  if (r.mode !== 'creneaux') {
+    encadre('#e8f0fe', '#c6dafc', '#1a3d6e', '📨 ' + escapeHTMLSafe(r.message || ''));
+    tcSyncTour();   // pour voir l'échange arriver dans sa propre messagerie
+    return;
+  }
+
+  const prenom = (c.name || '').split(' ')[0];
   let h = '<div style="margin-top:12px; padding:12px; background:#f8f9fa; border:1px solid var(--border); border-radius:12px;">';
-  h += '<div style="font-size:12px; font-weight:600; color:var(--text); margin-bottom:2px;">\u{1F4C5} Cr\u00e9neaux propos\u00e9s par ' + escapeHTMLSafe(prenom) + '</div>';
-  h += '<div style="font-size:10.5px; color:#9aa0a6; margin-bottom:10px;">Tape sur un cr\u00e9neau pour confirmer le rendez-vous.</div>';
-  slots.forEach(function(s, i) {
-    const hh = ('0'+s.h).slice(-2) + 'h' + ('0'+s.m).slice(-2);
-    h += '<div onclick="confirmRdvContact(\'' + contactId + '\',' + i + ')" style="display:flex; align-items:center; gap:10px; padding:11px 12px; background:#fff; border:1.5px solid #e8eaed; border-radius:10px; margin-bottom:7px; cursor:pointer;">' +
-         '<span style="font-size:17px;">\u{1F550}</span>' +
-         '<div style="flex:1;"><div style="font-size:12.5px; font-weight:600; color:var(--text); text-transform:capitalize;">' + s.label + '</div>' +
-         '<div style="font-size:11px; color:var(--text-sec);">' + hh + ' \u2014 dur\u00e9e 1 h</div></div>' +
-         '<span style="color:var(--g-blue); font-size:15px;">\u203A</span></div>';
+  h += '<div style="font-size:12px; font-weight:600; color:var(--text); margin-bottom:2px;">📅 Créneaux proposés par '
+    + escapeHTMLSafe(prenom) + '</div>';
+  h += '<div style="font-size:10.5px; color:#9aa0a6; margin-bottom:10px;">Tape sur un créneau pour confirmer le rendez-vous.</div>';
+  r.creneaux.forEach(function (s, i) {
+    const hh = ('0' + s.heure).slice(-2) + 'h' + ('0' + s.minute).slice(-2);
+    h += '<div onclick="confirmRdvContact(\'' + contactId + '\',' + (i + 1) + ')" style="display:flex; align-items:center; gap:10px; padding:11px 12px; background:#fff; border:1.5px solid #e8eaed; border-radius:10px; margin-bottom:7px; cursor:pointer;">'
+      + '<span style="font-size:17px;">🕐</span>'
+      + '<div style="flex:1;"><div style="font-size:12.5px; font-weight:600; color:var(--text); text-transform:capitalize;">'
+      + escapeHTMLSafe(s.libelle) + '</div>'
+      + '<div style="font-size:11px; color:var(--text-sec);">' + hh + ' — durée 1 h</div></div>'
+      + '<span style="color:var(--g-blue); font-size:15px;">›</span></div>';
   });
   h += '<div onclick="requestRdvContact(\'' + contactId + '\')" style="text-align:center; font-size:11.5px; color:var(--text-sec); padding:4px; cursor:pointer;">Annuler</div>';
   h += '</div>';
   zone.innerHTML = h;
-  zone._slots = slots;
+  zone._rdv = r.rdv;
 }
 
-function confirmRdvContact(contactId, idx) {
-  const c = contactsList.find(x => x.id === contactId);
+/**
+ * Le demandeur retient un créneau.
+ *
+ * C'est le serveur qui inscrit le rendez-vous dans les deux agendas ; la
+ * synchronisation le rapporte ici dans la seconde. On n'écrit donc rien
+ * localement — sinon le rendez-vous existerait en double, une fois posé
+ * à la main et une fois reçu.
+ */
+async function confirmRdvContact(contactId, rang) {
   const zone = document.getElementById('rdvzone_' + contactId);
-  if (!c || !zone || !zone._slots) return;
-  const s = zone._slots[idx];
-  if (!s) return;
+  if (!zone || !zone._rdv) return;
 
-  const firstCat = (c.categories && c.categories.length) ? c.categories[0] : null;
-  const cat = firstCat ? (CT_CAT_MAP[firstCat] || 'travail') : 'travail';
+  const rdv = zone._rdv;
+  zone.innerHTML = '<div style="margin-top:12px; padding:12px 14px; background:#f8f9fa; border:1px solid var(--border); border-radius:12px; font-size:12.5px; color:var(--text-sec);">⏳ Confirmation…</div>';
 
-  events.push({
-    date: s.date, startH: s.h, startM: s.m, endH: s.h + 1, endM: s.m,
-    title: c.name, cat: cat, mode: mode, id: 'ct_' + Date.now()
-  });
-  saveEventsToStorage();
-  window._lastAddedEventDate = s.date;
-  if (currentPage === 'calendar') render();
+  let r;
+  try {
+    r = await TC_BACKEND.choisirCreneauRdv(rdv, rang);
+  } catch (e) {
+    zone.innerHTML = '<div style="margin-top:12px; padding:12px 14px; background:#fce8e6; border:1px solid #f5b8b3; border-radius:12px; font-size:12.5px; color:#c5221f;">❌ '
+      + escapeHTMLSafe(e.message || 'Ce créneau n’est plus disponible.') + '</div>';
+    return;
+  }
 
-  const hh = ('0'+s.h).slice(-2) + 'h' + ('0'+s.m).slice(-2);
-  zone.innerHTML = '<div style="margin-top:12px; padding:12px 14px; background:#e6f4ea; border:1px solid #34a853; border-radius:12px;">' +
-    '<div style="font-size:12.5px; font-weight:600; color:#1e7e34; line-height:1.5;">\u2705 RDV du ' + s.label + ' \u00e0 ' + hh + ' ajout\u00e9 \u00e0 ton agenda</div>' +
-    '<div onclick="navigate(\'calendar\')" style="margin-top:8px; font-size:11.5px; font-weight:600; color:#1a73e8; cursor:pointer;">Voir dans mon agenda \u2192</div>' +
-    '</div>';
-  showToast('\u2705 Rendez-vous enregistr\u00e9');
+  zone.innerHTML = '<div style="margin-top:12px; padding:12px 14px; background:#e6f4ea; border:1px solid #34a853; border-radius:12px;">'
+    + '<div style="font-size:12.5px; font-weight:600; color:#1e7e34; line-height:1.5;">✅ Rendez-vous du '
+    + escapeHTMLSafe(r.libelle || '') + ' à ' + escapeHTMLSafe((r.heure || '').replace(':', 'h'))
+    + ' confirmé des deux côtés</div>'
+    + '<div onclick="navigate(\'calendar\')" style="margin-top:8px; font-size:11.5px; font-weight:600; color:#1a73e8; cursor:pointer;">Voir dans mon agenda →</div>'
+    + '</div>';
+  showToast('✅ Rendez-vous confirmé');
+
+  // Le rendez-vous vient d'être écrit dans les deux comptes : on va le
+  // chercher tout de suite plutôt que d'attendre le prochain passage.
+  tcSyncTour();
 }
+
 
 /**
  * Ce contact utilise-t-il TimeCool ?
@@ -13730,6 +13782,29 @@ const TC_BACKEND = {
       };
     }
     return { statut: d.statut };
+  },
+
+  // ─── Rendez-vous entre comptes ───────────────────────────────
+
+  /**
+   * Demande un rendez-vous à un autre compte TimeCool.
+   * @returns {Object} soit { mode:'creneaux', rdv, creneaux },
+   *   soit { mode:'messagerie', rdv, message }. Le demandeur ne peut
+   *   pas distinguer un agenda plein d'un accès non accordé.
+   */
+  async demanderRdv(reference, titre) {
+    return tcAppel('POST', '/rdv/demander',
+      titre ? { reference: reference, titre: titre } : { reference: reference });
+  },
+
+  /** Retient un créneau : le rendez-vous s'inscrit dans les deux agendas. */
+  async choisirCreneauRdv(rdv, rang) {
+    return tcAppel('POST', '/rdv/choisir', { rdv: rdv, rang: rang });
+  },
+
+  async envoyerMessage(reference, texte) {
+    await tcAppel('POST', '/messages/envoyer', { reference: reference, texte: texte });
+    return true;
   },
 
   // ─── Synchronisation entre appareils ─────────────────────────
@@ -14350,6 +14425,19 @@ const TC_SYNC_TYPES = {
     poser: function (liste) { contactsList = liste; saveContacts(); }
   },
   /*
+   * Les conversations, écrites par le serveur seulement.
+   *
+   * `lectureSeule` : elles descendent, elles ne remontent jamais. Sans
+   * ce drapeau, la comparaison d'empreintes les considérerait comme des
+   * objets locaux disparus et enverrait leur suppression au serveur.
+   */
+  conversation: {
+    lectureSeule: true,
+    lire: function () { return tcConversations(); },
+    id: function (o) { return o.reference; },
+    poser: function (liste) { tcPoserConversations(liste); }
+  },
+  /*
    * Les réglages, une clé à la fois.
    *
    * Un seul bloc aurait suffi à les faire circuler, mais changer le
@@ -14409,6 +14497,20 @@ const TC_SYNC_TYPES = {
     }
   }
 };
+
+const TC_CONVERSATIONS_KEY = 'tc_conversations';
+
+/** Conversations reçues du serveur, rangées par référence de compte. */
+function tcConversations() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TC_CONVERSATIONS_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
+}
+
+function tcPoserConversations(liste) {
+  try { localStorage.setItem(TC_CONVERSATIONS_KEY, JSON.stringify(liste)); } catch (e) {}
+}
 
 /* Taille au-delà de laquelle un contenu n'est plus un réglage. */
 const TC_SYNC_REGLAGE_MAX = 100000;
@@ -14522,7 +14624,9 @@ async function tcSyncAppliquer(elements) {
         delete empreintes[cle];
       } else if (e.contenu) {
         if (i !== undefined) liste[i] = e.contenu; else liste.push(e.contenu);
-        empreintes[cle] = tcSyncEmpreinte(e.contenu);
+        // Pas d'empreinte pour un objet en lecture seule : elle servirait
+        // uniquement à détecter une modification locale, qui n'existe pas.
+        if (!t.lectureSeule) empreintes[cle] = tcSyncEmpreinte(e.contenu);
         touche = true;
       }
       recus++;
@@ -14561,6 +14665,7 @@ async function tcSyncPousser() {
 
   Object.keys(TC_SYNC_TYPES).forEach(function (type) {
     const t = TC_SYNC_TYPES[type];
+    if (t.lectureSeule) return;   // ces objets descendent, ils ne remontent pas
     (t.lire() || []).forEach(function (o) {
       const uid = t.id(o);
       if (!uid) return;   // objet sans identifiant : rien à quoi le rattacher
@@ -14576,7 +14681,11 @@ async function tcSyncPousser() {
   Object.keys(connues).forEach(function (cle) {
     if (presentes[cle] !== undefined) return;
     const i = cle.indexOf(':');
-    aEnvoyer.push({ type: cle.slice(0, i), uid: cle.slice(i + 1), contenu: null });
+    const type = cle.slice(0, i);
+    // Un objet en lecture seule absent d'ici n'a pas été supprimé ici :
+    // annoncer sa disparition l'effacerait chez tout le monde.
+    if (TC_SYNC_TYPES[type] && TC_SYNC_TYPES[type].lectureSeule) return;
+    aEnvoyer.push({ type: type, uid: cle.slice(i + 1), contenu: null });
   });
 
   if (!aEnvoyer.length) return 0;

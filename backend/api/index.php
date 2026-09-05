@@ -77,6 +77,235 @@ function vueCompte(array $c): array
     ];
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDEZ-VOUS ENTRE DEUX COMPTES
+
+   Le serveur ne « pousse » rien : il écrit dans le magasin synchronisé
+   du destinataire, et la sonde de son appareil vient le chercher dans
+   la seconde. Tout passe donc par elementsPoser().
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Écrit des éléments dans un ou plusieurs comptes, chacun sous son
+ * propre numéro de version.
+ *
+ * @param array $ecritures  [['compte_id'=>int,'type'=>string,'uid'=>string,'contenu'=>?array], ...]
+ */
+function elementsPoser(array $ecritures): void
+{
+    $parCompte = [];
+    foreach ($ecritures as $e) {
+        $parCompte[(int) $e['compte_id']][] = $e;
+    }
+
+    $pdo = Db::pdo();
+    $transaction = !$pdo->inTransaction();
+    if ($transaction) {
+        $pdo->beginTransaction();
+    }
+    try {
+        foreach ($parCompte as $compteId => $lot) {
+            // Le compteur est verrouillé le temps de l'écriture : deux
+            // écritures simultanées obtiennent des numéros distincts.
+            $c = Db::un('SELECT compteur_sync FROM comptes WHERE id = ? FOR UPDATE', [$compteId]);
+            if ($c === null) {
+                continue;
+            }
+            $version = (int) $c['compteur_sync'];
+            foreach ($lot as $e) {
+                $version++;
+                $supprime = !isset($e['contenu']) || $e['contenu'] === null;
+                Db::req(
+                    'INSERT INTO elements (compte_id, type, uid, contenu, version, supprime)
+                     VALUES (?, ?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE
+                       contenu = VALUES(contenu),
+                       version = VALUES(version),
+                       supprime = VALUES(supprime)',
+                    [
+                        $compteId, $e['type'], $e['uid'],
+                        $supprime ? null : json_encode($e['contenu'], JSON_UNESCAPED_UNICODE),
+                        $version, $supprime ? 1 : 0,
+                    ]
+                );
+            }
+            Db::req('UPDATE comptes SET compteur_sync = ? WHERE id = ?', [$version, $compteId]);
+        }
+        if ($transaction) {
+            $pdo->commit();
+        }
+    } catch (Throwable $err) {
+        if ($transaction) {
+            $pdo->rollBack();
+        }
+        throw $err;
+    }
+}
+
+/** Compte ouvert portant cette référence, ou null. */
+function compteParReference(string $reference): ?array
+{
+    if (!preg_match('/^[0-9A-Z]{12,26}$/', $reference)) {
+        return null;
+    }
+    return Db::un('SELECT * FROM comptes WHERE reference = ? AND cloture_le IS NULL', [$reference]);
+}
+
+/**
+ * Le titulaire a-t-il autorisé ce demandeur à lui prendre rendez-vous ?
+ *
+ * L'autorisation est une fiche contact, chez LUI, portant le numéro ou
+ * l'email du demandeur et au moins une catégorie cochée. Un contact
+ * bloqué n'autorise rien — et ne le saura jamais : la réponse rendue au
+ * demandeur est la même que pour un agenda plein.
+ *
+ * Seul un booléen sort d'ici. Le reste du carnet du titulaire n'est ni
+ * lu ni transmis.
+ */
+function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
+{
+    $tel = Empreinte::normaliserTelephone((string) $demandeur['telephone']);
+    $email = Empreinte::normaliserEmail((string) $demandeur['email']);
+
+    $fiches = Db::tous(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "contact" AND supprime = 0',
+        [$titulaireId]
+    );
+    foreach ($fiches as $f) {
+        $c = json_decode((string) $f['contenu'], true);
+        if (!is_array($c)) {
+            continue;
+        }
+        $memeTel = isset($c['phone']) && $c['phone'] !== ''
+            && Empreinte::normaliserTelephone((string) $c['phone']) === $tel;
+        $memeMail = isset($c['email']) && $c['email'] !== ''
+            && Empreinte::normaliserEmail((string) $c['email']) === $email;
+        if (!$memeTel && !$memeMail) {
+            continue;
+        }
+        if (!empty($c['blocked'])) {
+            return false;
+        }
+        return is_array($c['categories'] ?? null) && $c['categories'] !== [];
+    }
+    return false;   // aucune fiche : rien n'a été configuré pour ce demandeur
+}
+
+/**
+ * Créneaux libres dans l'agenda du titulaire — le SIEN, pas celui du
+ * demandeur, ce qui était toute l'erreur de la version précédente.
+ *
+ * Un créneau d'une heure par jour, jours ouvrés, sur quinze jours.
+ */
+function creneauxLibres(int $titulaireId, int $combien = 3): array
+{
+    $occupes = [];
+    $lignes = Db::tous(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "rdv" AND supprime = 0',
+        [$titulaireId]
+    );
+    foreach ($lignes as $l) {
+        $e = json_decode((string) $l['contenu'], true);
+        if (!is_array($e) || !isset($e['date'])) {
+            continue;
+        }
+        $occupes[$e['date']][] = [
+            (int) ($e['startH'] ?? 0) * 60 + (int) ($e['startM'] ?? 0),
+            (int) ($e['endH'] ?? 0) * 60 + (int) ($e['endM'] ?? 0),
+        ];
+    }
+
+    $heures = [9, 10, 11, 14, 15, 16, 17];
+    $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    $mois = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+             'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+    $sortie = [];
+    for ($j = 1; $j <= 15 && count($sortie) < $combien; $j++) {
+        $t = strtotime("+$j day");
+        $jsem = (int) date('w', $t);
+        if ($jsem === 0 || $jsem === 6) {
+            continue;   // week-end
+        }
+        $date = date('Y-m-d', $t);
+        foreach ($heures as $h) {
+            $debut = $h * 60;
+            $fin = $debut + 60;
+            $libre = true;
+            foreach ($occupes[$date] ?? [] as $o) {
+                if ($debut < $o[1] && $fin > $o[0]) {
+                    $libre = false;
+                    break;
+                }
+            }
+            if (!$libre) {
+                continue;
+            }
+            $sortie[] = [
+                'date'    => $date,
+                'heure'   => $h,
+                'minute'  => 0,
+                'libelle' => $jours[$jsem] . ' ' . (int) date('j', $t) . ' ' . $mois[(int) date('n', $t)],
+            ];
+            break;   // un seul créneau par jour, plus lisible
+        }
+    }
+    return $sortie;
+}
+
+/**
+ * Dépose un message dans les deux messageries, celle de l'expéditeur et
+ * celle du destinataire.
+ *
+ * Une conversation par correspondant : l'identifiant de l'élément est
+ * la référence de l'autre compte. Chacun voit donc le même échange,
+ * rangé sous le nom de l'autre.
+ */
+function messagePoser(array $de, array $vers, string $texte, ?int $rdvId = null): void
+{
+    $maintenant = date('c');
+    $ligne = ['texte' => $texte, 'le' => $maintenant];
+    if ($rdvId !== null) {
+        $ligne['rdv'] = $rdvId;
+    }
+
+    $ecritures = [];
+    foreach ([[$de, $vers, 'me'], [$vers, $de, 'them']] as [$proprietaire, $autre, $sens]) {
+        $uid = $autre['reference'];
+        $existant = Db::un(
+            'SELECT contenu FROM elements
+              WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+            [$proprietaire['id'], $uid]
+        );
+        $conv = $existant ? json_decode((string) $existant['contenu'], true) : null;
+        if (!is_array($conv)) {
+            $conv = [
+                'reference' => $uid,
+                'with'      => trim($autre['prenom'] . ' ' . $autre['nom']),
+                'thread'    => [],
+            ];
+        }
+        $conv['thread'][] = ['from' => $sens] + $ligne;
+        // Une conversation ne garde pas tout : au-delà, le premier
+        // chargement deviendrait lourd pour rien.
+        if (count($conv['thread']) > 200) {
+            $conv['thread'] = array_slice($conv['thread'], -200);
+        }
+        $conv['maj'] = $maintenant;
+        $ecritures[] = [
+            'compte_id' => (int) $proprietaire['id'],
+            'type'      => 'conversation',
+            'uid'       => $uid,
+            'contenu'   => $conv,
+        ];
+    }
+    elementsPoser($ecritures);
+}
+
+
 switch ($route) {
 
     // ═══════════════════════════════════════════════════════════
@@ -513,6 +742,147 @@ switch ($route) {
             }
         }
         Rep::ok(['inscrits' => $inscrits]);
+
+    // ═══════════════════════════════════════════════════════════
+    // PRISE DE RENDEZ-VOUS ENTRE COMPTES
+    // ═══════════════════════════════════════════════════════════
+
+    /*
+     * Demande de rendez-vous.
+     *
+     * Deux issues, et le demandeur ne peut pas les distinguer d'un
+     * refus : soit le titulaire l'a autorisé et a des créneaux libres,
+     * et on les lui propose ; soit non, et la demande part dans les deux
+     * messageries. Un contact bloqué tombe dans le second cas sans
+     * jamais l'apprendre.
+     */
+    case 'POST /rdv/demander':
+        $moi = Auth::compte();
+        $cible = compteParReference(Entree::requis('reference', 26));
+        if ($cible === null) {
+            Rep::erreur(404, 'compte_introuvable', 'Ce contact n a pas de compte TimeCool.');
+        }
+        if ((int) $cible['id'] === (int) $moi['id']) {
+            Rep::erreur(400, 'soi_meme', 'Vous ne pouvez pas vous prendre rendez-vous.');
+        }
+
+        $titre = Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom']);
+        $autorise = autorisationPourPrendreRdv((int) $cible['id'], $moi);
+        $creneaux = $autorise ? creneauxLibres((int) $cible['id'], 3) : [];
+
+        Db::req(
+            'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, statut)
+             VALUES (?, ?, ?, "attente")',
+            [$moi['id'], $cible['id'], $titre]
+        );
+        $rdvId = (int) Db::pdo()->lastInsertId();
+
+        if ($creneaux === []) {
+            // Agenda plein, pas encore configuré, ou accès bloqué : la
+            // même réponse dans les trois cas.
+            messagePoser(
+                $moi,
+                $cible,
+                trim($moi['prenom'] . ' ' . $moi['nom']) . ' souhaite prendre rendez-vous avec vous.',
+                $rdvId
+            );
+            Rep::ok([
+                'mode'    => 'messagerie',
+                'rdv'     => $rdvId,
+                'message' => 'L agenda de ' . $cible['prenom'] . ' est complet ou pas encore '
+                    . 'configuré. J ai envoyé ta demande de prise de rendez-vous dans sa '
+                    . 'messagerie, que tu peux consulter aussi dans ta messagerie.',
+            ]);
+        }
+
+        foreach ($creneaux as $rang => $c) {
+            $debut = $c['date'] . ' ' . str_pad((string) $c['heure'], 2, '0', STR_PAD_LEFT) . ':00:00';
+            Db::req(
+                'INSERT INTO rdv_creneaux (rdv_id, rang, debut, fin, libelle)
+                 VALUES (?, ?, ?, DATE_ADD(?, INTERVAL 1 HOUR), ?)',
+                [$rdvId, $rang + 1, $debut, $debut, $c['libelle']]
+            );
+        }
+        Rep::ok(['mode' => 'creneaux', 'rdv' => $rdvId, 'creneaux' => $creneaux]);
+
+    /*
+     * Le demandeur retient un créneau : le rendez-vous s inscrit dans
+     * LES DEUX agendas, en une seule transaction.
+     */
+    case 'POST /rdv/choisir':
+        $moi = Auth::compte();
+        $rdvId = Entree::entier('rdv');
+        $rang = Entree::entier('rang');
+        if ($rdvId === null || $rang === null) {
+            Rep::erreur(400, 'champs_manquants', 'Champs rdv et rang requis.');
+        }
+
+        $rdv = Db::un(
+            'SELECT * FROM rdv WHERE id = ? AND organisateur_id = ? AND statut = "attente"',
+            [$rdvId, $moi['id']]
+        );
+        if ($rdv === null) {
+            Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+        }
+        $creneau = Db::un('SELECT * FROM rdv_creneaux WHERE rdv_id = ? AND rang = ?', [$rdvId, $rang]);
+        if ($creneau === null) {
+            Rep::erreur(404, 'creneau_introuvable', 'Créneau inconnu.');
+        }
+        $cible = Db::un('SELECT * FROM comptes WHERE id = ?', [$rdv['invite_compte_id']]);
+        if ($cible === null) {
+            Rep::erreur(410, 'compte_absent', 'Le compte destinataire n existe plus.');
+        }
+
+        $debut = strtotime($creneau['debut']);
+        $fin = strtotime($creneau['fin']);
+        $entree = static function (string $titre) use ($debut, $fin, $rdvId): array {
+            return [
+                'id'     => 'tc_rdv_' . $rdvId,
+                'date'   => date('Y-m-d', $debut),
+                'startH' => (int) date('G', $debut), 'startM' => (int) date('i', $debut),
+                'endH'   => (int) date('G', $fin),   'endM'   => (int) date('i', $fin),
+                'title'  => $titre,
+                'cat'    => 'travail',
+                'mode'   => 'user',
+            ];
+        };
+
+        Db::req('UPDATE rdv_creneaux SET retenu = 1 WHERE id = ?', [$creneau['id']]);
+        Db::req('UPDATE rdv SET statut = "choisi", repondu_le = NOW() WHERE id = ?', [$rdvId]);
+
+        // Chacun voit le nom de l'autre dans son agenda.
+        elementsPoser([
+            ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
+             'contenu' => $entree(trim($cible['prenom'] . ' ' . $cible['nom']))],
+            ['compte_id' => (int) $cible['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
+             'contenu' => $entree(trim($moi['prenom'] . ' ' . $moi['nom']))],
+        ]);
+
+        messagePoser(
+            $moi, $cible,
+            'Rendez-vous confirmé : ' . $creneau['libelle'] . ' à '
+                . date('H\\hi', $debut) . '.',
+            $rdvId
+        );
+
+        Rep::ok([
+            'date'   => date('Y-m-d', $debut),
+            'heure'  => date('H:i', $debut),
+            'libelle' => $creneau['libelle'],
+        ]);
+
+    /* Message libre d un compte à un autre. */
+    case 'POST /messages/envoyer':
+        $moi = Auth::compte();
+        $cible = compteParReference(Entree::requis('reference', 26));
+        if ($cible === null) {
+            Rep::erreur(404, 'compte_introuvable', 'Destinataire inconnu.');
+        }
+        if ((int) $cible['id'] === (int) $moi['id']) {
+            Rep::erreur(400, 'soi_meme', 'Vous ne pouvez pas vous écrire à vous-même.');
+        }
+        messagePoser($moi, $cible, Entree::requis('texte', 2000));
+        Rep::ok();
 
     // ═══════════════════════════════════════════════════════════
     // SYNCHRONISATION ENTRE APPAREILS
