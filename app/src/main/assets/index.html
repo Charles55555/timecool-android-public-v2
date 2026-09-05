@@ -137,7 +137,10 @@ body { display:flex; flex-direction:column; }
 .fab { position:fixed; bottom:20px; right:16px; width:54px; height:54px; border-radius:16px; border:none; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:20; }
 .fab svg { width:24px; height:24px; }
 
-.side-menu { position:fixed; top:0; left:-300px; width:280px; height:100vh; background:#fff; box-shadow:2px 0 8px rgba(0,0,0,0.1); transition:left 0.25s; z-index:100; overflow-y:auto; }
+/* top:0 + bottom:0 plutot que height:100vh : sur mobile, 100vh compte
+   la zone masquee par la barre d adresse, et les derniers elements du
+   menu passaient sous l ecran sans pouvoir etre atteints. */
+.side-menu { position:fixed; top:0; bottom:0; left:-300px; width:280px; background:#fff; box-shadow:2px 0 8px rgba(0,0,0,0.1); transition:left 0.25s; z-index:100; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:env(safe-area-inset-bottom, 0px); }
 .side-menu.open { left:0; }
 .menu-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); opacity:0; pointer-events:none; transition:opacity 0.25s; z-index:99; }
 .menu-overlay.open { opacity:1; pointer-events:auto; }
@@ -156,7 +159,13 @@ body { display:flex; flex-direction:column; }
 .page { display:none; flex-direction:column; height:100%; overflow-y:auto; }
 
 /* ═══ Pages d'authentification v2.6 ═══ */
-.auth-page { display:none; flex-direction:column; min-height:100vh; overflow-y:auto; position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; max-width:480px; margin:0 auto; background:#fff; }
+/* Pas de min-height:100vh ici : top:0 + bottom:0 donnent deja la hauteur
+   visible, et 100vh compte en plus la zone masquee par la barre
+   d'adresse du navigateur mobile. L'element depassait donc l'ecran par
+   le bas, et cette partie etait inatteignable — le dernier bouton de la
+   page devenait invisible.
+   padding-bottom : la barre gestuelle des telephones recents. */
+.auth-page { display:none; flex-direction:column; overflow-y:auto; -webkit-overflow-scrolling:touch; position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; max-width:480px; margin:0 auto; background:#fff; padding-bottom:env(safe-area-inset-bottom, 0px); }
 .auth-page.active { display:flex; }
 .auth-page input:focus { border-color:var(--g-blue) !important; }
 .auth-page .code-digit:focus { border-color:var(--g-blue); transform:scale(1.05); }
