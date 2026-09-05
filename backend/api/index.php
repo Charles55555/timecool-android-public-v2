@@ -1654,12 +1654,31 @@ switch ($route) {
     // sans jamais déchiffrer ni transmettre les clés inutilement.
     case 'GET /cles-api':
         $compte = Auth::compte();
-        Rep::ok([
-            'cles' => Db::tous(
-                'SELECT service, indice, maj_le FROM cles_api WHERE compte_id = ? ORDER BY service',
-                [$compte['id']]
-            ),
-        ]);
+        $siennes = Db::tous(
+            'SELECT service, indice, maj_le FROM cles_api WHERE compte_id = ? ORDER BY service',
+            [$compte['id']]
+        );
+        $connus = array_column($siennes, 'service');
+
+        // Les clés héritées de l'administrateur figurent dans la liste,
+        // signalées comme telles : sans cela l'écran laisserait croire
+        // qu'aucune clé n'est disponible, alors que tout fonctionne.
+        foreach (Db::tous(
+            'SELECT k.service, k.indice, k.maj_le
+               FROM cles_api k
+               JOIN comptes c ON c.id = k.compte_id
+              WHERE c.admin = 1 AND c.cloture_le IS NULL
+              ORDER BY k.service',
+            []
+        ) as $d) {
+            if (!in_array($d['service'], $connus, true)) {
+                $d['herite'] = true;
+                $siennes[] = $d;
+            }
+        }
+        usort($siennes, static fn($a, $b) => strcmp($a['service'], $b['service']));
+
+        Rep::ok(['cles' => $siennes]);
 
     // Valeur en clair d'une seule clé, pour que l'application puisse
     // appeler le service concerné.
@@ -1673,6 +1692,32 @@ switch ($route) {
             'SELECT valeur_chiffree FROM cles_api WHERE compte_id = ? AND service = ?',
             [$compte['id'], $service]
         );
+
+        /*
+         * À défaut, la clé du compte administrateur.
+         *
+         * Les services d'intelligence artificielle, de cartographie et
+         * d'envoi de SMS sont fournis PAR TimeCool : un nouvel
+         * utilisateur n'a aucune clé à lui, et sans ce recours il se
+         * retrouverait avec un assistant muet.
+         *
+         * Seule la valeur sort d'ici, jamais l'identité du compte qui la
+         * porte, et uniquement pour un service demandé nommément.
+         */
+        $herite = false;
+        if ($ligne === null) {
+            $ligne = Db::un(
+                'SELECT k.valeur_chiffree
+                   FROM cles_api k
+                   JOIN comptes c ON c.id = k.compte_id
+                  WHERE c.admin = 1 AND c.cloture_le IS NULL AND k.service = ?
+                  ORDER BY k.maj_le DESC
+                  LIMIT 1',
+                [$service]
+            );
+            $herite = $ligne !== null;
+        }
+
         if ($ligne === null) {
             Rep::erreur(404, 'cle_absente', 'Aucune clé enregistrée pour ce service.');
         }
@@ -1683,7 +1728,7 @@ switch ($route) {
             Rep::erreur(500, 'cle_illisible',
                 'Clé enregistrée illisible. Ressaisissez-la.');
         }
-        Rep::ok(['service' => $service, 'valeur' => $clair]);
+        Rep::ok(['service' => $service, 'valeur' => $clair, 'herite' => $herite]);
 
     case 'POST /cles-api':
         $compte = Auth::compte();

@@ -14849,6 +14849,70 @@ async function tcSyncPousser() {
   return aEnvoyer.length;
 }
 
+const TC_COMPTE_LOCAL_KEY = 'tc_compte_local';
+
+/**
+ * Efface les données du compte précédent.
+ *
+ * Même partage que le paquet d'appairage : ce qui appartient au compte
+ * s'en va, ce qui est propre à l'appareil reste — clé de chiffrement,
+ * jeton, biométrie, code PIN. Une seule règle, deux usages.
+ *
+ * Les rendez-vous de démonstration sont conservés : ils n'appartiennent
+ * à personne, et un agenda entièrement vide au premier écran donne
+ * l'impression d'une application cassée.
+ */
+function tcViderDonneesDuCompte() {
+  const aEffacer = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (tcCleTransferable(k)) aEffacer.push(k);
+  }
+  // Ces quatre-là ne sont pas « transférables » — elles voyagent par
+  // leur propre champ dans le paquet d'appairage — mais elles
+  // appartiennent bel et bien au compte.
+  [TC_EVENTS_KEY, TC_TASKS_KEY, 'timecool_tasks', 'timecool_birthdays',
+   TC_SYNC_VERSION_KEY, TC_SYNC_EMPREINTES_KEY].forEach(function (k) {
+    if (aEffacer.indexOf(k) < 0) aEffacer.push(k);
+  });
+  aEffacer.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+
+  events = events.filter(function (e) {
+    return e.mode !== 'user' && !(e.id && e.id.indexOf('charly_ai_') === 0);
+  });
+  tasksList = [];
+  birthdays = [];
+  if (typeof contactsList !== 'undefined') contactsList = [];
+  messages = { user: [], pro: [] };
+}
+
+/**
+ * Vérifie quel compte occupe l'appareil, et fait le ménage s'il a changé.
+ *
+ * Appelée à chaque tour de synchronisation plutôt qu'à chaque endroit
+ * où une session s'ouvre : inscription, connexion, appairage,
+ * redémarrage. Il en manquerait un, et ce chemin-là laisserait les
+ * données de quelqu'un d'autre — sans la moindre erreur visible.
+ *
+ * @returns {boolean} vrai si un ménage a eu lieu.
+ */
+function tcPreparerAppareilPourCompte() {
+  const ref = tcSyncCompte();
+  if (!ref) return false;
+
+  let precedent = null;
+  try { precedent = localStorage.getItem(TC_COMPTE_LOCAL_KEY); } catch (e) {}
+  if (precedent === ref) return false;
+
+  // Rien de marqué : premier compte sur cet appareil, ou installation
+  // d'avant cette règle. On ne touche à rien, on note simplement.
+  const menage = precedent !== null;
+  if (menage) tcViderDonneesDuCompte();
+
+  try { localStorage.setItem(TC_COMPTE_LOCAL_KEY, ref); } catch (e) {}
+  return menage;
+}
+
 let _tcSyncEnCours = false;
 let _tcSyncMinuteur = null;
 let _tcSyncBientot = null;
@@ -14860,6 +14924,12 @@ async function tcSyncTour() {
   _tcSyncEnCours = true;
   _tcDernierTourComplet = Date.now();
   try {
+    // Avant tout échange : si un autre compte s'est ouvert sur cet
+    // appareil, ses données à lui ne doivent pas partir sous ce
+    // compte-ci.
+    if (tcPreparerAppareilPourCompte()) {
+      showToast('🔄 Nouveau compte — chargement de tes données');
+    }
     const recus = await tcSyncTirer();
     await tcSyncPousser();
     if (recus > 0) {
@@ -15169,7 +15239,11 @@ const TC_JAMAIS_TRANSFERE = [
   // feraient croire que tout a deja ete envoye : l agenda du nouvel
   // appareil ne partirait jamais, et rien ne lui reviendrait.
   'tc_sync_version',           // TC_SYNC_VERSION_KEY
-  'tc_sync_empreintes'         // TC_SYNC_EMPREINTES_KEY
+  'tc_sync_empreintes',        // TC_SYNC_EMPREINTES_KEY
+  // Quel compte occupe cet appareil. Recopie ailleurs, il ferait croire
+  // au nouvel appareil qu il est deja sur le bon compte, et les donnees
+  // du precedent ne seraient jamais effacees.
+  'tc_compte_local'            // TC_COMPTE_LOCAL_KEY
 ];
 
 /** Une clé a-t-elle le droit de voyager ? */
