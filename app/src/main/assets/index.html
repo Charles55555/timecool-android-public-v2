@@ -14879,6 +14879,11 @@ async function tcSyncPousser() {
 
 const TC_COMPTE_LOCAL_KEY = 'tc_compte_local';
 
+/* Change de valeur quand un nettoyage unique doit avoir lieu sur tous
+   les appareils. Chaque appareil le fait une fois, puis note la version. */
+const TC_NETTOYAGE_KEY = 'tc_nettoyage';
+const TC_NETTOYAGE_VERSION = 'v1-donnees-melangees';
+
 /**
  * Efface les données du compte précédent.
  *
@@ -14928,6 +14933,28 @@ function tcPreparerAppareilPourCompte() {
   const ref = tcSyncCompte();
   if (!ref) return false;
 
+  /*
+   * Nettoyage unique des appareils déjà pollués.
+   *
+   * Avant cette correction, créer un compte dans un navigateur laissait
+   * en place les données du compte précédent. Le ménage au changement
+   * de compte n'y peut rien : le compte, justement, ne change plus.
+   *
+   * Sans danger : tout ce qui appartient au compte est sur le serveur,
+   * et la lecture qui suit le rétablit aussitôt. Ce qui ne revient pas
+   * n'était pas à lui.
+   */
+  let nettoye = null;
+  try { nettoye = localStorage.getItem(TC_NETTOYAGE_KEY); } catch (e) {}
+  if (nettoye !== TC_NETTOYAGE_VERSION) {
+    tcViderDonneesDuCompte();
+    try {
+      localStorage.setItem(TC_NETTOYAGE_KEY, TC_NETTOYAGE_VERSION);
+      localStorage.setItem(TC_COMPTE_LOCAL_KEY, ref);
+    } catch (e) {}
+    return true;
+  }
+
   let precedent = null;
   try { precedent = localStorage.getItem(TC_COMPTE_LOCAL_KEY); } catch (e) {}
   if (precedent === ref) return false;
@@ -14960,8 +14987,10 @@ async function tcSyncTour() {
     // Avant tout échange : si un autre compte s'est ouvert sur cet
     // appareil, ses données à lui ne doivent pas partir sous ce
     // compte-ci.
-    if (tcPreparerAppareilPourCompte()) {
-      showToast('🔄 Nouveau compte — chargement de tes données');
+    if (tcPreparerAppareilPourCompte() && typeof showToast === 'function') {
+      // Garde de type : une exception ici interromprait tout le tour de
+      // synchronisation, pour un simple message a l ecran.
+      showToast('🔄 Chargement de tes données…');
     }
     const recus = await tcSyncTirer();
     await tcSyncPousser();
@@ -15276,7 +15305,11 @@ const TC_JAMAIS_TRANSFERE = [
   // Quel compte occupe cet appareil. Recopie ailleurs, il ferait croire
   // au nouvel appareil qu il est deja sur le bon compte, et les donnees
   // du precedent ne seraient jamais effacees.
-  'tc_compte_local'            // TC_COMPTE_LOCAL_KEY
+  'tc_compte_local',           // TC_COMPTE_LOCAL_KEY
+  // Sans cette exclusion, le menage effacerait son propre marqueur et se
+  // rejouerait a chaque tour, effacant sans fin ce que la lecture vient
+  // de rapporter.
+  'tc_nettoyage'               // TC_NETTOYAGE_KEY
 ];
 
 /** Une clé a-t-elle le droit de voyager ? */
