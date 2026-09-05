@@ -266,9 +266,9 @@ function creneauxLibres(int $titulaireId, int $combien = 3): array
  */
 function messageDemandeRdv(array $de, array $vers): string
 {
-    return 'Salut ' . $vers['prenom'] . ' 👋 J\'ai essayé de prendre rendez-vous avec toi '
-        . 'sur TimeCool, mais ton agenda n\'est pas encore ouvert pour moi. '
-        . 'Tu me dis quand tu es disponible ? Merci !';
+    return "Salut " . $vers['prenom'] . " 👋 J'ai essayé de prendre rendez-vous avec toi "
+        . "sur TimeCool, mais ton agenda ne semble pas encore configuré pour la prise "
+        . "d'un rendez-vous instantané. SVP tu me dis quand tu es disponible ? Merci !";
 }
 
 /**
