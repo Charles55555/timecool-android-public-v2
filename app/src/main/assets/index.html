@@ -866,6 +866,9 @@ if (window.pdfjsLib) {
   </div>
   <div id="headerAgendaLabel" style="display:none; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:13px; font-weight:700; color:var(--g-blue); white-space:nowrap; pointer-events:none;"></div>
   <div class="header-right">
+    <button class="icon-btn" onclick="tcMettreAJourMaintenant()" title="Mettre à jour TimeCool" aria-label="Mettre à jour">
+      <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+    </button>
     <button class="icon-btn" onclick="navigate('messages')">
       <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
       <span class="badge" id="headerBadge">0</span>
@@ -2208,6 +2211,27 @@ function tcVersionPlusRecente(a, b) {
     if (y < x) return false;
   }
   return false;
+}
+
+/**
+ * Mise à jour depuis n'importe quel écran.
+ *
+ * Dans l'APK : la vérification habituelle, qui télécharge et installe.
+ * Dans un navigateur : la page EST l'application, il suffit de la
+ * recharger. Un paramètre horodaté force le rechargement depuis le
+ * serveur — sans lui, le navigateur peut resservir sa copie en cache, et
+ * on croirait la mise à jour faite alors que rien n'a changé.
+ */
+function tcMettreAJourMaintenant() {
+  if (window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj) {
+    checkForUpdates(true);
+    return;
+  }
+  showToast('\u{1F504} Rechargement…');
+  // Court délai pour que le message soit vu avant que la page parte.
+  setTimeout(function () {
+    location.replace(location.pathname + '?maj=' + Date.now());
+  }, 300);
 }
 
 async function checkForUpdates(manual) {
