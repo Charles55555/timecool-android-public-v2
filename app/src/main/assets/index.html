@@ -14819,8 +14819,24 @@ async function tcSyncPousser() {
     });
   });
 
-  // Connu au tour précédent et absent maintenant : supprimé ici. On
-  // l'annonce, sinon l'autre appareil le renverrait indéfiniment.
+  /*
+   * Connu au tour précédent et absent maintenant : supprimé ici. On
+   * l'annonce, sinon l'autre appareil le renverrait indéfiniment.
+   *
+   * MAIS une famille qui passe de plusieurs objets connus à AUCUN n'est
+   * pas un geste d'utilisateur : c'est un défaut — onglet en retard,
+   * chargement raté, variable réinitialisée. Annoncer ces
+   * suppressions-là effacerait tout le carnet chez tout le monde,
+   * définitivement. On s'abstient, et la lecture suivante rétablit.
+   */
+  const vues = {};
+  Object.keys(connues).forEach(function (cle) {
+    const type = cle.slice(0, cle.indexOf(':'));
+    vues[type] = vues[type] || { connues: 0, presentes: 0 };
+    vues[type].connues++;
+    if (presentes[cle] !== undefined) vues[type].presentes++;
+  });
+
   Object.keys(connues).forEach(function (cle) {
     if (presentes[cle] !== undefined) return;
     const i = cle.indexOf(':');
@@ -14828,6 +14844,16 @@ async function tcSyncPousser() {
     // Un objet en lecture seule absent d'ici n'a pas été supprimé ici :
     // annoncer sa disparition l'effacerait chez tout le monde.
     if (TC_SYNC_TYPES[type] && TC_SYNC_TYPES[type].lectureSeule) return;
+    const v = vues[type];
+    if (v && v.presentes === 0 && v.connues >= TC_SYNC_SEUIL_DISPARITION) {
+      if (!v.signale) {
+        v.signale = true;
+        console.warn('Synchronisation : ' + v.connues + ' « ' + type
+          + ' » ont disparu d un coup — suppressions NON envoyees, la '
+          + 'lecture suivante retablira.');
+      }
+      return;
+    }
     aEnvoyer.push({ type: type, uid: cle.slice(i + 1), contenu: null });
   });
 
@@ -14914,6 +14940,11 @@ function tcPreparerAppareilPourCompte() {
   try { localStorage.setItem(TC_COMPTE_LOCAL_KEY, ref); } catch (e) {}
   return menage;
 }
+
+/* Au-dessous de ce nombre, une famille videe reste plausible : on a pu
+   supprimer ses deux derniers contacts a la main. Au-dessus, c'est un
+   defaut, et la suppression n'est pas annoncee. */
+const TC_SYNC_SEUIL_DISPARITION = 5;
 
 let _tcSyncEnCours = false;
 let _tcSyncMinuteur = null;
@@ -15998,6 +16029,9 @@ async function addContactManually() {
   saveContacts();
   renderContacts();
   showToast('✅ Contact ajouté');
+  // Sans cela, un contact qui vient de s'inscrire n'apparait comme
+  // utilisateur TimeCool qu'apres avoir quitte la page et y etre revenu.
+  if (typeof tcRafraichirBadgesContacts === 'function') tcRafraichirBadgesContacts();
 }
 
 async function deleteContact(id) {
