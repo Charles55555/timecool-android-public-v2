@@ -19,18 +19,29 @@ Rien n'est commencé et laissé en plan à cette heure.
 
 ## En attente de Charles
 
-- **v2.0.81 à tester** : le navigateur doit enfin proposer d'enregistrer
-  l'identifiant et le mot de passe, sur Chrome comme sur Safari iPhone.
-  Aucun gestionnaire ne proposera rien dans l'APK — page servie depuis un
-  fichier local, hors de tout site.
-- **Mode `dontAsk`** : Charles doit le poser lui-même via `/config`.
-  Un agent n'a pas le droit d'élargir ses propres permissions.
+- **La liste d'avant-lancement**, section 8 de `CLAUDE.md`. Rien de fait.
 
 ## Avant le lancement public
 
 Voir la section 8 de `CLAUDE.md`. Rien de tout cela n'est fait.
 
 ---
+
+## 05/09/2026
+
+**Enregistrement du mot de passe : validé par Charles.** Chrome propose
+bien la fenêtre après connexion sur `timecool.fr/app/`. Sujet clos.
+
+**Mode `dontAsk` abandonné.** Une heure perdue à tenter de poser le
+réglage, pour un confort mineur. Le chemin sans effort : choisir « ne
+plus demander pour cette commande » quand une fenêtre de permission
+apparaît — la liste se complète d'elle-même.
+
+**chirurgiendentistenews.fr** servait une vieille copie du site TimeCool,
+sur un autre hébergement IONOS (195.36.145.100), et Google le citait
+comme source sur TimeCool. Fichiers retirés par Charles, le domaine
+renvoie 403. Aucune donnée sensible n'était exposée. L'index de Google
+mettra quelques jours à se mettre à jour.
 
 ## 04/09/2026
 
