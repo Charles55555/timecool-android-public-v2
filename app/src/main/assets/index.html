@@ -4548,44 +4548,88 @@ function openMsgPrivacy() {
 }
 
 function msgLongPress(id) {
-  const m = (messages[mode] || []).find(x => x.id === id);
+  const m = tcConversationParId(id);
   if (!m) return;
+  // Une conversation avec un autre compte TimeCool appartient aussi à
+  // l'autre : rien à archiver, supprimer ou marquer non lu ici.
+  if (m.serveur) return;
   const ov = document.createElement('div');
   ov.className = 'msg-sheet-ov';
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
   ov.innerHTML = '<div class="msg-sheet">' +
     '<div class="msg-sheet-h">' + m.with + '</div>' +
-    '<div class="msg-sheet-i" onclick="msgToggleArchive(' + id + ',this)"><span>📦</span>' + (m.archived ? 'Désarchiver' : 'Archiver') + '</div>' +
-    '<div class="msg-sheet-i" onclick="msgToggleRead(' + id + ',this)"><span>🔵</span>' + (m.unread > 0 ? 'Marquer comme lu' : 'Marquer comme non lu') + '</div>' +
-    '<div class="msg-sheet-i" onclick="msgBlock(' + id + ',this)"><span>🚫</span>Bloquer ce contact</div>' +
-    '<div class="msg-sheet-i" style="color:#ea4335;" onclick="msgDelete(' + id + ',this)"><span>🗑️</span>Supprimer la conversation</div>' +
+    '<div class="msg-sheet-i" onclick="msgToggleArchive(\'' + id + '\',this)"><span>📦</span>' + (m.archived ? 'Désarchiver' : 'Archiver') + '</div>' +
+    '<div class="msg-sheet-i" onclick="msgToggleRead(\'' + id + '\',this)"><span>🔵</span>' + (m.unread > 0 ? 'Marquer comme lu' : 'Marquer comme non lu') + '</div>' +
+    '<div class="msg-sheet-i" onclick="msgBlock(\'' + id + '\',this)"><span>🚫</span>Bloquer ce contact</div>' +
+    '<div class="msg-sheet-i" style="color:#ea4335;" onclick="msgDelete(\'' + id + '\',this)"><span>🗑️</span>Supprimer la conversation</div>' +
     '</div>';
   document.body.appendChild(ov);
 }
 function _closeSheet(el) { const ov = el.closest('.msg-sheet-ov'); if (ov) ov.remove(); }
 function msgToggleArchive(id, el) {
-  const m = messages[mode].find(x => x.id === id); if (!m) return;
+  const m = (messages[mode] || []).find(x => String(x.id) === String(id)); if (!m) return;
   m.archived = !m.archived; saveMessagesToStorage(); _closeSheet(el); renderMessages();
   showToast(m.archived ? 'Conversation archivée' : 'Conversation restaurée');
 }
 function msgToggleRead(id, el) {
-  const m = messages[mode].find(x => x.id === id); if (!m) return;
+  const m = (messages[mode] || []).find(x => String(x.id) === String(id)); if (!m) return;
   m.unread = m.unread > 0 ? 0 : 1; saveMessagesToStorage(); _closeSheet(el); updateBadges(); renderMessages();
 }
 function msgBlock(id, el) {
-  const m = messages[mode].find(x => x.id === id); if (!m) return;
+  const m = (messages[mode] || []).find(x => String(x.id) === String(id)); if (!m) return;
   _closeSheet(el); showToast('🚫 ' + m.with + ' ne peut plus te contacter');
 }
 async function msgDelete(id, el) {
   _closeSheet(el);
   if (!await tcConfirm('Supprimer cette conversation ?')) return;
-  messages[mode] = messages[mode].filter(x => x.id !== id);
+  messages[mode] = (messages[mode] || []).filter(x => String(x.id) !== String(id));
   saveMessagesToStorage();
   updateBadges(); renderMessages(); showToast('Conversation supprimée');
 }
 
+/**
+ * Les conversations affichables : celles du serveur d'abord, puis
+ * celles de l'appareil.
+ *
+ * Les conversations du serveur NE sont PAS versées dans `messages` :
+ * cet objet est enregistré en local et voyage comme réglage. Les y
+ * mêler les ferait exister en double, une fois comme conversation
+ * synchronisée et une fois comme copie figée.
+ */
+function tcConversationsAffichables() {
+  const heure = function (iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const auj = new Date();
+    const memeJour = d.toDateString() === auj.toDateString();
+    return memeJour
+      ? ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)
+      : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  };
+
+  const duServeur = tcConversations().map(function (c) {
+    return {
+      id: 'srv_' + c.reference,
+      reference: c.reference,
+      with: c.with || c.reference,
+      avatar: (c.with || '?').split(' ').map(function (m) { return m.charAt(0); })
+        .join('').slice(0, 2).toUpperCase(),
+      color: getContactColor(c.with || c.reference),
+      icon: '',
+      unread: 0,
+      archived: false,
+      serveur: true,
+      thread: (c.thread || []).map(function (t) {
+        return { from: t.from, text: t.texte || '', time: heure(t.le) };
+      })
+    };
+  }).sort(function (a, b) { return a.with.localeCompare(b.with, 'fr'); });
+
+  return duServeur.concat(messages[mode] || []);
+}
+
 function renderMessages() {
-  const all = messages[mode] || [];
+  const all = tcConversationsAffichables();
   const list = document.getElementById('messagesList');
   const bar = document.getElementById('msgFilterBar');
   const si = document.getElementById('msgSearch');
@@ -4616,9 +4660,9 @@ function renderMessages() {
     const last = m.thread[m.thread.length-1] || { text:'Nouvelle conversation \u2014 aucun message', time:'' };
     return `
     <div class="msg-preview ${m.unread>0?'unread':''} ${m.archived?'arch':''}"
-         onclick="openConversation(${m.id})"
-         oncontextmenu="event.preventDefault();msgLongPress(${m.id});return false;"
-         ontouchstart="_msgPressTimer=setTimeout(function(){msgLongPress(${m.id});},550)"
+         onclick="openConversation('${m.id}')"
+         oncontextmenu="event.preventDefault();msgLongPress('${m.id}');return false;"
+         ontouchstart="_msgPressTimer=setTimeout(function(){msgLongPress('${m.id}');},550)"
          ontouchend="clearTimeout(_msgPressTimer)"
          ontouchmove="clearTimeout(_msgPressTimer)">
       <div class="msg-avatar" style="background:${m.color};">${m.icon||m.avatar}</div>
@@ -4630,8 +4674,17 @@ function renderMessages() {
     </div>`; }).join('');
 }
 
+/** Retrouve une conversation, du serveur comme de l'appareil.
+ *  Comparaison souple : les identifiants locaux sont des nombres, ceux
+ *  du serveur des chaînes, et le HTML ne rend que des chaînes. */
+function tcConversationParId(id) {
+  return tcConversationsAffichables().find(function (m) {
+    return String(m.id) === String(id);
+  });
+}
+
 function openConversation(id) {
-  const msg = messages[mode].find(m => m.id===id);
+  const msg = tcConversationParId(id);
   if (!msg) return;
   _currentConvId = id;
   msg.unread = 0;
@@ -4971,7 +5024,7 @@ function renderPremium() {
 
 // ═══ UTILITIES ═══
 function updateBadges() {
-  const unread = messages[mode].reduce((s,m) => s+m.unread, 0);
+  const unread = (messages[mode] || []).reduce((s, m) => s + (m.unread || 0), 0);
   const hb = document.getElementById('headerBadge');
   const mb = document.getElementById('menuBadge');
   if (hb) { hb.style.display = unread>0?'flex':'none'; hb.textContent = unread; }
@@ -14130,13 +14183,32 @@ function messageContact(contactId) {
   }, 250);
 }
 
-function sendConvMessage() {
+async function sendConvMessage() {
   const input = document.getElementById('convInput');
   if (!input) return;
   const txt = input.value.trim();
   if (!txt) return;
-  const conv = (messages[mode] || []).find(m => m.id === _currentConvId);
+
+  const conv = tcConversationParId(_currentConvId);
   if (!conv) return;
+
+  /* Conversation avec un autre compte TimeCool : c'est le serveur qui
+     écrit, dans les deux messageries. On n'ajoute rien localement — la
+     synchronisation rapporte le message dans la seconde, et l'écrire
+     aussi ici le ferait apparaître en double. */
+  if (conv.serveur) {
+    input.value = '';
+    try {
+      await TC_BACKEND.envoyerMessage(conv.reference, txt);
+    } catch (e) {
+      input.value = txt;   // rien n'est parti : on rend sa saisie
+      showToast('❌ ' + (e.message || 'Message non envoyé'));
+      return;
+    }
+    await tcSyncTour();
+    openConversation(conv.id);
+    return;
+  }
   const d = new Date();
   conv.thread.push({
     from: 'me',
@@ -14775,6 +14847,7 @@ async function tcSyncTour() {
         if (currentPage === 'tasks' && typeof renderTasks === 'function') renderTasks();
         if (currentPage === 'birthdays' && typeof renderBirthdays === 'function') renderBirthdays();
         if (currentPage === 'contacts' && typeof renderContactsList === 'function') renderContactsList();
+        if (currentPage === 'messages' && typeof renderMessages === 'function') renderMessages();
       }
     }
   } catch (e) {
