@@ -257,6 +257,21 @@ function creneauxLibres(int $titulaireId, int $combien = 3): array
 }
 
 /**
+ * Le message envoyé quand l'agenda du destinataire ne peut pas être
+ * consulté — plein, pas encore configuré, ou accès non accordé.
+ *
+ * Écrit à la première personne : c'est un message DU demandeur, pas une
+ * notification du système. Un ton sec ferait passer une demande banale
+ * pour un reproche.
+ */
+function messageDemandeRdv(array $de, array $vers): string
+{
+    return 'Salut ' . $vers['prenom'] . ' 👋 J\'ai essayé de prendre rendez-vous avec toi '
+        . 'sur TimeCool, mais ton agenda n\'est pas encore ouvert pour moi. '
+        . 'Tu me dis quand tu es disponible ? Merci !';
+}
+
+/**
  * Dépose un message dans les deux messageries, celle de l'expéditeur et
  * celle du destinataire.
  *
@@ -770,28 +785,53 @@ switch ($route) {
         $autorise = autorisationPourPrendreRdv((int) $cible['id'], $moi);
         $creneaux = $autorise ? creneauxLibres((int) $cible['id'], 3) : [];
 
-        Db::req(
-            'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, statut)
-             VALUES (?, ?, ?, "attente")',
-            [$moi['id'], $cible['id'], $titre]
+        /*
+         * Une seule demande en attente à la fois vers la même personne.
+         *
+         * Sans cela, chaque clic créait une demande et déposait un
+         * message : trois essais, et le destinataire recevait trois fois
+         * la même chose. On reprend celle qui attend déjà.
+         */
+        $enAttente = Db::un(
+            'SELECT id, cree_le FROM rdv
+              WHERE organisateur_id = ? AND invite_compte_id = ? AND statut = "attente"
+              ORDER BY id DESC LIMIT 1',
+            [$moi['id'], $cible['id']]
         );
-        $rdvId = (int) Db::pdo()->lastInsertId();
+        $reprise = $enAttente !== null;
+
+        if ($reprise) {
+            $rdvId = (int) $enAttente['id'];
+            // Les créneaux d'une demande reprise sont recalculés :
+            // l'agenda du destinataire a pu changer entre-temps.
+            Db::req('DELETE FROM rdv_creneaux WHERE rdv_id = ?', [$rdvId]);
+        } else {
+            Db::req(
+                'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, statut)
+                 VALUES (?, ?, ?, "attente")',
+                [$moi['id'], $cible['id'], $titre]
+            );
+            $rdvId = (int) Db::pdo()->lastInsertId();
+        }
 
         if ($creneaux === []) {
             // Agenda plein, pas encore configuré, ou accès bloqué : la
-            // même réponse dans les trois cas.
-            messagePoser(
-                $moi,
-                $cible,
-                trim($moi['prenom'] . ' ' . $moi['nom']) . ' souhaite prendre rendez-vous avec vous.',
-                $rdvId
-            );
+            // même réponse dans les trois cas. Le message n'est déposé
+            // qu'à la première demande.
+            if (!$reprise) {
+                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible), $rdvId);
+            }
             Rep::ok([
                 'mode'    => 'messagerie',
                 'rdv'     => $rdvId,
-                'message' => 'L agenda de ' . $cible['prenom'] . ' est complet ou pas encore '
-                    . 'configuré. J ai envoyé ta demande de prise de rendez-vous dans sa '
-                    . 'messagerie, que tu peux consulter aussi dans ta messagerie.',
+                // Au deuxième clic rien n'est reparti : le dire, plutôt
+                // que d'annoncer un envoi qui n'a pas eu lieu.
+                'message' => $reprise
+                    ? 'Ta demande est déjà partie dans la messagerie de ' . $cible['prenom']
+                        . '. Tu peux la retrouver dans ta messagerie, en attendant sa réponse.'
+                    : 'Son agenda est complet ou pas encore configuré. Ta demande de '
+                        . 'rendez-vous est partie dans la messagerie de ' . $cible['prenom']
+                        . ', et tu peux la retrouver dans ta messagerie.',
             ]);
         }
 
