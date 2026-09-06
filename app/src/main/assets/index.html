@@ -9806,13 +9806,138 @@ function tcMessageErreurMicro(code) {
   }
 }
 
+/** Meme travail pour les erreurs venues d'Android. */
+function tcMessageErreurDictee(code) {
+  switch (code) {
+    case 'permission':
+      return '🎙️ Micro refusé — autorise-le dans Réglages → Applications '
+           + '→ TimeCool → Autorisations.';
+    case 'indisponible':
+      return '🎙️ Ce téléphone n’a pas de reconnaissance vocale installée.';
+    case 'rien-entendu':
+    case 'rien-compris':
+      return '🎙️ Je n’ai rien entendu — réessaie en parlant plus près.';
+    case 'reseau':
+      return '🎙️ La dictée a besoin d’Internet — vérifie ta connexion.';
+    case 'micro':
+      return '🎙️ Le micro n’a pas pu être ouvert.';
+    case 'occupe':
+      return '🎙️ Le micro est utilisé par une autre application.';
+    default:
+      return '🎙️ La dictée s’est interrompue (' + code + ').';
+  }
+}
+
 /** Appelee par MainActivity quand Android refuse le micro. */
 function tcMicroRefuse() {
   showToast('🎙️ Micro refusé — autorise-le dans Réglages → Applications '
     + '→ TimeCool → Autorisations.');
 }
 
+/* Au-dela, plus rien ne viendra. La WebView d'Android accepte de
+   demarrer l'ecoute puis ne renvoie ni texte, ni fin, ni erreur : sans
+   cette borne le bouton clignote indefiniment. */
+const TC_DICTEE_ATTENTE_MAX = 10000;
+let _tcDicteeMinuteur = null;
+let _tcDicteeNative = false;
+
+function tcDicteeArmerMinuteur() {
+  if (_tcDicteeMinuteur) clearTimeout(_tcDicteeMinuteur);
+  _tcDicteeMinuteur = setTimeout(function () {
+    _tcDicteeMinuteur = null;
+    if (!charlyMicActive) return;
+    tcDicteeArreter();
+    showToast('🎙️ Rien n’est venu — réessaie, ou écris ton message.');
+  }, TC_DICTEE_ATTENTE_MAX);
+}
+
+function tcDicteeDesarmerMinuteur() {
+  if (_tcDicteeMinuteur) clearTimeout(_tcDicteeMinuteur);
+  _tcDicteeMinuteur = null;
+}
+
+/** Arrete la dictee, quelle que soit la voie empruntee. */
+function tcDicteeArreter() {
+  tcDicteeDesarmerMinuteur();
+  if (_tcDicteeNative && window.TimeCoolNatif && window.TimeCoolNatif.arreterDictee) {
+    try { window.TimeCoolNatif.arreterDictee(); } catch (e) {}
+  }
+  _tcDicteeNative = false;
+  stopCharlyMic();
+}
+
+/**
+ * La langue a ecouter.
+ *
+ * Celle de l'application, sans region : Android comme le navigateur
+ * acceptent « fr » aussi bien que « fr-FR », et deviner un pays a
+ * partir d'une langue serait faux plus souvent qu'utile.
+ */
+function tcLangueDictee() {
+  return (typeof currentLanguage === 'string' && currentLanguage) ? currentLanguage : 'fr';
+}
+
+/** L'application sait-elle transcrire elle-meme ? */
+function tcDicteeNativeDisponible() {
+  try {
+    return !!(window.TimeCoolNatif && window.TimeCoolNatif.dicteeDisponible
+      && window.TimeCoolNatif.dicteeDisponible());
+  } catch (e) { return false; }
+}
+
+/* Appelees par MainActivity pendant la dictee. */
+function tcDicteePartielle(texte) {
+  tcDicteeArmerMinuteur();   // la parole avance : on repousse la borne
+  const inp = document.getElementById('charlyInput');
+  if (!inp) return;
+  inp.value = texte || '';
+  if (typeof autoResizeCharly === 'function') autoResizeCharly(inp);
+}
+
+function tcDicteeFinale(texte) {
+  const inp = document.getElementById('charlyInput');
+  if (inp) {
+    inp.value = texte || '';
+    if (typeof autoResizeCharly === 'function') autoResizeCharly(inp);
+  }
+  tcDicteeArreter();
+  if (inp && inp.value.trim()) setTimeout(function () { charlySendMessage(); }, 200);
+}
+
+function tcDicteeErreur(code) {
+  tcDicteeArreter();
+  showToast(tcMessageErreurDictee(code));
+}
+
 function charlyMicToggle() {
+  if (charlyMicActive) {
+    tcDicteeArreter();
+    if (charlyRecognition) charlyRecognition.stop();
+    return;
+  }
+
+  /*
+   * L'application transcrit elle-meme quand elle le peut. L'API vocale
+   * du web est bien presente dans la WebView, mais elle n'y produit
+   * jamais rien : la choisir reviendrait a laisser le bouton pulser
+   * dans le vide.
+   */
+  if (tcDicteeNativeDisponible()) {
+    _tcDicteeNative = true;
+    charlyMicActive = true;
+    const b = document.getElementById('charlyMicBtn');
+    if (b) { b.style.background = 'var(--g-red)'; b.style.animation = 'pulse 1s infinite'; }
+    const st = document.getElementById('charlyStatus');
+    if (st) st.textContent = '🎙️ Je t\'écoute…';
+    tcDicteeArmerMinuteur();
+    try {
+      window.TimeCoolNatif.demarrerDictee(tcLangueDictee());
+    } catch (e) {
+      tcDicteeErreur('demarrage');
+    }
+    return;
+  }
+
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     showToast(tcEstDansApk()
       ? '🎙️ La dictée n’est pas disponible dans l’application — utilise '
@@ -9820,13 +9945,9 @@ function charlyMicToggle() {
       : '🎙️ Ce navigateur ne sait pas faire de dictée — essaie Chrome ou Safari.');
     return;
   }
-  if (charlyMicActive) {
-    if (charlyRecognition) charlyRecognition.stop();
-    return;
-  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   charlyRecognition = new SR();
-  charlyRecognition.lang = 'fr-FR';
+  charlyRecognition.lang = tcLangueDictee();
   charlyRecognition.continuous = false;
   charlyRecognition.interimResults = true;
 
@@ -9838,7 +9959,9 @@ function charlyMicToggle() {
   document.getElementById('charlyStatus').textContent = '🎙️ Je t\'écoute…';
 
   let finalTranscript = '';
+  tcDicteeArmerMinuteur();
   charlyRecognition.onresult = function(event) {
+    tcDicteeArmerMinuteur();   // la parole avance : on repousse la borne
     let interim = '';
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript;
@@ -9849,11 +9972,13 @@ function charlyMicToggle() {
     autoResizeCharly(inp);
   };
   charlyRecognition.onerror = function(event) {
+    tcDicteeDesarmerMinuteur();
     const message = tcMessageErreurMicro(event.error);
     if (message) showToast(message);
     stopCharlyMic();
   };
   charlyRecognition.onend = function() {
+    tcDicteeDesarmerMinuteur();
     stopCharlyMic();
     if (inp.value.trim()) {
       // Auto-envoi après dictée

@@ -17,6 +17,9 @@ import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Environment;
 import android.provider.ContactsContract;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.provider.MediaStore;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
@@ -85,6 +88,10 @@ public class MainActivity extends Activity {
 
     /** Demande de micro venue de la WebView, meme mecanique que la camera. */
     private PermissionRequest requeteMicroEnAttente;
+
+    /** Reconnaissance vocale d'Android. Vit sur le thread principal. */
+    private SpeechRecognizer dictee;
+    private boolean dicteeEnCours;
 
     /** Prompt de géolocalisation en attente d'une réponse à la permission runtime. */
     private String origineLocalisationEnAttente;
@@ -503,6 +510,111 @@ public class MainActivity extends Activity {
         });
     }
 
+    /**
+     * Demarre la dictee et renvoie le texte a la page.
+     *
+     * A appeler sur le thread principal : SpeechRecognizer l'exige, y
+     * compris pour sa creation.
+     */
+    private void demarrerDicteeInterne(String langue) {
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                new String[] { android.Manifest.permission.RECORD_AUDIO }, REQ_MICRO);
+            appelerJs("tcDicteeErreur", "permission");
+            return;
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            appelerJs("tcDicteeErreur", "indisponible");
+            return;
+        }
+        arreterDicteeInterne();
+
+        dictee = SpeechRecognizer.createSpeechRecognizer(this);
+        dicteeEnCours = true;
+        dictee.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onResults(Bundle resultats) {
+                java.util.ArrayList<String> mots =
+                    resultats.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                String texte = (mots != null && !mots.isEmpty()) ? mots.get(0) : "";
+                dicteeEnCours = false;
+                appelerJs("tcDicteeFinale", texte);
+            }
+
+            @Override
+            public void onPartialResults(Bundle resultats) {
+                java.util.ArrayList<String> mots =
+                    resultats.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (mots != null && !mots.isEmpty()) {
+                    appelerJs("tcDicteePartielle", mots.get(0));
+                }
+            }
+
+            @Override
+            public void onError(int code) {
+                /*
+                 * Toute fin remonte a la page, erreur comprise. Sans
+                 * cela on reproduirait le defaut qu'on corrige : un
+                 * bouton qui clignote sans que rien ne vienne.
+                 */
+                dicteeEnCours = false;
+                appelerJs("tcDicteeErreur", nomErreurDictee(code));
+            }
+
+            @Override public void onReadyForSpeech(Bundle params) { }
+            @Override public void onBeginningOfSpeech() { }
+            @Override public void onRmsChanged(float niveau) { }
+            @Override public void onBufferReceived(byte[] tampon) { }
+            @Override public void onEndOfSpeech() { }
+            @Override public void onEvent(int type, Bundle params) { }
+        });
+
+        Intent intention = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intention.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intention.putExtra(RecognizerIntent.EXTRA_LANGUAGE,
+            (langue == null || langue.isEmpty()) ? "fr-FR" : langue);
+        intention.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        // Le texte s'affiche au fur et a mesure : sans cela on attend la
+        // fin sans savoir si quelque chose est entendu.
+        try {
+            dictee.startListening(intention);
+        } catch (Exception e) {
+            dicteeEnCours = false;
+            appelerJs("tcDicteeErreur", "demarrage");
+        }
+    }
+
+    /** Libere le micro. Sans appel, il reste tenu par l'application. */
+    private void arreterDicteeInterne() {
+        dicteeEnCours = false;
+        if (dictee != null) {
+            try {
+                dictee.stopListening();
+                dictee.cancel();
+                dictee.destroy();
+            } catch (Exception e) {
+                // Deja detruit : rien a faire.
+            }
+            dictee = null;
+        }
+    }
+
+    /** Le code d'erreur d'Android, en un mot que la page sait traduire. */
+    private String nomErreurDictee(int code) {
+        switch (code) {
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: return "permission";
+            case SpeechRecognizer.ERROR_NO_MATCH:                 return "rien-compris";
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:           return "rien-entendu";
+            case SpeechRecognizer.ERROR_NETWORK:
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:          return "reseau";
+            case SpeechRecognizer.ERROR_AUDIO:                    return "micro";
+            case SpeechRecognizer.ERROR_BUSY:                     return "occupe";
+            default:                                              return "erreur-" + code;
+        }
+    }
+
     /** Exécute une fonction JavaScript de la page, sur le thread UI. */
     private void appelerJs(final String fonction, final String argJson) {
         final String script = argJson.isEmpty()
@@ -746,6 +858,41 @@ public class MainActivity extends Activity {
          * Lance la connexion Google. La page reçoit le résultat via
          * tcGoogleJeton ou tcGoogleErreur.
          */
+        /**
+         * La dictee native est-elle utilisable ici ?
+         *
+         * La page s'en sert pour choisir : dans la WebView, l'API vocale
+         * du web existe mais ne produit jamais rien.
+         */
+        @JavascriptInterface
+        public boolean dicteeDisponible() {
+            return SpeechRecognizer.isRecognitionAvailable(MainActivity.this);
+        }
+
+        /**
+         * Ecoute et transcrit. La page recoit tcDicteePartielle au fil de
+         * la parole, puis tcDicteeFinale ou tcDicteeErreur.
+         */
+        @JavascriptInterface
+        public void demarrerDictee(final String langue) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    demarrerDicteeInterne(langue);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void arreterDictee() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    arreterDicteeInterne();
+                }
+            });
+        }
+
         @JavascriptInterface
         public void connexionGoogle() {
             runOnUiThread(new Runnable() {
@@ -1329,6 +1476,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        // Le micro reste tenu par l'application si on ne le rend pas.
+        arreterDicteeInterne();
         // Sans cette liberation, la reference statique retiendrait
         // l'activite detruite en memoire.
         if (instanceCourante == this) {
