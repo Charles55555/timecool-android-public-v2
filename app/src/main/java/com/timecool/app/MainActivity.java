@@ -610,7 +610,7 @@ public class MainActivity extends Activity {
             case SpeechRecognizer.ERROR_NETWORK:
             case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:          return "reseau";
             case SpeechRecognizer.ERROR_AUDIO:                    return "micro";
-            case SpeechRecognizer.ERROR_BUSY:                     return "occupe";
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:        return "occupe";
             default:                                              return "erreur-" + code;
         }
     }
