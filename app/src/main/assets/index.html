@@ -9854,6 +9854,24 @@ function tcDicteeTexte(dit) {
   return (avant.replace(/\s+$/, '') + ' ' + dit).trim();
 }
 
+/**
+ * Rend la main au champ, sans faire surgir le clavier.
+ *
+ * focus() ouvre le clavier a l'ecran sur un telephone : il recouvre la
+ * page et il faut le refermer avant de pouvoir redicter. On ne le
+ * demande donc que la ou il ne coute rien — un pointeur fin, autrement
+ * dit une souris.
+ */
+function tcDicteeRendreLaMain() {
+  const inp = document.getElementById('charlyInput');
+  if (!inp) return;
+  let souris = false;
+  try { souris = window.matchMedia('(pointer: fine)').matches; } catch (e) {}
+  if (!souris) return;
+  inp.focus();
+  try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+}
+
 /** Retient le contenu du champ avant d'ecouter. */
 function tcDicteeMemoriserPrefixe() {
   const inp = document.getElementById('charlyInput');
@@ -9926,10 +9944,7 @@ function tcDicteeFinale(texte) {
    * ni de reprendre son souffle — un silence suffisait a envoyer.
    * Le curseur revient dans le champ, la main est rendue.
    */
-  if (inp) {
-    inp.focus();
-    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
-  }
+  tcDicteeRendreLaMain();
 }
 
 function tcDicteeErreur(code) {
@@ -10011,8 +10026,7 @@ function charlyMicToggle() {
     tcDicteeDesarmerMinuteur();
     stopCharlyMic();
     // Plus d'envoi automatique : voir tcDicteeFinale.
-    inp.focus();
-    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+    tcDicteeRendreLaMain();
   };
   charlyRecognition.start();
 }
