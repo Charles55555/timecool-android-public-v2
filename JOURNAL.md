@@ -27,6 +27,68 @@ Voir la section 8 de `CLAUDE.md`. Rien de tout cela n'est fait.
 
 ---
 
+## 06/09/2026
+
+**Bandeau « Nouvelle version disponible ».** Le bouton de l'en-tête
+marchait, mais il fallait y penser. Le déploiement inscrit désormais son
+horodatage dans la page et le publie dans `version.json` ; la page
+compare les deux. Se fier aux en-têtes de cache ne marcherait pas : le
+serveur n'envoie pas de `Cache-Control`, il garde donc le droit de
+resservir une copie périmée pendant des heures — une page périmée doit
+pouvoir le constater elle-même. **Le déploiement web passe maintenant
+par `scripts/deployer-web.sh`**, qui pose l'horodatage ; un `tee` direct
+livrerait le marqueur tel quel et personne ne serait plus prévenu.
+
+**Configuration IA : sept messages faux retirés.** L'encart rouge
+affirmait qu'un proxy serait nécessaire en production — vérifié auprès
+d'Anthropic, l'appel direct depuis un navigateur est autorisé et le code
+envoie déjà l'en-tête qu'il faut. Le bandeau du haut prétendait que les
+clés restent locales et seront un jour sur le serveur : faux deux fois.
+« Fichier sécurisé » désignait un `.json` en clair, contredit dix lignes
+plus bas par la page elle-même. Et « clé invalide » s'affichait pour
+n'importe quelle erreur : seul un 401 met désormais la clé en cause.
+
+**Le plafond de réponse était bloqué à 500 jetons pour tous les
+comptes**, sans moyen de le changer — le champ « longueur maximale »
+avait disparu de la page, et le message d'erreur y renvoyait quand même.
+Claude 5 prend ses jetons de réflexion sur la même réserve : une demande
+d'agenda complet partait entièrement en réflexion et ne produisait aucun
+texte. Le réglage n'est pas revenu — un plafond n'est pas un budget, la
+facturation porte sur ce qui est produit.
+
+**Une copie figée du prompt bloquait un compte.** Prise avant la
+correction de `getDefaultPromptV64`, elle passait pour une modification
+volontaire. Il lui manquait la règle « une demande claire s'exécute sans
+demander confirmation » — le défaut signalé une dizaine de fois — celle
+des faux conflits le même jour, et tous ses emojis étaient devenus des
+points d'interrogation. `TC_PROMPT_VERSION` en v8.
+
+**Le micro, en quatre temps.**
+
+1. Dans l'APK il ne pouvait pas fonctionner, jamais : la permission
+   audio n'était pas déclarée et la WebView refusait d'office tout ce
+   qui n'était pas la caméra.
+2. La permission accordée, le bouton pulsait indéfiniment. La WebView
+   *expose* l'API vocale du web sans savoir l'exécuter : elle accepte le
+   démarrage puis ne renvoie ni texte, ni fin, ni erreur. Passage par la
+   reconnaissance vocale d'Android, via le pont.
+3. Le message partait 200 ms après la dernière syllabe : impossible de
+   se relire ou de reprendre son souffle. La voix s'écrit maintenant à
+   la suite du champ, et c'est l'utilisateur qui envoie.
+4. Le `focus()` ajouté au point 3 faisait monter le clavier à l'écran,
+   qui recouvrait la page avant qu'on puisse redicter. Ma régression,
+   corrigée dans l'heure : le clavier n'est appelé que là où il y a une
+   souris.
+
+Les erreurs de dictée disent enfin quoi faire, et un garde-fou de dix
+secondes couvre les deux voies : un bouton qui clignote sans que rien ne
+vienne ne doit jamais pouvoir arriver.
+
+**Leçon du jour.** Trois défauts sur quatre étaient des messages qui
+mentaient — sur la cause, sur l'endroit où agir, ou sur un réglage
+disparu. Un message faux coûte plus cher qu'une absence de message : il
+envoie chercher au mauvais endroit.
+
 ## 05/09/2026
 
 **Valide par Charles en fin de journee :** isolation des donnees entre
