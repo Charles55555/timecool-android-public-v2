@@ -9841,6 +9841,25 @@ const TC_DICTEE_ATTENTE_MAX = 10000;
 let _tcDicteeMinuteur = null;
 let _tcDicteeNative = false;
 
+/* Ce que contenait le champ quand la dictee a commence. La voix s'ecrit
+   a la suite : sans ce prefixe, une seconde dictee effacerait la
+   premiere, et il deviendrait impossible d'ajouter quoi que ce soit. */
+let _tcDicteePrefixe = '';
+
+/** Assemble l'existant et ce qui vient d'etre dit. */
+function tcDicteeTexte(dit) {
+  const avant = _tcDicteePrefixe;
+  if (!avant) return (dit || '').trim();
+  if (!dit) return avant;
+  return (avant.replace(/\s+$/, '') + ' ' + dit).trim();
+}
+
+/** Retient le contenu du champ avant d'ecouter. */
+function tcDicteeMemoriserPrefixe() {
+  const inp = document.getElementById('charlyInput');
+  _tcDicteePrefixe = (inp && inp.value) ? inp.value : '';
+}
+
 function tcDicteeArmerMinuteur() {
   if (_tcDicteeMinuteur) clearTimeout(_tcDicteeMinuteur);
   _tcDicteeMinuteur = setTimeout(function () {
@@ -9890,18 +9909,27 @@ function tcDicteePartielle(texte) {
   tcDicteeArmerMinuteur();   // la parole avance : on repousse la borne
   const inp = document.getElementById('charlyInput');
   if (!inp) return;
-  inp.value = texte || '';
+  inp.value = tcDicteeTexte(texte);
   if (typeof autoResizeCharly === 'function') autoResizeCharly(inp);
 }
 
 function tcDicteeFinale(texte) {
   const inp = document.getElementById('charlyInput');
   if (inp) {
-    inp.value = texte || '';
+    inp.value = tcDicteeTexte(texte);
     if (typeof autoResizeCharly === 'function') autoResizeCharly(inp);
   }
   tcDicteeArreter();
-  if (inp && inp.value.trim()) setTimeout(function () { charlySendMessage(); }, 200);
+  /*
+   * On n'envoie pas. Le message partait 200 ms apres la derniere
+   * syllabe : impossible de se relire, de corriger un mot mal entendu,
+   * ni de reprendre son souffle — un silence suffisait a envoyer.
+   * Le curseur revient dans le champ, la main est rendue.
+   */
+  if (inp) {
+    inp.focus();
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+  }
 }
 
 function tcDicteeErreur(code) {
@@ -9925,6 +9953,7 @@ function charlyMicToggle() {
   if (tcDicteeNativeDisponible()) {
     _tcDicteeNative = true;
     charlyMicActive = true;
+    tcDicteeMemoriserPrefixe();
     const b = document.getElementById('charlyMicBtn');
     if (b) { b.style.background = 'var(--g-red)'; b.style.animation = 'pulse 1s infinite'; }
     const st = document.getElementById('charlyStatus');
@@ -9959,6 +9988,7 @@ function charlyMicToggle() {
   document.getElementById('charlyStatus').textContent = '🎙️ Je t\'écoute…';
 
   let finalTranscript = '';
+  tcDicteeMemoriserPrefixe();
   tcDicteeArmerMinuteur();
   charlyRecognition.onresult = function(event) {
     tcDicteeArmerMinuteur();   // la parole avance : on repousse la borne
@@ -9968,7 +9998,7 @@ function charlyMicToggle() {
       if (event.results[i].isFinal) finalTranscript += transcript;
       else interim += transcript;
     }
-    inp.value = (finalTranscript + interim).trim();
+    inp.value = tcDicteeTexte((finalTranscript + interim).trim());
     autoResizeCharly(inp);
   };
   charlyRecognition.onerror = function(event) {
@@ -9980,10 +10010,9 @@ function charlyMicToggle() {
   charlyRecognition.onend = function() {
     tcDicteeDesarmerMinuteur();
     stopCharlyMic();
-    if (inp.value.trim()) {
-      // Auto-envoi après dictée
-      setTimeout(() => charlySendMessage(), 200);
-    }
+    // Plus d'envoi automatique : voir tcDicteeFinale.
+    inp.focus();
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
   };
   charlyRecognition.start();
 }
