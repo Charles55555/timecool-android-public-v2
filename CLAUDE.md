@@ -122,9 +122,17 @@ fichier et perdrait propriétaire et permissions, `tee` écrit dedans.
 ```bash
 # API
 cat backend/api/index.php | tee /var/www/vhosts/timecool.fr/site1/index.php > /dev/null
-# Version web
-cat app/src/main/assets/index.html | tee /var/www/vhosts/timecool.fr/httpdocs/app/index.html > /dev/null
+# Version web : PASSER PAR LE SCRIPT, jamais tee directement
+./scripts/deployer-web.sh
 ```
+
+**La version web se déploie par `scripts/deployer-web.sh`.** Il fait le
+`tee`, mais il inscrit aussi l'horodatage du déploiement dans la page
+et le publie dans `version.json`. C'est la comparaison des deux qui
+fait apparaître le bandeau « Nouvelle version disponible » chez ceux qui
+ont déjà la page ouverte ou une copie en cache. Un `tee` direct
+déploierait le marqueur `__TC_DEPLOIEMENT__` tel quel : la page ne
+saurait plus se comparer à rien, et plus personne ne serait prévenu.
 
 Base de données : lecture par `timecool-cc`, **écriture par
 `timecool-root`** (le compte `claudecode_ro` est en lecture seule).

@@ -251,6 +251,16 @@ body { display:flex; flex-direction:column; }
 .btn-secondary { background:var(--bg-soft); color:var(--text); }
 .btn-success { background:var(--g-green); color:white; }
 
+/* Bandeau de mise a jour. Fixe en bas, au-dessus de tout ecran, mais
+   SOUS le toast (10200) : un message ne doit jamais etre masque par lui.
+   Quand il est visible, le toast remonte — sinon ils se superposent. */
+.maj-bandeau { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(12px + env(safe-area-inset-bottom,0px)); z-index:10150; display:flex; align-items:center; gap:10px; width:calc(100% - 24px); max-width:440px; box-sizing:border-box; padding:10px 12px; background:#1a2740; border:1px solid rgba(251,188,4,0.45); border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,0.32); }
+.maj-bandeau[hidden] { display:none; }
+.maj-bandeau .maj-icone { font-size:16px; flex:0 0 auto; }
+.maj-bandeau .maj-texte { flex:1; min-width:0; color:#fff; font-size:13px; font-weight:600; line-height:1.3; }
+.maj-bandeau .maj-bouton { flex:0 0 auto; padding:9px 16px; background:var(--g-yellow); color:#202124; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; }
+.maj-bandeau .maj-fermer { flex:0 0 auto; padding:6px 8px; background:transparent; color:#aab4c6; border:none; font-size:15px; line-height:1; cursor:pointer; }
+body.maj-visible .toast { bottom:152px; }
 .toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 20px; border-radius:24px; font-size:13px; opacity:0; transition:opacity 0.3s; z-index:10200; text-align:center; max-width:90%; }
 /* ═══ Modales TimeCool — remplacent confirm/alert/prompt natifs ═══
    Les boites natives affichaient le chemin technique de la page
@@ -1778,6 +1788,14 @@ if (window.pdfjsLib) {
 
 <div class="toast" id="toast"></div>
 
+<!-- Hors de toute page : le bandeau doit survivre a la navigation. -->
+<div class="maj-bandeau" id="tcBandeauMaj" hidden>
+  <span class="maj-icone">🔄</span>
+  <span class="maj-texte" id="tcBandeauMajTexte">Nouvelle version disponible</span>
+  <button class="maj-bouton" id="tcBandeauMajBouton" onclick="tcActionBandeauMaj()">Recharger</button>
+  <button class="maj-fermer" onclick="tcIgnorerMaj()" aria-label="Masquer" title="Masquer">✕</button>
+</div>
+
 <script>
 // ═══ STATE ═══
 /* ══════════════════════════════════════════════════════════════
@@ -2218,6 +2236,96 @@ function tcRepriseApresMaj() {
   }, 900);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   BANDEAU « NOUVELLE VERSION DISPONIBLE »
+
+   Le deploiement web remplace le marqueur ci-dessous par un horodatage
+   et publie le meme dans version.json. La page compare les deux.
+
+   Pourquoi ne pas se fier au cache du navigateur : le serveur n envoie
+   pas de Cache-Control, il a donc le droit de resservir sa copie
+   pendant des heures. Une page perimee doit pouvoir le constater
+   elle-meme, ce que deux valeurs comparees permettent et pas un en-tete.
+
+   Dans le depot et dans l APK la valeur reste le marqueur : la
+   verification web ne s y declenche pas.
+   ══════════════════════════════════════════════════════════════ */
+const TC_DEPLOIEMENT = '__TC_DEPLOIEMENT__';
+const TC_MAJ_IGNOREE_KEY = 'tc_maj_ignoree';
+const TC_MAJ_INTERVALLE = 5 * 60 * 1000;
+
+let _tcMajVersionApk = null;   // version a installer, dans l application
+
+function tcEstDansApk() {
+  return !!(window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj);
+}
+
+/** La croix ne fait taire QUE cette version-la : la suivante reparait. */
+function tcMajIgnoree(signature) {
+  try { return localStorage.getItem(TC_MAJ_IGNOREE_KEY) === String(signature); }
+  catch (e) { return false; }
+}
+
+function tcAfficherBandeauMaj(signature, texte, libelleBouton) {
+  const b = document.getElementById('tcBandeauMaj');
+  if (!b || tcMajIgnoree(signature)) return;
+  b.dataset.signature = String(signature);
+  const t = document.getElementById('tcBandeauMajTexte');
+  if (t) t.textContent = texte || 'Nouvelle version disponible';
+  const bouton = document.getElementById('tcBandeauMajBouton');
+  if (bouton) bouton.textContent = libelleBouton || 'Recharger';
+  b.hidden = false;
+  document.body.classList.add('maj-visible');
+}
+
+function tcMasquerBandeauMaj() {
+  const b = document.getElementById('tcBandeauMaj');
+  if (b) b.hidden = true;
+  document.body.classList.remove('maj-visible');
+}
+
+function tcIgnorerMaj() {
+  const b = document.getElementById('tcBandeauMaj');
+  if (b && b.dataset.signature) {
+    try { localStorage.setItem(TC_MAJ_IGNOREE_KEY, b.dataset.signature); } catch (e) {}
+  }
+  tcMasquerBandeauMaj();
+}
+
+function tcActionBandeauMaj() {
+  tcMasquerBandeauMaj();
+  if (tcEstDansApk() && _tcMajVersionApk) { tcLancerMaj(_tcMajVersionApk); return; }
+  tcMettreAJourMaintenant();
+}
+
+/** Cote web : compare l horodatage de cette page a celui du serveur. */
+async function tcVerifierMajWeb() {
+  // Marqueur non remplace : depot ou APK, il n y a rien a comparer.
+  if (!/^[0-9]+$/.test(TC_DEPLOIEMENT)) return;
+  const b = document.getElementById('tcBandeauMaj');
+  if (b && !b.hidden) return;   // deja affiche : ne pas repasser dessus
+
+  let distante;
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;        // hors ligne ou fichier absent : on se tait
+    distante = String((await res.json()).deploiement || '');
+  } catch (e) { return; }
+
+  if (!distante || distante === TC_DEPLOIEMENT) return;
+  tcAfficherBandeauMaj(distante, 'Nouvelle version disponible', 'Recharger');
+}
+
+/** A l ouverture, au retour sur l onglet, et toutes les cinq minutes. */
+function tcSurveillerMaj() {
+  if (tcEstDansApk()) return;   // l application a sa propre verification
+  tcVerifierMajWeb();
+  setInterval(tcVerifierMajWeb, TC_MAJ_INTERVALLE);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) tcVerifierMajWeb();
+  });
+}
+
 /** Compare deux versions « 2.0.51 ». Renvoie true si b est plus recente que a. */
 function tcVersionPlusRecente(a, b) {
   const na = String(a || '').replace(/^v/, '').split('.').map(Number);
@@ -2283,13 +2391,12 @@ async function checkForUpdates(manual) {
     tcLancerMaj(distante);
     return;
   }
-  if (zone) {
-    zone.innerHTML =
-      '<div style="margin:12px 16px; padding:12px 14px; background:#e8f0fe; border:1px solid #c6dafc; border-radius:12px;">' +
-        '<div style="font-size:12.5px; font-weight:700; color:#1a3d6e; margin-bottom:6px;">🔄 Nouvelle version disponible (v' + distante + ')</div>' +
-        '<button onclick="tcLancerMaj(\'' + distante + '\')" style="width:100%; padding:10px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">Mettre à jour maintenant</button>' +
-      '</div>';
-  }
+  /* Le meme bandeau que sur le web, pour ne pas entretenir deux
+     apparences differentes de la meme annonce. Le libelle, lui, doit
+     differer : ici on telecharge et Android demandera confirmation. */
+  _tcMajVersionApk = distante;
+  tcAfficherBandeauMaj('apk-' + distante,
+    'Nouvelle version disponible (v' + distante + ')', 'Mettre à jour');
 }
 
 /** Telecharge puis remet l APK a l installateur d Android. */
@@ -2356,6 +2463,7 @@ function tcMajEchec(raison) {
 window.addEventListener('load', function() {
   tcRepriseApresMaj();
   setTimeout(function () { checkForUpdates(false); }, 1500);
+  tcSurveillerMaj();
 });
 
 let mode = 'user';
@@ -15309,7 +15417,8 @@ const TC_JAMAIS_TRANSFERE = [
   // Sans cette exclusion, le menage effacerait son propre marqueur et se
   // rejouerait a chaque tour, effacant sans fin ce que la lecture vient
   // de rapporter.
-  'tc_nettoyage'               // TC_NETTOYAGE_KEY
+  'tc_nettoyage',              // TC_NETTOYAGE_KEY
+  'tc_maj_ignoree'             // TC_MAJ_IGNOREE_KEY
 ];
 
 /** Une clé a-t-elle le droit de voyager ? */
