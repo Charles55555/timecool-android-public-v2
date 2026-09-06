@@ -9779,9 +9779,45 @@ async function resetCharlyChat() {
 let charlyRecognition = null;
 let charlyMicActive = false;
 
+/**
+ * Ce que dit une erreur de dictee, en clair et avec le geste qui suit.
+ *
+ * Le code brut du navigateur etait affiche tel quel — « not-allowed »
+ * ne dit rien, et surtout pas qu'une autorisation refusee une fois ne
+ * sera jamais redemandee d'elle-meme.
+ */
+function tcMessageErreurMicro(code) {
+  switch (code) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return '🎙️ Micro refusé — autorise-le pour ce site : appuie sur l’icône '
+           + 'à gauche de l’adresse, puis Autorisations → Micro.';
+    case 'audio-capture':
+      return '🎙️ Aucun micro détecté sur cet appareil.';
+    case 'network':
+      return '🎙️ La dictée a besoin d’Internet — vérifie ta connexion.';
+    case 'no-speech':
+      // Pas une panne : ne pas l'annoncer comme telle.
+      return '🎙️ Je n’ai rien entendu — réessaie en parlant plus près.';
+    case 'aborted':
+      return null;   // arret volontaire : rien a dire
+    default:
+      return '🎙️ La dictée s’est interrompue (' + code + ').';
+  }
+}
+
+/** Appelee par MainActivity quand Android refuse le micro. */
+function tcMicroRefuse() {
+  showToast('🎙️ Micro refusé — autorise-le dans Réglages → Applications '
+    + '→ TimeCool → Autorisations.');
+}
+
 function charlyMicToggle() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showToast('⚠️ Reconnaissance vocale non supportée par ce navigateur');
+    showToast(tcEstDansApk()
+      ? '🎙️ La dictée n’est pas disponible dans l’application — utilise '
+        + 'timecool.fr/app/ dans Chrome ou Safari.'
+      : '🎙️ Ce navigateur ne sait pas faire de dictée — essaie Chrome ou Safari.');
     return;
   }
   if (charlyMicActive) {
@@ -9813,7 +9849,8 @@ function charlyMicToggle() {
     autoResizeCharly(inp);
   };
   charlyRecognition.onerror = function(event) {
-    showToast('❌ Erreur micro : ' + event.error);
+    const message = tcMessageErreurMicro(event.error);
+    if (message) showToast(message);
     stopCharlyMic();
   };
   charlyRecognition.onend = function() {

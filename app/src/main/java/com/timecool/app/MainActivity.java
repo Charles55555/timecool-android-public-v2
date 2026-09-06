@@ -74,6 +74,7 @@ public class MainActivity extends Activity {
     private static final int REQ_EXPORT_FICHIER = 1004;
     private static final int REQ_CAMERA = 1005;
     private static final int REQ_NOTIFICATIONS = 1006;
+    private static final int REQ_MICRO = 1007;
 
     /* Identifiants des rappels programmes. Necessaires pour les annuler :
        AlarmManager n offre aucun moyen de lister ses propres alarmes. */
@@ -81,6 +82,9 @@ public class MainActivity extends Activity {
 
     /** Demande de camera venue de la WebView, en attente de la reponse Android. */
     private PermissionRequest requeteCameraEnAttente;
+
+    /** Demande de micro venue de la WebView, meme mecanique que la camera. */
+    private PermissionRequest requeteMicroEnAttente;
 
     /** Prompt de géolocalisation en attente d'une réponse à la permission runtime. */
     private String origineLocalisationEnAttente;
@@ -234,11 +238,35 @@ public class MainActivity extends Activity {
             @Override
             public void onPermissionRequest(final PermissionRequest requete) {
                 boolean veutCamera = false;
+                boolean veutMicro = false;
                 for (String r : requete.getResources()) {
                     if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) {
                         veutCamera = true;
-                        break;
+                    } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) {
+                        veutMicro = true;
                     }
+                }
+                /*
+                 * Le micro suit la meme mecanique que la camera. Avant, il
+                 * tombait dans le refus d'office ci-dessous : la page
+                 * recevait « refuse » sans qu'aucune fenetre n'apparaisse,
+                 * et rien ne permettait de revenir dessus.
+                 */
+                if (veutMicro && !veutCamera) {
+                    if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                            == PackageManager.PERMISSION_GRANTED) {
+                        requete.grant(new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+                        return;
+                    }
+                    if (requeteMicroEnAttente != null) {
+                        requeteMicroEnAttente.deny();
+                    }
+                    requeteMicroEnAttente = requete;
+                    requestPermissions(
+                        new String[] { android.Manifest.permission.RECORD_AUDIO },
+                        REQ_MICRO
+                    );
+                    return;
                 }
                 if (!veutCamera) {
                     requete.deny();
@@ -382,6 +410,25 @@ public class MainActivity extends Activity {
             }
             if (!accorde) {
                 appelerJs("tcCameraRefusee", "");
+            }
+            return;
+        }
+        if (requete == REQ_MICRO) {
+            boolean accorde = resultats.length > 0
+                && resultats[0] == PackageManager.PERMISSION_GRANTED;
+            if (requeteMicroEnAttente != null) {
+                if (accorde) {
+                    requeteMicroEnAttente.grant(
+                        new String[] { PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+                } else {
+                    // Toujours repondre, refus compris : sans cela la page
+                    // attendrait indefiniment un micro qui ne viendra pas.
+                    requeteMicroEnAttente.deny();
+                }
+                requeteMicroEnAttente = null;
+            }
+            if (!accorde) {
+                appelerJs("tcMicroRefuse", "");
             }
             return;
         }

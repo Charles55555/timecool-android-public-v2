@@ -14,6 +14,11 @@
          quand meme l'application et saisit le code a 6 chiffres. -->
     <uses-permission android:name="android.permission.CAMERA"/>
 
+    <!-- Dictee vocale dans Charly IA, demandee a l'execution et
+         uniquement au premier appui sur le micro. Sans cette ligne, la
+         WebView repond « refuse » sans qu'aucune fenetre n'apparaisse. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
     <!-- Installation de la mise a jour depuis l'application. Sans elle,
          Android refuse l'intent d'installation sans aucun message. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
