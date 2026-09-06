@@ -7095,7 +7095,7 @@ function renderAIConfig() {
       <span style="font-size:20px;">⚠️</span>
       <div style="font-size:11px; color:#5f4500; line-height:1.5;">
         <b>Page administrateur — Confidentielle</b><br>
-        Ces clés sont sauvegardées localement sur cet appareil uniquement. En production, elles seront stockées côté serveur sécurisé (backend TIMECOOL).
+        Ces clés sont enregistrées sur cet appareil et rattachées à ton compte : tu les retrouves sur un nouvel appareil sans les ressaisir.
       </div>
     </div>
     <div style="text-align:right; font-size:10px; color:var(--text-sec); margin:-10px 2px 14px;">${tcFormaterVersion()}</div>
@@ -7146,9 +7146,6 @@ function renderAIConfig() {
             <button onclick="toggleInlineKey('inlineAnthropicKey')" style="padding:8px; background:#f1f3f4; border:1px solid var(--border); border-radius:8px; cursor:pointer;">👁️</button>
           </div>
         </div>
-        <div style="margin-top:6px; padding:8px 10px; background:#fce8e6; border-radius:8px; font-size:10px; color:#c62828;">
-          ⚠️ CORS : la clé Anthropic nécessitera un proxy backend en production. En test local (file:///) elle fonctionnera.
-        </div>
       </div>
       <label style="display:flex; align-items:center; gap:12px; padding:10px 0; cursor:pointer;">
         <input type="checkbox" id="aiEnabled" ${charlyIA.config.enabled?'checked':''} style="width:20px; height:20px;">
@@ -7179,7 +7176,7 @@ function renderAIConfig() {
 
     <div style="background:#e8f5e9; border:1px solid #b9e1c4; border-radius:12px; padding:12px 14px; margin-bottom:18px; font-size:11px; color:#1b5e20; line-height:1.6;">
       <b>📊 Statistiques Charly IA</b><br>
-      Appels API effectués : <b>${charlyIA.callCount || 0}</b> &nbsp;|&nbsp;
+      Appels API depuis cet appareil : <b>${charlyIA.callCount || 0}</b> &nbsp;|&nbsp;
       Messages dans la session : <b>${charlyIA.history ? charlyIA.history.length : 0}</b>
     </div>
 
@@ -7191,7 +7188,7 @@ function renderAIConfig() {
     <div style="background:#fff; border:1.5px solid var(--g-green); border-radius:14px; padding:16px; margin-bottom:10px;">
       <div style="font-size:13px; font-weight:700; color:var(--g-green); margin-bottom:6px;">🔐 Sauvegarde & Transfert de clés</div>
       <div style="font-size:11px; color:var(--text-sec); margin-bottom:12px; line-height:1.5;">
-        Sauvegarde tes clés dans un fichier sécurisé. À chaque nouvelle version de TimeCool, importe ce fichier pour tout récupérer en 1 seconde — sans ressaisir.
+        Tes clés sont déjà rattachées à ton compte et reviennent seules sur un nouvel appareil. Ce fichier est une copie de secours, à garder hors ligne.
       </div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
         <button onclick="exportApiKeys()" style="padding:14px 8px; background:#e8f5e9; color:#1b5e20; border:1.5px solid #b9e1c4; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:4px;">
@@ -7391,11 +7388,20 @@ async function testApiKey(id) {
         saveCharlyIAConfig();
         showToast('✅ Anthropic Claude connecté !');
       } else {
+        /* Seul un 401 met la cle en cause. Un modele inconnu, un credit
+           epuise ou une limite de debit renvoient autre chose : accuser
+           la cle ferait chercher au mauvais endroit une cle qui marche. */
         const err = await resp.json().catch(() => ({}));
-        showToast('❌ Clé Anthropic invalide : ' + (err.error?.message || resp.status));
+        const detail = (err.error && err.error.message) || ('erreur ' + resp.status);
+        showToast(resp.status === 401
+          ? '❌ Clé Anthropic refusée : ' + detail
+          : '❌ Anthropic : ' + detail);
       }
     } catch(e) {
-      showToast('❌ Erreur (CORS probable en prod) : ' + e.message.substring(0,60));
+      // Ne plus accuser CORS : l API autorise l appel direct depuis un
+      // navigateur, l en-tete est envoye plus haut. Dire ce qui s est
+      // reellement passe, sans designer un coupable au hasard.
+      showToast('❌ Test impossible : ' + e.message.substring(0,60));
     }
   } else {
     showToast('🔌 Test non disponible pour ce service depuis le navigateur');
