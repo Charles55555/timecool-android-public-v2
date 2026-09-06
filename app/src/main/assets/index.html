@@ -3030,6 +3030,13 @@ CRÉATION de RDV → ne devine JAMAIS le jour ni l'heure. Pose UNE seule questio
 Ceci ne s'applique pas à une simple CONSULTATION ("qu'est-ce que j'ai la semaine prochaine ?"),
 qui est répondue automatiquement à partir de l'agenda réel, période entière comprise.`;
 
+/* Plafond de la reponse, en jetons (environ quatre caracteres chacun).
+   Ce n'est pas un budget : on paie ce qui est produit, pas la borne.
+   Large a dessein — les jetons de reflexion de Claude 5 se prennent sur
+   la meme reserve, et un agenda complet fait plusieurs dizaines de
+   lignes. Trop bas, la reponse n'existe simplement pas. */
+const TC_IA_JETONS_MAX = 8000;
+
 // ═══ CHARLY IA — État global v7.4 ═══
 let charlyIA = {
   // Configuration (sauvegardée dans localStorage)
@@ -3045,7 +3052,6 @@ let charlyIA = {
     systemPrompt: null,
     enabled: true,
     maxMessages: 50,
-    maxLength: 500,
     demoMode: false
   },
   // Historique de la conversation
@@ -3075,7 +3081,7 @@ function tcMigrateClaudeModel(id) {
 /* Change de valeur à chaque fois qu'il faut jeter les copies gardées
    par les appareils. */
 const TC_PROMPT_VERSION_KEY = 'timecool_prompt_version';
-const TC_PROMPT_VERSION = 'v7-prompt-non-recopie';
+const TC_PROMPT_VERSION = 'v8-copies-figees';
 
 // Charger configuration et démarches depuis localStorage au démarrage
 function loadCharlyIAConfig() {
@@ -7415,18 +7421,11 @@ function toggleApiKeyVisibility() {
   else { inp.type = 'password'; btn.textContent = '👁️'; }
 }
 
-function saveAIConfigForm() {
-  charlyIA.config.provider = document.getElementById('aiProvider').value;
-  charlyIA.config.apiKey = document.getElementById('aiApiKey').value.trim();
-  charlyIA.config.model = document.getElementById('aiModel').value;
-  charlyIA.config.systemPrompt = tcPromptPersonnalise(document.getElementById('aiPrompt').value);
-  charlyIA.config.enabled = document.getElementById('aiEnabled').checked;
-  charlyIA.config.demoMode = document.getElementById('aiDemoMode').checked;
-  charlyIA.config.maxMessages = parseInt(document.getElementById('aiMaxMessages').value) || 50;
-  charlyIA.config.maxLength = parseInt(document.getElementById('aiMaxLength').value) || 500;
-  saveCharlyIAConfig();
-  showToast('✅ Configuration enregistrée');
-}
+/* saveAIConfigForm() retiree : jamais appelee, et quatre des huit
+   champs qu'elle lisait (aiProvider, aiApiKey, aiMaxMessages,
+   aiMaxLength) n'existent plus dans la page. Elle aurait leve une
+   exception des sa premiere ligne. C'est saveAllApiKeys() qui
+   enregistre cette page. */
 
 function togglePromptEditor() {
   const body = document.getElementById('promptEditorBody');
@@ -9449,7 +9448,7 @@ async function callOpenAIDirectly(messages) {
     body: JSON.stringify({
       model: charlyIA.config.model || 'gpt-4o-mini',
       messages: messages,
-      max_tokens: charlyIA.config.maxLength || 1000,
+      max_tokens: TC_IA_JETONS_MAX,
       temperature: 0.7
     })
   });
@@ -9480,7 +9479,7 @@ async function callAnthropic(messages) {
     },
     body: JSON.stringify({
       model: charlyIA.config.claudeModel || 'claude-sonnet-5',
-      max_tokens: charlyIA.config.maxLength || 1000,
+      max_tokens: TC_IA_JETONS_MAX,
       system: (systemMsg ? systemMsg.content : 'Tu es Charly IA, assistant intelligent de TIMECOOL.') + tcLangInstruction(),
       messages: userMessages
     })
@@ -9529,7 +9528,9 @@ async function callAnthropic(messages) {
     throw new Error('Claude a refusé de répondre à cette demande.');
   }
   if (raison === 'max_tokens') {
-    throw new Error('Réponse trop longue pour la limite configurée — augmente « longueur maximale » dans Configuration IA.');
+    // Ne plus renvoyer vers « longueur maximale » : ce champ n'existe
+    // plus dans la page, la consigne etait impossible a suivre.
+    throw new Error('Réponse trop longue — demande-lui moins de choses à la fois.');
   }
   throw new Error('Claude n\'a renvoyé aucun texte (' + raison + ').');
 }
