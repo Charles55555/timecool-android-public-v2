@@ -129,7 +129,7 @@ function jetonCourt(int $longueur = 12): string
  * @throws RuntimeException si la configuration manque ou si le serveur
  *         refuse. L'appelant décide quoi en dire.
  */
-function envoyerEmail(string $vers, string $sujet, string $texte): void
+function envoyerEmail(string $vers, string $sujet, string $texte, ?string $html = null): void
 {
     $adresse = (string) Conf::get('email_expediteur', '');
     $motDePasse = (string) Conf::get('email_mot_de_passe', '');
@@ -186,18 +186,44 @@ function envoyerEmail(string $vers, string $sujet, string $texte): void
         $dire('DATA', '354');
 
         // Le sujet est encodé : sans cela, un accent arrive illisible.
-        $entetes = implode("\r\n", [
+        $communs = [
             'From: ' . mb_encode_mimeheader($nom, 'UTF-8') . ' <' . $adresse . '>',
             'To: <' . $vers . '>',
             'Subject: ' . mb_encode_mimeheader($sujet, 'UTF-8'),
             'Date: ' . date('r'),
             'MIME-Version: 1.0',
-            'Content-Type: text/plain; charset=UTF-8',
-            'Content-Transfer-Encoding: 8bit',
-        ]);
+        ];
+
+        if ($html === null) {
+            $entetes = implode("\r\n", array_merge($communs, [
+                'Content-Type: text/plain; charset=UTF-8',
+                'Content-Transfer-Encoding: 8bit',
+            ]));
+            $corps = $texte;
+        } else {
+            /*
+             * Les deux versions dans le même message : le texte d'abord,
+             * la mise en page ensuite. Un client qui refuse l'HTML tombe
+             * sur le texte, et le code reste lisible partout.
+             */
+            $limite = 'tc' . bin2hex(random_bytes(12));
+            $entetes = implode("\r\n", array_merge($communs, [
+                'Content-Type: multipart/alternative; boundary="' . $limite . '"',
+            ]));
+            $corps = "--{$limite}\n"
+                . "Content-Type: text/plain; charset=UTF-8\n"
+                . "Content-Transfer-Encoding: 8bit\n\n"
+                . $texte . "\n"
+                . "--{$limite}\n"
+                . "Content-Type: text/html; charset=UTF-8\n"
+                . "Content-Transfer-Encoding: 8bit\n\n"
+                . $html . "\n"
+                . "--{$limite}--\n";
+        }
+
         // Une ligne réduite à un point termine le message : celles du
         // corps sont donc doublées, sinon le message serait tronqué là.
-        $corps = preg_replace('/^\./m', '..', str_replace("\n", "\r\n", $texte));
+        $corps = preg_replace('/^\./m', '..', str_replace("\n", "\r\n", $corps));
         fwrite($flux, $entetes . "\r\n\r\n" . $corps . "\r\n.\r\n");
         $reponse = $lire();
         if (strncmp($reponse, '250', 3) !== 0) {
@@ -207,6 +233,61 @@ function envoyerEmail(string $vers, string $sujet, string $texte): void
     } finally {
         @fclose($flux);
     }
+}
+
+
+/**
+ * Habillage TimeCool d'un e-mail.
+ *
+ * Tableaux et styles écrits sur chaque balise : un e-mail n'a ni
+ * feuille de style ni flexbox, Gmail et Outlook retirent tout le reste.
+ * Les couleurs sont celles du logo — TIME en rouge, COOL en jaune, et
+ * les quatre points bleu, rouge, jaune, vert.
+ */
+function emailHabille(string $titre, string $corpsHtml): string
+{
+    $point = static function (string $couleur): string {
+        return '<span style="display:inline-block; width:7px; height:7px; '
+            . 'border-radius:50%; background:' . $couleur . '; margin:0 2px;"></span>';
+    };
+    $points = $point('#1a73e8') . $point('#ea4335') . $point('#fbbc04') . $point('#34a853');
+
+    return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>' . htmlspecialchars($titre, ENT_QUOTES, 'UTF-8') . '</title></head>'
+        . '<body style="margin:0; padding:0; background:#f2f4f7;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        .   'style="background:#f2f4f7; padding:28px 12px;"><tr><td align="center">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        .   'style="max-width:520px; background:#ffffff; border-radius:16px; '
+        .   'font-family:Arial,Helvetica,sans-serif; overflow:hidden;">'
+
+        . '<tr><td style="padding:26px 28px 6px; text-align:center;">'
+        .   '<div style="font-size:26px; font-weight:bold; letter-spacing:-0.5px;">'
+        .     '<span style="color:#ea4335;">TIME</span>'
+        .     '<span style="color:#fbbc04;">COOL</span>'
+        .   '</div>'
+        .   '<div style="margin-top:6px;">' . $points . '</div>'
+        .   '<div style="font-size:12px; color:#9aa0a6; margin-top:8px;">'
+        .     'Votre agenda intelligent</div>'
+        . '</td></tr>'
+
+        . '<tr><td style="padding:22px 28px 8px;">'
+        .   '<div style="font-size:18px; font-weight:bold; color:#202124;">'
+        .     htmlspecialchars($titre, ENT_QUOTES, 'UTF-8') . '</div>'
+        . '</td></tr>'
+
+        . '<tr><td style="padding:0 28px 26px; font-size:15px; color:#3c4043; '
+        .   'line-height:1.6;">' . $corpsHtml . '</td></tr>'
+
+        . '<tr><td style="padding:16px 28px 24px; border-top:1px solid #e8eaed; '
+        .   'font-size:11.5px; color:#9aa0a6; text-align:center; line-height:1.5;">'
+        .   'Message automatique — TimeCool<br>'
+        .   '<a href="https://timecool.fr" style="color:#1a73e8; text-decoration:none;">'
+        .     'timecool.fr</a>'
+        . '</td></tr>'
+
+        . '</table></td></tr></table></body></html>';
 }
 
 
@@ -621,9 +702,12 @@ switch ($route) {
         try {
             envoyerEmail(
                 $moi['email'],
-                'Test TimeCool',
+                'TIMECOOL - TEST D ENVOI',
                 "Bonjour,\n\nSi tu lis ce message, l'envoi d'e-mails de TimeCool "
-                . "fonctionne.\n\n— TimeCool\n"
+                . "fonctionne.\n\n— TimeCool\n",
+                emailHabille('Test d envoi',
+                    '<p style="margin:0;">Si tu lis ce message, l\'envoi d\'e-mails '
+                    . 'de TimeCool fonctionne.</p>')
             );
         } catch (Throwable $e) {
             error_log('TimeCool test email: ' . $e->getMessage());
@@ -1994,16 +2078,30 @@ switch ($route) {
         if ($compteVise !== null) {
             try {
                 if ($parEmail) {
+                    $html = '<p style="margin:0 0 14px;">Bonjour,</p>'
+                        . '<p style="margin:0 0 18px;">Voici ton code pour choisir un '
+                        . 'nouveau mot de passe :</p>'
+                        . '<div style="margin:0 0 18px; padding:18px; text-align:center; '
+                        . 'background:#f2f6fc; border:1px solid #d6e2f5; border-radius:12px; '
+                        . 'font-size:34px; font-weight:bold; letter-spacing:10px; '
+                        . 'color:#1a73e8;">' . $code . '</div>'
+                        . '<p style="margin:0 0 14px; font-size:13.5px; color:#5f6368;">'
+                        . 'Il est valable ' . $minutes . ' minutes.</p>'
+                        . '<p style="margin:0; font-size:13.5px; color:#5f6368;">'
+                        . 'Si tu n\'as rien demandé, ignore ce message : ton mot de passe '
+                        . 'reste inchangé.</p>';
+
                     envoyerEmail(
                         $destination,
-                        'Ton code TimeCool',
+                        'TIMECOOL - MOT DE PASSE OUBLIE',
                         "Bonjour,\n\n"
                         . "Voici ton code pour choisir un nouveau mot de passe TimeCool :\n\n"
                         . "    {$code}\n\n"
                         . "Il est valable {$minutes} minutes.\n\n"
                         . "Si tu n'as rien demandé, ignore ce message : ton mot de passe "
                         . "reste inchangé.\n\n"
-                        . "— TimeCool\n"
+                        . "— TimeCool\n",
+                        emailHabille('Ton code de vérification', $html)
                     );
                 } else {
                     Sms::envoyer(
