@@ -13,7 +13,9 @@
     # sinon /rdv/<jeton> partirait vers index.php et renverrait un JSON
     # « route inconnue » au lieu de la page. Le jeton reste dans l'URL :
     # la page le relit depuis le chemin.
-    RewriteRule ^rdv/[0-9a-f]{64}/?$ rdv.html [L]
+    # Deux formes : le jeton court d aujourd hui, et l ancien en 64
+    # hexadecimaux, pour que les liens deja envoyes fonctionnent encore.
+    RewriteRule ^rdv/([0-9a-f]{64}|[A-Z2-9]{8,16})/?$ rdv.html [L]
 
     # Tout ce qui ne correspond pas à un fichier réel part vers index.php.
     RewriteCond %{REQUEST_FILENAME} !-f

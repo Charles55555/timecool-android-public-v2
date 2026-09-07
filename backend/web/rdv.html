@@ -101,7 +101,9 @@ const TC_BACKEND = {
  * pour rester compatible avec un lien de l'ancienne forme.
  */
 function getToken() {
-  const m = window.location.pathname.match(/\/rdv\/([0-9a-f]{64})/i);
+  // La forme courte d'aujourd'hui, et l'ancienne en 64 hexadécimaux :
+  // un lien déjà envoyé doit continuer de fonctionner.
+  const m = window.location.pathname.match(/\/rdv\/([0-9a-fA-F]{64}|[A-Z2-9]{8,16})/);
   if (m) return m[1];
   return new URLSearchParams(window.location.search).get('token');
 }

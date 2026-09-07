@@ -92,6 +92,33 @@ function vueCompte(array $c): array
  *
  * @param array $ecritures  [['compte_id'=>int,'type'=>string,'uid'=>string,'contenu'=>?array], ...]
  */
+/**
+ * Jeton court, pour un lien qu'un humain va lire dans un message.
+ *
+ * Un jeton de 64 caractères occupait trois lignes dans WhatsApp, et le
+ * message en contenait trois. La table ne garde que l'EMPREINTE du
+ * jeton : sa longueur est donc libre.
+ *
+ * Douze caractères sur un alphabet de trente-deux font soixante bits —
+ * pour un lien à usage unique qui expire en 48 heures, c'est hors
+ * d'atteinte. Les caractères qu'on confond à la lecture (I, O, 0, 1)
+ * sont écartés : un lien peut être recopié à la main.
+ *
+ * Ici et non dans lib.php : ce fichier-là vit hors de la racine web et
+ * n'est pas déployable par l'agent. Un index.php qui appellerait une
+ * méthode nouvelle de lib.php partirait en erreur 500.
+ */
+function jetonCourt(int $longueur = 12): string
+{
+    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $sortie = '';
+    for ($i = 0; $i < $longueur; $i++) {
+        $sortie .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+    }
+    return $sortie;
+}
+
+
 function elementsPoser(array $ecritures): void
 {
     $parCompte = [];
@@ -1479,7 +1506,9 @@ switch ($route) {
                 );
             }
 
-            $jeton  = Jeton::creer();
+            // Court : ce jeton s'affiche dans un message que quelqu'un
+            // doit lire. Voir Jeton::creerCourt().
+            $jeton  = jetonCourt();
             $heures = (int) Conf::get('lien_rdv_heures', 48);
             Db::req(
                 'INSERT INTO rdv_liens (rdv_id, jeton_hash, prenom_organisateur,
@@ -1513,7 +1542,9 @@ switch ($route) {
     // TC_BACKEND.fetchRdvLink — public, sans authentification.
     case 'GET /rdv/lien':
         $jeton = $_GET['jeton'] ?? '';
-        if (!is_string($jeton) || !preg_match('/^[0-9a-f]{64}$/', $jeton)) {
+        // Les deux formes : la courte d'aujourd'hui, et l'ancienne en 64
+        // hexadécimaux, pour que les liens déjà envoyés restent valables.
+        if (!is_string($jeton) || !preg_match('/^([0-9a-f]{64}|[A-Z2-9]{8,16})$/', $jeton)) {
             Rep::erreur(404, 'lien_inconnu', 'Lien invalide.');
         }
         $lien = Db::un(
@@ -1539,7 +1570,7 @@ switch ($route) {
     // TC_BACKEND.submitRdvChoice — public, à usage unique.
     case 'POST /rdv/lien/choix':
         $jeton = Entree::requis('jeton', 64);
-        if (!preg_match('/^[0-9a-f]{64}$/', $jeton)) {
+        if (!preg_match('/^([0-9a-f]{64}|[A-Z2-9]{8,16})$/', $jeton)) {
             Rep::erreur(404, 'lien_inconnu', 'Lien invalide.');
         }
         $rang = Entree::corps()['rang'] ?? null;

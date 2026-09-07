@@ -270,6 +270,31 @@ l'erreur d'encodage est survenue après la troncature.
 
 ---
 
+### lib.php n'est pas déployable — index.php si
+
+`backend/api/lib.php` et `config.php` vivent dans
+`/var/www/vhosts/timecool.fr/private/`, un dossier fermé à l'agent. On
+peut les modifier dans le dépôt, **pas les mettre en production**.
+
+Conséquence : **ne jamais déployer un `index.php` qui appelle du code
+nouveau de `lib.php`.** La méthode n'existera pas côté serveur et toute
+la route part en erreur 500. C'est arrivé le 07/09 sur la création des
+liens de rendez-vous — rétabli en deux minutes, mais la production était
+cassée entre-temps.
+
+Ce qui doit vivre à côté du code déployable s'écrit dans `index.php`,
+même si sa place naturelle serait `lib.php`. Voir `jetonCourt()`.
+
+Toujours vérifier après un déploiement d'API :
+
+```bash
+curl -sS https://api.timecool.fr/parametres
+```
+
+et, pour une route modifiée, l'appeler pour de vrai.
+
+---
+
 ## 8. Avant le lancement public
 
 - Retirer `POST /test/sms-twilio`
