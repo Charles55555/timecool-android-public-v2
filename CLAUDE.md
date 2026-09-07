@@ -297,7 +297,7 @@ et, pour une route modifiée, l'appeler pour de vrai.
 
 ## 8. Avant le lancement public
 
-- Retirer `POST /test/sms-twilio`
+- Retirer `POST /test/sms-twilio` et `POST /test/email`
 - Passer `timecool.fr` de PHP 8.0 à 8.3
 - Remettre `verification_obligatoire` à vrai et `mode_test` à faux
   (`mode_test` expose les codes de vérification dans les réponses)
