@@ -14437,7 +14437,10 @@ async function sendCreneauxDirect(contactId, channel) {
     const suggestions = slots.map(function (sl, i) {
       const hh = ('0' + sl.h).slice(-2) + 'h' + ('0' + sl.m).slice(-2);
       return sl.label + ' ' + hh + ' : ' + url + '?c=' + (i + 1);
-    }).join('\n');
+    // Une ligne vide entre chaque : collees, les trois se lisaient
+    // comme un seul bloc, et l oeil ne separait plus une date du
+    // lien precedent.
+    }).join('\n\n');
 
     const text =
       'Salut ' + prenom + ',\n\n'
