@@ -1771,6 +1771,162 @@ switch ($route) {
         Rep::ok(['change' => true]);
 
     // ═══════════════════════════════════════════════════════════
+    // MOT DE PASSE OUBLIÉ — demande d'un code, par SMS
+    //
+    // Ni session ni mot de passe : c'est justement ce qui manque à qui
+    // arrive ici.
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /mot-de-passe/oublie':
+        $telephone = Empreinte::normaliserTelephone(Entree::requis('telephone', 20));
+        if (!preg_match('/^\+[1-9][0-9]{7,14}$/', $telephone)) {
+            Rep::erreur(400, 'telephone_invalide', 'Numéro de téléphone invalide.');
+        }
+        $telEmpreinte = Empreinte::stockable($telephone);
+
+        /*
+         * Réponse identique que le compte existe ou non. La révéler
+         * dirait qui est inscrit chez TimeCool à quiconque saurait
+         * taper des numéros.
+         */
+        $memeReponse = ['envoye' => true];
+
+        // Le plafond s'applique avant toute chose : sans lui, cette route
+        // permettrait d'inonder un numéro de SMS.
+        $recentes = Db::un(
+            'SELECT COUNT(*) AS n FROM verifications
+              WHERE destination_empreinte = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 HOUR)',
+            [$telEmpreinte]
+        );
+        if ((int) $recentes['n'] >= (int) Conf::get('verification_max_par_heure', 5)) {
+            Rep::erreur(429, 'trop_de_demandes', 'Trop de demandes. Réessayez dans une heure.');
+        }
+
+        $compteVise = Db::un(
+            'SELECT id FROM comptes
+              WHERE telephone_empreinte = ? AND cloture_le IS NULL AND bloque_le IS NULL',
+            [$telEmpreinte]
+        );
+
+        /*
+         * La vérification est créée dans les deux cas, et la référence
+         * rendue dans les deux cas. Sans cela, une réponse plus courte
+         * pour un numéro inconnu suffirait à savoir qui est inscrit —
+         * c'est le défaut qu'avait la première version de cette route.
+         *
+         * Le SMS ne part que si le compte existe. Sinon le code attendu
+         * ne correspond à rien, et l'écran suivant échoue comme sur un
+         * code faux.
+         */
+        $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $ref     = Jeton::reference();
+        $minutes = (int) Conf::get('verification_minutes', 15);
+        $ip      = $_SERVER['REMOTE_ADDR'] ?? null;
+
+        Db::req(
+            'INSERT INTO verifications (reference, canal, destination, destination_empreinte,
+                 code_hash, ip_creation, expire_le)
+             VALUES (?, "sms", ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))',
+            [
+                $ref, $telephone, $telEmpreinte,
+                Jeton::hacher($code),
+                $ip !== null ? @inet_pton($ip) : null,
+                $minutes,
+            ]
+        );
+
+        /*
+         * Envoi réel même en mode test, et le code n'est JAMAIS renvoyé
+         * dans la réponse. Le mode test rend le code à qui le demande :
+         * utile pour l'inscription, mais ici cela donnerait le compte de
+         * n'importe qui à n'importe qui.
+         */
+        if ($compteVise !== null) {
+            try {
+                Sms::envoyer(
+                    $telephone,
+                    "Votre code TimeCool pour changer de mot de passe : {$code} "
+                    . "(valable {$minutes} minutes). Si vous n avez rien demande, ignorez ce message."
+                );
+            } catch (Throwable $e) {
+                // Journalisé, mais pas annoncé : un échec d'envoi distinct
+                // d'un succès redirait ce que la réponse tait.
+                error_log('TimeCool SMS mot de passe oublie: ' . $e->getMessage());
+            }
+        }
+
+        Rep::ok($memeReponse + ['reference' => $ref, 'expire_dans_minutes' => $minutes], 201);
+
+    // ═══════════════════════════════════════════════════════════
+    // MOT DE PASSE OUBLIÉ — le changer, preuve du code à l'appui
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /mot-de-passe/reinitialiser':
+        $telephone = Empreinte::normaliserTelephone(Entree::requis('telephone', 20));
+        $preuve    = Entree::requis('preuve', 64);
+        $nouveau   = Entree::corps()['nouveau_mot_de_passe'] ?? '';
+
+        if (!is_string($nouveau) || mb_strlen($nouveau) < 10) {
+            Rep::erreur(400, 'mot_de_passe_faible',
+                'Le nouveau mot de passe doit faire au moins 10 caractères.');
+        }
+
+        $v = Db::un(
+            'SELECT * FROM verifications
+              WHERE preuve_hash = ? AND consomme_le IS NULL
+                AND valide_le IS NOT NULL AND preuve_expire_le > NOW()',
+            [Jeton::hacher($preuve)]
+        );
+        if ($v === null) {
+            Rep::erreur(403, 'verification_requise',
+                'Vérification absente, expirée ou déjà utilisée.');
+        }
+        /*
+         * Le numéro vérifié doit être celui dont on change le mot de
+         * passe. Sans ce contrôle, on vérifierait son propre numéro puis
+         * on changerait le mot de passe de quelqu'un d'autre.
+         */
+        if ($v['canal'] !== 'sms' || !hash_equals($v['destination'], $telephone)) {
+            Rep::erreur(403, 'verification_non_concordante',
+                'La vérification ne correspond pas à ce numéro.');
+        }
+
+        $compteVise = Db::un(
+            'SELECT id FROM comptes
+              WHERE telephone_empreinte = ? AND cloture_le IS NULL AND bloque_le IS NULL',
+            [Empreinte::stockable($telephone)]
+        );
+        if ($compteVise === null) {
+            Rep::erreur(404, 'compte_absent', 'Aucun compte pour ce numéro.');
+        }
+
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            // La preuve est consommée : un même code ne change qu'un mot
+            // de passe, une fois.
+            Db::req('UPDATE verifications SET consomme_le = NOW() WHERE id = ?', [$v['id']]);
+            Db::req(
+                'UPDATE comptes SET mot_de_passe_hash = ? WHERE id = ?',
+                [password_hash($nouveau, algoMotDePasse()), $compteVise['id']]
+            );
+            /*
+             * TOUTES les sessions tombent, sans exception : celui qui
+             * arrive ici n'en a aucune, et si quelqu'un s'était introduit
+             * avec l'ancien mot de passe, il doit sortir.
+             */
+            Db::req(
+                'UPDATE sessions SET revoque_le = NOW()
+                  WHERE compte_id = ? AND revoque_le IS NULL',
+                [$compteVise['id']]
+            );
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+
+        Rep::ok(['change' => true]);
+
+    // ═══════════════════════════════════════════════════════════
     // CLÉS API DE L'UTILISATEUR
     // Conservées chiffrées, restituées uniquement au titulaire du
     // compte, authentifié par sa session.

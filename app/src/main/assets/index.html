@@ -781,6 +781,75 @@ if (window.pdfjsLib) {
   </div>
 </div>
 
+<!-- Mot de passe oublié — 1. le numéro -->
+<div class="page auth-page" id="page-auth-oubli" style="background:#f7f9fc;">
+  <div class="conv-header">
+    <button class="back-btn" onclick="navigateAuth('auth-login')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <div style="font-size:16px; font-weight:600;">Mot de passe oublié</div>
+  </div>
+  <div style="padding:30px 24px 40px;">
+    <div style="text-align:center; margin-bottom:26px;">
+      <div style="font-size:56px; margin-bottom:14px;">🔑</div>
+      <div style="font-size:16px; font-weight:600; margin-bottom:8px;">On va te renvoyer un code</div>
+      <div style="font-size:13px; color:var(--text-sec); line-height:1.5;">
+        Donne le numéro de téléphone de ton compte TimeCool. Tu recevras
+        un code à 6 chiffres par SMS.
+      </div>
+    </div>
+
+    <form onsubmit="event.preventDefault(); tcOubliDemanderCode();">
+      <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Téléphone</label>
+      <input type="tel" id="oubliTelephone" autocomplete="tel" placeholder="06 12 34 56 78"
+        style="width:100%; padding:15px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box; margin-bottom:18px;">
+      <button type="submit" id="btnOubliCode"
+        style="width:100%; padding:16px; background:var(--g-blue); color:#fff; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer;">
+        Recevoir le code
+      </button>
+    </form>
+
+    <div style="margin-top:18px; font-size:11.5px; color:var(--text-sec); line-height:1.5; text-align:center;">
+      Par SMS uniquement pour l’instant — l’envoi par e-mail n’est pas
+      encore en place.
+    </div>
+  </div>
+</div>
+
+<!-- Mot de passe oublié — 2. le code et le nouveau mot de passe -->
+<div class="page auth-page" id="page-auth-oubli-code" style="background:#f7f9fc;">
+  <div class="conv-header">
+    <button class="back-btn" onclick="navigateAuth('auth-oubli')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <div style="font-size:16px; font-weight:600;">Nouveau mot de passe</div>
+  </div>
+  <div style="padding:30px 24px 40px;">
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="font-size:56px; margin-bottom:14px;">📱</div>
+      <div style="font-size:13px; color:var(--text-sec); line-height:1.5;" id="oubliDestination">
+        Un code à 6 chiffres vient de partir par SMS.
+      </div>
+    </div>
+
+    <form onsubmit="event.preventDefault(); tcOubliChanger();">
+      <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Code reçu</label>
+      <input type="text" id="oubliCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+        placeholder="123456"
+        style="width:100%; padding:15px; border:1.5px solid var(--border); border-radius:12px; font-size:22px; letter-spacing:6px; text-align:center; box-sizing:border-box; margin-bottom:18px;">
+
+      <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Nouveau mot de passe</label>
+      <input type="password" id="oubliNouveau" autocomplete="new-password" placeholder="10 caractères minimum"
+        style="width:100%; padding:15px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box; margin-bottom:18px;">
+
+      <button type="submit" id="btnOubliChanger"
+        style="width:100%; padding:16px; background:var(--g-blue); color:#fff; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer;">
+        Changer mon mot de passe
+      </button>
+    </form>
+
+    <button onclick="tcOubliDemanderCode()" style="width:100%; margin-top:12px; padding:14px; background:transparent; color:var(--g-blue); border:none; font-size:13px; cursor:pointer;">
+      ↻ Renvoyer le code
+    </button>
+  </div>
+</div>
+
 <!-- Page Connexion -->
 <div class="page auth-page" id="page-auth-login" style="background:#f7f9fc; min-height:100vh;">
   <div class="conv-header">
@@ -844,7 +913,7 @@ if (window.pdfjsLib) {
       Continuer avec Google
     </button>
 
-    <button type="button" onclick="navigateAuth('auth-welcome')" style="width:100%; padding:14px; background:transparent; color:var(--text-sec); border:none; font-size:13px; cursor:pointer;">
+    <button type="button" onclick="tcOuvrirOubli()" style="width:100%; padding:14px; background:transparent; color:var(--text-sec); border:none; font-size:13px; cursor:pointer;">
       Mot de passe oublié ?
     </button>
   </div>
@@ -10125,6 +10194,91 @@ async function logoutUser() {
 }
 
 // ═══ Navigation entre les pages d'auth ═══
+/* ══════════════════════════════════════════════════════════════
+   MOT DE PASSE OUBLIÉ
+
+   Le code part par SMS sur le numéro du compte. Le serveur répond la
+   même chose que le compte existe ou non : l'application ne peut donc
+   pas dire « ce numéro est inconnu », et ne doit pas essayer.
+   ══════════════════════════════════════════════════════════════ */
+let _tcOubliReference = null;
+let _tcOubliTelephone = '';
+
+function tcOuvrirOubli() {
+  _tcOubliReference = null;
+  const t = document.getElementById('oubliTelephone');
+  if (t) t.value = '';
+  navigateAuth('auth-oubli');
+}
+
+async function tcOubliDemanderCode() {
+  const champ = document.getElementById('oubliTelephone');
+  const tel = (champ ? champ.value : '').trim();
+  if (!tel) { showToast('📱 Donne le numéro de ton compte'); return; }
+
+  const bouton = document.getElementById('btnOubliCode');
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Envoi…'; }
+  try {
+    _tcOubliTelephone = tcNormaliserTelephone(tel);
+    const d = await tcAppel('POST', '/mot-de-passe/oublie',
+      { telephone: _tcOubliTelephone }, false);
+    _tcOubliReference = d.reference || null;
+
+    const info = document.getElementById('oubliDestination');
+    if (info) {
+      info.textContent = 'Si un compte existe pour le ' + _tcOubliTelephone
+        + ', un code à 6 chiffres vient d’y être envoyé par SMS.';
+    }
+    navigateAuth('auth-oubli-code');
+  } catch (e) {
+    /* Le serveur ne dit jamais si le compte existe : le seul cas où il
+       refuse est le plafond de demandes, ou une panne d'envoi. */
+    showToast(e && e.code === 'trop_de_demandes'
+      ? '⏳ Trop de demandes — réessaie dans une heure'
+      : '❌ Envoi impossible — vérifie le numéro et ta connexion');
+  } finally {
+    if (bouton) { bouton.disabled = false; bouton.textContent = 'Recevoir le code'; }
+  }
+}
+
+async function tcOubliChanger() {
+  const code = (document.getElementById('oubliCode') || {}).value || '';
+  const nouveau = (document.getElementById('oubliNouveau') || {}).value || '';
+
+  if (code.trim().length !== 6) { showToast('🔢 Le code fait 6 chiffres'); return; }
+  if (nouveau.length < 10) { showToast('🔒 10 caractères minimum'); return; }
+  if (!_tcOubliReference) { showToast('↻ Demande un nouveau code'); return; }
+
+  const bouton = document.getElementById('btnOubliChanger');
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Changement…'; }
+  try {
+    // Le code donne une preuve, la preuve autorise le changement : deux
+    // temps, comme à l'inscription, avec le même compteur d'essais.
+    const v = await tcAppel('POST', '/verification/valider',
+      { reference: _tcOubliReference, code: code.trim() }, false);
+    await tcAppel('POST', '/mot-de-passe/reinitialiser', {
+      telephone: _tcOubliTelephone,
+      preuve: v.preuve,
+      nouveau_mot_de_passe: nouveau,
+    }, false);
+
+    _tcOubliReference = null;
+    showToast('✅ Mot de passe changé — connecte-toi');
+    navigateAuth('auth-login');
+  } catch (e) {
+    const code_ = e && e.code;
+    showToast(
+      code_ === 'code_incorrect'      ? '❌ Code incorrect' :
+      code_ === 'trop_de_tentatives'  ? '⛔ Trop d’essais — demande un nouveau code' :
+      code_ === 'verification_expiree' ? '⏰ Code expiré — demande un nouveau code' :
+      code_ === 'mot_de_passe_faible' ? '🔒 10 caractères minimum' :
+      '❌ Changement impossible — réessaie'
+    );
+  } finally {
+    if (bouton) { bouton.disabled = false; bouton.textContent = 'Changer mon mot de passe'; }
+  }
+}
+
 function navigateAuth(pageId) {
   document.querySelectorAll('.auth-page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + pageId).classList.add('active');
