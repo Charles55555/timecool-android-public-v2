@@ -24,13 +24,16 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
-- **Les clés API en clair dans la base.** Le correctif tient en une
-  ligne, l'héritage des clés par les nouveaux comptes n'en souffre pas.
-  Détail en section 9 de `CLAUDE.md`. Signalé une fois, sans insister.
-- **Vingt-deux des vingt-sept champs de clés de la page Configuration IA
-  ne servent à rien** — Twilio compris, que Charles avait rempli. Les
-  cacher, ou les garder avec la mention « pas encore branché » ?
 - **La liste d'avant-lancement**, section 8 de `CLAUDE.md`. Rien de fait.
+
+**Tranché le 07/09 — ne plus y revenir :**
+
+- Les **vingt-sept champs de clés** de la page Configuration IA restent
+  en l'état. Ses mots : « tout ce qui se passe dans la page
+  administrateur ne me dérange en rien [...] toi tu sais ce qui
+  fonctionne et moi je sais ce qui fonctionne ». Il est en phase de test.
+  Ne pas proposer de les nettoyer.
+- Les **clés API en clair** : corrigées le 07/09.
 
 ## Ce que seule la session du PC peut faire
 

@@ -42,6 +42,34 @@ reste. Une phrase suffit, pas un débat.
 
 ---
 
+### Quand demander, quand agir — règle du 07/09/2026
+
+Charles ne veut plus arbitrer des choix techniques qu'il n'a pas les
+moyens de juger. Ses mots : « je souhaiterais que ta session et la sienne
+puissiez être le plus autonomes possible ».
+
+**Si ça ne change rien à ce qu'il voit : on agit, on le dit après.**
+Une correction interne, un défaut de sécurité, un test, du code mort.
+
+**Si ça change ce qu'il voit ou la façon dont l'application se comporte :
+on demande avant.** Un écran, un bouton, un message, une fonction
+nouvelle.
+
+Cette règle remplace la précédente — annoncer et attendre sur *tous* les
+sujets, posée le 04/09 quand des modifications non demandées lui
+faisaient perdre du temps. Elle ne l'annule pas : la moitié « ce qu'il
+voit » reste entière.
+
+Terminer chaque réponse par **« Moi je dois faire quoi ? »** puis
+**« Toi tu dois faire quoi ? »** — cela n'a pas changé.
+
+Et le plus important : **écrire sans jargon.** Il l'a demandé plusieurs
+fois, la dernière avec agacement — « on dirait que vous me parlez en
+chinois ». Une case, un fichier, une page : des mots qu'il utilise.
+Quand un exemple concret peut remplacer une explication, le donner.
+
+---
+
 ## 2. Ce que cette session peut faire — ou non
 
 Tout dépend de l'endroit où elle s'exécute.
@@ -268,6 +296,15 @@ l'erreur d'encodage est survenue après la troncature.
   `TC_SYNC_DEJA_SYNCHRONISE` — car la route `/cles-api` distribue déjà les
   clés aux nouveaux comptes, chiffrées. Signalé une fois à Charles, sans
   insister : c'est sa décision.
+- ~~**Les clés API en clair**~~ — corrigé le 07/09 : `timecool_api_keys`
+  est sorti du bloc « réglage ». L'exclusion efface aussi les valeurs
+  déjà stockées, la clé étant annoncée disparue au tour suivant.
+- **Les vingt-sept champs de clés : Charles a tranché le 07/09 — on n'y
+  touche pas.** Ses mots : « tout ce qui se passe dans la page
+  administrateur ne me dérange en rien [...] toi tu sais ce qui
+  fonctionne et moi je sais ce qui fonctionne ». Il est en phase de test,
+  ces champs ne le gênent pas. **Ne pas y revenir**, ni proposer de les
+  nettoyer. Ce qui suit reste noté pour information seulement.
 - **Vingt-deux des vingt-sept champs de clés ne servent à rien.** Seuls
   `anthropic`, `openai`, `gmaps`, `google_cse_cx` et `google_translate`
   sont relus par le code. Les autres s'enregistrent et rien ne les

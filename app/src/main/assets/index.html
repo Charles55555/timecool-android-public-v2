@@ -14983,7 +14983,22 @@ const TC_SYNC_DEJA_SYNCHRONISE = [
   // Écrite par le serveur, jamais par l'appareil. Laissée ici, la
   // famille « réglage » la remontait comme un bloc et écrasait les
   // conversations reçues : la messagerie restait vide.
-  'tc_conversations'
+  'tc_conversations',
+  /*
+   * Les clés API ont leur propre route, qui les chiffre. Ici, le bloc
+   * « réglage » les transportait EN CLAIR, ce qui annulait ce
+   * chiffrement : elles étaient lisibles telles quelles dans la base.
+   *
+   * Rien n'est perdu : tcRecupererClesDuServeur() les rapporte à chaque
+   * revalidation de session, et un nouveau compte hérite de celles de
+   * l'administrateur par la même route — c'est ce qui fait marcher
+   * l'assistant dès la première ouverture.
+   *
+   * Cette exclusion efface aussi les valeurs déjà stockées : absente du
+   * bloc, la clé est annoncée disparue au tour suivant, et le serveur
+   * vide la ligne.
+   */
+  'timecool_api_keys'
 ];
 
 /** Une clé est-elle un réglage à synchroniser ? */

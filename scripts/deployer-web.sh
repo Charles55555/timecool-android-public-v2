@@ -31,6 +31,9 @@ grep -q '__TC_DEPLOIEMENT__' "$SOURCE" \
 
 sed "s/__TC_DEPLOIEMENT__/$HORODATAGE/" "$SOURCE" | tee "$CIBLE/index.html" > /dev/null
 printf '{"deploiement":"%s"}\n' "$HORODATAGE" | tee "$CIBLE/version.json" > /dev/null
-chmod 644 "$CIBLE/version.json"
+# N utile qu a la toute premiere creation. Plesk reprend ensuite le
+# fichier a son compte, et le chmod echoue alors — avec set -e, il
+# tuait le script APRES un deploiement pourtant reussi.
+chmod 644 "$CIBLE/version.json" 2>/dev/null || true
 
 echo "Deploye — horodatage $HORODATAGE ($(date -d "@$HORODATAGE" '+%d/%m/%Y %Hh%M'))"
