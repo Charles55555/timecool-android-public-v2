@@ -14430,21 +14430,39 @@ async function sendCreneauxDirect(contactId, channel) {
     };
     const text = messages[channel];
 
+    /*
+     * Ce qui manque au contact se dit AVANT de se feliciter. Sans
+     * numero, ou sans adresse, rien ne s'ouvre : annoncer « envoye »
+     * laissait Charles attendre une reponse qui ne pouvait pas venir,
+     * pendant que le lien mourait tout seul au bout de 48 h.
+     */
+    let ouvert = false;
     if (channel === 'sms' && c.phone) {
       window.location.href = 'sms:' + c.phone.replace(/\s/g, '') + '?body=' + encodeURIComponent(text);
+      ouvert = true;
     } else if (channel === 'email' && c.email) {
       window.location.href = 'mailto:' + c.email + '?subject=' + encodeURIComponent('Proposition de rendez-vous') + '&body=' + encodeURIComponent(text);
+      ouvert = true;
     } else if (channel === 'whatsapp' && c.phone) {
       window.open('https://wa.me/' + c.phone.replace(/[^0-9]/g, '') + '?text=' + encodeURIComponent(text), '_blank');
+      ouvert = true;
     }
 
     if (ov) ov.remove();
-    showToast('✅ Créneaux envoyés à ' + prenom);
+    if (ouvert) {
+      showToast('✅ Créneaux prêts pour ' + prenom + ' — envoie le message');
+    } else if (channel === 'email') {
+      showToast('✉️ ' + prenom + ' n’a pas d’adresse e-mail dans ta fiche contact');
+    } else {
+      showToast('📵 ' + prenom + ' n’a pas de numéro dans ta fiche contact');
+    }
   } catch(e) {
-    // Comportement normal aujourd'hui : aucun serveur connecté.
-    // Le code ci-dessus est prêt, il ne manque que le branchement.
+    /* La route existe et fonctionne : ce message datait de l'époque sans
+       serveur, et faisait passer une panne de réseau ou une session
+       expirée pour une fonction pas encore écrite. */
     if (ov) ov.remove();
-    showToast('⏳ Cette fonctionnalité sera bientôt disponible.');
+    console.warn('Envoi des créneaux :', e && (e.code || e.message));
+    showToast('❌ Envoi impossible — vérifie ta connexion et réessaie');
   }
 }
 

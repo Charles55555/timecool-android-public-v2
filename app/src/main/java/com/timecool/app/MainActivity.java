@@ -200,9 +200,19 @@ public class MainActivity extends Activity {
                  * silence — le bouton « Inviter sur TimeCool » ne
                  * produisait donc rien, pas meme un message.
                  */
+                /*
+                 * L'application affiche sa propre page en file:// : toute
+                 * adresse en http(s) sort donc forcement d'elle, et doit
+                 * partir vers l'application du telephone qui sait la
+                 * traiter — WhatsApp, le navigateur, la messagerie.
+                 *
+                 * Les appels a l'API ne passent pas par ici : fetch()
+                 * n'est pas une navigation.
+                 */
                 if (url.startsWith("sms:") || url.startsWith("smsto:")
                         || url.startsWith("tel:") || url.startsWith("mailto:")
-                        || url.startsWith("geo:")) {
+                        || url.startsWith("geo:")
+                        || url.startsWith("http://") || url.startsWith("https://")) {
                     try {
                         Intent sortie = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                         sortie.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
