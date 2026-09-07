@@ -14423,12 +14423,32 @@ async function sendCreneauxDirect(contactId, channel) {
       slots: slots
     });
 
-    const messages = {
-      sms: organizerName + ' te propose un RDV sur TimeCool. Choisis ton créneau : ' + url,
-      email: 'Bonjour ' + prenom + ',\n\n' + organizerName + ' te propose 3 créneaux pour un rendez-vous.\nAucune installation nécessaire — choisis directement ici :\n' + url + '\n\nCe lien expire dans 48h.',
-      whatsapp: prenom + ', ' + organizerName + ' te propose un RDV 📅 Choisis ton créneau en un clic, sans rien installer : ' + url
-    };
-    const text = messages[channel];
+    /*
+     * Un seul texte pour les trois canaux : ils n'avaient aucune raison
+     * de dire trois choses differentes.
+     *
+     * Chaque suggestion porte SON lien, avec le rang du creneau. La page
+     * d'arrivee met alors ce creneau en avant plutot que de redemander
+     * de choisir — sans quoi « en cliquant sur l'une de ces 3
+     * suggestions » serait faux.
+     *
+     * Texte ecrit par Charles le 07/09 : ne pas le reformuler.
+     */
+    const suggestions = slots.map(function (sl, i) {
+      const hh = ('0' + sl.h).slice(-2) + 'h' + ('0' + sl.m).slice(-2);
+      return sl.label + ' ' + hh + ' : ' + url + '?c=' + (i + 1);
+    }).join('\n');
+
+    const text =
+      'Salut ' + prenom + ',\n'
+      + 'Comme convenu tu trouveras ci dessous les 3 suggestions de rendez-vous que je peux te proposer:\n\n'
+      + suggestions + '\n'
+      + 'En cliquant sur l\'une de ces 3 suggestions le rendez vous sera confirmé dans mon agenda TimeCool.\n\n'
+      + 'tu peux aussi télécharger l\'application gratuite TimeCool, je la trouve exceptionnelle.\n'
+      + 'TimeCool est un agenda qui parle aux autres agendas pour simplifier '
+      + 'la prise de rendez-vous, ou même la saisie d\'un rendez-vous grâce à Charly IA.\n'
+      + 'Crois moi tu vas être surpris !\n'
+      + 'Rejoins-moi sur TimeCool, on va optimiser notre temps : https://timecool.fr';
 
     /*
      * Ce qui manque au contact se dit AVANT de se feliciter. Sans

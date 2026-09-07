@@ -25,6 +25,8 @@
   .slot .ic { font-size:20px; }
   .slot .label { font-size:14px; font-weight:600; text-transform:capitalize; }
   .slot .hh { font-size:12.5px; color:var(--text-sec); margin-top:1px; }
+  .slot.vise { border-color:#1a73e8; background:#e8f0fe; box-shadow:0 0 0 2px rgba(26,115,232,.18); }
+  .ok-btn { display:block; width:100%; margin:14px 0 0; padding:15px; border:none; border-radius:12px; background:#1a73e8; color:#fff; font-size:16px; font-weight:700; cursor:pointer; }
   .none-btn { width:100%; padding:13px; background:none; border:1.5px solid var(--border); border-radius:12px; color:var(--text-sec); font-size:13px; font-weight:600; cursor:pointer; margin-top:8px; }
   .foot { text-align:center; font-size:11px; color:#9aa0a6; margin-top:20px; line-height:1.5; }
   .state { text-align:center; padding:20px 0; }
@@ -104,16 +106,45 @@ function getToken() {
   return new URLSearchParams(window.location.search).get('token');
 }
 
+/**
+ * Rang demande par le lien : /rdv/<jeton>?c=2 pointe le deuxieme creneau.
+ *
+ * Le message envoye propose trois suggestions, chacune avec son lien.
+ * Sans ce reperage, les trois menaient a la meme liste et il fallait
+ * choisir une seconde fois.
+ */
+function getRangDemande() {
+  const v = parseInt(new URLSearchParams(window.location.search).get('c'), 10);
+  return (v >= 1 && v <= 3) ? v : null;
+}
+
 function renderSlots(data) {
   const el = document.getElementById('content');
-  let html = '<div class="lead"><b>' + escapeHTML(data.organizerName) + '</b> te propose un rendez-vous. Choisis le créneau qui te convient :</div>';
+  const rangVoulu = getRangDemande();
+  const vise = data.slots.findIndex(function (s) { return s.rang === rangVoulu; });
+
+  let html = '<div class="lead"><b>' + escapeHTML(data.organizerName) + '</b> te propose un rendez-vous. '
+    + (vise >= 0
+        ? 'Confirme le créneau que tu as choisi, ou prends-en un autre :'
+        : 'Choisis le créneau qui te convient :')
+    + '</div>';
+
   data.slots.forEach(function(s, i) {
     const hh = ('0'+s.h).slice(-2) + 'h' + ('0'+s.m).slice(-2);
-    html += '<div class="slot" onclick="chooseSlot(' + i + ')">' +
-      '<span class="ic">🕐</span>' +
+    /* Mis en avant, pas confirme d'office : les messageries vont
+       chercher un apercu des liens qu'on leur envoie, et un rendez-vous
+       ne doit pas se confirmer parce qu'un robot est passe lire la
+       page. Une pression de plus, volontaire. */
+    const choisi = (i === vise);
+    html += '<div class="slot' + (choisi ? ' vise' : '') + '" onclick="chooseSlot(' + i + ')">' +
+      '<span class="ic">' + (choisi ? '✅' : '🕐') + '</span>' +
       '<div><div class="label">' + escapeHTML(s.label) + '</div><div class="hh">' + hh + '</div></div>' +
       '</div>';
   });
+
+  if (vise >= 0) {
+    html += '<button class="ok-btn" onclick="chooseSlot(' + vise + ')">Confirmer ce rendez-vous</button>';
+  }
   html += '<button class="none-btn" onclick="chooseSlot(-1)">Aucun de ces créneaux ne me convient</button>';
   html += '<div class="foot">🔒 Ce lien est personnel et à usage unique.<br>Aucune inscription, aucune donnée conservée au-delà de ta réponse.</div>';
   el.innerHTML = html;
