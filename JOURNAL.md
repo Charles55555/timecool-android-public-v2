@@ -50,6 +50,90 @@ Voir la section 8 de `CLAUDE.md`. Rien de tout cela n'est fait.
 
 ---
 
+## 07/09/2026
+
+**Deux sessions qui savent la même chose.** Charles voulait que la
+session du PC et celle du nuage donnent les mêmes conseils. Ce qui
+manquait n'était pas le code — il est dans le dépôt — mais ce qui ne
+s'apprend qu'en regardant la production. Écrit dans `CLAUDE.md`, avec la
+consigne d'y poser ses questions plutôt que de deviner, et la règle qui
+évite de refaire deux fois le même travail.
+
+**Nouvelle règle de travail, décidée par lui.** Ce qui ne change rien à
+ce qu'il voit se fait sans lui demander ; ce qui touche un écran, un
+bouton ou un message se demande avant. Il ne veut plus arbitrer des
+choix techniques qu'il n'a pas les moyens de juger — et il a raison.
+S'y ajoute une consigne répétée plusieurs fois : **écrire sans jargon.**
+
+**Les clés API quittent le bloc de synchronisation.** Le serveur les
+chiffrait dans sa table dédiée, mais le même tiroir repartait en clair
+dans les réglages : la clé Anthropic était lisible telle quelle en base,
+sur quatre comptes. Le chiffrement était annulé par la porte d'à côté.
+
+**Le bouton « Inviter sur TimeCool » ne faisait rien** dans
+l'application, et le lien envoyé menait à une page morte —
+`app.timecool.fr` n'a jamais été enregistré. La WebView répondait « je
+m'en occupe » à toute adresse sortante, puis l'avalait : WhatsApp et les
+liens « Obtenir la clé » étaient muets pour la même raison.
+
+**« Envoyer les créneaux » disait « envoyés » quoi qu'il arrive** — même
+quand rien ne partait, faute d'adresse ou de numéro. Le lien avait
+pourtant été créé et mourait seul au bout de 48 h, pendant que Charles
+attendait une réponse impossible.
+
+**Et surtout : le créneau choisi n'arrivait pas dans l'agenda.** Le
+message promettait « le rendez-vous sera confirmé dans mon agenda
+TimeCool ». C'était faux — le choix restait dans les tables du serveur,
+l'agenda l'ignorait, et personne n'était prévenu. Corrigé, puis vérifié
+de bout en bout contre l'API.
+
+**Les liens de rendez-vous passent de 64 à 12 caractères.** Trois liens
+de trois lignes rendaient le message illisible. Rien à changer en base :
+elle ne garde que l'empreinte du jeton, sa longueur était donc libre.
+Chaque suggestion porte le sien, et la page d'arrivée met ce créneau en
+avant — sans le confirmer d'office, car les messageries vont chercher un
+aperçu des liens qu'on leur envoie.
+
+**Mot de passe oublié, de zéro.** Le bouton ramenait à l'écran
+d'accueil. En le construisant, découverte que **Twilio n'a jamais été
+configuré** : aucun SMS n'est jamais parti de TimeCool, ni pour
+l'inscription ni pour rien. La clé Twilio saisie dans la page
+Configuration IA fait partie des champs morts.
+
+**L'envoi d'e-mails, donc.** Le courrier du domaine étant déjà chez
+IONOS avec l'autorisation d'envoi en place, il suffisait de
+s'authentifier. Client SMTP écrit à la main — `mail()` ne sait pas
+s'authentifier ailleurs, et une bibliothèque aurait demandé de déposer
+des fichiers dans la racine web. Message aux couleurs de la marque, avec
+une version texte pour les clients qui refusent l'HTML.
+
+**Un logo dans l'onglet.** Le serveur n'ayant aucun outil graphique, les
+images sont dessinées en Python, pixel par pixel, et les fichiers
+encodés à la main.
+
+**La page de statistiques était entièrement fausse.** Un nouvel
+utilisateur y découvrait « 6h 12 économisées », « 142 rendez-vous
+honorés » et six praticiens inventés. Tout est calculé maintenant, et
+ce qui n'est pas mesurable — décalages, annulations — reste à zéro en le
+disant.
+
+**Deux erreurs à moi, notées pour ne pas les repayer.**
+
+1. J'ai déployé un `index.php` qui appelait une méthode ajoutée à
+   `lib.php` — fichier hors de la racine web, que l'agent ne peut pas
+   déployer. La création de liens est partie en 500 en production.
+   Rétabli en deux minutes. **Ne jamais déployer un `index.php` qui
+   appelle du code nouveau de `lib.php`.**
+2. La première version du mot de passe oublié **révélait si un compte
+   existe** : un numéro inconnu recevait une réponse plus courte. La
+   précaution que j'annonçais ne tenait pas.
+
+**Leçon du jour.** Presque tout ce qui a été corrigé aujourd'hui était
+une promesse non tenue : un bouton qui ne fait rien, un lien mort, un
+« envoyé » alors que rien ne part, un agenda qui ignore ce qu'on lui a
+promis, des statistiques inventées. Le code marchait ; c'est ce qu'il
+disait qui était faux.
+
 ## 06/09/2026
 
 **Bandeau « Nouvelle version disponible ».** Le bouton de l'en-tête
