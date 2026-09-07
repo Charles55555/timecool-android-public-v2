@@ -14412,7 +14412,7 @@ async function sendCreneauxDirect(contactId, channel) {
   const slots = ov ? ov._slots : null;
   if (!c || !slots) return;
 
-  const prenom = c.name.split(' ')[0];
+  const prenom = tcPrenomPresentable(c.name);
   const organizerName = (userAccount && userAccount.firstname) || 'Un utilisateur TimeCool';
 
   try {
@@ -14486,6 +14486,25 @@ async function sendCreneauxDirect(contactId, channel) {
   }
 }
 
+/**
+ * Un prenom presentable dans un message.
+ *
+ * Les contacts importes du telephone arrivent souvent tout en
+ * majuscules. « Salut CHARLY » donne l'impression qu'on hurle.
+ *
+ * Seuls les mots ENTIEREMENT en majuscules sont retouches : un prenom
+ * tape normalement n'est pas deforme, et « Jean-Luc » comme « O'Brien »
+ * gardent leur majuscule interne.
+ */
+function tcPrenomPresentable(nom) {
+  const brut = String(nom || '').trim().split(/\s+/)[0] || '';
+  if (!brut || brut !== brut.toLocaleUpperCase('fr')) return brut;
+  return brut.toLocaleLowerCase('fr').replace(
+    /(^|[-'\u2019])([\p{L}])/gu,
+    function (_, avant, lettre) { return avant + lettre.toLocaleUpperCase('fr'); }
+  );
+}
+
 /** Aucune application pour ouvrir ce lien : le dire au lieu de rien. */
 function tcOuvertureImpossible(url) {
   if (url && url.indexOf('sms:') === 0) {
@@ -14511,7 +14530,7 @@ function inviteContact(contactId) {
    * Surtout pas app.timecool.fr, utilise jusqu'au 07/09 : ce nom n'a
    * jamais ete enregistre et menait a une page morte.
    */
-  const prenom = (contact.name || '').trim().split(/\s+/)[0] || '';
+  const prenom = tcPrenomPresentable(contact.name);
   const txt =
     (prenom ? 'Salut ' + prenom + ',' : 'Salut,') + '\n'
     + 'J\'ai test\u00e9 l\'application gratuite TimeCool et je la trouve exceptionnelle.\n'

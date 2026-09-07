@@ -279,6 +279,44 @@ function messageDemandeRdv(array $de, array $vers): string
  * la référence de l'autre compte. Chacun voit donc le même échange,
  * rangé sous le nom de l'autre.
  */
+/**
+ * Un message dans la messagerie d'un seul compte.
+ *
+ * messagePoser() ecrit des deux cotes et reclame deux comptes. Ici
+ * l'interlocuteur n'en a pas : il a repondu depuis un lien, sans rien
+ * installer. Le fil existe donc chez l'organisateur seulement.
+ *
+ * @param array  $compte      Le destinataire du message.
+ * @param string $uid         Identifiant stable du fil.
+ * @param string $nomAutre    Nom affiche en tete du fil.
+ */
+function conversationPoser(array $compte, string $uid, string $nomAutre, string $texte): void
+{
+    $maintenant = date('c');
+    $existant = Db::un(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+        [$compte['id'], $uid]
+    );
+    $conv = $existant ? json_decode((string) $existant['contenu'], true) : null;
+    if (!is_array($conv)) {
+        $conv = ['reference' => $uid, 'with' => $nomAutre, 'thread' => []];
+    }
+    $conv['thread'][] = ['from' => 'them', 'texte' => $texte, 'le' => $maintenant];
+    if (count($conv['thread']) > 200) {
+        $conv['thread'] = array_slice($conv['thread'], -200);
+    }
+    $conv['maj'] = $maintenant;
+
+    elementsPoser([[
+        'compte_id' => (int) $compte['id'],
+        'type'      => 'conversation',
+        'uid'       => $uid,
+        'contenu'   => $conv,
+    ]]);
+}
+
+
 function messagePoser(array $de, array $vers, string $texte, ?int $rdvId = null): void
 {
     $maintenant = date('c');
@@ -1527,11 +1565,36 @@ switch ($route) {
             }
 
             $lien = Db::un('SELECT * FROM rdv_liens WHERE jeton_hash = ?', [Jeton::hacher($jeton)]);
+
+            /*
+             * Le message envoye au contact promet que le rendez-vous
+             * sera confirme dans l'agenda de l'organisateur. Rien ne
+             * l'y mettait : le choix restait dans les tables du serveur,
+             * l'agenda l'ignorait, et l'organisateur n'etait meme pas
+             * prevenu. Il aurait attendu un contact qui avait repondu.
+             *
+             * Ecrit dans la meme transaction que le choix : soit tout
+             * est enregistre, soit rien ne l'est.
+             */
+            $rdvBase = Db::un('SELECT * FROM rdv WHERE id = ?', [$lien['rdv_id']]);
+            $organisateur = $rdvBase === null ? null : Db::un(
+                'SELECT * FROM comptes WHERE id = ?',
+                [$rdvBase['organisateur_id']]
+            );
+            $qui = trim((string) ($lien['prenom_destinataire'] ?? '')) ?: 'Ton contact';
+            $filUid = 'lien_rdv_' . $lien['rdv_id'];
+
             if ($rang === -1) {
                 Db::req(
                     'UPDATE rdv SET statut = "refuse", repondu_le = NOW() WHERE id = ?',
                     [$lien['rdv_id']]
                 );
+                if ($organisateur !== null) {
+                    conversationPoser(
+                        $organisateur, $filUid, $qui,
+                        $qui . ' n’est disponible sur aucun des trois créneaux proposés.'
+                    );
+                }
             } else {
                 Db::req(
                     'UPDATE rdv SET statut = "choisi", repondu_le = NOW() WHERE id = ?',
@@ -1541,6 +1604,38 @@ switch ($route) {
                     'UPDATE rdv_creneaux SET retenu = 1 WHERE rdv_id = ? AND rang = ?',
                     [$lien['rdv_id'], $rang]
                 );
+
+                $creneau = Db::un(
+                    'SELECT * FROM rdv_creneaux WHERE rdv_id = ? AND rang = ?',
+                    [$lien['rdv_id'], $rang]
+                );
+                if ($creneau !== null && $organisateur !== null) {
+                    $debut = strtotime($creneau['debut']);
+                    $fin   = strtotime($creneau['fin']);
+                    elementsPoser([[
+                        'compte_id' => (int) $organisateur['id'],
+                        'type'      => 'rdv',
+                        'uid'       => 'tc_rdv_' . $lien['rdv_id'],
+                        'contenu'   => [
+                            'id'     => 'tc_rdv_' . $lien['rdv_id'],
+                            'date'   => date('Y-m-d', $debut),
+                            'startH' => (int) date('G', $debut),
+                            'startM' => (int) date('i', $debut),
+                            'endH'   => (int) date('G', $fin),
+                            'endM'   => (int) date('i', $fin),
+                            'title'  => $qui,
+                            'cat'    => 'travail',
+                            'mode'   => 'user',
+                        ],
+                    ]]);
+                    conversationPoser(
+                        $organisateur, $filUid, $qui,
+                        $qui . ' a choisi : '
+                            . (trim((string) ($creneau['libelle'] ?? '')) ?: date('d/m/Y', $debut))
+                            . ' à ' . date('H\\hi', $debut)
+                            . '. Le rendez-vous est dans ton agenda.'
+                    );
+                }
             }
             $pdo->commit();
         } catch (Throwable $e) {
