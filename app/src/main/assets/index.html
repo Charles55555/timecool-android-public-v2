@@ -14464,7 +14464,11 @@ async function sendCreneauxDirect(contactId, channel) {
       window.location.href = 'mailto:' + c.email + '?subject=' + encodeURIComponent('Proposition de rendez-vous') + '&body=' + encodeURIComponent(text);
       ouvert = true;
     } else if (channel === 'whatsapp' && c.phone) {
-      window.open('https://wa.me/' + c.phone.replace(/[^0-9]/g, '') + '?text=' + encodeURIComponent(text), '_blank');
+      /* wa.me n'accepte que la forme internationale sans le « + ».
+         Retirer les non-chiffres ne suffit pas : « 06 07 78 65 12 »
+         donnait wa.me/0607786512, que WhatsApp rejette. */
+      const numeroWa = tcNormaliserTelephone(c.phone).replace(/[^0-9]/g, '');
+      window.open('https://wa.me/' + numeroWa + '?text=' + encodeURIComponent(text), '_blank');
       ouvert = true;
     }
 
