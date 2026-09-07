@@ -14466,8 +14466,12 @@ function inviteContact(contactId) {
    * Texte ecrit par Charles le 07/09. Ne pas le reformuler : c'est ce
    * que ses contacts liront.
    *
-   * L'adresse est timecool.fr/app/ — app.timecool.fr, utilise jusque-la,
-   * n'a jamais ete enregistre et menait a une page morte.
+   * L'adresse est le SITE, timecool.fr, et non l'application elle-meme :
+   * celui qui recoit le message decouvre TimeCool, il lui faut d'abord
+   * savoir de quoi il s'agit. Le site mene ensuite a l'application.
+   *
+   * Surtout pas app.timecool.fr, utilise jusqu'au 07/09 : ce nom n'a
+   * jamais ete enregistre et menait a une page morte.
    */
   const prenom = (contact.name || '').trim().split(/\s+/)[0] || '';
   const txt =
@@ -14476,7 +14480,7 @@ function inviteContact(contactId) {
     + 'TimeCool est un agenda qui parle aux autres agendas pour simplifier '
     + 'la prise de rendez-vous, ou m\u00eame la saisie d\'un rendez-vous gr\u00e2ce \u00e0 Charly IA.\n'
     + 'Crois moi tu vas \u00eatre surpris !\n'
-    + 'Rejoins-moi sur TimeCool, on va optimiser notre temps : https://timecool.fr/app/';
+    + 'Rejoins-moi sur TimeCool, on va optimiser notre temps : https://timecool.fr';
   if (contact.phone) {
     try { window.location.href = 'sms:' + contact.phone.replace(/\s/g, '') + '?body=' + encodeURIComponent(txt); } catch(e) {}
   }
