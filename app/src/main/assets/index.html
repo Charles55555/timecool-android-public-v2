@@ -14462,9 +14462,20 @@ function tcOuvertureImpossible(url) {
 function inviteContact(contactId) {
   const contact = contactsList.find(c => c.id === contactId);
   if (!contact) return;
-  // app.timecool.fr n'existe pas : le nom n'a jamais ete enregistre, et
-  // tout invite tombait sur une page morte. Celle-ci repond.
-  const txt = 'Rejoins-moi sur TimeCool, on prend rendez-vous sans se courir apr\u00e8s : https://timecool.fr/app/';
+  /*
+   * Texte ecrit par Charles le 07/09. Ne pas le reformuler : c'est ce
+   * que ses contacts liront.
+   *
+   * L'adresse est timecool.fr/app/ — app.timecool.fr, utilise jusque-la,
+   * n'a jamais ete enregistre et menait a une page morte.
+   */
+  const prenom = (contact.name || '').trim().split(/\s+/)[0] || '';
+  const txt =
+    (prenom ? 'Salut ' + prenom + ',' : 'Salut,') + '\n'
+    + 'J\'ai test\u00e9 l\'application gratuite TimeCool et je la trouve exceptionnelle.\n'
+    + 'TimeCool est un agenda qui parle aux autres agendas pour simplifier '
+    + 'la prise de rendez-vous, ou m\u00eame la saisie d\'un rendez-vous gr\u00e2ce \u00e0 Charly IA.\n'
+    + 'Rejoins-moi sur TimeCool, on va optimiser notre temps : https://timecool.fr/app/';
   if (contact.phone) {
     try { window.location.href = 'sms:' + contact.phone.replace(/\s/g, '') + '?body=' + encodeURIComponent(txt); } catch(e) {}
   }
