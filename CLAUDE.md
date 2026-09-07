@@ -61,6 +61,35 @@ dans un dépôt, même privé.
 Test rapide : `ssh -o BatchMode=yes timecool-cc 'echo ok'` répond, ou
 non.
 
+### Ce que le code ne dit pas — et qu'il faut demander
+
+Plusieurs défauts n'ont été trouvés qu'en regardant la production, jamais
+en lisant le code :
+
+- le plafond de réponse de Charly IA était figé à 500 jetons **sur tous
+  les comptes**, valeur enregistrée, invisible dans les sources ;
+- un compte gardait une copie figée d'un ancien prompt, ce qui le privait
+  de toutes les corrections écrites depuis ;
+- les clés API sont en clair dans la table de synchronisation, alors que
+  la table prévue pour elles les chiffre.
+
+Donc : quand un diagnostic dépend de l'état réel — la valeur d'un réglage
+sur un compte, les journaux du serveur, savoir si une correction est bien
+arrivée sur l'appareil de Charles — **ne pas deviner à partir du code**.
+Poser la question dans `JOURNAL.md`, section « En attente ». La session
+du PC y répond.
+
+### Qui travaille sur quoi
+
+`app/src/main/assets/index.html` fait 950 Ko d'un seul tenant. Deux
+sessions dans la même zone finissent en conflit, ou refont le même
+travail : le 04/09, les formulaires de connexion ont été corrigés **deux
+fois en parallèle**, sans que ni l'une ni l'autre le sache.
+
+**Avant de toucher au code : écrire une ligne dans la section « En cours »
+de `JOURNAL.md`, et la pousser.** Une ligne suffit — quel chantier, quels
+fichiers. La retirer en partant.
+
 ---
 
 ## 3. Où est quoi — et les pièges
@@ -228,6 +257,27 @@ l'erreur d'encodage est survenue après la troncature.
 ---
 
 ## 9. Ce qui reste à faire
+
+**Décisions en attente de Charles** — analysées, chiffrées, non tranchées :
+
+- **Les clés API sont en clair dans la base.** La table `cles_api` les
+  chiffre en AES-256-GCM, mais le bloc « réglage » de la synchronisation
+  transporte le même tiroir `timecool_api_keys` sans chiffrement : la clé
+  Anthropic est lisible en clair dans `elements`, sur quatre comptes. Le
+  correctif tient en une ligne — ajouter `timecool_api_keys` à
+  `TC_SYNC_DEJA_SYNCHRONISE` — car la route `/cles-api` distribue déjà les
+  clés aux nouveaux comptes, chiffrées. Signalé une fois à Charles, sans
+  insister : c'est sa décision.
+- **Vingt-deux des vingt-sept champs de clés ne servent à rien.** Seuls
+  `anthropic`, `openai`, `gmaps`, `google_cse_cx` et `google_translate`
+  sont relus par le code. Les autres s'enregistrent et rien ne les
+  consulte — Twilio compris, que Charles avait rempli alors que les SMS
+  partent avec la configuration du serveur. Deux champs Firebase font
+  double emploi et réclament une clé que Google a supprimée en juin 2024.
+- **Badge « Actif v6.1 »** sur une application en 2.0.x.
+- **`verif-categories` est cassé** depuis avant le 06/09 : le test
+  lui-même, pas l'application.
+
 
 - Canal temps réel dédié, si la seconde de latence devient gênante. La
   sonde actuelle interroge `GET /sync/version` (0,6 ms) chaque seconde

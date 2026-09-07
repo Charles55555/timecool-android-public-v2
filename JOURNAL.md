@@ -17,9 +17,29 @@ Entrées les plus récentes en haut.
 
 Rien n'est commencé et laissé en plan à cette heure.
 
+**Deux sessions travaillent sur ce dépôt.** Avant de commencer un
+chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
+pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
+formulaires de connexion ont été corrigés deux fois en parallèle.
+
 ## En attente de Charles
 
+- **Les clés API en clair dans la base.** Le correctif tient en une
+  ligne, l'héritage des clés par les nouveaux comptes n'en souffre pas.
+  Détail en section 9 de `CLAUDE.md`. Signalé une fois, sans insister.
+- **Vingt-deux des vingt-sept champs de clés de la page Configuration IA
+  ne servent à rien** — Twilio compris, que Charles avait rempli. Les
+  cacher, ou les garder avec la mention « pas encore branché » ?
 - **La liste d'avant-lancement**, section 8 de `CLAUDE.md`. Rien de fait.
+
+## Ce que seule la session du PC peut faire
+
+Regarder la base, lire les journaux du serveur, déployer la version web,
+vérifier qu'une correction est bien arrivée sur l'appareil de Charles.
+
+La session du nuage écrit et teste le code, ouvre une *pull request*, et
+**pose ici ses questions** au lieu de deviner à partir des sources.
+Plusieurs défauts de la semaine étaient invisibles dans le code.
 
 ## Avant le lancement public
 
