@@ -5108,6 +5108,13 @@ function renderDashboard() {
   const relations = (typeof events !== 'undefined'
     && events.some(function (e) { return e && e.mode !== 'user' && !tcVientDeCharly(e); }))
     ? userRelations : [];
+  /* Tant qu'il n'y a rien de réel, on montre une ligne d'exemple plutôt
+     qu'un vide : Charles veut voir à quoi ressemblera cette page. Elle
+     porte le prénom d'un vrai contact du carnet, et le mot « exemple »
+     pour que personne ne prenne ces chiffres pour les siens. */
+  const contactExemple = (typeof contactsList !== 'undefined' && contactsList.length)
+    ? tcPrenomPresentable(contactsList[0].name)
+    : 'Pierre-Marie';
   if (mode==='user') {
     c.innerHTML = `
       <div class="dash-hero">
@@ -5139,16 +5146,16 @@ function renderDashboard() {
 
       <div class="stat-grid">
         <div class="stat-card">
-          <div class="stat-card-label">RDV honorés</div>
+          <div class="stat-card-label">RDV honorés par moi</div>
           <div class="stat-card-value">${stats.honoresMois}</div>
-          <div class="stat-card-sub">sur ${stats.prevusMois} ce mois-ci</div>
+          <div class="stat-card-sub">sur ${stats.prevusMois} prévus</div>
           <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : ${stats.honoresTotal}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-card-label">Notés par Charly IA</div>
-          <div class="stat-card-value" style="color:var(--g-blue);">${stats.charlyMois}</div>
-          <div class="stat-card-sub">${TC_MINUTES_PAR_RDV_CHARLY} min gagnées chacun</div>
-          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : ${stats.charlyTotal}</div>
+          <div class="stat-card-label">RDV honorés par mes contacts</div>
+          <div class="stat-card-value">0</div>
+          <div class="stat-card-sub">sur 0 prévus</div>
+          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Pas encore suivi</div>
         </div>
         <div class="stat-card">
           <div class="stat-card-label">Décalés par moi</div>
@@ -5179,10 +5186,25 @@ function renderDashboard() {
       <div class="breakdown">
         <div class="breakdown-title">🔒 Ma relation avec mes contacts <span style="font-weight:400; color:var(--text-sec); font-size:11px;">(données privées)</span></div>
         ${relations.length === 0 ? `
-          <div style="padding:16px; border-top:1px solid var(--border); font-size:12.5px; color:var(--text-sec); line-height:1.6;">
-            Rien à afficher pour l'instant. Au fil de tes rendez-vous, tu
-            verras ici avec qui ça se passe bien, et avec qui ça décale
-            souvent. Ces observations ne quittent jamais ton appareil.
+          <div style="padding:14px 16px; border-top:1px solid var(--border); font-size:12px; color:var(--text-sec); line-height:1.6;">
+            Rien de réel à afficher pour l'instant. Voici ce que tu verras
+            au fil de tes rendez-vous — avec qui ça se passe bien, et avec
+            qui ça décale souvent. Ces observations ne quittent jamais ton
+            appareil.
+          </div>
+          <div style="padding:12px 16px; border-top:1px solid var(--border); opacity:.55;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div>
+                <div style="font-size:14px; font-weight:500;">${escapeHTMLSafe(contactExemple)}</div>
+                <div style="font-size:11px; color:var(--text-sec);">8 RDV</div>
+              </div>
+              <div class="relation-tag tag-excellent">Exemple</div>
+            </div>
+            <div class="relation-stats">
+              <div class="relation-stat"><div class="relation-stat-val">100%</div><div class="relation-stat-lbl">Ponctualité</div></div>
+              <div class="relation-stat"><div class="relation-stat-val">3 min</div><div class="relation-stat-lbl">Retard moyen</div></div>
+              <div class="relation-stat"><div class="relation-stat-val">8</div><div class="relation-stat-lbl">RDV honorés</div></div>
+            </div>
           </div>
         ` : relations.map(r => `
           <div style="padding:12px 16px; border-top:1px solid var(--border);">
