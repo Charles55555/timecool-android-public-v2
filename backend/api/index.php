@@ -119,6 +119,97 @@ function jetonCourt(int $longueur = 12): string
 }
 
 
+/**
+ * Envoie un e-mail par le serveur d'envoi configuré.
+ *
+ * Écrit ici plutôt qu'avec une bibliothèque : mail() ne sait pas
+ * s'authentifier auprès d'un serveur externe, et déposer une
+ * bibliothèque dans la racine web ajouterait de la surface pour rien.
+ *
+ * @throws RuntimeException si la configuration manque ou si le serveur
+ *         refuse. L'appelant décide quoi en dire.
+ */
+function envoyerEmail(string $vers, string $sujet, string $texte): void
+{
+    $adresse = (string) Conf::get('email_expediteur', '');
+    $motDePasse = (string) Conf::get('email_mot_de_passe', '');
+    if ($adresse === '' || $motDePasse === '') {
+        throw new RuntimeException(
+            'Envoi d e-mail non configuré : renseigner email_expediteur et '
+            . 'email_mot_de_passe dans config.php.'
+        );
+    }
+    $hote = (string) Conf::get('email_smtp', 'smtp.ionos.fr');
+    $port = (int) Conf::get('email_port', 465);
+    $nom  = (string) Conf::get('email_nom', 'TimeCool');
+
+    // Port 465 : le chiffrement commence dès la connexion. Plus simple et
+    // plus sûr qu'une négociation STARTTLS qu'un intermédiaire peut faire
+    // échouer pour rester en clair.
+    $cible = ($port === 465 ? 'ssl://' : 'tcp://') . $hote . ':' . $port;
+    $flux = @stream_socket_client($cible, $err, $errMsg, 20);
+    if ($flux === false) {
+        throw new RuntimeException('Serveur d envoi injoignable : ' . $errMsg);
+    }
+    stream_set_timeout($flux, 20);
+
+    $lire = static function () use ($flux): string {
+        $reponse = '';
+        while (($ligne = fgets($flux, 1024)) !== false) {
+            $reponse .= $ligne;
+            // Une réponse SMTP se termine par « 250 » et non « 250- ».
+            if (strlen($ligne) < 4 || $ligne[3] !== '-') {
+                break;
+            }
+        }
+        return $reponse;
+    };
+    $dire = static function (string $ordre, string $attendu) use ($flux, $lire): string {
+        if ($ordre !== '') {
+            fwrite($flux, $ordre . "\r\n");
+        }
+        $reponse = $lire();
+        if (strncmp($reponse, $attendu, strlen($attendu)) !== 0) {
+            throw new RuntimeException('SMTP : ' . trim(substr($reponse, 0, 120)));
+        }
+        return $reponse;
+    };
+
+    try {
+        $dire('', '220');
+        $dire('EHLO timecool.fr', '250');
+        $dire('AUTH LOGIN', '334');
+        $dire(base64_encode($adresse), '334');
+        $dire(base64_encode($motDePasse), '235');
+        $dire('MAIL FROM:<' . $adresse . '>', '250');
+        $dire('RCPT TO:<' . $vers . '>', '250');
+        $dire('DATA', '354');
+
+        // Le sujet est encodé : sans cela, un accent arrive illisible.
+        $entetes = implode("\r\n", [
+            'From: ' . mb_encode_mimeheader($nom, 'UTF-8') . ' <' . $adresse . '>',
+            'To: <' . $vers . '>',
+            'Subject: ' . mb_encode_mimeheader($sujet, 'UTF-8'),
+            'Date: ' . date('r'),
+            'MIME-Version: 1.0',
+            'Content-Type: text/plain; charset=UTF-8',
+            'Content-Transfer-Encoding: 8bit',
+        ]);
+        // Une ligne réduite à un point termine le message : celles du
+        // corps sont donc doublées, sinon le message serait tronqué là.
+        $corps = preg_replace('/^\./m', '..', str_replace("\n", "\r\n", $texte));
+        fwrite($flux, $entetes . "\r\n\r\n" . $corps . "\r\n.\r\n");
+        $reponse = $lire();
+        if (strncmp($reponse, '250', 3) !== 0) {
+            throw new RuntimeException('SMTP refus : ' . trim(substr($reponse, 0, 120)));
+        }
+        @fwrite($flux, "QUIT\r\n");
+    } finally {
+        @fclose($flux);
+    }
+}
+
+
 function elementsPoser(array $ecritures): void
 {
     $parCompte = [];
@@ -1777,20 +1868,41 @@ switch ($route) {
     // arrive ici.
     // ═══════════════════════════════════════════════════════════
     case 'POST /mot-de-passe/oublie':
-        $telephone = Empreinte::normaliserTelephone(Entree::requis('telephone', 20));
-        if (!preg_match('/^\+[1-9][0-9]{7,14}$/', $telephone)) {
-            Rep::erreur(400, 'telephone_invalide', 'Numéro de téléphone invalide.');
+        /*
+         * E-mail ou téléphone, au choix. L'écran de connexion demande une
+         * adresse : réclamer un numéro pour retrouver son mot de passe
+         * n'aurait pas de sens.
+         */
+        $identifiant = Entree::requis('identifiant', 190);
+        $parEmail = filter_var($identifiant, FILTER_VALIDATE_EMAIL) !== false;
+
+        if ($parEmail) {
+            $destination = Empreinte::normaliserEmail($identifiant);
+            $colonne = 'email_empreinte';
+        } else {
+            $destination = Empreinte::normaliserTelephone($identifiant);
+            if (!preg_match('/^\+[1-9][0-9]{7,14}$/', $destination)) {
+                Rep::erreur(400, 'identifiant_invalide',
+                    'Donne une adresse e-mail ou un numéro de téléphone.');
+            }
+            $colonne = 'telephone_empreinte';
         }
-        $telEmpreinte = Empreinte::stockable($telephone);
+        $destEmpreinte = Empreinte::stockable($destination);
 
         /*
-         * L'envoi de SMS est-il seulement en place ?
+         * Le canal demandé est-il seulement en place ?
          *
          * Cette question ne concerne aucun compte en particulier : y
          * répondre ne révèle rien, et la taire ferait annoncer « code
          * envoyé » alors que rien ne part. C'est arrivé le 07/09.
          */
-        if ((string) Conf::get('twilio_account_sid', '') === ''
+        if ($parEmail) {
+            if ((string) Conf::get('email_expediteur', '') === ''
+                || (string) Conf::get('email_mot_de_passe', '') === '') {
+                Rep::erreur(503, 'email_indisponible',
+                    'L envoi d e-mails n est pas encore en place sur ce serveur.');
+            }
+        } elseif ((string) Conf::get('twilio_account_sid', '') === ''
             || (string) Conf::get('twilio_auth_token', '') === ''
             || (string) Conf::get('twilio_numero_expediteur', '') === '') {
             Rep::erreur(503, 'sms_indisponible',
@@ -1809,7 +1921,7 @@ switch ($route) {
         $recentes = Db::un(
             'SELECT COUNT(*) AS n FROM verifications
               WHERE destination_empreinte = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 HOUR)',
-            [$telEmpreinte]
+            [$destEmpreinte]
         );
         if ((int) $recentes['n'] >= (int) Conf::get('verification_max_par_heure', 5)) {
             Rep::erreur(429, 'trop_de_demandes', 'Trop de demandes. Réessayez dans une heure.');
@@ -1817,8 +1929,8 @@ switch ($route) {
 
         $compteVise = Db::un(
             'SELECT id FROM comptes
-              WHERE telephone_empreinte = ? AND cloture_le IS NULL AND bloque_le IS NULL',
-            [$telEmpreinte]
+              WHERE ' . $colonne . ' = ? AND cloture_le IS NULL AND bloque_le IS NULL',
+            [$destEmpreinte]
         );
 
         /*
@@ -1839,9 +1951,9 @@ switch ($route) {
         Db::req(
             'INSERT INTO verifications (reference, canal, destination, destination_empreinte,
                  code_hash, ip_creation, expire_le)
-             VALUES (?, "sms", ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))',
+             VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))',
             [
-                $ref, $telephone, $telEmpreinte,
+                $ref, $parEmail ? 'email' : 'sms', $destination, $destEmpreinte,
                 Jeton::hacher($code),
                 $ip !== null ? @inet_pton($ip) : null,
                 $minutes,
@@ -1856,15 +1968,29 @@ switch ($route) {
          */
         if ($compteVise !== null) {
             try {
-                Sms::envoyer(
-                    $telephone,
-                    "Votre code TimeCool pour changer de mot de passe : {$code} "
-                    . "(valable {$minutes} minutes). Si vous n avez rien demande, ignorez ce message."
-                );
+                if ($parEmail) {
+                    envoyerEmail(
+                        $destination,
+                        'Ton code TimeCool',
+                        "Bonjour,\n\n"
+                        . "Voici ton code pour choisir un nouveau mot de passe TimeCool :\n\n"
+                        . "    {$code}\n\n"
+                        . "Il est valable {$minutes} minutes.\n\n"
+                        . "Si tu n'as rien demandé, ignore ce message : ton mot de passe "
+                        . "reste inchangé.\n\n"
+                        . "— TimeCool\n"
+                    );
+                } else {
+                    Sms::envoyer(
+                        $destination,
+                        "Votre code TimeCool pour changer de mot de passe : {$code} "
+                        . "(valable {$minutes} minutes). Si vous n avez rien demande, ignorez ce message."
+                    );
+                }
             } catch (Throwable $e) {
                 // Journalisé, mais pas annoncé : un échec d'envoi distinct
                 // d'un succès redirait ce que la réponse tait.
-                error_log('TimeCool SMS mot de passe oublie: ' . $e->getMessage());
+                error_log('TimeCool code mot de passe oublie: ' . $e->getMessage());
             }
         }
 
@@ -1874,9 +2000,15 @@ switch ($route) {
     // MOT DE PASSE OUBLIÉ — le changer, preuve du code à l'appui
     // ═══════════════════════════════════════════════════════════
     case 'POST /mot-de-passe/reinitialiser':
-        $telephone = Empreinte::normaliserTelephone(Entree::requis('telephone', 20));
-        $preuve    = Entree::requis('preuve', 64);
-        $nouveau   = Entree::corps()['nouveau_mot_de_passe'] ?? '';
+        $identifiant = Entree::requis('identifiant', 190);
+        $preuve      = Entree::requis('preuve', 64);
+        $nouveau     = Entree::corps()['nouveau_mot_de_passe'] ?? '';
+
+        $parEmail = filter_var($identifiant, FILTER_VALIDATE_EMAIL) !== false;
+        $destination = $parEmail
+            ? Empreinte::normaliserEmail($identifiant)
+            : Empreinte::normaliserTelephone($identifiant);
+        $colonne = $parEmail ? 'email_empreinte' : 'telephone_empreinte';
 
         if (!is_string($nouveau) || mb_strlen($nouveau) < 10) {
             Rep::erreur(400, 'mot_de_passe_faible',
@@ -1898,18 +2030,19 @@ switch ($route) {
          * passe. Sans ce contrôle, on vérifierait son propre numéro puis
          * on changerait le mot de passe de quelqu'un d'autre.
          */
-        if ($v['canal'] !== 'sms' || !hash_equals($v['destination'], $telephone)) {
+        if ($v['canal'] !== ($parEmail ? 'email' : 'sms')
+            || !hash_equals($v['destination'], $destination)) {
             Rep::erreur(403, 'verification_non_concordante',
-                'La vérification ne correspond pas à ce numéro.');
+                'La vérification ne correspond pas à cet identifiant.');
         }
 
         $compteVise = Db::un(
             'SELECT id FROM comptes
-              WHERE telephone_empreinte = ? AND cloture_le IS NULL AND bloque_le IS NULL',
-            [Empreinte::stockable($telephone)]
+              WHERE ' . $colonne . ' = ? AND cloture_le IS NULL AND bloque_le IS NULL',
+            [Empreinte::stockable($destination)]
         );
         if ($compteVise === null) {
-            Rep::erreur(404, 'compte_absent', 'Aucun compte pour ce numéro.');
+            Rep::erreur(404, 'compte_absent', 'Aucun compte pour cet identifiant.');
         }
 
         $pdo = Db::pdo();

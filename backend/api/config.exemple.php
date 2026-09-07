@@ -115,6 +115,25 @@ return [
      */
     'mode_test' => false,
 
+    /*
+     * ENVOI D'E-MAILS — boîte dédiée chez l'hébergeur du domaine.
+     *
+     * Le courrier de timecool.fr est géré par IONOS, et l'autorisation
+     * d'envoyer au nom du domaine y est déjà posée (SPF). Il suffit donc
+     * de s'authentifier auprès de leur serveur d'envoi : aucun réglage
+     * de domaine à changer.
+     *
+     * Les trois dernières lignes ont ces valeurs par défaut : on peut
+     * les omettre. Sans les deux premières, l'envoi d'e-mails répond
+     * « pas en place » — franchement, plutôt que d'annoncer un message
+     * qui ne part pas.
+     */
+    'email_expediteur'   => 'contact@timecool.fr',
+    'email_mot_de_passe' => '',   // mot de passe de la boîte
+    'email_smtp'         => 'smtp.ionos.fr',
+    'email_port'         => 465,
+    'email_nom'          => 'TimeCool',
+
     // Base publique des liens envoyés par SMS / email / WhatsApp.
     'url_publique' => 'https://api.timecool.fr',
 

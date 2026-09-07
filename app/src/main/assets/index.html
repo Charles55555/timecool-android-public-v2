@@ -792,14 +792,14 @@ if (window.pdfjsLib) {
       <div style="font-size:56px; margin-bottom:14px;">🔑</div>
       <div style="font-size:16px; font-weight:600; margin-bottom:8px;">On va te renvoyer un code</div>
       <div style="font-size:13px; color:var(--text-sec); line-height:1.5;">
-        Donne le numéro de téléphone de ton compte TimeCool. Tu recevras
-        un code à 6 chiffres par SMS.
+        Donne l’adresse e-mail de ton compte TimeCool. Tu recevras un
+        code à 6 chiffres.
       </div>
     </div>
 
     <form onsubmit="event.preventDefault(); tcOubliDemanderCode();">
-      <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Téléphone</label>
-      <input type="tel" id="oubliTelephone" autocomplete="tel" placeholder="06 12 34 56 78"
+      <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Email</label>
+      <input type="email" id="oubliTelephone" autocomplete="username" placeholder="exemple@email.com"
         style="width:100%; padding:15px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box; margin-bottom:18px;">
       <button type="submit" id="btnOubliCode"
         style="width:100%; padding:16px; background:var(--g-blue); color:#fff; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer;">
@@ -808,8 +808,8 @@ if (window.pdfjsLib) {
     </form>
 
     <div style="margin-top:18px; font-size:11.5px; color:var(--text-sec); line-height:1.5; text-align:center;">
-      Par SMS uniquement pour l’instant — l’envoi par e-mail n’est pas
-      encore en place.
+      Tu peux aussi donner le numéro de téléphone de ton compte : le code
+      partira alors par SMS.
     </div>
   </div>
 </div>
@@ -10214,20 +10214,26 @@ function tcOuvrirOubli() {
 async function tcOubliDemanderCode() {
   const champ = document.getElementById('oubliTelephone');
   const tel = (champ ? champ.value : '').trim();
-  if (!tel) { showToast('📱 Donne le numéro de ton compte'); return; }
+  if (!tel) { showToast('✉️ Donne l’adresse de ton compte'); return; }
 
   const bouton = document.getElementById('btnOubliCode');
   if (bouton) { bouton.disabled = true; bouton.textContent = 'Envoi…'; }
   try {
-    _tcOubliTelephone = tcNormaliserTelephone(tel);
+    /* Une adresse part telle quelle ; un numéro est mis au format
+       international, comme partout ailleurs. Le serveur reconnaît l'un
+       ou l'autre et choisit le canal. */
+    const estEmail = tel.indexOf('@') > 0;
+    _tcOubliTelephone = estEmail ? tel : tcNormaliserTelephone(tel);
+
     const d = await tcAppel('POST', '/mot-de-passe/oublie',
-      { telephone: _tcOubliTelephone }, false);
+      { identifiant: _tcOubliTelephone }, false);
     _tcOubliReference = d.reference || null;
 
     const info = document.getElementById('oubliDestination');
     if (info) {
-      info.textContent = 'Si un compte existe pour le ' + _tcOubliTelephone
-        + ', un code à 6 chiffres vient d’y être envoyé par SMS.';
+      info.textContent = 'Si un compte existe pour ' + _tcOubliTelephone
+        + ', un code à 6 chiffres vient d’y être envoyé'
+        + (estEmail ? ' par e-mail.' : ' par SMS.');
     }
     navigateAuth('auth-oubli-code');
   } catch (e) {
@@ -10235,7 +10241,8 @@ async function tcOubliDemanderCode() {
        refuse est le plafond de demandes, ou une panne d'envoi. */
     showToast(
       e && e.code === 'trop_de_demandes'  ? '⏳ Trop de demandes — réessaie dans une heure' :
-      e && e.code === 'sms_indisponible'  ? '📵 L’envoi de SMS n’est pas encore en place — contacte l’administrateur' :
+      e && e.code === 'sms_indisponible'  ? '📵 L’envoi de SMS n’est pas encore en place — donne plutôt ton adresse e-mail' :
+      e && e.code === 'email_indisponible' ? '✉️ L’envoi d’e-mails n’est pas encore en place — donne plutôt ton numéro' :
       '❌ Envoi impossible — vérifie le numéro et ta connexion');
   } finally {
     if (bouton) { bouton.disabled = false; bouton.textContent = 'Recevoir le code'; }
@@ -10258,7 +10265,7 @@ async function tcOubliChanger() {
     const v = await tcAppel('POST', '/verification/valider',
       { reference: _tcOubliReference, code: code.trim() }, false);
     await tcAppel('POST', '/mot-de-passe/reinitialiser', {
-      telephone: _tcOubliTelephone,
+      identifiant: _tcOubliTelephone,
       preuve: v.preuve,
       nouveau_mot_de_passe: nouveau,
     }, false);
