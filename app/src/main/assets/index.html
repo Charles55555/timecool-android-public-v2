@@ -14475,6 +14475,7 @@ function inviteContact(contactId) {
     + 'J\'ai test\u00e9 l\'application gratuite TimeCool et je la trouve exceptionnelle.\n'
     + 'TimeCool est un agenda qui parle aux autres agendas pour simplifier '
     + 'la prise de rendez-vous, ou m\u00eame la saisie d\'un rendez-vous gr\u00e2ce \u00e0 Charly IA.\n'
+    + 'Crois moi tu vas \u00eatre surpris !\n'
     + 'Rejoins-moi sur TimeCool, on va optimiser notre temps : https://timecool.fr/app/';
   if (contact.phone) {
     try { window.location.href = 'sms:' + contact.phone.replace(/\s/g, '') + '?body=' + encodeURIComponent(txt); } catch(e) {}
