@@ -10233,9 +10233,10 @@ async function tcOubliDemanderCode() {
   } catch (e) {
     /* Le serveur ne dit jamais si le compte existe : le seul cas où il
        refuse est le plafond de demandes, ou une panne d'envoi. */
-    showToast(e && e.code === 'trop_de_demandes'
-      ? '⏳ Trop de demandes — réessaie dans une heure'
-      : '❌ Envoi impossible — vérifie le numéro et ta connexion');
+    showToast(
+      e && e.code === 'trop_de_demandes'  ? '⏳ Trop de demandes — réessaie dans une heure' :
+      e && e.code === 'sms_indisponible'  ? '📵 L’envoi de SMS n’est pas encore en place — contacte l’administrateur' :
+      '❌ Envoi impossible — vérifie le numéro et ta connexion');
   } finally {
     if (bouton) { bouton.disabled = false; bouton.textContent = 'Recevoir le code'; }
   }

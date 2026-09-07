@@ -1784,6 +1784,20 @@ switch ($route) {
         $telEmpreinte = Empreinte::stockable($telephone);
 
         /*
+         * L'envoi de SMS est-il seulement en place ?
+         *
+         * Cette question ne concerne aucun compte en particulier : y
+         * répondre ne révèle rien, et la taire ferait annoncer « code
+         * envoyé » alors que rien ne part. C'est arrivé le 07/09.
+         */
+        if ((string) Conf::get('twilio_account_sid', '') === ''
+            || (string) Conf::get('twilio_auth_token', '') === ''
+            || (string) Conf::get('twilio_numero_expediteur', '') === '') {
+            Rep::erreur(503, 'sms_indisponible',
+                'L envoi de SMS n est pas encore en place sur ce serveur.');
+        }
+
+        /*
          * Réponse identique que le compte existe ou non. La révéler
          * dirait qui est inscrit chez TimeCool à quiconque saurait
          * taper des numéros.
