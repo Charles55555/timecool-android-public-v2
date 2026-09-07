@@ -607,6 +607,31 @@ switch ($route) {
         Rep::ok(['envoye' => true]);
 
     // ═══════════════════════════════════════════════════════════
+    // ⚠️ TEMPORAIRE — TEST D'ENVOI D'E-MAIL, À RETIRER AVANT LE LANCEMENT
+    //
+    // La route de mot de passe oublié tait les échecs d'envoi pour ne pas
+    // révéler si un compte existe : impossible, du dehors, de savoir si
+    // le message part. Celle-ci le dit.
+    //
+    // Elle n'écrit qu'à l'adresse du compte connecté : on ne peut donc
+    // s'en servir que pour s'écrire à soi-même.
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /test/email':
+        $moi = Auth::compte();
+        try {
+            envoyerEmail(
+                $moi['email'],
+                'Test TimeCool',
+                "Bonjour,\n\nSi tu lis ce message, l'envoi d'e-mails de TimeCool "
+                . "fonctionne.\n\n— TimeCool\n"
+            );
+        } catch (Throwable $e) {
+            error_log('TimeCool test email: ' . $e->getMessage());
+            Rep::erreur(502, 'envoi_echoue', 'Envoi impossible : ' . $e->getMessage());
+        }
+        Rep::ok(['envoye' => true, 'vers' => $moi['email']]);
+
+    // ═══════════════════════════════════════════════════════════
     // INSCRIPTION
     // ═══════════════════════════════════════════════════════════
     case 'POST /inscription':
