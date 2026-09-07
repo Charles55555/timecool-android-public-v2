@@ -30,7 +30,7 @@ BLANC = (255, 255, 255)
 # fond, cadran, aiguille des heures, aiguille des minutes
 PALETTES = {
     'logo':      (BLEU,  BLANC, ROUGE, JAUNE),   # l'application
-    'logo-site': (JAUNE, BLANC, BLEU,  ROUGE),   # le site
+    'logo-site': (ROUGE, BLANC, JAUNE, BLEU),   # le site
 }
 
 
