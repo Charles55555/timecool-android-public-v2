@@ -1605,7 +1605,7 @@ if (window.pdfjsLib) {
 <!-- === PAGE IMPORT AGENDA === -->
 <div class="page" id="page-importagenda">
   <div class="page-header" style="display:flex; align-items:flex-start; gap:10px;">
-    <button class="back-btn" onclick="tcRetour()" title="Retour" aria-label="Retour" style="margin-top:2px;">
+    <button class="back-btn" onclick="tcRetourImport()" title="Retour" aria-label="Retour" style="margin-top:2px;">
       <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     </button>
     <div>
@@ -7049,6 +7049,22 @@ let _tcPagePrecedente = 'calendar';
 /** Revient a l'ecran precedent. */
 function tcRetour() {
   navigate(_tcPagePrecedente || 'calendar');
+}
+
+/**
+ * Retour depuis « Importer mon ancien agenda ».
+ *
+ * L'import se fait en quatre etapes. Sortir de la page des la premiere
+ * pression prive de corriger un choix — quel agenda, quelle periode.
+ * On recule donc d'une etape, et on ne quitte qu'a la premiere.
+ */
+function tcRetourImport() {
+  if (typeof _importStep === 'number' && _importStep > 1) {
+    _importStep -= 1;
+    if (typeof renderImportAgenda === 'function') renderImportAgenda();
+    return;
+  }
+  tcRetour();
 }
 
 navigate = function(page) {
@@ -17894,7 +17910,10 @@ function selectImportSource(id) {
 
 function renderImportStep2(c) {
   var src = IMPORT_SOURCES.find(function(s){ return s.id === _importSource; });
-  var html = '<button onclick="_importStep=1;renderImportAgenda();" style="background:transparent;border:none;color:#1a73e8;font-size:14px;cursor:pointer;padding:0;margin-bottom:16px;">\u2190 Retour</button>';
+  // Le retour est porte par la fleche de l'en-tete : deux commandes
+  // cote a cote, l'une vers l'etape precedente et l'autre hors de la
+  // page, se marchaient dessus.
+  var html = '';
 
   html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:12px 14px;background:#e8f0fe;border-radius:12px;">';
   html += '<span style="font-size:22px;">' + src.icon + '</span>';
@@ -17930,7 +17949,10 @@ function renderImportStep3(c) {
   var src = IMPORT_SOURCES.find(function(s){ return s.id === _importSource; });
   var per = IMPORT_PERIODS.find(function(p){ return p.id === _importPeriod; });
 
-  var html = '<button onclick="_importStep=2;renderImportAgenda();" style="background:transparent;border:none;color:#1a73e8;font-size:14px;cursor:pointer;padding:0;margin-bottom:16px;">\u2190 Retour</button>';
+  // Le retour est porte par la fleche de l'en-tete : deux commandes
+  // cote a cote, l'une vers l'etape precedente et l'autre hors de la
+  // page, se marchaient dessus.
+  var html = '';
 
   html += '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">';
   html += '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:#e8f0fe;border-radius:20px;font-size:12.5px;font-weight:500;color:#1a73e8;">' + src.icon + ' ' + src.name + '</div>';
@@ -18045,7 +18067,10 @@ function renderIcsScanResult(name, size, date, isNative) {
   var c = document.getElementById('importAgendaContent');
   if (!c) return;
 
-  var html = '<button onclick="_importStep=3;renderImportAgenda();" style="background:transparent;border:none;color:#1a73e8;font-size:14px;cursor:pointer;padding:0;margin-bottom:16px;">\u2190 Retour</button>';
+  // Le retour est porte par la fleche de l'en-tete : deux commandes
+  // cote a cote, l'une vers l'etape precedente et l'autre hors de la
+  // page, se marchaient dessus.
+  var html = '';
 
   if (!name) {
     html += '<div style="text-align:center;padding:22px 6px;">';
