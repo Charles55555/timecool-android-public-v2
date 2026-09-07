@@ -128,6 +128,17 @@ disant.
    existe** : un numéro inconnu recevait une réponse plus courte. La
    précaution que j'annonçais ne tenait pas.
 
+**Deux logos, pas un.** Charles garde le site et l'application ouverts
+côte à côte et les confondait. Même dessin, couleurs permutées : rouge
+pour le site, bleu pour l'application. Le jaune, essayé d'abord, se
+noyait dans une barre d'onglets claire.
+
+**Retour sur les statistiques.** J'avais renommé deux cartes sans qu'il
+l'ait demandé — ses libellés sont revenus. Et le bloc des relations ne
+disparaît plus quand il est vide : il montre une ligne d'exemple, portée
+par un vrai prénom du carnet et marquée comme telle. Il voulait voir à
+quoi ressemblera la page, pas un écran vide.
+
 **Leçon du jour.** Presque tout ce qui a été corrigé aujourd'hui était
 une promesse non tenue : un bouton qui ne fait rien, un lien mort, un
 « envoyé » alors que rien ne part, un agenda qui ignore ce qu'on lui a
