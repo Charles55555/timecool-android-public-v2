@@ -13636,7 +13636,8 @@ function renderContactsListHTML(contacts) {
 /* ===== D\u00e9tection des contacts d\u00e9j\u00e0 inscrits sur TimeCool =====
    En production : l'app envoie les num\u00e9ros HACH\u00c9S au serveur, qui renvoie
    uniquement les correspondances. Les num\u00e9ros ne circulent jamais en clair.
-   Brancher window.TimeCoolNative.matchContacts() ou l'API app.timecool.fr.
+   Brancher window.TimeCoolNative.matchContacts() ou l'API, qui vit sur
+   api.timecool.fr — et non app.timecool.fr, nom qui n'a jamais existe.
    En attendant, r\u00e9sultat simul\u00e9 mais stable pour un m\u00eame contact. */
 /* ===== Demande de RDV \u2014 simulation sur la fiche contact =====
    Les cr\u00e9neaux sont calcul\u00e9s sur TES trous r\u00e9els. En production ils viendront
@@ -14447,10 +14448,23 @@ async function sendCreneauxDirect(contactId, channel) {
   }
 }
 
+/** Aucune application pour ouvrir ce lien : le dire au lieu de rien. */
+function tcOuvertureImpossible(url) {
+  if (url && url.indexOf('sms:') === 0) {
+    showToast('\u{1F4F5} Aucune application de messages sur cet appareil');
+  } else if (url && url.indexOf('tel:') === 0) {
+    showToast('\u{1F4F5} Aucune application de t\u00e9l\u00e9phone sur cet appareil');
+  } else {
+    showToast('\u{1F4F5} Impossible d\u2019ouvrir ce lien');
+  }
+}
+
 function inviteContact(contactId) {
   const contact = contactsList.find(c => c.id === contactId);
   if (!contact) return;
-  const txt = 'Rejoins-moi sur TimeCool, on prend rendez-vous sans se courir apr\u00e8s : https://app.timecool.fr';
+  // app.timecool.fr n'existe pas : le nom n'a jamais ete enregistre, et
+  // tout invite tombait sur une page morte. Celle-ci repond.
+  const txt = 'Rejoins-moi sur TimeCool, on prend rendez-vous sans se courir apr\u00e8s : https://timecool.fr/app/';
   if (contact.phone) {
     try { window.location.href = 'sms:' + contact.phone.replace(/\s/g, '') + '?body=' + encodeURIComponent(txt); } catch(e) {}
   }

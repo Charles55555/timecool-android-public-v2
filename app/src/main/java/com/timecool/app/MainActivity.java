@@ -192,6 +192,28 @@ public class MainActivity extends Activity {
                 if (url.startsWith("file://")) {
                     return false;
                 }
+                /*
+                 * Une adresse qui n'est pas une page web ne concerne pas
+                 * la WebView : elle designe une autre application du
+                 * telephone. Rendre true sans rien faire, comme avant,
+                 * revenait a dire « je m'en occupe » puis a l'avaler en
+                 * silence — le bouton « Inviter sur TimeCool » ne
+                 * produisait donc rien, pas meme un message.
+                 */
+                if (url.startsWith("sms:") || url.startsWith("smsto:")
+                        || url.startsWith("tel:") || url.startsWith("mailto:")
+                        || url.startsWith("geo:")) {
+                    try {
+                        Intent sortie = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        sortie.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(sortie);
+                    } catch (Exception e) {
+                        // Aucune application pour ce type d'adresse : on
+                        // le dit, plutot que de laisser croire a un envoi.
+                        appelerJs("tcOuvertureImpossible", url);
+                    }
+                    return true;
+                }
                 return true;
             }
 
