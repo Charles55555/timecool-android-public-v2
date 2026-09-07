@@ -5035,10 +5035,79 @@ function chooseSlot(convId, idx) {
   }, 800);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   STATISTIQUES — ce que la page peut vraiment compter
+
+   Chaque rendez-vous cree par Charly IA fait gagner cinq minutes : la
+   regle est de Charles, et c'est la seule qui repose sur une trace
+   reelle — ces rendez-vous portent un identifiant reconnaissable.
+
+   Les decalages et les annulations restent a zero : TimeCool n'en garde
+   aucune trace, un rendez-vous deplace ou annule disparait simplement.
+   Le jour ou cet historique existera, ces compteurs suivront.
+   ══════════════════════════════════════════════════════════════ */
+const TC_MINUTES_PAR_RDV_CHARLY = 5;
+
+/** Un rendez-vous cree par Charly IA se reconnait a son identifiant. */
+function tcVientDeCharly(e) {
+  return !!(e && e.id && String(e.id).indexOf('charly_ai_') === 0);
+}
+
+/** « 50 min » en dessous d'une heure, « 6 h 12 » au-dela. */
+function tcDureeLisible(minutes) {
+  const m = Math.max(0, Math.round(minutes || 0));
+  if (m < 60) return m + ' min';
+  const h = Math.floor(m / 60);
+  const reste = m % 60;
+  return reste === 0 ? h + ' h' : h + ' h ' + String(reste).padStart(2, '0');
+}
+
+/** Bilan d'un mois, et cumul depuis le debut. */
+function tcStatistiques(mois) {
+  const tous = (typeof events === 'undefined' ? [] : events)
+    .filter(function (e) { return e && (e.mode === 'user' || tcVientDeCharly(e)); });
+
+  const an = mois.getFullYear();
+  const m = mois.getMonth();
+  const duMois = tous.filter(function (e) {
+    const d = new Date(String(e.date) + 'T00:00:00');
+    return !isNaN(d.getTime()) && d.getFullYear() === an && d.getMonth() === m;
+  });
+
+  // Passé : la date ET l'heure sont derrière nous.
+  const maintenant = Date.now();
+  const estPasse = function (e) {
+    const d = new Date(String(e.date) + 'T00:00:00');
+    if (isNaN(d.getTime())) return false;
+    d.setHours(e.endH || e.startH || 0, e.endM || e.startM || 0, 0, 0);
+    return d.getTime() < maintenant;
+  };
+
+  const charlyMois = duMois.filter(tcVientDeCharly).length;
+  const charlyTotal = tous.filter(tcVientDeCharly).length;
+
+  return {
+    charlyMois: charlyMois,
+    charlyTotal: charlyTotal,
+    minutesMois: charlyMois * TC_MINUTES_PAR_RDV_CHARLY,
+    minutesTotal: charlyTotal * TC_MINUTES_PAR_RDV_CHARLY,
+    prevusMois: duMois.length,
+    honoresMois: duMois.filter(estPasse).length,
+    honoresTotal: tous.filter(estPasse).length,
+  };
+}
+
 // ═══ DASHBOARD ═══
 function renderDashboard() {
   const c = document.getElementById('dashContent');
   const monthLabel = `${MONTHS[dashMonth.getMonth()]} ${dashMonth.getFullYear()}`;
+  const stats = tcStatistiques(dashMonth);
+  /* Les relations de démonstration ne s'affichent que dans les données
+     de démonstration : un nouvel utilisateur y voyait six praticiens
+     inventés, avec leur ponctualité. */
+  const relations = (typeof events !== 'undefined'
+    && events.some(function (e) { return e && e.mode !== 'user' && !tcVientDeCharly(e); }))
+    ? userRelations : [];
   if (mode==='user') {
     c.innerHTML = `
       <div class="dash-hero">
@@ -5047,55 +5116,75 @@ function renderDashboard() {
           <div class="dash-month-title">${monthLabel}</div>
           <button onclick="nextDashMonth()"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
         </div>
+        <div style="margin:0 0 16px; padding:14px 16px; background:#fff; border-radius:14px; font-size:12.5px; color:var(--text-sec); line-height:1.6; text-align:left;">
+          <div style="font-size:13.5px; font-weight:600; color:var(--text); margin-bottom:6px;">⏱️ Ton temps, en chiffres</div>
+          Chaque rendez-vous que Charly IA note à ta place, c'est cinq
+          minutes que tu ne passes pas à chercher un créneau, écrire un
+          message et attendre une réponse. Cette page les additionne.<br><br>
+          Tu y verras aussi tes rendez-vous du mois, et ce que deviennent
+          ceux qui bougent. Tout part de zéro : ces chiffres sont les
+          tiens, et rien n'en sort d'ici.
+        </div>
+
         <div class="big-stat">
-          <div class="big-stat-value">6h 12</div>
+          <div class="big-stat-value">${tcDureeLisible(stats.minutesMois)}</div>
           <div class="big-stat-label">Temps économisé ce mois grâce à Charly IA</div>
-          <div class="big-stat-sub" style="color:var(--text-sec); font-weight:500;">Total cumulé : ~75h économisées</div>
+          <div class="big-stat-sub" style="color:var(--text-sec); font-weight:500;">${
+            stats.charlyMois === 0
+              ? 'Aucun rendez-vous créé par Charly ce mois-ci'
+              : stats.charlyMois + ' rendez-vous × 5 min — total cumulé : ' + tcDureeLisible(stats.minutesTotal)
+          }</div>
         </div>
       </div>
 
       <div class="stat-grid">
         <div class="stat-card">
-          <div class="stat-card-label">RDV honorés par moi</div>
-          <div class="stat-card-value">15</div>
-          <div class="stat-card-sub">sur 18 prévus</div>
-          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : 142</div>
+          <div class="stat-card-label">RDV honorés</div>
+          <div class="stat-card-value">${stats.honoresMois}</div>
+          <div class="stat-card-sub">sur ${stats.prevusMois} ce mois-ci</div>
+          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : ${stats.honoresTotal}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-card-label">RDV honorés par mes contacts</div>
-          <div class="stat-card-value">17</div>
-          <div class="stat-card-sub">sur 19 prévus</div>
-          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : 156</div>
+          <div class="stat-card-label">Notés par Charly IA</div>
+          <div class="stat-card-value" style="color:var(--g-blue);">${stats.charlyMois}</div>
+          <div class="stat-card-sub">${TC_MINUTES_PAR_RDV_CHARLY} min gagnées chacun</div>
+          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : ${stats.charlyTotal}</div>
         </div>
         <div class="stat-card">
           <div class="stat-card-label">Décalés par moi</div>
-          <div class="stat-card-value" style="color:var(--g-green);">3</div>
+          <div class="stat-card-value" style="color:var(--g-green);">0</div>
           <div class="stat-card-sub">même jour — sinon compté annulé</div>
-          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : 18</div>
+          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Pas encore suivi</div>
         </div>
         <div class="stat-card">
           <div class="stat-card-label">Décalés par mes contacts</div>
-          <div class="stat-card-value" style="color:var(--g-green);">5</div>
+          <div class="stat-card-value" style="color:var(--g-green);">0</div>
           <div class="stat-card-sub">même jour — sinon compté annulé</div>
-          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : 24</div>
+          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Pas encore suivi</div>
         </div>
         <div class="stat-card">
           <div class="stat-card-label">Annulés par moi</div>
-          <div class="stat-card-value" style="color:var(--g-yellow);">2</div>
+          <div class="stat-card-value" style="color:var(--g-yellow);">0</div>
           <div class="stat-card-sub">reprogrammés instantanément</div>
-          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : 11</div>
+          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Pas encore suivi</div>
         </div>
         <div class="stat-card">
           <div class="stat-card-label">Annulés par mes contacts</div>
-          <div class="stat-card-value" style="color:var(--g-yellow);">4</div>
+          <div class="stat-card-value" style="color:var(--g-yellow);">0</div>
           <div class="stat-card-sub">visible seulement entre vous deux</div>
-          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Total cumulé : 19</div>
+          <div class="stat-card-sub" style="margin-top:2px; opacity:.7;">Pas encore suivi</div>
         </div>
       </div>
 
       <div class="breakdown">
         <div class="breakdown-title">🔒 Ma relation avec mes contacts <span style="font-weight:400; color:var(--text-sec); font-size:11px;">(données privées)</span></div>
-        ${userRelations.map(r => `
+        ${relations.length === 0 ? `
+          <div style="padding:16px; border-top:1px solid var(--border); font-size:12.5px; color:var(--text-sec); line-height:1.6;">
+            Rien à afficher pour l'instant. Au fil de tes rendez-vous, tu
+            verras ici avec qui ça se passe bien, et avec qui ça décale
+            souvent. Ces observations ne quittent jamais ton appareil.
+          </div>
+        ` : relations.map(r => `
           <div style="padding:12px 16px; border-top:1px solid var(--border);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
               <div>
