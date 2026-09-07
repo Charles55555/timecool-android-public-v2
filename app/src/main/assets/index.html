@@ -1604,9 +1604,14 @@ if (window.pdfjsLib) {
 <!-- === PAGE MES DISPONIBILITES === -->
 <!-- === PAGE IMPORT AGENDA === -->
 <div class="page" id="page-importagenda">
-  <div class="page-header">
-    <div class="page-title">📥 Importer mon ancien agenda</div>
-    <div class="page-subtitle">Récupère tous tes rendez-vous en quelques secondes</div>
+  <div class="page-header" style="display:flex; align-items:flex-start; gap:10px;">
+    <button class="back-btn" onclick="tcRetour()" title="Retour" aria-label="Retour" style="margin-top:2px;">
+      <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    </button>
+    <div>
+      <div class="page-title">📥 Importer mon ancien agenda</div>
+      <div class="page-subtitle">Récupère tous tes rendez-vous en quelques secondes</div>
+    </div>
   </div>
   <div class="main"><div id="importAgendaContent" style="padding:14px;"></div></div>
 </div>
@@ -7037,7 +7042,21 @@ function renderPros() {
    pendant des semaines, sans aucune erreur visible.
 
    Ajouter ici, pas là-bas. */
+/* D'ou l'on venait, pour que la fleche de retour existe. Le calendrier
+   par defaut : c'est l'ecran d'accueil de l'application. */
+let _tcPagePrecedente = 'calendar';
+
+/** Revient a l'ecran precedent. */
+function tcRetour() {
+  navigate(_tcPagePrecedente || 'calendar');
+}
+
 navigate = function(page) {
+  // Une page ne se ramene pas a elle-meme : sans cela, revenir depuis
+  // « importagenda » vers « importagenda » ne ferait rien.
+  if (typeof currentPage === 'string' && currentPage && currentPage !== page) {
+    _tcPagePrecedente = currentPage;
+  }
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-' + page);
