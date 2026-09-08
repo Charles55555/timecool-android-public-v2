@@ -7060,7 +7060,8 @@ function tcRetour() {
  */
 function tcRetourImport() {
   if (typeof _importStep === 'number' && _importStep > 1) {
-    _importStep -= 1;
+    // L'etape 2 n'existe plus : on la saute aussi en revenant.
+    _importStep = (_importStep === 3) ? 1 : _importStep - 1;
     if (typeof renderImportAgenda === 'function') renderImportAgenda();
     return;
   }
@@ -17847,7 +17848,6 @@ loadDispo();
 // === IMPORT AGENDA — Parcours complet ===
 var _importStep = 1;
 var _importSource = null;
-var _importPeriod = null;
 var _importFile = null;
 
 var IMPORT_SOURCES = [
@@ -17862,18 +17862,14 @@ var IMPORT_SOURCES = [
   { id:'autre',    name:'Un autre agenda',  icon:'\ud83d\udcc2', color:'#5f6368', ini:'\ud83d\udcc2', short:'Un autre<br>agenda' }
 ];
 
-var IMPORT_PERIODS = [
-  { id:'3m',  label:'Les 3 derniers mois', sub:'Import rapide' },
-  { id:'1y',  label:'La derni\u00e8re ann\u00e9e',    sub:'Recommand\u00e9' },
-  { id:'all', label:'Tout mon historique',  sub:'Aucune limite de date' }
-];
+/* IMPORT_PERIODS retiree avec l'etape qui la lisait. */
+
 
 function renderImportAgenda() {
   var c = document.getElementById('importAgendaContent');
   if (!c) return;
 
   if (_importStep === 1) { renderImportStep1(c); }
-  else if (_importStep === 2) { renderImportStep2(c); }
   else if (_importStep === 3) { renderImportStep3(c); }
   else if (_importStep === 4) { renderImportStep4(c); }
 }
@@ -17905,49 +17901,18 @@ function renderImportStep1(c) {
 function selectImportSource(id) {
   _importSource = id;
   renderImportAgenda();
-  setTimeout(function() { _importStep = 2; renderImportAgenda(); }, 350);
-}
-
-function renderImportStep2(c) {
-  var src = IMPORT_SOURCES.find(function(s){ return s.id === _importSource; });
-  // Le retour est porte par la fleche de l'en-tete : deux commandes
-  // cote a cote, l'une vers l'etape precedente et l'autre hors de la
-  // page, se marchaient dessus.
-  var html = '';
-
-  html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;padding:12px 14px;background:#e8f0fe;border-radius:12px;">';
-  html += '<span style="font-size:22px;">' + src.icon + '</span>';
-  html += '<div style="font-size:14px;font-weight:600;color:#1a1a2e;">' + src.name + '</div>';
-  html += '</div>';
-
-  html += '<div style="font-size:16px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">Jusqu\u2019o\u00f9 remonter\u00a0?</div>';
-  html += '<div style="font-size:12.5px;color:#9aa0a6;margin-bottom:16px;">Choisis la p\u00e9riode \u00e0 importer.</div>';
-
-  IMPORT_PERIODS.forEach(function(p) {
-    var sel = _importPeriod === p.id;
-    html += '<div onclick="selectImportPeriod(\'' + p.id + '\')" style="display:flex;align-items:center;gap:14px;padding:16px;background:' + (sel ? '#e8f0fe' : '#fff') + ';border:1.5px solid ' + (sel ? '#1a73e8' : '#e8eaed') + ';border-radius:12px;margin-bottom:10px;cursor:pointer;">';
-    html += '<div style="width:22px;height:22px;border-radius:50%;border:2px solid ' + (sel ? '#1a73e8' : '#dadce0') + ';background:' + (sel ? '#1a73e8' : '#fff') + ';display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
-    if (sel) html += '<span style="color:#fff;font-size:12px;">\u2713</span>';
-    html += '</div>';
-    html += '<div style="flex:1;">';
-    html += '<div style="font-size:14.5px;font-weight:600;color:#1a1a2e;">' + p.label + '</div>';
-    html += '<div style="font-size:12px;color:#9aa0a6;margin-top:2px;">' + p.sub + '</div>';
-    html += '</div>';
-    html += '</div>';
-  });
-
-  c.innerHTML = html;
-}
-
-function selectImportPeriod(id) {
-  _importPeriod = id;
-  renderImportAgenda();
+  // Droit au fichier : l'etape 2 demandait « jusqu'ou remonter », une
+  // question a laquelle personne ne sait repondre et qui ne coupait que
+  // le passe. Tout est importe.
   setTimeout(function() { _importStep = 3; renderImportAgenda(); }, 350);
 }
 
+/* renderImportStep2 et selectImportPeriod retirees : elles demandaient
+   « jusqu'ou remonter ». Voir selectImportSource, qui passe desormais
+   directement au fichier. */
+
 function renderImportStep3(c) {
   var src = IMPORT_SOURCES.find(function(s){ return s.id === _importSource; });
-  var per = IMPORT_PERIODS.find(function(p){ return p.id === _importPeriod; });
 
   // Le retour est porte par la fleche de l'en-tete : deux commandes
   // cote a cote, l'une vers l'etape precedente et l'autre hors de la
@@ -17956,7 +17921,6 @@ function renderImportStep3(c) {
 
   html += '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">';
   html += '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:#e8f0fe;border-radius:20px;font-size:12.5px;font-weight:500;color:#1a73e8;">' + src.icon + ' ' + src.name + '</div>';
-  html += '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:#e8f0fe;border-radius:20px;font-size:12.5px;font-weight:500;color:#1a73e8;">\ud83d\udcc6 ' + per.label + '</div>';
   html += '</div>';
 
   html += '<div style="font-size:16px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">Ton fichier</div>';
@@ -18144,11 +18108,10 @@ function processIcsImport(icsText, fileName, fileSize) {
   var imported = 0;
   var newEvents = [];
 
-  // Calculer la date limite selon la période
-  var limitDate = null;
+  // Aucune limite de date : tout l'agenda entre. On compte simplement
+  // ce qui est deja passe, pour le dire a la fin.
   var now = new Date();
-  if (_importPeriod === '3m') { limitDate = new Date(now); limitDate.setMonth(now.getMonth() - 3); }
-  else if (_importPeriod === '1y') { limitDate = new Date(now); limitDate.setFullYear(now.getFullYear() - 1); }
+  var passes = 0;
 
   vevents.forEach(function(block) {
     var get = function(key) {
@@ -18163,7 +18126,7 @@ function processIcsImport(icsText, fileName, fileSize) {
     var month = dtstart.substring(4,6);
     var day = dtstart.substring(6,8);
     var evDate = new Date(year + '-' + month + '-' + day);
-    if (limitDate && evDate < limitDate) return;
+    if (evDate < now) passes++;
 
     var hour = dtstart.length >= 13 ? parseInt(dtstart.substring(9,11)) : 9;
     var min = dtstart.length >= 15 ? parseInt(dtstart.substring(11,13)) : 0;
@@ -18197,12 +18160,12 @@ function processIcsImport(icsText, fileName, fileSize) {
       // Ajouter les événements
       newEvents.forEach(function(ev) { events.push(ev); });
       saveEventsToStorage();
-      setTimeout(function() { showImportSuccess(imported); }, 400);
+      setTimeout(function() { showImportSuccess(imported, passes); }, 400);
     }
   }, 45);
 }
 
-function showImportSuccess(count) {
+function showImportSuccess(count, passes) {
   var c = document.getElementById('importAgendaContent');
   if (!c) return;
   var html = '<div style="text-align:center;padding:40px 20px;">';
@@ -18211,6 +18174,14 @@ function showImportSuccess(count) {
   html += '<div style="font-size:15px;color:#34a853;font-weight:600;margin-bottom:24px;">' + count + ' rendez-vous import\u00e9' + (count > 1 ? 's' : '') + '</div>';
   html += '<div style="font-size:13px;color:#5f6368;line-height:1.6;margin-bottom:28px;padding:14px;background:#e8f5e9;border-radius:12px;">';
   html += 'Tous tes rendez-vous sont maintenant dans TimeCool. Tu peux les consulter dans ton agenda.';
+  // Dire ce qui est entre plutot que demander ce qu'on veut : les
+  // rendez-vous passes forment souvent le gros du fichier, et personne
+  // ne s'y attend.
+  if (passes > 0) {
+    html += '<br><br><span style="color:#9aa0a6;">Dont ' + passes + ' d\u00e9j\u00e0 pass\u00e9'
+         + (passes > 1 ? 's' : '') + ', gard\u00e9' + (passes > 1 ? 's' : '')
+         + ' comme historique.</span>';
+  }
   html += '</div>';
   html += '<button onclick="navigate(\'calendar\')" style="width:100%;max-width:280px;padding:15px;background:#1a73e8;color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">Voir mon agenda</button>';
   html += '<button onclick="resetImport()" style="width:100%;max-width:280px;padding:12px;background:transparent;color:#5f6368;border:none;font-size:13px;cursor:pointer;">Importer un autre agenda</button>';
@@ -18222,7 +18193,6 @@ function showImportSuccess(count) {
 function resetImport() {
   _importStep = 1;
   _importSource = null;
-  _importPeriod = null;
   _importFile = null;
   renderImportAgenda();
 }
