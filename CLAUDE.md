@@ -89,6 +89,29 @@ dans un dépôt, même privé.
 Test rapide : `ssh -o BatchMode=yes timecool-cc 'echo ok'` répond, ou
 non.
 
+### Si la session du PC disparaît
+
+Elle tourne **sur l'ordinateur de Charles**. Un redémarrage l'arrête, et
+c'est arrivé plusieurs fois. Ce qu'il faut savoir :
+
+**Rien n'est perdu.** Le travail vit dans ce dépôt et dans `JOURNAL.md`,
+pas dans une conversation. Une nouvelle session reprend tout en les
+lisant.
+
+**Personne d'autre ne peut la relancer.** Ni la session du nuage, ni
+quoi que ce soit à distance : cet ordinateur n'est joignable de nulle
+part. Seul Charles le peut, en double-cliquant sur
+`Reprendre-Claude-TimeCool.bat`, posé sur son bureau. Il ouvre le bon
+dossier tout seul — lancé ailleurs, la commande ne retrouve pas la
+session, et c'est ce qui lui avait fait perdre deux heures le 03/09.
+
+**Ce qui continue sans elle :** écrire et tester du code, ouvrir une
+*pull request*, répondre à ses questions.
+
+**Ce qui attend son retour :** déployer, regarder la base, lire les
+journaux du serveur, vérifier qu'une correction est bien arrivée sur son
+appareil.
+
 ### Ce que le code ne dit pas — et qu'il faut demander
 
 Plusieurs défauts n'ont été trouvés qu'en regardant la production, jamais
