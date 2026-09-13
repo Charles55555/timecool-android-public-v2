@@ -105,6 +105,18 @@ part. Seul Charles le peut, en double-cliquant sur
 dossier tout seul — lancé ailleurs, la commande ne retrouve pas la
 session, et c'est ce qui lui avait fait perdre deux heures le 03/09.
 
+Ce raccourci ne fait que deux choses. Si un jour il disparaît, Charles
+peut les taper lui-même dans une fenêtre de commande Windows :
+
+```
+cd C:\Users\Commercial11\desktop
+claude --continue
+```
+
+**La première ligne est celle qui compte.** Une session appartient à un
+dossier : tapée ailleurs, la seconde ouvre une session neuve, sans
+mémoire, et donne l'impression que tout est perdu.
+
 **Ce qui continue sans elle :** écrire et tester du code, ouvrir une
 *pull request*, répondre à ses questions.
 
