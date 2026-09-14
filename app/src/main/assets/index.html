@@ -573,7 +573,7 @@ if (window.pdfjsLib) {
 <!-- ═══ PAGES D'AUTHENTIFICATION ═══ -->
 
 <!-- Page Bienvenue (1ère ouverture) -->
-<div class="page auth-page" id="page-auth-welcome" style="background:linear-gradient(180deg, #f0f7ff 0%, #fff 60%); min-height:100vh;">
+<div class="page auth-page" id="page-auth-welcome" style="background:linear-gradient(180deg, #f0f7ff 0%, #fff 60%);">
   <!-- Sélecteur de langue en haut à droite -->
   <div style="position:absolute; top:16px; right:16px; z-index:10; max-width:130px;">
     <button onclick="toggleLanguageMenu()" id="langSelectorBtn" style="display:flex; align-items:center; gap:6px; padding:8px 12px; background:#fff; border:1.5px solid var(--border); border-radius:20px; font-size:13px; font-weight:500; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.06);">
@@ -586,7 +586,7 @@ if (window.pdfjsLib) {
     </div>
   </div>
 
-  <div style="padding:0 28px 30px; text-align:center; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+  <div style="padding:0 28px 30px; text-align:center; min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
     <div style="font-size:40px; font-weight:800; margin-bottom:8px; letter-spacing:-1px; padding-top:60px;">
       <span style="color:#ea4335;">T</span><span style="color:#fbbc04;">I</span><span style="color:#34a853;">M</span><span style="color:#1a73e8;">E</span><span style="color:#1a73e8;">C</span><span style="color:#34a853;">O</span><span style="color:#fbbc04;">O</span><span style="color:#ea4335;">L</span>
     </div>
@@ -624,7 +624,7 @@ if (window.pdfjsLib) {
 </div>
 
 <!-- Page Inscription -->
-<div class="page auth-page" id="page-auth-signup" style="background:#f7f9fc; min-height:100vh;">
+<div class="page auth-page" id="page-auth-signup" style="background:#f7f9fc;">
   <div class="conv-header">
     <button class="back-btn" onclick="navigateAuth('auth-welcome')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div style="font-size:16px; font-weight:600;">Créer mon compte</div>
@@ -711,7 +711,7 @@ if (window.pdfjsLib) {
 </div>
 
 <!-- Page Choix méthode de vérification -->
-<div class="page auth-page" id="page-auth-verify-method" style="background:#f7f9fc; min-height:100vh;">
+<div class="page auth-page" id="page-auth-verify-method" style="background:#f7f9fc;">
   <div class="conv-header">
     <button class="back-btn" onclick="navigateAuth('auth-signup')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div style="font-size:16px; font-weight:600;">Vérification</div>
@@ -746,7 +746,7 @@ if (window.pdfjsLib) {
 </div>
 
 <!-- Page Saisie du code -->
-<div class="page auth-page" id="page-auth-verify-code" style="background:#f7f9fc; min-height:100vh;">
+<div class="page auth-page" id="page-auth-verify-code" style="background:#f7f9fc;">
   <div class="conv-header">
     <button class="back-btn" onclick="navigateAuth('auth-verify-method')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div style="font-size:16px; font-weight:600;">Code de vérification</div>
@@ -860,7 +860,7 @@ if (window.pdfjsLib) {
 </div>
 
 <!-- Page Connexion -->
-<div class="page auth-page" id="page-auth-login" style="background:#f7f9fc; min-height:100vh;">
+<div class="page auth-page" id="page-auth-login" style="background:#f7f9fc;">
   <div class="conv-header">
     <button class="back-btn" onclick="navigateAuth('auth-welcome')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div style="font-size:16px; font-weight:600;">Connexion</div>
@@ -929,7 +929,7 @@ if (window.pdfjsLib) {
 </div>
 
 <!-- Page Confirmation compte créé -->
-<div class="page auth-page" id="page-auth-success" style="background:linear-gradient(180deg, #e8f5e9 0%, #fff 60%); min-height:100vh;">
+<div class="page auth-page" id="page-auth-success" style="background:linear-gradient(180deg, #e8f5e9 0%, #fff 60%);">
   <div style="padding:80px 28px 30px; text-align:center;">
     <div style="width:120px; height:120px; border-radius:50%; background:#34a853; display:flex; align-items:center; justify-content:center; font-size:70px; margin:0 auto 30px; box-shadow:0 8px 24px rgba(52,168,83,0.3);">✓</div>
 
@@ -944,7 +944,7 @@ if (window.pdfjsLib) {
 </div>
 
 <!-- Page Provenance (facultative, une seule fois après l'inscription) -->
-<div class="page auth-page" id="page-auth-provenance" style="background:#f7f9fc; min-height:100vh;">
+<div class="page auth-page" id="page-auth-provenance" style="background:#f7f9fc;">
   <div style="padding:50px 24px 40px;">
     <div style="text-align:center; margin-bottom:6px; font-size:34px;">🧭</div>
     <div style="font-size:20px; font-weight:700; color:var(--text); text-align:center; margin-bottom:6px;">Comment as-tu connu TimeCool ?</div>
@@ -18710,7 +18710,7 @@ function validateAdminPin() {
 
 <!-- PERMISSIONS SCREEN -->
 <div id="permissionsScreen" style="display:none; position:fixed; inset:0; z-index:99997; background:#fff; overflow-y:auto;">
-  <div style="padding:40px 28px; text-align:center; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+  <div style="padding:40px 28px; text-align:center; min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
     <div style="font-size:48px; margin-bottom:20px;">🔐</div>
     <div style="font-size:22px; font-weight:800; color:#1a1a2e; margin-bottom:10px;">Autorisations requises</div>
     <div style="font-size:14px; color:#5f6368; margin-bottom:32px; line-height:1.6;">Pour profiter pleinement de TimeCool,<br>nous avons besoin de quelques autorisations.</div>
