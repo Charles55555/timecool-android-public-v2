@@ -27,15 +27,18 @@ git clone <adresse du dépôt> timecool
 cd timecool
 ```
 
-## 2. Installer les deux outils
+## 2. Installer l'outil qui fabrique le projet
 
 ```
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install xcodegen
+curl -L -o xcodegen.zip https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip
+unzip -q xcodegen.zip
 ```
 
-Le premier installe Homebrew, qui sert à installer le second. Compte une
-dizaine de minutes.
+Quatre mégaoctets, deux minutes.
+
+**Pourquoi pas Homebrew :** son installateur réclame les droits
+administrateur, qu'on n'a pas sur un Mac loué en formule partagée.
+XcodeGen se distribue aussi tout compilé — on s'en sert directement.
 
 Si Xcode n'est pas déjà là, installe-le depuis le Mac App Store — c'est
 long, une dizaine de gigaoctets. Sur un Mac loué chez MacinCloud, il est
@@ -58,9 +61,12 @@ corrige dans l'original.
 
 ```
 cd ios
-xcodegen
+../xcodegen_bin/bin/xcodegen
 open TimeCool.xcodeproj
 ```
+
+Si le chemin ne correspond pas, cherche où l'archive s'est décompressée :
+`find ~ -name xcodegen -type f 2>/dev/null | head`
 
 Xcode s'ouvre.
 
