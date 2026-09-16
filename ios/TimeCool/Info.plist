@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Réglages de l'application, lus par iOS au lancement.
+
+  Les deux lignes qui comptent sont les phrases d'explication : iOS les
+  affiche mot pour mot dans la fenêtre qui demande l'autorisation, et
+  Apple refuse une application qui n'expliquerait pas pourquoi elle
+  demande. Elles sont écrites pour être lues par l'utilisateur, pas par
+  un développeur.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>fr_FR</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>TimeCool</string>
+
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+
+    <!-- Face ID : phrase montrée par iOS avant la première demande. -->
+    <key>NSFaceIDUsageDescription</key>
+    <string>Pour rouvrir TimeCool sans retaper ton mot de passe.</string>
+
+    <!--
+      Le clavier ne recouvre plus la page : sans ceci, le bouton d'un
+      formulaire passe sous le clavier et devient inatteignable — le
+      défaut déjà rencontré sur Android.
+    -->
+    <key>UIRequiresFullScreen</key>
+    <false/>
+
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIColorName</key>
+        <string>LaunchBackground</string>
+    </dict>
+
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+
+    <!--
+      Aucune adresse en clair n'est autorisée : tout passe par HTTPS.
+      La page elle-même est embarquée, elle n'a pas besoin du réseau
+      pour s'afficher.
+    -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+</dict>
+</plist>

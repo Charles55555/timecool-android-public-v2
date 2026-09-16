@@ -1,0 +1,47 @@
+# Description du projet Xcode, lisible et versionnable.
+#
+# Xcode range normalement ces réglages dans un fichier de plusieurs
+# milliers de lignes, illisible et impossible à relire dans un dépôt.
+# XcodeGen le fabrique à partir de ce fichier-ci.
+#
+# Sur le Mac :   brew install xcodegen && cd ios && xcodegen
+#
+# Le projet se régénère en une commande — il n'est donc pas dans le
+# dépôt, et aucun conflit ne peut s'y loger.
+
+name: TimeCool
+options:
+  bundleIdPrefix: fr.timecool
+  # iOS 16 : Face ID et les notifications y sont stables, et cette
+  # version couvre la quasi-totalité des iPhone en service.
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    # Laissé vide : c'est Xcode qui le remplira avec le compte de
+    # Charles à la première ouverture.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  TimeCool:
+    type: application
+    platform: iOS
+    sources:
+      - path: TimeCool
+      # La page est copiée telle quelle depuis le dépôt Android : une
+      # seule source pour les deux applications, jamais deux copies à
+      # tenir à jour.
+      - path: TimeCool/web
+        type: folder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.timecool.app
+        INFOPLIST_FILE: TimeCool/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"   # iPhone seulement pour cette version

@@ -1,0 +1,7 @@
+# Fabrique par xcodegen a partir de project.yml : illisible, et il se
+# refait en une commande.
+TimeCool.xcodeproj/
+
+# Copie de la page partagee, posee par scripts/preparer-ios.sh. La
+# versionner ferait vivre deux exemplaires du meme fichier.
+TimeCool/web/
