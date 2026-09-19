@@ -23,12 +23,19 @@ cp "$SOURCE" "$CIBLE/index.html"
 # Les deux bibliothèques que la page charge depuis son propre dossier :
 # sans elles, la lecture du QR code d'appairage échoue en silence.
 for lib in jsqr.min.js qrgen.min.js; do
-    chemin="/var/www/vhosts/timecool.fr/httpdocs/app/$lib"
-    if [ -f "$chemin" ]; then
-        cp "$chemin" "$CIBLE/$lib"
-    else
-        echo "  ⚠️  $lib introuvable — le scan de QR code ne marchera pas"
-    fi
+    # À côté de la page d'abord : c'est le cas dans le dépôt, donc
+    # sur n'importe quelle machine. Le serveur n'est qu'un secours.
+    for chemin in "$(dirname "$SOURCE")/$lib" \
+                  "/var/www/vhosts/timecool.fr/httpdocs/app/$lib"; do
+        if [ -f "$chemin" ]; then
+            cp "$chemin" "$CIBLE/$lib"
+            break
+        fi
+    done
+    [ -f "$CIBLE/$lib" ] || {
+        echo "$lib introuvable : le scan du QR code ne marchera pas" >&2
+        exit 1
+    }
 done
 
 octets=$(wc -c < "$CIBLE/index.html")

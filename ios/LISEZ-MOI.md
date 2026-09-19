@@ -23,7 +23,7 @@ cette étape.
 Dans le Terminal du Mac :
 
 ```
-git clone <adresse du dépôt> timecool
+git clone https://github.com/Charles55555/timecool-android-public-v2.git timecool
 cd timecool
 ```
 
