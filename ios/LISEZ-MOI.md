@@ -61,12 +61,9 @@ corrige dans l'original.
 
 ```
 cd ios
-../xcodegen_bin/bin/xcodegen
+../xcodegen/bin/xcodegen
 open TimeCool.xcodeproj
 ```
-
-Si le chemin ne correspond pas, cherche où l'archive s'est décompressée :
-`find ~ -name xcodegen -type f 2>/dev/null | head`
 
 Xcode s'ouvre.
 
