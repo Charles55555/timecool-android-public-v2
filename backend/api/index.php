@@ -291,6 +291,55 @@ function emailHabille(string $titre, string $corpsHtml): string
 }
 
 
+/**
+ * Compte dont les cles servent de modele aux comptes neufs.
+ *
+ * Fixe ici et non dans config.php : ce fichier-la n'est pas deployable
+ * par l'agent, et une constante manquante en production casserait
+ * l'inscription entiere.
+ */
+const CLES_COMPTE_MODELE = 53;
+
+/**
+ * Depose dans un compte neuf les cles du compte modele.
+ *
+ * Sans cela, le nouvel inscrit ouvre une application qui ne repond pas :
+ * Charly IA a besoin d'une cle pour parler, et la page Configuration IA
+ * n'affiche que des « non configuree ». Personne ne doit avoir a
+ * configurer une application avant de pouvoir l'utiliser.
+ *
+ * Le texte chiffre est recopie tel quel : le coffre utilise une cle
+ * globale au serveur, les valeurs ne repassent donc jamais en clair.
+ *
+ * Un echec ici ne fait jamais echouer l'inscription : mieux vaut un
+ * compte cree sans cles -- rattrapable a la main -- qu'un inscrit
+ * renvoye vers une erreur alors que son compte existe deja en base.
+ *
+ * A revoir avant l'ouverture au public : ces cles sont payantes, et
+ * cette regle les donne a quiconque cree un compte.
+ */
+function clesDuModele(int $compteId): void
+{
+    if ($compteId === CLES_COMPTE_MODELE) {
+        return;
+    }
+    try {
+        Db::req(
+            'INSERT INTO cles_api (compte_id, service, valeur_chiffree, indice)
+             SELECT ?, service, valeur_chiffree, indice
+               FROM cles_api
+              WHERE compte_id = ?
+             ON DUPLICATE KEY UPDATE valeur_chiffree = VALUES(valeur_chiffree),
+                                     indice          = VALUES(indice)',
+            [$compteId, CLES_COMPTE_MODELE]
+        );
+    } catch (Throwable $e) {
+        error_log('cles du modele non deposees pour le compte '
+            . $compteId . ' : ' . $e->getMessage());
+    }
+}
+
+
 function elementsPoser(array $ecritures): void
 {
     $parCompte = [];
@@ -827,6 +876,9 @@ switch ($route) {
         }
 
         $id = (int) Db::pdo()->lastInsertId();
+
+        // Le compte doit etre utilisable des la premiere seconde.
+        clesDuModele($id);
 
         // La preuve est consommée : elle ne peut pas servir à créer un
         // second compte. Absente quand la vérification est suspendue —
