@@ -4,7 +4,7 @@
 # milliers de lignes, illisible et impossible à relire dans un dépôt.
 # XcodeGen le fabrique à partir de ce fichier-ci.
 #
-# Sur le Mac :   brew install xcodegen && cd ios && xcodegen
+# Sur le Mac :   cd ios && ../xcodegen/bin/xcodegen
 #
 # Le projet se régénère en une commande — il n'est donc pas dans le
 # dépôt, et aucun conflit ne peut s'y loger.
@@ -34,6 +34,10 @@ targets:
     platform: iOS
     sources:
       - path: TimeCool
+        # Sans cette exclusion, le dossier ci-dessous serait ramassé une
+        # première fois ici, à plat, et Xcode aurait deux index.html.
+        excludes:
+          - "web"
       # La page est copiée telle quelle depuis le dépôt Android : une
       # seule source pour les deux applications, jamais deux copies à
       # tenir à jour.
