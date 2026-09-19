@@ -26,14 +26,19 @@ final class VueWeb: UIViewController {
         vue = WKWebView(frame: .zero, configuration: reglages)
         vue.navigationDelegate = self
         vue.uiDelegate = self
-        // La page gère elle-même ses zones sûres : sans cela, iOS ajoute
-        // ses propres marges et le contenu saute au premier défilement.
+        // iOS n'ajoute plus ses propres marges : la vue est déjà posée
+        // dans la zone utile ci-dessous, et le contenu ne saute donc pas
+        // au premier défilement.
         vue.scrollView.contentInsetAdjustmentBehavior = .never
         vue.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(vue)
+        // Haut et bas dans la zone utile : sans cela la page passe sous
+        // l'heure et sous la pastille noire. Gauche et droite restent aux
+        // bords — l'application est en portrait, il n'y a pas d'encoche
+        // latérale, et les fonds continuent d'un bord à l'autre.
         NSLayoutConstraint.activate([
-            vue.topAnchor.constraint(equalTo: view.topAnchor),
-            vue.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            vue.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            vue.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
             vue.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             vue.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
