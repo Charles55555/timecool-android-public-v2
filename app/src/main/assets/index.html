@@ -13964,6 +13964,14 @@ function renderContactsListHTML(contacts) {
             ? `<div class="ct-blocked">\u{1F6AB}<div><b>Acc\u00e8s bloqu\u00e9 volontairement.</b> Ce contact ne pourra plus prendre de RDV automatiquement. Ses nouvelles demandes de RDV arriveront dans ta messagerie s\u00e9curis\u00e9e et attendront ta validation \u2014 Ce contact ne sait pas qu'il est bloqu\u00e9. Clique sur <b>D\u00e9bloquer l'acc\u00e8s</b> pour le d\u00e9bloquer.</div></div>`
             : (cats.length === 0 ? `<div style="font-size:11px; color:#ea4335; margin-top:8px; font-style:italic;">${escapeHTMLSafe(prenom)} ne peut pas me prendre de rendez-vous</div>` : '')}
 
+          ${onTC ? '' : `
+          <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
+            <span style="font-size:11.5px; color:var(--text-sec);">🌐 Ecris-lui en :</span>
+            <select data-notranslate onchange="setContactLangue('${c.id}', this.value)" style="padding:5px 8px; border:1.5px solid var(--border); border-radius:10px; font-size:11.5px; background:#fff; color:var(--text); cursor:pointer;">
+              ${SUPPORTED_LANGUAGES.map(l => `<option value="${l.code}"${tcLangueDuContact(c) === l.code ? ' selected' : ''}>${l.flag} ${l.label}</option>`).join('')}
+            </select>
+          </div>` }
+
           <div class="ct-actions">
             ${onTC ? `
             ${FEATURES.RDV_CONTACT ? `<div class="ct-act rdv" onclick="requestRdvContact('${c.id}')">\u{1F4C5} Demander un rendez-vous</div>` : ''}
@@ -16876,6 +16884,35 @@ async function addContactManually() {
   // Sans cela, un contact qui vient de s'inscrire n'apparait comme
   // utilisateur TimeCool qu'apres avoir quitte la page et y etre revenu.
   if (typeof tcRafraichirBadgesContacts === 'function') tcRafraichirBadgesContacts();
+}
+
+/** La langue dans laquelle l'utilisateur lit TimeCool, aujourd'hui. */
+function tcLangueCourante() {
+  return (typeof currentLanguage === 'string' && currentLanguage) ? currentLanguage : 'fr';
+}
+
+/**
+ * La langue dans laquelle ecrire a ce contact.
+ *
+ * Celle de sa fiche s'il n'a pas TimeCool. S'il en a un, la sienne
+ * l'emporte et le serveur la connait deja : la fiche est ignoree.
+ */
+function tcLangueDuContact(c) {
+  if (!c) return tcLangueCourante();
+  const code = c.langue;
+  const connue = SUPPORTED_LANGUAGES.some(l => l.code === code);
+  return connue ? code : tcLangueCourante();
+}
+
+/** Enregistre la langue choisie sur la fiche d'un contact. */
+function setContactLangue(id, code) {
+  const c = contactsList.find(x => x.id === id);
+  if (!c) return;
+  const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
+  if (!lang) return;
+  c.langue = code;
+  saveContacts();
+  showToast(`${lang.flag} ${c.name} : ${lang.label}`);
 }
 
 async function deleteContact(id) {
