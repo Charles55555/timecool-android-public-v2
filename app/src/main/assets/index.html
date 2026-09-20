@@ -14006,7 +14006,7 @@ function renderContactsListHTML(contacts) {
           <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
             <span style="font-size:11.5px; color:var(--text-sec);">🌐 Ecris-lui en :</span>
             <select data-notranslate onchange="setContactLangue('${c.id}', this.value)" style="padding:5px 8px; border:1.5px solid var(--border); border-radius:10px; font-size:11.5px; background:#fff; color:var(--text); cursor:pointer;">
-              ${SUPPORTED_LANGUAGES.map(l => `<option value="${l.code}"${tcLangueDuContact(c) === l.code ? ' selected' : ''}>${l.flag} ${l.label}</option>`).join('')}
+              ${SUPPORTED_LANGUAGES.map(l => `<option value="${l.code}"${tcLangueDuContact(c) === l.code ? ' selected' : ''}>${l.flag} ${tcNomDeLangue(l.code, l.label)}</option>`).join('')}
             </select>
           </div>` }
 
@@ -16922,6 +16922,28 @@ async function addContactManually() {
   // Sans cela, un contact qui vient de s'inscrire n'apparait comme
   // utilisateur TimeCool qu'apres avoir quitte la page et y etre revenu.
   if (typeof tcRafraichirBadgesContacts === 'function') tcRafraichirBadgesContacts();
+}
+
+/**
+ * Le nom d'une langue, ecrit dans celle que lit l'utilisateur.
+ *
+ * « sv » devient « Suedois » pour un francophone, « Svedese » pour un
+ * italien. Le navigateur porte ces noms depuis toujours : rien a
+ * telecharger, rien a traduire, aucun delai.
+ *
+ * Repli sur le nom d'origine si le navigateur est trop ancien pour
+ * connaitre Intl.DisplayNames — mieux vaut « Svenska » que rien.
+ */
+function tcNomDeLangue(code, secours) {
+  try {
+    const nom = new Intl.DisplayNames([tcLangueCourante()], { type: 'language' }).of(code);
+    if (!nom || nom === code) return secours;
+    // Le francais et l'italien rendent ces noms en minuscule ; dans une
+    // liste deroulante, la majuscule se lit mieux.
+    return nom.charAt(0).toUpperCase() + nom.slice(1);
+  } catch (e) {
+    return secours;
+  }
 }
 
 /** La langue dans laquelle l'utilisateur lit TimeCool, aujourd'hui. */
