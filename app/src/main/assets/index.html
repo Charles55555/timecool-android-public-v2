@@ -14006,7 +14006,7 @@ function renderContactsListHTML(contacts) {
           <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
             <span style="font-size:11.5px; color:var(--text-sec);">🌐 Ecris-lui en :</span>
             <select data-notranslate onchange="setContactLangue('${c.id}', this.value)" style="padding:5px 8px; border:1.5px solid var(--border); border-radius:10px; font-size:11.5px; background:#fff; color:var(--text); cursor:pointer;">
-              ${SUPPORTED_LANGUAGES.map(l => `<option value="${l.code}"${tcLangueDuContact(c) === l.code ? ' selected' : ''}>${l.flag} ${tcNomDeLangue(l.code, l.label)}</option>`).join('')}
+              ${tcLanguesClassees().map(l => `<option value="${l.code}"${tcLangueDuContact(c) === l.code ? ' selected' : ''}>${l.flag} ${l.nom}</option>`).join('')}
             </select>
           </div>` }
 
@@ -16944,6 +16944,30 @@ function tcNomDeLangue(code, secours) {
   } catch (e) {
     return secours;
   }
+}
+
+/**
+ * Les langues proposees, classees alphabetiquement pour celui qui lit.
+ *
+ * L'ordre depend de la langue affichee : « Allemand, Anglais, Danois »
+ * pour un francophone, « Ceco, Danese, Francese » pour un italien. Le
+ * tri se refait donc a chaque affichage, et jamais une fois pour
+ * toutes.
+ *
+ * localeCompare plutot qu'une comparaison ordinaire : sans lui,
+ * « Neerlandais » se rangerait apres « Norvegien » a cause de son
+ * accent, et les alphabets non latins tomberaient tous en fin de liste.
+ */
+function tcLanguesClassees() {
+  const lues = SUPPORTED_LANGUAGES.map(function (l) {
+    return { code: l.code, flag: l.flag, nom: tcNomDeLangue(l.code, l.label) };
+  });
+  const langue = tcLangueCourante();
+  lues.sort(function (a, b) {
+    try { return a.nom.localeCompare(b.nom, langue); }
+    catch (e) { return a.nom < b.nom ? -1 : (a.nom > b.nom ? 1 : 0); }
+  });
+  return lues;
 }
 
 /** La langue dans laquelle l'utilisateur lit TimeCool, aujourd'hui. */
