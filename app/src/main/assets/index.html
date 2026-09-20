@@ -225,6 +225,11 @@ body { display:flex; flex-direction:column; }
 .conv-msg { max-width:85%; padding:10px 14px; border-radius:18px; margin-bottom:8px; font-size:13px; line-height:1.5; }
 .conv-msg.received { background:#fff; color:var(--text); margin-right:auto; border-bottom-left-radius:4px; }
 .conv-msg.sent { background:var(--g-blue); color:white; margin-left:auto; border-bottom-right-radius:4px; }
+/* Le message d'origine, sous une traduction. Discret : on ne le lit
+   que si la traduction semble fautive. */
+.tc-orig { margin-top:6px; padding-top:6px; border-top:1px dashed #dadce0; }
+.tc-orig-lien { font-size:11px; color:var(--g-blue); cursor:pointer; text-decoration:underline; }
+.tc-orig-txt { display:block; font-size:12px; color:var(--text-sec); font-style:italic; margin-bottom:4px; }
 .conv-time { font-size:10px; margin-top:4px; opacity:0.7; }
 .conv-timer { background:#fff4e0; border:1px solid var(--g-yellow); padding:10px 14px; border-radius:12px; margin-bottom:10px; font-size:12px; color:#b26a00; display:flex; align-items:center; gap:8px; font-weight:500; }
 
@@ -4861,7 +4866,14 @@ function tcConversationsAffichables() {
       archived: false,
       serveur: true,
       thread: (c.thread || []).map(function (t) {
-        return { from: t.from, text: t.texte || '', time: heure(t.le) };
+        // « original » n'existe que sur un message traduit par le
+        // serveur : c'est lui qui declenche le lien de relecture.
+        return {
+          from: t.from,
+          text: t.texte || '',
+          time: heure(t.le),
+          original: typeof t.original === 'string' ? t.original : ''
+        };
       })
     };
   }).sort(function (a, b) { return a.with.localeCompare(b.with, 'fr'); });
@@ -4924,6 +4936,32 @@ function tcConversationParId(id) {
   });
 }
 
+/**
+ * Le bloc « voir l'original » sous un message traduit.
+ *
+ * Rendu vide si le message n'a pas ete traduit, ou si la traduction
+ * rend exactement le meme texte : proposer de relire l'identique
+ * n'aiderait personne.
+ */
+function tcOriginalHTML(t) {
+  const brut = (t.original || '').trim();
+  if (!brut || brut === (t.text || '').trim()) return '';
+  return '<div class="tc-orig" data-notranslate>'
+    + '<span class="tc-orig-txt" hidden>' + escapeHTMLSafe(brut).replace(/\n/g, '<br>') + '</span>'
+    + '<span class="tc-orig-lien" onclick="tcBasculerOriginal(this)">Voir l\'original</span>'
+    + '</div>';
+}
+
+/** Montre ou cache le texte d'origine, sans recharger la conversation. */
+function tcBasculerOriginal(lien) {
+  const bloc = lien.parentElement;
+  if (!bloc) return;
+  const texte = bloc.querySelector('.tc-orig-txt');
+  if (!texte) return;
+  texte.hidden = !texte.hidden;
+  lien.textContent = texte.hidden ? 'Voir l\'original' : 'Masquer l\'original';
+}
+
 function openConversation(id) {
   const msg = tcConversationParId(id);
   if (!msg) return;
@@ -4941,7 +4979,7 @@ function openConversation(id) {
         ? (t.convocId
             ? `<div onclick="openConvocationDashboard('${t.convocId}')" style="text-align:center; margin:10px 0; font-size:11.5px; color:var(--g-blue); cursor:pointer; text-decoration:underline;">${t.text} — voir le décompte</div>`
             : `<div style="text-align:center; margin:10px 0; font-size:11.5px; color:var(--text-sec);">${t.text}</div>`)
-        : `<div class="conv-msg ${t.from==='me'?'sent':'received'}">${t.text.replace(/\n/g,'<br>')}<div class="conv-time">${t.time}</div></div>`
+        : `<div class="conv-msg ${t.from==='me'?'sent':'received'}">${t.text.replace(/\n/g,'<br>')}${tcOriginalHTML(t)}<div class="conv-time">${t.time}</div></div>`
       ).join('')
     : '<div style="text-align:center; padding:36px 20px; color:var(--text-sec); font-size:12.5px; line-height:1.6;">\u{1F512} Conversation priv\u00e9e.<br>\u00c9cris ton premier message ci-dessous.</div>';
   if (msg.rdvRequest && !msg.rdvHandled) {
