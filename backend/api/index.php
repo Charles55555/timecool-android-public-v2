@@ -649,7 +649,13 @@ function traduire(string $texte, string $deLangue, string $versLangue, int $comp
 }
 
 
-function messagePoser(array $de, array $vers, string $texte, ?int $rdvId = null): void
+function messagePoser(
+    array $de,
+    array $vers,
+    string $texte,
+    ?int $rdvId = null,
+    ?string $langueImposee = null
+): void
 {
     $maintenant = date('c');
     $ligne = ['texte' => $texte, 'le' => $maintenant];
@@ -662,6 +668,10 @@ function messagePoser(array $de, array $vers, string $texte, ?int $rdvId = null)
     // delai -- c'est le cas courant.
     $langueDe   = is_string($de['langue'] ?? null)   && $de['langue']   !== '' ? $de['langue']   : 'fr';
     $langueVers = is_string($vers['langue'] ?? null) && $vers['langue'] !== '' ? $vers['langue'] : 'fr';
+    // L'expediteur a tranche : son choix passe devant celui du compte.
+    if (is_string($langueImposee) && $langueImposee !== '') {
+        $langueVers = $langueImposee;
+    }
     $traduit = $langueVers === $langueDe
         ? null
         : traduire($texte, $langueDe, $langueVers, (int) $de['id']);
@@ -1352,7 +1362,19 @@ switch ($route) {
         if ((int) $cible['id'] === (int) $moi['id']) {
             Rep::erreur(400, 'soi_meme', 'Vous ne pouvez pas vous écrire à vous-même.');
         }
-        messagePoser($moi, $cible, Entree::requis('texte', 2000));
+        // Langue imposee par l'expediteur, facultative. Absente, le
+        // destinataire recoit dans la sienne -- c'est le bon defaut, et
+        // c'est celui d'avant.
+        $imposee = Entree::corps()['langue'] ?? null;
+        if ($imposee !== null) {
+            $connues = ['cs', 'da', 'de', 'el', 'en', 'es', 'fr', 'it', 'hu',
+                        'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'fi', 'sv'];
+            if (!is_string($imposee) || !in_array($imposee, $connues, true)) {
+                Rep::erreur(400, 'langue_inconnue', 'Cette langue n’est pas gérée.');
+            }
+        }
+
+        messagePoser($moi, $cible, Entree::requis('texte', 2000), null, $imposee);
         Rep::ok();
 
     // ═══════════════════════════════════════════════════════════

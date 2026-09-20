@@ -14002,13 +14002,13 @@ function renderContactsListHTML(contacts) {
             ? `<div class="ct-blocked">\u{1F6AB}<div><b>Acc\u00e8s bloqu\u00e9 volontairement.</b> Ce contact ne pourra plus prendre de RDV automatiquement. Ses nouvelles demandes de RDV arriveront dans ta messagerie s\u00e9curis\u00e9e et attendront ta validation \u2014 Ce contact ne sait pas qu'il est bloqu\u00e9. Clique sur <b>D\u00e9bloquer l'acc\u00e8s</b> pour le d\u00e9bloquer.</div></div>`
             : (cats.length === 0 ? `<div style="font-size:11px; color:#ea4335; margin-top:8px; font-style:italic;">${escapeHTMLSafe(prenom)} ne peut pas me prendre de rendez-vous</div>` : '')}
 
-          ${onTC ? '' : `
           <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
             <span style="font-size:11.5px; color:var(--text-sec);">🌐 Ecris-lui en :</span>
             <select data-notranslate onchange="setContactLangue('${c.id}', this.value)" style="padding:5px 8px; border:1.5px solid var(--border); border-radius:10px; font-size:11.5px; background:#fff; color:var(--text); cursor:pointer;">
-              ${tcLanguesClassees().map(l => `<option value="${l.code}"${tcLangueDuContact(c) === l.code ? ' selected' : ''}>${l.flag} ${l.nom}</option>`).join('')}
+              ${onTC ? `<option value=""${c.langue ? '' : ' selected'}>🌐 Sa langue (automatique)</option>` : ''}
+              ${tcLanguesClassees().map(l => `<option value="${l.code}"${(onTC ? c.langue : tcLangueDuContact(c)) === l.code ? ' selected' : ''}>${l.flag} ${l.nom}</option>`).join('')}
             </select>
-          </div>` }
+          </div>
 
           <div class="ct-actions">
             ${onTC ? `
@@ -14637,8 +14637,12 @@ const TC_BACKEND = {
     return tcAppel('POST', '/rdv/choisir', { rdv: rdv, rang: rang });
   },
 
-  async envoyerMessage(reference, texte) {
-    await tcAppel('POST', '/messages/envoyer', { reference: reference, texte: texte });
+  async envoyerMessage(reference, texte, langue) {
+    const corps = { reference: reference, texte: texte };
+    // Absente quand rien n'est impose : le serveur s'en tient alors a
+    // la langue du destinataire, qu'il est seul a connaitre.
+    if (langue) corps.langue = langue;
+    await tcAppel('POST', '/messages/envoyer', corps);
     return true;
   },
 
@@ -15057,7 +15061,7 @@ async function sendConvMessage() {
   if (conv.serveur) {
     input.value = '';
     try {
-      await TC_BACKEND.envoyerMessage(conv.reference, txt);
+      await TC_BACKEND.envoyerMessage(conv.reference, txt, tcLangueForceePour(conv.reference));
     } catch (e) {
       input.value = txt;   // rien n'est parti : on rend sa saisie
       showToast('❌ ' + (e.message || 'Message non envoyé'));
@@ -16988,15 +16992,40 @@ function tcLangueDuContact(c) {
   return connue ? code : tcLangueCourante();
 }
 
-/** Enregistre la langue choisie sur la fiche d'un contact. */
+/**
+ * Enregistre la langue choisie sur la fiche d'un contact.
+ *
+ * Le code vide remet le reglage a zero : on revient alors a la langue
+ * du compte du destinataire, ou a la sienne s'il n'en a pas.
+ */
 function setContactLangue(id, code) {
   const c = contactsList.find(x => x.id === id);
   if (!c) return;
+  if (!code) {
+    delete c.langue;
+    saveContacts();
+    showToast(`🌐 ${c.name} : sa propre langue`);
+    return;
+  }
   const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
   if (!lang) return;
   c.langue = code;
   saveContacts();
-  showToast(`${lang.flag} ${c.name} : ${lang.label}`);
+  showToast(`${lang.flag} ${c.name} : ${tcNomDeLangue(lang.code, lang.label)}`);
+}
+
+/**
+ * La langue imposee pour ce correspondant, ou rien.
+ *
+ * Rien veut dire « laisse le serveur decider » : il connait la langue
+ * du destinataire et c'est elle qui doit primer tant qu'on n'a pas
+ * choisi le contraire.
+ */
+function tcLangueForceePour(reference) {
+  if (!reference || !Array.isArray(contactsList)) return '';
+  const c = contactsList.find(x => x.referenceCompte === reference);
+  if (!c || !c.langue) return '';
+  return SUPPORTED_LANGUAGES.some(l => l.code === c.langue) ? c.langue : '';
 }
 
 async function deleteContact(id) {
