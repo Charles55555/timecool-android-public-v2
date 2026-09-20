@@ -1949,6 +1949,32 @@ switch ($route) {
     // réponse précédente plutôt que d'empiler un historique, ce champ
     // ne représentant qu'un instantané, pas un journal.
     // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    // LANGUE DU COMPTE
+    // Le telephone la connait depuis toujours, le serveur non : elle
+    // n'etait ecrite qu'a l'inscription. Or c'est lui qui traduira les
+    // messages, et il doit savoir dans quelle langue les rendre.
+    //
+    // La liste est recopiee de SUPPORTED_LANGUAGES, cote page. Une
+    // langue inconnue est refusee plutot qu'enregistree : une valeur
+    // fantaisiste en base ferait echouer la traduction sans laisser de
+    // trace comprehensible.
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /compte/langue':
+        $compte = Auth::compte();
+
+        $langues = ['cs', 'da', 'de', 'el', 'en', 'es', 'fr', 'it', 'hu',
+                    'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'fi', 'sv'];
+
+        $langue = Entree::corps()['langue'] ?? '';
+        if (!is_string($langue) || !in_array($langue, $langues, true)) {
+            Rep::erreur(400, 'langue_inconnue', 'Cette langue n’est pas gérée.');
+        }
+
+        Db::req('UPDATE comptes SET langue = ? WHERE id = ?', [$langue, $compte['id']]);
+
+        Rep::ok(['langue' => $langue]);
+
     case 'POST /compte/provenance':
         $compte = Auth::compte();
 

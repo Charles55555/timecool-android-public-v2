@@ -3396,6 +3396,33 @@ async function tcRecupererClesDuServeur() {
   }
 }
 
+/**
+ * Annonce la langue au serveur, sans faire attendre l'utilisateur.
+ *
+ * Volontairement sans await chez les appelants : l'affichage bascule
+ * tout de suite, l'envoi suit. Hors ligne, l'echec est sans
+ * consequence — tcRattraperLangue() reglera le cas au demarrage
+ * suivant.
+ */
+function tcPousserLangue(code) {
+  if (!TC_BACKEND.estConnecte()) return;
+  TC_BACKEND.enregistrerLangue(code).catch(function(e) {
+    console.warn('Langue non transmise au serveur :', e.code || e.message);
+  });
+}
+
+/**
+ * Rattrape les comptes dont la langue a change avant que le serveur ne
+ * sache l'enregistrer. Sans cela, quelqu'un qui lit TimeCool en anglais
+ * depuis des mois resterait « francais » aux yeux du serveur, et
+ * recevrait ses messages traduits dans la mauvaise langue.
+ */
+function tcRattraperLangue(compte) {
+  if (!compte || typeof currentLanguage !== 'string' || !currentLanguage) return;
+  if (compte.langue === currentLanguage) return;
+  tcPousserLangue(currentLanguage);
+}
+
 function generateEvents() {
   // v7.4 — Agendas vidés pour la démo investisseurs
   // Charly IA construit l'agenda en direct devant l'investisseur
@@ -10311,6 +10338,7 @@ async function tcRevaliderSession() {
     if (compte !== null) {
       // Session valide : on recupere les cles enregistrees sur le compte.
       tcRecupererClesDuServeur();
+      tcRattraperLangue(compte);
     }
     if (compte === null) {
       try { localStorage.setItem('timecool_session_active', 'false'); } catch(e) {}
@@ -11870,6 +11898,7 @@ function selectLanguage(code) {
   }
   currentLanguage = code;
   try { localStorage.setItem('timecool_language', code); } catch(e){}
+  tcPousserLangue(code);
   // Mettre à jour l'affichage
   document.getElementById('currentLangFlag').textContent = lang.flag;
   document.getElementById('currentLangLabel').textContent = lang.label;
@@ -11932,6 +11961,7 @@ function selectLanguageFromSettings(code) {
   }
   currentLanguage = code;
   try { localStorage.setItem('timecool_language', code); } catch(e){}
+  tcPousserLangue(code);
 
   // Fermer la fenêtre ouverte, quel que soit le chemin utilisé
   const ov = document.getElementById('langModalOverlay');
@@ -14480,6 +14510,12 @@ const TC_BACKEND = {
 
   async supprimerCleApi(service) {
     await tcAppel('POST', '/cles-api/supprimer', { service: service });
+    return true;
+  },
+
+  /** Dit au serveur dans quelle langue ce compte lit TimeCool. */
+  async enregistrerLangue(code) {
+    await tcAppel('POST', '/compte/langue', { langue: code });
     return true;
   },
 
