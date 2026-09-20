@@ -565,6 +565,90 @@ function conversationPoser(array $compte, string $uid, string $nomAutre, string 
 }
 
 
+/**
+ * Traduit un texte, ou rend null si ce n'est pas possible.
+ *
+ * Rendre null n'est jamais une erreur : l'appelant envoie alors le
+ * texte d'origine. Un message qui arrive dans la mauvaise langue vaut
+ * mieux qu'un message qui n'arrive pas.
+ *
+ * La cle est celle de l'expediteur : c'est lui qui declenche l'envoi,
+ * et c'est son compte qui en porte le cout.
+ *
+ * @param string $deLangue    Langue dans laquelle l'expediteur a ecrit.
+ * @param string $versLangue  Langue dans laquelle le destinataire lit.
+ * @param int    $compteIdCle Compte dont on emprunte la cle Google.
+ */
+function traduire(string $texte, string $deLangue, string $versLangue, int $compteIdCle): ?string
+{
+    $texte = trim($texte);
+    // Au-dela, ce n'est plus un message mais un document : on laisse
+    // passer sans traduire plutot que de faire attendre l'expediteur.
+    if ($texte === '' || mb_strlen($texte) > 5000) {
+        return null;
+    }
+
+    $ligne = Db::un(
+        'SELECT valeur_chiffree FROM cles_api WHERE compte_id = ? AND service = ?',
+        [$compteIdCle, 'google_translate']
+    );
+    if ($ligne === null) {
+        return null;
+    }
+
+    try {
+        $cle = Coffre::dechiffrer($ligne['valeur_chiffree']);
+    } catch (Throwable $e) {
+        error_log('traduction : cle illisible pour le compte ' . $compteIdCle);
+        return null;
+    }
+    if (!is_string($cle) || $cle === '') {
+        return null;
+    }
+
+    $ch = curl_init('https://translation.googleapis.com/language/translate/v2');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        // Trois secondes au maximum : passe ce delai, l'expediteur a
+        // deja trop attendu pour un confort qui n'est pas vital.
+        CURLOPT_TIMEOUT        => 3,
+        CURLOPT_CONNECTTIMEOUT => 2,
+        // Meme forme que l'appel deja utilise par la page pour son
+        // interface : cle dans l'en-tete, langue de depart annoncee.
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'X-Goog-Api-Key: ' . $cle,
+        ],
+        CURLOPT_POSTFIELDS     => json_encode([
+            'q'      => $texte,
+            'source' => $deLangue,
+            'target' => $versLangue,
+            'format' => 'text',
+        ]),
+    ]);
+    $reponse = curl_exec($ch);
+    $codeHttp = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $souci = curl_error($ch);
+    curl_close($ch);
+
+    if ($reponse === false || $codeHttp !== 200) {
+        error_log('traduction refusee (' . $codeHttp . ') ' . $souci);
+        return null;
+    }
+
+    $d = json_decode((string) $reponse, true);
+    $traduit = $d['data']['translations'][0]['translatedText'] ?? null;
+    if (!is_string($traduit) || trim($traduit) === '') {
+        return null;
+    }
+
+    // Google rend des entites HTML meme en mode texte : sans cela, une
+    // apostrophe reviendrait ecrite &#39; dans la messagerie.
+    return html_entity_decode($traduit, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+}
+
+
 function messagePoser(array $de, array $vers, string $texte, ?int $rdvId = null): void
 {
     $maintenant = date('c');
@@ -572,6 +656,15 @@ function messagePoser(array $de, array $vers, string $texte, ?int $rdvId = null)
     if ($rdvId !== null) {
         $ligne['rdv'] = $rdvId;
     }
+
+    // Chacun lit TimeCool dans sa langue, et le serveur les connait
+    // toutes les deux. Memes langues : aucun appel, aucun cout, aucun
+    // delai -- c'est le cas courant.
+    $langueDe   = is_string($de['langue'] ?? null)   && $de['langue']   !== '' ? $de['langue']   : 'fr';
+    $langueVers = is_string($vers['langue'] ?? null) && $vers['langue'] !== '' ? $vers['langue'] : 'fr';
+    $traduit = $langueVers === $langueDe
+        ? null
+        : traduire($texte, $langueDe, $langueVers, (int) $de['id']);
 
     $ecritures = [];
     foreach ([[$de, $vers, 'me'], [$vers, $de, 'them']] as [$proprietaire, $autre, $sens]) {
@@ -589,7 +682,16 @@ function messagePoser(array $de, array $vers, string $texte, ?int $rdvId = null)
                 'thread'    => [],
             ];
         }
-        $conv['thread'][] = ['from' => $sens] + $ligne;
+        // Seul l'exemplaire du destinataire est traduit. Celui de
+        // l'expediteur garde ses mots : il doit se relire tel qu'il a
+        // ecrit, pas retraduit.
+        $sienne = $ligne;
+        if ($sens === 'them' && $traduit !== null) {
+            $sienne['texte']    = $traduit;
+            $sienne['original'] = $texte;
+            $sienne['langue']   = $langueVers;
+        }
+        $conv['thread'][] = ['from' => $sens] + $sienne;
         // Une conversation ne garde pas tout : au-delà, le premier
         // chargement deviendrait lourd pour rien.
         if (count($conv['thread']) > 200) {
