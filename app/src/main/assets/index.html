@@ -222,6 +222,13 @@ body { display:flex; flex-direction:column; }
 .conv-name { font-size:15px; font-weight:500; }
 .conv-sub { font-size:11px; color:var(--text-sec); }
 .conv-body { flex:1; overflow-y:auto; padding:16px; background:#f5f5f5; }
+/* Journees entieres et periodes, au-dessus de la grille des heures. */
+.tc-bandeau-evt { margin:0 8px 6px; padding:8px 12px; border-radius:10px; cursor:pointer; }
+.tc-bandeau-titre { font-size:13px; font-weight:600; line-height:1.3; }
+.tc-bandeau-note { font-size:10.5px; opacity:0.85; margin-top:2px; }
+.tc-chip-evt { margin:2px 2px 0; padding:2px 3px; border-radius:4px; font-size:8.5px;
+  font-weight:700; line-height:1.25; text-align:center; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
 .conv-msg { max-width:85%; padding:10px 14px; border-radius:18px; margin-bottom:8px; font-size:13px; line-height:1.5; }
 .conv-msg.received { background:#fff; color:var(--text); margin-right:auto; border-bottom-left-radius:4px; }
 .conv-msg.sent { background:var(--g-blue); color:white; margin-left:auto; border-bottom-right-radius:4px; }
@@ -1569,10 +1576,18 @@ if (window.pdfjsLib) {
       <div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid #eee;">
         <div style="flex:1;">
           <div class="info-label">Date</div>
-          <input type="date" id="newEvtDate" value="2026-04-22" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
+          <input type="date" id="newEvtDate" value="2026-04-22" onchange="tcMajFinApresDebut()" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
+        </div>
+        <div style="flex:1;">
+          <div class="info-label">Jusqu'au</div>
+          <input type="date" id="newEvtDateFin" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
         </div>
       </div>
-      <div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid #eee;">
+      <label style="display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #eee; cursor:pointer;">
+        <input type="checkbox" id="newEvtAllDay" onchange="tcMajJourneeEntiere()" style="width:18px; height:18px; cursor:pointer;">
+        <span style="font-size:14px; color:var(--text);">Journée entière</span>
+      </label>
+      <div id="newEvtHeures" style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid #eee;">
         <div style="flex:1;">
           <div class="info-label">Début</div>
           <input type="time" id="newEvtStart" value="14:00" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
@@ -3093,6 +3108,16 @@ Pour tout événement à ajouter, utilise EXACTEMENT ce format :
 [/AGENDA]
 
 Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE | LIEU (facultatif, un 5e champ)
+
+ÉVÉNEMENT SUR PLUSIEURS JOURS : ajoute la date de fin après la date de début, séparée par « > ».
+[AGENDA]
+2026-11-11>2026-11-14 | 00:00-23:59 | Ryder Cup 2026 | loisir
+[/AGENDA]
+Une seule ligne pour toute la période — surtout PAS une ligne par jour.
+Utilise-la dès que l'utilisateur donne un début et une fin : « du 11 au 14 », « pendant 3 jours »,
+« toute la semaine prochaine », « mes vacances du 1er au 15 août ».
+Sans heure précisée sur une période, mets 00:00-23:59.
+NE confonds PAS avec la récurrence : « tous les mardis » reste une ligne par occurrence.
 Catégories : travail, sport, famille, rdv, repas, pause, trajet, preparation, administratif, loisir
 Le lieu n'est ajouté (5e champ) que si l'utilisateur l'a donné, ou pour changer explicitement le
 lieu d'un rendez-vous existant. Absent, le lieu déjà connu du rendez-vous modifié est conservé
@@ -3169,7 +3194,7 @@ function tcMigrateClaudeModel(id) {
 /* Change de valeur à chaque fois qu'il faut jeter les copies gardées
    par les appareils. */
 const TC_PROMPT_VERSION_KEY = 'timecool_prompt_version';
-const TC_PROMPT_VERSION = 'v8-copies-figees';
+const TC_PROMPT_VERSION = 'v9-periodes';
 
 // Charger configuration et démarches depuis localStorage au démarrage
 function loadCharlyIAConfig() {
@@ -3932,6 +3957,88 @@ function render() {
 }
 
 // ═══ VUE MOIS v4.1 ═══
+/**
+ * Le dernier jour occupe par un evenement.
+ *
+ * Sans dateFin, un evenement tient sur sa seule journee : c'est le cas
+ * de tout ce qui existait avant la periode, et ca doit le rester.
+ */
+function tcEvenementFin(e) {
+  if (!e) return '';
+  const fin = e.dateFin;
+  // Une fin anterieure au debut ferait disparaitre l'evenement de
+  // partout. Mieux vaut l'afficher sur un jour que nulle part.
+  return (typeof fin === 'string' && fin >= e.date) ? fin : e.date;
+}
+
+/** Cet evenement occupe-t-il ce jour ? */
+function tcEvenementCouvre(e, jour) {
+  if (!e || !jour) return false;
+  return e.date <= jour && jour <= tcEvenementFin(e);
+}
+
+/** Un evenement qui s'etend sur plusieurs jours. */
+function tcEvenementSurPlusieursJours(e) {
+  return !!e && tcEvenementFin(e) !== e.date;
+}
+
+/**
+ * « du 11 au 14 novembre », ou la date seule si l'evenement tient sur
+ * un jour. Le mois n'est repete que s'il change.
+ */
+function tcPeriodeLisible(e) {
+  const jour = function (iso, avecMois) {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('fr-FR', avecMois
+      ? { weekday: 'long', day: 'numeric', month: 'long' }
+      : { weekday: 'long', day: 'numeric' });
+  };
+  const fin = tcEvenementFin(e);
+  if (fin === e.date) return jour(e.date, true);
+  const memeMois = e.date.slice(0, 7) === fin.slice(0, 7);
+  return 'du ' + jour(e.date, !memeMois) + ' au ' + jour(fin, true);
+}
+
+/**
+ * Cet evenement s'affiche-t-il en bandeau plutot que dans les heures ?
+ *
+ * Une journee entiere n'a pas d'horaire, et une periode n'en a pas sur
+ * ses journees du milieu : les deux recouvriraient la grille entiere.
+ */
+function tcEstBandeau(e) {
+  return !!e && (e.allDay === true || tcEvenementSurPlusieursJours(e));
+}
+
+/** Combien de jours dure cet evenement, au minimum un. */
+function tcEvenementDuree(e) {
+  const debut = new Date(e.date + 'T00:00:00');
+  const fin = new Date(tcEvenementFin(e) + 'T00:00:00');
+  return Math.round((fin - debut) / 86400000) + 1;
+}
+
+/**
+ * « Jour 2 sur 4 » sous un evenement de plusieurs jours.
+ *
+ * Sans ce reperage, les quatre journees d'une meme periode sont
+ * indiscernables : on ne sait plus si l'on regarde le debut ou la fin.
+ */
+function tcEtapeDeLaPeriode(e, jour) {
+  if (!tcEvenementSurPlusieursJours(e)) return '';
+  const debut = new Date(e.date + 'T00:00:00');
+  const ici = new Date(jour + 'T00:00:00');
+  const rang = Math.round((ici - debut) / 86400000) + 1;
+  return 'Jour ' + rang + ' sur ' + tcEvenementDuree(e);
+}
+
+/** Les evenements qui occupent ce jour, tries, bandeaux ou non. */
+function tcEvenementsDuJour(jour, enBandeau) {
+  return events.filter(function (e) {
+    return tcEvenementCouvre(e, jour) && e.mode === mode
+      && isCategoryVisible(e.cat) && isCalendarVisible(e.calendarId)
+      && tcEstBandeau(e) === enBandeau;
+  });
+}
+
 function renderMonth() {
   const header = document.getElementById('monthGridHeader');
   const body = document.getElementById('monthGridBody');
@@ -3959,7 +4066,7 @@ function renderMonth() {
     const isToday = (cellDateStr === todayStr);
 
     // Récupérer les événements du jour
-    const dayEvents = events.filter(e => e.date === cellDateStr && e.mode === mode && isCategoryVisible(e.cat) && isCalendarVisible(e.calendarId));
+    const dayEvents = events.filter(e => tcEvenementCouvre(e, cellDateStr) && e.mode === mode && isCategoryVisible(e.cat) && isCalendarVisible(e.calendarId));
 
     const cell = document.createElement('div');
     cell.className = 'month-day' + (isOtherMonth ? ' other-month' : '') + (isToday ? ' today' : '');
@@ -4068,6 +4175,20 @@ function renderWeek() {
       reste.textContent = '+' + (fetes.length - 2);
       col.appendChild(reste);
     }
+
+    // Journees entieres et periodes : dans l'en-tete, au-dessus des
+    // heures, la ou les reperes s'affichent deja. La colonne est
+    // etroite, le titre est donc coupe — il reste lisible au toucher.
+    tcEvenementsDuJour(fmt(d), true).forEach(function (e) {
+      const chip = document.createElement('div');
+      chip.className = 'tc-chip-evt';
+      tcAppliquerCouleurEvenement(chip, e.cat);
+      chip.title = e.title;
+      chip.textContent = e.title;
+      const evt = e;
+      chip.onclick = function (ev) { ev.stopPropagation(); openEventModal(evt); };
+      col.appendChild(chip);
+    });
     // L en-tete devient cliquable des qu il porte un repere : c est le
     // geste naturel pour en lire le nom complet.
     if (fetes.length) {
@@ -4098,7 +4219,7 @@ function renderWeek() {
     const w = body.offsetWidth;
     const colWidth = (w-50)/7;
     weekDates.forEach((d, di) => {
-      events.filter(e => e.date===fmt(d) && e.mode===mode && isCategoryVisible(e.cat) && isCalendarVisible(e.calendarId)).forEach(e => {
+      tcEvenementsDuJour(fmt(d), false).forEach(e => {
         const sm = (e.startH-agendaStartH)*60 + e.startM;
         const dm = (e.endH-e.startH)*60 + (e.endM-e.startM);
         const evt = document.createElement('div');
@@ -4181,13 +4302,26 @@ function renderDay() {
     body.appendChild(tcBandeauRepere(r));
   });
 
+  // Meme traitement pour les journees entieres et les periodes : sans
+  // heure de debut, elles n'ont pas leur place dans la grille.
+  tcEvenementsDuJour(fmt(d), true).forEach(function (e) {
+    const el = document.createElement('div');
+    el.className = 'tc-bandeau-evt';
+    tcAppliquerCouleurEvenement(el, e.cat);
+    const etape = tcEtapeDeLaPeriode(e, fmt(d));
+    el.innerHTML = '<div class="tc-bandeau-titre">' + escapeHTMLSafe(e.title) + '</div>'
+      + '<div class="tc-bandeau-note">' + (etape || 'Journée entière') + '</div>';
+    el.onclick = function () { openEventModal(e); };
+    body.appendChild(el);
+  });
+
   for (let h=agendaStartH; h<=agendaEndH; h++) {
     const row = document.createElement('div');
     row.className = 'day-hour';
     row.innerHTML = `<div class="day-hour-label">${h}:00</div><div></div>`;
     body.appendChild(row);
   }
-  events.filter(e => e.date===fmt(d) && e.mode===mode && isCategoryVisible(e.cat) && isCalendarVisible(e.calendarId)).forEach(e => {
+  tcEvenementsDuJour(fmt(d), false).forEach(e => {
     const sm = (e.startH-agendaStartH)*60 + e.startM;
     const dm = (e.endH-e.startH)*60 + (e.endM-e.startM);
     const evt = document.createElement('div');
@@ -4206,8 +4340,12 @@ let currentEvent = null;
 function openEventModal(e) {
   currentEvent = e;
   document.getElementById('emTitle').textContent = e.title;
-  const dateStr = new Date(e.date+'T00:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
-  const timeStr = `${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}`;
+  const dateStr = tcPeriodeLisible(e);
+  // Une journee entiere n'a pas d'horaire : afficher « 00:00 - 23:59 »
+  // serait exact et incomprehensible.
+  const timeStr = e.allDay
+    ? 'Journée entière'
+    : `${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}`;
   document.getElementById('emBody').innerHTML = `
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><div><div class="event-detail-label">Date</div><div class="event-detail-value">${dateStr}</div></div></div>
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg><div><div class="event-detail-label">Horaire</div><div class="event-detail-value">${timeStr}</div></div></div>
@@ -4243,11 +4381,27 @@ function openEditEventModal() {
       <input id="editTitle" type="text" value="${e.title.replace(/"/g,'&quot;')}" 
         style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px;">
       
-      <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">DATE</div>
-      <input id="editDate" type="date" value="${e.date}"
-        style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px;">
+      <div style="display:flex; gap:10px; margin-bottom:14px;">
+        <div style="flex:1;">
+          <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">DATE</div>
+          <input id="editDate" type="date" value="${e.date}"
+            style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box;">
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">JUSQU'AU</div>
+          <input id="editDateFin" type="date" value="${e.dateFin || ''}"
+            style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box;">
+        </div>
+      </div>
       
-      <div style="display:flex; gap:10px;">
+      <label style="display:flex; align-items:center; gap:10px; margin-bottom:14px; cursor:pointer;">
+        <input id="editAllDay" type="checkbox" ${e.allDay ? 'checked' : ''}
+          onchange="document.getElementById('editHeures').style.display = this.checked ? 'none' : 'flex';"
+          style="width:18px; height:18px; cursor:pointer;">
+        <span style="font-size:14px; color:var(--text);">Journée entière</span>
+      </label>
+
+      <div id="editHeures" style="display:${e.allDay ? 'none' : 'flex'}; gap:10px;">
         <div style="flex:1;">
           <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">HEURE DÉBUT</div>
           <input id="editStartH" type="time" value="${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')}"
@@ -4276,6 +4430,9 @@ function saveEventEdit() {
   if (!e) return;
   const newTitle = document.getElementById('editTitle').value.trim();
   const newDate = document.getElementById('editDate').value;
+  const champFin = document.getElementById('editDateFin');
+  const coche = document.getElementById('editAllDay');
+  const allDay = !!(coche && coche.checked);
   const startTime = document.getElementById('editStartH').value.split(':');
   const endTime = document.getElementById('editEndH').value.split(':');
   if (!newTitle || !newDate) { showToast('Remplis tous les champs'); return; }
@@ -4283,8 +4440,20 @@ function saveEventEdit() {
   const newLieu = lieuChamp ? lieuChamp.value.trim() : '';
   e.title = newTitle;
   e.date = newDate;
-  e.startH = parseInt(startTime[0]); e.startM = parseInt(startTime[1]);
-  e.endH = parseInt(endTime[0]); e.endM = parseInt(endTime[1]);
+  if (allDay) {
+    e.allDay = true;
+    e.startH = 0; e.startM = 0; e.endH = 23; e.endM = 59;
+  } else {
+    delete e.allDay;
+    e.startH = parseInt(startTime[0]); e.startM = parseInt(startTime[1]);
+    e.endH = parseInt(endTime[0]); e.endM = parseInt(endTime[1]);
+  }
+  // Vide ou ramenee au jour meme, la periode disparait : l'evenement
+  // redevient ce qu'il etait, sans champ inutile.
+  let finVoulue = (champFin && champFin.value) || '';
+  if (finVoulue && finVoulue < e.date) finVoulue = e.date;
+  if (finVoulue && finVoulue !== e.date) e.dateFin = finVoulue;
+  else delete e.dateFin;
   if (newLieu) e.lieu = newLieu; else delete e.lieu;
   closeEventModal();
   saveEventsToStorage();
@@ -5925,22 +6094,63 @@ function openCreateModal() {
 }
 function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
 
+/**
+ * Cache les heures quand l'evenement occupe la journee entiere.
+ *
+ * Les laisser visibles ferait croire qu'elles comptent encore, et on
+ * chercherait ensuite pourquoi le rendez-vous s'affiche de 0h a
+ * minuit.
+ */
+function tcMajJourneeEntiere() {
+  const coche = document.getElementById('newEvtAllDay');
+  const heures = document.getElementById('newEvtHeures');
+  if (heures) heures.style.display = (coche && coche.checked) ? 'none' : 'flex';
+}
+
+/**
+ * Empeche une date de fin anterieure au debut.
+ *
+ * Deplacer le debut au-dela de la fin donnerait une periode a l'envers,
+ * qui ne s'afficherait sur aucun jour : l'evenement disparaitrait sans
+ * un mot.
+ */
+function tcMajFinApresDebut() {
+  const debut = document.getElementById('newEvtDate');
+  const fin = document.getElementById('newEvtDateFin');
+  if (!debut || !fin || !fin.value) return;
+  if (fin.value < debut.value) fin.value = debut.value;
+}
+
 function saveNewEvent() {
   const title = document.getElementById('newEvtTitle').value.trim();
   const type = document.getElementById('newEvtType').value;
   const calSel = document.getElementById('newEvtCalendar');
   const calendarId = (calSel && calSel.value) || 'cal_default';
   const date = document.getElementById('newEvtDate').value;
+  const champFin = document.getElementById('newEvtDateFin');
+  const coche = document.getElementById('newEvtAllDay');
+  const allDay = !!(coche && coche.checked);
   const start = document.getElementById('newEvtStart').value;
   const end = document.getElementById('newEvtEnd').value;
   if (!title) { showToast('⚠️ Titre requis'); return; }
-  if (!date || !start || !end) { showToast('⚠️ Date/heures requises'); return; }
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  events.push({
+  if (!date) { showToast('⚠️ Date requise'); return; }
+  if (!allDay && (!start || !end)) { showToast('⚠️ Heures requises'); return; }
+
+  // Une journee entiere occupe la journee entiere : les heures du
+  // formulaire, meme laissees a 14h, n'ont plus de sens ici.
+  const [sh, sm] = allDay ? [0, 0] : start.split(':').map(Number);
+  const [eh, em] = allDay ? [23, 59] : end.split(':').map(Number);
+
+  // Absente ou egale au debut, la date de fin n'est pas enregistree :
+  // un evenement d'un seul jour reste exactement ce qu'il etait.
+  let dateFin = (champFin && champFin.value) || '';
+  if (dateFin && dateFin < date) dateFin = date;
+  const periode = dateFin && dateFin !== date ? { dateFin: dateFin } : {};
+
+  events.push(Object.assign({
     date, startH:sh, startM:sm, endH:eh, endM:em,
     title, cat:type, calendarId, mode, id:'new_'+Date.now()
-  });
+  }, allDay ? { allDay: true } : {}, periode));
   saveEventsToStorage();
   closeCreateModal();
   showToast('✅ Événement créé');
@@ -8275,18 +8485,25 @@ function extractAgendaProposals(content) {
     const block = agendaMatch[1].trim();
     const lines = block.split('\n').filter(l => l.trim());
     lines.forEach(line => {
-      // Format prioritaire : YYYY-MM-DD | HH:MM-HH:MM | Title | category | lieu (facultatif)
-      let m1 = line.match(/(\d{4}-\d{2}-\d{2})\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?\s*(?:\|\s*([^|]+?))?$/);
+      // Format prioritaire : YYYY-MM-DD[>YYYY-MM-DD] | HH:MM-HH:MM | Title | category | lieu
+      // La date de fin est facultative : les lignes ecrites a l'ancien
+      // format restent comprises telles quelles.
+      let m1 = line.match(/(\d{4}-\d{2}-\d{2})(?:\s*>\s*(\d{4}-\d{2}-\d{2}))?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?\s*(?:\|\s*([^|]+?))?$/);
       if (m1) {
+        const debut = fixPastYear(m1[1]);
+        const fin = m1[2] ? fixPastYear(m1[2]) : '';
         proposals.push({
-          date: fixPastYear(m1[1]),
-          startH: parseInt(m1[2]), startM: parseInt(m1[3]),
-          endH: parseInt(m1[4]), endM: parseInt(m1[5]),
-          start: m1[2]+'h'+(m1[3]==='00'?'':m1[3]),
-          end: m1[4]+'h'+(m1[5]==='00'?'':m1[5]),
-          title: m1[6].trim(),
-          category: (m1[7] || 'green').trim().toLowerCase(),
-          lieu: m1[8] ? m1[8].trim() : null
+          date: debut,
+          // Une fin anterieure au debut est ignoree plutot que gardee :
+          // l'evenement ne s'afficherait sur aucun jour.
+          dateFin: (fin && fin > debut) ? fin : null,
+          startH: parseInt(m1[3]), startM: parseInt(m1[4]),
+          endH: parseInt(m1[5]), endM: parseInt(m1[6]),
+          start: m1[3]+'h'+(m1[4]==='00'?'':m1[4]),
+          end: m1[5]+'h'+(m1[6]==='00'?'':m1[6]),
+          title: m1[7].trim(),
+          category: (m1[8] || 'green').trim().toLowerCase(),
+          lieu: m1[9] ? m1[9].trim() : null
         });
         return;
       }
@@ -8597,7 +8814,11 @@ function validateAgendaProposalFromMsg(msg) {
       cat: catMap[p.category] || 'green',
       mode: mode === 'pro' ? 'pro' : 'user',
       id: 'charly_ai_' + Date.now() + '_' + idx,
-      ...(lieuFinal ? { lieu: lieuFinal } : {})
+      ...(lieuFinal ? { lieu: lieuFinal } : {}),
+      // Recalculee par rapport a dateStr : l'annee du debut a pu etre
+      // corrigee plus haut, et une periode dont seule la fin garde la
+      // mauvaise annee durerait douze mois.
+      ...(p.dateFin && p.dateFin > dateStr ? { dateFin: p.dateFin } : {})
     });
     added++;
   });
