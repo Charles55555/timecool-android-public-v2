@@ -1,23 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Icone TimeCool : des etoiles sur fond blanc.
+
+  Dessinee par scripts/dessiner-icone.py, a partir de la
+  geometrie qui sert aussi a l icone de l iPhone. Ne pas la
+  retoucher a la main : la prochaine execution du script
+  effacerait la retouche.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Fond blanc arrondi -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M24,54 A30,30 0 1,1 84,54 A30,30 0 1,1 24,54Z"/>
-
-    <!-- 4 points colorés TimeCool -->
-    <path android:fillColor="#1a73e8"
-        android:pathData="M38,54 A6,6 0 1,1 50,54 A6,6 0 1,1 38,54Z"/>
     <path android:fillColor="#EA4335"
-        android:pathData="M50,54 A6,6 0 1,1 62,54 A6,6 0 1,1 50,54Z"/>
-    <path android:fillColor="#FBBC04"
-        android:pathData="M62,54 A6,6 0 1,1 74,54 A6,6 0 1,1 62,54Z"/>
+        android:pathData="M54.00,57.24 L52.05,55.29 L54.00,30.96 L55.95,55.29Z"/>
+    <path android:fillColor="#4285F4"
+        android:pathData="M54.00,57.24 L55.95,55.29 L80.28,57.24 L55.95,59.19Z"/>
     <path android:fillColor="#34A853"
-        android:pathData="M74,54 A6,6 0 1,1 86,54 A6,6 0 1,1 74,54Z"/>
+        android:pathData="M54.00,57.24 L55.95,59.19 L54.00,83.52 L52.05,59.19Z"/>
+    <path android:fillColor="#FBBC04"
+        android:pathData="M54.00,57.24 L52.05,59.19 L27.72,57.24 L52.05,55.29Z"/>
+    <path android:fillColor="#EA4335"
+        android:pathData="M65.16,24.48 L66.23,33.13 L74.88,34.20 L66.23,35.27 L65.16,43.92 L64.09,35.27 L55.44,34.20 L64.09,33.13Z"/>
+    <path android:fillColor="#4285F4"
+        android:pathData="M34.20,27.00 L35.15,34.69 L42.84,35.64 L35.15,36.59 L34.20,44.28 L33.25,36.59 L25.56,35.64 L33.25,34.69Z"/>
+    <path android:fillColor="#FBBC04"
+        android:pathData="M78.84,40.82 L79.46,45.82 L84.46,46.44 L79.46,47.06 L78.84,52.06 L78.22,47.06 L73.22,46.44 L78.22,45.82Z"/>
+    <path android:fillColor="#34A853"
+        android:pathData="M28.08,60.12 L28.67,64.93 L33.48,65.52 L28.67,66.11 L28.08,70.92 L27.49,66.11 L22.68,65.52 L27.49,64.93Z"/>
+    <path android:fillColor="#4285F4"
+        android:pathData="M66.38,68.76 L67.37,76.77 L75.38,77.76 L67.37,78.75 L66.38,86.76 L65.40,78.75 L57.38,77.76 L65.40,76.77Z"/>
 
 </vector>
