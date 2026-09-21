@@ -1576,7 +1576,7 @@ if (window.pdfjsLib) {
       <div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid #eee;">
         <div style="flex:1;">
           <div class="info-label">Date</div>
-          <input type="date" id="newEvtDate" value="2026-04-22" onchange="tcMajFinApresDebut()" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
+          <input type="date" id="newEvtDate" onchange="tcMajFinApresDebut()" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
         </div>
         <div style="flex:1;">
           <div class="info-label">Jusqu'au</div>
@@ -6090,6 +6090,44 @@ function openCreateModal() {
   if (calSel) {
     calSel.innerHTML = customCalendars.map(c => `<option value="${c.id}">⬤ ${escapeHTMLSafe(c.name)}</option>`).join('');
   }
+
+  // Le jour regarde, pas une date figee : on ouvre un jour de
+  // l'agenda, on y ajoute quelque chose. viewDate vaut aujourd'hui
+  // tant qu'on n'a pas change de mois.
+  const jour = (viewDate instanceof Date && !isNaN(viewDate)) ? viewDate : new Date();
+  const champDate = document.getElementById('newEvtDate');
+  if (champDate) champDate.value = fmt(jour);
+
+  // Remise a zero : sans elle, la periode et la journee entiere du
+  // rendez-vous precedent se recopiaient en silence sur le suivant.
+  const champFin = document.getElementById('newEvtDateFin');
+  if (champFin) champFin.value = '';
+  const coche = document.getElementById('newEvtAllDay');
+  if (coche) coche.checked = false;
+  tcMajJourneeEntiere();
+
+  // L'heure ronde qui vient, et une heure de duree : la proposition la
+  // plus souvent juste, et de toute facon plus proche que 14h.
+  const depart = new Date(jour);
+  const maintenant = new Date();
+  if (fmt(jour) === fmt(maintenant)) {
+    // Bornee a 23h : au-dela, l'heure suivante tombe le lendemain et
+    // le rendez-vous serait pose dans le passe de la journee affichee.
+    depart.setHours(Math.min(maintenant.getHours() + 1, 23), 0, 0, 0);
+  } else {
+    depart.setHours(9, 0, 0, 0);
+  }
+  const hhmm = function (d) {
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  const arrivee = depart.getHours() === 23
+    ? new Date(depart.getTime() + 59 * 60000)
+    : new Date(depart.getTime() + 3600000);
+  const champDebut = document.getElementById('newEvtStart');
+  const champHeureFin = document.getElementById('newEvtEnd');
+  if (champDebut) champDebut.value = hhmm(depart);
+  if (champHeureFin) champHeureFin.value = hhmm(arrivee);
+
   document.getElementById('createModal').classList.add('open');
 }
 function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
