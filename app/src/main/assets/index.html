@@ -11867,13 +11867,22 @@ async function tcRafraichirTout() {
     }
   } catch (e) { /* le bandeau de mise a jour se tait deja tout seul */ }
 
-  // Le bandeau de mise a jour a pris la main : ne pas lui passer devant.
+  tcTirerCacher();
+
+  // Le bandeau des mises a jour a pris la main : il annonce deja une
+  // nouvelle version, on ne lui passe pas devant.
   const maj = document.getElementById('tcBandeauMaj');
-  if (maj && !maj.hidden) {
-    tcTirerCacher();
-  } else {
-    tcTirerBandeau('\u00c0 jour', 60);
-    setTimeout(tcTirerCacher, 900);
+  if (!maj || maj.hidden) {
+    // Rien de neuf, mais le geste etait volontaire : on repond par le
+    // meme bandeau, avec le meme bouton. Tirer pour obtenir la
+    // derniere version et n'avoir rien a toucher serait deroutant.
+    //
+    // La signature est un horodatage : celle d'un bandeau ferme est
+    // retenue pour ne plus le remontrer, ce qui vaut pour une version
+    // annoncee toute seule mais pas pour une reponse a un geste.
+    if (typeof tcAfficherBandeauMaj === 'function') {
+      tcAfficherBandeauMaj('tirage-' + Date.now(), 'Tout est \u00e0 jour', 'Recharger');
+    }
   }
   _tirerEnCours = false;
 }
