@@ -14150,20 +14150,138 @@ function getContactColor(name) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+/**
+ * Au-dela de ce nombre, la page passe par la reglette.
+ *
+ * Deux cents fiches se construisent encore sans attente sensible ; le
+ * seuil est place la pour que les petits carnets ne perdent rien.
+ */
+const TC_CONTACTS_SEUIL = 200;
+
+/** La lettre regardee, ou '' tant qu'on n'en a choisi aucune. */
+let _contactsLettre = '';
+
+/**
+ * Sous quelle lettre ranger ce contact.
+ *
+ * Les accents rejoignent leur lettre de base : \u00ab \u00c9mile \u00bb se cherche
+ * sous E, et non sous un \u00c9 que personne n'irait toucher. Tout ce qui
+ * ne commence pas par une lettre -- chiffres, symboles, numeros sans
+ * nom -- se range sous #.
+ */
+function tcLettreContact(c) {
+  const nom = ((c && c.name) || '').trim();
+  if (!nom) return '#';
+  const base = nom.normalize('NFD').replace(/[\u0300-\u036f]/g, '').charAt(0).toUpperCase();
+  return (base >= 'A' && base <= 'Z') ? base : '#';
+}
+
+/** Combien de contacts sous chaque lettre. */
+function tcContactsParLettre() {
+  const compte = {};
+  if (!Array.isArray(contactsList)) return compte;
+  contactsList.forEach(function (c) {
+    const l = tcLettreContact(c);
+    compte[l] = (compte[l] || 0) + 1;
+  });
+  return compte;
+}
+
+/** La page doit-elle passer par la reglette ? */
+function tcContactsParLettres() {
+  return Array.isArray(contactsList) && contactsList.length > TC_CONTACTS_SEUIL;
+}
+
+/**
+ * Les contacts a construire maintenant.
+ *
+ * Une recherche l'emporte sur la lettre : on cherche dans tout le
+ * carnet, pas dans la lettre affichee \u2014 sinon taper un nom ne
+ * donnerait rien tant qu'on n'aurait pas devine sa premiere lettre.
+ */
+function tcContactsAffiches() {
+  if (!Array.isArray(contactsList)) return [];
+  const q = contactsSearchQuery.trim().toLowerCase();
+  let liste;
+  if (q) {
+    liste = contactsList.filter(function (c) {
+      return (c.name && c.name.toLowerCase().includes(q))
+        || (c.phone && c.phone.toLowerCase().includes(q))
+        || (c.email && c.email.toLowerCase().includes(q));
+    });
+  } else if (tcContactsParLettres()) {
+    liste = _contactsLettre
+      ? contactsList.filter(function (c) { return tcLettreContact(c) === _contactsLettre; })
+      : [];
+  } else {
+    liste = contactsList;
+  }
+  return liste.slice().sort(function (a, b) {
+    return (a.name || '').localeCompare(b.name || '', 'fr');
+  });
+}
+
+/** Touche une lettre : la meme lettre deux fois la referme. */
+function tcChoisirLettre(lettre) {
+  _contactsLettre = (_contactsLettre === lettre) ? '' : lettre;
+  contactsSearchQuery = '';
+  renderContacts();
+}
+
+/** La reglette A-Z, avec le nombre de fiches sous chaque lettre. */
+function tcRegletteHTML() {
+  if (!tcContactsParLettres()) return '';
+  const compte = tcContactsParLettre();
+  const lettres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['#']);
+  let h = '<div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px;">';
+  lettres.forEach(function (l) {
+    const n = compte[l] || 0;
+    const choisie = (_contactsLettre === l);
+    if (n === 0) {
+      h += '<span style="flex:1; min-width:26px; text-align:center; padding:6px 0;'
+        + ' font-size:12px; color:#dadce0;">' + l + '</span>';
+      return;
+    }
+    h += '<button onclick="tcChoisirLettre(\'' + l + '\')" title="' + n + ' contact'
+      + (n > 1 ? 's' : '') + '" style="flex:1; min-width:26px; padding:6px 0; cursor:pointer;'
+      + ' font-size:12px; font-weight:600; border-radius:6px;'
+      + (choisie
+          ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
+          : ' background:#fff; color:var(--g-blue); border:1.5px solid var(--border);')
+      + '">' + l + '</button>';
+  });
+  h += '</div>';
+  return h;
+}
+
+/**
+ * Ce qu'on montre tant qu'aucune lettre n'est choisie.
+ *
+ * Le nombre total y figure : c'est ce qui permet de verifier du premier
+ * coup d'oeil qu'un import s'est bien passe, sans derouler quoi que ce
+ * soit.
+ */
+function tcContactsInviteHTML() {
+  const total = Array.isArray(contactsList) ? contactsList.length : 0;
+  return '<div style="text-align:center; padding:36px 20px; color:var(--text-sec);">'
+    + '<div style="font-size:40px; margin-bottom:12px;">\ud83d\udc65</div>'
+    + '<div style="font-size:17px; font-weight:700; color:var(--text); margin-bottom:6px;">'
+    + total.toLocaleString('fr-FR') + ' contacts</div>'
+    + '<div style="font-size:12.5px; line-height:1.6;">Touche une lettre ci-dessus,<br>'
+    + 'ou cherche un nom dans la barre de recherche.</div></div>';
+}
+
+/** La liste, ou l'invitation a choisir. */
+function tcContactsListeHTML() {
+  if (tcContactsParLettres() && !_contactsLettre && !contactsSearchQuery.trim()) {
+    return tcContactsInviteHTML();
+  }
+  return renderContactsListHTML(tcContactsAffiches());
+}
+
 function renderContacts() {
   const c = document.getElementById('contactsContent');
   if (!c) return;
-
-  // Filtrer selon la recherche
-  const q = contactsSearchQuery.trim().toLowerCase();
-  const filtered = q ? contactsList.filter(c =>
-    (c.name && c.name.toLowerCase().includes(q)) ||
-    (c.phone && c.phone.toLowerCase().includes(q)) ||
-    (c.email && c.email.toLowerCase().includes(q))
-  ) : contactsList;
-
-  // Trier par nom
-  const sorted = [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   c.innerHTML = `
     <div style="font-size:13px;color:#5f6368;margin-bottom:14px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">
@@ -14187,8 +14305,10 @@ function renderContacts() {
       <input type="text" id="contactsSearchInput" placeholder="Rechercher un contact..." value="${escapeHTMLSafe(contactsSearchQuery)}" oninput="contactsSearchQuery = this.value; renderContactsList();" style="width:100%; padding:12px 14px 12px 40px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; box-sizing:border-box; outline:none;">
     </div>
 
+    ${tcRegletteHTML()}
+
     <div id="contactsListContainer">
-      ${renderContactsListHTML(sorted)}
+      ${tcContactsListeHTML()}
     </div>
 
     <div style="margin-top:24px; padding:14px; background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; font-size:11px; color:#5f4500; line-height:1.5;">
@@ -15358,14 +15478,11 @@ function toggleContactCat(contactId, catId) {
 function renderContactsList() {
   const container = document.getElementById('contactsListContainer');
   if (!container) return;
-  const q = contactsSearchQuery.trim().toLowerCase();
-  const filtered = q ? contactsList.filter(c =>
-    (c.name && c.name.toLowerCase().includes(q)) ||
-    (c.phone && c.phone.toLowerCase().includes(q)) ||
-    (c.email && c.email.toLowerCase().includes(q))
-  ) : contactsList;
-  const sorted = [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  container.innerHTML = renderContactsListHTML(sorted);
+  // Taper un nom quitte la lettre en cours : on cherche dans tout le
+  // carnet, et garder une lettre allumee laisserait croire le
+  // contraire.
+  if (contactsSearchQuery.trim()) _contactsLettre = '';
+  container.innerHTML = tcContactsListeHTML();
   tcRestaurerZonesRdv();
 }
 
