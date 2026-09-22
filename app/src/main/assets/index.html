@@ -3674,12 +3674,12 @@ function tcCatNormalisee(cat) {
 
 /* L'ordre de ce tableau est l'ordre d'affichage a l'ecran. */
 var DISPO_CATEGORIES = [
-  { id: 'travail',   icon: '\ud83d\udcbc', label: 'Pour mon travail' },
-  { id: 'sante',     icon: '\ud83c\udfe5', label: 'Pour ma sant\u00e9' },
-  { id: 'famille',   icon: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67', label: 'Pour ma famille' },
-  { id: 'amis',      icon: '\ud83c\udf89', label: 'Pour mes amis et loisirs' },
-  { id: 'sport',     icon: '\ud83c\udfcb\ufe0f', label: 'Pour mon sport' },
-  { id: 'personnel', icon: '\u2600\ufe0f', label: 'Pour mon temps \u00e0 moi' }
+  { id: 'travail',   icon: '\ud83d\udcbc', label: 'Mon travail' },
+  { id: 'sante',     icon: '\ud83c\udfe5', label: 'Ma sant\u00e9' },
+  { id: 'famille',   icon: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67', label: 'Ma famille' },
+  { id: 'amis',      icon: '\ud83c\udf89', label: 'Mes amis et loisirs' },
+  { id: 'sport',     icon: '\ud83c\udfcb\ufe0f', label: 'Mon sport' },
+  { id: 'personnel', icon: '\u2600\ufe0f', label: 'Mon temps \u00e0 moi' }
 ].map(function (cat) {
   var c = TC_COULEURS_CATEGORIES[cat.id];
   cat.color = c.color;
@@ -18133,14 +18133,31 @@ function phraseDispo(plage) {
   return 'Je suis disponible ' + formatJours(plage.jours) + ' de ' + formatHeure(plage.debut) + ' \u00e0 ' + formatHeure(plage.fin);
 }
 
+/**
+ * Combien de contacts peuvent reellement reserver dans cette categorie.
+ *
+ * Memes conditions que le serveur au moment d'accorder un rendez-vous :
+ * la fiche porte la categorie, et le contact n'est pas bloque. Compter
+ * autrement afficherait un chiffre rassurant et faux.
+ */
+function tcContactsAutorises(catId) {
+  if (!Array.isArray(contactsList)) return 0;
+  return contactsList.filter(function (c) {
+    return c && !c.blocked && Array.isArray(c.categories)
+      && c.categories.indexOf(catId) > -1;
+  }).length;
+}
+
 function renderDispo() {
   if (!_dispoData) loadDispo();
   var c = document.getElementById('dispoContent');
   if (!c) return;
 
   var html = '<div style="font-size:13px;color:#5f6368;margin-bottom:16px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">';
-  html += '\ud83d\udd12 Cet espace reste confidentiel. Indique les plages horaires o\u00f9 tes contacts peuvent te prendre un rendez-vous automatiquement. ';
-  html += 'Tout le reste du temps, ton agenda est ferm\u00e9.';
+  html += '\ud83d\udd12 <b>Cet espace reste confidentiel, et tu restes ma\u00eetre de ton agenda.</b><br>';
+  html += 'Tu ouvres seulement les cr\u00e9neaux que tu veux, et seulement aux contacts que tu choisis. ';
+  html += 'Eux ne voient jamais ton agenda \u2014 uniquement les cr\u00e9neaux que tu as ouverts. ';
+  html += 'Partout ailleurs, c\u2019est ferm\u00e9.';
   html += '</div>';
 
   DISPO_CATEGORIES.forEach(function(cat) {
@@ -18154,7 +18171,7 @@ function renderDispo() {
     html += '<div style="flex:1;">';
     html += '<div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:3px;">' + cat.label + '</div>';
     if (plages.length === 0) {
-      html += '<div style="font-size:12.5px;color:#9aa0a6;line-height:1.5;">Je ne suis pas disponible</div>';
+      html += '<div style="font-size:12.5px;color:#9aa0a6;line-height:1.5;">Aucune plage ouverte \u2014 personne ne peut r\u00e9server.</div>';
     } else {
       plages.forEach(function(p, idx) {
         html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
@@ -18164,13 +18181,27 @@ function renderDispo() {
         html += '</div>';
       });
     }
+    // Qui peut reserver dans ces heures. Sans cette ligne, une plage
+    // ouverte a personne ressemble a une plage ouverte a tous.
+    var combien = tcContactsAutorises(cat.id);
+    if (plages.length > 0) {
+      if (combien > 0) {
+        html += '<div style="font-size:12px;color:#5f6368;margin-top:6px;">'
+          + '\ud83d\udc65 ' + combien + ' contact' + (combien > 1 ? 's' : '')
+          + ' peu' + (combien > 1 ? 'vent' : 't') + ' r\u00e9server dans ces heures</div>';
+      } else {
+        html += '<div style="font-size:12px;color:#ea4335;margin-top:6px;font-weight:500;">'
+          + '\u26a0\ufe0f Aucun contact autoris\u00e9 \u2014 personne ne peut r\u00e9server</div>';
+      }
+    }
+
     html += '</div>';
     html += '</div>';
 
     // Bouton toujours visible
     html += '<div style="padding:0 16px 16px;">';
     html += '<button onclick="openDispoForm(\'' + cat.id + '\')" style="width:100%;padding:12px;background:' + cat.color + ';color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:600;cursor:pointer;">';
-    html += '+ Ajouter une plage pour me rendre disponible';
+    html += '+ Ajouter une plage';
     html += '</button>';
     html += '</div>';
 
