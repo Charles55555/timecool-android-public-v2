@@ -14162,6 +14162,14 @@ const TC_CONTACTS_SEUIL = 200;
 let _contactsLettre = '';
 
 /**
+ * La categorie sur laquelle la page est filtree, ou ''.
+ *
+ * Posee depuis \u00ab Mes disponibilites \u00bb : on y regarde une plage
+ * horaire, on veut voir qui peut y reserver.
+ */
+let _contactsCategorie = '';
+
+/**
  * Sous quelle lettre ranger ce contact.
  *
  * Les accents rejoignent leur lettre de base : \u00ab \u00c9mile \u00bb se cherche
@@ -14201,6 +14209,16 @@ function tcContactsParLettres() {
  */
 function tcContactsAffiches() {
   if (!Array.isArray(contactsList)) return [];
+  // Une categorie demandee l'emporte sur la reglette : on vient voir
+  // qui peut reserver, pas parcourir l'alphabet.
+  if (_contactsCategorie) {
+    return contactsList.filter(function (c) {
+      return c && Array.isArray(c.categories)
+        && c.categories.indexOf(_contactsCategorie) > -1;
+    }).sort(function (a, b) {
+      return (a.name || '').localeCompare(b.name || '', 'fr');
+    });
+  }
   const q = contactsSearchQuery.trim().toLowerCase();
   let liste;
   if (q) {
@@ -14221,6 +14239,43 @@ function tcContactsAffiches() {
   });
 }
 
+/**
+ * Affiche les contacts autorises pour une categorie.
+ *
+ * Appelee depuis \u00ab Mes disponibilites \u00bb. Sans elle, on reglait les
+ * heures d'un cote et les personnes de l'autre, sans jamais savoir si
+ * les deux se repondaient.
+ */
+function tcVoirContactsDeCategorie(catId) {
+  _contactsCategorie = catId;
+  _contactsLettre = '';
+  contactsSearchQuery = '';
+  navigate('contacts');
+  renderContacts();
+}
+
+/** Retire le filtre et rend la page a son etat ordinaire. */
+function tcRetirerFiltreCategorie() {
+  _contactsCategorie = '';
+  renderContacts();
+}
+
+/** Le bandeau qui rappelle sur quoi la page est filtree. */
+function tcFiltreCategorieHTML() {
+  if (!_contactsCategorie) return '';
+  const cat = DISPO_CATEGORIES.find(function (c) { return c.id === _contactsCategorie; });
+  if (!cat) return '';
+  return '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;'
+    + ' padding:10px 14px; border-radius:12px; background:' + cat.bg + ';'
+    + ' border:1.5px solid ' + cat.color + ';">'
+    + '<span style="font-size:18px;">' + cat.icon + '</span>'
+    + '<div style="flex:1; font-size:12.5px; color:' + cat.color + '; font-weight:600;">'
+    + 'Qui peut r\u00e9server pour \u00ab ' + cat.label + ' \u00bb</div>'
+    + '<button onclick="tcRetirerFiltreCategorie()" style="background:#fff; border:1px solid '
+    + cat.color + '; color:' + cat.color + '; border-radius:8px; padding:4px 10px;'
+    + ' font-size:12px; cursor:pointer;">Tout voir</button></div>';
+}
+
 /** Touche une lettre : la meme lettre deux fois la referme. */
 function tcChoisirLettre(lettre) {
   _contactsLettre = (_contactsLettre === lettre) ? '' : lettre;
@@ -14230,6 +14285,9 @@ function tcChoisirLettre(lettre) {
 
 /** La reglette A-Z, avec le nombre de fiches sous chaque lettre. */
 function tcRegletteHTML() {
+  // Pendant un filtre par categorie, la reglette n'a plus de sens :
+  // on regarde une poignee de personnes, pas un alphabet.
+  if (_contactsCategorie) return '';
   if (!tcContactsParLettres()) return '';
   const compte = tcContactsParLettre();
   const lettres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['#']);
@@ -14273,7 +14331,8 @@ function tcContactsInviteHTML() {
 
 /** La liste, ou l'invitation a choisir. */
 function tcContactsListeHTML() {
-  if (tcContactsParLettres() && !_contactsLettre && !contactsSearchQuery.trim()) {
+  if (!_contactsCategorie && tcContactsParLettres()
+      && !_contactsLettre && !contactsSearchQuery.trim()) {
     return tcContactsInviteHTML();
   }
   return renderContactsListHTML(tcContactsAffiches());
@@ -14305,6 +14364,7 @@ function renderContacts() {
       <input type="text" id="contactsSearchInput" placeholder="Rechercher un contact..." value="${escapeHTMLSafe(contactsSearchQuery)}" oninput="contactsSearchQuery = this.value; renderContactsList();" style="width:100%; padding:12px 14px 12px 40px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; box-sizing:border-box; outline:none;">
     </div>
 
+    ${tcFiltreCategorieHTML()}
     ${tcRegletteHTML()}
 
     <div id="contactsListContainer">
@@ -14329,13 +14389,14 @@ function renderContactsListHTML(contacts) {
     `;
   }
 
-  const CATS = [
-    { id:'travail',   icon:'\u{1F4BC}', short:'Mon travail',    color:'#1a73e8', bg:'#e8f0fe' },
-    { id:'sante',     icon:'\u{1F3E5}', short:'Ma sant\u00e9',      color:'#ea4335', bg:'#fce8e6' },
-    { id:'famille',   icon:'\u{1F468}\u200D\u{1F469}\u200D\u{1F467}', short:'Ma famille',  color:'#fbbc04', bg:'#fff8e1' },
-    { id:'amis',      icon:'\u{1F389}', short:'Mes loisirs',   color:'#8430ce', bg:'#f3e8fd' },
-    { id:'personnel', icon:'\u2600\uFE0F', short:'Mon temps libre', color:'#34a853', bg:'#e8f5e9' }
-  ];
+  // Memes categories, memes libelles et memes couleurs que \u00ab Mes
+  // disponibilites \u00bb. Les couleurs etaient jusqu'ici recopiees a la
+  // main et avaient diverge -- \u00ab Mon temps libre \u00bb etait vert ici,
+  // turquoise la-bas, pour la meme chose.
+  const CATS = DISPO_CATEGORIES.map(function (cat) {
+    return { id: cat.id, icon: cat.icon, short: cat.label,
+             color: cat.color, bg: cat.bg };
+  });
 
   // Grouper par première lettre
   const groups = {};
@@ -18303,12 +18364,16 @@ function renderDispo() {
     var combien = tcContactsAutorises(cat.id);
     if (plages.length > 0) {
       if (combien > 0) {
-        html += '<div style="font-size:12px;color:#5f6368;margin-top:6px;">'
+        html += '<div onclick="tcVoirContactsDeCategorie(\'' + cat.id + '\')"'
+          + ' style="font-size:12px;color:' + cat.color + ';margin-top:6px;cursor:pointer;'
+          + 'text-decoration:underline;">'
           + '\ud83d\udc65 ' + combien + ' contact' + (combien > 1 ? 's' : '')
-          + ' peu' + (combien > 1 ? 'vent' : 't') + ' r\u00e9server dans ces heures</div>';
+          + ' peu' + (combien > 1 ? 'vent' : 't') + ' r\u00e9server dans ces heures \u203a</div>';
       } else {
-        html += '<div style="font-size:12px;color:#ea4335;margin-top:6px;font-weight:500;">'
-          + '\u26a0\ufe0f Aucun contact autoris\u00e9 \u2014 personne ne peut r\u00e9server</div>';
+        html += '<div onclick="tcVoirContactsDeCategorie(\'' + cat.id + '\')"'
+          + ' style="font-size:12px;color:#ea4335;margin-top:6px;font-weight:500;'
+          + 'cursor:pointer;text-decoration:underline;">'
+          + '\u26a0\ufe0f Aucun contact autoris\u00e9 \u2014 personne ne peut r\u00e9server \u203a</div>';
       }
     }
 
