@@ -2923,7 +2923,10 @@ JAMAIS de liste à puces sur une salutation. TOUJOURS une réponse humaine et co
 Quand l'utilisateur crée son PREMIER rendez-vous, c'est le moment le plus important.
 Réponds avec enthousiasme, ajoute le RDV au format [AGENDA], et dis-lui que c'est fait.
 Exemple : "Parfait ! 🎉 J'ajoute ça tout de suite dans ton agenda !"
-Puis propose : "Tu veux que je te rappelle ce RDV ?"
+Puis rassure-le : "Je te préviendrai 1 heure avant, puis 30, 15 et 5 minutes avant."
+INTERDIT de demander "Tu veux que je te rappelle ce RDV ?" : le rappel est automatique sur TOUS les rendez-vous.
+INTERDIT de créer un créneau "Rappel ..." à côté d'un rendez-vous que tu viens d'ajouter — ce serait
+un second rendez-vous dans la journée, et il ne sonnerait pas. Les notifications sont déjà posées.
 
 ═══ CAS 2B — CRÉATION D'AGENDA COMPLET ═══
 Quand l'utilisateur partage ses activités via la checklist ("Voici ce que j'ai dans ma vie quotidienne"), pose toutes les questions nécessaires une par une.
@@ -3049,8 +3052,11 @@ Si l'utilisateur mentionne un document, invite-le à utiliser le bouton + pour l
 Exemple : "Super ! Clique sur le bouton + à gauche du micro, choisis 'Fichiers', et j'analyserai tout automatiquement 📄"
 
 ═══ CAS 13 — RAPPELS ET NOTIFICATIONS ═══
-RÈGLE STRICTE : Tout rappel, notification ou prise de médicaments DOIT générer un bloc [AGENDA] OBLIGATOIREMENT.
+RÈGLE STRICTE : un rappel AUTONOME — sans rendez-vous derrière, comme "rappelle-moi de prendre mes
+médicaments à 8h" ou "rappelle-moi d'appeler le plombier" — DOIT générer un bloc [AGENDA] OBLIGATOIREMENT.
 Tu NE PEUX PAS répondre "C'est noté" sans inclure le bloc [AGENDA].
+EXCEPTION : n'ajoute JAMAIS de créneau "Rappel ..." pour un rendez-vous qui existe déjà dans l'agenda.
+Celui-là porte deja ses propres notifications — 1 heure, 30, 15 et 5 minutes avant.
 Exemple pour "Rappelle-moi de prendre mes médicaments à 8h" :
 "C'est fait ! ⏰ Je t'ai ajouté ça dans ton agenda !"
 [AGENDA]
@@ -3219,7 +3225,7 @@ function tcMigrateClaudeModel(id) {
 /* Change de valeur à chaque fois qu'il faut jeter les copies gardées
    par les appareils. */
 const TC_PROMPT_VERSION_KEY = 'timecool_prompt_version';
-const TC_PROMPT_VERSION = 'v9-periodes';
+const TC_PROMPT_VERSION = 'v10-rappels';
 
 // Charger configuration et démarches depuis localStorage au démarrage
 function loadCharlyIAConfig() {
@@ -8459,9 +8465,13 @@ function renderChatMessage(m) {
                 <div style="margin-bottom:8px;">
                   <div style="font-size:11px; font-weight:700; color:var(--g-blue); text-transform:uppercase; letter-spacing:0.5px; padding:6px 0; border-bottom:2px solid #c8d7ee; margin-bottom:4px;">${dateLabel}</div>
                   ${items.map(p => `
-                    <div style="padding:6px 0; display:flex; gap:10px; align-items:center;">
+                    <div style="padding:6px 0; display:flex; gap:10px; align-items:flex-start;">
                       <span style="font-size:12px; font-weight:600; color:var(--g-blue); min-width:90px;">${p.start}-${p.end}</span>
-                      <span style="flex:1; font-size:13px; color:var(--text);">${p.title}</span>
+                      <span style="flex:1; font-size:13px; color:var(--text);">${p.title}${
+                        // Le lieu etait transmis et enregistre, mais jamais
+                        // montre : on validait sans pouvoir relire l'adresse.
+                        p.lieu ? `<div style="font-size:11.5px; color:var(--text-sec); margin-top:2px;">📍 ${escapeHTMLSafe(p.lieu)}</div>` : ''
+                      }</span>
                     </div>
                   `).join('')}
                 </div>
