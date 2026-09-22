@@ -14441,18 +14441,22 @@ function tcRegletteHTML() {
   if (!tcContactsParLettres()) return '';
   const compte = tcContactsParLettre();
   const lettres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['#']);
-  let h = '<div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px;">';
+  // Une grille a cellules fixes plutot qu'un partage de la largeur :
+  // autrement les cinq dernieres lettres s'etiraient sur toute la
+  // deuxieme ligne.
+  let h = '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(30px, 1fr));'
+    + ' gap:4px; margin-bottom:12px;">';
   lettres.forEach(function (l) {
     const n = compte[l] || 0;
     const choisie = (_contactsLettre === l);
     if (n === 0) {
-      h += '<span style="flex:1; min-width:26px; text-align:center; padding:6px 0;'
+      h += '<span style="text-align:center; padding:6px 0;'
         + ' font-size:12px; color:#dadce0;">' + l + '</span>';
       return;
     }
     h += '<button onclick="tcChoisirLettre(\'' + l + '\')" title="' + n + ' contact'
-      + (n > 1 ? 's' : '') + '" style="flex:1; min-width:26px; padding:6px 0; cursor:pointer;'
-      + ' font-size:12px; font-weight:600; border-radius:6px;'
+      + (n > 1 ? 's' : '') + '" style="'
+      + ' font-size:12px; font-weight:600; border-radius:6px; padding:6px 0; cursor:pointer;'
       + (choisie
           ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
           : ' background:#fff; color:var(--g-blue); border:1.5px solid var(--border);')
@@ -14494,20 +14498,10 @@ function renderContacts() {
 
   c.innerHTML = `
     <div style="font-size:13px;color:#5f6368;margin-bottom:14px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">
-      \u{1F4A1} Choisis pour chaque personne dans quel domaine elle peut te prendre un rendez-vous. Tant que tu ne choisis rien, personne ne peut r\u00e9server ton temps.
-      <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e8eaed; font-size:11.5px; color:#5f6368;">
-        <span style="color:#1a73e8; font-weight:600;">\u25CF Color\u00e9</span> = autoris\u00e9 &nbsp;\u00b7&nbsp; <span style="color:#9aa0a6; font-weight:600;">\u25CF Gris</span> = non autoris\u00e9
-      </div>
+      \u{1F4A1} Choisis, pour chaque personne, ce qu'elle peut r\u00e9server chez toi.
+    </div>
     </div>
 
-    <div style="display:flex; gap:8px; margin-bottom:14px;">
-      <button onclick="importPhoneContacts()" style="flex:1; padding:12px; background:var(--g-blue); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-        📱 Importer mes contacts
-      </button>
-      <button onclick="addContactManually()" style="flex:1; padding:12px; background:var(--g-green); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-        + Ajouter
-      </button>
-    </div>
 
     <div style="margin-bottom:14px; position:relative;">
       <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:16px; color:var(--text-sec);">🔍</span>
@@ -14521,8 +14515,13 @@ function renderContacts() {
       ${tcContactsListeHTML()}
     </div>
 
-    <div style="margin-top:24px; padding:14px; background:#fff4e0; border:1px solid #fbbc04; border-radius:12px; font-size:11px; color:#5f4500; line-height:1.5;">
-      💡 <b>Astuce</b> : Sur l'application Android officielle, tes contacts du téléphone seront importés automatiquement. En attendant, tu peux les ajouter manuellement.
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button onclick="importPhoneContacts()" style="flex:1; padding:12px; background:var(--g-blue); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+        📱 Importer mes contacts
+      </button>
+      <button onclick="addContactManually()" style="flex:1; padding:12px; background:var(--g-green); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+        + Ajouter
+      </button>
     </div>
   `;
   tcRestaurerZonesRdv();
@@ -14557,6 +14556,10 @@ function renderContactsListHTML(contacts) {
   });
 
   let html = '';
+  // La legende ne s'affiche qu'une fois, sur la premiere fiche : en
+  // haut de page elle expliquait des boutons qu'on ne voyait pas
+  // encore.
+  let legendeAPoser = true;
   Object.keys(groups).sort().forEach(letter => {
     html += `<div style="font-size:12px; font-weight:700; color:var(--g-blue); padding:10px 6px 6px; letter-spacing:0.5px;">${letter}</div>`;
     groups[letter].forEach(c => {
@@ -14585,6 +14588,7 @@ function renderContactsListHTML(contacts) {
 
           <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:2px;">Il peut me prendre un RDV pour\u00a0:</div>
           <div style="font-size:10.5px; color:#9aa0a6; margin-bottom:7px; font-style:italic;">(clique sur une ou plusieurs cat\u00e9gories pour te rendre disponible)</div>
+          ${legendeAPoser ? `<div style="font-size:11px; color:#9aa0a6; margin-bottom:6px;"><span style="color:var(--g-blue); font-weight:600;">\u25cf Color\u00e9</span> = autoris\u00e9 &nbsp;\u00b7&nbsp; <span style="font-weight:600;">\u25cf Gris</span> = non autoris\u00e9</div>` : ''}
           <div style="display:flex; flex-wrap:wrap; gap:6px; ${c.blocked ? 'opacity:0.4; pointer-events:none;' : ''}">
             ${CATS.map(cat => {
               const active = cats.indexOf(cat.id) > -1;
@@ -14615,6 +14619,7 @@ function renderContactsListHTML(contacts) {
           ${onTC ? '' : `<div class="ct-nouser">${escapeHTMLSafe(prenom)} n'utilise pas encore TimeCool. Tes cat\u00e9gories sont enregistr\u00e9es et s'activeront d\u00e8s son inscription.</div>`}
         </div>
       `;
+      legendeAPoser = false;
     });
   });
   return html;
