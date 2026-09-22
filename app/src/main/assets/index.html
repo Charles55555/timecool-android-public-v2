@@ -74,7 +74,17 @@ body { display:flex; flex-direction:column; }
 .tab.active { color:var(--g-blue); }
 .tab.active::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; background:var(--g-blue); border-radius:3px 3px 0 0; }
 
-.main { flex:1; overflow-y:auto; background:#fff; position:relative; }
+.main { flex:1; overflow-y:auto; background:#fff; position:relative;
+  /* Sans cela, Chrome declenche son propre « tirer pour recharger »
+     et recharge toute la page au lieu de laisser faire le notre. */
+  overscroll-behavior-y: contain; }
+
+/* Le bandeau qui suit le doigt pendant qu'on tire. */
+.tc-tirer { position:fixed; left:50%; transform:translateX(-50%);
+  z-index:10200; padding:8px 18px; border-radius:20px;
+  background:#1a2740; color:#fff; font-size:12.5px; font-weight:600;
+  box-shadow:0 6px 18px rgba(0,0,0,0.28); pointer-events:none;
+  white-space:nowrap; }
 
 .week-header { display:grid; grid-template-columns:50px repeat(7,minmax(0,1fr)); border-bottom:1px solid var(--border); position:sticky; top:0; background:#fff; z-index:5; }
 
@@ -2423,7 +2433,19 @@ async function tcVerifierMajWeb() {
 }
 
 /** A l ouverture, au retour sur l onglet, et toutes les cinq minutes. */
+/** Allume le geste \u00ab tirer pour rafraichir \u00bb, des que possible. */
+function tcDemarrerTirer() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tcInitTirerRafraichir);
+  } else {
+    tcInitTirerRafraichir();
+  }
+}
+
 function tcSurveillerMaj() {
+  // Le geste vaut aussi dans l'APK : il y resynchronise les donnees,
+  // meme si la verification de version y suit son propre chemin.
+  tcDemarrerTirer();
   if (tcEstDansApk()) return;   // l application a sa propre verification
   tcVerifierMajWeb();
   setInterval(tcVerifierMajWeb, TC_MAJ_INTERVALLE);
@@ -11757,7 +11779,135 @@ function refreshAccountMenu() {
   }
 }
 
-// ═══ v5.6 — Swipe gauche/droite pour naviguer dans l'agenda ═══
+/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+   TIRER VERS LE BAS POUR RAFRAICHIR
+
+   Le geste de Facebook ou Gmail, disponible sur toutes les pages. Il
+   resynchronise les donnees et verifie la version, en une fois.
+
+   Il ne recharge pas la page : un rechargement ferait perdre ce qui
+   est en cours de saisie pour exactement le meme resultat.
+   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
+
+/** Distance a parcourir avant que le geste compte. */
+const TC_TIRER_SEUIL = 70;
+
+let _tirerDepart = null;   // position du doigt, ou null
+let _tirerZone = null;     // la zone qui defile, pour verifier qu'on est en haut
+let _tirerEnCours = false; // un rafraichissement tourne deja
+
+/** La zone qui defile sous ce point, ou null. */
+function tcZoneDefilante(cible) {
+  let el = cible;
+  while (el && el !== document.body) {
+    if (el.scrollHeight > el.clientHeight + 1) {
+      const style = getComputedStyle(el).overflowY;
+      if (style === 'auto' || style === 'scroll') return el;
+    }
+    el = el.parentElement;
+  }
+  return null;
+}
+
+/** Le bandeau qui suit le doigt. */
+function tcTirerBandeau(texte, hauteur) {
+  let el = document.getElementById('tcTirer');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'tcTirer';
+    el.className = 'tc-tirer';
+    document.body.appendChild(el);
+  }
+  el.textContent = texte;
+  el.style.top = Math.min(hauteur, 90) + 'px';
+  el.hidden = false;
+  return el;
+}
+
+function tcTirerCacher() {
+  const el = document.getElementById('tcTirer');
+  if (el) el.hidden = true;
+}
+
+/**
+ * Resynchronise et verifie la version.
+ *
+ * Les deux echecs sont avales : hors ligne, le geste ne doit pas
+ * afficher d'erreur alarmante pour quelque chose qui se rattrapera
+ * tout seul au prochain passage.
+ */
+async function tcRafraichirTout() {
+  if (_tirerEnCours) return;
+  _tirerEnCours = true;
+  tcTirerBandeau('Actualisation\u2026', 60);
+  try {
+    if (typeof tcSyncTour === 'function') await tcSyncTour();
+  } catch (e) {
+    console.warn('Rafraichissement : synchronisation', e && (e.code || e.message));
+  }
+  try {
+    if (typeof tcVerifierMajWeb === 'function') await tcVerifierMajWeb();
+  } catch (e) { /* le bandeau de mise a jour se tait deja tout seul */ }
+
+  // Le bandeau de mise a jour a pris la main : ne pas lui passer devant.
+  const maj = document.getElementById('tcBandeauMaj');
+  if (maj && !maj.hidden) {
+    tcTirerCacher();
+  } else {
+    tcTirerBandeau('\u00c0 jour', 60);
+    setTimeout(tcTirerCacher, 900);
+  }
+  _tirerEnCours = false;
+}
+
+/**
+ * Branche le geste sur toute l'application.
+ *
+ * Un seul jeu d'ecouteurs, poses sur le document : les pages vont et
+ * viennent, le document reste. Tous passifs -- ils ne font rien tant
+ * qu'on ne tire pas, et le defilement garde sa fluidite.
+ */
+function tcInitTirerRafraichir() {
+  if (document._tirerInitialise) return;
+  document._tirerInitialise = true;
+
+  document.addEventListener('touchstart', function (e) {
+    _tirerDepart = null;
+    if (!e.touches || e.touches.length !== 1) return;
+    // Pas de geste par-dessus une fenetre ouverte : on y tire pour la
+    // faire defiler, pas pour rafraichir ce qu'il y a derriere.
+    if (document.querySelector('.modal-overlay.open')) return;
+    const zone = tcZoneDefilante(e.target);
+    // Deja tout en haut, sinon tirer vers le bas doit faire defiler.
+    if (zone && zone.scrollTop > 0) return;
+    _tirerZone = zone;
+    _tirerDepart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function (e) {
+    if (!_tirerDepart || !e.touches || e.touches.length !== 1) return;
+    if (_tirerZone && _tirerZone.scrollTop > 0) { _tirerDepart = null; tcTirerCacher(); return; }
+    const dy = e.touches[0].clientY - _tirerDepart.y;
+    const dx = Math.abs(e.touches[0].clientX - _tirerDepart.x);
+    // Un mouvement de biais est un glissement lateral, pas un tirage.
+    if (dy < 12 || dx > dy) { tcTirerCacher(); return; }
+    tcTirerBandeau(dy >= TC_TIRER_SEUIL ? 'L\u00e2che pour actualiser' : 'Tire pour actualiser',
+                   Math.min(dy / 2, 90));
+  }, { passive: true });
+
+  document.addEventListener('touchend', function (e) {
+    const depart = _tirerDepart;
+    _tirerDepart = null;
+    _tirerZone = null;
+    if (!depart || !e.changedTouches || e.changedTouches.length !== 1) { tcTirerCacher(); return; }
+    const dy = e.changedTouches[0].clientY - depart.y;
+    const dx = Math.abs(e.changedTouches[0].clientX - depart.x);
+    if (dy < TC_TIRER_SEUIL || dx > dy) { tcTirerCacher(); return; }
+    tcRafraichirTout();
+  }, { passive: true });
+}
+
+// \u2550\u2550\u2550 v5.6 \u2014 Swipe gauche/droite pour naviguer dans l'agenda \u2550\u2550\u2550
 let _swipeStartX = 0;
 let _swipeStartY = 0;
 let _swipeStartTime = 0;
