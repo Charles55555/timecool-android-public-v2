@@ -11846,7 +11846,15 @@ async function tcRafraichirTout() {
     console.warn('Rafraichissement : synchronisation', e && (e.code || e.message));
   }
   try {
-    if (typeof tcVerifierMajWeb === 'function') await tcVerifierMajWeb();
+    // Deux chemins pour la meme question. Dans l'APK, la verification du
+    // site s'arrete des sa premiere ligne : c'est le numero de version
+    // de l'application qu'il faut comparer, pas l'horodatage du site.
+    const dansApk = !!(window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj);
+    if (dansApk) {
+      if (typeof checkForUpdates === 'function') await checkForUpdates(false);
+    } else if (typeof tcVerifierMajWeb === 'function') {
+      await tcVerifierMajWeb();
+    }
   } catch (e) { /* le bandeau de mise a jour se tait deja tout seul */ }
 
   // Le bandeau de mise a jour a pris la main : ne pas lui passer devant.
