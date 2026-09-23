@@ -279,8 +279,14 @@ titre('« Ce n est personne » se retient aussi');
   verifie('et on ne repose plus la question',
     ctx.tcAttenteContact({}, [{ contact: 'chez Ikea' }]) === null,
     'sinon elle reviendrait chaque semaine');
-  verifie('la ligne disparait de la carte',
-    ctx.tcLigneContactProposition({}, { contact: 'chez Ikea' }, 't1') === '');
+  const ligne = ctx.tcLigneContactProposition({}, { contact: 'chez Ikea' }, 't1');
+  verifie('mais la ligne reste visible', ligne.indexOf('sans contact') > -1,
+    'effacee, plus rien n expliquerait pourquoi ce rendez-vous n a personne');
+  verifie('et se defait d un doigt', ligne.indexOf('relier') > -1
+    && ligne.indexOf('tcChoisirContactProposition') > -1,
+    'une memoire sans marche arriere est un piege');
+  verifie('la question, elle, ne revient pas',
+    ctx.tcLigneContactProposition({}, { contact: 'chez Ikea' }, 't1').indexOf('qui est-ce ?') === -1);
   verifie('mais une autre designation reste posee',
     ctx.tcSurnomRefuse('mon dermatologue') === false);
 }
@@ -555,8 +561,12 @@ function fin() {
     && page.indexOf('Ne remplis ce champ que si une personne est nommée') === -1,
     'l ancienne consigne lui faisait ignorer « mon ostéopathe »');
   verifie('et le prompt ne promet plus quatre sonneries',
-    page.indexOf('1 heure, 30, 15 et 5 minutes avant') === -1,
+    page.indexOf('1 heure, 30, 15 et 5 minutes avant') === -1
+    && page.indexOf('30, 15 et 5 minutes avant') === -1,
     'le rappel est unique depuis la fusion des reglages');
+  verifie('ni aucune durée qu il ne connait pas',
+    page.indexOf("N'annonce JAMAIS de durée précise") > -1,
+    'le delai se regle dans Parametres, le modele ne le voit pas');
 
   console.log('');
   console.log(ko + ' anomalie(s).');

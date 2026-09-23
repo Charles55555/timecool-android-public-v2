@@ -2944,7 +2944,8 @@ JAMAIS de liste à puces sur une salutation. TOUJOURS une réponse humaine et co
 Quand l'utilisateur crée son PREMIER rendez-vous, c'est le moment le plus important.
 Réponds avec enthousiasme, ajoute le RDV au format [AGENDA], et dis-lui que c'est fait.
 Exemple : "Parfait ! 🎉 J'ajoute ça tout de suite dans ton agenda !"
-Puis rassure-le : "Je te préviendrai 1 heure avant, puis 30, 15 et 5 minutes avant."
+Puis rassure-le : "Je te préviendrai avant, au délai que tu as choisi dans tes réglages."
+N'annonce JAMAIS de durée précise : le délai se règle dans Paramètres, tu ne le connais pas.
 INTERDIT de demander "Tu veux que je te rappelle ce RDV ?" : le rappel est automatique sur TOUS les rendez-vous.
 INTERDIT de créer un créneau "Rappel ..." à côté d'un rendez-vous que tu viens d'ajouter — ce serait
 un second rendez-vous dans la journée, et il ne sonnerait pas. Les notifications sont déjà posées.
@@ -4778,10 +4779,19 @@ function tcIgnorerContactProposition(tempId, nom) {
 /** La ligne « avec qui » d'une proposition, avec son choix si besoin. */
 function tcLigneContactProposition(msg, p, tempId) {
   const nom = tcDesignationPour(msg, p);
-  if (!nom || tcSurnomRefuse(nom)) return '';
+  if (!nom) return '';
   const style = 'font-size:11.5px; margin-top:2px;';
   const ouvrir = 'onclick="tcChoisirContactProposition(' + JSON.stringify(String(tempId || '')).replace(/"/g, '&quot;')
     + ',' + JSON.stringify(nom).replace(/"/g, '&quot;') + ')"';
+
+  if (tcSurnomRefuse(nom)) {
+    // On ne repose plus la question, mais on ne l'efface pas non plus :
+    // sans cette ligne, plus rien n'expliquerait pourquoi ce
+    // rendez-vous n'a personne, ni comment y remedier.
+    return '<div style="' + style + ' color:#9aa0a6;" ' + ouvrir + '>'
+      + '👤 <span data-notranslate>' + escapeHTMLSafe(nom) + '</span>'
+      + ' — sans contact <span style="color:var(--g-blue);">· relier</span></div>';
+  }
   const retenu = tcContactDeProposition(msg, p);
   if (retenu) {
     return '<div style="' + style + ' color:var(--text-sec);" ' + ouvrir + '>'
@@ -4810,6 +4820,9 @@ function tcChoisirContactProposition(tempId, nom) {
     if (!msg._contacts) msg._contacts = {};
     if (id) msg._contacts[cle] = id;
     else delete msg._contacts[cle];
+    // Designer quelqu'un annule le « sans contact » precedent, ici et
+    // dans le carnet : sans cela le choix resterait sans effet.
+    if (id && msg._sansContact) delete msg._sansContact[cle];
     // Retenu pour la prochaine fois : « mon osteopathe » se reliera
     // tout seul, ici comme dans le bouton « Prevenir ».
     if (tcRetenirSurnom(nom, id)) {
