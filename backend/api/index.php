@@ -649,6 +649,167 @@ function traduire(string $texte, string $deLangue, string $versLangue, int $comp
 }
 
 
+/**
+ * Envoie les rappels par email arrives a echeance.
+ *
+ * Appelee chaque minute par une tache planifiee. Elle ne rend jamais
+ * d'erreur a l'appelant : un compte dont l'email rebondit ne doit pas
+ * empecher les suivants d'etre servis.
+ *
+ * @return array Ce qui a ete fait, pour le journal de la tache.
+ */
+function rappelsEnvoyer(): array
+{
+    // La trace des envois vit a part. Dans elements, elle redescendrait
+    // sur tous les appareils a la synchronisation suivante, pour une
+    // information qui ne les concerne pas.
+    Db::req(
+        'CREATE TABLE IF NOT EXISTS rappels_envoyes (
+             compte_id BIGINT UNSIGNED NOT NULL,
+             uid       VARCHAR(190)    NOT NULL,
+             envoye_le DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+             PRIMARY KEY (compte_id, uid)
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
+    $zone = new DateTimeZone('Europe/Paris');
+    $maintenant = new DateTime('now', $zone);
+
+    // Deux minutes en arriere : une minute juste laisserait tomber un
+    // rappel des que la tache prend une seconde de retard.
+    $debutFenetre = (clone $maintenant)->modify('-2 minutes');
+
+    $comptes = Db::tous(
+        "SELECT c.id, c.email, c.prenom
+           FROM elements e
+           JOIN comptes c ON c.id = e.compte_id
+          WHERE e.type = 'reglage' AND e.uid = 'tc_rappel_email'
+            AND e.supprime = 0
+            AND JSON_UNQUOTE(JSON_EXTRACT(e.contenu, '$.v')) = '1'
+            AND c.cloture_le IS NULL AND c.email <> ''"
+    );
+
+    $envoyes = 0;
+    $examines = 0;
+
+    foreach ($comptes as $compte) {
+        $defaut = rappelDelaiParDefaut((int) $compte['id']);
+
+        // Deux jours suffisent : le plus long rappel propose est « la
+        // veille », soit 1440 minutes.
+        $rdvs = Db::tous(
+            "SELECT uid, contenu FROM elements
+              WHERE compte_id = ? AND type = 'rdv' AND supprime = 0
+                AND JSON_UNQUOTE(JSON_EXTRACT(contenu, '$.date'))
+                    BETWEEN ? AND ?",
+            [
+                (int) $compte['id'],
+                $maintenant->format('Y-m-d'),
+                (clone $maintenant)->modify('+2 days')->format('Y-m-d'),
+            ]
+        );
+
+        foreach ($rdvs as $ligne) {
+            $examines++;
+            $rdv = json_decode((string) $ligne['contenu'], true);
+            if (!is_array($rdv) || empty($rdv['date'])) {
+                continue;
+            }
+
+            $delai = isset($rdv['rappel']) && is_int($rdv['rappel']) ? $rdv['rappel'] : $defaut;
+            if ($delai <= 0) {
+                continue;   // aucun rappel voulu pour celui-la
+            }
+
+            $debut = DateTime::createFromFormat(
+                'Y-m-d H:i',
+                $rdv['date'] . ' ' . sprintf('%02d:%02d', (int) ($rdv['startH'] ?? 0), (int) ($rdv['startM'] ?? 0)),
+                $zone
+            );
+            if ($debut === false) {
+                continue;
+            }
+
+            $quand = (clone $debut)->modify('-' . $delai . ' minutes');
+            if ($quand < $debutFenetre || $quand > $maintenant) {
+                continue;
+            }
+
+            // La cle porte le delai : changer d'avis apres un envoi doit
+            // pouvoir en declencher un nouveau, a la nouvelle heure.
+            $cle = $ligne['uid'] . '@' . $delai;
+            try {
+                Db::req(
+                    'INSERT INTO rappels_envoyes (compte_id, uid) VALUES (?, ?)',
+                    [(int) $compte['id'], $cle]
+                );
+            } catch (PDOException $e) {
+                continue;   // deja envoye : la cle primaire a parle
+            }
+
+            try {
+                rappelEnvoyerUn($compte, $rdv, $debut, $delai);
+                $envoyes++;
+            } catch (Throwable $e) {
+                error_log('rappel non envoye au compte ' . $compte['id'] . ' : ' . $e->getMessage());
+            }
+        }
+    }
+
+    return ['examines' => $examines, 'envoyes' => $envoyes];
+}
+
+/** Le delai choisi par ce compte, en minutes. */
+function rappelDelaiParDefaut(int $compteId): int
+{
+    $l = Db::un(
+        "SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = 'reglage' AND uid = 'tc_rappel_defaut'
+            AND supprime = 0",
+        [$compteId]
+    );
+    if ($l === null) {
+        return 60;
+    }
+    $d = json_decode((string) $l['contenu'], true);
+    $v = is_array($d) ? ($d['v'] ?? null) : null;
+    // L'application l'enregistre en texte : « 15 », pas 15.
+    $minutes = is_numeric($v) ? (int) $v : 60;
+    return in_array($minutes, [0, 5, 15, 30, 60, 120, 1440], true) ? $minutes : 60;
+}
+
+/** Un rappel, mis en forme et poste. */
+function rappelEnvoyerUn(array $compte, array $rdv, DateTime $debut, int $delai): void
+{
+    $quand = [
+        5 => 'dans 5 minutes', 15 => 'dans 15 minutes', 30 => 'dans 30 minutes',
+        60 => 'dans 1 heure', 120 => 'dans 2 heures', 1440 => 'demain',
+    ][$delai] ?? 'bientôt';
+
+    $titre = trim((string) ($rdv['title'] ?? 'Rendez-vous'));
+    $heure = $debut->format('H\hi');
+    $jour = $debut->format('d/m/Y');
+    $lieu = trim((string) ($rdv['lieu'] ?? ''));
+
+    $corps = '<p>Bonjour ' . htmlspecialchars((string) $compte['prenom'], ENT_QUOTES, 'UTF-8') . ',</p>'
+        . '<p><strong>' . htmlspecialchars($titre, ENT_QUOTES, 'UTF-8') . '</strong>, c\'est ' . $quand . '.</p>'
+        . '<p>Le ' . $jour . ' à ' . $heure . '.</p>';
+    if ($lieu !== '') {
+        $corps .= '<p>📍 ' . htmlspecialchars($lieu, ENT_QUOTES, 'UTF-8') . '</p>';
+    }
+
+    $texte = $titre . ', c\'est ' . $quand . '. Le ' . $jour . ' à ' . $heure . '.'
+        . ($lieu !== '' ? ' Lieu : ' . $lieu . '.' : '');
+
+    envoyerEmail(
+        (string) $compte['email'],
+        'TIMECOOL - RAPPEL : ' . mb_strtoupper($titre, 'UTF-8'),
+        $texte,
+        emailHabille('Rappel de rendez-vous', $corps)
+    );
+}
+
+
 function messagePoser(
     array $de,
     array $vers,
@@ -2084,6 +2245,23 @@ switch ($route) {
     // fantaisiste en base ferait echouer la traduction sans laisser de
     // trace comprehensible.
     // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    // RAPPELS PAR EMAIL
+    // Appelee chaque minute par une tache planifiee de la machine.
+    //
+    // Aucun jeton : la route n'est joignable que depuis le serveur
+    // lui-meme. Un secret aurait du vivre dans ce fichier, qui est
+    // public.
+    // ═══════════════════════════════════════════════════════════
+    case 'GET /taches/rappels':
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        if (!in_array($ip, ['127.0.0.1', '::1', '82.165.253.73'], true)) {
+            // Repondre « inconnue » plutot que « interdite » : inutile
+            // d'annoncer au reste du monde que cette route existe.
+            Rep::erreur(404, 'route_inconnue', 'Route inconnue.');
+        }
+        Rep::ok(rappelsEnvoyer());
+
     case 'POST /compte/langue':
         $compte = Auth::compte();
 
