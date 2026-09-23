@@ -4368,6 +4368,52 @@ function renderDay() {
 
 // ═══ EVENT MODAL ═══
 let currentEvent = null;
+/** Ouvre Google Maps sur l'itineraire vers cette adresse. */
+function tcYAller(lieu) {
+  const adresse = (lieu || '').trim();
+  if (!adresse) return;
+  // C'est Maps qui demandera la position, sur son ecran : TimeCool
+  // n'a aucune permission a reclamer pour cela.
+  const url = 'https://www.google.com/maps/dir/?api=1&destination='
+    + encodeURIComponent(adresse);
+  if (typeof tcOuvrirAilleurs === 'function') tcOuvrirAilleurs(url);
+  else window.open(url, '_blank');
+}
+
+/**
+ * Estime le temps de trajet et l'affiche dans la fiche.
+ *
+ * A la demande seulement : la position n'est reclamee qu'a cet
+ * instant, et chaque calcul coute chez Google.
+ */
+async function tcTempsDeTrajet(lieu) {
+  const zone = document.getElementById('emTrajet');
+  if (!zone) return;
+  zone.innerHTML = '<span style="color:var(--text-sec);">Calcul en cours\u2026</span>';
+  let r;
+  try {
+    r = await tcEstimerTrajet(lieu);
+  } catch (err) {
+    zone.innerHTML = '<span style="color:#ea4335;">' + escapeHTMLSafe(err.message || 'Calcul impossible') + '</span>';
+    return;
+  }
+  if (r === null) {
+    // Position refusee ou introuvable : le dire, plutot que de laisser
+    // \u00ab Calcul en cours\u2026 \u00bb indefiniment.
+    zone.innerHTML = '<span style="color:var(--text-sec);">Position indisponible \u2014 autorise la localisation pour ce calcul.</span>';
+    return;
+  }
+  if (r.aucunItineraire) {
+    zone.innerHTML = '<span style="color:var(--text-sec);">Aucun itin\u00e9raire trouv\u00e9 pour cette adresse.</span>';
+    return;
+  }
+  const duree = r.basseMin === r.hauteMin
+    ? r.basseMin + ' min'
+    : r.basseMin + ' \u00e0 ' + r.hauteMin + ' min';
+  zone.innerHTML = '<span style="color:var(--g-blue); font-weight:600;">\u23f1\ufe0f ' + duree + ' de trajet</span>'
+    + (r.distanceKm ? '<span style="color:var(--text-sec);"> \u00b7 ' + r.distanceKm + ' km</span>' : '');
+}
+
 function openEventModal(e) {
   currentEvent = e;
   document.getElementById('emTitle').textContent = e.title;
@@ -4380,7 +4426,13 @@ function openEventModal(e) {
   document.getElementById('emBody').innerHTML = `
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><div><div class="event-detail-label">Date</div><div class="event-detail-value">${dateStr}</div></div></div>
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg><div><div class="event-detail-label">Horaire</div><div class="event-detail-value">${timeStr}</div></div></div>
-    ${e.lieu ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><div><div class="event-detail-label">Lieu</div><div class="event-detail-value">${escapeHTML(e.lieu)}</div></div></div>` : ''}
+    ${e.lieu ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><div style="flex:1;"><div class="event-detail-label">Lieu</div><div class="event-detail-value">${escapeHTML(e.lieu)}</div>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button onclick="tcYAller(${JSON.stringify(e.lieu)})" style="padding:8px 14px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\ud83d\uddfa\ufe0f Y aller</button>
+        <button onclick="tcTempsDeTrajet(${JSON.stringify(e.lieu)})" style="padding:8px 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue); border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\u23f1\ufe0f Combien de temps ?</button>
+      </div>
+      <div id="emTrajet" style="font-size:12px; margin-top:8px;"></div>
+    </div></div>` : ''}
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Confidentialité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Sur votre appareil</div></div></div>
   `;
   const actions = document.getElementById('emActions');
