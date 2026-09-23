@@ -4750,6 +4750,7 @@ async function tcRepondreQuiEstCe(texte) {
     });
     renderCharlyChat();
     tcChoisirContactProposition(msg.tempId || '', nom);
+    // Ici le nom tape a bien donne des resultats : on le garde.
     const champ = document.getElementById('tcRechContactRdv');
     if (champ) { champ.value = texte; tcRendreContactsRdv(); }
     return;
@@ -4831,10 +4832,14 @@ function tcChoisirContactProposition(tempId, nom) {
     }
     renderCharlyChat();
   });
-  // La recherche part du nom prononce : les douze Michel sont deja la,
-  // le plus probable en tete.
-  const champ = document.getElementById('tcRechContactRdv');
-  if (champ) { champ.value = nom; tcRendreContactsRdv(); }
+  // La recherche ne part du nom prononce que s'il mene quelque part :
+  // « Michel » affiche aussitot les homonymes, « mon osteopathe » ne
+  // donnerait qu'un « aucun contact trouve » devant quelqu'un venu
+  // precisement designer une personne.
+  if (tcResoudreContact(nom).length > 0) {
+    const champ = document.getElementById('tcRechContactRdv');
+    if (champ) { champ.value = nom; tcRendreContactsRdv(); }
+  }
 }
 
 /** Le contact relie a un rendez-vous, s'il en a un et s'il existe encore. */
@@ -4955,7 +4960,9 @@ function tcRendreContactsRdv() {
   const vus = tcDernierRdvParContact();
   const trouves = tcContactsPourRdv(q);
   if (!trouves.length) {
-    zone.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-sec); font-size:13px;">Aucun contact trouvé.</div>';
+    zone.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-sec); font-size:13px;">'
+      + 'Aucun contact ne correspond à « ' + escapeHTMLSafe(q) + ' ».<br>'
+      + '<span style="font-size:11.5px;">Efface pour voir tout ton carnet.</span></div>';
     return;
   }
   // Quarante suffisent a l'ecran : au-dela on affine la recherche, et
@@ -4983,10 +4990,15 @@ function tcChoisirContactRdv(retour) {
   ov.className = 'msg-sheet-ov';
   ov.id = 'tcFeuilleContactRdv';
   ov.onclick = function (ev) { if (ev.target === ov) ov.remove(); };
+  const combien = Array.isArray(contactsList) ? contactsList.length : 0;
   ov.innerHTML = '<div class="msg-sheet">'
     + '<div class="msg-sheet-h">Avec qui ?</div>'
     + '<div style="padding:0 20px 10px;">'
-      + '<input id="tcRechContactRdv" type="text" placeholder="Rechercher un contact…" oninput="tcRendreContactsRdv()"'
+      // Rempli, le texte d'invite disparait : la ligne au-dessus reste,
+      // elle, et dit toujours ou l'on cherche.
+      + '<div style="font-size:11.5px; color:var(--text-sec); margin-bottom:6px;">🔍 Cherche dans tes '
+      + combien + ' contacts — nom, téléphone ou email</div>'
+      + '<input id="tcRechContactRdv" type="text" placeholder="Tape un nom…" oninput="tcRendreContactsRdv()"'
       + ' style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; box-sizing:border-box;">'
     + '</div>'
     + '<div id="tcListeContactsRdv" style="max-height:44vh; overflow-y:auto;"></div>'

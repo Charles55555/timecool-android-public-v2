@@ -553,6 +553,13 @@ function fin() {
     page.indexOf('Choisir dans mes contacts') > -1
     && page.indexOf('Noter sans contact') > -1,
     'un rendez-vous ne doit jamais rester bloque');
+  verifie('le champ dit ou il cherche',
+    page.indexOf('Cherche dans tes ') > -1
+    && page.indexOf(" contacts — nom, téléphone ou email") > -1,
+    'rempli, le texte d invite disparait : la ligne au-dessus reste');
+  verifie('et une designation sans resultat ne le remplit pas',
+    page.indexOf('if (tcResoudreContact(nom).length > 0) {') > -1,
+    '« mon osteopathe » pre-rempli ne pouvait donner qu « aucun contact trouve »');
   verifie('un nom tapé est intercepté avant le modele',
     /if \(tcAttenteContactEnCours\(\)\) \{\s*await tcRepondreQuiEstCe\(text\);/.test(page),
     'la question promet « donne-moi son nom » : il faut savoir le recevoir');
