@@ -4681,10 +4681,86 @@ function tcDesignationTutoyee(designation) {
   });
 }
 
-/** Ce que Charly dit tant qu'il lui manque la personne. */
+/**
+ * Ce que Charly dit tant qu'il lui manque la personne.
+ *
+ * La derniere phrase n'est pas une politesse : sans contact, le
+ * bouton « Prevenir » du rendez-vous n'aura personne a joindre. Mieux
+ * vaut le dire maintenant qu'au moment du retard.
+ */
 function tcQuestionContact(designation) {
-  return 'Qui est ' + tcDesignationTutoyee(designation)
-    + ' ? Je le note dès que tu me le dis.';
+  const qui = tcDesignationTutoyee(designation);
+  return 'Qui est ' + qui + ' ? Est-ce qu\'il existe dans tes contacts ?\n'
+    + 'Si oui, donne-moi son nom et son prénom.\n'
+    + 'Si non, je ne pourrai ni annuler ce rendez-vous ni prévenir d\'un retard.';
+}
+
+/**
+ * La question « qui est-ce ? » posee et restee sans reponse.
+ *
+ * @returns {?Object} { msg, nom } du dernier message concerne.
+ */
+function tcAttenteContactEnCours() {
+  if (!Array.isArray(charlyIA.history)) return null;
+  for (let i = charlyIA.history.length - 1; i >= 0; i--) {
+    const m = charlyIA.history[i];
+    if (!m || m.role !== 'assistant' || m._validated) continue;
+    const propositions = extractAgendaProposals(m.content);
+    if (!propositions || !propositions.length) continue;
+    const nom = tcAttenteContact(m, propositions);
+    // Le premier message a propositions rencontre en remontant decide :
+    // au-dela, la question n'est plus celle en cours.
+    return nom ? { msg: m, nom: nom } : null;
+  }
+  return null;
+}
+
+/**
+ * Traite un message ecrit alors que la question attend sa reponse.
+ *
+ * La question promet « donne-moi son nom et son prenom » : il faut
+ * donc savoir recevoir un nom, sans quoi on demanderait quelque chose
+ * dont on ne ferait rien.
+ */
+async function tcRepondreQuiEstCe(texte) {
+  const attente = tcAttenteContactEnCours();
+  if (!attente) return;
+  const msg = attente.msg, nom = attente.nom;
+  tcPousserMessageUtilisateur(texte);
+
+  const trouves = tcResoudreContact(texte);
+
+  if (trouves.length === 1) {
+    if (!msg._contacts) msg._contacts = {};
+    msg._contacts[tcSansAccents(nom)] = trouves[0].id;
+    tcRetenirSurnom(nom, trouves[0].id);
+    charlyIA.history.push({
+      role: 'system_info',
+      content: '👤 ' + nom + ' = ' + trouves[0].name + '. Je m\'en souviendrai.'
+    });
+    renderCharlyChat();
+    return;
+  }
+
+  if (trouves.length > 1) {
+    charlyIA.history.push({
+      role: 'system_info',
+      content: '👤 ' + trouves.length + ' contacts portent ce nom — lequel est-ce ?'
+    });
+    renderCharlyChat();
+    tcChoisirContactProposition(msg.tempId || '', nom);
+    const champ = document.getElementById('tcRechContactRdv');
+    if (champ) { champ.value = texte; tcRendreContactsRdv(); }
+    return;
+  }
+
+  // Personne de ce nom : on ne laisse pas sans issue.
+  charlyIA.history.push({
+    role: 'system_info',
+    content: 'Je ne trouve personne à ce nom dans tes contacts. '
+      + 'Choisis-le dans la liste, ou note le rendez-vous sans contact.'
+  });
+  renderCharlyChat();
 }
 
 /** Noter le rendez-vous sans relier personne. */
@@ -9090,7 +9166,19 @@ function renderChatMessage(m) {
             ${escapeHTML(cleanContent).replace(/\n/g,'<br>') || '...'}
           </div>
     `;
-    if (displayProposals && displayProposals.length) {
+    if (contactAttendu) {
+      // Rien d'autre que la question tant qu'on n'a pas la reponse :
+      // une proposition deja mise en forme donnerait a croire que le
+      // rendez-vous est pris.
+      const idMsg = m.tempId || '';
+      const nomJs = JSON.stringify(contactAttendu).replace(/"/g, '&quot;');
+      html += `
+          <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button onclick="tcChoisirContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#fff8e1; color:#8a6500; border:1.5px solid #fbbc04; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">👤 Choisir dans mes contacts</button>
+            <button onclick="tcIgnorerContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:10px; font-size:12px; cursor:pointer;">Noter sans contact</button>
+          </div>
+      `;
+    } else if (displayProposals && displayProposals.length) {
       // Grouper les propositions par date pour un affichage plus clair
       const byDate = {};
       displayProposals.forEach(p => {
@@ -9123,24 +9211,14 @@ function renderChatMessage(m) {
                         // Le lieu etait transmis et enregistre, mais jamais
                         // montre : on validait sans pouvoir relire l'adresse.
                         p.lieu ? `<div style="font-size:11.5px; color:var(--text-sec); margin-top:2px;">📍 ${escapeHTMLSafe(p.lieu)}</div>` : ''
-                      }${tcLigneContactProposition(m, p, m.tempId || '')}${
-                        // Les deux reponses possibles, sous la ligne
-                        // qui pose la question. Jamais zero issue.
-                        tcAttenteContact(m, [p]) ? `
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                          <button onclick="tcChoisirContactProposition('${m.tempId || ''}', ${JSON.stringify(tcDesignationPour(m, p) || '').replace(/"/g, '&quot;')})" style="padding:7px 12px; background:#fff8e1; color:#8a6500; border:1.5px solid #fbbc04; border-radius:9px; font-size:11.5px; font-weight:600; cursor:pointer;">👤 Choisir dans mes contacts</button>
-                          <button onclick="tcIgnorerContactProposition('${m.tempId || ''}', ${JSON.stringify(tcDesignationPour(m, p) || '').replace(/"/g, '&quot;')})" style="padding:7px 12px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:9px; font-size:11.5px; cursor:pointer;">Noter sans contact</button>
-                        </div>` : ''
-                      }</span>
+                      }${tcLigneContactProposition(m, p, m.tempId || '')}</span>
                     </div>
                   `).join('')}
                 </div>
               `;
             }).join('')}
             <div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;">
-              ${contactAttendu
-                ? `<button onclick="showToast('👤 Dis-moi d\\'abord qui c\\'est')" style="flex:1; min-width:120px; padding:10px; background:#e8eaed; color:#9aa0a6; border:none; border-radius:10px; font-size:12px; font-weight:600; cursor:default;">✅ Valider mon agenda</button>`
-                : `<button onclick="validateAgendaProposal('${m.tempId || ''}')" style="flex:1; min-width:120px; padding:10px; background:var(--g-green); color:white; border:none; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">✅ Valider mon agenda</button>`}
+              <button onclick="validateAgendaProposal('${m.tempId || ''}')" style="flex:1; min-width:120px; padding:10px; background:var(--g-green); color:white; border:none; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">✅ Valider mon agenda</button>
               <button onclick="charlyQuickReply('Modifie : ')" style="flex:1; min-width:80px; padding:10px; background:#fef7e0; color:#8a6500; border:1px solid #fbd784; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">✏️ Modifier</button>
               <button onclick="charlyQuickReply('Recommence depuis le début')" style="flex:1; min-width:80px; padding:10px; background:#f1f3f4; color:var(--text); border:1.5px solid var(--border); border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">↻ Recommencer</button>
             </div>
@@ -10438,6 +10516,15 @@ async function charlySendMessage() {
   // réponse, jamais une nouvelle intention à réinterpréter ailleurs.
   if (_tcTrajetEtapes) {
     await tcRepondreEtapeTrajet(text);
+    return;
+  }
+
+  // === RÉPONSE À LA QUESTION « QUI EST-CE ? » ===
+  // Même principe, et même raison de passer avant la clé API : la
+  // réponse ne coûte aucun appel au modèle, elle se cherche dans le
+  // carnet d'adresses. Une question posée attend sa réponse.
+  if (tcAttenteContactEnCours()) {
+    await tcRepondreQuiEstCe(text);
     return;
   }
 

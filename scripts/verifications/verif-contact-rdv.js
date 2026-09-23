@@ -55,8 +55,14 @@ const ctx = {
     }
   },
   window: { get location() { return ctx._loc; }, set location(v) { ctx._loc = v; } },
-  _loc: { set href(u) { ouvertures.push(u); }, get href() { return ''; } }
+  _loc: { set href(u) { ouvertures.push(u); }, get href() { return ''; } },
+  document: { getElementById: () => null },
+  renderCharlyChat: () => {},
+  tcChoisirContactProposition: () => { choisisseurOuvert = true; },
+  tcRendreContactsRdv: () => {},
+  tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); }
 };
+let choisisseurOuvert = false;
 ctx.window.location = ctx._loc;
 vm.createContext(ctx);
 
@@ -78,6 +84,7 @@ ctx.localStorage = {
  'tcContactDuSurnom', 'tcContactDeProposition', 'tcLigneContactProposition',
  'tcAttenteContact', 'tcDesignationTutoyee', 'tcQuestionContact',
  'tcDesignationDuMessage', 'tcDesignationPour', 'tcSurnomRefuse',
+ 'tcAttenteContactEnCours', 'tcRepondreQuiEstCe',
  'extractAgendaProposals', 'findUpcomingEventForContact', 'tcTransmettrePrevenance',
  'tcDirePrevenance'].forEach((n) => {
   const src = extraire(n);
@@ -327,6 +334,69 @@ titre('Mais on ne retient pas une ambiguite');
     ctx.tcContactDeProposition({ _contacts: { michel: 'c2' } }, { contact: 'Michel' }).id === 'c2');
 }
 
+titre('Repondre en tapant un nom');
+{
+  const bloc = 'Parfait !\n[AGENDA]\n2026-09-27 | 19:00-20:00 | Dermatologue | rdv | - | mon dermatologue\n[/AGENDA]';
+  const poser = () => {
+    carnet();
+    choisisseurOuvert = false;
+    ctx.charlyIA.history = [
+      { role: 'user', content: 'rendez-vous dimanche 19h avec mon dermatologue' },
+      { role: 'assistant', content: bloc, tempId: 'tq' }
+    ];
+    return ctx.charlyIA.history[1];
+  };
+
+  let msg = poser();
+  const attente = ctx.tcAttenteContactEnCours();
+  verifie('la question est reconnue comme en cours',
+    attente && attente.nom === 'mon dermatologue', attente ? attente.nom : 'aucune');
+
+  ctx.tcRepondreQuiEstCe('Sophie Anceau');
+  verifie('le nom tapé relie la personne',
+    msg._contacts && msg._contacts['mon dermatologue'] === 'c6',
+    'la question promet « donne-moi son nom » : il faut savoir le recevoir');
+  verifie('et c est retenu pour la prochaine fois',
+    ctx.tcContactDuSurnom('mon dermatologue') !== null);
+  verifie('la question ne se pose plus',
+    ctx.tcAttenteContactEnCours() === null);
+  verifie('et Charly le confirme',
+    ctx.charlyIA.history.some((m) => m.role === 'system_info'
+      && m.content.indexOf('Sophie Anceau') > -1),
+    ctx.charlyIA.history.map((m) => m.role).join(' '));
+
+  msg = poser();
+  ctx.tcRepondreQuiEstCe('Michel');
+  verifie('un nom porté par plusieurs ouvre le choix', choisisseurOuvert === true);
+  verifie('et rien n est relie a l aveugle',
+    !msg._contacts || !msg._contacts['mon dermatologue']);
+
+  msg = poser();
+  ctx.tcRepondreQuiEstCe('Gontran de Kermadec');
+  verifie('un nom introuvable est dit, sans impasse',
+    ctx.charlyIA.history.some((m) => m.role === 'system_info'
+      && m.content.indexOf('Je ne trouve personne') > -1));
+  verifie('et la question reste posee',
+    ctx.tcAttenteContactEnCours() !== null,
+    'pour qu il puisse encore choisir ou passer outre');
+
+  ctx.charlyIA.history = [];
+  verifie('sans question en cours, rien n est intercepte',
+    ctx.tcAttenteContactEnCours() === null);
+}
+
+titre('Ce que la question annonce');
+{
+  const q = ctx.tcQuestionContact('mon dermatologue');
+  verifie('elle demande s il est dans les contacts',
+    q.indexOf('dans tes contacts') > -1, q.split('\n')[0]);
+  verifie('elle demande le nom et le prénom',
+    q.indexOf('son nom et son prénom') > -1);
+  verifie('et elle dit ce qu on perd sans contact',
+    q.indexOf('annuler') > -1 && q.indexOf('retard') > -1,
+    'le dire maintenant vaut mieux qu au moment du retard');
+}
+
 titre('Ce que Charly ecrit, et ce qu on en lit');
 {
   const bloc = '[AGENDA]\n'
@@ -470,12 +540,16 @@ function fin() {
   verifie('« c est noté » cede la place a la question',
     page.indexOf('if (contactAttendu) cleanContent = tcQuestionContact(contactAttendu);') > -1,
     'Charly ne voit pas le carnet : il ne peut pas savoir qu il lui manque quelqu un');
-  verifie('et « Valider » attend la reponse',
-    page.indexOf("onclick=\"showToast('👤 Dis-moi d\\\\'abord qui c\\\\'est')\"") > -1);
+  verifie('et la proposition ne s affiche qu apres',
+    /if \(contactAttendu\) \{[\s\S]{0,2000}?\} else if \(displayProposals && displayProposals\.length\) \{/.test(page),
+    'affichees ensemble, elles donnaient a croire que le rendez-vous etait pris');
   verifie('les deux issues sont offertes',
     page.indexOf('Choisir dans mes contacts') > -1
     && page.indexOf('Noter sans contact') > -1,
     'un rendez-vous ne doit jamais rester bloque');
+  verifie('un nom tapé est intercepté avant le modele',
+    /if \(tcAttenteContactEnCours\(\)\) \{\s*await tcRepondreQuiEstCe\(text\);/.test(page),
+    'la question promet « donne-moi son nom » : il faut savoir le recevoir');
   verifie('et qu un role vaut un nom',
     page.indexOf('OU par son rôle') > -1
     && page.indexOf('Ne remplis ce champ que si une personne est nommée') === -1,
