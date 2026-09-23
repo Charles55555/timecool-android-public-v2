@@ -2118,6 +2118,8 @@ const TC_RAPPEL_DELAI_KEY = 'tc_rappel_delai';
 const TC_SONNERIES_KEY = 'tc_sonneries';
 
 const TC_DELAIS_RAPPEL = [
+  { minutes: 0,    label: 'Aucun rappel' },
+  { minutes: 5,    label: '5 minutes avant' },
   { minutes: 10,   label: '10 minutes avant' },
   { minutes: 30,   label: '30 minutes avant' },
   { minutes: 60,   label: '1 heure avant' },
@@ -2213,6 +2215,11 @@ function tcChoisirDelaiRappel() {
         (choisi ? '<span>✓</span>' : '') +
       '</div>';
     }).join('') +
+    '<label style="display:flex; align-items:center; gap:12px; padding:14px 20px; border-top:8px solid #f1f3f4; cursor:pointer;">' +
+      '<input type="checkbox" ' + (tcRappelEmail() ? 'checked' : '') + ' onchange="tcDefinirRappelEmail(this.checked)" style="width:20px; height:20px; cursor:pointer;">' +
+      '<div><div style="font-size:14px; color:var(--text);">Me pr\u00e9venir aussi par email</div>' +
+      '<div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Utile quand ton t\u00e9l\u00e9phone est \u00e9teint. L\'email part de nos serveurs, tu n\'as rien \u00e0 installer.</div></div>' +
+    '</label>' +
     '<div style="padding:14px 20px;"></div>' +
   '</div>';
   document.body.appendChild(ov);
@@ -4499,7 +4506,7 @@ function openEditEventModal() {
 
       <div style="font-size:12px; color:var(--text-sec); margin:14px 0 6px; font-weight:600;">RAPPEL</div>
       <select id="editRappel" style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box;">
-        ${TC_RAPPEL_DELAIS.map(d => `<option value="${d.minutes}"${tcRappelDuRdv(e) === d.minutes ? ' selected' : ''}>${d.label}</option>`).join('')}
+        ${TC_DELAIS_RAPPEL.map(d => `<option value="${d.minutes}"${tcRappelDuRdv(e) === d.minutes ? ' selected' : ''}>${d.label}</option>`).join('')}
       </select>
 
       <div style="font-size:12px; color:var(--text-sec); margin:14px 0 6px; font-weight:600;">LIEU (facultatif)</div>
@@ -4548,7 +4555,7 @@ function saveEventEdit() {
     // Egal au reglage general : on ne fige rien sur la fiche, pour que
     // le rendez-vous suive le jour ou l'on change d'avis dans les
     // parametres.
-    if (minutes === tcRappelDefaut()) delete e.rappel;
+    if (minutes === tcDelaiRappel()) delete e.rappel;
     else e.rappel = minutes;
   }
   if (newLieu) e.lieu = newLieu; else delete e.lieu;
@@ -7291,7 +7298,7 @@ function renderSettingsInterne() {
       <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
         <div style="flex:1;">
           <div style="font-size:14px;">Rappels avant RDV</div>
-          <div style="font-size:11px; color:var(--text-sec);" id="rappelDelaiTexte">${tcDelaiRappelTexte()}</div>
+          <div style="font-size:11px; color:var(--text-sec);" id="rappelDelaiTexte">${tcDelaiRappelTexte()}${tcRappelEmail() ? ' \u00b7 aussi par email' : ''}</div>
         </div>
         <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
           <input type="checkbox" id="rappelsToggle" ${tcRappelsActifs() ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerRappels(this.checked)" style="opacity:0; width:0; height:0;">
@@ -7330,10 +7337,6 @@ function renderSettingsInterne() {
       <div onclick="openSettingsModal('timezone')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
         <div><div style="font-size:14px;">Fuseau horaire</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_tz_label">${currentTimezone}</div></div>
         <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
-      </div>
-      <div onclick="openSettingsModal('rappel')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div><div style="font-size:14px;">Rappel avant mes rendez-vous</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_rappel_label">${tcLibelleRappel(tcRappelDefaut())}${tcRappelEmail() ? ' \u00b7 aussi par email' : ''}</div></div>
-        <div style="font-size:13px; color:var(--g-blue);">Modifier \u203a</div>
       </div>
       <div onclick="openSettingsModal('hours')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
         <div><div style="font-size:14px;">Plage horaire de ma journée</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_hours_label">${agendaStartH}h00 → ${agendaEndH}h00</div></div>
@@ -12409,27 +12412,6 @@ function openSettingsModal(type) {
             ${currentLanguage===lang.code?'<span style="color:var(--g-blue);">✓</span>':''}
           </div>
         `).join('')}
-      </div>`;
-  } else if (type === 'rappel') {
-    const actuel = tcRappelDefaut();
-    html = `
-      <div style="padding:16px 0;">
-        <div style="font-size:16px; font-weight:600; margin-bottom:4px;">\ud83d\udd14 Rappel avant mes rendez-vous</div>
-        <div style="font-size:11px; color:var(--text-sec); margin-bottom:16px;">Ce choix s'applique \u00e0 tous tes rendez-vous. Tu peux le changer rendez-vous par rendez-vous.</div>
-        ${TC_RAPPEL_DELAIS.map(d => `
-          <div onclick="tcDefinirRappelDefaut(${d.minutes}); closeSettingsModal();" style="padding:12px 16px; margin-bottom:6px; border-radius:10px; border:1.5px solid ${actuel===d.minutes?'var(--g-blue)':'var(--border)'}; background:${actuel===d.minutes?'#e8f0fe':'var(--bg)'}; cursor:pointer; display:flex; align-items:center; gap:12px;">
-            <span style="font-size:14px; color:var(--text); flex:1;">${d.label}</span>
-            ${actuel===d.minutes?'<span style="color:var(--g-blue);">\u2713</span>':''}
-          </div>
-        `).join('')}
-
-        <label style="display:flex; align-items:center; gap:12px; margin-top:16px; padding:14px 16px; border-radius:10px; border:1.5px solid var(--border); cursor:pointer;">
-          <input type="checkbox" ${tcRappelEmail() ? 'checked' : ''} onchange="tcDefinirRappelEmail(this.checked)" style="width:20px; height:20px; cursor:pointer;">
-          <div>
-            <div style="font-size:14px; color:var(--text);">Me pr\u00e9venir aussi par email</div>
-            <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Utile quand ton t\u00e9l\u00e9phone est \u00e9teint. L'email part de nos serveurs, tu n'as rien \u00e0 installer.</div>
-          </div>
-        </label>
       </div>`;
   } else if (type === 'timezone') {
     html = `
@@ -19484,49 +19466,14 @@ function tcNotifBaseId(ev) {
    prevenu la veille.
    \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
 
-/** En minutes avant le rendez-vous. 0 veut dire : aucun rappel. */
-const TC_RAPPEL_DELAIS = [
-  { minutes: 0,    label: 'Aucun rappel' },
-  { minutes: 5,    label: '5 minutes avant' },
-  { minutes: 15,   label: '15 minutes avant' },
-  { minutes: 30,   label: '30 minutes avant' },
-  { minutes: 60,   label: '1 heure avant' },
-  { minutes: 120,  label: '2 heures avant' },
-  { minutes: 1440, label: 'La veille' }
-];
+/* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+   QUAND PREVENIR
 
-const TC_RAPPEL_CLE = 'tc_rappel_defaut';
-
-/** Le delai choisi dans les parametres, en minutes. */
-function tcRappelDefaut() {
-  try {
-    const v = parseInt(localStorage.getItem(TC_RAPPEL_CLE), 10);
-    if (TC_RAPPEL_DELAIS.some(function (d) { return d.minutes === v; })) return v;
-  } catch (e) {}
-  return 60;
-}
-
-function tcDefinirRappelDefaut(minutes) {
-  try { localStorage.setItem(TC_RAPPEL_CLE, String(minutes)); } catch (e) {}
-  if (typeof renderSettings === 'function') renderSettings();
-  if (typeof scheduleAllReminders === 'function') scheduleAllReminders();
-  showToast('\ud83d\udd14 ' + tcLibelleRappel(minutes));
-}
-
-/**
- * Le delai qui s'applique a ce rendez-vous.
- *
- * Celui de sa fiche s'il en porte un, sinon celui des parametres. Un
- * rendez-vous regle sur \u00ab aucun rappel \u00bb garde bien zero : il ne doit
- * pas retomber sur le defaut a la premiere occasion.
- */
-function tcRappelDuRdv(e) {
-  const v = e && e.rappel;
-  if (typeof v === 'number' && TC_RAPPEL_DELAIS.some(function (d) { return d.minutes === v; })) {
-    return v;
-  }
-  return tcRappelDefaut();
-}
+   Le delai se regle dans les parametres, sous \u00ab Rappels avant RDV \u00bb.
+   Ces fonctions-ci ne font que s'y brancher : le reglage lui-meme
+   vit plus haut, avec l'interrupteur et les sonneries, depuis
+   toujours.
+   \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 */
 
 const TC_RAPPEL_EMAIL_CLE = 'tc_rappel_email';
 
@@ -19551,8 +19498,23 @@ function tcDefinirRappelEmail(actif) {
   showToast(actif ? '\ud83d\udce7 Rappels par email activ\u00e9s' : '\ud83d\udce7 Rappels par email coup\u00e9s');
 }
 
+/**
+ * Le delai qui s'applique a ce rendez-vous.
+ *
+ * Celui de sa fiche s'il en porte un, sinon celui des parametres. Un
+ * rendez-vous regle sur \u00ab aucun rappel \u00bb garde bien zero : il ne doit
+ * pas retomber sur le defaut a la premiere occasion.
+ */
+function tcRappelDuRdv(e) {
+  const v = e && e.rappel;
+  if (typeof v === 'number' && TC_DELAIS_RAPPEL.some(function (d) { return d.minutes === v; })) {
+    return v;
+  }
+  return tcDelaiRappel();
+}
+
 function tcLibelleRappel(minutes) {
-  const d = TC_RAPPEL_DELAIS.find(function (x) { return x.minutes === minutes; });
+  const d = TC_DELAIS_RAPPEL.find(function (x) { return x.minutes === minutes; });
   return d ? d.label : '1 heure avant';
 }
 

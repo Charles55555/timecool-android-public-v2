@@ -764,7 +764,7 @@ function rappelDelaiParDefaut(int $compteId): int
 {
     $l = Db::un(
         "SELECT contenu FROM elements
-          WHERE compte_id = ? AND type = 'reglage' AND uid = 'tc_rappel_defaut'
+          WHERE compte_id = ? AND type = 'reglage' AND uid = 'tc_rappel_delai'
             AND supprime = 0",
         [$compteId]
     );
@@ -775,7 +775,7 @@ function rappelDelaiParDefaut(int $compteId): int
     $v = is_array($d) ? ($d['v'] ?? null) : null;
     // L'application l'enregistre en texte : « 15 », pas 15.
     $minutes = is_numeric($v) ? (int) $v : 60;
-    return in_array($minutes, [0, 5, 15, 30, 60, 120, 1440], true) ? $minutes : 60;
+    return in_array($minutes, [0, 5, 10, 30, 60, 120, 1440], true) ? $minutes : 60;
 }
 
 /** Un rappel, mis en forme et poste. */
