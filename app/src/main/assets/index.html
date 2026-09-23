@@ -5074,6 +5074,9 @@ function createNewGroup() {
   if (!messages[mode]) messages[mode] = [];
   const conv = {
     id: Date.now(),
+    // Le moment de la creation, pour que le groupe apparaisse en tete
+    // de la messagerie et non tout en bas.
+    quand: new Date().toISOString(),
     with: name,
     isGroup: true,
     members: members,
@@ -5176,9 +5179,17 @@ function tcConversationsAffichables() {
    * une date d'aujourd'hui posee par defaut.
    */
   const tcQuandConversation = function (c) {
-    if (!c || !c.quand) return 0;
-    const t = Date.parse(c.quand);
-    return isNaN(t) ? 0 : t;
+    if (!c) return 0;
+    if (c.quand) {
+      const t = Date.parse(c.quand);
+      if (!isNaN(t)) return t;
+    }
+    // Les conversations creees dans l'appareil portent Date.now()
+    // comme identifiant : il fait une date utilisable, et range
+    // correctement celles qui existent deja. Les exemples de
+    // demonstration ont de petits nombres et restent en fin de liste.
+    if (typeof c.id === 'number' && c.id > 1e12) return c.id;
+    return 0;
   };
 
   const duServeur = tcConversations().map(function (c) {
@@ -15913,6 +15924,9 @@ async function sendConvMessage() {
     text: txt,
     time: ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)
   });
+  // Le serveur horodate les siennes ; ici c'est a nous de le faire,
+  // sinon la conversation ne remonterait jamais dans la liste.
+  conv.quand = d.toISOString();
   input.value = '';
   saveMessagesToStorage();
   openConversation(conv.id);
