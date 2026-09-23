@@ -75,6 +75,7 @@ ctx.localStorage = {
 ['tcSansAccents', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
  'tcContactsPourRdv', 'tcContactDuRdv', 'tcCleSurnom', 'tcSurnoms', 'tcRetenirSurnom',
  'tcContactDuSurnom', 'tcContactDeProposition', 'tcLigneContactProposition',
+ 'tcAttenteContact', 'tcDesignationTutoyee', 'tcQuestionContact',
  'extractAgendaProposals', 'findUpcomingEventForContact', 'tcTransmettrePrevenance',
  'tcDirePrevenance'].forEach((n) => {
   const src = extraire(n);
@@ -210,6 +211,42 @@ titre('« Mon osteopathe » : demander une fois, retenir');
   verifie('un contact supprime fait redemander',
     ctx.tcContactDeProposition({}, p) === null,
     'plutot que de relier un contact qui n existe plus');
+}
+
+titre('Rien n est note tant qu on ne sait pas qui c est');
+{
+  carnet();
+  const p = { contact: 'mon ostéopathe', title: 'Ostéopathe' };
+  const msg = {};
+  verifie('la proposition attend',
+    ctx.tcAttenteContact(msg, [p]) === 'mon ostéopathe',
+    String(ctx.tcAttenteContact(msg, [p])));
+  verifie('et la question se pose a la deuxieme personne',
+    ctx.tcQuestionContact('mon ostéopathe').indexOf('ton ostéopathe') > -1,
+    ctx.tcQuestionContact('mon ostéopathe'));
+  verifie('« ma mère » devient « ta mère »',
+    ctx.tcDesignationTutoyee('ma mère') === 'ta mère');
+  verifie('« mes parents » devient « tes parents »',
+    ctx.tcDesignationTutoyee('mes parents') === 'tes parents');
+  verifie('un prenom n est pas retouche',
+    ctx.tcDesignationTutoyee('Michel') === 'Michel');
+
+  ctx.tcRetenirSurnom('mon ostéopathe', 'c6');
+  verifie('des qu on sait, plus d attente',
+    ctx.tcAttenteContact(msg, [p]) === null);
+
+  carnet();
+  const misDeCote = { _sansContact: { 'mon osteopathe': true } };
+  verifie('« noter sans contact » leve l attente',
+    ctx.tcAttenteContact(misDeCote, [p]) === null,
+    'sinon le rendez-vous serait pris en otage');
+  verifie('et plus personne n est relie',
+    ctx.tcContactDeProposition(misDeCote, p) === null);
+
+  verifie('une proposition sans personne n attend rien',
+    ctx.tcAttenteContact({}, [{ title: 'Courses' }]) === null);
+  verifie('et une liste vide non plus',
+    ctx.tcAttenteContact({}, []) === null && ctx.tcAttenteContact({}, null) === null);
 }
 
 titre('Mais on ne retient pas une ambiguite');
@@ -365,6 +402,15 @@ function fin() {
   verifie('Charly sait qu il ne choisit pas',
     page.indexOf('Tu ne cherches JAMAIS dans ses contacts') > -1,
     'sinon il inventerait un nom de famille');
+  verifie('« c est noté » cede la place a la question',
+    page.indexOf('if (contactAttendu) cleanContent = tcQuestionContact(contactAttendu);') > -1,
+    'Charly ne voit pas le carnet : il ne peut pas savoir qu il lui manque quelqu un');
+  verifie('et « Valider » attend la reponse',
+    page.indexOf("onclick=\"showToast('👤 Dis-moi d\\\\'abord qui c\\\\'est')\"") > -1);
+  verifie('les deux issues sont offertes',
+    page.indexOf('Choisir dans mes contacts') > -1
+    && page.indexOf('Noter sans contact') > -1,
+    'un rendez-vous ne doit jamais rester bloque');
   verifie('et qu un role vaut un nom',
     page.indexOf('OU par son rôle') > -1
     && page.indexOf('Ne remplis ce champ que si une personne est nommée') === -1,
