@@ -4542,7 +4542,8 @@ function tcRetenirSurnom(designation, contactId) {
   if (tcResoudreContact(designation).length > 0) return false;
   const carnet = tcSurnoms();
   if (contactId) carnet[cle] = contactId;
-  else delete carnet[cle];
+  else if (contactId === false) carnet[cle] = false;   // ce n'est personne
+  else delete carnet[cle];                             // on oublie
   try { localStorage.setItem(TC_SURNOMS_CLE, JSON.stringify(carnet)); } catch (e) {}
   if (typeof tcSyncTour === 'function') tcSyncTour();
   return true;
@@ -4582,8 +4583,9 @@ function tcMessageProposition(tempId) {
  * demande.
  */
 function tcContactDeProposition(msg, p) {
-  if (!p || !p.contact) return null;
-  const cle = tcSansAccents(p.contact);
+  const nom = tcDesignationPour(msg, p);
+  if (!nom) return null;
+  const cle = tcSansAccents(nom);
   const choisi = msg && msg._contacts && msg._contacts[cle];
   if (choisi) {
     return contactsList.find(function (c) { return c.id === choisi; }) || null;
@@ -4592,10 +4594,62 @@ function tcContactDeProposition(msg, p) {
   // puis, seulement, le seul contact qui porte ce nom.
   // Mis de cote explicitement : on ne cherche plus.
   if (msg && msg._sansContact && msg._sansContact[cle]) return null;
-  const connu = tcContactDuSurnom(p.contact);
+  const connu = tcContactDuSurnom(nom);
   if (connu) return connu;
-  const trouves = tcResoudreContact(p.contact);
+  const trouves = tcResoudreContact(nom);
   return trouves.length === 1 ? trouves[0] : null;
+}
+
+/* Ce qui suit « avec » ou « chez » sans designer quelqu'un. */
+const TC_PAS_UNE_PERSONNE = [
+  'moi', 'toi', 'soi', 'nous', 'vous', 'eux', 'lui', 'elle', 'elles', 'ils',
+  'plaisir', 'ca', 'cela', 'ce', 'cette', 'ces', 'qui', 'quoi', 'tout', 'rien'
+];
+
+/**
+ * La personne designee dans la phrase de l'utilisateur.
+ *
+ * « Avec Michel », « chez mon dermatologue », « chez le coiffeur ».
+ * Le determinant est conserve : c'est lui qui distingue une personne
+ * d'un lieu, et tcCleSurnom le retirera pour la memorisation.
+ *
+ * @returns {?string} la designation, ou null s'il n'y en a pas.
+ */
+function tcDesignationDuMessage(texte) {
+  if (!texte) return null;
+  const m = String(texte).match(
+    /\b(?:avec|chez)\s+((?:mon|ma|mes|le|la|les)\s+|l['’])?([a-zA-ZÀ-ɏ][\wÀ-ɏ'’-]{1,})(\s+[A-ZÀ-Ö][\wÀ-ɏ'’-]+)?/);
+  if (!m) return null;
+  const mot = m[2].trim();
+  if (TC_PAS_UNE_PERSONNE.indexOf(tcSansAccents(mot)) > -1) return null;
+  const det = (m[1] || '');
+  // « l'osteopathe » ne prend pas d'espace apres l'apostrophe.
+  const debut = /['’]$/.test(det) ? det : (det ? det.trim() + ' ' : '');
+  return debut + mot + (m[3] ? m[3] : '');
+}
+
+/**
+ * La designation retenue pour une proposition.
+ *
+ * Celle que Charly a transmise s'il l'a fait -- il comprend des
+ * tournures qu'une expression reguliere ne verra jamais -- sinon
+ * celle lue dans la demande qui a produit cette proposition.
+ */
+function tcDesignationPour(msg, p) {
+  if (p && p.contact) return p.contact;
+  if (!msg || !Array.isArray(charlyIA.history)) return null;
+  const rang = charlyIA.history.indexOf(msg);
+  const avant = rang > -1 ? charlyIA.history.slice(0, rang) : charlyIA.history;
+  for (let i = avant.length - 1; i >= 0; i--) {
+    if (avant[i] && avant[i].role === 'user') return tcDesignationDuMessage(avant[i].content);
+  }
+  return null;
+}
+
+/** Une designation dont on sait qu'elle ne designe personne. */
+function tcSurnomRefuse(designation) {
+  const cle = tcCleSurnom(designation);
+  return !!cle && tcSurnoms()[cle] === false;
 }
 
 /**
@@ -4609,10 +4663,13 @@ function tcAttenteContact(msg, propositions) {
   if (!Array.isArray(propositions)) return null;
   for (let i = 0; i < propositions.length; i++) {
     const p = propositions[i];
-    if (!p || !p.contact) continue;
-    const cle = tcSansAccents(p.contact);
+    const nom = tcDesignationPour(msg, p);
+    if (!nom) continue;
+    const cle = tcSansAccents(nom);
     if (msg && msg._sansContact && msg._sansContact[cle]) continue;
-    if (!tcContactDeProposition(msg, p)) return p.contact;
+    // Deja repondu une fois : ce n'est pas quelqu'un.
+    if (tcSurnomRefuse(nom)) continue;
+    if (!tcContactDeProposition(msg, p)) return nom;
   }
   return null;
 }
@@ -4636,31 +4693,35 @@ function tcIgnorerContactProposition(tempId, nom) {
   if (!msg) return;
   if (!msg._sansContact) msg._sansContact = {};
   msg._sansContact[tcSansAccents(nom)] = true;
+  // Retenu, comme l'est le choix d'un contact : sans cela, « chez
+  // Ikea » reposerait la meme question chaque semaine.
+  tcRetenirSurnom(nom, false);
   renderCharlyChat();
 }
 
 /** La ligne « avec qui » d'une proposition, avec son choix si besoin. */
 function tcLigneContactProposition(msg, p, tempId) {
-  if (!p || !p.contact) return '';
+  const nom = tcDesignationPour(msg, p);
+  if (!nom || tcSurnomRefuse(nom)) return '';
   const style = 'font-size:11.5px; margin-top:2px;';
   const ouvrir = 'onclick="tcChoisirContactProposition(' + JSON.stringify(String(tempId || '')).replace(/"/g, '&quot;')
-    + ',' + JSON.stringify(p.contact).replace(/"/g, '&quot;') + ')"';
+    + ',' + JSON.stringify(nom).replace(/"/g, '&quot;') + ')"';
   const retenu = tcContactDeProposition(msg, p);
   if (retenu) {
     return '<div style="' + style + ' color:var(--text-sec);" ' + ouvrir + '>'
       + '👤 <span data-notranslate>' + escapeHTMLSafe(retenu.name || '') + '</span>'
       + ' <span style="color:var(--g-blue);">· changer</span></div>';
   }
-  const trouves = tcResoudreContact(p.contact);
+  const trouves = tcResoudreContact(nom);
   if (trouves.length > 1) {
     return '<div style="' + style + ' color:#8a6500;" ' + ouvrir + '>'
       + '👤 ' + trouves.length + ' contacts nommés <span data-notranslate>'
-      + escapeHTMLSafe(p.contact) + '</span> — <b>choisir</b></div>';
+      + escapeHTMLSafe(nom) + '</span> — <b>choisir</b></div>';
   }
   // Personne de ce nom, et rien de retenu : c'est la premiere fois
   // qu'on entend parler de cette personne. On demande, une fois.
   return '<div style="' + style + ' color:#8a6500;" ' + ouvrir + '>'
-    + '👤 <span data-notranslate>' + escapeHTMLSafe(p.contact) + '</span>'
+    + '👤 <span data-notranslate>' + escapeHTMLSafe(nom) + '</span>'
     + ' — <b>qui est-ce ?</b></div>';
 }
 
@@ -9065,10 +9126,10 @@ function renderChatMessage(m) {
                       }${tcLigneContactProposition(m, p, m.tempId || '')}${
                         // Les deux reponses possibles, sous la ligne
                         // qui pose la question. Jamais zero issue.
-                        (p.contact && tcAttenteContact(m, [p])) ? `
+                        tcAttenteContact(m, [p]) ? `
                         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                          <button onclick="tcChoisirContactProposition('${m.tempId || ''}', ${JSON.stringify(p.contact).replace(/"/g, '&quot;')})" style="padding:7px 12px; background:#fff8e1; color:#8a6500; border:1.5px solid #fbbc04; border-radius:9px; font-size:11.5px; font-weight:600; cursor:pointer;">👤 Choisir dans mes contacts</button>
-                          <button onclick="tcIgnorerContactProposition('${m.tempId || ''}', ${JSON.stringify(p.contact).replace(/"/g, '&quot;')})" style="padding:7px 12px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:9px; font-size:11.5px; cursor:pointer;">Noter sans contact</button>
+                          <button onclick="tcChoisirContactProposition('${m.tempId || ''}', ${JSON.stringify(tcDesignationPour(m, p) || '').replace(/"/g, '&quot;')})" style="padding:7px 12px; background:#fff8e1; color:#8a6500; border:1.5px solid #fbbc04; border-radius:9px; font-size:11.5px; font-weight:600; cursor:pointer;">👤 Choisir dans mes contacts</button>
+                          <button onclick="tcIgnorerContactProposition('${m.tempId || ''}', ${JSON.stringify(tcDesignationPour(m, p) || '').replace(/"/g, '&quot;')})" style="padding:7px 12px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:9px; font-size:11.5px; cursor:pointer;">Noter sans contact</button>
                         </div>` : ''
                       }</span>
                     </div>

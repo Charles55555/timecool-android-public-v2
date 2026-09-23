@@ -66,16 +66,18 @@ ctx.localStorage = {
   setItem: (k, v) => { memoire[k] = String(v); },
   removeItem: (k) => { delete memoire[k]; }
 };
-{
-  const m = page.match(/const TC_SURNOMS_CLE = '[^']+';/);
+[/const TC_SURNOMS_CLE = '[^']+';/,
+ /const TC_PAS_UNE_PERSONNE = \[[\s\S]*?\];/].forEach((re) => {
+  const m = page.match(re);
   if (m) vm.runInContext(m[0].replace('const ', 'var '), ctx);
-  else { ko++; console.log('  KO  TC_SURNOMS_CLE introuvable'); }
-}
+  else { ko++; console.log('  KO  ' + re + ' introuvable'); }
+});
 
 ['tcSansAccents', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
  'tcContactsPourRdv', 'tcContactDuRdv', 'tcCleSurnom', 'tcSurnoms', 'tcRetenirSurnom',
  'tcContactDuSurnom', 'tcContactDeProposition', 'tcLigneContactProposition',
  'tcAttenteContact', 'tcDesignationTutoyee', 'tcQuestionContact',
+ 'tcDesignationDuMessage', 'tcDesignationPour', 'tcSurnomRefuse',
  'extractAgendaProposals', 'findUpcomingEventForContact', 'tcTransmettrePrevenance',
  'tcDirePrevenance'].forEach((n) => {
   const src = extraire(n);
@@ -211,6 +213,69 @@ titre('« Mon osteopathe » : demander une fois, retenir');
   verifie('un contact supprime fait redemander',
     ctx.tcContactDeProposition({}, p) === null,
     'plutot que de relier un contact qui n existe plus');
+}
+
+titre('La designation se lit dans la phrase');
+{
+  carnet();
+  const lu = ctx.tcDesignationDuMessage;
+  verifie('« chez mon dermatologue »', lu('rendez-vous dimanche chez mon dermatologue') === 'mon dermatologue',
+    String(lu('rendez-vous dimanche chez mon dermatologue')));
+  verifie('« avec Michel »', lu('Mets un rendez-vous avec Michel demain') === 'Michel',
+    String(lu('Mets un rendez-vous avec Michel demain')));
+  verifie('« chez le coiffeur »', lu('mardi 10h chez le coiffeur') === 'le coiffeur',
+    String(lu('mardi 10h chez le coiffeur')));
+  verifie('« chez l’ostéopathe » garde l apostrophe collee',
+    lu('jeudi chez l’ostéopathe') === 'l’ostéopathe',
+    String(lu('jeudi chez l’ostéopathe')));
+  verifie('« avec Michel Dupont » prend les deux mots',
+    lu('déjeuner avec Michel Dupont') === 'Michel Dupont',
+    String(lu('déjeuner avec Michel Dupont')));
+
+  verifie('« chez moi » ne designe personne', lu('je travaille chez moi demain') === null);
+  verifie('« avec plaisir » non plus', lu('avec plaisir, note-le') === null);
+  verifie('et une phrase sans personne non plus',
+    lu('mets-moi une réunion demain à 10h') === null);
+  verifie('ni une phrase vide', lu('') === null && lu(null) === null);
+}
+
+titre('Ce que Charly transmet prime, mais on ne l attend pas');
+{
+  carnet();
+  ctx.charlyIA.history = [
+    { role: 'user', content: 'rendez-vous dimanche 19h chez mon dermatologue' },
+    { role: 'assistant', content: 'Parfait !', tempId: 't9' }
+  ];
+  const msg = ctx.charlyIA.history[1];
+  verifie('sans 6e champ, la phrase suffit',
+    ctx.tcDesignationPour(msg, { title: 'Dermatologue' }) === 'mon dermatologue',
+    'le modele l avait oublie une fois sur deux');
+  verifie('avec un 6e champ, c est lui qui compte',
+    ctx.tcDesignationPour(msg, { contact: 'Dr Benali' }) === 'Dr Benali',
+    'il comprend des tournures qu une expression reguliere ne verra jamais');
+  verifie('la carte pose donc la question',
+    ctx.tcLigneContactProposition(msg, { title: 'Dermatologue' }, 't9').indexOf('qui est-ce ?') > -1);
+  verifie('et rien n est note tant qu on ne sait pas',
+    ctx.tcAttenteContact(msg, [{ title: 'Dermatologue' }]) === 'mon dermatologue');
+
+  ctx.charlyIA.history = [{ role: 'user', content: 'mets une réunion demain 10h' }];
+  verifie('une demande sans personne n attend rien',
+    ctx.tcDesignationPour(ctx.charlyIA.history[0], { title: 'Réunion' }) === null);
+  ctx.charlyIA.history = [];
+}
+
+titre('« Ce n est personne » se retient aussi');
+{
+  carnet();
+  ctx.tcRetenirSurnom('chez Ikea', false);
+  verifie('la reponse est gardee', ctx.tcSurnomRefuse('chez Ikea') === true);
+  verifie('et on ne repose plus la question',
+    ctx.tcAttenteContact({}, [{ contact: 'chez Ikea' }]) === null,
+    'sinon elle reviendrait chaque semaine');
+  verifie('la ligne disparait de la carte',
+    ctx.tcLigneContactProposition({}, { contact: 'chez Ikea' }, 't1') === '');
+  verifie('mais une autre designation reste posee',
+    ctx.tcSurnomRefuse('mon dermatologue') === false);
 }
 
 titre('Rien n est note tant qu on ne sait pas qui c est');
