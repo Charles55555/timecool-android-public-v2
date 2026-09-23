@@ -4968,47 +4968,96 @@ function openNewGroupSheet() {
   ov.id = 'newGroupSheetOv';
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
 
-  const contactsHtml = contactsList.length
-    ? contactsList.map(function(c) {
-        const color = getContactColor(c.name);
-        const initials = getContactInitials(c.name);
-        return '<div class="msg-sheet-i" data-cid="' + c.id + '" onclick="toggleGroupContact(\'' + c.id + '\', this)" style="justify-content:space-between;">' +
-          '<div style="display:flex; align-items:center; gap:12px;">' +
-          '<div style="width:36px; height:36px; border-radius:50%; background:' + color + '; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; flex-shrink:0;">' + initials + '</div>' +
-          '<span>' + escapeHTMLSafe(c.name) + '</span></div>' +
-          '<span class="grp-check" style="width:20px; height:20px; border-radius:50%; border:2px solid #c4c8cc;"></span></div>';
-      }).join('')
-    : '<div style="padding:20px; text-align:center; color:var(--text-sec); font-size:13px;">Ajoute d\'abord des contacts dans Mes contacts.</div>';
-
   ov.innerHTML = '<div class="msg-sheet" style="max-height:80vh; display:flex; flex-direction:column;">' +
-    '<div class="msg-sheet-h">👥 Nouveau groupe</div>' +
-    '<div style="padding:0 20px 12px;"><input type="text" id="newGroupName" placeholder="Nom du groupe (ex : Équipe de foot)" style="width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; font-family:inherit;"></div>' +
-    '<div style="padding:0 20px 6px; font-size:11.5px; color:var(--text-sec);">Choisis les membres :</div>' +
-    '<div style="overflow-y:auto; flex:1;">' + contactsHtml + '</div>' +
-    '<div style="padding:14px 20px 4px;"><button onclick="createNewGroup()" style="width:100%; padding:13px; background:var(--g-blue); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">Créer le groupe</button></div>' +
+    '<div class="msg-sheet-h">\ud83d\udc65 Nouveau groupe</div>' +
+    '<div style="padding:0 20px 12px;"><input type="text" id="newGroupName" placeholder="Nom du groupe (ex : \u00c9quipe de foot)" style="width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; font-family:inherit;"></div>' +
+    '<div style="padding:0 20px 10px;"><input type="text" id="newGroupSearch" oninput="tcRendreMembresGroupe()" placeholder="\ud83d\udd0d Chercher un contact\u2026" style="width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; font-family:inherit;"></div>' +
+    '<div id="newGroupList" style="overflow-y:auto; flex:1;"></div>' +
+    '<div style="padding:14px 20px 4px;"><button id="newGroupBtn" onclick="createNewGroup()" style="width:100%; padding:13px; background:var(--g-blue); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">Cr\u00e9er le groupe</button></div>' +
     '</div>';
   document.body.appendChild(ov);
+  tcRendreMembresGroupe();
 }
 
-function toggleGroupContact(cid, el) {
-  const idx = _tcGroupSelected.indexOf(cid);
-  const check = el.querySelector('.grp-check');
-  if (idx === -1) {
-    _tcGroupSelected.push(cid);
-    check.style.background = 'var(--g-blue)';
-    check.style.borderColor = 'var(--g-blue)';
-    check.textContent = '✓';
-    check.style.color = '#fff';
-    check.style.display = 'flex';
-    check.style.alignItems = 'center';
-    check.style.justifyContent = 'center';
-    check.style.fontSize = '11px';
-  } else {
-    _tcGroupSelected.splice(idx, 1);
-    check.style.background = 'transparent';
-    check.style.borderColor = '#c4c8cc';
-    check.textContent = '';
+/** Une ligne de contact, cochee ou non. */
+function tcLigneMembreGroupe(c) {
+  const choisi = _tcGroupSelected.indexOf(c.id) > -1;
+  const color = getContactColor(c.name);
+  const initials = getContactInitials(c.name);
+  return '<div class="msg-sheet-i" data-cid="' + c.id + '" onclick="toggleGroupContact(\'' + c.id + '\')" style="justify-content:space-between;">' +
+    '<div style="display:flex; align-items:center; gap:12px;">' +
+    '<div style="width:36px; height:36px; border-radius:50%; background:' + color + '; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; flex-shrink:0;">' + initials + '</div>' +
+    '<span>' + escapeHTMLSafe(c.name) + '</span></div>' +
+    '<span class="grp-check" style="width:20px; height:20px; border-radius:50%; ' +
+    (choisi
+      ? 'border:2px solid var(--g-blue); background:var(--g-blue); color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px;">\u2713'
+      : 'border:2px solid #c4c8cc;">') +
+    '</span></div>';
+}
+
+/**
+ * Dresse la liste des membres proposes.
+ *
+ * Rien tant qu'on n'a pas cherche : construire les 3 313 fiches
+ * rendait l'ouverture de la fenetre penible, et derouler un carnet
+ * entier pour trouver un nom l'est encore plus.
+ *
+ * Les deja choisis restent en tete quoi qu'il arrive. Sans cela, on
+ * coche quelqu'un, on tape un autre nom, et le premier disparait de
+ * l'ecran -- on le croit perdu.
+ */
+function tcRendreMembresGroupe() {
+  const zone = document.getElementById('newGroupList');
+  if (!zone) return;
+  const champ = document.getElementById('newGroupSearch');
+  const q = (champ ? champ.value : '').trim().toLowerCase();
+
+  if (!Array.isArray(contactsList) || !contactsList.length) {
+    zone.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-sec); font-size:13px;">Ajoute d\'abord des contacts dans Mes contacts.</div>';
+    return;
   }
+
+  const choisis = contactsList.filter(function (c) {
+    return _tcGroupSelected.indexOf(c.id) > -1;
+  });
+  const trouves = q
+    ? contactsList.filter(function (c) {
+        return _tcGroupSelected.indexOf(c.id) === -1
+          && ((c.name && c.name.toLowerCase().includes(q))
+            || (c.phone && c.phone.toLowerCase().includes(q))
+            || (c.email && c.email.toLowerCase().includes(q)));
+      }).slice(0, 50)
+    : [];
+
+  let h = '';
+  if (choisis.length) {
+    h += '<div style="padding:6px 20px; font-size:11px; font-weight:700; color:var(--g-blue); text-transform:uppercase;">Choisis (' + choisis.length + ')</div>';
+    h += choisis.map(tcLigneMembreGroupe).join('');
+  }
+  if (q) {
+    h += trouves.length
+      ? '<div style="padding:6px 20px; font-size:11px; font-weight:700; color:var(--text-sec); text-transform:uppercase;">R\u00e9sultats</div>' + trouves.map(tcLigneMembreGroupe).join('')
+      : '<div style="padding:20px; text-align:center; color:var(--text-sec); font-size:13px;">Aucun contact \u00e0 ce nom.</div>';
+  } else if (!choisis.length) {
+    h += '<div style="padding:24px 20px; text-align:center; color:var(--text-sec); font-size:13px; line-height:1.6;">Cherche un contact par son nom<br>pour l\u2019ajouter au groupe.</div>';
+  }
+  zone.innerHTML = h;
+
+  const bouton = document.getElementById('newGroupBtn');
+  if (bouton) {
+    bouton.textContent = _tcGroupSelected.length
+      ? 'Cr\u00e9er le groupe (' + _tcGroupSelected.length + ')'
+      : 'Cr\u00e9er le groupe';
+  }
+}
+
+function toggleGroupContact(cid) {
+  const idx = _tcGroupSelected.indexOf(cid);
+  if (idx === -1) _tcGroupSelected.push(cid);
+  else _tcGroupSelected.splice(idx, 1);
+  // La liste se redessine : le contact coche rejoint le haut, et le
+  // compteur du bouton suit.
+  tcRendreMembresGroupe();
 }
 
 function createNewGroup() {
