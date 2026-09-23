@@ -350,6 +350,20 @@ body.maj-visible .toast { bottom:152px; }
 @keyframes tcDot90sm  { 0%,100%{transform:rotate(90deg)  translate(7px,0);} 50%{transform:rotate(90deg)  translate(0,0);} }
 @keyframes tcDot180sm { 0%,100%{transform:rotate(180deg) translate(7px,0);} 50%{transform:rotate(180deg) translate(0,0);} }
 @keyframes tcDot270sm { 0%,100%{transform:rotate(270deg) translate(7px,0);} 50%{transform:rotate(270deg) translate(0,0);} }
+
+/* Les quatre points du logo, qui s'allument l'un apres l'autre :
+   bleu, rouge, jaune, vert, puis on recommence, tant que la recherche
+   dure. Animation CSS pure : aucun minuteur JavaScript, donc rien qui
+   pese sur la page. */
+.tc-points { display:inline-flex; align-items:center; gap:6px; }
+.tc-points span { width:8px; height:8px; border-radius:50%; opacity:0.25; animation: tcPointPulse 1.6s ease-in-out infinite; }
+.tc-points span:nth-child(1) { background:var(--g-blue);   animation-delay:0s; }
+.tc-points span:nth-child(2) { background:var(--g-red);    animation-delay:0.2s; }
+.tc-points span:nth-child(3) { background:var(--g-yellow); animation-delay:0.4s; }
+.tc-points span:nth-child(4) { background:var(--g-green);  animation-delay:0.6s; }
+@keyframes tcPointPulse { 0%,60%,100% { transform:scale(0.75); opacity:0.25; } 30% { transform:scale(1.3); opacity:1; } }
+/* Un telephone regle pour limiter les animations les voit fixes. */
+@media (prefers-reduced-motion: reduce) { .tc-points span { animation:none; opacity:1; transform:none; } }
 .ai-text { font-size:13px; color:var(--g-blue); font-weight:500; }
 
 /* Dashboard */
@@ -8510,6 +8524,9 @@ function renderCharlyChat() {
     return;
   }
   body.innerHTML = charlyIA.history.map(m => renderChatMessage(m)).join('');
+  // Le redessin efface la bulle d'attente : on la remet si Charly
+  // cherche toujours, sinon elle disparaitrait au premier rafraichissement.
+  tcMajAttenteCharly();
   // Scroll to bottom
   setTimeout(() => { body.scrollTop = body.scrollHeight; }, 50);
 }
@@ -9264,6 +9281,59 @@ function tcDefinirStatutCharly(texte, chargement) {
   charlyIA.isLoading = !!chargement;
   const btn = document.getElementById('charlySendBtn');
   if (btn) btn.style.opacity = chargement ? '0.5' : '1';
+  tcMajAttenteCharly();
+}
+
+/**
+ * La bulle d'attente, en bas de la conversation.
+ *
+ * Elle se place la ou la reponse va s'afficher, et disparait des
+ * qu'elle arrive. Son texte est celui du bandeau : Charly ne fait pas
+ * toujours la meme chose -- il consulte l'agenda, calcule un trajet,
+ * cherche sur le web -- et le dire fait patienter mieux que des
+ * points seuls.
+ */
+function tcMajAttenteCharly() {
+  const corps = document.getElementById('charlyChatBody');
+  if (!corps) return;
+  let bulle = document.getElementById('charlyAttente');
+
+  if (!charlyIA.isLoading) {
+    if (bulle) bulle.remove();
+    return;
+  }
+
+  const statut = document.getElementById('charlyStatus');
+  const texte = (statut && statut.textContent) || 'Recherche en cours…';
+
+  if (!bulle) {
+    corps.insertAdjacentHTML('beforeend',
+      '<div id="charlyAttente" style="display:flex; margin-bottom:10px;">' +
+        '<div style="padding:12px 16px; background:white; border:1px solid var(--border);' +
+        ' border-radius:16px 16px 16px 4px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">' +
+          '<div class="tc-points"><span></span><span></span><span></span><span></span></div>' +
+          '<div class="tc-attente-texte" style="font-size:11px; color:var(--text-sec); margin-top:6px;"></div>' +
+        '</div>' +
+      '</div>');
+    bulle = document.getElementById('charlyAttente');
+  }
+  // On ne recree jamais une bulle qui existe : les points repartiraient
+  // du bleu a chaque changement de texte, et l'animation sauterait.
+  const ligne = bulle && bulle.querySelector('.tc-attente-texte');
+  if (ligne) ligne.textContent = texte;
+  corps.scrollTop = corps.scrollHeight;
+}
+
+/**
+ * Le dernier message de la conversation, sans compter la bulle.
+ *
+ * Des boutons viennent se greffer sous le dernier message -- annuler
+ * un rendez-vous, forcer un conflit. Sans ce filtre ils atterriraient
+ * sous les points d'attente.
+ */
+function tcDernierMessageCharly() {
+  const tous = document.querySelectorAll('#charlyChatBody > div:not(#charlyAttente)');
+  return tous.length ? tous[tous.length - 1] : null;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -9519,7 +9589,7 @@ async function tcGererSuppressionRdv(text) {
     charlyIA.history.push({role: 'system_info', content: html, isHTML: true});
     renderCharlyChat();
     setTimeout(() => {
-      const lastMsg = document.querySelector('#charlyChatBody > div:last-child');
+      const lastMsg = tcDernierMessageCharly();
       if (!lastMsg) return;
       const actionsDiv = document.createElement('div');
       actionsDiv.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; margin:10px auto; max-width:90%;';
@@ -10041,9 +10111,7 @@ async function charlySendMessage() {
   renderCharlyChat();
 
   // Show loading
-  charlyIA.isLoading = true;
-  document.getElementById('charlyStatus').textContent = '⏳ Charly réfléchit…';
-  document.getElementById('charlySendBtn').style.opacity = '0.5';
+  tcDefinirStatutCharly('⏳ Charly réfléchit…', true);
 
   try {
     let reply;
@@ -10153,9 +10221,7 @@ JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY
     renderCharlyChat();
     showToast('❌ Erreur API : ' + err.message.substring(0,60));
   }
-  charlyIA.isLoading = false;
-  document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
-  document.getElementById('charlySendBtn').style.opacity = '1';
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
 }
 
 // ═══ APPEL API OPENAI ═══
@@ -10738,7 +10804,7 @@ function charlyMicToggle() {
   charlyMicActive = true;
   btn.style.background = 'var(--g-red)';
   btn.style.animation = 'pulse 1s infinite';
-  document.getElementById('charlyStatus').textContent = '🎙️ Je t\'écoute…';
+  tcDefinirStatutCharly('🎙️ Je t\'écoute…', false);
 
   let finalTranscript = '';
   tcDicteeMemoriserPrefixe();
@@ -10776,7 +10842,7 @@ function stopCharlyMic() {
     btn.style.background = 'var(--g-blue)';
     btn.style.animation = '';
   }
-  document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
 }
 
 // ═══ Override navigate pour les nouvelles pages ═══
@@ -12651,8 +12717,7 @@ async function handleCharlyFileSelected(event, sourceType) {
   renderCharlyChat();
 
   // Indicateur de loading
-  charlyIA.isLoading = true;
-  document.getElementById('charlyStatus').textContent = '⏳ Charly analyse ton fichier…';
+  tcDefinirStatutCharly('⏳ Charly analyse ton fichier…', true);
 
   try {
     let extractedText = '';
@@ -12665,8 +12730,7 @@ async function handleCharlyFileSelected(event, sourceType) {
           role: 'system_info',
           content: '⚠️ Ce PDF semble être une image scannée. Lecture des images bientôt disponible — peux-tu me donner les détails du RDV manuellement ?'
         });
-        charlyIA.isLoading = false;
-        document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+        tcDefinirStatutCharly('🔒 Assistant intelligent', false);
         renderCharlyChat();
         return;
       }
@@ -12676,8 +12740,7 @@ async function handleCharlyFileSelected(event, sourceType) {
         role: 'system_info',
         content: '📷 La lecture automatique des photos sera disponible bientôt. Pour ce RDV, peux-tu me donner les infos manuellement (date, heure, lieu) ?'
       });
-      charlyIA.isLoading = false;
-      document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+      tcDefinirStatutCharly('🔒 Assistant intelligent', false);
       renderCharlyChat();
       return;
     } else if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
@@ -12713,8 +12776,7 @@ Analyse ce texte et :
       role: 'system_info',
       content: `❌ Erreur lecture fichier : ${err.message.substring(0,100)}`
     });
-    charlyIA.isLoading = false;
-    document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
     renderCharlyChat();
   }
 }
@@ -12738,14 +12800,12 @@ async function extractTextFromPDF(file) {
 async function charlyProcessMessage() {
   if (!charlyIA.config.enabled) {
     showToast('⚠️ Charly IA désactivé');
-    charlyIA.isLoading = false;
-    document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
     return;
   }
   if (!charlyIA.config.demoMode && !charlyIA.config.apiKey) {
     showToast('⚠️ Aucune clé API. Configure-la dans Configuration IA.');
-    charlyIA.isLoading = false;
-    document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
     return;
   }
 
@@ -12784,8 +12844,7 @@ ${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | rdv
     charlyIA.history.push({role:'system_info', content:`❌ Erreur : ${err.message.substring(0,120)}`});
     renderCharlyChat();
   }
-  charlyIA.isLoading = false;
-  document.getElementById('charlyStatus').textContent = '🔒 Assistant intelligent';
+  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -12883,7 +12942,7 @@ function showConflictWarning(conflicts, msg) {
 
   // Ajouter les boutons d'action
   setTimeout(() => {
-    const lastMsg = document.querySelector('#charlyChatBody > div:last-child');
+    const lastMsg = tcDernierMessageCharly();
     if (!lastMsg) return;
     const actionsDiv = document.createElement('div');
     actionsDiv.style.cssText = 'display:flex; gap:6px; flex-wrap:wrap; margin:10px auto; max-width:90%;';
