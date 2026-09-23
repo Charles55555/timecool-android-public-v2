@@ -5119,6 +5119,19 @@ function tcConversationsAffichables() {
       : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   };
 
+  /**
+   * Le moment du dernier message, en millisecondes.
+   *
+   * Zero quand il n'y en a pas de lisible : la conversation tombe
+   * alors en fin de liste plutot qu'en tete, ce qui arriverait avec
+   * une date d'aujourd'hui posee par defaut.
+   */
+  const tcQuandConversation = function (c) {
+    if (!c || !c.quand) return 0;
+    const t = Date.parse(c.quand);
+    return isNaN(t) ? 0 : t;
+  };
+
   const duServeur = tcConversations().map(function (c) {
     return {
       id: 'srv_' + c.reference,
@@ -5131,6 +5144,10 @@ function tcConversationsAffichables() {
       unread: 0,
       archived: false,
       serveur: true,
+      // Le moment du dernier message, garde brut : \u00ab 22:48 \u00bb sert a
+      // l'affichage, pas a comparer deux conversations.
+      quand: c.maj || ((c.thread || []).length
+        ? c.thread[c.thread.length - 1].le : ''),
       thread: (c.thread || []).map(function (t) {
         // « original » n'existe que sur un message traduit par le
         // serveur : c'est lui qui declenche le lien de relecture.
@@ -5142,9 +5159,13 @@ function tcConversationsAffichables() {
         };
       })
     };
-  }).sort(function (a, b) { return a.with.localeCompare(b.with, 'fr'); });
+  });
 
-  return duServeur.concat(messages[mode] || []);
+  // Le plus recent en haut. Les conversations de demonstration n'ont
+  // pas de date et tombent en fin de liste, dans leur ordre d'origine
+  // -- le tri de JavaScript est stable.
+  return duServeur.concat(messages[mode] || [])
+    .sort(function (a, b) { return tcQuandConversation(b) - tcQuandConversation(a); });
 }
 
 function renderMessages() {
