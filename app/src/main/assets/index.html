@@ -14812,7 +14812,8 @@ function renderContactsListHTML(contacts) {
             <div data-notranslate style="width:42px; height:42px; border-radius:50%; background:${color}; color:white; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; flex-shrink:0;">${initials}</div>
             <div style="flex:1; min-width:0;">
               <div style="font-size:14px; font-weight:600; color:var(--text);"><span data-notranslate>${escapeHTMLSafe(c.name)}</span>${onTC ? '<span class="tc-badge"><i>\u2713</i>TIMECOOL</span>' : ''}</div>
-              ${c.phone ? `<div data-notranslate style="font-size:11px; color:var(--text-sec); margin-top:2px;">\u{1F4F1} ${escapeHTMLSafe(c.phone)}</div>` : ''}
+              ${tcLigneCoordonnee(c, 'phone')}
+              ${tcLigneCoordonnee(c, 'email')}
             </div>
             <button onclick="toggleContactMenu(event, '${c.id}')" title="Options" style="padding:6px 8px; background:transparent; border:none; cursor:pointer; color:var(--text-sec); font-size:20px; line-height:1;">\u22EE</button>
             <div class="msg-menu" id="ctMenu_${c.id}" style="right:0; top:36px;">
@@ -17812,6 +17813,59 @@ function tcLanguesClassees() {
     catch (e) { return a.nom < b.nom ? -1 : (a.nom > b.nom ? 1 : 0); }
   });
   return lues;
+}
+
+/**
+ * Corrige une coordonnee d'un contact : son telephone ou son email.
+ *
+ * Les deux servent a reconnaitre les contacts deja inscrits sur
+ * TimeCool : on relance donc cette detection apres chaque
+ * modification, sinon un badge n'apparaitrait qu'a la visite suivante.
+ */
+async function tcModifierCoordonnee(id, champ) {
+  const c = contactsList.find(x => x.id === id);
+  if (!c) return;
+  const estEmail = (champ === 'email');
+  const saisi = await tcPrompt(
+    estEmail ? 'Adresse email de ' + c.name + ' :' : 'T\u00e9l\u00e9phone de ' + c.name + ' :',
+    c[champ] || ''
+  );
+  if (saisi === null) return;                 // annule
+  const valeur = String(saisi).trim();
+
+  if (valeur === '') {
+    delete c[champ];
+  } else if (estEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valeur)) {
+    // Une adresse sans arobase ne servirait a rien, et l'erreur ne se
+    // verrait qu'au moment ou l'invitation partirait dans le vide.
+    showToast('\u26a0\ufe0f Cette adresse email ne semble pas valide');
+    return;
+  } else if (!estEmail && !/[0-9]/.test(valeur)) {
+    showToast('\u26a0\ufe0f Ce num\u00e9ro ne contient aucun chiffre');
+    return;
+  } else {
+    c[champ] = valeur;
+  }
+
+  saveContacts();
+  renderContacts();
+  if (typeof tcRafraichirBadgesContacts === 'function') tcRafraichirBadgesContacts();
+  showToast(valeur === '' ? '\ud83d\uddd1\ufe0f Coordonn\u00e9e retir\u00e9e' : '\u2705 Enregistr\u00e9');
+}
+
+/** Une ligne de coordonnee, avec son crayon. */
+function tcLigneCoordonnee(c, champ) {
+  const estEmail = (champ === 'email');
+  const valeur = (c[champ] || '').trim();
+  const icone = estEmail ? '\ud83d\udce7' : '\ud83d\udcf1';
+  const manque = estEmail ? 'Ajouter un email' : 'Ajouter un t\u00e9l\u00e9phone';
+  return '<div style="display:flex; align-items:center; gap:6px; margin-top:2px;">'
+    + '<span data-notranslate style="font-size:11px; color:'
+    + (valeur ? 'var(--text-sec)' : '#9aa0a6') + '; font-style:' + (valeur ? 'normal' : 'italic') + ';">'
+    + icone + ' ' + (valeur ? escapeHTMLSafe(valeur) : manque) + '</span>'
+    + '<button onclick="event.stopPropagation(); tcModifierCoordonnee(\'' + c.id + '\', \'' + champ + '\')"'
+    + ' title="Modifier" style="background:none; border:none; cursor:pointer; padding:0 2px;'
+    + ' font-size:11px; line-height:1;">\u270f\ufe0f</button></div>';
 }
 
 /** La langue dans laquelle l'utilisateur lit TimeCool, aujourd'hui. */
