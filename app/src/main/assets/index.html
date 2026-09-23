@@ -3077,7 +3077,7 @@ RÈGLE STRICTE : un rappel AUTONOME — sans rendez-vous derrière, comme "rappe
 médicaments à 8h" ou "rappelle-moi d'appeler le plombier" — DOIT générer un bloc [AGENDA] OBLIGATOIREMENT.
 Tu NE PEUX PAS répondre "C'est noté" sans inclure le bloc [AGENDA].
 EXCEPTION : n'ajoute JAMAIS de créneau "Rappel ..." pour un rendez-vous qui existe déjà dans l'agenda.
-Celui-là porte deja ses propres notifications — 1 heure, 30, 15 et 5 minutes avant.
+Celui-là porte déjà son propre rappel, au délai choisi par l'utilisateur.
 Exemple pour "Rappelle-moi de prendre mes médicaments à 8h" :
 "C'est fait ! ⏰ Je t'ai ajouté ça dans ton agenda !"
 [AGENDA]
@@ -3159,7 +3159,15 @@ Pour tout événement à ajouter, utilise EXACTEMENT ce format :
 2026-05-06 | 10:00-11:00 | Rendez-vous médecin | rdv
 [/AGENDA]
 
-Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE | LIEU (facultatif, un 5e champ)
+Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE | LIEU (5e champ, facultatif) | CONTACT (6e champ, facultatif)
+
+CONTACT : le nom de la personne avec qui est le rendez-vous, EXACTEMENT comme l'utilisateur l'a dit
+(« Michel », « Dr Benali », « maman »). Tu ne cherches JAMAIS dans ses contacts, tu n'ajoutes JAMAIS
+un nom de famille qu'il n'a pas prononcé, et tu ne demandes JAMAIS « lequel ? » : l'application
+retrouve la personne dans le carnet et lui fait choisir s'il y a plusieurs Michel.
+Ne remplis ce champ que si une personne est nommée. « Rendez-vous dentiste » sans nom → pas de 6e champ.
+Si le lieu est absent mais qu'il y a un contact, mets « - » en 5e champ :
+2026-05-06 | 14:00-15:00 | Rendez-vous dentiste | rdv | - | Michel
 
 ÉVÉNEMENT SUR PLUSIEURS JOURS : ajoute la date de fin après la date de début, séparée par « > ».
 [AGENDA]
@@ -4454,6 +4462,7 @@ function openEventModal(e) {
       </div>
       <div id="emTrajet" style="font-size:12px; margin-top:8px;"></div>
     </div></div>` : ''}
+    ${tcContactDuRdv(e) ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div><div class="event-detail-label">Avec</div><div class="event-detail-value" data-notranslate>${escapeHTML(tcContactDuRdv(e).name || '')}</div></div></div>` : ''}
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Confidentialité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Sur votre appareil</div></div></div>
   `;
   const actions = document.getElementById('emActions');
@@ -4476,6 +4485,281 @@ function openEventModal(e) {
   document.getElementById('eventModal').classList.add('open');
 }
 
+/* ══════════════════════════════════════════════════════════════
+   AVEC QUI ?
+
+   Un rendez-vous porte la reference du contact (`e.contact`), jamais
+   son nom : un nom se change, et rien ne distingue douze Michel.
+   Quand le contact disparait du carnet, le rendez-vous reste --
+   simplement, il n'a plus personne a prevenir.
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Le message qui porte cette proposition.
+ *
+ * Meme repli que la validation : un tempId absent ne doit pas
+ * empecher de designer la personne.
+ */
+function tcMessageProposition(tempId) {
+  const direct = charlyIA.history.find(function (m) {
+    return m.role === 'assistant' && m.tempId === tempId;
+  });
+  if (direct) return direct;
+  return [...charlyIA.history].reverse().find(function (m) {
+    return m.role === 'assistant' && extractAgendaProposals(m.content) && !m._validated;
+  }) || null;
+}
+
+/**
+ * Le contact retenu pour une proposition.
+ *
+ * Celui que l'utilisateur a designe s'il l'a fait ; sinon le seul qui
+ * corresponde. Jamais le premier de douze : entre douze Michel, on
+ * demande.
+ */
+function tcContactDeProposition(msg, p) {
+  if (!p || !p.contact) return null;
+  const cle = tcSansAccents(p.contact);
+  const choisi = msg && msg._contacts && msg._contacts[cle];
+  if (choisi) {
+    return contactsList.find(function (c) { return c.id === choisi; }) || null;
+  }
+  const trouves = tcResoudreContact(p.contact);
+  return trouves.length === 1 ? trouves[0] : null;
+}
+
+/** La ligne « avec qui » d'une proposition, avec son choix si besoin. */
+function tcLigneContactProposition(msg, p, tempId) {
+  if (!p || !p.contact) return '';
+  const style = 'font-size:11.5px; margin-top:2px;';
+  const ouvrir = 'onclick="tcChoisirContactProposition(' + JSON.stringify(String(tempId || '')).replace(/"/g, '&quot;')
+    + ',' + JSON.stringify(p.contact).replace(/"/g, '&quot;') + ')"';
+  const retenu = tcContactDeProposition(msg, p);
+  if (retenu) {
+    return '<div style="' + style + ' color:var(--text-sec);" ' + ouvrir + '>'
+      + '👤 <span data-notranslate>' + escapeHTMLSafe(retenu.name || '') + '</span>'
+      + ' <span style="color:var(--g-blue);">· changer</span></div>';
+  }
+  const trouves = tcResoudreContact(p.contact);
+  if (trouves.length > 1) {
+    return '<div style="' + style + ' color:#8a6500;" ' + ouvrir + '>'
+      + '👤 ' + trouves.length + ' contacts nommés <span data-notranslate>'
+      + escapeHTMLSafe(p.contact) + '</span> — <b>choisir</b></div>';
+  }
+  return '<div style="' + style + ' color:var(--text-sec);" ' + ouvrir + '>'
+    + '👤 <span data-notranslate>' + escapeHTMLSafe(p.contact) + '</span>'
+    + ' — pas dans tes contacts <span style="color:var(--g-blue);">· choisir</span></div>';
+}
+
+/** Demande qui est la personne, la recherche deja remplie de son nom. */
+function tcChoisirContactProposition(tempId, nom) {
+  const msg = tcMessageProposition(tempId);
+  if (!msg) return;
+  const cle = tcSansAccents(nom);
+  tcChoisirContactRdv(function (id) {
+    if (!msg._contacts) msg._contacts = {};
+    if (id) msg._contacts[cle] = id;
+    else delete msg._contacts[cle];
+    renderCharlyChat();
+  });
+  // La recherche part du nom prononce : les douze Michel sont deja la,
+  // le plus probable en tete.
+  const champ = document.getElementById('tcRechContactRdv');
+  if (champ) { champ.value = nom; tcRendreContactsRdv(); }
+}
+
+/** Le contact relie a un rendez-vous, s'il en a un et s'il existe encore. */
+function tcContactDuRdv(e) {
+  if (!e || !e.contact || !Array.isArray(contactsList)) return null;
+  return contactsList.find(function (c) { return c.id === e.contact; }) || null;
+}
+
+/** Sans accents ni majuscules : « Michele » doit trouver « Michèle ». */
+function tcSansAccents(t) {
+  return String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/** La date du dernier rendez-vous connu, par contact. */
+function tcDernierRdvParContact() {
+  const vus = {};
+  (Array.isArray(events) ? events : []).forEach(function (e) {
+    if (!e || !e.contact) return;
+    if (!vus[e.contact] || e.date > vus[e.contact]) vus[e.contact] = e.date;
+  });
+  return vus;
+}
+
+/**
+ * Les contacts a proposer, du plus probable au moins probable.
+ *
+ * Ceux avec qui on a deja eu rendez-vous viennent d'abord, le plus
+ * recent en tete : c'est presque toujours celui-la qu'on cherche.
+ * Puis ceux qui sont sur TimeCool, puis l'ordre alphabetique. Avec
+ * trois mille contacts, l'ordre alphabetique seul ne sert a rien.
+ */
+function tcContactsPourRdv(q) {
+  if (!Array.isArray(contactsList)) return [];
+  const recherche = tcSansAccents(q).trim();
+  const vus = tcDernierRdvParContact();
+  const liste = recherche
+    ? contactsList.filter(function (c) {
+        return tcSansAccents(c.name).indexOf(recherche) > -1
+          || tcSansAccents(c.phone).indexOf(recherche) > -1
+          || tcSansAccents(c.email).indexOf(recherche) > -1;
+      })
+    : contactsList.slice();
+  return tcClasserContacts(liste, vus);
+}
+
+/**
+ * Du plus probable au moins probable.
+ *
+ * Les dates s'ecrivent AAAA-MM-JJ : les comparer comme du texte
+ * suffit, et l'absence de date (chaine vide) tombe en dernier.
+ */
+function tcClasserContacts(liste, vus) {
+  const dates = vus || tcDernierRdvParContact();
+  return liste.sort(function (a, b) {
+    const da = dates[a.id] || '', db = dates[b.id] || '';
+    if (da !== db) return da < db ? 1 : -1;
+    const ta = a.referenceCompte ? 0 : 1, tb = b.referenceCompte ? 0 : 1;
+    if (ta !== tb) return ta - tb;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'fr');
+  });
+}
+
+/**
+ * Les contacts qui peuvent repondre au nom prononce.
+ *
+ * Chaque mot doit commencer un mot du nom : « Michel » trouve
+ * « Michel Dupont » et « Jean-Michel Aubert », mais pas « Carmichel ».
+ * Sans cela, un prenom court ramenerait la moitie du carnet.
+ */
+function tcResoudreContact(nom) {
+  const q = tcSansAccents(nom).trim();
+  if (!q || !Array.isArray(contactsList)) return [];
+  const mots = q.split(/\s+/).filter(Boolean);
+  const trouves = contactsList.filter(function (c) {
+    const n = tcSansAccents(c.name);
+    return mots.every(function (mot) {
+      const propre = mot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp('(^|[^a-z0-9])' + propre).test(n);
+    });
+  });
+  return tcClasserContacts(trouves);
+}
+
+/** Ce qui distingue un contact d'un homonyme : telephone, email, ou rien. */
+function tcDetailContact(c, vus) {
+  const bouts = [];
+  if (c.phone) bouts.push(escapeHTMLSafe(c.phone));
+  else if (c.email) bouts.push(escapeHTMLSafe(c.email));
+  if (vus && vus[c.id]) {
+    const d = new Date(vus[c.id] + 'T00:00:00');
+    if (!isNaN(d)) bouts.push('RDV le ' + d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
+  }
+  if (c.referenceCompte) bouts.push('sur TimeCool');
+  return bouts.join(' · ');
+}
+
+function tcLigneContactRdv(c, vus) {
+  const detail = tcDetailContact(c, vus);
+  return '<div class="msg-sheet-i" onclick="tcRetenirContactRdv(' + JSON.stringify(c.id).replace(/"/g, '&quot;') + ')">'
+    + '<span>👤</span>'
+    + '<div><div data-notranslate>' + escapeHTMLSafe(c.name || 'Sans nom') + '</div>'
+    + (detail ? '<div data-notranslate style="font-size:11px; color:var(--text-sec);">' + detail + '</div>' : '')
+    + '</div></div>';
+}
+
+/** La liste du selecteur, refaite a chaque frappe. */
+function tcRendreContactsRdv() {
+  const zone = document.getElementById('tcListeContactsRdv');
+  if (!zone) return;
+  const champ = document.getElementById('tcRechContactRdv');
+  const q = champ ? champ.value : '';
+
+  if (!Array.isArray(contactsList) || !contactsList.length) {
+    zone.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-sec); font-size:13px;">'
+      + 'Ajoute d\'abord des contacts dans Mes contacts.</div>';
+    return;
+  }
+  const vus = tcDernierRdvParContact();
+  const trouves = tcContactsPourRdv(q);
+  if (!trouves.length) {
+    zone.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-sec); font-size:13px;">Aucun contact trouvé.</div>';
+    return;
+  }
+  // Quarante suffisent a l'ecran : au-dela on affine la recherche, et
+  // dessiner trois mille lignes ferait ramer l'ouverture.
+  const montres = trouves.slice(0, 40);
+  zone.innerHTML = montres.map(function (c) { return tcLigneContactRdv(c, vus); }).join('')
+    + (trouves.length > montres.length
+      ? '<div style="padding:10px 20px; font-size:11px; color:var(--text-sec); text-align:center;">'
+        + (trouves.length - montres.length) + ' autres — précise ta recherche</div>'
+      : '');
+}
+
+/* Ou renvoyer le contact choisi. Nul : la fiche en cours d'edition. */
+let _tcContactRdvRetour = null;
+
+/**
+ * Ouvre le choix du contact.
+ *
+ * @param {Function} [retour] appelee avec l'identifiant choisi (ou
+ *   null). Sans elle, le choix atterrit dans la fiche ouverte.
+ */
+function tcChoisirContactRdv(retour) {
+  _tcContactRdvRetour = (typeof retour === 'function') ? retour : null;
+  const ov = document.createElement('div');
+  ov.className = 'msg-sheet-ov';
+  ov.id = 'tcFeuilleContactRdv';
+  ov.onclick = function (ev) { if (ev.target === ov) ov.remove(); };
+  ov.innerHTML = '<div class="msg-sheet">'
+    + '<div class="msg-sheet-h">Avec qui ?</div>'
+    + '<div style="padding:0 20px 10px;">'
+      + '<input id="tcRechContactRdv" type="text" placeholder="Rechercher un contact…" oninput="tcRendreContactsRdv()"'
+      + ' style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; box-sizing:border-box;">'
+    + '</div>'
+    + '<div id="tcListeContactsRdv" style="max-height:44vh; overflow-y:auto;"></div>'
+    + '<div class="msg-sheet-i" onclick="tcRetenirContactRdv(null)" style="border-top:1px solid var(--border); color:var(--text-sec);">'
+      + '<span>🚫</span>Aucun contact</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  tcRendreContactsRdv();
+}
+
+/** Retient le contact choisi (l'enregistrement vient apres). */
+function tcRetenirContactRdv(id) {
+  const feuille = document.getElementById('tcFeuilleContactRdv');
+  if (feuille) feuille.remove();
+  const retour = _tcContactRdvRetour;
+  _tcContactRdvRetour = null;
+  if (retour) { retour(id || null); return; }
+  const champ = document.getElementById('editContact');
+  if (champ) champ.value = id || '';
+  tcMajLigneContactRdv();
+}
+
+/** La ligne « Avec qui ? » de la fiche, telle qu'elle doit s'afficher. */
+function tcLigneContactHTML(id) {
+  const c = id && Array.isArray(contactsList)
+    ? contactsList.find(function (x) { return x.id === id; })
+    : null;
+  if (!c) {
+    return '<span style="color:#9aa0a6;">Choisir un contact…</span>';
+  }
+  const detail = tcDetailContact(c, tcDernierRdvParContact());
+  return '<span data-notranslate style="color:var(--text);">👤 ' + escapeHTMLSafe(c.name || 'Sans nom') + '</span>'
+    + (detail ? '<span data-notranslate style="font-size:11px; color:var(--text-sec); margin-left:8px;">' + detail + '</span>' : '');
+}
+
+function tcMajLigneContactRdv() {
+  const ligne = document.getElementById('editContactLigne');
+  if (!ligne) return;
+  const champ = document.getElementById('editContact');
+  ligne.innerHTML = tcLigneContactHTML(champ ? champ.value : '');
+}
+
 function openEditEventModal() {
   const e = currentEvent;
   if (!e) return;
@@ -4485,6 +4769,12 @@ function openEditEventModal() {
       <input id="editTitle" type="text" value="${e.title.replace(/"/g,'&quot;')}" 
         style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px;">
       
+      <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">AVEC QUI ? (facultatif)</div>
+      <input id="editContact" type="hidden" value="${e.contact || ''}">
+      <div id="editContactLigne" onclick="tcChoisirContactRdv()"
+        style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px;
+        box-sizing:border-box; margin-bottom:14px; cursor:pointer; min-height:22px;">${tcLigneContactHTML(e.contact)}</div>
+
       <div style="display:flex; gap:10px; margin-bottom:14px;">
         <div style="flex:1;">
           <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">DATE</div>
@@ -4573,6 +4863,11 @@ function saveEventEdit() {
     else e.rappel = minutes;
   }
   if (newLieu) e.lieu = newLieu; else delete e.lieu;
+  const champContact = document.getElementById('editContact');
+  if (champContact) {
+    if (champContact.value) e.contact = champContact.value;
+    else delete e.contact;
+  }
   closeEventModal();
   saveEventsToStorage();
   scheduleAllReminders();
@@ -8642,7 +8937,7 @@ function renderChatMessage(m) {
                         // Le lieu etait transmis et enregistre, mais jamais
                         // montre : on validait sans pouvoir relire l'adresse.
                         p.lieu ? `<div style="font-size:11.5px; color:var(--text-sec); margin-top:2px;">📍 ${escapeHTMLSafe(p.lieu)}</div>` : ''
-                      }</span>
+                      }${tcLigneContactProposition(m, p, m.tempId || '')}</span>
                     </div>
                   `).join('')}
                 </div>
@@ -8732,7 +9027,10 @@ function extractAgendaProposals(content) {
       // Format prioritaire : YYYY-MM-DD[>YYYY-MM-DD] | HH:MM-HH:MM | Title | category | lieu
       // La date de fin est facultative : les lignes ecrites a l'ancien
       // format restent comprises telles quelles.
-      let m1 = line.match(/(\d{4}-\d{2}-\d{2})(?:\s*>\s*(\d{4}-\d{2}-\d{2}))?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?\s*(?:\|\s*([^|]+?))?$/);
+      // Le 6e champ est le nom de la personne, tel que l'utilisateur
+      // l'a prononce. Charly ne le cherche pas dans le carnet : c'est
+      // l'application qui s'en charge, plus bas.
+      let m1 = line.match(/(\d{4}-\d{2}-\d{2})(?:\s*>\s*(\d{4}-\d{2}-\d{2}))?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?\s*(?:\|\s*([^|]+?))?\s*(?:\|\s*([^|]+?))?$/);
       if (m1) {
         const debut = fixPastYear(m1[1]);
         const fin = m1[2] ? fixPastYear(m1[2]) : '';
@@ -8747,7 +9045,10 @@ function extractAgendaProposals(content) {
           end: m1[5]+'h'+(m1[6]==='00'?'':m1[6]),
           title: m1[7].trim(),
           category: (m1[8] || 'green').trim().toLowerCase(),
-          lieu: m1[9] ? m1[9].trim() : null
+          // Un tiret marque un lieu absent quand seul le contact est
+          // donne : sans lui, les deux champs se confondraient.
+          lieu: (m1[9] && m1[9].trim() !== '-') ? m1[9].trim() : null,
+          contact: m1[10] ? m1[10].trim() : null
         });
         return;
       }
@@ -9059,6 +9360,9 @@ function validateAgendaProposalFromMsg(msg) {
       mode: mode === 'pro' ? 'pro' : 'user',
       id: 'charly_ai_' + Date.now() + '_' + idx,
       ...(lieuFinal ? { lieu: lieuFinal } : {}),
+      // Sans personne designee, le rendez-vous se cree quand meme :
+      // un contact manquant n'a jamais empeche un rendez-vous d'exister.
+      ...(tcContactDeProposition(msg, p) ? { contact: tcContactDeProposition(msg, p).id } : {}),
       // Recalculee par rapport a dateStr : l'annee du debut a pu etre
       // corrigee plus haut, et une periode dont seule la fin garde la
       // mauvaise annee durerait douze mois.
@@ -16048,28 +16352,57 @@ function saveMsgTemplate(kind, value) {
    contact — jamais deux versions différentes du même comportement.
    ══════════════════════════════════════════════════════════════ */
 let _prevenirName = '';
+let _prevenirContact = null;
 let _prevenirEventRef = null;
 
-function findUpcomingEventForContact(contactName) {
+/**
+ * Le prochain rendez-vous avec ce contact.
+ *
+ * La reference d'abord. Le titre ensuite, pour les rendez-vous crees
+ * avant que le lien existe : beaucoup s'intitulent simplement du nom
+ * de la personne, et les perdre serait une regression visible.
+ */
+function findUpcomingEventForContact(contact) {
+  const c = (contact && typeof contact === 'object') ? contact : null;
+  const contactName = c ? c.name : contact;
   const todayStr = new Date().toISOString().split('T')[0];
-  const matches = events.filter(e => e.mode === mode && e.title === contactName && e.date >= todayStr);
+  let matches = c
+    ? events.filter(e => e.mode === mode && e.contact === c.id && e.date >= todayStr)
+    : [];
+  if (!matches.length) matches = events.filter(e => e.mode === mode && !e.contact && e.title === contactName && e.date >= todayStr);
   matches.sort((a, b) => (a.date + String(a.startH).padStart(2,'0') + String(a.startM).padStart(2,'0'))
     .localeCompare(b.date + String(b.startH).padStart(2,'0') + String(b.startM).padStart(2,'0')));
   return matches[0] || null;
 }
 
 function openPrevenirFromEvent() {
-  if (!currentEvent) return;
-  openPrevenirSheet(currentEvent.title, currentEvent);
+  const ev = currentEvent;
+  if (!ev) return;
+  const c = tcContactDuRdv(ev);
+  if (c) { openPrevenirSheet(c, ev); return; }
+  // Sans contact, il n'y a personne a prevenir : on le demande, plutot
+  // que d'ouvrir une feuille qui proposerait de prevenir le titre du
+  // rendez-vous.
+  showToast('👤 Avec qui est ce rendez-vous ?');
+  tcChoisirContactRdv(function (id) {
+    if (!id) return;
+    ev.contact = id;
+    saveEventsToStorage();
+    const choisi = tcContactDuRdv(ev);
+    if (choisi) openPrevenirSheet(choisi, ev);
+  });
 }
 
 function openPrevenirFromContact(contactId) {
   const c = contactsList.find(x => x.id === contactId);
   if (!c) return;
-  openPrevenirSheet(c.name, findUpcomingEventForContact(c.name));
+  openPrevenirSheet(c, findUpcomingEventForContact(c));
 }
 
-function openPrevenirSheet(name, eventRef) {
+/** @param {Object|string} contact le contact, ou son nom a defaut. */
+function openPrevenirSheet(contact, eventRef) {
+  _prevenirContact = (contact && typeof contact === 'object') ? contact : null;
+  const name = _prevenirContact ? _prevenirContact.name : String(contact || '');
   _prevenirName = name;
   _prevenirEventRef = eventRef || null;
 
@@ -16091,6 +16424,18 @@ function openPrevenirSheet(name, eventRef) {
     body += '<div style="padding:0 20px 10px; font-size:11.5px; color:var(--text-sec);">Aucun rendez-vous à venir trouvé avec ce contact — tu peux quand même le prévenir d\'un retard.</div>';
   }
   body += '<div class="msg-sheet-i" onclick="prevenirRetard()"><span>⏱️</span>Je vais être en retard</div>';
+  // Dire d'avance par ou cela partira evite la surprise de voir
+  // l'application SMS s'ouvrir, ou d'attendre une reponse a un message
+  // qui ne pouvait pas partir.
+  const parOu = !_prevenirContact
+    ? null
+    : (_prevenirContact.referenceCompte ? 'Message direct sur TimeCool'
+      : (_prevenirContact.phone ? 'Par SMS depuis ton téléphone'
+        : (_prevenirContact.email ? 'Par email depuis ton téléphone'
+          : 'Ce contact n’a ni numéro ni email — ajoute-en un dans sa fiche')));
+  if (parOu) {
+    body += '<div style="padding:8px 20px 2px; font-size:11px; color:var(--text-sec);">' + parOu + '</div>';
+  }
 
   ov.innerHTML = '<div class="msg-sheet">' + body + '</div>';
   document.body.appendChild(ov);
@@ -16128,13 +16473,14 @@ async function prevenirAnnuler(withNewSlot) {
   const idx = events.indexOf(ev);
   if (idx > -1) events.splice(idx, 1);
   saveEventsToStorage();
-  sendPrevenirMessage(name, text);
+  const chemin = await tcTransmettrePrevenance(_prevenirContact, text);
   render();
   closeEventModal();
-  showToast('✅ ' + name + ' prévenu(e)');
+  tcDirePrevenance(chemin, name);
 
   if (withNewSlot) {
-    const c = contactsList.find(x => x.name === name);
+    // Le contact lui-meme, pas le premier qui porte son nom.
+    const c = _prevenirContact || contactsList.find(x => x.name === name);
     if (c) setTimeout(function() {
       navigate('contacts');
       requestRdvContact(c.id);
@@ -16173,11 +16519,12 @@ function confirmerRetard(name, btn) {
   const prenom = name.split(' ')[0];
   const text = 'Bonjour ' + prenom + ', je te préviens que j\'aurai environ ' + minutes + ' minutes de retard. Merci de ta patience !';
   if (btn) showButtonSpinner(btn);
-  setTimeout(function() {
-    sendPrevenirMessage(name, text);
+  const contact = _prevenirContact;
+  tcTransmettrePrevenance(contact, text).then(function (chemin) {
     _closeAllSheets();
-    showToast('✅ ' + name + ' prévenu(e) du retard');
-  }, 450);
+    if (chemin === 'timecool') showToast('✅ ' + name + ' prévenu(e) du retard');
+    else tcDirePrevenance(chemin, name);
+  });
 }
 
 /* ═══ SPINNER LOGO — utilitaires ═══
@@ -17642,6 +17989,60 @@ function cycleRecipientStatus(convocId, idx) {
   openConvocationDashboard(convocId);
 }
 
+/**
+ * Fait partir un message de prevenance, par le chemin disponible.
+ *
+ * Sur TimeCool, il arrive directement dans l'application du
+ * destinataire. Sinon on ouvre l'application SMS, WhatsApp ou mail du
+ * telephone avec le texte deja ecrit : c'est le telephone qui envoie,
+ * donc rien a installer et rien a payer.
+ *
+ * @returns {string} le chemin emprunte : 'timecool', 'sms',
+ *   'whatsapp', 'email', ou 'aucun' quand le contact n'a aucune
+ *   coordonnee -- auquel cas il faut le dire, et surtout ne pas
+ *   annoncer que la personne est prevenue.
+ */
+async function tcTransmettrePrevenance(contact, texte) {
+  const nom = (contact && contact.name) || _prevenirName || '';
+  if (contact && contact.referenceCompte) {
+    try {
+      await TC_BACKEND.envoyerMessage(
+        contact.referenceCompte, texte,
+        (typeof tcLangueForceePour === 'function') ? tcLangueForceePour(contact.referenceCompte) : null);
+      sendPrevenirMessage(nom, texte);
+      return 'timecool';
+    } catch (err) {
+      // Reseau coupe ou session expiree : le telephone prend le relais
+      // plutot que de perdre le message.
+      console.warn('Prevenance TimeCool :', err && (err.code || err.message));
+    }
+  }
+  if (contact && contact.phone) {
+    sendPrevenirMessage(nom, texte);
+    window.location.href = tcLienSms(contact.phone, texte);
+    return 'sms';
+  }
+  if (contact && contact.email) {
+    sendPrevenirMessage(nom, texte);
+    window.location.href = 'mailto:' + contact.email
+      + '?subject=' + encodeURIComponent('Notre rendez-vous')
+      + '&body=' + encodeURIComponent(texte);
+    return 'email';
+  }
+  return 'aucun';
+}
+
+/** Ce qu'il faut dire une fois le message parti — ou pas parti. */
+function tcDirePrevenance(chemin, nom) {
+  if (chemin === 'timecool') { showToast('✅ ' + nom + ' prévenu(e)'); return; }
+  if (chemin === 'sms' || chemin === 'email') {
+    showToast('✅ Message prêt pour ' + nom + ' — envoie-le');
+    return;
+  }
+  showToast('📵 ' + nom + ' n’a ni numéro ni email dans ta fiche contact');
+}
+
+/** Garde une trace du message dans la conversation locale. */
 function sendPrevenirMessage(name, text) {
   if (!messages[mode]) messages[mode] = [];
   let conv = messages[mode].find(m => m.with === name && !m.isGroup);
