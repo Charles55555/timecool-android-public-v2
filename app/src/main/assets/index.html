@@ -14429,6 +14429,9 @@ const TC_CONTACTS_SEUIL = 200;
 /** La lettre regardee, ou '' tant qu'on n'en a choisi aucune. */
 let _contactsLettre = '';
 
+/** N'afficher que les contacts deja inscrits sur TimeCool. */
+let _contactsTimeCool = false;
+
 /**
  * La categorie sur laquelle la page est filtree, ou ''.
  *
@@ -14477,6 +14480,12 @@ function tcContactsParLettres() {
  */
 function tcContactsAffiches() {
   if (!Array.isArray(contactsList)) return [];
+  // Les inscrits l'emportent aussi sur la reglette : on vient voir qui
+  // est deja la, pas parcourir l'alphabet.
+  if (_contactsTimeCool) {
+    return contactsList.filter(function (c) { return isTimeCoolUser(c); })
+      .sort(function (a, b) { return (a.name || '').localeCompare(b.name || '', 'fr'); });
+  }
   // Une categorie demandee l'emporte sur la reglette : on vient voir
   // qui peut reserver, pas parcourir l'alphabet.
   if (_contactsCategorie) {
@@ -14515,6 +14524,7 @@ function tcContactsAffiches() {
  * les deux se repondaient.
  */
 function tcVoirContactsDeCategorie(catId) {
+  _contactsTimeCool = false;
   _contactsCategorie = catId;
   _contactsLettre = '';
   contactsSearchQuery = '';
@@ -14544,8 +14554,46 @@ function tcFiltreCategorieHTML() {
     + ' font-size:12px; cursor:pointer;">Tout voir</button></div>';
 }
 
+/** Combien de contacts sont deja sur TimeCool. */
+function tcCompterTimeCool() {
+  if (!Array.isArray(contactsList)) return 0;
+  return contactsList.filter(function (c) { return isTimeCoolUser(c); }).length;
+}
+
+/** N'afficher que les inscrits, ou revenir a la liste ordinaire. */
+function tcBasculerTimeCool() {
+  _contactsTimeCool = !_contactsTimeCool;
+  _contactsCategorie = '';
+  _contactsLettre = '';
+  contactsSearchQuery = '';
+  renderContacts();
+}
+
+/**
+ * Le bouton qui les rassemble.
+ *
+ * Aucun inscrit : il le dit et ne s'ouvre pas. Un ecran vide ne
+ * renseignerait sur rien.
+ */
+function tcBoutonTimeCoolHTML() {
+  if (_contactsCategorie) return '';
+  const n = tcCompterTimeCool();
+  if (n === 0) {
+    return '<div style="text-align:center; font-size:12px; color:var(--text-sec);'
+      + ' margin-bottom:12px;">Aucun de tes contacts n\u2019utilise encore TimeCool.</div>';
+  }
+  const actif = _contactsTimeCool;
+  return '<button onclick="tcBasculerTimeCool()" style="width:100%; margin-bottom:12px;'
+    + ' padding:11px; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;'
+    + (actif
+        ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
+        : ' background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);')
+    + '">\ud83d\udc65 ' + (actif ? 'Tout voir' : 'Mes contacts TimeCool (' + n + ')') + '</button>';
+}
+
 /** Touche une lettre : la meme lettre deux fois la referme. */
 function tcChoisirLettre(lettre) {
+  _contactsTimeCool = false;
   _contactsLettre = (_contactsLettre === lettre) ? '' : lettre;
   contactsSearchQuery = '';
   renderContacts();
@@ -14555,7 +14603,7 @@ function tcChoisirLettre(lettre) {
 function tcRegletteHTML() {
   // Pendant un filtre par categorie, la reglette n'a plus de sens :
   // on regarde une poignee de personnes, pas un alphabet.
-  if (_contactsCategorie) return '';
+  if (_contactsCategorie || _contactsTimeCool) return '';
   if (!tcContactsParLettres()) return '';
   const compte = tcContactsParLettre();
   const lettres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['#']);
@@ -14603,7 +14651,7 @@ function tcContactsInviteHTML() {
 
 /** La liste, ou l'invitation a choisir. */
 function tcContactsListeHTML() {
-  if (!_contactsCategorie && tcContactsParLettres()
+  if (!_contactsCategorie && !_contactsTimeCool && tcContactsParLettres()
       && !_contactsLettre && !contactsSearchQuery.trim()) {
     return tcContactsInviteHTML();
   }
@@ -14627,6 +14675,7 @@ function renderContacts() {
     </div>
 
     ${tcFiltreCategorieHTML()}
+    ${tcBoutonTimeCoolHTML()}
     ${tcRegletteHTML()}
 
     <div id="contactsListContainer">
@@ -15815,7 +15864,9 @@ function renderContactsList() {
   // Taper un nom quitte la lettre en cours : on cherche dans tout le
   // carnet, et garder une lettre allumee laisserait croire le
   // contraire.
-  if (contactsSearchQuery.trim()) _contactsLettre = '';
+  // Chercher un nom quitte aussi la liste des inscrits : on cherche
+  // dans tout le carnet.
+  if (contactsSearchQuery.trim()) { _contactsLettre = ''; _contactsTimeCool = false; }
   container.innerHTML = tcContactsListeHTML();
   tcRestaurerZonesRdv();
 }
