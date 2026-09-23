@@ -3161,11 +3161,13 @@ Pour tout événement à ajouter, utilise EXACTEMENT ce format :
 
 Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE | LIEU (5e champ, facultatif) | CONTACT (6e champ, facultatif)
 
-CONTACT : le nom de la personne avec qui est le rendez-vous, EXACTEMENT comme l'utilisateur l'a dit
-(« Michel », « Dr Benali », « maman »). Tu ne cherches JAMAIS dans ses contacts, tu n'ajoutes JAMAIS
-un nom de famille qu'il n'a pas prononcé, et tu ne demandes JAMAIS « lequel ? » : l'application
-retrouve la personne dans le carnet et lui fait choisir s'il y a plusieurs Michel.
-Ne remplis ce champ que si une personne est nommée. « Rendez-vous dentiste » sans nom → pas de 6e champ.
+CONTACT : la personne avec qui est le rendez-vous, EXACTEMENT comme l'utilisateur l'a désignée —
+par son nom (« Michel », « Dr Benali ») OU par son rôle (« mon ostéopathe », « maman », « mon coiffeur »).
+Une désignation par le rôle compte autant qu'un nom : c'est même ainsi qu'on parle de la plupart des gens.
+Tu ne cherches JAMAIS dans ses contacts, tu n'ajoutes JAMAIS un nom qu'il n'a pas prononcé,
+et tu ne demandes JAMAIS « lequel ? » ni « comment s'appelle-t-il ? » : l'application retrouve la
+personne, la lui fait désigner une seule fois si elle est inconnue, et s'en souvient ensuite.
+Ne remplis ce champ que si le rendez-vous est avec quelqu'un : « faire les courses » → pas de 6e champ.
 Si le lieu est absent mais qu'il y a un contact, mets « - » en 5e champ :
 2026-05-06 | 14:00-15:00 | Rendez-vous dentiste | rdv | - | Michel
 
@@ -4494,6 +4496,68 @@ function openEventModal(e) {
    simplement, il n'a plus personne a prevenir.
    ══════════════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════════
+   LE CARNET DE SURNOMS
+
+   « Mon osteopathe », « maman », « mon coiffeur » : on designe
+   rarement les gens par leur nom d'etat civil. Une fiche contact ne
+   portant pas de metier, rien ne permet de deviner. On demande donc
+   une fois, et on retient.
+   ══════════════════════════════════════════════════════════════ */
+
+const TC_SURNOMS_CLE = 'tc_surnoms';
+
+/**
+ * La cle sous laquelle une designation est retenue.
+ *
+ * « Mon osteopathe », « l'osteopathe » et « Osteopathe » designent la
+ * meme personne : le possessif et les accents disparaissent.
+ */
+function tcCleSurnom(designation) {
+  return tcSansAccents(designation)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/^(mon|ma|mes|le|la|les|l|un|une) /, '')
+    .trim();
+}
+
+function tcSurnoms() {
+  try {
+    const brut = localStorage.getItem(TC_SURNOMS_CLE);
+    const carnet = brut ? JSON.parse(brut) : {};
+    return (carnet && typeof carnet === 'object') ? carnet : {};
+  } catch (e) { return {}; }
+}
+
+/**
+ * Retient qui se cache derriere une designation.
+ *
+ * Rien n'est retenu pour une designation que des contacts portent
+ * deja comme nom : entre quatre Michel, il faut redemander. Figer le
+ * premier choix ferait partir l'annulation suivante chez le mauvais.
+ */
+function tcRetenirSurnom(designation, contactId) {
+  const cle = tcCleSurnom(designation);
+  if (!cle) return false;
+  if (tcResoudreContact(designation).length > 0) return false;
+  const carnet = tcSurnoms();
+  if (contactId) carnet[cle] = contactId;
+  else delete carnet[cle];
+  try { localStorage.setItem(TC_SURNOMS_CLE, JSON.stringify(carnet)); } catch (e) {}
+  if (typeof tcSyncTour === 'function') tcSyncTour();
+  return true;
+}
+
+/** Le contact deja associe a cette designation, s'il existe encore. */
+function tcContactDuSurnom(designation) {
+  const cle = tcCleSurnom(designation);
+  if (!cle || !Array.isArray(contactsList)) return null;
+  const id = tcSurnoms()[cle];
+  if (!id) return null;
+  // Le contact a pu etre supprime du carnet depuis : on redemandera.
+  return contactsList.find(function (c) { return c.id === id; }) || null;
+}
+
 /**
  * Le message qui porte cette proposition.
  *
@@ -4524,6 +4588,10 @@ function tcContactDeProposition(msg, p) {
   if (choisi) {
     return contactsList.find(function (c) { return c.id === choisi; }) || null;
   }
+  // Ce qu'il a designe ici prime ; puis ce qu'on a retenu de lui ;
+  // puis, seulement, le seul contact qui porte ce nom.
+  const connu = tcContactDuSurnom(p.contact);
+  if (connu) return connu;
   const trouves = tcResoudreContact(p.contact);
   return trouves.length === 1 ? trouves[0] : null;
 }
@@ -4546,9 +4614,11 @@ function tcLigneContactProposition(msg, p, tempId) {
       + '👤 ' + trouves.length + ' contacts nommés <span data-notranslate>'
       + escapeHTMLSafe(p.contact) + '</span> — <b>choisir</b></div>';
   }
-  return '<div style="' + style + ' color:var(--text-sec);" ' + ouvrir + '>'
+  // Personne de ce nom, et rien de retenu : c'est la premiere fois
+  // qu'on entend parler de cette personne. On demande, une fois.
+  return '<div style="' + style + ' color:#8a6500;" ' + ouvrir + '>'
     + '👤 <span data-notranslate>' + escapeHTMLSafe(p.contact) + '</span>'
-    + ' — pas dans tes contacts <span style="color:var(--g-blue);">· choisir</span></div>';
+    + ' — <b>qui est-ce ?</b></div>';
 }
 
 /** Demande qui est la personne, la recherche deja remplie de son nom. */
@@ -4560,6 +4630,12 @@ function tcChoisirContactProposition(tempId, nom) {
     if (!msg._contacts) msg._contacts = {};
     if (id) msg._contacts[cle] = id;
     else delete msg._contacts[cle];
+    // Retenu pour la prochaine fois : « mon osteopathe » se reliera
+    // tout seul, ici comme dans le bouton « Prevenir ».
+    if (tcRetenirSurnom(nom, id)) {
+      const c = id && contactsList.find(function (x) { return x.id === id; });
+      if (c) showToast('👤 « ' + nom +' » = ' + c.name + ' — je m\'en souviens');
+    }
     renderCharlyChat();
   });
   // La recherche part du nom prononce : les douze Michel sont deja la,

@@ -60,8 +60,21 @@ const ctx = {
 ctx.window.location = ctx._loc;
 vm.createContext(ctx);
 
+let memoire = {};
+ctx.localStorage = {
+  getItem: (k) => (k in memoire ? memoire[k] : null),
+  setItem: (k, v) => { memoire[k] = String(v); },
+  removeItem: (k) => { delete memoire[k]; }
+};
+{
+  const m = page.match(/const TC_SURNOMS_CLE = '[^']+';/);
+  if (m) vm.runInContext(m[0].replace('const ', 'var '), ctx);
+  else { ko++; console.log('  KO  TC_SURNOMS_CLE introuvable'); }
+}
+
 ['tcSansAccents', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
- 'tcContactsPourRdv', 'tcContactDuRdv', 'tcContactDeProposition', 'tcLigneContactProposition',
+ 'tcContactsPourRdv', 'tcContactDuRdv', 'tcCleSurnom', 'tcSurnoms', 'tcRetenirSurnom',
+ 'tcContactDuSurnom', 'tcContactDeProposition', 'tcLigneContactProposition',
  'extractAgendaProposals', 'findUpcomingEventForContact', 'tcTransmettrePrevenance',
  'tcDirePrevenance'].forEach((n) => {
   const src = extraire(n);
@@ -82,6 +95,7 @@ function carnet() {
     { id: 'c6', name: 'Sophie Anceau' }
   ];
   ctx.events = [];
+  memoire = {};
   envoyes = []; ouvertures = []; traces = []; toasts = []; echecReseau = false;
 }
 
@@ -155,10 +169,60 @@ titre('Aucun Michel : le rendez-vous se cree quand meme');
   carnet();
   const p = { contact: 'Gontran' };
   verifie('personne n est relie', ctx.tcContactDeProposition({}, p) === null);
-  verifie('et on le dit sans bloquer',
-    ctx.tcLigneContactProposition({}, p, 't1').indexOf('pas dans tes contacts') > -1);
+  verifie('et on demande sans bloquer',
+    ctx.tcLigneContactProposition({}, p, 't1').indexOf('qui est-ce ?') > -1);
   verifie('une proposition sans personne n affiche rien',
     ctx.tcLigneContactProposition({}, { title: 'Dentiste' }, 't1') === '');
+}
+
+titre('« Mon osteopathe » : demander une fois, retenir');
+{
+  carnet();
+  verifie('le possessif ne change pas la personne',
+    ctx.tcCleSurnom('Mon ostéopathe') === 'osteopathe'
+    && ctx.tcCleSurnom("L'ostéopathe") === 'osteopathe'
+    && ctx.tcCleSurnom('OSTÉOPATHE') === 'osteopathe',
+    ctx.tcCleSurnom('Mon ostéopathe'));
+  verifie('un prenom reste lui-meme', ctx.tcCleSurnom('Michel') === 'michel');
+  verifie('« mon » seul ne vide pas tout', ctx.tcCleSurnom('mon') === 'mon');
+  verifie('et une designation vide ne casse rien',
+    ctx.tcCleSurnom('') === '' && ctx.tcCleSurnom(null) === '');
+
+  const p = { contact: 'mon ostéopathe' };
+  verifie('la premiere fois, on ne sait pas',
+    ctx.tcContactDeProposition({}, p) === null);
+  verifie('et la carte le demande',
+    ctx.tcLigneContactProposition({}, p, 't1').indexOf('qui est-ce ?') > -1,
+    'plutot que « pas dans tes contacts », qui n appelle aucune action');
+
+  verifie('le choix est retenu', ctx.tcRetenirSurnom('mon ostéopathe', 'c6') === true);
+  const retrouve = ctx.tcContactDeProposition({}, p);
+  verifie('la fois suivante, c est automatique',
+    retrouve && retrouve.id === 'c6', retrouve ? retrouve.name : 'toujours rien');
+  verifie('meme dit autrement',
+    ctx.tcContactDeProposition({}, { contact: "l'Ostéopathe" }) !== null,
+    'on ne redit pas deux fois la meme chose de la meme facon');
+  verifie('sous une cle qui suit l utilisateur',
+    ctx.TC_SURNOMS_CLE === 'tc_surnoms' && ('tc_surnoms' in memoire),
+    'sans le prefixe tc_, elle resterait sur ce seul telephone');
+
+  ctx.contactsList = ctx.contactsList.filter((c) => c.id !== 'c6');
+  verifie('un contact supprime fait redemander',
+    ctx.tcContactDeProposition({}, p) === null,
+    'plutot que de relier un contact qui n existe plus');
+}
+
+titre('Mais on ne retient pas une ambiguite');
+{
+  carnet();
+  verifie('« Michel » n est jamais retenu',
+    ctx.tcRetenirSurnom('Michel', 'c1') === false,
+    'quatre le portent : figer le premier choix enverrait la prochaine annulation au mauvais');
+  verifie('et rien n est ecrit', !('tc_surnoms' in memoire));
+  verifie('on redemande donc a chaque fois',
+    ctx.tcContactDeProposition({}, { contact: 'Michel' }) === null);
+  verifie('le choix du moment prime malgre tout',
+    ctx.tcContactDeProposition({ _contacts: { michel: 'c2' } }, { contact: 'Michel' }).id === 'c2');
 }
 
 titre('Ce que Charly ecrit, et ce qu on en lit');
@@ -301,6 +365,10 @@ function fin() {
   verifie('Charly sait qu il ne choisit pas',
     page.indexOf('Tu ne cherches JAMAIS dans ses contacts') > -1,
     'sinon il inventerait un nom de famille');
+  verifie('et qu un role vaut un nom',
+    page.indexOf('OU par son rôle') > -1
+    && page.indexOf('Ne remplis ce champ que si une personne est nommée') === -1,
+    'l ancienne consigne lui faisait ignorer « mon ostéopathe »');
   verifie('et le prompt ne promet plus quatre sonneries',
     page.indexOf('1 heure, 30, 15 et 5 minutes avant') === -1,
     'le rappel est unique depuis la fusion des reglages');
