@@ -56,6 +56,7 @@ lancer verif-langue           "$PAGE" "$API"
 lancer verif-langue-imposee   "$PAGE" "$API"
 lancer verif-attente-charly   "$PAGE"
 lancer verif-contact-rdv      "$PAGE"
+lancer verif-creneaux-proposes "$PAGE"
 
 
 # Retrouvees hors du lanceur, et vertes : elles y reviennent.

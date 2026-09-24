@@ -2915,7 +2915,9 @@ Tu réponds MAXIMUM 3 lignes — jamais plus, sauf si l'utilisateur demande des 
 Tu termines par une action proposée ou une question courte — SAUF quand tu viens
 d'exécuter la demande : dans ce cas tu confirmes simplement ce que tu as fait.
 Tu poses UNE seule question à la fois, jamais plusieurs.
-En cas de doute ou d'incompréhension, utilise la formule "Sauf erreur de ma part".
+La formule "Sauf erreur de ma part" est RESERVEE aux cas où tu contredis l'utilisateur ou signales un problème : chevauchement d'horaires, rendez-vous introuvable, date qui n'existe pas, demande portant sur le passé.
+Pour une simple information manquante, pose la question directement — "Quel jour ?", "À quelle heure ?" — sans préambule.
+Ne commence JAMAIS deux réponses de suite par la même formule : c’est un tic, et ça s’entend.
 
 ═══ RÈGLE MÈRE — AU-DESSUS DE TOUTES LES AUTRES ═══
 Tu exécutes UNIQUEMENT si la demande est claire, nette et précise.
@@ -10020,6 +10022,190 @@ function tcPeriodeAgenda(text) {
   return null;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   PROPOSER DES CRÉNEAUX
+
+   « Donne-moi un rendez-vous la semaine prochaine » n'est pas une
+   création : c'est une demande de proposition. Les créneaux se
+   calculent ici, à partir des plages ouvertes dans Mes disponibilités
+   et de l'agenda réel — le modèle ne voit ni l'un ni l'autre, et en
+   inventerait.
+   ══════════════════════════════════════════════════════════════ */
+
+/** « HH:MM » en minutes depuis minuit, ou null si illisible. */
+function tcMinutesDeHeure(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm == null ? '' : hhmm).trim());
+  if (!m) return null;
+  const h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+  return (h >= 0 && h < 24 && mi >= 0 && mi < 60) ? h * 60 + mi : null;
+}
+
+function tcHeureLisible(minutes) {
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return h + 'h' + (m ? String(m).padStart(2, '0') : '');
+}
+
+/**
+ * Les plages ouvertes un jour donné, toutes catégories confondues et
+ * recouvrements fusionnés.
+ *
+ * Sans aucune plage déclarée, une journée ordinaire sert de repli et
+ * `defaut` le signale : mieux vaut proposer en le disant que de ne
+ * rien savoir répondre.
+ */
+function tcPlagesDuJour(date) {
+  if (typeof loadDispo === 'function' && !_dispoData) loadDispo();
+  const jour = ((date.getDay() + 6) % 7) + 1;        // 1 = lundi … 7 = dimanche
+  const brutes = [];
+  Object.keys(_dispoData || {}).forEach(function (cat) {
+    const plages = _dispoData[cat];
+    if (!Array.isArray(plages)) return;
+    plages.forEach(function (p) {
+      if (!p || !Array.isArray(p.jours) || p.jours.indexOf(jour) === -1) return;
+      const d = tcMinutesDeHeure(p.debut), f = tcMinutesDeHeure(p.fin);
+      if (d === null || f === null || f <= d) return;
+      brutes.push({ debut: d, fin: f });
+    });
+  });
+  if (!brutes.length) {
+    return { plages: [{ debut: 9 * 60, fin: 18 * 60 }], defaut: true };
+  }
+  brutes.sort(function (a, b) { return a.debut - b.debut; });
+  const fusion = [brutes[0]];
+  for (let i = 1; i < brutes.length; i++) {
+    const dernier = fusion[fusion.length - 1];
+    if (brutes[i].debut <= dernier.fin) dernier.fin = Math.max(dernier.fin, brutes[i].fin);
+    else fusion.push(brutes[i]);
+  }
+  return { plages: fusion, defaut: false };
+}
+
+/** Ce qui est déjà pris ce jour-là, en minutes, journées entières comprises. */
+function tcOccupationsDuJour(dateISO) {
+  return (Array.isArray(events) ? events : [])
+    .filter(function (e) {
+      return e && e.mode === mode
+        && (typeof tcEvenementCouvre === 'function' ? tcEvenementCouvre(e, dateISO) : e.date === dateISO);
+    })
+    .map(function (e) {
+      return e.allDay
+        ? { debut: 0, fin: 24 * 60 }
+        : { debut: e.startH * 60 + e.startM, fin: e.endH * 60 + e.endM };
+    })
+    .sort(function (a, b) { return a.debut - b.debut; });
+}
+
+/**
+ * Les créneaux libres d'une période, du plus proche au plus lointain.
+ *
+ * Deux par jour au plus : au-delà, la réponse devient une liste qu'on
+ * ne lit pas. Une heure minimum, sinon on proposerait des trous où
+ * rien ne tient.
+ */
+function tcCreneauxDisponibles(periode, maxi) {
+  const limite = maxi || 5;
+  const MINIMUM = 60;
+  const now = new Date();
+  const aujourdhui = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const debut = (periode && periode.debut) ? new Date(periode.debut) : aujourdhui;
+  const fin = (periode && periode.fin)
+    ? new Date(periode.fin)
+    : new Date(debut.getFullYear(), debut.getMonth(), debut.getDate() + 13);
+
+  const trouves = [];
+  let defautUtilise = false;
+  const jour = new Date(debut);
+
+  while (jour <= fin && trouves.length < limite) {
+    const dateISO = tcISO(jour);
+    const info = tcPlagesDuJour(jour);
+    if (info.defaut) defautUtilise = true;
+    const pris = tcOccupationsDuJour(dateISO);
+    // Aujourd'hui, ce qui est passé n'est plus disponible.
+    const plancher = (dateISO === tcISO(now)) ? now.getHours() * 60 + now.getMinutes() : 0;
+    let duJour = 0;
+
+    info.plages.forEach(function (plage) {
+      if (duJour >= 2 || trouves.length >= limite) return;
+      let curseur = Math.max(plage.debut, plancher);
+      pris.forEach(function (o) {
+        if (duJour >= 2 || trouves.length >= limite) return;
+        // Hors de la plage : sans effet sur elle.
+        if (o.fin <= curseur || o.debut >= plage.fin) return;
+        if (o.debut - curseur >= MINIMUM) {
+          trouves.push({ date: dateISO, debut: curseur, fin: o.debut });
+          duJour++;
+        }
+        curseur = Math.max(curseur, o.fin);
+      });
+      if (duJour < 2 && trouves.length < limite && plage.fin - curseur >= MINIMUM) {
+        trouves.push({ date: dateISO, debut: curseur, fin: plage.fin });
+        duJour++;
+      }
+    });
+    jour.setDate(jour.getDate() + 1);
+  }
+  return { creneaux: trouves, defaut: defautUtilise };
+}
+
+/**
+ * Reconnaît une demande de proposition de créneau.
+ *
+ * À distinguer d'une création : « mets-moi un RDV demain à 15h » donne
+ * l'heure, il n'y a rien à proposer. Une heure précise dans la phrase
+ * suffit donc à écarter ce chemin.
+ *
+ * @returns {?Object} la période visée (éventuellement nulle), ou null.
+ */
+function detecterDemandeCreneau(text) {
+  const t = String(text || '').toLowerCase().trim();
+  // Une heure donnée : c'est une création, pas une demande de créneau.
+  if (/\b\d{1,2}\s?h(\s?\d{2})?\b/.test(t) || /\b\d{1,2}:\d{2}\b/.test(t)) return null;
+  // Verbes qui posent un rendez-vous déjà décidé.
+  if (/\b(ajoute|mets?|crée|cree|note|planifie|réserve|reserve|annule|supprime|déplace|deplace)\b/.test(t)) return null;
+
+  const proposition = /\b(propose|proposer|trouve|trouver|donne|donner|sugg[èe]re|sugg[ée]rer|cherche|chercher)[- ]?(moi|me)?\b[^.?!]{0,40}\b(cr[ée]neau|cr[ée]neaux|rendez-vous|rdv|moment|horaire|dispo\w*)\b/;
+  const question = /\bquand\b[^.?!]{0,30}\b(je (peux|pourrais|suis|serais?)|suis-je|puis-je)\b/;
+  if (!proposition.test(t) && !question.test(t)) return null;
+
+  return { periode: tcPeriodeAgenda(t) };
+}
+
+/**
+ * Répond avec de vrais créneaux, sans passer par le modèle.
+ *
+ * Instantané et gratuit : tout est déjà sur l'appareil.
+ */
+async function tcGererDemandeCreneau(text, intent) {
+  tcPousserMessageUtilisateur(text);
+  const periode = intent && intent.periode;
+  const quand = (periode && periode.label) ? periode.label : 'dans les deux semaines qui viennent';
+  const r = tcCreneauxDisponibles(periode, 5);
+
+  if (!r.creneaux.length) {
+    charlyIA.history.push({
+      role: 'assistant',
+      content: 'Sauf erreur de ma part, je ne vois aucun créneau libre ' + quand
+        + '. Tu veux que je regarde plus loin ?'
+    });
+    renderCharlyChat();
+    return;
+  }
+
+  const lignes = r.creneaux.map(function (c) {
+    return '• ' + tcFormaterDateHumaine(c.date)
+      + ' de ' + tcHeureLisible(c.debut) + ' à ' + tcHeureLisible(c.fin);
+  });
+  let reponse = 'Voici ce qui est libre ' + quand + ' :\n' + lignes.join('\n')
+    + '\n\nDis-moi lequel te va, et avec qui, je le note.';
+  if (r.defaut) {
+    reponse += '\n\n(Je pars d\'une journée de 9h à 18h : tu n\'as pas encore ouvert de plages '
+      + 'dans Mes disponibilités.)';
+  }
+  charlyIA.history.push({ role: 'assistant', content: reponse });
+  renderCharlyChat();
+}
+
 /**
  * Reconnaît une consultation d'agenda formulée en langage naturel et
  * renvoie l'intention à traiter, ou null si la phrase ne correspond à
@@ -10597,6 +10783,16 @@ async function charlySendMessage() {
   const _consultation = detecterConsultationAgenda(text);
   if (_consultation) {
     await tcGererConsultationAgenda(text, _consultation);
+    return;
+  }
+
+  // === INTERCEPTION DEMANDE DE CRÉNEAU — proposés à partir des plages
+  // ouvertes et de l'agenda réel, jamais inventés par le LLM. Placée
+  // avant les intégrations Google : elle ne coûte rien et ne sort pas
+  // de l'appareil. ===
+  const _creneau = detecterDemandeCreneau(text);
+  if (_creneau) {
+    await tcGererDemandeCreneau(text, _creneau);
     return;
   }
 
