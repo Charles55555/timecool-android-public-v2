@@ -4436,14 +4436,25 @@ function tcMessageErreurTrajet(err) {
   if (/failed to fetch|networkerror|load failed/i.test(brut)) {
     return 'Calcul impossible : connexion interrompue. Réessaie dans un instant.';
   }
-  if (/PERMISSION_DENIED|API key|API_KEY|not authorized|403/i.test(brut)) {
-    return 'Calcul impossible : la clé Google n’autorise pas ce service. '
-      + 'Vérifie-la dans Configuration IA.';
+  // L'API Routes se demande separement dans la console Google : un
+  // projet qui avait Directions ne l'a pas pour autant.
+  if (/has not been used in project|SERVICE_DISABLED|is disabled|not enabled/i.test(brut)) {
+    return 'Calcul impossible : l’API « Routes » n’est pas activée sur ton compte Google. '
+      + 'Active-la dans la console Google Cloud, puis réessaie dans quelques minutes.';
   }
-  if (/quota|RESOURCE_EXHAUSTED|429/i.test(brut)) {
+  if (/quota|RESOURCE_EXHAUSTED|429|OVER_QUERY_LIMIT/i.test(brut)) {
     return 'Calcul impossible : quota Google atteint pour aujourd’hui.';
   }
-  return 'Calcul impossible pour le moment.';
+  if (/PERMISSION_DENIED|API.?key|not authorized|referer|referrer|blocked|403/i.test(brut)) {
+    return 'Calcul impossible : ta clé Google n’autorise pas ce service. '
+      + 'Vérifie ses restrictions dans la console Google Cloud.';
+  }
+  // Cause inconnue : on montre le detail, en petit. Une capture
+  // d'ecran suffit alors a diagnostiquer, sans aller ouvrir la
+  // console du navigateur.
+  const detail = brut.replace(/\s+/g, ' ').slice(0, 120);
+  return 'Calcul impossible pour le moment.'
+    + (detail ? ' — ' + detail : '');
 }
 
 async function tcTempsDeTrajet(lieu) {

@@ -165,13 +165,21 @@ titre('Ce que lit l utilisateur quand ca echoue');
   verifie('un quota atteint se dit',
     m(new Error('RESOURCE_EXHAUSTED')).indexOf('quota') > -1);
   verifie('une cle refusee se dit, et ou la corriger',
-    m(new Error('Google Routes : API key not authorized')).indexOf('Configuration IA') > -1);
+    m(new Error('Google Routes : API key not authorized')).indexOf('console Google') > -1,
+    'une restriction de cle se corrige chez Google, pas dans l application');
+  verifie('une API non activee est nommee',
+    m(new Error('Routes API has not been used in project 42 before or it is disabled'))
+      .indexOf('Routes') > -1,
+    'un projet qui avait Directions n a pas Routes pour autant');
   verifie('une cle absente garde son message, deja clair',
     m(new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.'))
       .indexOf('manquante') > -1);
-  verifie('une panne inconnue ne reste pas muette',
-    m(new Error('Boum')).length > 0 && m(new Error('Boum')).indexOf('Boum') === -1,
-    m(new Error('Boum')));
+  verifie('une panne inconnue laisse de quoi diagnostiquer',
+    m(new Error('Boum')).indexOf('Boum') > -1,
+    'une capture d ecran doit suffire, sans ouvrir la console du navigateur');
+  verifie('mais le detail reste court',
+    m(new Error('x'.repeat(400))).length < 200,
+    String(m(new Error('x'.repeat(400))).length) + ' caracteres');
   verifie('et une erreur sans message non plus',
     m(null).length > 0 && m({}).length > 0);
 }
