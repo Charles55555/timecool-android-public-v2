@@ -36,4 +36,6 @@ printf '{"deploiement":"%s"}\n' "$HORODATAGE" | tee "$CIBLE/version.json" > /dev
 # tuait le script APRES un deploiement pourtant reussi.
 chmod 644 "$CIBLE/version.json" 2>/dev/null || true
 
-echo "Deploye — horodatage $HORODATAGE ($(date -d "@$HORODATAGE" '+%d/%m/%Y %Hh%M'))"
+# Le serveur est en UTC : l'heure affichee est celle de Paris,
+# la seule qui corresponde a la pendule de celui qui lit.
+echo "Deploye — horodatage $HORODATAGE ($(TZ=Europe/Paris date -d "@$HORODATAGE" '+%d/%m/%Y %Hh%M'))"
