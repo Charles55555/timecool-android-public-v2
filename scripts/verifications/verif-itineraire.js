@@ -107,6 +107,7 @@ titre('L appel part vers une API qui accepte les navigateurs');
     fetch: async (url, init) => { demande = { url, init }; return reponse; }
   };
   vm.createContext(ctx);
+  vm.runInContext(extraire('tcExtremitesRoute'), ctx);
   vm.runInContext(extraire('tcEstimerTrajet'), ctx);
 
   return ctx.tcEstimerTrajet('88 boulevard Victor Hugo, Neuilly').then((r) => {
@@ -129,8 +130,8 @@ titre('L appel part vers une API qui accepte les navigateurs');
       corps.origin.location.latLng.latitude === 48.88);
     verifie('la destination part en adresse',
       corps.destination.address.indexOf('Victor Hugo') > -1);
-    verifie('le trafic est pris en compte',
-      corps.routingPreference === 'TRAFFIC_AWARE',
+    verifie('le trafic est calcule au mieux',
+      corps.routingPreference === 'TRAFFIC_AWARE_OPTIMAL',
       'sinon l estimation ignore les bouchons');
 
     verifie('la duree est lue malgre le « s » final',

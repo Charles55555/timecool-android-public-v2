@@ -4494,7 +4494,11 @@ async function tcTempsDeTrajet(lieu) {
     : '';
   zone.innerHTML = '<span style="color:var(--g-blue); font-weight:600;">\u23f1\ufe0f ' + duree + ' de trajet</span>'
     + (r.distanceKm ? '<span style="color:var(--text-sec);"> \u00b7 ' + r.distanceKm + ' km</span>' : '')
-    + flou;
+    + flou
+    + (r.extremites
+      ? '<div style="color:var(--text-sec); font-size:10px; margin-top:2px;">Google a calcul\u00e9 de '
+        + r.extremites.depart + ' \u00e0 ' + r.extremites.arrivee + '</div>'
+      : '');
 }
 
 function openEventModal(e) {
@@ -11404,6 +11408,25 @@ async function tcRecherchePlaces(requete, opts) {
  * est par nature incertain. Renvoie null si la position de départ est
  * indisponible (géolocalisation refusée) : jamais de durée inventée.
  */
+/**
+ * Les deux bouts de l'itineraire, tels que Google les a compris.
+ *
+ * Affiche sous le resultat le temps de verifier que le calcul part et
+ * arrive au bon endroit. Sans eux, une position approximative, une
+ * adresse mal comprise et un itineraire absurde donnent le meme
+ * symptome : un nombre qui ne ressemble pas a celui de Maps.
+ */
+function tcExtremitesRoute(route) {
+  const jambe = route && route.legs && route.legs[0];
+  if (!jambe) return null;
+  const point = (p) => {
+    const l = p && p.latLng;
+    return l ? (Math.round(l.latitude * 10000) / 10000) + ',' + (Math.round(l.longitude * 10000) / 10000) : null;
+  };
+  const depart = point(jambe.startLocation), arrivee = point(jambe.endLocation);
+  return (depart && arrivee) ? { depart: depart, arrivee: arrivee } : null;
+}
+
 async function tcEstimerTrajet(destination, opts) {
   opts = opts || {};
   const cle = tcCleGoogle();
@@ -11428,7 +11451,10 @@ async function tcEstimerTrajet(destination, opts) {
     origin: origine,
     destination: { address: destination },
     travelMode: 'DRIVE',
-    routingPreference: 'TRAFFIC_AWARE',
+    // OPTIMAL : le calcul complet avec trafic, celui de Google Maps.
+    // TRAFFIC_AWARE se contente d'appliquer le trafic a un itineraire
+    // calcule vite, et renvoyait un chemin trois fois plus long.
+    routingPreference: 'TRAFFIC_AWARE_OPTIMAL',
     languageCode: 'fr-FR',
     regionCode: 'FR',
     units: 'METRIC'
@@ -11440,7 +11466,10 @@ async function tcEstimerTrajet(destination, opts) {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': cle,
       // Sans masque, Google refuse la requete : il faut dire ce qu'on lit.
-      'X-Goog-FieldMask': 'routes.duration,routes.staticDuration,routes.distanceMeters'
+      // Les extremites servent a verifier que Google est parti et
+      // arrive la ou on croit : une mauvaise position et une mauvaise
+      // adresse se ressemblent depuis l'ecran.
+      'X-Goog-FieldMask': 'routes.duration,routes.staticDuration,routes.distanceMeters,routes.legs.startLocation,routes.legs.endLocation'
     },
     body: JSON.stringify(corps)
   });
@@ -11474,7 +11503,8 @@ async function tcEstimerTrajet(destination, opts) {
     hauteMin: Math.max(1, Math.round(hauteSec / 60)),
     distanceKm: route.distanceMeters ? Math.round(route.distanceMeters / 100) / 10 : null,
     adresseArrivee: destination,
-    precisionDepart: precision
+    precisionDepart: precision,
+    extremites: tcExtremitesRoute(route)
   };
 }
 
