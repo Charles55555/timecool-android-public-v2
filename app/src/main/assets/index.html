@@ -9848,8 +9848,26 @@ function extraireLieuDuTexte(text) {
 
 function detecterRechercheProfessionnel(text) {
   const t = text.toLowerCase();
-  const declencheur = /\b(cherche|trouve|recherche|connais[- ]tu|un bon|une bonne|il me faut|j'ai besoin d'|j’ai besoin d’|propose[- ]?moi)\b/.test(t);
+
+  // Poser un rendez-vous n'est jamais chercher un professionnel, meme
+  // quand la phrase nomme un metier : « mets-moi un RDV chez mon
+  // avocat » demande un rendez-vous, pas une liste d'avocats.
+  if (/\b(ajoute|ajouter|mets?|cr[ée]e|cr[ée]er|note|noter|planifie|planifier|r[ée]serve|r[ée]server|d[ée]cale|d[ée]place|annule|supprime)\b/.test(t)) {
+    return null;
+  }
+  // Une personne deja nommee n'est pas a chercher.
+  if (/\b(s['’]appelle|il s['’]agit de|mon contact)\b/.test(t)) return null;
+
+  // Le declencheur doit s'adresser a Charly. « trouve » seul attrapait
+  // « il se trouve au 36 avenue », et lancait une recherche payante.
+  const declencheur =
+    /\bje (cherche|recherche|voudrais|souhaite)\b/.test(t)
+    || /\b(cherche|trouve|recherche)[- ](moi|nous)\b/.test(t)
+    || /\b(connais[- ]tu|tu connais)\b/.test(t)
+    || /\b(un bon|une bonne|il me faut|j['’]ai besoin d['’])/.test(t)
+    || /\bpropose[- ]?moi\b/.test(t);
   if (!declencheur) return null;
+
   const profession = TC_PROFESSIONS.find(p => t.includes(p)) || null;
   if (!profession) return null;
   return { profession: profession, lieu: extraireLieuDuTexte(text) };

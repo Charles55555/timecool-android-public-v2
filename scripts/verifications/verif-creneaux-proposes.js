@@ -213,6 +213,55 @@ titre('Reconnaître la demande');
   verifie('ni une phrase vide', d('') === null && d(null) === null);
 }
 
+titre('Chercher un professionnel, ou poser un rendez-vous');
+{
+  // TC_PROFESSIONS et extraireLieuDuTexte vivent a cote du detecteur.
+  const ctxP = { console, RegExp, String };
+  vm.createContext(ctxP);
+  const liste = page.match(/const TC_PROFESSIONS = \[[\s\S]*?\];/);
+  if (liste) vm.runInContext(liste[0].replace('const ', 'var '), ctxP);
+  else { ko++; console.log('  KO  TC_PROFESSIONS introuvable'); }
+  ['extraireLieuDuTexte', 'detecterRechercheProfessionnel'].forEach((n) => {
+    const src = extraire(n);
+    if (src) vm.runInContext(src, ctxP);
+    else { ko++; console.log('  KO  ' + n + ' introuvable'); }
+  });
+  const d = ctxP.detecterRechercheProfessionnel;
+
+  // La phrase exacte qui partait chercher des avocats sur Google.
+  const vraie = "Tu peux me mettre un rendez-vous pour aujourd'hui à 14h, j'ai rendez-vous "
+    + "chez mon avocat, il s'appelle William Ayache et il se trouve au 36 avenue des Champs-Élysées à Paris";
+  verifie('« il se trouve au 36 avenue » ne cherche plus un avocat',
+    d(vraie) === null,
+    'le verbe « trouve » seul suffisait, et la recherche est facturée');
+
+  verifie('poser un rendez-vous chez son médecin non plus',
+    d('ajoute un rendez-vous chez mon médecin demain') === null);
+  verifie('ni « mets-moi un RDV chez le dentiste »',
+    d('mets-moi un rdv chez le dentiste jeudi') === null);
+  verifie('ni une personne déjà nommée',
+    d('je cherche un avocat, il s’appelle William Ayache') === null,
+    'elle est connue : il n y a rien a chercher');
+
+  verifie('mais « je cherche un avocat à Paris » cherche bien',
+    d('je cherche un avocat à Paris') !== null);
+  verifie('et la profession est reconnue',
+    (d('je cherche un avocat à Paris') || {}).profession === 'avocat');
+  verifie('« trouve-moi un dentiste » aussi',
+    d('trouve-moi un dentiste pas loin') !== null);
+  verifie('« connais-tu un bon plombier ? » aussi',
+    d('connais-tu un bon plombier ?') !== null);
+  verifie('« il me faut un kiné » aussi',
+    d('il me faut un kiné') !== null);
+  verifie('et « j’ai besoin d’un notaire »',
+    d('j’ai besoin d’un notaire') !== null);
+
+  verifie('une phrase sans métier ne cherche rien',
+    d('je cherche mes clés') === null);
+  verifie('et une phrase vide non plus',
+    d('') === null);
+}
+
 titre('Ce que Charly répond');
 {
   decor(OUVERT_9_18);
