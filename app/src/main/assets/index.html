@@ -4486,8 +4486,15 @@ async function tcTempsDeTrajet(lieu) {
   const duree = r.basseMin === r.hauteMin
     ? r.basseMin + ' min'
     : r.basseMin + ' \u00e0 ' + r.hauteMin + ' min';
+  // Au-dela de deux kilometres d'incertitude, le point de depart n'est
+  // pas le bon : l'ecart avec Google Maps s'expliquera de lui-meme.
+  const flou = (typeof r.precisionDepart === 'number' && r.precisionDepart > 2000)
+    ? '<div style="color:var(--text-sec); font-size:11px; margin-top:2px;">Position de d\u00e9part approximative ('
+      + Math.round(r.precisionDepart / 1000) + ' km pr\u00e8s) \u2014 autorise la localisation pr\u00e9cise pour affiner.</div>'
+    : '';
   zone.innerHTML = '<span style="color:var(--g-blue); font-weight:600;">\u23f1\ufe0f ' + duree + ' de trajet</span>'
-    + (r.distanceKm ? '<span style="color:var(--text-sec);"> \u00b7 ' + r.distanceKm + ' km</span>' : '');
+    + (r.distanceKm ? '<span style="color:var(--text-sec);"> \u00b7 ' + r.distanceKm + ' km</span>' : '')
+    + flou;
 }
 
 function openEventModal(e) {
@@ -11319,9 +11326,19 @@ function tcObtenirPosition(timeoutMs) {
     const regler = valeur => { if (!reglee) { reglee = true; resolve(valeur); } };
     setTimeout(() => regler(null), delai);
     navigator.geolocation.getCurrentPosition(
-      pos => regler({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      pos => regler({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        // En metres. Un ordinateur sans GPS annonce volontiers
+        // plusieurs kilometres : l'estimation qui en decoule n'a alors
+        // pas la meme valeur, et il faut pouvoir le dire.
+        precision: pos.coords.accuracy
+      }),
       () => regler(null),
-      { enableHighAccuracy: false, timeout: delai, maximumAge: 5 * 60 * 1000 }
+      // Haute precision : sur telephone c'est le GPS, donc le meme
+      // point de depart que Google Maps. Basse precision donnait le
+      // Wi-Fi ou l'adresse reseau, a plusieurs kilometres pres.
+      { enableHighAccuracy: true, timeout: delai, maximumAge: 60 * 1000 }
     );
   });
 }
@@ -11394,12 +11411,13 @@ async function tcEstimerTrajet(destination, opts) {
 
   // Routes attend un objet, pas une chaine : des coordonnees quand on
   // les a, une adresse sinon.
-  let origine;
+  let origine, precision = null;
   if (opts.origine) {
     origine = { address: opts.origine };
   } else {
     const position = await tcObtenirPosition();
     if (!position) return null;
+    precision = position.precision;
     origine = { location: { latLng: { latitude: position.lat, longitude: position.lng } } };
   }
 
@@ -11455,7 +11473,8 @@ async function tcEstimerTrajet(destination, opts) {
     basseMin: Math.max(1, Math.round(basseSec / 60)),
     hauteMin: Math.max(1, Math.round(hauteSec / 60)),
     distanceKm: route.distanceMeters ? Math.round(route.distanceMeters / 100) / 10 : null,
-    adresseArrivee: destination
+    adresseArrivee: destination,
+    precisionDepart: precision
   };
 }
 
