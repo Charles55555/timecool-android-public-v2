@@ -4736,6 +4736,17 @@ function tcDesignationTutoyee(designation) {
  */
 function tcQuestionContact(designation) {
   const qui = tcDesignationTutoyee(designation);
+
+  // Plusieurs homonymes : ce n'est plus « qui est-ce ? » mais
+  // « lequel ? ». Un carnet de trois mille fiches en contient
+  // forcement, et la question generique laissait croire que
+  // l'application ne connaissait pas la personne.
+  const homonymes = tcResoudreContact(designation);
+  if (homonymes.length > 1) {
+    return homonymes.length + ' contacts portent ce nom : ' + designation + '.\n'
+      + 'Lequel est-ce ? Choisis-le dans la liste.';
+  }
+
   return 'Qui est ' + qui + ' ? Est-ce qu\'il existe dans tes contacts ?\n'
     + 'Si oui, donne-moi son nom et son prénom.\n'
     + 'Si non, je ne pourrai ni annuler ce rendez-vous ni prévenir d\'un retard.';
@@ -4768,13 +4779,45 @@ function tcAttenteContactEnCours() {
  * donc savoir recevoir un nom, sans quoi on demanderait quelque chose
  * dont on ne ferait rien.
  */
+/**
+ * Ce qui, dans une reponse, peut encore designer quelqu'un.
+ *
+ * « Oui il existe dans mes contacts » repond a la question posee sans
+ * nommer personne. On cherche donc successivement : la phrase telle
+ * quelle, la phrase debarrassee de ce qui n'est pas un nom, puis la
+ * designation d'origine -- repondre « oui » revenant a confirmer
+ * qu'elle figure bien dans le carnet.
+ */
+function tcPistesDeRecherche(texte, nom) {
+  const pistes = [];
+  const brut = String(texte || '').trim();
+  if (brut) pistes.push(brut);
+
+  const allege = brut
+    .replace(/\b(oui|non|ouais|voil[aà]|exact|c['’]est|il|elle|s['’]appelle|se nomme|bien s[uû]r)\b/gi, ' ')
+    .replace(/\b(il|elle)?\s*(existe|est)\s*(bien)?\s*(dans|sur)?\s*(mes|le|la|mon)?\s*(contacts?|carnet|r[ée]pertoire)\b/gi, ' ')
+    .replace(/[,.;:!?]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (allege && allege !== brut) pistes.push(allege);
+
+  if (nom) pistes.push(String(nom));
+  return pistes;
+}
+
 async function tcRepondreQuiEstCe(texte) {
   const attente = tcAttenteContactEnCours();
   if (!attente) return;
   const msg = attente.msg, nom = attente.nom;
   tcPousserMessageUtilisateur(texte);
 
-  const trouves = tcResoudreContact(texte);
+  // La premiere piste qui mene a quelqu'un gagne.
+  let trouves = [];
+  const pistes = tcPistesDeRecherche(texte, nom);
+  for (let i = 0; i < pistes.length; i++) {
+    const essai = tcResoudreContact(pistes[i]);
+    if (essai.length) { trouves = essai; break; }
+  }
 
   if (trouves.length === 1) {
     if (!msg._contacts) msg._contacts = {};
@@ -4795,9 +4838,11 @@ async function tcRepondreQuiEstCe(texte) {
     });
     renderCharlyChat();
     tcChoisirContactProposition(msg.tempId || '', nom);
-    // Ici le nom tape a bien donne des resultats : on le garde.
+    // On pre-remplit avec la piste qui a donne ces resultats, pas avec
+    // la phrase entiere : « oui il existe » ne trouverait rien.
+    const piste = pistes.find(function (p) { return tcResoudreContact(p).length > 1; });
     const champ = document.getElementById('tcRechContactRdv');
-    if (champ) { champ.value = texte; tcRendreContactsRdv(); }
+    if (champ && piste) { champ.value = piste; tcRendreContactsRdv(); }
     return;
   }
 

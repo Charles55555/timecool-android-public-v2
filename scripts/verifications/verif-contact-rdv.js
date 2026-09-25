@@ -85,6 +85,7 @@ ctx.localStorage = {
  'tcAttenteContact', 'tcDesignationTutoyee', 'tcQuestionContact',
  'tcDesignationDuMessage', 'tcDesignationPour', 'tcSurnomRefuse',
  'tcAttenteContactEnCours', 'tcRepondreQuiEstCe',
+ 'tcPistesDeRecherche',
  'extractAgendaProposals', 'findUpcomingEventForContact', 'tcTransmettrePrevenance',
  'tcDirePrevenance'].forEach((n) => {
   const src = extraire(n);
@@ -389,6 +390,77 @@ titre('Repondre en tapant un nom');
   ctx.charlyIA.history = [];
   verifie('sans question en cours, rien n est intercepte',
     ctx.tcAttenteContactEnCours() === null);
+}
+
+titre('Repondre « oui », comme tout le monde');
+{
+  const bloc = 'Parfait !\n[AGENDA]\n2026-09-25 | 15:00-16:00 | Avocat | rdv | - | William Ayache\n[/AGENDA]';
+  const poser = () => {
+    choisisseurOuvert = false;
+    ctx.charlyIA.history = [
+      { role: 'user', content: 'rendez-vous a 15h avec mon avocat' },
+      { role: 'assistant', content: bloc, tempId: 'tw' }
+    ];
+    return ctx.charlyIA.history[1];
+  };
+
+  const pistes = ctx.tcPistesDeRecherche('Oui il existe dans mes contacts', 'William Ayache');
+  verifie('la phrase telle quelle reste la premiere piste',
+    pistes[0] === 'Oui il existe dans mes contacts');
+  verifie('la designation sert de dernier recours',
+    pistes[pistes.length - 1] === 'William Ayache',
+    'repondre « oui » revient a dire qu elle est dans le carnet');
+
+  // Deux homonymes : la situation reelle d un carnet importe.
+  carnet();
+  ctx.contactsList.push({ id: 'w1', name: 'William Ayache', phone: '06 09 69 31 63' });
+  ctx.contactsList.push({ id: 'w2', name: 'William Ayache', email: 'w.ayache@ex.fr' });
+
+  verifie('avec deux homonymes, la question se pose',
+    ctx.tcAttenteContact(poser(), [{ contact: 'William Ayache' }]) === 'William Ayache',
+    'on ne choisit pas a la place de quelqu un entre deux fiches identiques');
+  verifie('et elle dit qu ils sont deux',
+    ctx.tcQuestionContact('William Ayache').indexOf('2 contacts portent ce nom') > -1,
+    ctx.tcQuestionContact('William Ayache').split('\n')[0]);
+
+  let msg = poser();
+  ctx.tcRepondreQuiEstCe('Oui il existe dans mes contacts');
+  verifie('« oui » ouvre la liste au lieu de dire qu on ne trouve personne',
+    choisisseurOuvert === true,
+    'c est exactement ce qui se passait : « je ne trouve personne » devant deux fiches');
+  verifie('et rien n est relie a l aveugle',
+    !msg._contacts || !msg._contacts['william ayache']);
+
+  // Un seul homonyme : la personne est trouvee, aucune question.
+  carnet();
+  ctx.contactsList.push({ id: 'w1', name: 'William Ayache', phone: '06 09 69 31 63' });
+  verifie('avec un seul, aucune question ne se pose',
+    ctx.tcAttenteContact(poser(), [{ contact: 'William Ayache' }]) === null,
+    'il est trouve tout seul');
+
+  // Le contact ajoute entre la question et la reponse.
+  carnet();
+  msg = poser();
+  verifie('carnet vide : la question se pose',
+    ctx.tcAttenteContact(msg, [{ contact: 'William Ayache' }]) === 'William Ayache');
+  ctx.contactsList.push({ id: 'w9', name: 'William Ayache', phone: '06 09 69 31 63' });
+  verifie('ajoute entre-temps, la question tombe d elle-meme',
+    ctx.tcAttenteContact(msg, [{ contact: 'William Ayache' }]) === null,
+    'la proposition le relie au rendu suivant, sans rien redemander');
+  verifie('et la personne est bien celle ajoutee',
+    ctx.tcContactDeProposition(msg, { contact: 'William Ayache' }).id === 'w9');
+
+  carnet();
+  msg = poser();
+  ctx.tcRepondreQuiEstCe('Gontran de Kermadec');
+  verifie('mais un nom introuvable reste introuvable',
+    !msg._contacts || !msg._contacts['william ayache'],
+    'une piste de repli ne doit pas relier n importe qui');
+  verifie('et on le dit',
+    ctx.charlyIA.history.some((m) => m.role === 'system_info'
+      && m.content.indexOf('Je ne trouve personne') > -1));
+
+  ctx.charlyIA.history = [];
 }
 
 titre('Ce que la question annonce');
