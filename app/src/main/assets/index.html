@@ -4420,6 +4420,32 @@ function tcYAller(lieu) {
  * A la demande seulement : la position n'est reclamee qu'a cet
  * instant, et chaque calcul coute chez Google.
  */
+/**
+ * Ce qu'on montre a l'utilisateur quand le calcul echoue.
+ *
+ * « Failed to fetch » est le message du navigateur, pas une phrase
+ * pour quelqu'un qui voulait savoir combien de temps de route il a.
+ * Le detail technique part dans la console, ou il sert a quelque
+ * chose ; ici on dit ce qui s'est passe et quoi faire.
+ */
+function tcMessageErreurTrajet(err) {
+  const brut = (err && err.message) ? String(err.message) : '';
+  console.error('Calcul de trajet : ' + (brut || 'erreur inconnue'));
+
+  if (/Clé Google/i.test(brut)) return brut;          // deja en francais, et utile
+  if (/failed to fetch|networkerror|load failed/i.test(brut)) {
+    return 'Calcul impossible : connexion interrompue. Réessaie dans un instant.';
+  }
+  if (/PERMISSION_DENIED|API key|API_KEY|not authorized|403/i.test(brut)) {
+    return 'Calcul impossible : la clé Google n’autorise pas ce service. '
+      + 'Vérifie-la dans Configuration IA.';
+  }
+  if (/quota|RESOURCE_EXHAUSTED|429/i.test(brut)) {
+    return 'Calcul impossible : quota Google atteint pour aujourd’hui.';
+  }
+  return 'Calcul impossible pour le moment.';
+}
+
 async function tcTempsDeTrajet(lieu) {
   const zone = document.getElementById('emTrajet');
   if (!zone) return;
@@ -4428,7 +4454,7 @@ async function tcTempsDeTrajet(lieu) {
   try {
     r = await tcEstimerTrajet(lieu);
   } catch (err) {
-    zone.innerHTML = '<span style="color:#ea4335;">' + escapeHTMLSafe(err.message || 'Calcul impossible') + '</span>';
+    zone.innerHTML = '<span style="color:#ea4335;">' + escapeHTMLSafe(tcMessageErreurTrajet(err)) + '</span>';
     return;
   }
   if (r === null) {
@@ -11263,38 +11289,61 @@ async function tcEstimerTrajet(destination, opts) {
   const cle = tcCleGoogle();
   if (!cle) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
 
-  let origine = opts.origine || null;
-  if (!origine) {
+  // Routes attend un objet, pas une chaine : des coordonnees quand on
+  // les a, une adresse sinon.
+  let origine;
+  if (opts.origine) {
+    origine = { address: opts.origine };
+  } else {
     const position = await tcObtenirPosition();
     if (!position) return null;
-    origine = position.lat + ',' + position.lng;
+    origine = { location: { latLng: { latitude: position.lat, longitude: position.lng } } };
   }
 
-  const params = new URLSearchParams({
+  // API Routes : la seule des deux qui autorise un appel depuis la
+  // page. L'ancienne, Directions, ne renvoie aucun en-tete CORS — le
+  // navigateur bloquait la reponse sans qu'on puisse rien y faire.
+  const corps = {
     origin: origine,
-    destination: destination,
-    mode: 'driving',
-    language: 'fr',
-    region: 'fr',
-    departure_time: 'now',
-    traffic_model: 'best_guess',
-    key: cle
+    destination: { address: destination },
+    travelMode: 'DRIVE',
+    routingPreference: 'TRAFFIC_AWARE',
+    languageCode: 'fr-FR',
+    regionCode: 'FR',
+    units: 'METRIC'
+  };
+
+  const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': cle,
+      // Sans masque, Google refuse la requete : il faut dire ce qu'on lit.
+      'X-Goog-FieldMask': 'routes.duration,routes.staticDuration,routes.distanceMeters'
+    },
+    body: JSON.stringify(corps)
   });
 
-  const res = await fetch('https://maps.googleapis.com/maps/api/directions/json?' + params.toString());
-  if (!res.ok) throw new Error('Google Directions : HTTP ' + res.status);
-  const data = await res.json();
-
-  if (data.status !== 'OK') {
-    if (data.status === 'ZERO_RESULTS' || data.status === 'NOT_FOUND') return { aucunItineraire: true };
-    console.error('Directions API ' + data.status + ' : ' + (data.error_message || ''));
-    throw new Error('Google Directions : ' + data.status + (data.error_message ? ' — ' + data.error_message : ''));
+  if (!res.ok) {
+    let msg = 'HTTP ' + res.status;
+    try { const j = await res.json(); msg = (j.error && j.error.message) || msg; } catch (e) {}
+    console.error('Routes API ' + res.status + ' : ' + msg);
+    throw new Error('Google Routes : ' + msg);
   }
 
-  const jambe = data.routes[0] && data.routes[0].legs[0];
-  const sansTrafic = jambe && jambe.duration ? jambe.duration.value : null;
-  if (!jambe || sansTrafic == null) return { aucunItineraire: true };
-  const avecTrafic = jambe.duration_in_traffic ? jambe.duration_in_traffic.value : sansTrafic;
+  const data = await res.json();
+  const route = data.routes && data.routes[0];
+  // Aucune route : Google repond 200 avec une liste vide.
+  if (!route || !route.duration) return { aucunItineraire: true };
+
+  // Les durees arrivent en texte, « 1234s ».
+  const secondes = (v) => {
+    const m = /^(\d+(?:\.\d+)?)s$/.exec(String(v || ''));
+    return m ? Math.round(parseFloat(m[1])) : null;
+  };
+  const avecTrafic = secondes(route.duration);
+  const sansTrafic = secondes(route.staticDuration) || avecTrafic;
+  if (avecTrafic == null) return { aucunItineraire: true };
 
   const basseSec = Math.min(sansTrafic, avecTrafic);
   const hauteSec = Math.max(sansTrafic, avecTrafic) * 1.1;
@@ -11302,8 +11351,8 @@ async function tcEstimerTrajet(destination, opts) {
   return {
     basseMin: Math.max(1, Math.round(basseSec / 60)),
     hauteMin: Math.max(1, Math.round(hauteSec / 60)),
-    distanceKm: jambe.distance ? Math.round(jambe.distance.value / 100) / 10 : null,
-    adresseArrivee: jambe.end_address || destination
+    distanceKm: route.distanceMeters ? Math.round(route.distanceMeters / 100) / 10 : null,
+    adresseArrivee: destination
   };
 }
 

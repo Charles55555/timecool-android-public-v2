@@ -18,7 +18,8 @@ function verifie(libelle, condition, detail) {
 function titre(t) { console.log(''); console.log('-- ' + t + ' --'); }
 
 function extraire(nom) {
-  const debut = page.indexOf('function ' + nom + '(');
+  const asy = page.indexOf('async function ' + nom + '(');
+  const debut = asy > -1 ? asy : page.indexOf('function ' + nom + '(');
   if (debut < 0) return null;
   let n = 0;
   for (let j = page.indexOf('{', debut); j < page.length; j++) {
@@ -84,9 +85,95 @@ titre('Le temps de trajet');
     // page : on cherche sur la partie sans accent.
     src && src.indexOf('Aucun itin') > -1);
   verifie('une erreur est montree, pas avalee',
-    src && /catch \(err\)[\s\S]{0,200}err\.message/.test(src));
-  verifie('le message d erreur est echappe',
-    src && src.indexOf('escapeHTMLSafe(err.message') > -1);
+    src && /catch \(err\)[\s\S]{0,200}tcMessageErreurTrajet\(err\)/.test(src));
+  verifie('elle passe par la traduction en francais',
+    src && src.indexOf('escapeHTMLSafe(tcMessageErreurTrajet(err))') > -1,
+    '« Failed to fetch » ne dit rien a personne');
+}
+
+titre('L appel part vers une API qui accepte les navigateurs');
+{
+  let demande = null;
+  let reponse = { ok: true, json: async () => ({
+    routes: [{ duration: '1800s', staticDuration: '1500s', distanceMeters: 12400 }]
+  }) };
+  const ctx = {
+    console, Math, JSON, String, parseFloat, RegExp,
+    tcCleGoogle: () => 'CLE-TEST',
+    tcObtenirPosition: async () => ({ lat: 48.88, lng: 2.27 }),
+    fetch: async (url, init) => { demande = { url, init }; return reponse; }
+  };
+  vm.createContext(ctx);
+  vm.runInContext(extraire('tcEstimerTrajet'), ctx);
+
+  return ctx.tcEstimerTrajet('88 boulevard Victor Hugo, Neuilly').then((r) => {
+    verifie('c est l API Routes qui est appelee',
+      demande && demande.url.indexOf('routes.googleapis.com') > -1,
+      demande ? demande.url : 'aucun appel');
+    verifie('et plus l ancienne, que le navigateur bloque',
+      page.indexOf('maps/api/directions/json') === -1,
+      'Directions ne renvoie aucun en-tete CORS : l appel echouait toujours');
+    verifie('la cle voyage dans l en-tete, pas dans l adresse',
+      demande.init.headers['X-Goog-Api-Key'] === 'CLE-TEST'
+      && demande.url.indexOf('CLE-TEST') === -1,
+      'une cle dans l URL se retrouve dans les journaux de tout le monde');
+    verifie('le masque de champs est fourni',
+      !!demande.init.headers['X-Goog-FieldMask'],
+      'sans lui Google refuse la requete');
+
+    const corps = JSON.parse(demande.init.body);
+    verifie('la position part en coordonnees',
+      corps.origin.location.latLng.latitude === 48.88);
+    verifie('la destination part en adresse',
+      corps.destination.address.indexOf('Victor Hugo') > -1);
+    verifie('le trafic est pris en compte',
+      corps.routingPreference === 'TRAFFIC_AWARE',
+      'sinon l estimation ignore les bouchons');
+
+    verifie('la duree est lue malgre le « s » final',
+      r.basseMin === 25 && r.hauteMin === 33,
+      r.basseMin + ' a ' + r.hauteMin + ' min — 1500s et 1800s+10%');
+    verifie('et la distance convertie en km', r.distanceKm === 12.4, String(r.distanceKm));
+
+    // Aucune route : Google repond 200 avec une liste vide.
+    reponse = { ok: true, json: async () => ({}) };
+    return ctx.tcEstimerTrajet('Nulle part');
+  }).then((r) => {
+    verifie('une adresse sans itineraire est reconnue', r && r.aucunItineraire === true,
+      'plutot qu une erreur rouge incomprehensible');
+
+    reponse = { ok: false, status: 403, json: async () => ({ error: { message: 'API key not authorized' } }) };
+    return ctx.tcEstimerTrajet('Ailleurs').then(() => null, (e) => e);
+  }).then((err) => {
+    verifie('un refus de Google remonte avec sa raison',
+      err && err.message.indexOf('not authorized') > -1, err ? err.message : 'aucune erreur');
+    suite();
+  });
+}
+
+function suite() {
+titre('Ce que lit l utilisateur quand ca echoue');
+{
+  const ctx = { console, RegExp, String };
+  vm.createContext(ctx);
+  vm.runInContext(extraire('tcMessageErreurTrajet'), ctx);
+  const m = ctx.tcMessageErreurTrajet;
+
+  const reseau = m(new Error('Failed to fetch'));
+  verifie('« Failed to fetch » devient une phrase',
+    reseau.indexOf('Failed') === -1 && reseau.indexOf('connexion') > -1, reseau);
+  verifie('un quota atteint se dit',
+    m(new Error('RESOURCE_EXHAUSTED')).indexOf('quota') > -1);
+  verifie('une cle refusee se dit, et ou la corriger',
+    m(new Error('Google Routes : API key not authorized')).indexOf('Configuration IA') > -1);
+  verifie('une cle absente garde son message, deja clair',
+    m(new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.'))
+      .indexOf('manquante') > -1);
+  verifie('une panne inconnue ne reste pas muette',
+    m(new Error('Boum')).length > 0 && m(new Error('Boum')).indexOf('Boum') === -1,
+    m(new Error('Boum')));
+  verifie('et une erreur sans message non plus',
+    m(null).length > 0 && m({}).length > 0);
 }
 
 titre('Les boutons n apparaissent qu avec une adresse');
@@ -147,3 +234,4 @@ titre('L attribut produit se relit comme un navigateur le ferait');
 console.log('');
 console.log(ko + ' anomalie(s).');
 process.exit(ko ? 1 : 0);
+}
