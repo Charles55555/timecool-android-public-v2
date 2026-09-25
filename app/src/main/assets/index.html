@@ -9827,6 +9827,29 @@ function charlyQuickAction(action) {
 // une demande explicite d'une simple conversation, sans jamais
 // intercepter une question générale à tort.
 
+/**
+ * Le texte contient-il cette expression, comme mot entier ?
+ *
+ * includes() cherche une suite de caracteres : la cle « app » se
+ * trouvait dans « s'appelle », et Charly repondait alors sur
+ * l'application Android a qui demandait un rendez-vous. On exige donc
+ * que ce qui entoure l'expression ne soit pas une lettre.
+ *
+ * L'apostrophe n'en est pas une : « l'app » declenche bien.
+ */
+function tcContientMot(texte, expression) {
+  if (!texte || !expression) return false;
+  const lettre = /[a-z0-9à-ÿœæ]/i;
+  let i = texte.indexOf(expression);
+  while (i !== -1) {
+    const avant = i > 0 ? texte[i - 1] : '';
+    const apres = texte[i + expression.length] || '';
+    if (!lettre.test(avant) && !lettre.test(apres)) return true;
+    i = texte.indexOf(expression, i + 1);
+  }
+  return false;
+}
+
 const TC_PROFESSIONS = ['médecin','docteur','généraliste','dentiste','dentaire','kiné','kinésithérapeute',
   'ostéopathe','pharmacie','pharmacien','vétérinaire','opticien','coiffeur','coiffeuse','garagiste',
   'avocat','notaire','plombier','électricien','psychologue','psychiatre','gynécologue','dermatologue',
@@ -9868,7 +9891,7 @@ function detecterRechercheProfessionnel(text) {
     || /\bpropose[- ]?moi\b/.test(t);
   if (!declencheur) return null;
 
-  const profession = TC_PROFESSIONS.find(p => t.includes(p)) || null;
+  const profession = TC_PROFESSIONS.find(p => tcContientMot(t, p)) || null;
   if (!profession) return null;
   return { profession: profession, lieu: extraireLieuDuTexte(text) };
 }
@@ -10949,7 +10972,7 @@ async function charlySendMessage() {
   ];
   // Exclure les messages des boutons rapides de l'interception FAQ
   const _isQuickAction = text.includes('Pose-moi les questions') || text.includes('quick_action_') || text.includes('Voici ce que j') || text.includes('vie quotidienne');
-  const _faqMatch = !_isQuickAction && _faq.find(f => f.keys.some(k => text.toLowerCase().includes(k)));
+  const _faqMatch = !_isQuickAction && _faq.find(f => f.keys.some(k => tcContientMot(text.toLowerCase(), k)));
   if (_faqMatch) {
     charlyIA.history.push({role:'user', content:text});
     inp.value = ''; inp.style.height = 'auto';
@@ -10962,7 +10985,7 @@ async function charlySendMessage() {
 
   const _textForCheck = text.toLowerCase();
   const _isChecklistMsg = text.includes('vie quotidienne') || text.includes('Voici ce que j');
-  const _unavailMatch = !_isChecklistMsg && _unavailable.find(u => u.keys.some(k => _textForCheck.includes(k)));
+  const _unavailMatch = !_isChecklistMsg && _unavailable.find(u => u.keys.some(k => tcContientMot(_textForCheck, k)));
   if (_unavailMatch) {
     charlyIA.history.push({role:'user', content:text});
     inp.value = ''; inp.style.height = 'auto';

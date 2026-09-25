@@ -213,6 +213,64 @@ titre('Reconnaître la demande');
   verifie('ni une phrase vide', d('') === null && d(null) === null);
 }
 
+titre('Un declencheur est un mot, pas un morceau de mot');
+{
+  const ctxM = { console, RegExp, String };
+  vm.createContext(ctxM);
+  vm.runInContext(extraire('tcContientMot'), ctxM);
+  const dans = ctxM.tcContientMot;
+
+  verifie('« app » ne se cache plus dans « s’appelle »',
+    dans("il s’appelle william ayache", 'app') === false,
+    'Charly repondait sur le Play Store a une demande de rendez-vous');
+  verifie('mais « l’app » declenche toujours',
+    dans("je n’arrive pas a ouvrir l’app", 'app') === true,
+    'l apostrophe n est pas une lettre');
+  verifie('« app » seul aussi', dans('app', 'app') === true);
+  verifie('« message » ne mord pas « messagerie »',
+    dans('ouvre ma messagerie', 'message') === false);
+  verifie('« sms » ne mord pas « smsc »',
+    dans('identifiant smsc', 'sms') === false);
+  verifie('mais « un sms » oui', dans('envoie un sms', 'sms') === true);
+  verifie('les accents comptent comme des lettres',
+    dans('une réunion', 'union') === false,
+    'sans cela « union » se trouverait dans « reunion »');
+  verifie('une expression de plusieurs mots marche',
+    dans('je veux envoyer un email', 'envoyer un email') === true);
+  verifie('et rien ne casse sur du vide',
+    dans('', 'app') === false && dans('app', '') === false);
+
+  // Les vraies listes, passees sur de vraies phrases.
+  const listes = [];
+  ['_unavailable', '_faq'].forEach((nom) => {
+    const m = page.match(new RegExp('const ' + nom + ' = \\[[\\s\\S]*?\\n  \\];'));
+    if (!m) { ko++; console.log('  KO  ' + nom + ' introuvable'); return; }
+    (m[0].match(/keys: \[[^\]]*\]/g) || []).forEach((bloc) => {
+      (bloc.match(/'((?:[^'\\]|\\.)*)'/g) || []).forEach((c) => {
+        listes.push(c.slice(1, -1).replace(/\\'/g, "'"));
+      });
+    });
+  });
+  verifie('les deux listes sont lues', listes.length > 80, listes.length + ' declencheurs');
+
+  const phrases = [
+    "tu peux me mettre un rendez-vous cet après-midi à 15h chez mon avocat, "
+      + "il s’appelle william ayache, il est dans mes contacts et ça se passe "
+      + "au 36 avenue des champs-élysées à paris",
+    "ajoute un déjeuner avec ma mère samedi midi",
+    "décale mon rendez-vous de jeudi à 16h",
+    "qu’est-ce que j’ai demain ?",
+    "rendez-vous dentiste mardi 9h",
+    "mets une réunion d’équipe lundi à 10h"
+  ];
+  phrases.forEach((p) => {
+    const mordues = listes.filter((k) => dans(p, k));
+    verifie('« ' + p.slice(0, 34) + '… » n est pas détournée',
+      mordues.length === 0,
+      mordues.length ? 'attrapée par : ' + mordues.join(', ') : '');
+  });
+}
+
 titre('Chercher un professionnel, ou poser un rendez-vous');
 {
   // TC_PROFESSIONS et extraireLieuDuTexte vivent a cote du detecteur.
@@ -221,7 +279,7 @@ titre('Chercher un professionnel, ou poser un rendez-vous');
   const liste = page.match(/const TC_PROFESSIONS = \[[\s\S]*?\];/);
   if (liste) vm.runInContext(liste[0].replace('const ', 'var '), ctxP);
   else { ko++; console.log('  KO  TC_PROFESSIONS introuvable'); }
-  ['extraireLieuDuTexte', 'detecterRechercheProfessionnel'].forEach((n) => {
+  ['tcContientMot', 'extraireLieuDuTexte', 'detecterRechercheProfessionnel'].forEach((n) => {
     const src = extraire(n);
     if (src) vm.runInContext(src, ctxP);
     else { ko++; console.log('  KO  ' + n + ' introuvable'); }
