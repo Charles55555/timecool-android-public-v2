@@ -87,8 +87,11 @@ titre('Le temps de trajet');
   verifie('une erreur est montree, pas avalee',
     src && /catch \(err\)[\s\S]{0,200}tcMessageErreurTrajet\(err\)/.test(src));
   verifie('elle passe par la traduction en francais',
-    src && src.indexOf('escapeHTMLSafe(tcMessageErreurTrajet(err))') > -1,
+    src && src.indexOf('tcMessageErreurTrajet(err).split') > -1,
     '« Failed to fetch » ne dit rien a personne');
+  verifie('et le detail de Google s affiche en dessous',
+    src && /parts\[1\][\s\S]{0,200}escapeHTMLSafe\(parts\[1\]\)/.test(src),
+    'ma phrase n est qu une hypothese : c est le detail qui tranche');
 }
 
 titre('L appel part vers une API qui accepte les navigateurs');
@@ -161,12 +164,18 @@ titre('Ce que lit l utilisateur quand ca echoue');
 
   const reseau = m(new Error('Failed to fetch'));
   verifie('« Failed to fetch » devient une phrase',
-    reseau.indexOf('Failed') === -1 && reseau.indexOf('connexion') > -1, reseau);
+    reseau.split('\n')[0].indexOf('Failed') === -1
+    && reseau.indexOf('connexion') > -1, reseau.split('\n')[0]);
+  verifie('et le message d origine suit, en dessous',
+    reseau.split('\n')[1] === 'Failed to fetch',
+    'sans lui, une erreur mal classee envoie corriger le mauvais reglage');
   verifie('un quota atteint se dit',
     m(new Error('RESOURCE_EXHAUSTED')).indexOf('quota') > -1);
-  verifie('une cle refusee se dit, et ou la corriger',
-    m(new Error('Google Routes : API key not authorized')).indexOf('console Google') > -1,
-    'une restriction de cle se corrige chez Google, pas dans l application');
+  verifie('une cle refusee se dit sans affirmer la cause',
+    m(new Error('Google Routes : API key not authorized')).indexOf('refuse cette cl') > -1,
+    'affirmer « tes restrictions » envoyait corriger un reglage qui allait bien');
+  verifie('une facturation absente est reconnue',
+    m(new Error('billing account not configured')).indexOf('facturation') > -1);
   verifie('une API non activee est nommee',
     m(new Error('Routes API has not been used in project 42 before or it is disabled'))
       .indexOf('Routes') > -1,

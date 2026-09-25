@@ -4432,30 +4432,32 @@ function tcMessageErreurTrajet(err) {
   const brut = (err && err.message) ? String(err.message) : '';
   console.error('Calcul de trajet : ' + (brut || 'erreur inconnue'));
 
-  if (/Clé Google/i.test(brut)) return brut;          // deja en francais, et utile
+  // Deja en francais et deja actionnable : rien a ajouter.
+  if (/Clé Google/i.test(brut)) return brut;
+
+  let phrase;
   if (/failed to fetch|networkerror|load failed/i.test(brut)) {
-    return 'Calcul impossible : connexion interrompue. Réessaie dans un instant.';
+    phrase = 'Calcul impossible : connexion interrompue. Réessaie dans un instant.';
+  } else if (/has not been used in project|SERVICE_DISABLED|is disabled|not enabled/i.test(brut)) {
+    // L'API Routes se demande separement dans la console Google.
+    phrase = 'Calcul impossible : l’API « Routes » n’est pas activée sur ton compte Google.';
+  } else if (/quota|RESOURCE_EXHAUSTED|429|OVER_QUERY_LIMIT/i.test(brut)) {
+    phrase = 'Calcul impossible : quota Google atteint pour aujourd’hui.';
+  } else if (/billing|facturation/i.test(brut)) {
+    phrase = 'Calcul impossible : la facturation n’est pas active sur ce projet Google.';
+  } else if (/PERMISSION_DENIED|API.?key|not authorized|referer|referrer|blocked|403/i.test(brut)) {
+    phrase = 'Calcul impossible : Google refuse cette clé pour ce service.';
+  } else {
+    phrase = 'Calcul impossible pour le moment.';
   }
-  // L'API Routes se demande separement dans la console Google : un
-  // projet qui avait Directions ne l'a pas pour autant.
-  if (/has not been used in project|SERVICE_DISABLED|is disabled|not enabled/i.test(brut)) {
-    return 'Calcul impossible : l’API « Routes » n’est pas activée sur ton compte Google. '
-      + 'Active-la dans la console Google Cloud, puis réessaie dans quelques minutes.';
-  }
-  if (/quota|RESOURCE_EXHAUSTED|429|OVER_QUERY_LIMIT/i.test(brut)) {
-    return 'Calcul impossible : quota Google atteint pour aujourd’hui.';
-  }
-  if (/PERMISSION_DENIED|API.?key|not authorized|referer|referrer|blocked|403/i.test(brut)) {
-    return 'Calcul impossible : ta clé Google n’autorise pas ce service. '
-      + 'Vérifie ses restrictions dans la console Google Cloud.';
-  }
-  // Cause inconnue : on montre le detail, en petit. Une capture
-  // d'ecran suffit alors a diagnostiquer, sans aller ouvrir la
-  // console du navigateur.
-  const detail = brut.replace(/\s+/g, ' ').slice(0, 120);
-  return 'Calcul impossible pour le moment.'
-    + (detail ? ' — ' + detail : '');
+
+  // Ce que Google a repondu, tel quel. Ma phrase au-dessus n'est
+  // qu'une hypothese : c'est cette ligne qui tranche, et elle evite
+  // d'envoyer corriger un reglage qui va tres bien.
+  const detail = brut.replace(/\s+/g, ' ').slice(0, 160);
+  return phrase + (detail ? '\n' + detail : '');
 }
+
 
 async function tcTempsDeTrajet(lieu) {
   const zone = document.getElementById('emTrajet');
@@ -4465,7 +4467,10 @@ async function tcTempsDeTrajet(lieu) {
   try {
     r = await tcEstimerTrajet(lieu);
   } catch (err) {
-    zone.innerHTML = '<span style="color:#ea4335;">' + escapeHTMLSafe(tcMessageErreurTrajet(err)) + '</span>';
+    const parts = tcMessageErreurTrajet(err).split('\n');
+    zone.innerHTML = '<span style="color:#ea4335;">' + escapeHTMLSafe(parts[0]) + '</span>'
+      + (parts[1] ? '<div style="color:var(--text-sec); font-size:11px; margin-top:4px;">'
+        + escapeHTMLSafe(parts[1]) + '</div>' : '');
     return;
   }
   if (r === null) {
