@@ -4506,8 +4506,9 @@ function openEventModal(e) {
       <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
         <button onclick="tcYAller(${JSON.stringify(e.lieu).replace(/"/g, '&quot;')})" style="padding:8px 14px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\ud83d\uddfa\ufe0f Y aller</button>
         <button onclick="tcTempsDeTrajet(${JSON.stringify(e.lieu).replace(/"/g, '&quot;')})" style="padding:8px 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue); border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\u23f1\ufe0f Combien de temps ?</button>
+        <span id="emTrajet" style="font-size:12px; align-self:center; flex:1 1 auto; min-width:0;"></span>
       </div>
-      <div id="emTrajet" style="font-size:12px; margin-top:8px;"></div>
+
     </div></div>` : ''}
     ${tcContactDuRdv(e) ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div><div class="event-detail-label">Avec</div><div class="event-detail-value" data-notranslate>${escapeHTML(tcContactDuRdv(e).name || '')}</div></div></div>` : ''}
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Confidentialité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Sur votre appareil</div></div></div>
