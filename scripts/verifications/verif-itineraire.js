@@ -107,7 +107,6 @@ titre('L appel part vers une API qui accepte les navigateurs');
     fetch: async (url, init) => { demande = { url, init }; return reponse; }
   };
   vm.createContext(ctx);
-  vm.runInContext(extraire('tcExtremitesRoute'), ctx);
   vm.runInContext(extraire('tcEstimerTrajet'), ctx);
 
   return ctx.tcEstimerTrajet('88 boulevard Victor Hugo, Neuilly').then((r) => {
