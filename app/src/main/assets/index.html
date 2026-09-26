@@ -8598,6 +8598,9 @@ function renderAIConfig() {
       <b>📊 Statistiques Charly IA</b><br>
       Appels API depuis cet appareil : <b>${charlyIA.callCount || 0}</b> &nbsp;|&nbsp;
       Messages dans la session : <b>${charlyIA.history ? charlyIA.history.length : 0}</b>
+      ${charlyIA.dernierUsage ? `<br>Dernier appel \u2014 entr\u00e9e : <b>${charlyIA.dernierUsage.entree}</b>
+        &nbsp;|&nbsp; cache \u00e9crit : <b>${charlyIA.dernierUsage.cacheEcrit}</b>
+        &nbsp;|&nbsp; <b>cache lu : ${charlyIA.dernierUsage.cacheLu}</b>` : ''}
     </div>
 
     <button onclick="saveAllApiKeys()" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:10px; box-shadow:0 4px 14px rgba(26,115,232,0.3);">
@@ -11102,7 +11105,11 @@ ${tY}-${tM}-${tD} | 15:00-16:00 | Rendez-vous banque | rdv
 JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY-MM-DD.`;
 
       const messages = [
-        {role:'system', content: tcPromptSysteme() + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
+        // Deux morceaux : les regles, qui ne bougent jamais et se mettent
+        // en cache, puis la date et l'agenda, qui changent tout le temps.
+        {role:'system',
+         content: tcPromptSysteme() + tcLangInstruction(),
+         volatil: dateContext + '\n\n' + tcAgendaSnapshotPourIA()},
         ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
       ];
       reply = await callOpenAI(messages);
@@ -11199,7 +11206,13 @@ async function callOpenAIDirectly(messages) {
     },
     body: JSON.stringify({
       model: charlyIA.config.model || 'gpt-4o-mini',
-      messages: messages,
+      // Le decoupage stable/volatil est propre au cache d'Anthropic :
+      // ici les deux morceaux redeviennent un seul texte.
+      messages: messages.map(function (m) {
+        return m.volatil
+          ? { role: m.role, content: m.content + '\n\n' + m.volatil }
+          : m;
+      }),
       max_tokens: TC_IA_JETONS_MAX,
       temperature: 0.7
     })
@@ -11213,6 +11226,47 @@ async function callOpenAIDirectly(messages) {
   charlyIA.callCount++;
   try { localStorage.setItem('timecool_ai_callcount', String(charlyIA.callCount)); } catch(e){}
   return data.choices?.[0]?.message?.content || '(Réponse vide)';
+}
+
+/**
+ * Le prompt systeme decoupe pour le cache d'Anthropic.
+ *
+ * Le premier bloc porte cache_control : Anthropic met alors en cache
+ * tout ce qui le precede, marque compris. Les blocs suivants sont
+ * relus a chaque appel.
+ *
+ * C'est pourquoi la partie stable doit venir EN PREMIER. Placee
+ * derriere la date, elle ne serait jamais mise en cache : le prefixe
+ * changerait a chaque minute.
+ */
+function tcSystemeAnthropic(systemMsg) {
+  const stable = (systemMsg && systemMsg.content)
+    || 'Tu es Charly IA, assistant intelligent de TIMECOOL.';
+  const volatil = (systemMsg && systemMsg.volatil) || '';
+
+  const blocs = [{
+    type: 'text',
+    text: stable,
+    // Ephemere : le cache vit cinq minutes, et chaque lecture le
+    // prolonge d'autant. Deux messages rapproches en profitent, une
+    // conversation reprise le lendemain non.
+    cache_control: { type: 'ephemeral' }
+  }];
+  if (volatil) blocs.push({ type: 'text', text: volatil });
+  return blocs;
+}
+
+/** Ce que le dernier appel a lu en cache, pour pouvoir le verifier. */
+function tcNoterUsageIA(usage) {
+  if (!usage) return;
+  charlyIA.dernierUsage = {
+    entree: usage.input_tokens || 0,
+    cacheEcrit: usage.cache_creation_input_tokens || 0,
+    cacheLu: usage.cache_read_input_tokens || 0,
+    sortie: usage.output_tokens || 0
+  };
+  console.log('Charly — jetons : ' + JSON.stringify(charlyIA.dernierUsage));
+  try { localStorage.setItem('tc_dernier_usage_ia', JSON.stringify(charlyIA.dernierUsage)); } catch (e) {}
 }
 
 async function callAnthropic(messages) {
@@ -11232,7 +11286,7 @@ async function callAnthropic(messages) {
     body: JSON.stringify({
       model: charlyIA.config.claudeModel || 'claude-sonnet-5',
       max_tokens: TC_IA_JETONS_MAX,
-      system: (systemMsg ? systemMsg.content : 'Tu es Charly IA, assistant intelligent de TIMECOOL.') + tcLangInstruction(),
+      system: tcSystemeAnthropic(systemMsg),
       messages: userMessages
     })
   });
@@ -11249,6 +11303,7 @@ async function callAnthropic(messages) {
   }
   const data = await res.json();
   charlyIA.callCount++;
+  tcNoterUsageIA(data.usage);
   try { localStorage.setItem('timecool_ai_callcount', String(charlyIA.callCount)); } catch(e){}
 
   /* content est un TABLEAU DE BLOCS, pas un texte.
@@ -13841,7 +13896,11 @@ ${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | rdv
 [/AGENDA]`;
 
       const messages = [
-        {role:'system', content: tcPromptSysteme() + '\n\n' + dateContext + '\n\n' + tcAgendaSnapshotPourIA() + tcLangInstruction()},
+        // Deux morceaux : les regles, qui ne bougent jamais et se mettent
+        // en cache, puis la date et l'agenda, qui changent tout le temps.
+        {role:'system',
+         content: tcPromptSysteme() + tcLangInstruction(),
+         volatil: dateContext + '\n\n' + tcAgendaSnapshotPourIA()},
         ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
       ];
       reply = await callOpenAI(messages);
