@@ -7952,17 +7952,14 @@ function renderSettingsInterne() {
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">💬 Messages d'annulation &amp; retards</div>
-      <div style="padding:14px 16px; font-size:11px; color:var(--text-sec); line-height:1.5;">Ces textes sont proposés automatiquement quand tu annules, décales ou signales un retard — toujours modifiables avant envoi.</div>
-      <div style="padding:0 16px 14px;">
-        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Quand c'est moi qui préviens</div>
-        <div style="font-size:10.5px; color:var(--text-sec); margin-bottom:6px;">Utilisé quand tu annules ou décales de ton côté.</div>
-        <textarea id="tcMsgTemplateInitiate" style="width:100%; min-height:70px; padding:10px; border:1.5px solid var(--border); border-radius:10px; font-size:12.5px; font-family:inherit; resize:vertical;" onchange="saveMsgTemplate('initiate', this.value)">${getMsgTemplate('initiate')}</textarea>
+      <div style="padding:14px 16px; font-size:11px; color:var(--text-sec); line-height:1.5;">Trois messages, un par bouton. Ils sont proposés tels quels, et toujours modifiables avant d'être envoyés.</div>
+      <div id="tcMsgFormes" style="display:flex; gap:8px; padding:0 16px 12px;">
+        <button onclick="tcChoisirFormeMessages(false)" id="tcFormeTu"
+          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--g-blue); background:var(--g-blue); color:#fff;">Je tutoie</button>
+        <button onclick="tcChoisirFormeMessages(true)" id="tcFormeVous"
+          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:#fff; color:var(--text);">Je vouvoie</button>
       </div>
-      <div style="padding:0 16px 16px; border-top:1px solid var(--border); padding-top:14px;">
-        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Quand je réagis à un imprévu</div>
-        <div style="font-size:10.5px; color:var(--text-sec); margin-bottom:6px;">Utilisé quand tu réponds à un contact qui t'a prévenu en premier — pas de raison de t'excuser.</div>
-        <textarea id="tcMsgTemplateReact" style="width:100%; min-height:70px; padding:10px; border:1.5px solid var(--border); border-radius:10px; font-size:12.5px; font-family:inherit; resize:vertical;" onchange="saveMsgTemplate('react', this.value)">${getMsgTemplate('react')}</textarea>
-      </div>
+      <div id="tcMsgModeles"></div>
     </div>
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
@@ -8098,6 +8095,9 @@ function renderSettingsInterne() {
   `;
   // Mettre à jour l'affichage de la langue dans Paramètres
   setTimeout(() => initLanguageDisplay(), 50);
+  // Les trois messages vivent hors du template ci-dessus : ils
+  // dependent de l'onglet tutoiement/vouvoiement choisi.
+  tcChoisirFormeMessages(_tcFormeAffichee);
 }
 
 // ═══ GROUP RDV (4 agendas en 1 clic) ═══
@@ -15975,6 +15975,10 @@ function renderContactsListHTML(contacts) {
             : (cats.length === 0 ? `<div style="font-size:11px; color:#ea4335; margin-top:8px; font-style:italic;">${escapeHTMLSafe(prenom)} ne peut pas me prendre de rendez-vous</div>` : '')}
 
           <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
+            <span style="font-size:11.5px; color:var(--text-sec);">Je lui dis :</span>
+            ${tcBoutonsVouvoiement(c)}
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
             <span style="font-size:11.5px; color:var(--text-sec);">🌐 Ecris-lui en :</span>
             <select data-notranslate onchange="setContactLangue('${c.id}', this.value)" style="padding:5px 8px; border:1.5px solid var(--border); border-radius:10px; font-size:11.5px; background:#fff; color:var(--text); cursor:pointer;">
               ${onTC ? `<option value=""${c.langue ? '' : ' selected'}>🌐 Sa langue (automatique)</option>` : ''}
@@ -17105,27 +17109,189 @@ async function showSimulationNotice(message, onProceed) {
    « initiate » = quand c'est moi qui préviens (ton d'excuse)
    « react »    = quand je réponds à un imprévu de l'autre (ton neutre)
    ══════════════════════════════════════════════════════════════ */
-const TC_MSG_TEMPLATE_KEYS = {
-  initiate: 'tc_msg_template_initiate',
-  react: 'tc_msg_template_react'
-};
-const TC_MSG_TEMPLATE_DEFAULTS = {
-  initiate: "Bonjour [Prénom], désolé(e), un imprévu m'oblige à annuler notre rendez-vous du [date] à [heure]. Je te recontacte prochainement pour convenir d'une nouvelle date, selon tes disponibilités. Merci de ta confiance.",
-  react: "Bonjour [Prénom], pas de souci, on annule ce rendez-vous et on se recale bientôt !"
+/* ══════════════════════════════════════════════════════════════
+   LES TROIS MESSAGES
+
+   Un par action, et deux formes pour chacun. Le francais ne se
+   convertit pas par une regle : « tu es » donne « vous etes », « ta
+   confiance » donne « votre confiance ». Une transformation
+   automatique se tromperait, et se tromperait devant un avocat.
+   Les deux textes sont donc ecrits.
+   ══════════════════════════════════════════════════════════════ */
+
+const TC_MSG_ACTIONS = ['retard', 'annule', 'decale'];
+
+const TC_MSG_MODELES = {
+  retard: {
+    titre: 'Je serai en retard',
+    icone: '⏱️',
+    quand: 'Part quand tu appuies sur « Je vais être en retard ».',
+    variables: ['[Prénom]', '[minutes]'],
+    tu: "Bonjour [Prénom], je te préviens que j'aurai environ [minutes] minutes de retard. Merci de ta patience !",
+    vous: "Bonjour [Prénom], je vous préviens que j'aurai environ [minutes] minutes de retard. Merci de votre patience !"
+  },
+  annule: {
+    titre: 'J’annule',
+    icone: '❌',
+    quand: 'Part quand tu annules sans proposer de nouvelle date.',
+    variables: ['[Prénom]', '[date]', '[heure]'],
+    tu: "Bonjour [Prénom], désolé(e), un imprévu m'oblige à annuler notre rendez-vous du [date] à [heure]. Je te recontacte très vite pour convenir d'une nouvelle date. Merci de ta confiance.",
+    vous: "Bonjour [Prénom], désolé(e), un imprévu m'oblige à annuler notre rendez-vous du [date] à [heure]. Je vous recontacte très vite pour convenir d'une nouvelle date. Merci de votre confiance."
+  },
+  decale: {
+    titre: 'Je décale',
+    icone: '📅',
+    quand: 'Part quand tu changes l’heure ou proposes un autre créneau.',
+    variables: ['[Prénom]', '[date]', '[heure]'],
+    tu: "Bonjour [Prénom], je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux te proposer :",
+    vous: "Bonjour [Prénom], je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux vous proposer :"
+  }
 };
 
-function getMsgTemplate(kind) {
+/* La forme affichee dans les parametres. Sans rapport avec le choix
+   fait sur chaque fiche contact : ici on ecrit les deux textes. */
+let _tcFormeAffichee = false;
+
+/** Bascule l'ecran des parametres entre tutoiement et vouvoiement. */
+function tcChoisirFormeMessages(vouvoie) {
+  _tcFormeAffichee = !!vouvoie;
+  const tu = document.getElementById('tcFormeTu');
+  const vous = document.getElementById('tcFormeVous');
+  const actif = 'border:1.5px solid var(--g-blue); background:var(--g-blue); color:#fff;';
+  const inactif = 'border:1.5px solid var(--border); background:#fff; color:var(--text);';
+  const base = 'flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; ';
+  if (tu) tu.style.cssText = base + (vouvoie ? inactif : actif);
+  if (vous) vous.style.cssText = base + (vouvoie ? actif : inactif);
+  tcRendreModelesMessages();
+}
+
+/** Les trois champs, dans la forme choisie. */
+function tcRendreModelesMessages() {
+  const zone = document.getElementById('tcMsgModeles');
+  if (!zone) return;
+  const forme = _tcFormeAffichee ? 'vous' : 'tu';
+  zone.innerHTML = TC_MSG_ACTIONS.map(function (action) {
+    const m = TC_MSG_MODELES[action];
+    const texte = tcModeleMessage(action, _tcFormeAffichee);
+    return '<div style="padding:0 16px 16px; border-top:1px solid var(--border); padding-top:14px;">'
+      + '<div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">'
+        + m.icone + ' ' + escapeHTMLSafe(m.titre) + '</div>'
+      + '<div style="font-size:10.5px; color:var(--text-sec); margin-bottom:6px;">'
+        + escapeHTMLSafe(m.quand) + '</div>'
+      + '<textarea onchange="tcEnregistrerModele(\'' + action + '\', \'' + forme + '\', this.value)"'
+      + ' style="width:100%; min-height:70px; padding:10px; border:1.5px solid var(--border);'
+      + ' border-radius:10px; font-size:12.5px; font-family:inherit; resize:vertical;">'
+      + escapeHTMLSafe(texte) + '</textarea>'
+      // Les variables sont rappelees sous le champ : sans elles, on ne
+      // peut pas deviner que [Prénom] sera remplace.
+      + '<div style="font-size:10.5px; color:var(--text-sec); margin-top:4px;">Tu peux utiliser : '
+        + m.variables.map(function (v) {
+            return '<code style="background:var(--bg-soft); padding:1px 4px; border-radius:4px;">'
+              + escapeHTMLSafe(v) + '</code>';
+          }).join(' ')
+      + '</div></div>';
+  }).join('');
+}
+
+/** La cle de rangement d'un modele : tc_msg_annule_vous, par exemple. */
+function tcCleModele(action, forme) {
+  return 'tc_msg_' + action + '_' + forme;
+}
+
+/**
+ * Le texte d'un message, tel qu'il partira.
+ *
+ * @param {string} action  retard | annule | decale
+ * @param {boolean} vouvoie
+ */
+function tcModeleMessage(action, vouvoie) {
+  const modele = TC_MSG_MODELES[action];
+  if (!modele) return '';
+  const forme = vouvoie ? 'vous' : 'tu';
   try {
-    const v = localStorage.getItem(TC_MSG_TEMPLATE_KEYS[kind]);
-    if (v) return v;
-  } catch(e) {}
-  return TC_MSG_TEMPLATE_DEFAULTS[kind];
+    const perso = localStorage.getItem(tcCleModele(action, forme));
+    if (perso && perso.trim()) return perso;
+  } catch (e) {}
+  return modele[forme];
 }
 
-function saveMsgTemplate(kind, value) {
-  try { localStorage.setItem(TC_MSG_TEMPLATE_KEYS[kind], value); } catch(e) {}
-  showToast('✅ Modèle enregistré');
+function tcEnregistrerModele(action, forme, texte) {
+  try { localStorage.setItem(tcCleModele(action, forme), texte); } catch (e) {}
+  if (typeof tcSyncTour === 'function') tcSyncTour();
+  showToast('✅ Message enregistré');
 }
+
+/* ══════════════════════════════════════════════════════════════
+   TUTOIEMENT OU VOUVOIEMENT
+
+   Aucun carnet d'adresses ne porte cette information — ni Android,
+   ni Google Contacts. Mais eux n'ecrivent pas de messages a votre
+   place. On la deduit donc de ce que la fiche sait deja, et on la
+   laisse corrigeable d'un doigt : personne ne remplira trois mille
+   fiches a la main.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Un titre devant le nom suffit a trancher. */
+const TC_TITRES_VOUVOIEMENT = /^(dr|dr\.|docteur|me|me\.|ma[iî]tre|pr|pr\.|professeur|m\.|mr|monsieur|mme|madame|mlle)\s/i;
+
+/* Ces categories supposent une relation professionnelle. */
+const TC_CATEGORIES_VOUVOIEMENT = ['travail', 'sante'];
+
+/**
+ * Faut-il vouvoyer ce contact ?
+ *
+ * Le choix explicite prime. A defaut, le titre, puis la categorie.
+ * Dans le doute, le tutoiement : c'est le cas le plus frequent, et
+ * l'utilisateur voit le message avant qu'il parte.
+ */
+function tcVouvoiement(contact) {
+  if (!contact) return false;
+  if (typeof contact.vouvoie === 'boolean') return contact.vouvoie;
+  return tcVouvoiementDeduit(contact);
+}
+
+/** Ce que l'application devine, sans choix explicite. */
+function tcVouvoiementDeduit(contact) {
+  if (!contact) return false;
+  if (TC_TITRES_VOUVOIEMENT.test(String(contact.name || '').trim())) return true;
+  const cats = Array.isArray(contact.cats) ? contact.cats
+    : (contact.cat ? [contact.cat] : []);
+  return cats.some(function (c) { return TC_CATEGORIES_VOUVOIEMENT.indexOf(c) > -1; });
+}
+
+/**
+ * Les deux boutons « tu » et « vous » d'une fiche contact.
+ *
+ * Celui qui est actif l'est parce que l'utilisateur l'a choisi, ou
+ * parce que l'application l'a deduit. Rien ne distingue les deux cas
+ * a l'ecran : ce qui compte est la forme qui partira, pas d'ou elle
+ * vient.
+ */
+function tcBoutonsVouvoiement(c) {
+  const vouvoie = tcVouvoiement(c);
+  const bouton = function (actif, libelle, valeur) {
+    return '<button onclick="event.stopPropagation(); tcDefinirVouvoiement(\'' + c.id + '\', ' + valeur + ')"'
+      + ' style="padding:4px 12px; border-radius:8px; font-size:11.5px; font-weight:600; cursor:pointer;'
+      + (actif
+        ? ' border:1.5px solid var(--g-blue); background:var(--g-blue); color:#fff;'
+        : ' border:1.5px solid var(--border); background:#fff; color:var(--text-sec);')
+      + '">' + libelle + '</button>';
+  };
+  return bouton(!vouvoie, 'tu', 'false') + ' ' + bouton(vouvoie, 'vous', 'true');
+}
+
+/** Retient le choix de l'utilisateur pour ce contact. */
+function tcDefinirVouvoiement(contactId, vouvoie) {
+  const c = Array.isArray(contactsList)
+    ? contactsList.find(function (x) { return x.id === contactId; }) : null;
+  if (!c) return;
+  c.vouvoie = !!vouvoie;
+  saveContacts();
+  if (typeof renderContacts === 'function') renderContacts();
+  showToast(vouvoie ? '💬 Vous vouvoyez ' + (c.name || '') : '💬 Vous tutoyez ' + (c.name || ''));
+}
+
+
 
 /* ══════════════════════════════════════════════════════════════
    FENÊTRE PARTAGÉE « PRÉVENIR [PRÉNOM] »
@@ -17198,13 +17364,14 @@ function openPrevenirSheet(contact, eventRef) {
     const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
     const heureLabel = String(eventRef.startH).padStart(2, '0') + 'h' + String(eventRef.startM).padStart(2, '0');
     body += '<div style="padding:0 20px 12px; font-size:12px; color:var(--text-sec);">Rendez-vous du ' + dateLabel + ' à ' + heureLabel + '</div>';
-    body += '<div class="msg-sheet-i" onclick="prevenirModifierHeure()"><span>📅</span>Modifier l\'heure</div>';
-    body += '<div class="msg-sheet-i" onclick="prevenirAnnuler(true)"><span>🚫</span>Annuler et proposer un nouveau créneau</div>';
-    body += '<div class="msg-sheet-i" onclick="prevenirAnnuler(false)"><span>🚫</span>Annuler simplement</div>';
+    // Trois lignes, trois messages. « Modifier l'heure » et « annuler
+    // et proposer un creneau » n'en faisaient qu'un seul : decaler.
+    body += '<div class="msg-sheet-i" onclick="prevenirDecaler()"><span>📅</span>Je décale ce rendez-vous</div>';
+    body += '<div class="msg-sheet-i" onclick="prevenirAnnuler()"><span>❌</span>J\'annule ce rendez-vous</div>';
   } else {
     body += '<div style="padding:0 20px 10px; font-size:11.5px; color:var(--text-sec);">Aucun rendez-vous à venir trouvé avec ce contact — tu peux quand même le prévenir d\'un retard.</div>';
   }
-  body += '<div class="msg-sheet-i" onclick="prevenirRetard()"><span>⏱️</span>Je vais être en retard</div>';
+  body += '<div class="msg-sheet-i" onclick="prevenirRetard()"><span>⏱️</span>Je serai en retard</div>';
   // Dire d'avance par ou cela partira evite la surprise de voir
   // l'application SMS s'ouvrir, ou d'attendre une reponse a un message
   // qui ne pouvait pas partir.
@@ -17222,51 +17389,78 @@ function openPrevenirSheet(contact, eventRef) {
   document.body.appendChild(ov);
 }
 
-function prevenirModifierHeure() {
-  _closeAllSheets();
-  if (!_prevenirEventRef) return;
-  currentEvent = _prevenirEventRef;
-  openEditEventModal();
+
+/**
+ * Remplace les variables d'un modele par les valeurs du rendez-vous.
+ *
+ * Les crochets sont visibles dans les parametres : ce sont eux que
+ * l'utilisateur recopie, ce sont eux qu'on remplace. Rien n'est
+ * devine, rien n'est decoupe.
+ */
+function tcRemplirModele(texte, valeurs) {
+  let sortie = String(texte || '');
+  Object.keys(valeurs || {}).forEach(function (cle) {
+    sortie = sortie.split(cle).join(valeurs[cle]);
+  });
+  return sortie;
 }
 
-async function prevenirAnnuler(withNewSlot) {
+/** Le prenom, la date et l'heure d'un rendez-vous, prets a l'emploi. */
+function tcValeursDuRdv(nom, ev) {
+  const valeurs = { '[Prénom]': String(nom || '').split(' ')[0] };
+  if (ev) {
+    const d = new Date(ev.date + 'T00:00:00');
+    valeurs['[date]'] = isNaN(d) ? ev.date
+      : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    valeurs['[heure]'] = String(ev.startH).padStart(2, '0') + 'h' + String(ev.startM).padStart(2, '0');
+  }
+  return valeurs;
+}
+
+/** J'annule — sans proposer d'autre date. */
+async function prevenirAnnuler() {
   if (!_prevenirEventRef) return;
   const ev = _prevenirEventRef;
   const name = _prevenirName;
-  const prenom = name.split(' ')[0];
-  const d = new Date(ev.date + 'T00:00:00');
-  const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const heureLabel = String(ev.startH).padStart(2, '0') + 'h' + String(ev.startM).padStart(2, '0');
-
-  let text = getMsgTemplate('initiate')
-    .replace(/\[Prénom\]/g, prenom)
-    .replace(/\[date\]/g, dateLabel)
-    .replace(/\[heure\]/g, heureLabel);
-
-  if (withNewSlot) {
-    text = text.replace(/\s*Je te recontacte prochainement[^.]*\.\s*/i, ' ');
-    text = text.trim() + ' Je te propose de nouveaux créneaux :';
-  }
+  const texte = tcRemplirModele(
+    tcModeleMessage('annule', tcVouvoiement(_prevenirContact)),
+    tcValeursDuRdv(name, ev));
 
   _closeAllSheets();
-  if (!await tcConfirm('Envoyer ce message à ' + name + ' et annuler le rendez-vous ?\n\n« ' + text + ' »')) return;
+  if (!await tcConfirm('Envoyer ce message à ' + name + ' et annuler le rendez-vous ?\n\n« ' + texte + ' »')) return;
 
   const idx = events.indexOf(ev);
   if (idx > -1) events.splice(idx, 1);
   saveEventsToStorage();
-  const chemin = await tcTransmettrePrevenance(_prevenirContact, text);
+  const chemin = await tcTransmettrePrevenance(_prevenirContact, texte);
   render();
   closeEventModal();
   tcDirePrevenance(chemin, name);
+}
 
-  if (withNewSlot) {
-    // Le contact lui-meme, pas le premier qui porte son nom.
-    const c = _prevenirContact || contactsList.find(x => x.name === name);
-    if (c) setTimeout(function() {
-      navigate('contacts');
-      requestRdvContact(c.id);
-    }, 400);
-  }
+/**
+ * Je décale — le message part, puis l'écran de modification s'ouvre.
+ *
+ * « Modifier l'heure » ne prévenait personne : on changeait l'heure,
+ * et le contact l'apprenait le jour même. L'envoi précède donc la
+ * modification, et rien ne bouge si l'envoi est refusé.
+ */
+async function prevenirDecaler() {
+  if (!_prevenirEventRef) return;
+  const ev = _prevenirEventRef;
+  const name = _prevenirName;
+  const texte = tcRemplirModele(
+    tcModeleMessage('decale', tcVouvoiement(_prevenirContact)),
+    tcValeursDuRdv(name, ev));
+
+  _closeAllSheets();
+  if (!await tcConfirm('Prévenir ' + name + ' que tu décales ?\n\n« ' + texte + ' »')) return;
+
+  const chemin = await tcTransmettrePrevenance(_prevenirContact, texte);
+  tcDirePrevenance(chemin, name);
+  // Le rendez-vous reste : c'est son horaire qu'on vient changer.
+  currentEvent = ev;
+  openEditEventModal();
 }
 
 function prevenirRetard() {
@@ -17294,15 +17488,20 @@ function _adjustRetard(delta) {
   inp.value = v;
 }
 
-function confirmerRetard(name, btn) {
+async function confirmerRetard(name, btn) {
   const inp = document.getElementById('retardMinutesInput');
   const minutes = inp ? Math.max(1, parseInt(inp.value, 10) || 5) : 5;
-  const prenom = name.split(' ')[0];
-  const text = 'Bonjour ' + prenom + ', je te préviens que j\'aurai environ ' + minutes + ' minutes de retard. Merci de ta patience !';
-  if (btn) showButtonSpinner(btn);
   const contact = _prevenirContact;
+  const text = tcRemplirModele(
+    tcModeleMessage('retard', tcVouvoiement(contact)),
+    { '[Prénom]': String(name || '').split(' ')[0], '[minutes]': String(minutes) });
+
+  _closeAllSheets();
+  // Ce message etait le seul a partir sans avoir ete lu.
+  if (!await tcConfirm('Envoyer ce message à ' + name + ' ?\n\n« ' + text + ' »')) return;
+
+  if (btn) showButtonSpinner(btn);
   tcTransmettrePrevenance(contact, text).then(function (chemin) {
-    _closeAllSheets();
     if (chemin === 'timecool') showToast('✅ ' + name + ' prévenu(e) du retard');
     else tcDirePrevenance(chemin, name);
   });
