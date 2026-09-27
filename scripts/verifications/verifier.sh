@@ -58,6 +58,7 @@ lancer verif-attente-charly   "$PAGE"
 lancer verif-contact-rdv      "$PAGE"
 lancer verif-creneaux-proposes "$PAGE"
 lancer verif-cache-prompt      "$PAGE"
+lancer verif-initiales         "$PAGE"
 
 
 # Retrouvees hors du lanceur, et vertes : elles y reviennent.

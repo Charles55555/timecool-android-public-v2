@@ -3633,7 +3633,10 @@ function switchMode(m) {
   const avatar = document.getElementById('headerAvatar');
   if (avatar) {
     avatar.className = 'avatar ' + (m==='user'?'avatar-user':'avatar-pro');
-    avatar.textContent = m==='user'?'JD':'TM';
+    // Les initiales de demonstration ne s'installent que faute de
+    // compte connecte : sinon l'entete affichait JD par-dessus un
+    // vrai utilisateur au moindre changement de mode.
+    if (!tcMajAvatarEntete()) avatar.textContent = m==='user'?'JD':'TM';
   }
   const menuSub = document.getElementById('menuSubtitle');
   if (menuSub) menuSub.innerHTML = m==='user'?'<span data-notranslate>Jean Dupont</span> — Particulier':'<span data-notranslate>Dr. Martin</span> — Professionnel';
@@ -5323,7 +5326,7 @@ function renderProfile() {
     const a = userAccount;
     const prenom = a.firstname || '';
     const nom = a.lastname || '';
-    const initiales = ((prenom[0] || '') + (nom[0] || '')).toUpperCase() || '👤';
+    const initiales = tcInitiales() || '👤';
     const tel = a.phone ? ((a.phoneCountry ? a.phoneCountry + ' ' : '') + a.phone) : null;
     const ville = [a.zip, a.city].filter(Boolean).join(' ');
     const depuis = a.createdAt
@@ -6917,13 +6920,13 @@ function switchProfile(profileId) {
     currentProfile.user = profileId;
     const p = profilesData.user[profileId];
     const avatar = document.getElementById('headerAvatar');
-    avatar.textContent = p.initials;
+    if (!tcMajAvatarEntete()) avatar.textContent = p.initials;
     document.getElementById('menuSubtitle').innerHTML = '<span data-notranslate>' + escapeHTMLSafe(p.name) + '</span> — Particulier';
   } else {
     currentProfile.pro = profileId;
     const p = profilesData.pro[profileId];
     const avatar = document.getElementById('headerAvatar');
-    avatar.textContent = p.initials;
+    if (!tcMajAvatarEntete()) avatar.textContent = p.initials;
     document.getElementById('menuSubtitle').innerHTML = '<span data-notranslate>' + escapeHTMLSafe(p.name) + '</span> — Professionnel';
   }
   updateProfileSelector();
@@ -8347,7 +8350,7 @@ switchMode = function(m) {
   const avatar = document.getElementById('headerAvatar');
   if (avatar) {
     avatar.className = 'avatar avatar-user';
-    avatar.textContent = 'JD';
+    if (!tcMajAvatarEntete()) avatar.textContent = 'JD';
   }
   const menuSub = document.getElementById('menuSubtitle');
   if (menuSub) menuSub.innerHTML = '<span data-notranslate>Jean Dupont</span> — Particulier';
@@ -12339,6 +12342,11 @@ function completeGoogleSignIn(firstName, lastName, email) {
   const initials = (firstName[0] + (lastName ? lastName[0] : firstName[1] || '')).toUpperCase();
 
   userAccount = {
+    // Les deux orthographes : le reste de l'application lit
+    // firstname/lastname, et ne trouvait rien apres une connexion
+    // Google -- d'ou des initiales vides sur la page Mon profil.
+    firstname: firstName,
+    lastname: lastName || '',
     firstName: firstName,
     lastName: lastName || '',
     email: email,
@@ -12992,6 +13000,42 @@ function closeWelcomeSplash() {
   }, 400);
 }
 
+/**
+ * Les initiales du compte connecte.
+ *
+ * Trois orthographes cohabitent dans le code -- firstname, firstName,
+ * prenom -- selon le chemin qui a cree le compte. Les trois sont
+ * acceptees ici plutot que laissees a la charge de chaque affichage :
+ * c'est ainsi que l'entete montrait CC quand le menu montrait AA.
+ *
+ * Sans nom exploitable, la premiere lettre de l'email vaut mieux que
+ * rien ; un rond vide n'apprend rien a personne.
+ */
+function tcInitiales() {
+  const a = (typeof userAccount !== 'undefined' && userAccount) ? userAccount : null;
+  if (!a) return null;
+  const prenom = a.firstname || a.firstName || a.prenom || '';
+  const nom = a.lastname || a.lastName || a.nom || '';
+  const deux = ((prenom[0] || '') + (nom[0] || '')).toUpperCase();
+  if (deux) return deux;
+  const secours = String(a.email || '').trim();
+  return secours ? secours[0].toUpperCase() : null;
+}
+
+/**
+ * Applique ces initiales a l'avatar de l'entete.
+ *
+ * @returns {boolean} faux si aucun compte n'est connecte, auquel cas
+ *   l'appelant reste libre de poser une valeur de demonstration.
+ */
+function tcMajAvatarEntete() {
+  const avatar = document.getElementById('headerAvatar');
+  const initiales = tcInitiales();
+  if (!avatar || !initiales) return false;
+  avatar.textContent = initiales;
+  return true;
+}
+
 // ═══ v5.6 — Menu compte (clic sur l'avatar header) ═══
 function toggleAccountMenu() {
   const menu = document.getElementById('accountMenu');
@@ -13032,10 +13076,9 @@ function refreshAccountMenu() {
   if (!avatarEl || !nameEl || !emailEl) return;
 
   if (typeof userAccount !== 'undefined' && userAccount) {
-    const fn = userAccount.firstname || '';
-    const ln = userAccount.lastname || '';
-    const initials = ((fn[0] || '') + (ln[0] || '')).toUpperCase() || (fn[0] || 'U').toUpperCase();
-    avatarEl.textContent = initials;
+    const fn = userAccount.firstname || userAccount.firstName || '';
+    const ln = userAccount.lastname || userAccount.lastName || '';
+    avatarEl.textContent = tcInitiales() || 'U';
     const fullName = `${fn} ${ln}`.trim();
     nameEl.textContent = fullName || 'Utilisateur';
     emailEl.textContent = userAccount.email || '';
@@ -19196,11 +19239,7 @@ if (!isLoggedIn) {
     setTimeout(() => {
       const menuSub = document.getElementById('menuSubtitle');
       if (menuSub) menuSub.innerHTML = '<span data-notranslate>' + escapeHTMLSafe(userAccount.firstname + ' ' + userAccount.lastname) + '</span>';
-      const avatar = document.getElementById('headerAvatar');
-      if (avatar) {
-        const initials = (userAccount.firstname[0] + userAccount.lastname[0]).toUpperCase();
-        avatar.textContent = initials;
-      }
+      tcMajAvatarEntete();
     }, 100);
   }
 }
