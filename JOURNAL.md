@@ -15,7 +15,9 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-Rien n'est commencé et laissé en plan à cette heure.
+- **Charly : déplacer des rendez-vous** (30/09 nuit, session « TIMECOOL
+  SERVEUR ») — prompt CAS 6, affichage des propositions, `validateAgendaProposalFromMsg`,
+  question « prévenir ou déjà vu ? », dans `index.html`.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
