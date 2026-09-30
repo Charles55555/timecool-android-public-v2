@@ -15,7 +15,9 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-Rien n'est commencé et laissé en plan à cette heure.
+- **Google Agenda, étape 2 : recopie TimeCool → Google** (01/10, session
+  « TIMECOOL SERVEUR ») — `backend/api/index.php` (après POST /sync),
+  `backend/sql/008_*`, bloc Google Agenda des Paramètres dans `index.html`.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Commercial11\\\\Documents\\\\Claude\\\\Projects\\\\TIMECOOL-PUBLIC-V2\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName, @{N=\"Taille\";E={\"{0:N0} o\" -f $_.Length}} | Format-Table -AutoSize)"
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Commercial11\\\\Documents\\\\Claude\\\\Projects\\\\TIMECOOL-PUBLIC-V2\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName, @{N=\"Taille\";E={\"{0:N0} o\" -f $_.Length}} | Format-Table -AutoSize)",
+      "Bash(cat backend/api/index.php | tee /var/www/vhosts/timecool.fr/site1/index.php > /dev/null)",
+      "Bash(./scripts/deployer-web.sh)"
     ]
   }
 }
