@@ -1251,6 +1251,27 @@ function googleAgendaRecopier(int $compteId): void
                 // depuis dans TimeCool : la dernière modification gagne,
                 // il est recréé ci-dessous.
             }
+            if ($googleId === null && $r['google_id'] === null) {
+                // Jamais relié ici — mais peut-être déjà chez Google : après
+                // « Délier » puis « Relier », les événements envoyés la
+                // première fois y sont restés. On les retrouve par leur
+                // marque privée, plutôt que de les créer une seconde fois.
+                [$code, $d] = googleAppel('GET', GOOGLE_AGENDA_EVENEMENTS . '?' . http_build_query([
+                    'privateExtendedProperty' => 'timecool_uid=' . $r['uid'],
+                    'showDeleted' => 'false',
+                    'maxResults' => 1,
+                ]), ['jeton' => $acces]);
+                $existant = $d['items'][0]['id'] ?? null;
+                if ($code === 200 && is_string($existant)) {
+                    $appels++;
+                    [$code] = googleAppel('PUT',
+                        GOOGLE_AGENDA_EVENEMENTS . '/' . rawurlencode($existant),
+                        ['jeton' => $acces, 'json' => $ev]);
+                    if ($code === 200) {
+                        $googleId = $existant;
+                    }
+                }
+            }
             if ($googleId === null) {
                 [$code, $d] = googleAppel('POST', GOOGLE_AGENDA_EVENEMENTS,
                     ['jeton' => $acces, 'json' => $ev]);

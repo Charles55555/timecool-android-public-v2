@@ -16675,7 +16675,7 @@ async function tcGoogleAgendaAfficher() {
     zone.innerHTML =
       _tcGoogleAgendaLigne('Reliez votre Google Agenda à TimeCool. Google vous demandera votre accord sur sa propre page.') +
       '<div style="padding:0 16px 16px;">' +
-        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Relier mon Google Agenda</button>' +
+        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Relier mon agenda TimeCool avec mon agenda Google</button>' +
       '</div>';
     return;
   }
@@ -16743,7 +16743,7 @@ async function tcGoogleAgendaRelier() {
   } catch (e) {
     showToast('⚠️ ' + (e.message || 'Google Agenda indisponible'));
   } finally {
-    if (bouton) { bouton.disabled = false; bouton.textContent = 'Relier mon Google Agenda'; }
+    if (bouton) { bouton.disabled = false; bouton.textContent = 'Relier mon agenda TimeCool avec mon agenda Google'; }
   }
 }
 
@@ -16751,6 +16751,7 @@ async function tcGoogleAgendaRelier() {
 async function tcGoogleAgendaDelier(bouton) {
   if (bouton.dataset.confirme !== '1') {
     bouton.dataset.confirme = '1';
+    bouton.dataset.le = String(Date.now());
     bouton.textContent = 'Confirmer ?';
     setTimeout(function () {
       if (bouton.isConnected && bouton.dataset.confirme === '1') {
@@ -16760,6 +16761,9 @@ async function tcGoogleAgendaDelier(bouton) {
     }, 4000);
     return;
   }
+  // Un double appui trop rapide n'est pas une confirmation : le second
+  // doit venir après avoir lu « Confirmer ? ».
+  if (Date.now() - Number(bouton.dataset.le || 0) < 800) return;
   bouton.disabled = true;
   try {
     await tcAppel('POST', '/google/agenda/deconnecter', {});
