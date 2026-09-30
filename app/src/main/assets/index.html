@@ -16330,7 +16330,10 @@ async function tcGoogleAgendaAfficher() {
   try {
     etat = await tcAppel('GET', '/google/agenda/etat');
   } catch (e) {
-    zone.innerHTML = _tcGoogleAgendaLigne('Impossible de joindre le serveur pour le moment. Réessayez plus tard.');
+    // Serveur pas encore mis à jour : ce n'est pas une panne.
+    zone.innerHTML = _tcGoogleAgendaLigne(e.code === 'route_inconnue'
+      ? 'Bientôt disponible.'
+      : 'Impossible de joindre le serveur pour le moment. Réessayez plus tard.');
     return;
   }
   if (!document.getElementById('tcGoogleAgendaZone')) return;
