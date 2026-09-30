@@ -73,9 +73,15 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   Reste : le retour Google → TimeCool (suppressions et modifications des
   rendez-vous marqués `timecool_uid`), puis la case « Laisser Charly lire
   tout mon Google Agenda ».
-  **À vérifier :** les 30 rendez-vous du compte 53 (5@dentalcortex.fr)
-  ont tous un titre vide sur le serveur — perte à l'envoi, ou vraiment
-  vides sur son téléphone ? Poser la question à Charles.
+  **Titres perdus — cause trouvée et corrigée le 30/09 à 22h58** : 29
+  titres sur 30 du compte 53 vides, sur le serveur ET sur son téléphone.
+  `tcGetDeviceKey` fabriquait une clé par appel tant qu'aucune n'existait ;
+  `saveEventsToStorage` chiffre tout en parallèle → chaque titre chiffré
+  avec une clé perdue. Corrigé (une seule clé, `_tcCleAppareil`), contrôle
+  `verif-cle-appareil` (l'ancienne version perd exactement 29/30). Les
+  titres perdus ne sont PAS récupérés : le serveur ne garde pas
+  d'historique. Seul espoir : un fichier de sauvegarde TimeCool (export
+  JSON) antérieur au 30/09, ou une sauvegarde de base Plesk.
   Étape 2, pas commencée : la recopie des rendez-vous. D'ici là l'écran
   le dit franchement, sans case qui ne ferait rien.
 
