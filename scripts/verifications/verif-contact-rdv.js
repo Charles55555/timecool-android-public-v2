@@ -622,7 +622,7 @@ function fin() {
     page.indexOf('if (contactAttendu) cleanContent = tcQuestionContact(contactAttendu);') > -1,
     'Charly ne voit pas le carnet : il ne peut pas savoir qu il lui manque quelqu un');
   verifie('et la proposition ne s affiche qu apres',
-    /if \(contactAttendu\) \{[\s\S]{0,2000}?\} else if \(displayProposals && displayProposals\.length\) \{/.test(page),
+    /if \(contactAttendu\) \{[\s\S]{0,2000}?\} else if \(displayProposals && displayProposals\.length( && !m\._deplacement)?\) \{/.test(page),
     'affichees ensemble, elles donnaient a croire que le rendez-vous etait pris');
   verifie('les deux issues sont offertes',
     page.indexOf('Choisir dans mes contacts') > -1

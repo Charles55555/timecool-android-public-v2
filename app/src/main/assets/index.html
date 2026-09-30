@@ -3038,7 +3038,7 @@ Ambiguïté de contact (deux "Marie" par exemple) → "Sauf erreur de ma part, t
 RDV déjà annulé ou inexistant → "Je suis désolé, je ne comprends pas ta demande : je ne vois aucun rendez-vous prévu correspondant."
 RDV déjà passé → "Sauf erreur de ma part, ta demande concerne un rendez-vous déjà passé."
 Date inexistante (ex : 31 février) → "Sauf erreur de ma part, je n'ai pas compris ta demande. Cette date n'existe pas."
-Annulation et reprogrammation dans le même message → traite comme une modification d'horaire, sous réserve de l'accord du contact.
+Annulation et reprogrammation dans le même message → traite comme un déplacement (CAS 6).
 L'utilisateur dit "annule pas" juste après, avant l'envoi → annule ta propre action en cours.
 RDV pas encore confirmé par le contact → précise que tu ne peux rien annuler ; si l'utilisateur insiste, envoie un message d'excuse annulant la demande en cours.
 "Dernier RDV" seul, sans précision → le RDV le plus récemment créé.
@@ -3053,11 +3053,15 @@ Contact non-TimeCool → notifié par le canal choisi dans Paramètres (SMS, ema
 Demande ambiguë façon plainte ("je peux plus jeudi...") → une seule question de clarification, sur un ton sympathique.
 
 ═══ CAS 6 — MODIFICATION DE RDV ═══
-Toute modification nécessite TOUJOURS l'accord des participants déjà engagés — jamais imposée unilatéralement,
-même si l'utilisateur se présente comme responsable ou supérieur hiérarchique de l'autre partie.
+Déplacement demandé clairement (tu sais quel(s) rendez-vous, et à quel moment) → génère TOUT DE SUITE
+une ligne [AGENDA] par rendez-vous déplacé, à sa nouvelle place. AUCUNE question, AUCUNE demande d'accord :
+l'application déplace elle-même, puis demande à l'utilisateur s'il faut prévenir ses contacts.
+Avant le bloc, une phrase courte seulement (ex : "Je m'en occupe 👍"). N'annonce pas toi-même que c'est fait,
+et ne propose pas d'envoyer un message aux contacts : l'application s'en charge.
+"Même heure" → reprends exactement l'heure de début et de fin du rendez-vous d'origine (voir l'AGENDA RÉEL).
 Ajout d'un participant : nom et prénom exacts requis ; sinon recommande de repartir sur une nouvelle demande complète.
-Confirme la modification avec enthousiasme une fois l'accord obtenu.
-Exemple : "C'est noté ! 👍 Ton RDV est déplacé à 17h. Autre chose à ajuster ?"
+Dans ton texte, écris toujours les dates en toutes lettres ("vendredi 2 octobre"), jamais "2026-10-02" :
+ce format est réservé aux lignes [AGENDA].
 Plusieurs rendez-vous de l'AGENDA RÉEL (voir plus bas) pourraient correspondre à la demande
 (même jour, plusieurs RDV ; nom ambigu) → ne devine JAMAIS lequel. Pose UNE question listant
 les candidats possibles (heure + titre de chacun) avant de générer le moindre bloc [AGENDA].
@@ -9341,7 +9345,7 @@ function renderChatMessage(m) {
             <button onclick="tcIgnorerContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:10px; font-size:12px; cursor:pointer;">Noter sans contact</button>
           </div>
       `;
-    } else if (displayProposals && displayProposals.length) {
+    } else if (displayProposals && displayProposals.length && !m._deplacement) {
       // Grouper les propositions par date pour un affichage plus clair
       const byDate = {};
       displayProposals.forEach(p => {
@@ -10708,6 +10712,158 @@ function tcAnnulerSuppressionRdv() {
   renderCharlyChat();
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   DÉPLACER DES RENDEZ-VOUS — règle de Charles du 30/09
+
+   Charly comprend la demande et renvoie la nouvelle place de chaque
+   rendez-vous en lignes [AGENDA], sous leur titre d'origine. Ici on
+   retrouve les rendez-vous concernés et on les déplace, sans carte
+   « Valider » à cliquer. Si l'un d'eux a un contact, une seule
+   question d'abord : les prévenir, ou c'est déjà vu avec eux ?
+   ═══════════════════════════════════════════════════════════════ */
+
+let _tcDeplacementEnAttente = null;
+
+/** « déplace », « décale », « repousse », « reporte », « avance », « bouge ». */
+function tcEstDeplacement(text) {
+  return /\b(deplac|decal|repouss|report|avanc|boug)/.test(tcSansAccents(text));
+}
+
+/**
+ * Les rendez-vous que la réponse de Charly déplace : [{ ev, p }], un
+ * par ligne [AGENDA], chacun retrouvé par son titre. null si une seule
+ * ligne ne correspond à aucun rendez-vous existant : ce n'est alors pas
+ * un déplacement, mais une création ordinaire.
+ */
+function tcDeplacementsProposes(msg) {
+  const props = extractAgendaProposals(msg.content);
+  if (!props || !props.length) return null;
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  const pris = new Set();
+  const liste = [];
+  for (const p of props) {
+    if (!p.date || !/^\d{4}-\d{2}-\d{2}$/.test(p.date)) return null;
+    const reste = events.filter(e => !pris.has(e.id));
+    const i = tcRdvRemplace(reste, p.title, p.date, evMode);
+    if (i < 0) return null;
+    pris.add(reste[i].id);
+    liste.push({ ev: reste[i], p });
+  }
+  return liste;
+}
+
+function _tcLigneRdv(ev) {
+  return `« ${ev.title} » : ${tcFormaterDateHumaine(ev.date)} ${tcFormaterHeure(ev)}`;
+}
+
+/**
+ * Déplace chaque rendez-vous à sa nouvelle place. Il garde son
+ * identifiant, son lieu et son contact : c'est le même rendez-vous,
+ * ailleurs dans le temps — Google Agenda le corrige au lieu d'en créer
+ * un second.
+ */
+function tcAppliquerDeplacement(liste) {
+  liste.forEach(function (x) {
+    const ev = x.ev, p = x.p;
+    ev.date = p.date;
+    if (p.dateFin && p.dateFin > p.date) ev.dateFin = p.dateFin; else delete ev.dateFin;
+    ev.startH = p.startH; ev.startM = p.startM;
+    ev.endH = p.endH; ev.endM = p.endM;
+    if (p.lieu) ev.lieu = p.lieu;
+  });
+  saveEventsToStorage();
+  if (currentPage === 'calendar') render();
+  const lignes = liste.map(x => '• ' + _tcLigneRdv(x.ev)).join('\n');
+  charlyIA.history.push({role: 'system_info', isHTML: true,
+    content: '✅ <b>C\'est fait, rendez-vous déplacé' + (liste.length > 1 ? 's' : '') + ' :</b><br>'
+      + escapeHTMLSafe(lignes).replace(/\n/g, '<br>')});
+  addDemarche({
+    icon: '📅',
+    title: `Déplacement — ${liste.length} rendez-vous`,
+    summary: liste.map(x => x.ev.title).join(' • '),
+    status: 'modifiee',
+    categorie: 'rdv',
+    detail: 'Charly IA a déplacé à la demande de l\'utilisateur : ' + liste.map(x => _tcLigneRdv(x.ev)).join(', ') + '.'
+  });
+  showToast('✅ Rendez-vous déplacé' + (liste.length > 1 ? 's' : ''));
+}
+
+/**
+ * Appelée juste après la réponse de Charly. Vrai si c'était un
+ * déplacement, pris en charge ici.
+ */
+function tcTraiterDeplacement(msg, text) {
+  if (!msg || msg.role !== 'assistant' || !tcEstDeplacement(text)) return false;
+  const liste = tcDeplacementsProposes(msg);
+  if (!liste) return false;
+  // Pas de carte « Valider mon agenda » : la demande est comprise.
+  msg._validated = true;
+  msg._deplacement = true;
+
+  const contacts = [];
+  liste.forEach(function (x) {
+    const c = tcContactDuRdv(x.ev);
+    if (c && !contacts.some(d => d.id === c.id)) contacts.push(c);
+  });
+  if (!contacts.length) {
+    tcAppliquerDeplacement(liste);
+    return true;
+  }
+
+  // Les anciennes dates, avant qu'elles ne changent : le message de
+  // décalage cite le rendez-vous tel que le contact le connaît.
+  _tcDeplacementEnAttente = {
+    liste: liste,
+    contacts: contacts,
+    anciens: liste.map(x => ({ id: x.ev.id, date: x.ev.date, startH: x.ev.startH, startM: x.ev.startM, contact: x.ev.contact }))
+  };
+  const plan = liste.map(x => '• ' + _tcLigneRdv(Object.assign({}, x.ev,
+    { date: x.p.date, startH: x.p.startH, startM: x.p.startM, endH: x.p.endH, endM: x.p.endM }))).join('\n');
+  const noms = contacts.map(c => c.name);
+  const avec = noms.length > 1 ? noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1] : noms[0];
+  charlyIA.history.push({role: 'assistant', content:
+    'Je déplace :\n' + plan + '\n\n'
+    + (noms.length > 1
+      ? `Veux-tu que je prévienne ${avec}, ou as-tu déjà vu le sujet avec eux ?`
+      : `Veux-tu que je prévienne ${avec}, ou as-tu déjà vu le sujet ensemble ?`)});
+  return true;
+}
+
+/** « déjà vu » → 'vu', « préviens-les » → 'prevenir', sinon null. */
+function tcReponsePrevenir(text) {
+  const t = tcSansAccents(text);
+  if (/\b(deja|pas besoin|inutile|c'?est (vu|regle|bon)|on en a parle|non)\b/.test(t)) return 'vu';
+  if (/(previen|prevenir|oui|envoie|vas-y|vas y|ok\b)/.test(t)) return 'prevenir';
+  return null;
+}
+
+/** Réponse à « les prévenir, ou c'est déjà vu ? » : on déplace, puis on prévient si demandé. */
+async function tcRepondreDeplacement(text) {
+  const attente = _tcDeplacementEnAttente;
+  const choix = tcReponsePrevenir(text);
+  _tcDeplacementEnAttente = null;
+  if (!attente || !choix) return false;
+  tcPousserMessageUtilisateur(text);
+  tcAppliquerDeplacement(attente.liste);
+  renderCharlyChat();
+  if (choix !== 'prevenir') return true;
+
+  // Un message par contact, celui de « Je décale » des Paramètres,
+  // complété de la nouvelle date. Chacun est relu avant de partir.
+  for (const c of attente.contacts) {
+    const ancien = attente.anciens.find(a => a.contact === c.id);
+    const nouveau = attente.liste.find(x => x.ev.contact === c.id);
+    if (!ancien || !nouveau) continue;
+    const valeursNouv = tcValeursDuRdv(c.name, nouveau.ev);
+    const texte = tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
+      + ' le ' + valeursNouv['[date]'] + ' à ' + valeursNouv['[heure]'] + '.';
+    if (!await tcConfirm('Prévenir ' + c.name + ' ?\n\n« ' + texte + ' »')) continue;
+    const chemin = await tcTransmettrePrevenance(c, texte);
+    tcDirePrevenance(chemin, c.name);
+  }
+  return true;
+}
+
 /**
  * Instantané compact et réel de l'agenda de l'utilisateur, injecté dans
  * le contexte envoyé au LLM à chaque message — seule source de vérité
@@ -11027,6 +11183,11 @@ async function charlySendMessage() {
   // et beaucoup répondent au clavier. Sans cette branche, le « oui »
   // partait au modèle, qui répondait « c'est fait » : rien n'était
   // supprimé.
+  if (_tcDeplacementEnAttente) {
+    if (await tcRepondreDeplacement(text)) return;
+    // Ni « préviens-les » ni « déjà vu » : rien n'est déplacé, et le
+    // message suit son chemin habituel.
+  }
   if (_tcSuppressionChoix) {
     const choisi = tcRdvDesigne(_tcSuppressionChoix, text);
     _tcSuppressionChoix = null;
@@ -11324,6 +11485,9 @@ JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY
 
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId});
+    // Un déplacement compris s'exécute (ou pose sa seule question),
+    // sans carte « Valider » à cliquer.
+    tcTraiterDeplacement(charlyIA.history[charlyIA.history.length - 1], text);
     // Journal d'activité : question générale posée à Charly. Exclue une
     // proposition d'agenda non encore validée — elle aura sa propre
     // entrée "rdv" une fois validée (validateAgendaProposalFromMsg),

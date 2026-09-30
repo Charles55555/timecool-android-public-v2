@@ -15,9 +15,7 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-- **Charly : déplacer des rendez-vous** (30/09 nuit, session « TIMECOOL
-  SERVEUR ») — prompt CAS 6, affichage des propositions, `validateAgendaProposalFromMsg`,
-  question « prévenir ou déjà vu ? », dans `index.html`.
+Rien n'est commencé et laissé en plan à cette heure.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
@@ -25,6 +23,16 @@ pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
+
+- **Charly déplace des rendez-vous — 30/09 nuit** (session serveur), règle
+  de Charles : compris → exécuté, sans carte « Valider ». Le modèle renvoie
+  les nouvelles places en [AGENDA] sous le titre d'origine (prompt CAS 6 :
+  plus de demande d'accord) ; `tcTraiterDeplacement` retrouve chaque
+  rendez-vous (`tcRdvRemplace`) et le déplace EN PLACE (même id → Google
+  corrige au lieu de dupliquer). S'il y a des contacts, une seule
+  question : « Veux-tu que je prévienne X, ou as-tu déjà vu le sujet avec
+  eux ? » ; « préviens » envoie le message « Je décale » complété de la
+  nouvelle date, relu avant envoi. Contrôle `verif-charly-deplacement`.
 
 - **Charly disait « c'est fait » sans rien supprimer — corrigé le 30/09
   soir** (session serveur). Le modèle n'a aucun moyen de supprimer ; seul
