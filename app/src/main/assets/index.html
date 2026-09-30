@@ -10524,6 +10524,28 @@ function tcReponseOuiNon(text) {
 }
 
 let _tcSuppressionEnAttente = null;
+/** Rendez-vous entre lesquels Charly a demandé « lequel ? ». */
+let _tcSuppressionChoix = null;
+
+/**
+ * Parmi les rendez-vous proposés, celui que désigne la réponse :
+ * par son heure (« celui de 16h ») ou un mot de son titre
+ * (« le dermatologue »). null si la réponse n'en désigne pas un seul.
+ */
+function tcRdvDesigne(candidats, text) {
+  const t = tcSansAccents(text);
+  const heure = tcHeureDansTexte(t);
+  let restants = candidats;
+  if (heure) {
+    restants = restants.filter(e => Number(e.startH) === heure.h
+      && (heure.m === null || Number(e.startM) === heure.m));
+  } else {
+    const mots = t.split(/[^a-z0-9]+/).filter(w => w.length >= 4
+      && ['celui', 'celle', 'supprime', 'supprimer', 'rendez', 'vous'].indexOf(w) < 0);
+    restants = restants.filter(e => mots.some(w => tcSansAccents(e.title).indexOf(w) > -1));
+  }
+  return restants.length === 1 ? restants[0] : null;
+}
 
 async function tcGererSuppressionRdv(text) {
   tcPousserMessageUtilisateur(text);
@@ -10603,8 +10625,25 @@ async function tcGererSuppressionRdv(text) {
     // Aucune précision de date/contact et plusieurs RDV existent : jamais deviner, on demande la période.
     reply = "Sauf erreur de ma part, tu as plusieurs rendez-vous dans ton agenda. Peux-tu préciser lequel (date, heure ou nom) ou quelle période annuler ?";
     charlyIA.history.push({role: 'assistant', content: reply});
+  } else if (candidats.length === 1) {
+    // Un seul rendez-vous correspond : la demande est comprise, elle est
+    // exécutée. Redemander « oui ou non ? » ne faisait que retarder
+    // (choix de Charles, 30/09).
+    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    tcSupprimerRdvs(candidats);
+    return;
+  } else if (!/\b(tous|toutes|tout|toute|journée|journee|semaine|mois)\b/.test(t)) {
+    // Plusieurs rendez-vous possibles pour une demande qui en vise un
+    // seul : jamais deviner. On les liste et on demande lequel ; la
+    // réponse (« celui de 16h », « le dermatologue ») est reconnue.
+    _tcSuppressionChoix = candidats;
+    reply = 'J’en vois ' + candidats.length + ' :\n'
+      + candidats.map(e => `• ${e.title} — ${tcFormaterDateHumaine(e.date)} ${tcFormaterHeure(e)}`).join('\n')
+      + '\nLequel veux-tu supprimer ?';
+    charlyIA.history.push({role: 'assistant', content: reply});
   } else {
-    // Un ou plusieurs RDV identifiés sans ambiguïté (filtre contact/date/période appliqué) : confirmation avant suppression.
+    // Plusieurs rendez-vous visés d'un coup (« toute ma journée ») :
+    // seule suppression qui demande encore confirmation, vu l'ampleur.
     _tcSuppressionEnAttente = candidats;
     const lignes = candidats.map(e => `• ${e.title} — ${tcFormaterDateHumaine(e.date)} ${tcFormaterHeure(e)}`).join('\n');
     const intro = candidats.length > 1
@@ -10633,7 +10672,13 @@ async function tcGererSuppressionRdv(text) {
 
 function tcConfirmerSuppressionRdv() {
   const cible = _tcSuppressionEnAttente;
+  _tcSuppressionEnAttente = null;
   if (!cible || !cible.length) return;
+  tcSupprimerRdvs(cible);
+}
+
+/** Retire ces rendez-vous de l'agenda, et le dit précisément. */
+function tcSupprimerRdvs(cible) {
   const ids = new Set(cible.map(e => e.id));
   let n = 0;
   for (let i = events.length - 1; i >= 0; i--) {
@@ -10647,9 +10692,11 @@ function tcConfirmerSuppressionRdv() {
     summary: cible.map(e => e.title).join(' • '),
     status: 'annulee',
     categorie: 'rdv',
-    detail: `Charly IA a annulé ${n} rendez-vous après confirmation explicite : ${cible.map(e => `${e.title} (${e.date})`).join(', ')}.`
+    detail: `Charly IA a annulé ${n} rendez-vous à la demande de l'utilisateur : ${cible.map(e => `${e.title} (${e.date})`).join(', ')}.`
   });
-  charlyIA.history.push({role: 'system_info', content: `✅ ${n} rendez-vous annulé${n>1?'s':''}.`});
+  charlyIA.history.push({role: 'system_info', content: n === 1
+    ? `✅ C'est fait : « ${cible[0].title} » (${tcFormaterDateHumaine(cible[0].date)} ${tcFormaterHeure(cible[0])}) est supprimé.`
+    : `✅ C'est fait : ${n} rendez-vous supprimés.`});
   renderCharlyChat();
   if (currentPage === 'calendar') render();
   showToast('✅ Rendez-vous annulé' + (n>1?'s':''));
@@ -10980,6 +11027,17 @@ async function charlySendMessage() {
   // et beaucoup répondent au clavier. Sans cette branche, le « oui »
   // partait au modèle, qui répondait « c'est fait » : rien n'était
   // supprimé.
+  if (_tcSuppressionChoix) {
+    const choisi = tcRdvDesigne(_tcSuppressionChoix, text);
+    _tcSuppressionChoix = null;
+    if (choisi) {
+      tcPousserMessageUtilisateur(text);
+      tcSupprimerRdvs([choisi]);
+      return;
+    }
+    // La réponse ne désigne aucun d'eux : la question tombe, rien n'est
+    // supprimé, le message suit son chemin habituel.
+  }
   if (_tcSuppressionEnAttente) {
     const reponse = tcReponseOuiNon(text);
     if (reponse !== null) {

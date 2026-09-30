@@ -20,7 +20,8 @@ function source(nom) {
 }
 
 const noms = ['detecterSuppressionRdv', 'tcHeureDansTexte', 'tcReponseOuiNon', 'tcSansAccents',
-  'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcAnnulerSuppressionRdv', 'tcRdvRemplace',
+  'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcSupprimerRdvs', 'tcAnnulerSuppressionRdv',
+  'tcRdvDesigne', 'tcRdvRemplace',
   'tcPeriodeAgenda', 'tcISO', 'parseFrenchDateFromText', 'tcComparerEvenements',
   'tcFormaterDateHumaine', 'tcFormaterHeure', 'escapeHTMLSafe'];
 
@@ -41,8 +42,8 @@ function contexte() {
   };
   vm.createContext(ctx);
   vm.runInContext(noms.map(source).join('\n') +
-    '\n;globalThis.attente = () => _tcSuppressionEnAttente;', ctx);
-  vm.runInContext('let _tcSuppressionEnAttente = null;', ctx);
+    '\n;globalThis.attente = () => _tcSuppressionEnAttente; globalThis.choix = () => _tcSuppressionChoix;', ctx);
+  vm.runInContext('let _tcSuppressionEnAttente = null; let _tcSuppressionChoix = null;', ctx);
   return ctx;
 }
 
@@ -64,22 +65,43 @@ function contexte() {
   verifie('« le 10 » n est pas une heure', c0.tcHeureDansTexte('supprime le rdv du 10 octobre') === null);
   verifie('« 10h30 » en est une', JSON.stringify(c0.tcHeureDansTexte('à 10h30')) === '{"h":10,"m":30}');
 
-  // Le scénario du 30/09, jusqu'au bout
+  // Le scénario du 30/09 : compris, donc exécuté sans « oui ou non ? »
   const c = contexte();
   c.events = agenda();
-  await c.tcGererSuppressionRdv('supprime le rdv demain matin 10h');
-  const cibles = c.attente() || [];
-  verifie('seul le rendez-vous de 10h est visé', cibles.length === 1 && cibles[0].id === 'charly_ai_1',
-    'visés : ' + cibles.map(e => e.title).join(', '));
-  verifie('« oui » se reconnaît', c.tcReponseOuiNon('Oui') === true && c.tcReponseOuiNon('oui vas-y') === true);
-  verifie('« non » aussi', c.tcReponseOuiNon('non merci') === false);
-  verifie('« juste celui de 10h » n est ni l un ni l autre', c.tcReponseOuiNon('juste celui de 10h') === null);
-  c.tcConfirmerSuppressionRdv();
-  verifie('après « oui », il a vraiment disparu', !c.events.some(e => e.id === 'charly_ai_1') && c.events.length === 2);
+  await c.tcGererSuppressionRdv('Tu peux me supprimer ce rendez-vous de demain matin à 10h');
+  verifie('un seul rendez-vous visé : supprimé tout de suite',
+    !c.events.some(e => e.id === 'charly_ai_1') && c.events.length === 2 && !c.attente(),
+    'restants : ' + c.events.map(e => e.title).join(', '));
+  const dit = c.charlyIA.history.map(m => m.content).join(' | ');
+  verifie('et Charly dit lequel', /C'est fait : « Essai agenda Google »/.test(dit), dit);
+
+  // Pas compris : il demande lequel, puis comprend la réponse
+  const c3 = contexte();
+  c3.events = agenda();
+  await c3.tcGererSuppressionRdv('supprime mon rdv de demain');
+  verifie('plusieurs possibles : rien de supprimé, il demande lequel',
+    c3.events.length === 3 && (c3.choix() || []).length === 3
+    && /Lequel veux-tu supprimer/.test(c3.charlyIA.history.map(m => m.content).join(' ')));
+  const choisi = c3.tcRdvDesigne(c3.choix(), 'celui de 16h');
+  verifie('« celui de 16h » désigne le dermatologue', choisi && choisi.id === 'charly_ai_2');
+  verifie('« le dermatologue » aussi', (c3.tcRdvDesigne(c3.choix(), 'le dermatologue') || {}).id === 'charly_ai_2');
+  verifie('« quel temps fait-il » ne désigne rien', c3.tcRdvDesigne(c3.choix(), 'quel temps fait-il') === null);
+
+  // Toute une journée : là, et là seulement, confirmation
+  const c4 = contexte();
+  c4.events = agenda();
+  await c4.tcGererSuppressionRdv('annule toute ma journée de demain');
+  verifie('« toute ma journée » demande confirmation, ne supprime pas d emblée',
+    c4.events.length === 3 && (c4.attente() || []).length === 3);
+  verifie('« oui » se reconnaît', c4.tcReponseOuiNon('Oui') === true && c4.tcReponseOuiNon('oui vas-y') === true);
+  verifie('« non » aussi', c4.tcReponseOuiNon('non merci') === false);
+  c4.tcConfirmerSuppressionRdv();
+  verifie('après « oui », la journée est vide', c4.events.length === 0);
 
   // La page traite bien le « oui » tapé avant le modèle
-  verifie('un « oui » tapé confirme, sans passer par le modèle',
+  verifie('la réponse à « lequel ? » et le « oui » passent avant le modèle',
     page.indexOf('if (reponse) tcConfirmerSuppressionRdv();') > -1
+    && page.indexOf('if (_tcSuppressionChoix) {') > -1
     && page.indexOf('if (_tcSuppressionEnAttente) {') < page.indexOf('const activeKey = charlyIA.config.provider'));
 
   // Décalage : le bon rendez-vous, jamais le premier venu
