@@ -15,7 +15,9 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-Rien n'est commencé et laissé en plan à cette heure.
+- **Charly : suppression et décalage de rendez-vous** (30/09 soir, session
+  « TIMECOOL SERVEUR ») — `tcGererSuppressionRdv`, `validateAgendaProposalFromMsg`,
+  `charlySendMessage`, prompt CAS 5/6, dans `index.html`.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
