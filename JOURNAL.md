@@ -85,9 +85,9 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   suivi chez Google), contact écrit « 👤 Avec … » en tête de description
   (choix de Charles : pas d'invité Google, qui recevrait un e-mail).
   Suppression pas encore essayée.
-  Reste : le retour Google → TimeCool (suppressions et modifications des
-  rendez-vous marqués `timecool_uid`), puis la case « Laisser Charly lire
-  tout mon Google Agenda ».
+  **Sens inverse (Google → TimeCool) : pas prévu pour l'instant**, décidé
+  par Charles le 30/09 au soir — ne pas l'entamer sans son signal. Reste
+  aussi la case « Laisser Charly lire tout mon Google Agenda ».
   **Titres perdus — cause trouvée et corrigée le 30/09 à 22h58** : 29
   titres sur 30 du compte 53 vides, sur le serveur ET sur son téléphone.
   `tcGetDeviceKey` fabriquait une clé par appel tant qu'aucune n'existait ;
