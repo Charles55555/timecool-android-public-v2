@@ -43,6 +43,20 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
      doit valoir vrai (lit `google_client_secret` et
      `google_redirect_agenda` dans config.php) ;
   4. seulement ensuite `./scripts/deployer-web.sh`.
+  **Fait le 30/09 à 21h42, session du PC** — les quatre étapes sont
+  passées. Table `google_agenda` créée sur `timecool_prod` (9 colonnes).
+  API déployée (132 954 octets, +258 lignes, aucune retirée, syntaxe
+  contrôlée, sauvegarde gardée, propriétaire et ACL conservés).
+  `GET /google/agenda/etat` répond 401 sans session : la route existe.
+  Vérification plus forte que prévu pour `disponible` : un appel réel au
+  point de jeton de Google avec le couple identifiant + secret + adresse
+  de retour renvoie `invalid_grant · Malformed auth code`, donc Google
+  **accepte le couple** et ne rejette que le faux code. Version web
+  déployée, horodatage 1790797346, le bloc « 📅 Google Agenda » est en
+  ligne. `deployer-web.sh` avait perdu son droit d'exécution (644) ; remis
+  à 775. **À faire avant le lancement : passer l'application Google de
+  « Test » à « Production », sinon seul `5@dentalcortex.fr` peut relier
+  son agenda.**
   Étape 2, pas commencée : la recopie des rendez-vous. D'ici là l'écran
   le dit franchement, sans case qui ne ferait rien.
 
