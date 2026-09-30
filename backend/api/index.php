@@ -880,6 +880,162 @@ function messagePoser(
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+// GOOGLE AGENDA — liaison du compte
+//
+// La personne autorise TimeCool sur la page de Google ; Google la
+// renvoie sur /google/agenda/retour avec un code, que le serveur
+// échange contre un jeton de renouvellement. Ce jeton reste ici,
+// chiffré, dans la table google_agenda (migration 007).
+// ═══════════════════════════════════════════════════════════════
+
+const GOOGLE_AGENDA_PORTEES = 'openid email https://www.googleapis.com/auth/calendar.events';
+
+/** Durée de validité du lien d'autorisation, en secondes. */
+const GOOGLE_AGENDA_LIEN_DUREE = 900;
+
+function googleAgendaRetour(): string
+{
+    return rtrim((string) Conf::get('url_publique', 'https://api.timecool.fr'), '/')
+        . '/google/agenda/retour';
+}
+
+/**
+ * Identifiant et code secret du client Web Google, ou null.
+ *
+ * Le code secret a été rangé dans config.php le 30/09/2026 par une
+ * session dont on n'a pas noté le nom de la case — et ce fichier est
+ * illisible pour l'agent, c'est voulu. Plutôt que de dépendre d'un nom,
+ * on cherche la valeur à sa forme : Google fait commencer tous ses
+ * codes secrets par « GOCSPX- ». Si un identifiant client est rangé à
+ * côté, c'est lui qui va avec ; sinon, le premier de google_client_ids,
+ * qui est celui du client Web.
+ */
+function googleAgendaClient(): ?array
+{
+    static $memo = false;
+    if ($memo !== false) {
+        return $memo;
+    }
+    $conf = @include __DIR__ . '/../private/config.php';
+    $trouve = null;
+    $chercher = static function ($noeud) use (&$chercher, &$trouve): void {
+        if (!is_array($noeud) || $trouve !== null) {
+            return;
+        }
+        foreach ($noeud as $v) {
+            if (is_string($v) && str_starts_with($v, 'GOCSPX-')) {
+                $id = null;
+                foreach ($noeud as $w) {
+                    if (is_string($w) && str_ends_with($w, '.apps.googleusercontent.com')) {
+                        $id = $w;
+                        break;
+                    }
+                }
+                $trouve = ['secret' => $v, 'id' => $id];
+                return;
+            }
+            $chercher($v);
+        }
+    };
+    $chercher(is_array($conf) ? $conf : []);
+
+    if ($trouve === null) {
+        return $memo = null;
+    }
+    if ($trouve['id'] === null) {
+        $ids = Conf::get('google_client_ids', []);
+        $trouve['id'] = is_array($ids) && is_string($ids[0] ?? null) ? $ids[0] : null;
+    }
+    return $memo = $trouve['id'] === null ? null : $trouve;
+}
+
+/** Appel POST de formulaire vers Google ; tableau décodé, ou null. */
+function googlePoster(string $url, array $champs): ?array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_POSTFIELDS     => http_build_query($champs),
+    ]);
+    $reponse = curl_exec($ch);
+    $codeHttp = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $d = is_string($reponse) ? json_decode($reponse, true) : null;
+    if ($codeHttp !== 200 || !is_array($d)) {
+        // Ni le code ni les jetons dans le journal : seulement l'erreur.
+        error_log('google ' . parse_url($url, PHP_URL_PATH) . ' refuse (' . $codeHttp . ') '
+            . (is_array($d) ? (string) ($d['error'] ?? '') : ''));
+        return null;
+    }
+    return $d;
+}
+
+/** Liaison du compte, ou null. Null aussi tant que la table n'existe pas. */
+function googleAgendaLiaison(int $compteId): ?array
+{
+    try {
+        return Db::un('SELECT * FROM google_agenda WHERE compte_id = ?', [$compteId]);
+    } catch (PDOException $e) {
+        return null;
+    }
+}
+
+/** Le lien d'autorisation porte, chiffré, le compte qui l'a demandé. */
+function googleAgendaEtatCreer(int $compteId): string
+{
+    $clair = json_encode(['c' => $compteId, 'e' => time() + GOOGLE_AGENDA_LIEN_DUREE]);
+    return rtrim(strtr(Coffre::chiffrer($clair), '+/', '-_'), '=');
+}
+
+/** Compte désigné par l'état, s'il est authentique et encore valable. */
+function googleAgendaEtatLire(string $etat): ?int
+{
+    $b64 = strtr($etat, '-_', '+/');
+    $b64 .= str_repeat('=', (4 - strlen($b64) % 4) % 4);
+    $clair = Coffre::dechiffrer($b64);
+    $d = is_string($clair) ? json_decode($clair, true) : null;
+    if (!is_array($d) || !is_int($d['c'] ?? null) || !is_int($d['e'] ?? null) || $d['e'] < time()) {
+        return null;
+    }
+    return $d['c'];
+}
+
+/**
+ * Page affichée dans le navigateur au retour de Google.
+ * Pas du JSON : c'est une personne qui la lit, pas l'application.
+ */
+function googleAgendaPage(bool $reussi, string $message): never
+{
+    http_response_code($reussi ? 200 : 400);
+    header('Content-Type: text/html; charset=utf-8');
+    header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'");
+    $titre = $reussi ? 'Google Agenda est relié' : 'La liaison n’a pas abouti';
+    $pastille = $reussi ? '✅' : '⚠️';
+    $msg = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+    echo '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<title>TimeCool — ' . $titre . '</title></head>'
+        . '<body style="margin:0;font-family:system-ui,sans-serif;background:#f6f7f9;color:#222;'
+        . 'display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">'
+        . '<div style="max-width:420px;background:#fff;border-radius:16px;padding:32px 24px;text-align:center;'
+        . 'box-shadow:0 2px 12px rgba(0,0,0,.08)">'
+        . '<div style="font-size:44px">' . $pastille . '</div>'
+        . '<h1 style="font-size:20px;margin:12px 0">' . $titre . '</h1>'
+        . '<p style="font-size:15px;line-height:1.5;color:#555">' . $msg . '</p>'
+        . '<p style="margin-top:24px"><a href="https://timecool.fr/app/" '
+        . 'style="display:inline-block;background:#1a73e8;color:#fff;text-decoration:none;'
+        . 'padding:12px 20px;border-radius:10px;font-weight:600">Revenir à TimeCool</a></p>'
+        . '<p style="font-size:13px;color:#888">Sur téléphone, vous pouvez aussi simplement fermer cette page.</p>'
+        . '</div></body></html>';
+    exit;
+}
+
+
 switch ($route) {
 
     // ═══════════════════════════════════════════════════════════
@@ -2693,6 +2849,143 @@ switch ($route) {
         $service = Entree::requis('service', 40);
         Db::req('DELETE FROM cles_api WHERE compte_id = ? AND service = ?',
             [$compte['id'], $service]);
+        Rep::ok();
+
+    // ═══════════════════════════════════════════════════════════
+    // GOOGLE AGENDA — liaison du compte (fonctions plus haut)
+    // ═══════════════════════════════════════════════════════════
+
+    // Ce que l'écran Paramètres doit afficher. Jamais de jeton.
+    case 'GET /google/agenda/etat':
+        $compte = Auth::compte();
+        $l = googleAgendaLiaison((int) $compte['id']);
+        Rep::ok([
+            'disponible' => googleAgendaClient() !== null,
+            'relie'      => $l !== null,
+            'email'      => $l['email_google'] ?? null,
+            'envoyer'    => $l !== null && (int) $l['envoyer'] === 1,
+            'recevoir'   => $l !== null && (int) $l['recevoir'] === 1,
+        ]);
+
+    // Adresse de la page Google où la personne donne son accord.
+    case 'POST /google/agenda/lien':
+        $compte = Auth::compte();
+        $client = googleAgendaClient();
+        if ($client === null) {
+            Rep::erreur(503, 'google_non_configure', 'Google Agenda n’est pas encore configuré sur le serveur.');
+        }
+        Rep::ok(['url' => 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+            'client_id'     => $client['id'],
+            'redirect_uri'  => googleAgendaRetour(),
+            'response_type' => 'code',
+            'scope'         => GOOGLE_AGENDA_PORTEES,
+            // offline + consent : sans eux Google ne redonne pas de jeton
+            // de renouvellement à une personne qui a déjà autorisé une fois.
+            'access_type'   => 'offline',
+            'prompt'        => 'consent',
+            'include_granted_scopes' => 'true',
+            'state'         => googleAgendaEtatCreer((int) $compte['id']),
+        ])]);
+
+    // Google renvoie ici le navigateur de la personne. Pas de session :
+    // le compte est celui que porte l'état chiffré.
+    case 'GET /google/agenda/retour':
+        if (isset($_GET['error'])) {
+            googleAgendaPage(false, $_GET['error'] === 'access_denied'
+                ? 'Vous avez refusé l’accès. Rien n’a été relié. Vous pouvez recommencer depuis les Paramètres de TimeCool.'
+                : 'Google a répondu par une erreur. Recommencez depuis les Paramètres de TimeCool.');
+        }
+        $compteId = googleAgendaEtatLire((string) ($_GET['state'] ?? ''));
+        $code = (string) ($_GET['code'] ?? '');
+        $client = googleAgendaClient();
+        if ($compteId === null || $code === '' || $client === null) {
+            googleAgendaPage(false, 'Ce lien a expiré ou n’est pas valable. Recommencez depuis les Paramètres de TimeCool.');
+        }
+
+        // Toutes les permissions demandées doivent avoir été cochées :
+        // Google laisse la personne décocher l'accès à l'agenda.
+        $accordees = explode(' ', (string) ($_GET['scope'] ?? ''));
+        if (!in_array('https://www.googleapis.com/auth/calendar.events', $accordees, true)) {
+            googleAgendaPage(false, 'La case d’accès à l’agenda n’a pas été cochée sur la page de Google. Recommencez, et cochez-la.');
+        }
+
+        $jetons = googlePoster('https://oauth2.googleapis.com/token', [
+            'code'          => $code,
+            'client_id'     => $client['id'],
+            'client_secret' => $client['secret'],
+            'redirect_uri'  => googleAgendaRetour(),
+            'grant_type'    => 'authorization_code',
+        ]);
+        if ($jetons === null || !is_string($jetons['refresh_token'] ?? null)) {
+            googleAgendaPage(false, 'Google n’a pas confirmé l’accès. Recommencez depuis les Paramètres de TimeCool.');
+        }
+
+        // L'adresse vient du jeton d'identité, reçu à l'instant de Google
+        // lui-même par une connexion chiffrée : pas besoin d'en vérifier
+        // la signature (règle donnée par Google pour ce cas précis).
+        $email = null;
+        $morceaux = explode('.', (string) ($jetons['id_token'] ?? ''));
+        if (count($morceaux) === 3) {
+            $charge = json_decode((string) base64_decode(strtr($morceaux[1], '-_', '+/')), true);
+            $email = is_string($charge['email'] ?? null) ? substr($charge['email'], 0, 255) : null;
+        }
+
+        try {
+            Db::req(
+                'INSERT INTO google_agenda
+                   (compte_id, email_google, jeton_renouvellement, jeton_acces, acces_expire_le)
+                 VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))
+                 ON DUPLICATE KEY UPDATE email_google = VALUES(email_google),
+                   jeton_renouvellement = VALUES(jeton_renouvellement),
+                   jeton_acces = VALUES(jeton_acces),
+                   acces_expire_le = VALUES(acces_expire_le),
+                   relie_le = NOW()',
+                [
+                    $compteId,
+                    $email,
+                    Coffre::chiffrer($jetons['refresh_token']),
+                    Coffre::chiffrer((string) ($jetons['access_token'] ?? '')),
+                    max(0, (int) ($jetons['expires_in'] ?? 0) - 60),
+                ]
+            );
+        } catch (PDOException $e) {
+            error_log('google agenda : enregistrement impossible (' . $e->getMessage() . ')');
+            googleAgendaPage(false, 'Google a donné son accord, mais TimeCool n’a pas pu l’enregistrer. Le serveur n’est pas encore prêt ; réessayez plus tard.');
+        }
+        googleAgendaPage(true, 'Votre Google Agenda'
+            . ($email !== null ? ' (' . $email . ')' : '')
+            . ' est maintenant relié à TimeCool. Revenez dans l’application.');
+
+    case 'POST /google/agenda/reglages':
+        $compte = Auth::compte();
+        $corps = Entree::corps();
+        $champs = [];
+        $valeurs = [];
+        foreach (['envoyer', 'recevoir'] as $c) {
+            if (array_key_exists($c, $corps)) {
+                $champs[] = $c . ' = ?';
+                $valeurs[] = $corps[$c] ? 1 : 0;
+            }
+        }
+        if ($champs === [] || googleAgendaLiaison((int) $compte['id']) === null) {
+            Rep::erreur(400, 'non_relie', 'Google Agenda n’est pas relié.');
+        }
+        $valeurs[] = $compte['id'];
+        Db::req('UPDATE google_agenda SET ' . implode(', ', $champs) . ' WHERE compte_id = ?', $valeurs);
+        Rep::ok();
+
+    // Délier : on prévient Google, puis on oublie. Même si Google ne
+    // répond pas, la ligne est effacée — l'accès ne sert alors plus.
+    case 'POST /google/agenda/deconnecter':
+        $compte = Auth::compte();
+        $l = googleAgendaLiaison((int) $compte['id']);
+        if ($l !== null) {
+            $jeton = Coffre::dechiffrer((string) $l['jeton_renouvellement']);
+            if (is_string($jeton) && $jeton !== '') {
+                googlePoster('https://oauth2.googleapis.com/revoke', ['token' => $jeton]);
+            }
+            Db::req('DELETE FROM google_agenda WHERE compte_id = ?', [$compte['id']]);
+        }
         Rep::ok();
 
     // ═══════════════════════════════════════════════════════════

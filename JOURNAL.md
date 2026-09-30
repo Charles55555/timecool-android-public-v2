@@ -15,9 +15,7 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-- **Google Agenda** (30/09, session « TIMECOOL SERVEUR ») — routes
-  `/google/agenda/*` dans `backend/api/index.php`, nouvelle migration
-  `backend/sql/007_*`, écran des paramètres dans `index.html`.
+Rien n'est commencé et laissé en plan à cette heure.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
@@ -34,6 +32,19 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   Google, l'échange des jetons côté serveur, la synchronisation. Montrer
   l'écran à Charles avant de brancher son vrai agenda. Ménage facultatif
   de son côté : supprimer l'ancien code secret `****YFgU` du 26/08.
+  **Mise à jour 30/09 soir** — étape 1 écrite, testée, poussée : liaison
+  du compte (routes `/google/agenda/etat|lien|retour|reglages|deconnecter`,
+  table `google_agenda`, bloc « 📅 Google Agenda » en tête des
+  Paramètres). Rien n'est en ligne. Il manque, dans cet ordre, **pour la
+  session du PC** :
+  1. `backend/sql/007_google_agenda.sql` sur la base (timecool-root) ;
+  2. déployer `backend/api/index.php` (aucun appel nouveau à lib.php) ;
+  3. vérifier `GET /google/agenda/etat` avec une session : `disponible`
+     doit valoir vrai. Le code trouve le secret à sa forme (`GOCSPX-`),
+     quel que soit le nom de la case dans config.php ;
+  4. seulement ensuite `./scripts/deployer-web.sh`.
+  Étape 2, pas commencée : la recopie des rendez-vous. D'ici là l'écran
+  le dit franchement, sans case qui ne ferait rien.
 
 - **La liste d'avant-lancement**, section 8 de `CLAUDE.md`. Rien de fait.
 

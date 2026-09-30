@@ -7889,6 +7889,11 @@ function renderSettingsInterne() {
 
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:#e8f0fe; font-size:12px; font-weight:700; text-transform:uppercase; color:#1a73e8;">📅 Google Agenda</div>
+      <div id="tcGoogleAgendaZone"></div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:#e8f5e9; font-size:12px; font-weight:700; text-transform:uppercase; color:#2e7d32;">💾 Sauvegarde & Restauration</div>
       <div onclick="exportTimeCoolData()" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
         <div>
@@ -8098,6 +8103,7 @@ function renderSettingsInterne() {
   // Les trois messages vivent hors du template ci-dessus : ils
   // dependent de l'onglet tutoiement/vouvoiement choisi.
   tcChoisirFormeMessages(_tcFormeAffichee);
+  tcGoogleAgendaAfficher();
 }
 
 // ═══ GROUP RDV (4 agendas en 1 clic) ═══
@@ -16295,6 +16301,114 @@ async function tcAppel(methode, chemin, corps, avecAuth = true) {
   }
   return data;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   GOOGLE AGENDA — liaison du compte
+
+   L'autorisation donnée par Google reste sur le serveur, chiffrée :
+   l'application ne connaît que l'état — relié ou non, et à quelle
+   adresse. L'accord se donne sur la page de Google, dans le
+   navigateur ; au retour, l'écran se remet à jour tout seul.
+   ══════════════════════════════════════════════════════════════ */
+
+let _tcGoogleAgendaEnAttente = false;
+
+function _tcGoogleAgendaLigne(texte) {
+  return '<div style="padding:14px 16px; font-size:12.5px; color:var(--text-sec); line-height:1.5;">' + texte + '</div>';
+}
+
+async function tcGoogleAgendaAfficher() {
+  const zone = document.getElementById('tcGoogleAgendaZone');
+  if (!zone) return;
+  if (!tcJeton()) {
+    zone.innerHTML = _tcGoogleAgendaLigne('Connectez-vous à votre compte TimeCool pour relier votre Google Agenda.');
+    return;
+  }
+  zone.innerHTML = _tcGoogleAgendaLigne('Vérification…');
+
+  let etat;
+  try {
+    etat = await tcAppel('GET', '/google/agenda/etat');
+  } catch (e) {
+    zone.innerHTML = _tcGoogleAgendaLigne('Impossible de joindre le serveur pour le moment. Réessayez plus tard.');
+    return;
+  }
+  if (!document.getElementById('tcGoogleAgendaZone')) return;
+
+  if (!etat.disponible) {
+    zone.innerHTML = _tcGoogleAgendaLigne('Bientôt disponible.');
+    return;
+  }
+
+  if (!etat.relie) {
+    zone.innerHTML =
+      _tcGoogleAgendaLigne('Reliez votre Google Agenda à TimeCool. Google vous demandera votre accord sur sa propre page.') +
+      '<div style="padding:0 16px 16px;">' +
+        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Relier mon Google Agenda</button>' +
+      '</div>';
+    return;
+  }
+
+  const adresse = etat.email ? escapeHTML(etat.email) : 'votre compte Google';
+  zone.innerHTML =
+    '<div style="padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px;">' +
+      '<div style="flex:1; min-width:0;">' +
+        '<div style="font-size:14px; font-weight:500;">✅ Relié</div>' +
+        '<div style="font-size:11px; color:var(--text-sec); margin-top:2px; overflow-wrap:anywhere;">' + adresse + '</div>' +
+      '</div>' +
+      '<button id="tcGoogleAgendaDelier" onclick="tcGoogleAgendaDelier(this)" style="flex-shrink:0; padding:9px 14px; background:#fff; color:var(--g-red); border:1px solid #f5b8b3; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">Délier</button>' +
+    '</div>' +
+    _tcGoogleAgendaLigne('La recopie de vos rendez-vous entre TimeCool et Google Agenda arrive dans la prochaine version.');
+}
+
+async function tcGoogleAgendaRelier() {
+  const bouton = document.getElementById('tcGoogleAgendaBouton');
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Ouverture de Google…'; }
+  try {
+    const r = await tcAppel('POST', '/google/agenda/lien', {});
+    _tcGoogleAgendaEnAttente = true;
+    // Dans l'application Android, une adresse https part vers le
+    // navigateur du téléphone — Google refuse d'afficher sa page
+    // d'accord à l'intérieur d'une application. Sur le web, la page
+    // de Google remplace celle-ci, et y ramène par un bouton.
+    window.location.href = r.url;
+  } catch (e) {
+    showToast('⚠️ ' + (e.message || 'Google Agenda indisponible'));
+  } finally {
+    if (bouton) { bouton.disabled = false; bouton.textContent = 'Relier mon Google Agenda'; }
+  }
+}
+
+/** Deux temps : le premier appui demande confirmation, le second délie. */
+async function tcGoogleAgendaDelier(bouton) {
+  if (bouton.dataset.confirme !== '1') {
+    bouton.dataset.confirme = '1';
+    bouton.textContent = 'Confirmer ?';
+    setTimeout(function () {
+      if (bouton.isConnected && bouton.dataset.confirme === '1') {
+        bouton.dataset.confirme = '';
+        bouton.textContent = 'Délier';
+      }
+    }, 4000);
+    return;
+  }
+  bouton.disabled = true;
+  try {
+    await tcAppel('POST', '/google/agenda/deconnecter', {});
+    showToast('Google Agenda n’est plus relié');
+  } catch (e) {
+    showToast('⚠️ ' + (e.message || 'Impossible de délier pour le moment'));
+  }
+  tcGoogleAgendaAfficher();
+}
+
+// Retour de la page de Google : l'application redevient visible.
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible' && _tcGoogleAgendaEnAttente) {
+    _tcGoogleAgendaEnAttente = false;
+    tcGoogleAgendaAfficher();
+  }
+});
 
 /**
  * Empreinte SHA-256 d'un identifiant normalisé.
