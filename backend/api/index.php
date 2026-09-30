@@ -915,26 +915,49 @@ function googleAgendaClient(): ?array
     return ['id' => $id, 'secret' => $secret];
 }
 
-/** Appel POST de formulaire vers Google ; tableau décodé, ou null. */
-function googlePoster(string $url, array $champs): ?array
+/**
+ * Appel à une API Google : [code HTTP, réponse décodée].
+ * Options : 'jeton' (accès), 'json' (corps JSON), 'formulaire' (corps
+ * de formulaire). Code 0 : Google n'a pas été joint du tout.
+ */
+function googleAppel(string $methode, string $url, array $options = []): array
 {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
+    $entetes = [];
+    $opts = [
+        CURLOPT_CUSTOMREQUEST  => $methode,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 10,
         CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_POSTFIELDS     => http_build_query($champs),
-    ]);
+    ];
+    if (isset($options['jeton'])) {
+        $entetes[] = 'Authorization: Bearer ' . $options['jeton'];
+    }
+    if (isset($options['json'])) {
+        $entetes[] = 'Content-Type: application/json';
+        $opts[CURLOPT_POSTFIELDS] = json_encode($options['json'], JSON_UNESCAPED_UNICODE);
+    } elseif (isset($options['formulaire'])) {
+        $opts[CURLOPT_POSTFIELDS] = http_build_query($options['formulaire']);
+    }
+    $opts[CURLOPT_HTTPHEADER] = $entetes;
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, $opts);
     $reponse = curl_exec($ch);
     $codeHttp = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    $d = is_string($reponse) ? json_decode($reponse, true) : null;
-    if ($codeHttp !== 200 || !is_array($d)) {
+    $d = is_string($reponse) && $reponse !== '' ? json_decode($reponse, true) : null;
+    return [$codeHttp, is_array($d) ? $d : []];
+}
+
+/** Appel POST de formulaire vers Google ; tableau décodé, ou null. */
+function googlePoster(string $url, array $champs): ?array
+{
+    [$codeHttp, $d] = googleAppel('POST', $url, ['formulaire' => $champs]);
+    if ($codeHttp !== 200) {
         // Ni le code ni les jetons dans le journal : seulement l'erreur.
         error_log('google ' . parse_url($url, PHP_URL_PATH) . ' refuse (' . $codeHttp . ') '
-            . (is_array($d) ? (string) ($d['error'] ?? '') : ''));
+            . (string) ($d['error'] ?? ''));
         return null;
     }
     return $d;
@@ -998,6 +1021,281 @@ function googleAgendaPage(bool $reussi, string $message): never
         . '<p style="font-size:13px;color:#888">Sur téléphone, vous pouvez aussi simplement fermer cette page.</p>'
         . '</div></body></html>';
     exit;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// GOOGLE AGENDA — recopie des rendez-vous TimeCool vers Google
+//
+// Elle tourne ici, sur le serveur, et non dans l'application : une
+// seule mécanique pour Android, iPhone et le web, qui continue même
+// téléphone éteint. Elle part juste après chaque POST /sync qui
+// touche un rendez-vous, une fois la réponse rendue à l'appareil :
+// personne n'attend Google.
+//
+// Seuls les rendez-vous créés dans TimeCool partent, et seulement
+// ceux à venir : recopier des années d'historique noierait l'agenda
+// Google. Chacun porte une marque privée (timecool_uid) qui permettra
+// de le reconnaître au retour.
+// ═══════════════════════════════════════════════════════════════
+
+/** Au plus autant d'appels à Google par passage ; la suite au suivant. */
+const GOOGLE_AGENDA_PAR_PASSAGE = 25;
+
+const GOOGLE_AGENDA_EVENEMENTS = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
+/**
+ * Événement Google correspondant à un rendez-vous TimeCool, ou null
+ * s'il n'a pas de date exploitable. Fonction pure : c'est elle que
+ * l'empreinte résume, pour ne renvoyer que ce qui a changé.
+ */
+function googleAgendaEvenement(array $rdv, string $uid, string $fuseau): ?array
+{
+    $motif = '/^\d{4}-\d{2}-\d{2}$/';
+    $debut = $rdv['date'] ?? null;
+    if (!is_string($debut) || !preg_match($motif, $debut)) {
+        return null;
+    }
+    $fin = $rdv['dateFin'] ?? null;
+    if (!is_string($fin) || !preg_match($motif, $fin) || $fin < $debut) {
+        $fin = $debut;
+    }
+
+    $titre = trim((string) ($rdv['title'] ?? ''));
+    $ev = [
+        'summary' => $titre !== '' ? $titre : 'Rendez-vous',
+        'extendedProperties' => ['private' => ['timecool_uid' => $uid]],
+    ];
+    $notes = trim((string) ($rdv['notes'] ?? ''));
+    if ($notes !== '') {
+        $ev['description'] = $notes;
+    }
+    $lieu = trim((string) ($rdv['lieu'] ?? ''));
+    if ($lieu !== '') {
+        $ev['location'] = $lieu;
+    }
+
+    if (!empty($rdv['allDay'])) {
+        // Chez Google, la fin d'une journée entière est exclue : le
+        // lendemain du dernier jour.
+        $ev['start'] = ['date' => $debut];
+        $ev['end'] = ['date' => date('Y-m-d', strtotime($fin . ' +1 day'))];
+        return $ev;
+    }
+
+    $heure = static fn($h, $m): string =>
+        sprintf('%02d:%02d:00', max(0, min(23, (int) $h)), max(0, min(59, (int) $m)));
+    $de = $debut . 'T' . $heure($rdv['startH'] ?? 9, $rdv['startM'] ?? 0);
+    $a = $fin . 'T' . $heure($rdv['endH'] ?? 10, $rdv['endM'] ?? 0);
+    if ($a <= $de) {
+        // Fin avant le début : une heure, plutôt qu'un refus de Google.
+        $a = date('Y-m-d\TH:i:s', strtotime($de . ' +1 hour'));
+    }
+    $ev['start'] = ['dateTime' => $de, 'timeZone' => $fuseau];
+    $ev['end'] = ['dateTime' => $a, 'timeZone' => $fuseau];
+    return $ev;
+}
+
+/**
+ * Jeton d'accès valable pour ce compte, ou null. Renouvelé auprès de
+ * Google quand il a expiré ; si Google refuse le renouvellement, la
+ * personne a retiré l'accès : c'est noté, l'écran le dira.
+ */
+function googleAgendaAcces(int $compteId): ?string
+{
+    $l = Db::un(
+        'SELECT jeton_renouvellement, jeton_acces, acces_expire_le > NOW() AS valide
+           FROM google_agenda WHERE compte_id = ?',
+        [$compteId]
+    );
+    if ($l === null) {
+        return null;
+    }
+    if ((int) $l['valide'] === 1 && $l['jeton_acces'] !== null) {
+        $acces = Coffre::dechiffrer((string) $l['jeton_acces']);
+        if (is_string($acces) && $acces !== '') {
+            return $acces;
+        }
+    }
+
+    $client = googleAgendaClient();
+    $renouvellement = Coffre::dechiffrer((string) $l['jeton_renouvellement']);
+    if ($client === null || !is_string($renouvellement)) {
+        return null;
+    }
+    [$code, $d] = googleAppel('POST', 'https://oauth2.googleapis.com/token', ['formulaire' => [
+        'client_id'     => $client['id'],
+        'client_secret' => $client['secret'],
+        'refresh_token' => $renouvellement,
+        'grant_type'    => 'refresh_token',
+    ]]);
+    if ($code !== 200 || !is_string($d['access_token'] ?? null)) {
+        error_log('google agenda : renouvellement refuse (' . $code . ') ' . (string) ($d['error'] ?? ''));
+        if (($d['error'] ?? '') === 'invalid_grant') {
+            Db::req("UPDATE google_agenda SET erreur = 'acces_retire' WHERE compte_id = ?", [$compteId]);
+        }
+        return null;
+    }
+    Db::req(
+        'UPDATE google_agenda
+            SET jeton_acces = ?, acces_expire_le = DATE_ADD(NOW(), INTERVAL ? SECOND), erreur = NULL
+          WHERE compte_id = ?',
+        [Coffre::chiffrer($d['access_token']), max(0, (int) ($d['expires_in'] ?? 0) - 60), $compteId]
+    );
+    return $d['access_token'];
+}
+
+/**
+ * Un passage de recopie pour un compte : crée, corrige et supprime
+ * chez Google ce qui a changé dans TimeCool depuis le passage
+ * précédent. Sans effet si le compte n'est pas relié ou si la case
+ * « Envoyer » est décochée.
+ */
+function googleAgendaRecopier(int $compteId): void
+{
+    $l = googleAgendaLiaison($compteId);
+    if ($l === null || (int) $l['envoyer'] !== 1 || $l['erreur'] !== null) {
+        return;
+    }
+    // Deux passages simultanés pour un même compte créeraient deux fois
+    // le même événement : le second attend que le premier ait fini.
+    $verrou = 'google_agenda_' . $compteId;
+    if ((int) (Db::un('SELECT GET_LOCK(?, 20) AS ok', [$verrou])['ok'] ?? 0) !== 1) {
+        return;
+    }
+    try {
+        $compte = Db::un('SELECT fuseau FROM comptes WHERE id = ?', [$compteId]);
+        $fuseau = is_string($compte['fuseau'] ?? null) && $compte['fuseau'] !== ''
+            ? $compte['fuseau'] : 'Europe/Paris';
+        $aujourdhui = (new DateTime('now', new DateTimeZone($fuseau)))->format('Y-m-d');
+
+        $appels = 0;
+        $acces = null;
+        $jeton = static function () use (&$acces, $compteId): ?string {
+            return $acces ??= googleAgendaAcces($compteId);
+        };
+
+        // 1. Ce qui existe dans TimeCool : créer ou corriger.
+        $lignes = Db::tous(
+            "SELECT e.uid, e.contenu, g.google_id, g.empreinte
+               FROM elements e
+               LEFT JOIN google_agenda_liens g ON g.compte_id = e.compte_id AND g.uid = e.uid
+              WHERE e.compte_id = ? AND e.type = 'rdv' AND e.supprime = 0",
+            [$compteId]
+        );
+        foreach ($lignes as $r) {
+            if ($appels >= GOOGLE_AGENDA_PAR_PASSAGE) {
+                return;
+            }
+            $rdv = json_decode((string) $r['contenu'], true);
+            if (!is_array($rdv)) {
+                continue;
+            }
+            $ev = googleAgendaEvenement($rdv, (string) $r['uid'], $fuseau);
+            if ($ev === null) {
+                continue;
+            }
+            $finRdv = is_string($rdv['dateFin'] ?? null) && $rdv['dateFin'] > $rdv['date']
+                ? $rdv['dateFin'] : $rdv['date'];
+            if ($r['google_id'] === null && $finRdv < $aujourdhui) {
+                continue;   // passé et jamais recopié : il reste où il est
+            }
+            $empreinte = sha1(json_encode($ev, JSON_UNESCAPED_UNICODE));
+            if ($r['empreinte'] === $empreinte) {
+                continue;   // rien de neuf
+            }
+            if ($jeton() === null) {
+                return;
+            }
+
+            $appels++;
+            $googleId = null;
+            if ($r['google_id'] !== null) {
+                // PUT et non PATCH : un champ vidé dans TimeCool doit
+                // l'être aussi chez Google, pas garder l'ancienne valeur.
+                [$code] = googleAppel('PUT',
+                    GOOGLE_AGENDA_EVENEMENTS . '/' . rawurlencode($r['google_id']),
+                    ['jeton' => $acces, 'json' => $ev]);
+                if ($code === 200) {
+                    $googleId = $r['google_id'];
+                } elseif ($code !== 404 && $code !== 410) {
+                    error_log('google agenda : correction refusee (' . $code . ') compte ' . $compteId);
+                    continue;
+                }
+                // 404 / 410 : supprimé chez Google entre-temps. Modifié
+                // depuis dans TimeCool : la dernière modification gagne,
+                // il est recréé ci-dessous.
+            }
+            if ($googleId === null) {
+                [$code, $d] = googleAppel('POST', GOOGLE_AGENDA_EVENEMENTS,
+                    ['jeton' => $acces, 'json' => $ev]);
+                if ($code !== 200 || !is_string($d['id'] ?? null)) {
+                    error_log('google agenda : creation refusee (' . $code . ') compte ' . $compteId);
+                    continue;
+                }
+                $googleId = $d['id'];
+            }
+            Db::req(
+                'INSERT INTO google_agenda_liens (compte_id, uid, google_id, empreinte)
+                 VALUES (?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE google_id = VALUES(google_id), empreinte = VALUES(empreinte)',
+                [$compteId, $r['uid'], $googleId, $empreinte]
+            );
+        }
+
+        // 2. Ce qui a disparu de TimeCool : supprimer chez Google.
+        $partis = Db::tous(
+            "SELECT g.uid, g.google_id
+               FROM google_agenda_liens g
+               LEFT JOIN elements e ON e.compte_id = g.compte_id AND e.type = 'rdv' AND e.uid = g.uid
+              WHERE g.compte_id = ? AND (e.id IS NULL OR e.supprime = 1)",
+            [$compteId]
+        );
+        foreach ($partis as $p) {
+            if ($appels >= GOOGLE_AGENDA_PAR_PASSAGE || $jeton() === null) {
+                return;
+            }
+            $appels++;
+            [$code] = googleAppel('DELETE',
+                GOOGLE_AGENDA_EVENEMENTS . '/' . rawurlencode($p['google_id']),
+                ['jeton' => $acces]);
+            if ($code !== 204 && $code !== 200 && $code !== 404 && $code !== 410) {
+                error_log('google agenda : suppression refusee (' . $code . ') compte ' . $compteId);
+                continue;
+            }
+            Db::req('DELETE FROM google_agenda_liens WHERE compte_id = ? AND uid = ?',
+                [$compteId, $p['uid']]);
+        }
+
+        Db::req('UPDATE google_agenda SET recopie_le = NOW() WHERE compte_id = ?', [$compteId]);
+    } finally {
+        Db::un('SELECT RELEASE_LOCK(?)', [$verrou]);
+    }
+}
+
+/**
+ * Lance un passage de recopie une fois la réponse partie : l'appareil
+ * reçoit sa réponse tout de suite, Google est appelé ensuite.
+ */
+function googleAgendaRecopierPlusTard(int $compteId): void
+{
+    static $prevu = [];
+    if (isset($prevu[$compteId])) {
+        return;
+    }
+    $prevu[$compteId] = true;
+    register_shutdown_function(static function () use ($compteId): void {
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        ignore_user_abort(true);
+        @set_time_limit(90);
+        try {
+            googleAgendaRecopier($compteId);
+        } catch (Throwable $e) {
+            error_log('google agenda : recopie interrompue, compte ' . $compteId . ' : ' . $e->getMessage());
+        }
+    });
 }
 
 
@@ -1786,6 +2084,12 @@ switch ($route) {
         } catch (Throwable $err) {
             $pdo->rollBack();
             throw $err;
+        }
+
+        // Un rendez-vous a changé : Google Agenda suit, une fois la
+        // réponse partie. Sans effet pour un compte non relié.
+        if (in_array('rdv', array_column($appliques, 'type'), true)) {
+            googleAgendaRecopierPlusTard((int) $compte['id']);
         }
 
         Rep::ok(['version' => $version, 'appliques' => $appliques]);
@@ -2824,12 +3128,19 @@ switch ($route) {
     case 'GET /google/agenda/etat':
         $compte = Auth::compte();
         $l = googleAgendaLiaison((int) $compte['id']);
+        // Ouvrir l'écran relance aussi la recopie : ce qu'un passage
+        // précédent n'a pas pu finir est rattrapé.
+        if ($l !== null) {
+            googleAgendaRecopierPlusTard((int) $compte['id']);
+        }
         Rep::ok([
             'disponible' => googleAgendaClient() !== null,
             'relie'      => $l !== null,
             'email'      => $l['email_google'] ?? null,
             'envoyer'    => $l !== null && (int) $l['envoyer'] === 1,
             'lire_tout'  => $l !== null && (int) $l['lire_tout'] === 1,
+            // 'acces_retire' : la personne a retiré l'accès chez Google.
+            'erreur'     => $l['erreur'] ?? null,
         ]);
 
     // Adresse de la page Google où la personne donne son accord.
@@ -2904,6 +3215,7 @@ switch ($route) {
                    jeton_renouvellement = VALUES(jeton_renouvellement),
                    jeton_acces = VALUES(jeton_acces),
                    acces_expire_le = VALUES(acces_expire_le),
+                   erreur = NULL,
                    relie_le = NOW()',
                 [
                     $compteId,
@@ -2917,6 +3229,7 @@ switch ($route) {
             error_log('google agenda : enregistrement impossible (' . $e->getMessage() . ')');
             googleAgendaPage(false, 'Google a donné son accord, mais TimeCool n’a pas pu l’enregistrer. Le serveur n’est pas encore prêt ; réessayez plus tard.');
         }
+        googleAgendaRecopierPlusTard($compteId);
         googleAgendaPage(true, 'Votre Google Agenda'
             . ($email !== null ? ' (' . $email . ')' : '')
             . ' est maintenant relié à TimeCool. Revenez dans l’application.');
@@ -2937,6 +3250,7 @@ switch ($route) {
         }
         $valeurs[] = $compte['id'];
         Db::req('UPDATE google_agenda SET ' . implode(', ', $champs) . ' WHERE compte_id = ?', $valeurs);
+        googleAgendaRecopierPlusTard((int) $compte['id']);
         Rep::ok();
 
     // Délier : on prévient Google, puis on oublie. Même si Google ne
@@ -2949,6 +3263,9 @@ switch ($route) {
             if (is_string($jeton) && $jeton !== '') {
                 googlePoster('https://oauth2.googleapis.com/revoke', ['token' => $jeton]);
             }
+            // Les rendez-vous déjà recopiés restent dans Google Agenda :
+            // délier arrête la recopie, n'efface rien chez Google.
+            Db::req('DELETE FROM google_agenda_liens WHERE compte_id = ?', [$compte['id']]);
             Db::req('DELETE FROM google_agenda WHERE compte_id = ?', [$compte['id']]);
         }
         Rep::ok();

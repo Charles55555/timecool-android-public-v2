@@ -16353,6 +16353,19 @@ async function tcGoogleAgendaAfficher() {
   }
 
   const adresse = etat.email ? escapeHTML(etat.email) : 'votre compte Google';
+
+  // Accès retiré chez Google (depuis son compte Google, par exemple) :
+  // la recopie est à l'arrêt, le dire et proposer de relier à nouveau.
+  if (etat.erreur === 'acces_retire') {
+    zone.innerHTML =
+      _tcGoogleAgendaLigne('⚠️ Google a retiré l’accès à ' + adresse + '. Vos rendez-vous ne sont plus recopiés.') +
+      '<div style="padding:0 16px 16px;">' +
+        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Relier à nouveau</button>' +
+      '</div>';
+    return;
+  }
+
+  const envoyer = etat.envoyer === true;
   zone.innerHTML =
     '<div style="padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px;">' +
       '<div style="flex:1; min-width:0;">' +
@@ -16361,7 +16374,31 @@ async function tcGoogleAgendaAfficher() {
       '</div>' +
       '<button id="tcGoogleAgendaDelier" onclick="tcGoogleAgendaDelier(this)" style="flex-shrink:0; padding:9px 14px; background:#fff; color:var(--g-red); border:1px solid #f5b8b3; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">Délier</button>' +
     '</div>' +
-    _tcGoogleAgendaLigne('La recopie de vos rendez-vous entre TimeCool et Google Agenda arrive dans la prochaine version.');
+    '<div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px;">' +
+      '<div style="flex:1;">' +
+        '<div style="font-size:14px; font-weight:500;">Envoyer mes rendez-vous TimeCool vers Google Agenda</div>' +
+        '<div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Vos rendez-vous à venir y apparaissent quelques secondes après leur enregistrement.</div>' +
+      '</div>' +
+      '<label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">' +
+        '<input type="checkbox" id="tcGoogleAgendaEnvoyer" ' + (envoyer ? 'checked' : '') + ' onchange="tcGoogleAgendaReglerEnvoi(this); tcMajVisuelInterrupteur(this)" style="opacity:0; width:0; height:0;">' +
+        '<span style="position:absolute; inset:0; background:' + (envoyer ? 'var(--g-blue)' : '#ccc') + '; border-radius:24px; transition:.2s;"></span>' +
+        '<span style="position:absolute; height:18px; width:18px; left:' + (envoyer ? '23px' : '3px') + '; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>' +
+      '</label>' +
+    '</div>';
+}
+
+/** La case « Envoyer » : enregistrée sur le serveur, qui fait la recopie. */
+async function tcGoogleAgendaReglerEnvoi(caseEnvoyer) {
+  const voulu = caseEnvoyer.checked;
+  try {
+    await tcAppel('POST', '/google/agenda/reglages', { envoyer: voulu });
+    showToast(voulu ? '✅ Vos rendez-vous partent vers Google Agenda' : 'Vos rendez-vous ne partent plus vers Google Agenda');
+  } catch (e) {
+    // Refusé : la case reprend l'état réel, plutôt que de mentir.
+    caseEnvoyer.checked = !voulu;
+    tcMajVisuelInterrupteur(caseEnvoyer);
+    showToast('⚠️ ' + (e.message || 'Réglage non enregistré'));
+  }
 }
 
 async function tcGoogleAgendaRelier() {
