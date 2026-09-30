@@ -32,7 +32,12 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   l'appel au modèle) ; un décalage retire le rendez-vous du même titre
   (`tcRdvRemplace`), plus « le premier charly_ai_ du jour », et garde son
   contact ; le prompt (CAS 5) interdit d'annoncer une suppression.
-  Contrôle `verif-charly-suppression`.
+  Contrôle `verif-charly-suppression`. Puis, même soir, règle de Charles :
+  un seul rendez-vous correspond → supprimé sans « oui ou non ? » ;
+  plusieurs → Charly demande lequel (`_tcSuppressionChoix`,
+  `tcRdvDesigne`) ; seule « toute ma journée » demande confirmation.
+  Essayé par Charles : « Essai agenda Google » supprimé dans TimeCool ET
+  chez Google (lien effacé de `google_agenda_liens`).
 
 - **Google Agenda (30/09)** — côté Google, tout est prêt : API Agenda
   activée, permission `calendar.events`, Charles en utilisateur test,
