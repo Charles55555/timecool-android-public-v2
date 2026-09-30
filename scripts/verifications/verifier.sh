@@ -32,6 +32,7 @@ lancer() {
 }
 
 lancer verif-syntaxe          "$PAGE"
+lancer verif-cle-appareil     "$PAGE"
 lancer verif-iphone           "$PAGE"
 lancer verif-hauteurs         "$PAGE"
 lancer verif-periode          "$PAGE"

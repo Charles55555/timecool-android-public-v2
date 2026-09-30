@@ -2803,16 +2803,37 @@ const TC_TASKS_KEY = 'tc_user_tasks';
    ══════════════════════════════════════════════════════════════ */
 const TC_DEVICE_KEY_STORAGE = 'tc_device_crypto_key';
 
-async function tcGetDeviceKey() {
-  const saved = localStorage.getItem(TC_DEVICE_KEY_STORAGE);
-  if (saved) {
-    const jwk = JSON.parse(saved);
-    return crypto.subtle.importKey('jwk', jwk, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+/*
+ * Une seule clé par appareil, même quand cent chiffrements la
+ * demandent au même instant.
+ *
+ * saveEventsToStorage chiffre tous les rendez-vous en parallèle. Sur
+ * un appareil sans clé encore, chaque appel en fabriquait une et
+ * l'enregistrait par-dessus la précédente : seule la dernière
+ * survivait. Les titres, chiffrés en premier, l'étaient chacun avec
+ * une clé perdue — illisibles au chargement suivant, donc vides, et
+ * renvoyés vides à tous les appareils. Le 30/09, 29 des 30 titres de
+ * Charles ont disparu ainsi.
+ */
+let _tcCleAppareil = null;
+
+function tcGetDeviceKey() {
+  if (!_tcCleAppareil) {
+    _tcCleAppareil = (async function () {
+      const saved = localStorage.getItem(TC_DEVICE_KEY_STORAGE);
+      if (saved) {
+        const jwk = JSON.parse(saved);
+        return crypto.subtle.importKey('jwk', jwk, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+      }
+      const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+      const jwk = await crypto.subtle.exportKey('jwk', key);
+      localStorage.setItem(TC_DEVICE_KEY_STORAGE, JSON.stringify(jwk));
+      return key;
+    })();
+    // Un échec ne doit pas rester en mémoire : l'appel suivant réessaie.
+    _tcCleAppareil.catch(function () { _tcCleAppareil = null; });
   }
-  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-  const jwk = await crypto.subtle.exportKey('jwk', key);
-  localStorage.setItem(TC_DEVICE_KEY_STORAGE, JSON.stringify(jwk));
-  return key;
+  return _tcCleAppareil;
 }
 
 function tcBufToB64(buf) {
