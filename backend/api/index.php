@@ -1049,7 +1049,7 @@ const GOOGLE_AGENDA_EVENEMENTS = 'https://www.googleapis.com/calendar/v3/calenda
  * s'il n'a pas de date exploitable. Fonction pure : c'est elle que
  * l'empreinte résume, pour ne renvoyer que ce qui a changé.
  */
-function googleAgendaEvenement(array $rdv, string $uid, string $fuseau): ?array
+function googleAgendaEvenement(array $rdv, string $uid, string $fuseau, ?string $avec = null): ?array
 {
     $motif = '/^\d{4}-\d{2}-\d{2}$/';
     $debut = $rdv['date'] ?? null;
@@ -1066,9 +1066,19 @@ function googleAgendaEvenement(array $rdv, string $uid, string $fuseau): ?array
         'summary' => $titre !== '' ? $titre : 'Rendez-vous',
         'extendedProperties' => ['private' => ['timecool_uid' => $uid]],
     ];
+    // Google n'a pas de case « contact », seulement des invités — et
+    // un invité reçoit un e-mail de Google. Le contact s'écrit donc en
+    // tête de la description, décidé par Charles le 30/09.
+    $description = [];
+    if ($avec !== null && trim($avec) !== '') {
+        $description[] = '👤 Avec ' . trim($avec);
+    }
     $notes = trim((string) ($rdv['notes'] ?? ''));
     if ($notes !== '') {
-        $ev['description'] = $notes;
+        $description[] = $notes;
+    }
+    if ($description !== []) {
+        $ev['description'] = implode("\n\n", $description);
     }
     $lieu = trim((string) ($rdv['lieu'] ?? ''));
     if ($lieu !== '') {
@@ -1169,6 +1179,19 @@ function googleAgendaRecopier(int $compteId): void
             ? $compte['fuseau'] : 'Europe/Paris';
         $aujourdhui = (new DateTime('now', new DateTimeZone($fuseau)))->format('Y-m-d');
 
+        // Nom de chaque contact, pour la ligne « Avec … » : le rendez-vous
+        // ne porte que l'identifiant du contact.
+        $noms = [];
+        foreach (Db::tous(
+            "SELECT uid, contenu FROM elements WHERE compte_id = ? AND type = 'contact' AND supprime = 0",
+            [$compteId]
+        ) as $c) {
+            $nom = json_decode((string) $c['contenu'], true)['name'] ?? null;
+            if (is_string($nom)) {
+                $noms[$c['uid']] = $nom;
+            }
+        }
+
         $appels = 0;
         $acces = null;
         $jeton = static function () use (&$acces, $compteId): ?string {
@@ -1191,7 +1214,9 @@ function googleAgendaRecopier(int $compteId): void
             if (!is_array($rdv)) {
                 continue;
             }
-            $ev = googleAgendaEvenement($rdv, (string) $r['uid'], $fuseau);
+            $contact = $rdv['contact'] ?? null;
+            $ev = googleAgendaEvenement($rdv, (string) $r['uid'], $fuseau,
+                is_string($contact) ? ($noms[$contact] ?? null) : null);
             if ($ev === null) {
                 continue;
             }
