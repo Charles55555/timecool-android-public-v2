@@ -15,7 +15,9 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-Rien n'est commencé et laissé en plan à cette heure.
+- **Google Agenda** (30/09, session « TIMECOOL SERVEUR ») — routes
+  `/google/agenda/*` dans `backend/api/index.php`, nouvelle migration
+  `backend/sql/007_*`, écran des paramètres dans `index.html`.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
