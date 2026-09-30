@@ -24,6 +24,15 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
+- **Google Agenda (30/09)** — côté Google, tout est prêt : API Agenda
+  activée, permission `calendar.events`, Charles en utilisateur test,
+  adresse de retour `https://api.timecool.fr/google/agenda/retour`,
+  code secret rangé dans `private/config.php`. **Aucune ligne de code
+  écrite.** Reste : les deux cases dans les paramètres, la connexion
+  Google, l'échange des jetons côté serveur, la synchronisation. Montrer
+  l'écran à Charles avant de brancher son vrai agenda. Ménage facultatif
+  de son côté : supprimer l'ancien code secret `****YFgU` du 26/08.
+
 - **La liste d'avant-lancement**, section 8 de `CLAUDE.md`. Rien de fait.
 
 **Tranché le 07/09 — ne plus y revenir :**
