@@ -40,8 +40,8 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   1. `backend/sql/007_google_agenda.sql` sur la base (timecool-root) ;
   2. déployer `backend/api/index.php` (aucun appel nouveau à lib.php) ;
   3. vérifier `GET /google/agenda/etat` avec une session : `disponible`
-     doit valoir vrai. Le code trouve le secret à sa forme (`GOCSPX-`),
-     quel que soit le nom de la case dans config.php ;
+     doit valoir vrai (lit `google_client_secret` et
+     `google_redirect_agenda` dans config.php) ;
   4. seulement ensuite `./scripts/deployer-web.sh`.
   Étape 2, pas commencée : la recopie des rendez-vous. D'ici là l'écran
   le dit franchement, sans case qui ne ferait rien.

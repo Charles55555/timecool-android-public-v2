@@ -28,9 +28,11 @@ CREATE TABLE google_agenda (
   jeton_acces  TEXT            NULL,
   acces_expire_le DATETIME     NULL,
 
-  -- Les deux cases de l'écran Paramètres.
-  envoyer      TINYINT(1)      NOT NULL DEFAULT 1,  -- TimeCool → Google
-  recevoir     TINYINT(1)      NOT NULL DEFAULT 1,  -- Google → TimeCool
+  -- Les deux cases de l'écran Paramètres, décidées par Charles :
+  -- « Envoyer mes rendez-vous TimeCool vers Google Agenda », cochée ;
+  -- « Laisser Charly lire tout mon Google Agenda », décochée.
+  envoyer      TINYINT(1)      NOT NULL DEFAULT 1,
+  lire_tout    TINYINT(1)      NOT NULL DEFAULT 0,
 
   relie_le     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   maj_le       DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

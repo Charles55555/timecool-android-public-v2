@@ -896,58 +896,23 @@ const GOOGLE_AGENDA_LIEN_DUREE = 900;
 
 function googleAgendaRetour(): string
 {
-    return rtrim((string) Conf::get('url_publique', 'https://api.timecool.fr'), '/')
-        . '/google/agenda/retour';
+    return (string) Conf::get('google_redirect_agenda', 'https://api.timecool.fr/google/agenda/retour');
 }
 
 /**
  * Identifiant et code secret du client Web Google, ou null.
- *
- * Le code secret a été rangé dans config.php le 30/09/2026 par une
- * session dont on n'a pas noté le nom de la case — et ce fichier est
- * illisible pour l'agent, c'est voulu. Plutôt que de dépendre d'un nom,
- * on cherche la valeur à sa forme : Google fait commencer tous ses
- * codes secrets par « GOCSPX- ». Si un identifiant client est rangé à
- * côté, c'est lui qui va avec ; sinon, le premier de google_client_ids,
- * qui est celui du client Web.
+ * L'identifiant est le premier de google_client_ids : celui du client
+ * Web, auquel le code secret et l'adresse de retour sont rattachés.
  */
 function googleAgendaClient(): ?array
 {
-    static $memo = false;
-    if ($memo !== false) {
-        return $memo;
+    $secret = Conf::get('google_client_secret');
+    $ids = Conf::get('google_client_ids', []);
+    $id = is_array($ids) ? ($ids[0] ?? null) : null;
+    if (!is_string($secret) || $secret === '' || !is_string($id) || $id === '') {
+        return null;
     }
-    $conf = @include __DIR__ . '/../private/config.php';
-    $trouve = null;
-    $chercher = static function ($noeud) use (&$chercher, &$trouve): void {
-        if (!is_array($noeud) || $trouve !== null) {
-            return;
-        }
-        foreach ($noeud as $v) {
-            if (is_string($v) && str_starts_with($v, 'GOCSPX-')) {
-                $id = null;
-                foreach ($noeud as $w) {
-                    if (is_string($w) && str_ends_with($w, '.apps.googleusercontent.com')) {
-                        $id = $w;
-                        break;
-                    }
-                }
-                $trouve = ['secret' => $v, 'id' => $id];
-                return;
-            }
-            $chercher($v);
-        }
-    };
-    $chercher(is_array($conf) ? $conf : []);
-
-    if ($trouve === null) {
-        return $memo = null;
-    }
-    if ($trouve['id'] === null) {
-        $ids = Conf::get('google_client_ids', []);
-        $trouve['id'] = is_array($ids) && is_string($ids[0] ?? null) ? $ids[0] : null;
-    }
-    return $memo = $trouve['id'] === null ? null : $trouve;
+    return ['id' => $id, 'secret' => $secret];
 }
 
 /** Appel POST de formulaire vers Google ; tableau décodé, ou null. */
@@ -2864,7 +2829,7 @@ switch ($route) {
             'relie'      => $l !== null,
             'email'      => $l['email_google'] ?? null,
             'envoyer'    => $l !== null && (int) $l['envoyer'] === 1,
-            'recevoir'   => $l !== null && (int) $l['recevoir'] === 1,
+            'lire_tout'  => $l !== null && (int) $l['lire_tout'] === 1,
         ]);
 
     // Adresse de la page Google où la personne donne son accord.
@@ -2961,7 +2926,7 @@ switch ($route) {
         $corps = Entree::corps();
         $champs = [];
         $valeurs = [];
-        foreach (['envoyer', 'recevoir'] as $c) {
+        foreach (['envoyer', 'lire_tout'] as $c) {
             if (array_key_exists($c, $corps)) {
                 $champs[] = $c . ' = ?';
                 $valeurs[] = $corps[$c] ? 1 : 0;
