@@ -3008,6 +3008,12 @@ Nom ambigu ou approximatif → zéro tolérance à l'approximation : liste les n
 
 ═══ CAS 5 — ANNULATION DE RDV ═══
 
+--- Ce que tu ne fais PAS toi-même ---
+Tu ne supprimes JAMAIS un rendez-vous de l'agenda : c'est l'application qui le fait, après confirmation de l'utilisateur.
+Ne dis donc JAMAIS "c'est fait", "supprimé" ou "annulé" à propos d'un rendez-vous retiré de l'agenda : ce serait faux.
+Si une demande de suppression te parvient malgré tout, réponds :
+"Pour le supprimer, écris-moi par exemple : supprime le rdv de demain 10h. Ou touche le rendez-vous dans ton agenda, puis 🗑️ Supprimer."
+
 --- Annulation simple ---
 Pose UNE SEULE question pour trancher : proposer tout de suite un nouveau créneau au contact,
 ou simplement le prévenir et laisser l'utilisateur reprendre contact plus tard ?
@@ -3055,6 +3061,8 @@ Exemple : "C'est noté ! 👍 Ton RDV est déplacé à 17h. Autre chose à ajust
 Plusieurs rendez-vous de l'AGENDA RÉEL (voir plus bas) pourraient correspondre à la demande
 (même jour, plusieurs RDV ; nom ambigu) → ne devine JAMAIS lequel. Pose UNE question listant
 les candidats possibles (heure + titre de chacun) avant de générer le moindre bloc [AGENDA].
+Déplacement ou modification → dans la ligne [AGENDA], garde EXACTEMENT le titre du rendez-vous d'origine :
+c'est grâce à lui que l'application retire l'ancien. Un titre changé laisserait l'ancien en place, en double.
 Changement de LIEU uniquement (le jour et l'heure ne bougent pas) → régénère la ligne [AGENDA]
 complète du rendez-vous concerné (mêmes date/heure/titre/catégorie), avec le nouveau lieu en 5e champ.
 
@@ -9422,6 +9430,42 @@ function escapeHTML(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+/**
+ * Index, dans `liste`, du rendez-vous qu'une proposition modifiée
+ * remplace, ou -1. Trouvé par son titre : identique d'abord, sinon
+ * celui qui partage le plus de mots significatifs (« dermato » trouve
+ * « Rendez-vous dermatologue »). À égalité, le même jour l'emporte,
+ * puis le plus proche. Aucun mot en commun : -1, jamais un rendez-vous
+ * pris au hasard.
+ */
+function tcRdvRemplace(liste, titre, dateStr, evMode) {
+  const vides = new Set(['rendez', 'vous', 'rendez-vous', 'avec', 'pour', 'chez', 'dans', 'mon', 'mes']);
+  const mots = function (x) {
+    return tcSansAccents(x).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3 && !vides.has(w); });
+  };
+  const cible = tcSansAccents(titre || '').trim();
+  const motsCible = mots(titre);
+  let meilleur = -1, meilleurScore = 0, meilleurEcart = Infinity;
+  for (let i = 0; i < liste.length; i++) {
+    const ev = liste[i];
+    if (!ev || ev.mode !== evMode || !ev.title) continue;
+    let score;
+    if (tcSansAccents(ev.title).trim() === cible) score = 1000;
+    else {
+      const motsEv = mots(ev.title);
+      score = motsCible.filter(function (w) {
+        return motsEv.some(function (v) { return v.startsWith(w) || w.startsWith(v); });
+      }).length;
+    }
+    if (score === 0) continue;
+    const ecart = Math.abs(new Date(ev.date) - new Date(dateStr)) || 0;
+    if (score > meilleurScore || (score === meilleurScore && ecart < meilleurEcart)) {
+      meilleur = i; meilleurScore = score; meilleurEcart = ecart;
+    }
+  }
+  return meilleur;
+}
+
 function extractAgendaProposals(content) {
   const proposals = [];
   const todayDate = new Date();
@@ -9737,40 +9781,20 @@ function validateAgendaProposalFromMsg(msg) {
       dateStr = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
     }
 
-    // Si modification : supprimer l'ancien événement Charly IA remplacé par cette proposition
+    // Si modification : retirer l'ancien rendez-vous que cette
+    // proposition remplace — celui qui porte le même titre, pas « le
+    // premier créé par Charly ce jour-là » comme avant, qui pouvait être
+    // n'importe lequel. Faute de titre reconnu, rien n'est retiré : un
+    // doublon se voit et se supprime, un rendez-vous perdu non.
     let lieuHerite = null;
+    let contactHerite = null;
     if (isModification) {
       const evMode = mode === 'pro' ? 'pro' : 'user';
-      // Stratégie 1 : au plus UN événement Charly IA supprimé sur la même
-      // date, par nouvelle proposition — jamais plus. Sans cette limite,
-      // 3 rendez-vous Charly IA existants ce jour-là disparaissaient tous
-      // pour la moindre modification d'un seul d'entre eux (perte de
-      // données silencieuse) ; ici, au pire un remplacement 1-pour-1.
-      let removed = 0;
-      for (let i = events.length - 1; i >= 0; i--) {
-        const ev = events[i];
-        if (ev.mode !== evMode) continue;
-        if (ev.date !== dateStr) continue;
-        if (ev.id && ev.id.startsWith('charly_ai_')) {
-          lieuHerite = ev.lieu || null;
-          events.splice(i, 1);
-          removed++;
-          break;
-        }
-      }
-      // Stratégie 2 : si rien supprimé sur cette date, chercher sur toutes
-      // dates (déplacement de jour) — au plus UN événement là aussi, même raison.
-      if (removed === 0) {
-        for (let i = events.length - 1; i >= 0; i--) {
-          const ev = events[i];
-          if (ev.mode !== evMode) continue;
-          if (ev.id && ev.id.startsWith('charly_ai_')) {
-            lieuHerite = ev.lieu || null;
-            events.splice(i, 1);
-            removed++;
-            break;
-          }
-        }
+      const i = tcRdvRemplace(events, p.title, dateStr, evMode);
+      if (i >= 0) {
+        lieuHerite = events[i].lieu || null;
+        contactHerite = events[i].contact || null;
+        events.splice(i, 1);
       }
     }
 
@@ -9791,7 +9815,10 @@ function validateAgendaProposalFromMsg(msg) {
       ...(lieuFinal ? { lieu: lieuFinal } : {}),
       // Sans personne designee, le rendez-vous se cree quand meme :
       // un contact manquant n'a jamais empeche un rendez-vous d'exister.
-      ...(tcContactDeProposition(msg, p) ? { contact: tcContactDeProposition(msg, p).id } : {}),
+      // Comme le lieu : le contact de l'ancien rendez-vous suit le
+      // décalage, sauf si la proposition en nomme un autre.
+      ...(tcContactDeProposition(msg, p) ? { contact: tcContactDeProposition(msg, p).id }
+          : (contactHerite ? { contact: contactHerite } : {})),
       // Recalculee par rapport a dateStr : l'annee du debut a pu etre
       // corrigee plus haut, et une periode dont seule la fin garde la
       // mauvaise annee durerait douze mois.
@@ -10467,9 +10494,33 @@ async function tcGererConsultationAgenda(text, intent) {
 function detecterSuppressionRdv(text) {
   const t = text.toLowerCase();
   if (/\bcomment\b/.test(t)) return null;
-  if (!/\b(annule|annuler|supprime|supprimer|efface|effacer|enlève|enleve|enlever)\b/.test(t)) return null;
-  if (!/\b(rdv|rendez-vous|rendez vous|agenda|journée|journee|semaine)\b/.test(t)) return null;
+  if (!/\b(annule[rsz]?|supprime[rsz]?|efface[rsz]?|enl[eè]ve[rsz]?|retire[rsz]?)\b/.test(t)) return null;
+  // L'objet de la demande : un rendez-vous nommé comme tel, ou désigné
+  // par un moment (« supprime celui de demain 10h »). Sans l'un ni
+  // l'autre, la phrase partait au modèle, qui répondait « c'est fait »
+  // sans rien pouvoir supprimer.
+  if (!/\b(rdv|rendez-vous|rendez vous|agenda|journée|journee|semaine)\b/.test(t)
+      && !tcHeureDansTexte(t) && !tcPeriodeAgenda(t)) return null;
   return true;
+}
+
+/**
+ * Heure citée dans une phrase : « 10h », « 10h30 », « 10:30 »,
+ * « 10 heures ». null si aucune. Jamais un nombre seul : « le 10 »
+ * est une date, pas une heure.
+ */
+function tcHeureDansTexte(t) {
+  const m = String(t).toLowerCase().match(/\b([01]?\d|2[0-3])\s*(?:h|:|heures?)\s*([0-5]\d)?(?![0-9])/);
+  if (!m) return null;
+  return { h: Number(m[1]), m: m[2] ? Number(m[2]) : null };
+}
+
+/** « oui » → true, « non » → false, autre chose → null. */
+function tcReponseOuiNon(text) {
+  const t = tcSansAccents(text).replace(/[!.?,]/g, ' ').trim();
+  if (/^(oui|ouais|ok|okay|d'accord|daccord|vas-y|vas y|go|yes|confirme|je confirme|c'est ca|exact)(\s|$)/.test(t)) return true;
+  if (/^(non|no|nan|annule pas|laisse|laisse tomber|stop)(\s|$)/.test(t)) return false;
+  return null;
 }
 
 let _tcSuppressionEnAttente = null;
@@ -10486,7 +10537,8 @@ async function tcGererSuppressionRdv(text) {
   // Filtre par contact si un nom de la liste de contacts apparaît dans le texte.
   const contact = contactsList.find(c => c.name && t.includes(c.name.toLowerCase()));
   if (contact) {
-    candidats = candidats.filter(e => e.title && e.title.toLowerCase().includes(contact.name.toLowerCase()));
+    candidats = candidats.filter(e => e.contact === contact.id
+      || (e.title && e.title.toLowerCase().includes(contact.name.toLowerCase())));
     filtreApplique = true;
   }
 
@@ -10506,13 +10558,28 @@ async function tcGererSuppressionRdv(text) {
     }
   }
 
+  // Filtre par heure : « demain 10h » vise le rendez-vous de 10h, pas
+  // toute la journée. À défaut d'heure, le moment de la journée.
+  const heure = tcHeureDansTexte(t);
+  if (heure) {
+    candidats = candidats.filter(e => Number(e.startH) === heure.h
+      && (heure.m === null || Number(e.startM) === heure.m));
+    filtreApplique = true;
+  } else if (/\bmatin\b/.test(t)) {
+    candidats = candidats.filter(e => Number(e.startH) < 12);
+  } else if (/apr[eè]s-?midi|aprem/.test(t)) {
+    candidats = candidats.filter(e => Number(e.startH) >= 12 && Number(e.startH) < 18);
+  } else if (/\bsoir\b|\bsoirée\b|\bsoiree\b/.test(t)) {
+    candidats = candidats.filter(e => Number(e.startH) >= 18);
+  }
+
   // Filtre par mot du titre (ex : "mon rdv chez le dentiste" -> "dentiste"),
   // uniquement si aucun filtre contact/date/période n'a déjà tranché — un
   // nom de contact ou une date explicite prime toujours sur un mot-clé
   // approximatif du titre.
   if (!filtreApplique) {
     const motsVides = new Set(['annule','annuler','supprime','supprimer','efface','effacer',
-      'enleve','enlève','enlever','mon','ma','mes','les','des','une','avec','pour','chez',
+      'enleve','enlève','enlever','retire','retirer','celui','celle','mon','ma','mes','les','des','une','avec','pour','chez',
       'tous','toutes','rdv','rendez','vous','rendez-vous','svp','stp']);
     const motsMessage = t.split(/[^a-zà-ÿ0-9-]+/).filter(w => w.length >= 3 && !motsVides.has(w));
     if (motsMessage.length) {
@@ -10543,7 +10610,7 @@ async function tcGererSuppressionRdv(text) {
     const intro = candidats.length > 1
       ? `Tu veux annuler ces ${candidats.length} rendez-vous ?`
       : 'Tu veux annuler ce rendez-vous ?';
-    const html = `⚠️ <b>${intro}</b><br><br>${escapeHTMLSafe(lignes).replace(/\n/g,'<br>')}<br><br>Cette action est définitive.`;
+    const html = `⚠️ <b>${intro}</b><br><br>${escapeHTMLSafe(lignes).replace(/\n/g,'<br>')}<br><br>Cette action est définitive. Réponds « oui » ou « non ».`;
     charlyIA.history.push({role: 'system_info', content: html, isHTML: true});
     renderCharlyChat();
     setTimeout(() => {
@@ -10906,6 +10973,24 @@ async function charlySendMessage() {
   if (tcAttenteContactEnCours()) {
     await tcRepondreQuiEstCe(text);
     return;
+  }
+
+  // === RÉPONSE À « TU VEUX ANNULER CE RENDEZ-VOUS ? » ===
+  // Les boutons Oui / Non disparaissent au moindre réaffichage du chat,
+  // et beaucoup répondent au clavier. Sans cette branche, le « oui »
+  // partait au modèle, qui répondait « c'est fait » : rien n'était
+  // supprimé.
+  if (_tcSuppressionEnAttente) {
+    const reponse = tcReponseOuiNon(text);
+    if (reponse !== null) {
+      tcPousserMessageUtilisateur(text);
+      if (reponse) tcConfirmerSuppressionRdv();
+      else tcAnnulerSuppressionRdv();
+      return;
+    }
+    // Autre chose qu'un oui ou un non : la question tombe, rien n'est
+    // supprimé, et le message suit son chemin habituel.
+    _tcSuppressionEnAttente = null;
   }
 
   const activeKey = charlyIA.config.provider === 'anthropic'

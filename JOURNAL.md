@@ -15,9 +15,7 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-- **Charly : suppression et décalage de rendez-vous** (30/09 soir, session
-  « TIMECOOL SERVEUR ») — `tcGererSuppressionRdv`, `validateAgendaProposalFromMsg`,
-  `charlySendMessage`, prompt CAS 5/6, dans `index.html`.
+Rien n'est commencé et laissé en plan à cette heure.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
@@ -25,6 +23,16 @@ pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
+
+- **Charly disait « c'est fait » sans rien supprimer — corrigé le 30/09
+  soir** (session serveur). Le modèle n'a aucun moyen de supprimer ; seul
+  l'intercepteur `tcGererSuppressionRdv` le fait, après confirmation. Quatre
+  corrections, accordées par Charles : l'heure citée filtre la cible
+  (`tcHeureDansTexte`) ; un « oui » tapé confirme (`tcReponseOuiNon`, avant
+  l'appel au modèle) ; un décalage retire le rendez-vous du même titre
+  (`tcRdvRemplace`), plus « le premier charly_ai_ du jour », et garde son
+  contact ; le prompt (CAS 5) interdit d'annoncer une suppression.
+  Contrôle `verif-charly-suppression`.
 
 - **Google Agenda (30/09)** — côté Google, tout est prêt : API Agenda
   activée, permission `calendar.events`, Charles en utilisateur test,

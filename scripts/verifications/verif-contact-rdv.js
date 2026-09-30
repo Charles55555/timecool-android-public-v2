@@ -611,7 +611,10 @@ function fin() {
     page.indexOf('openPrevenirSheet(currentEvent.title, currentEvent)') === -1,
     'il proposait de prevenir quelqu un nomme « Rendez-vous dentiste »');
   verifie('la validation emporte la personne',
-    page.indexOf('...(tcContactDeProposition(msg, p) ? { contact: tcContactDeProposition(msg, p).id } : {})') > -1);
+    page.indexOf('...(tcContactDeProposition(msg, p) ? { contact: tcContactDeProposition(msg, p).id }') > -1);
+  verifie('un décalage garde la personne',
+    page.indexOf('(contactHerite ? { contact: contactHerite } : {})') > -1,
+    'sans elle, décaler un rendez-vous par Charly perdait son contact');
   verifie('Charly sait qu il ne choisit pas',
     page.indexOf('Tu ne cherches JAMAIS dans ses contacts') > -1,
     'sinon il inventerait un nom de famille');
