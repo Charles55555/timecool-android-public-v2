@@ -63,8 +63,10 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   `fastcgi_finish_request`), et à chaque ouverture des Paramètres.
   Rendez-vous à venir seulement, 25 appels Google par passage au plus,
   table `google_agenda_liens` (migration 008, appliquée). Case
-  « Envoyer » dans les Paramètres. **Pas encore essayée pour de vrai** :
-  aucun compte n'est relié. Premier essai = Charles relie 5@dentalcortex.fr.
+  « Envoyer » dans les Paramètres. **Essayée pour de vrai le 30/09 à
+  22h44** : compte 53 relié à timecool.app@gmail.com, la Ryder Cup
+  (11–16/11) et « Essai agenda Google » (créé par Charly) sont arrivés
+  dans Google Agenda. Modification et suppression pas encore essayées.
   Reste : le retour Google → TimeCool (suppressions et modifications des
   rendez-vous marqués `timecool_uid`), puis la case « Laisser Charly lire
   tout mon Google Agenda ».
