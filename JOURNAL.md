@@ -66,7 +66,10 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   « Envoyer » dans les Paramètres. **Essayée pour de vrai le 30/09 à
   22h44** : compte 53 relié à timecool.app@gmail.com, la Ryder Cup
   (11–16/11) et « Essai agenda Google » (créé par Charly) sont arrivés
-  dans Google Agenda. Modification et suppression pas encore essayées.
+  dans Google Agenda. Modification essayée (dermatologue décalé à 16h,
+  suivi chez Google), contact écrit « 👤 Avec … » en tête de description
+  (choix de Charles : pas d'invité Google, qui recevrait un e-mail).
+  Suppression pas encore essayée.
   Reste : le retour Google → TimeCool (suppressions et modifications des
   rendez-vous marqués `timecool_uid`), puis la case « Laisser Charly lire
   tout mon Google Agenda ».
