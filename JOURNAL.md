@@ -15,9 +15,7 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-- **Google Agenda, étape 2 : recopie TimeCool → Google** (01/10, session
-  « TIMECOOL SERVEUR ») — `backend/api/index.php` (après POST /sync),
-  `backend/sql/008_*`, bloc Google Agenda des Paramètres dans `index.html`.
+Rien n'est commencé et laissé en plan à cette heure.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
@@ -59,6 +57,20 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   à 775. **À faire avant le lancement : passer l'application Google de
   « Test » à « Production », sinon seul `5@dentalcortex.fr` peut relier
   son agenda.**
+  **Étape 2 en ligne le 30/09 à 22h17** (session serveur) : recopie
+  TimeCool → Google, faite par le serveur après chaque POST /sync qui
+  touche un rendez-vous (`googleAgendaRecopier`, après la réponse, par
+  `fastcgi_finish_request`), et à chaque ouverture des Paramètres.
+  Rendez-vous à venir seulement, 25 appels Google par passage au plus,
+  table `google_agenda_liens` (migration 008, appliquée). Case
+  « Envoyer » dans les Paramètres. **Pas encore essayée pour de vrai** :
+  aucun compte n'est relié. Premier essai = Charles relie 5@dentalcortex.fr.
+  Reste : le retour Google → TimeCool (suppressions et modifications des
+  rendez-vous marqués `timecool_uid`), puis la case « Laisser Charly lire
+  tout mon Google Agenda ».
+  **À vérifier :** les 30 rendez-vous du compte 53 (5@dentalcortex.fr)
+  ont tous un titre vide sur le serveur — perte à l'envoi, ou vraiment
+  vides sur son téléphone ? Poser la question à Charles.
   Étape 2, pas commencée : la recopie des rendez-vous. D'ici là l'écran
   le dit franchement, sans case qui ne ferait rien.
 
