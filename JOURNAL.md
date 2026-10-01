@@ -32,8 +32,12 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   serveur, récupérés par le PC à la main). Charles a commandé le 01/10
   **IONOS Backup Cloud « Starter 100 »** (Acronis, 100 Go, 7 €/mois) pour
   copier hors du serveur le dossier des sauvegardes Plesk
-  (`/var/lib/psa/dumps`, ~42 Go). Reste : installer l'agent Acronis,
-  créer le plan, vérifier une première copie. Vérifier aussi que la base
+  (`/var/lib/psa/dumps`, ~42 Go). **Fait le 01/10** : agent Acronis installé
+  (machine 94DF20D, en ligne), plan « Nouveau plan de protection (1) »
+  appliqué : fichiers `/var/lib/psa/dumps` + `/var/backups/timecool`,
+  incrémentiel quotidien vers le cloud IONOS, 03h00 heure du serveur (UTC,
+  soit 5h à Paris), 7 jours. Console : backup.1and1.com, compte
+  NGCS_C5A96_3517.admin. Reste : vérifier la première copie le 02/10. Vérifier aussi que la base
   `timecool_prod` est bien connue de Plesk (sinon absente des sauvegardes).
 
 - **Sentinelle en service depuis le 01/10 à 12h17** : `scripts/sentinelle.sh`,
