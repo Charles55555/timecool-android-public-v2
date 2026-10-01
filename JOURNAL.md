@@ -24,6 +24,16 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
+- **Plesk mis à niveau en 18.0.81.2 le 01/10** (session du PC, ligne collée
+  par Charles ; sauvegardes préalables dans `/root/avant-plesk-18.0.81/`).
+  Services et TimeCool vérifiés sains. Mises à jour automatiques Ubuntu et
+  Plesk : déjà actives ; redémarrage automatique laissé désactivé (la
+  session serveur ne se relance pas seule au démarrage). Optimisation
+  MariaDB de « Performance Booster » **écartée** : `timecool_prod` fait 16 Mo,
+  cache InnoDB à 99,98 % de réussite, un redémarrage pour aucun gain.
+  Piège : la fin d'une mise à jour se juge à la libération du verrou dpkg
+  (`fuser /var/lib/dpkg/lock-frontend`), pas à la version affichée.
+
 - **Sauvegardes — état réel vérifié le 01/10** : Plesk sauvegarde chaque nuit
   à 0h07 (complète le lundi ~9,4 Go, incrémentale ~200 Mo), 25 versions,
   toutes réussies, mais **uniquement sur le serveur** (stockage distant
