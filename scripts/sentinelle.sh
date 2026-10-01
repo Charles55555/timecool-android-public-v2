@@ -57,7 +57,7 @@ prevenir() {
     tmux send-keys -t "$SESSION" Enter
   else
     printf '%s\n\nLa session Claude du serveur ne tourne pas : personne n a pu intervenir.\n' "$message" \
-      | mail -s "TimeCool : alerte de la sentinelle" "$EMAIL"
+      | mail -s "PANNE APPLICATION TIMECOOL SUR LE SERVEUR" "$EMAIL"
   fi
 }
 
