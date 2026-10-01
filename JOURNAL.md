@@ -167,6 +167,9 @@ Plusieurs défauts de la semaine étaient invisibles dans le code.
 
 ## Avant le lancement public
 
+- Changer tous les mots de passe donnés à Claude pendant la phase de test
+  (console de sauvegarde IONOS, etc.).
+
 - Revoir `/etc/sudoers.d/claudecode` (droit administrateur du profil de
   Claude, gardé par Charles pendant la phase de test).
 
