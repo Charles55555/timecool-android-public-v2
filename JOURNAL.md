@@ -37,8 +37,11 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   appliqué : fichiers `/var/lib/psa/dumps` + `/var/backups/timecool`,
   incrémentiel quotidien vers le cloud IONOS, 03h00 heure du serveur (UTC,
   soit 5h à Paris), 7 jours. Console : backup.1and1.com, compte
-  NGCS_C5A96_3517.admin. Reste : vérifier la première copie le 02/10. Vérifier aussi que la base
-  `timecool_prod` est bien connue de Plesk (sinon absente des sauvegardes).
+  NGCS_C5A96_3517.admin. Reste : vérifier la première copie le 02/10
+  (**session serveur seulement**, pour ne pas le faire deux fois).
+  Vérifié le 01/10 par la session du PC : `timecool_prod` est connue de
+  Plesk (abonnement timecool.fr) et présente dans la sauvegarde de la nuit
+  (`dumps/domains/timecool.fr/databases/timecool_prod_1`, 01/10 00h08). 
 
 - **Sentinelle en service depuis le 01/10 à 12h17** : `scripts/sentinelle.sh`,
   cron de `claudecode` chaque minute. Vérifie API, version web, erreurs
