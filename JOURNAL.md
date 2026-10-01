@@ -24,6 +24,18 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
+- **Profil `claudecode` et droits administrateur — 01/10** : sur décision de
+  Charles (trois profils : lui, la session du PC en secours, `claudecode`),
+  `/etc/sudoers.d/claudecode` (NOPASSWD: ALL) posé par lui depuis Plesk, et
+  règle `Bash(sudo:*)` ajoutée à `.claude/settings.local.json`. Le
+  garde-fou de Claude a refusé deux fois `sudo -n id -un` (« Permission
+  Grant », puis « Credential Exploration »). Relance de la session demandée
+  pour vérifier si la règle est alors prise en compte. Si le refus
+  persiste : conseiller à Charles de retirer `/etc/sudoers.d/claudecode`
+  (droit inutilisable = risque sans usage). Journaux du serveur lisibles
+  depuis le 01/10 ; Plesk en français ; Charles débloque depuis son
+  téléphone (Plesk → Extensions → Terminal SSH).
+
 - **Charly déplace des rendez-vous — 30/09 nuit** (session serveur), règle
   de Charles : compris → exécuté, sans carte « Valider ». Le modèle renvoie
   les nouvelles places en [AGENDA] sous le titre d'origine (prompt CAS 6 :
