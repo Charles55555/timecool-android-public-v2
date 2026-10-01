@@ -15,7 +15,9 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-Rien n'est commencé et laissé en plan à cette heure.
+- **Sentinelle de maintenance** (01/10, session « TIMECOOL SERVEUR ») —
+  `scripts/sentinelle.sh`, tâche cron de `claudecode`, état dans
+  `~/.timecool-sentinelle/`.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
