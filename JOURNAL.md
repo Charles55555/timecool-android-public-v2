@@ -33,8 +33,9 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   pour vérifier si la règle est alors prise en compte. **Relance faite le
   01/10 : refus maintenu** (« Credential Exploration »). Conclusion : les
   actions administrateur restent à Charles, depuis Plesk sur son téléphone.
-  Conseillé de retirer `/etc/sudoers.d/claudecode` (droit inutilisable =
-  risque sans usage) — sa décision. Ne pas retenter `sudo`. Journaux du serveur lisibles
+  Conseillé de retirer `/etc/sudoers.d/claudecode` ; **Charles a décidé de
+  le garder** (« phase de test, aucun utilisateur ») — ne plus le
+  proposer avant le lancement public. Ne pas retenter `sudo`. Journaux du serveur lisibles
   depuis le 01/10 ; Plesk en français ; Charles débloque depuis son
   téléphone (Plesk → Extensions → Terminal SSH).
 
@@ -145,6 +146,9 @@ La session du nuage écrit et teste le code, ouvre une *pull request*, et
 Plusieurs défauts de la semaine étaient invisibles dans le code.
 
 ## Avant le lancement public
+
+- Revoir `/etc/sudoers.d/claudecode` (droit administrateur du profil de
+  Claude, gardé par Charles pendant la phase de test).
 
 Voir la section 8 de `CLAUDE.md`. Rien de tout cela n'est fait.
 
