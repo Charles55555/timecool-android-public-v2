@@ -24,6 +24,18 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
+- **Sauvegardes — état réel vérifié le 01/10** : Plesk sauvegarde chaque nuit
+  à 0h07 (complète le lundi ~9,4 Go, incrémentale ~200 Mo), 25 versions,
+  toutes réussies, mais **uniquement sur le serveur** (stockage distant
+  FTP(S) « Non configuré », rien chez IONOS jusqu'ici). À part :
+  `timecool-backup.timer` (secrets `private/` chiffrés, 2h15, sur le
+  serveur, récupérés par le PC à la main). Charles a commandé le 01/10
+  **IONOS Backup Cloud « Starter 100 »** (Acronis, 100 Go, 7 €/mois) pour
+  copier hors du serveur le dossier des sauvegardes Plesk
+  (`/var/lib/psa/dumps`, ~42 Go). Reste : installer l'agent Acronis,
+  créer le plan, vérifier une première copie. Vérifier aussi que la base
+  `timecool_prod` est bien connue de Plesk (sinon absente des sauvegardes).
+
 - **Sentinelle en service depuis le 01/10 à 12h17** : `scripts/sentinelle.sh`,
   cron de `claudecode` chaque minute. Vérifie API, version web, erreurs
   fatales PHP ; panne déclarée à la 2e minute ratée ; API remise à la
