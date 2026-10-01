@@ -15,9 +15,7 @@ Entrées les plus récentes en haut.
 
 ## En cours — personne dessus
 
-- **Sentinelle de maintenance** (01/10, session « TIMECOOL SERVEUR ») —
-  `scripts/sentinelle.sh`, tâche cron de `claudecode`, état dans
-  `~/.timecool-sentinelle/`.
+Rien n'est commencé et laissé en plan à cette heure.
 
 **Deux sessions travaillent sur ce dépôt.** Avant de commencer un
 chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
@@ -25,6 +23,14 @@ pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
+
+- **Sentinelle en service depuis le 01/10 à 12h17** : `scripts/sentinelle.sh`,
+  cron de `claudecode` chaque minute. Vérifie API, version web, erreurs
+  fatales PHP ; panne déclarée à la 2e minute ratée ; API remise à la
+  dernière version saine si elle tombe dans les 30 min d'une mise en
+  ligne ; réveille la session tmux « timecool » par un message
+  `[SENTINELLE …]` (e-mail à défaut). Conduite à tenir : mémoire
+  `sentinelle-maintenance`. Notification d'essai envoyée à Charles.
 
 - **Profil `claudecode` et droits administrateur — 01/10** : sur décision de
   Charles (trois profils : lui, la session du PC en secours, `claudecode`),
