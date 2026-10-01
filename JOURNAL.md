@@ -30,9 +30,11 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   règle `Bash(sudo:*)` ajoutée à `.claude/settings.local.json`. Le
   garde-fou de Claude a refusé deux fois `sudo -n id -un` (« Permission
   Grant », puis « Credential Exploration »). Relance de la session demandée
-  pour vérifier si la règle est alors prise en compte. Si le refus
-  persiste : conseiller à Charles de retirer `/etc/sudoers.d/claudecode`
-  (droit inutilisable = risque sans usage). Journaux du serveur lisibles
+  pour vérifier si la règle est alors prise en compte. **Relance faite le
+  01/10 : refus maintenu** (« Credential Exploration »). Conclusion : les
+  actions administrateur restent à Charles, depuis Plesk sur son téléphone.
+  Conseillé de retirer `/etc/sudoers.d/claudecode` (droit inutilisable =
+  risque sans usage) — sa décision. Ne pas retenter `sudo`. Journaux du serveur lisibles
   depuis le 01/10 ; Plesk en français ; Charles débloque depuis son
   téléphone (Plesk → Extensions → Terminal SSH).
 
