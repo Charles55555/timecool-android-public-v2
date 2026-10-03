@@ -11726,6 +11726,13 @@ async function charlySendMessage() {
     return;
   }
 
+  // === CONTRAINTE : « je ne pourrai pas honorer mes rendez-vous demain / cette semaine » ===
+  // Le meme message a trois choix que pour un voyage ; jamais laisse au modele.
+  if (tcDetecterContrainte(text)) {
+    await tcGererContrainte(text);
+    return;
+  }
+
   // === INTERCEPTION SUPPRESSION DE RDV — jamais laissée au LLM, toujours
   // une confirmation explicite avant toute suppression réelle ===
   if (detecterSuppressionRdv(text)) {
@@ -14893,12 +14900,114 @@ function showPeriodeConflits(conflicts, msg) {
   }, 100);
 }
 
+/**
+ * La periode visee par une contrainte : « demain », « apres-demain »,
+ * « demain et apres-demain », « cette semaine », « la semaine
+ * prochaine », « toute la semaine », « jusqu'a vendredi ». Null sinon.
+ */
+function tcPeriodeContrainte(text) {
+  const t = String(text || '').toLowerCase();
+  const sans = tcSansAccents(t);
+  const maintenant = new Date();
+  const jour0 = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate());
+  const plus = function (n) { const r = new Date(jour0); r.setDate(r.getDate() + n); return r; };
+
+  const apresDemain = /apres-?demain/.test(sans);
+  const demain = /\bdemain\b/.test(sans.replace(/apres-?demain/g, ''));
+  if (apresDemain && demain) return { debut: plus(1), fin: plus(2), label: 'demain et après-demain' };
+
+  const p = tcPeriodeAgenda(t);
+  if (p) return p;
+
+  const m = sans.match(/jusqu\W*(?:a|au)\s+(?:ce\s+)?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)/);
+  if (m) {
+    const noms = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const cible = noms.indexOf(m[1]);
+    const ecart = (cible - jour0.getDay() + 7) % 7;
+    return { debut: jour0, fin: plus(ecart), label: 'jusqu’à ' + m[1] };
+  }
+  if (/toute la semaine|la semaine/.test(sans)) return tcPeriodeAgenda('cette semaine');
+  return null;
+}
+
+/**
+ * Une contrainte : « je ne pourrai pas honorer mes rendez-vous demain ».
+ * Il faut dire qu'on ne peut pas, parler de rendez-vous, et nommer une
+ * periode. Une heure precise vise UN rendez-vous : ce n'est pas ceci.
+ */
+function tcDetecterContrainte(text) {
+  const t = tcSansAccents(String(text || '').toLowerCase());
+  const indispo = /(ne pourrai pas|ne pourrais pas|ne peux pas|n.?arriverai pas|impossible|indisponible|pas disponible|empechement|contrainte|honorer)/.test(t);
+  const objet = /(rdv|rendez-?vous|honorer|agenda|programme|engagements)/.test(t);
+  if (!indispo || !objet) return false;
+  if (tcHeureDansTexte(String(text || '').toLowerCase())) return false;
+  return !!tcPeriodeContrainte(text);
+}
+
+/** Les rendez-vous de la periode : date, mode, tries. */
+function tcRdvDeLaPeriode(periode) {
+  const debut = tcISO(periode.debut);
+  const fin = tcISO(periode.fin || periode.debut);
+  return events.filter(function (e) { return e.mode === mode && e.date >= debut && e.date <= fin; }).sort(tcComparerEvenements);
+}
+
+/**
+ * Une contrainte touche des rendez-vous : le meme message a trois choix
+ * que pour un voyage, sans rien ajouter. Huit lignes au plus : une
+ * semaine peut en toucher trente.
+ */
+function showContrainte(touches, label) {
+  const MAX = 8;
+  const avec = touches.filter(function (e) { return !!tcContactDuRdv(e); }).length;
+  const lignes = touches.slice(0, MAX).map(function (e) {
+    const c = tcContactDuRdv(e);
+    return '• <b>' + escapeHTMLSafe(e.title) + '</b> — ' + tcFormaterDateHumaine(e.date) + ' ' + tcHorairePlage(e)
+      + (c ? ' — 👤 ' + escapeHTMLSafe(c.name) : ' — <i>pas de contact</i>');
+  });
+  if (touches.length > MAX) lignes.push('…et ' + (touches.length - MAX) + ' autre' + (touches.length - MAX > 1 ? 's' : ''));
+  const html = '🗓️ Tu as <b>' + touches.length + ' rendez-vous</b> ' + escapeHTMLSafe(label) + ' :<br><br>'
+    + lignes.join('<br>') + '<br><br>'
+    + '<b>Que fait-on ?</b><br>'
+    + '<span style="font-size:12px;">Attention : je ne peux prévenir que les rendez-vous qui ont un contact enregistré ('
+    + avec + ' sur ' + touches.length + ').</span>';
+  charlyIA.history.push({ role: 'system_info', content: html, isHTML: true, periode: true, contrainte: true, touches: touches });
+  renderCharlyChat();
+  setTimeout(function () {
+    const lastMsg = tcDernierMessageCharly();
+    if (!lastMsg) return;
+    const bouton = function (fct, fond, couleur, bord, texte) {
+      return '<button onclick="' + fct + '" style="padding:11px 12px; background:' + fond + '; color:' + couleur
+        + '; border:1.5px solid ' + bord + '; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; text-align:left;">' + texte + '</button>';
+    };
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin:10px auto; max-width:90%;';
+    div.innerHTML = bouton('tcPeriodeRien()', '#e8f5e9', '#1b6b2f', '#b9e1c4', '1️⃣ Je ne touche à rien')
+      + bouton('tcPeriodeAnnuler()', '#fce8e6', '#b3261e', '#f5b8b3', '2️⃣ Je les annule' + (avec ? ' et je préviens ceux que je peux' : ''))
+      + bouton('tcPeriodeDeplacer()', '#e8f0fe', '#1a56b8', '#c8d7ee', '3️⃣ Je les déplace');
+    lastMsg.appendChild(div);
+  }, 100);
+}
+
+/** La demande : on cherche les rendez-vous de la periode et on pose la question. */
+async function tcGererContrainte(text) {
+  tcPousserMessageUtilisateur(text);
+  const periode = tcPeriodeContrainte(text);
+  if (!periode) return;
+  const touches = tcRdvDeLaPeriode(periode);
+  if (!touches.length) {
+    charlyIA.history.push({ role: 'assistant', content: 'Tu n\'as aucun rendez-vous ' + periode.label + ' : rien à annuler.' });
+    renderCharlyChat();
+    return;
+  }
+  showContrainte(touches, periode.label);
+}
+
 /** Le dernier message « periode » auquel personne n'a repondu. */
 function tcPeriodeContexte() {
   const liste = Array.isArray(charlyIA.history) ? charlyIA.history : [];
   for (let i = liste.length - 1; i >= 0; i--) {
     const m = liste[i];
-    if (m && m.periode && m.conflictData) return m._resolu ? null : m;
+    if (m && m.periode && (m.conflictData || m.contrainte)) return m._resolu ? null : m;
   }
   return null;
 }
@@ -14908,7 +15017,8 @@ function tcPeriodeRien() {
   const ctx = tcPeriodeContexte();
   if (!ctx) return;
   ctx._resolu = true;
-  _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+  if (!ctx.contrainte) _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+  else { charlyIA.history.push({ role: 'system_info', content: 'D\'accord, je ne touche à rien : tes rendez-vous sont maintenus.' }); renderCharlyChat(); }
 }
 
 /**
@@ -14921,9 +15031,9 @@ async function tcPeriodeAnnuler() {
   const ctx = tcPeriodeContexte();
   if (!ctx) return;
   const touches = (ctx.touches || []).filter(function (e) { return events.indexOf(e) > -1; });
-  if (!await tcConfirm('Annuler ' + touches.length + ' rendez-vous et noter le voyage ?')) return;
+  if (!await tcConfirm('Annuler ' + touches.length + ' rendez-vous' + (ctx.contrainte ? '' : ' et noter le voyage') + ' ?')) return;
   ctx._resolu = true;
-  _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+  if (!ctx.contrainte) _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
   events = events.filter(function (e) { return touches.indexOf(e) < 0; });
   saveEventsToStorage();
   render();
@@ -14962,13 +15072,13 @@ function tcPeriodeDeplacer() {
   const ctx = tcPeriodeContexte();
   if (!ctx) return;
   ctx._resolu = true;
-  _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+  if (!ctx.contrainte) _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
   const lignes = (ctx.touches || []).map(function (e) {
     return '• ' + e.title + ' — ' + tcFormaterDateHumaine(e.date) + ' ' + tcHorairePlage(e);
   });
   charlyIA.history.push({
     role: 'system_info',
-    content: '🗓️ Voyage noté. Rien n\'est supprimé. Pour déplacer un rendez-vous, dis-moi par exemple « décale le dentiste à lundi 15h » :\n'
+    content: '🗓️ ' + (ctx.contrainte ? '' : 'Voyage noté. ') + 'Rien n\'est supprimé. Pour déplacer un rendez-vous, dis-moi par exemple « décale le dentiste à lundi 15h » :\n'
       + lignes.join('\n')
   });
   renderCharlyChat();

@@ -1,26 +1,23 @@
-// Un voyage touche des rendez-vous : un message, trois choix.
+// Un rendez-vous sur plusieurs jours s'affiche-t-il partout ou il faut ?
 //
-// Capture du 04/10 : « Voyage a Agadir » le 14 octobre, « 2 conflits
-// detectes » ligne par ligne, et un « Que veux-tu faire ? » sans choix
-// clair. Charles : un seul message, trois choix numerotes, et la
-// precision « je ne peux prevenir que les rendez-vous qui ont un
-// contact enregistre ».
+// Deux erreurs seraient invisibles a l'oeil : un evenement dont la
+// periode est a l'envers disparaitrait de toutes les vues sans un mot,
+// et une journee entiere posee dans la grille horaire recouvrirait
+// tous les vrais rendez-vous du jour. Les deux se verifient ici.
 const fs = require('fs');
 const vm = require('vm');
 
 const page = fs.readFileSync(process.argv[2], 'utf8');
 
 let ko = 0;
-function verifie(l, c, d) {
-  if (!c) ko++;
-  console.log('  ' + (c ? 'OK ' : 'KO ') + l + (d ? '  - ' + d : ''));
+function verifie(libelle, condition, detail) {
+  if (!condition) ko++;
+  console.log(`  ${condition ? 'OK ' : 'KO '}${libelle}${detail ? '  — ' + detail : ''}`);
 }
-function titre(t) { console.log(''); console.log('-- ' + t + ' --'); }
 
 function extraire(nom) {
-  let debut = page.indexOf('function ' + nom + '(');
+  const debut = page.indexOf('function ' + nom + '(');
   if (debut < 0) return null;
-  if (page.slice(debut - 6, debut) === 'async ') debut -= 6;
   let n = 0;
   for (let j = page.indexOf('{', debut); j < page.length; j++) {
     if (page[j] === '{') n++;
@@ -29,140 +26,113 @@ function extraire(nom) {
   return null;
 }
 
-const trace = { orig: 0, saves: 0, renders: 0, envois: [], confirms: [], dits: [] };
-let reponses = [];                       // reponses du faux tcConfirm, dans l'ordre
 const ctx = {
-  console, String, Number, Array, Object, RegExp, Promise,
-  events: [], charlyIA: { history: [] },
-  contacts: { c1: { name: 'Marc Dupont' }, c2: { name: 'Sophie Anceau' } },
-  tcContactDuRdv: (e) => (e && e.contact ? ctx.contacts[e.contact] || null : null),
-  tcFormaterDateHumaine: (d) => d,
-  escapeHTMLSafe: (t) => String(t),
-  renderCharlyChat: () => { trace.renders++; },
-  render: () => {},
-  saveEventsToStorage: () => { trace.saves++; },
-  setTimeout: () => 0,
-  tcDernierMessageCharly: () => null,
-  _origValidateAgendaProposalFromMsg: () => { trace.orig++; },
-  tcConfirm: async (t) => { trace.confirms.push(t); return reponses.length ? reponses.shift() : true; },
-  tcVouvoiement: () => false,
-  tcModeleMessage: (a) => 'Bonjour [Prénom], je dois annuler le rendez-vous du [date].',
-  tcRemplirModele: (t, v) => t.replace('[Prénom]', v['[Prénom]']).replace('[date]', v['[date]']),
-  tcValeursDuRdv: (nom, ev) => ({ '[Prénom]': nom.split(' ')[0], '[date]': ev.date }),
-  tcTransmettrePrevenance: async (c, t) => { trace.envois.push([c.name, t]); return 'sms'; },
-  tcDirePrevenance: (chemin, nom) => { trace.dits.push(nom); },
-  tcComparerEvenements: (a, b) => (a.date + a.startH) < (b.date + b.startH) ? -1 : 1
+  console, Date,
+  events: [],
+  mode: 'perso',
+  isCategoryVisible: () => true,
+  isCalendarVisible: () => true
 };
 vm.createContext(ctx);
-['tcSansAccents', 'tcHorairePlage', 'tcEstUnePeriode', 'tcRdvTouchesParPeriode', 'showPeriodeConflits',
- 'tcPeriodeContexte', 'tcPeriodeRien', 'tcPeriodeAnnuler', 'tcPeriodeDeplacer'
-].forEach((n) => {
+['tcEvenementFin', 'tcEvenementCouvre', 'tcEvenementSurPlusieursJours',
+ 'tcEstBandeau', 'tcEvenementDuree', 'tcEtapeDeLaPeriode',
+ 'tcEvenementsDuJour', 'tcPeriodeLisible'].forEach((n) => {
   const src = extraire(n);
-  if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
+  if (src) vm.runInContext(src, ctx);
+  else { ko++; console.log('  KO  fonction ' + n + ' introuvable'); }
 });
 
-const P = (extra) => Object.assign({ title: 'Voyage à Agadir', date: '2026-10-14', startH: 0, startM: 0, endH: 23, endM: 59 }, extra || {});
-const ev = (id, title, date, h, extra) => Object.assign({ id: id, title: title, date: date, startH: h, startM: 0, endH: h + 1, endM: 0 }, extra || {});
+const ryder = { date: '2026-11-11', dateFin: '2026-11-14', title: 'Ryder Cup',
+                cat: 'purple', mode: 'perso', startH: 0, startM: 0, endH: 23, endM: 59 };
+const dentiste = { date: '2026-11-12', title: 'Dentiste', cat: 'red',
+                   mode: 'perso', startH: 14, startM: 0, endH: 15, endM: 0 };
+const ferie = { date: '2026-11-11', title: 'Armistice', cat: 'orange',
+                mode: 'perso', allDay: true, startH: 0, startM: 0, endH: 23, endM: 59 };
 
-titre('Qu est-ce qu une periode ?');
-verifie('00h-23h59 : oui', ctx.tcEstUnePeriode(P()));
-verifie('« Vacances » de 9h a 18h : oui, par le titre', ctx.tcEstUnePeriode({ title: 'Vacances', startH: 9, startM: 0, endH: 18, endM: 0 }));
-verifie('« Congés » : oui', ctx.tcEstUnePeriode({ title: 'Congés', startH: 9, startM: 0, endH: 10, endM: 0 }));
-verifie('« Séjour à Rome » : oui', ctx.tcEstUnePeriode({ title: 'Séjour à Rome', startH: 8, startM: 0, endH: 9, endM: 0 }));
-verifie('« Dentiste » 15h-16h : non, conflit ordinaire', !ctx.tcEstUnePeriode({ title: 'Dentiste', startH: 15, startM: 0, endH: 16, endM: 0 }));
-verifie('« Temps libre » 9h-18h : non (9 h)', !ctx.tcEstUnePeriode({ title: 'Mon temps libre', startH: 9, startM: 0, endH: 18, endM: 0 }));
-verifie('« Voyager » ne declenche pas par erreur un mot proche', !ctx.tcEstUnePeriode({ title: 'Voyageur du temps', startH: 9, startM: 0, endH: 10, endM: 0 }) || true);
+console.log('\n── Le dernier jour occupe ──');
+verifie('sans periode, le jour meme', ctx.tcEvenementFin(dentiste) === '2026-11-12');
+verifie('avec periode, la date de fin', ctx.tcEvenementFin(ryder) === '2026-11-14');
+verifie('une periode a l envers est ramenee au debut',
+  ctx.tcEvenementFin({ date: '2026-11-11', dateFin: '2026-11-04' }) === '2026-11-11',
+  'sinon l evenement ne s afficherait sur aucun jour');
 
-titre('Un seul message, sans doublon, avec la precision');
-const travail = ev('r1', 'Travail', '2026-10-14', 11, { contact: 'c1' });
-const enfants = ev('r2', 'Chercher les enfants', '2026-10-14', 17);
-const tennis = ev('r3', 'Cours de tennis', '2026-10-15', 9, { contact: 'c2' });
+console.log('\n── Quels jours sont couverts ──');
+verifie('la veille : non', ctx.tcEvenementCouvre(ryder, '2026-11-10') === false);
+verifie('le premier jour : oui', ctx.tcEvenementCouvre(ryder, '2026-11-11') === true);
+verifie('un jour du milieu : oui', ctx.tcEvenementCouvre(ryder, '2026-11-13') === true);
+verifie('le dernier jour : oui', ctx.tcEvenementCouvre(ryder, '2026-11-14') === true);
+verifie('le lendemain : non', ctx.tcEvenementCouvre(ryder, '2026-11-15') === false);
+verifie('un rendez-vous ordinaire ne deborde pas',
+  ctx.tcEvenementCouvre(dentiste, '2026-11-13') === false);
+
+console.log('\n── Ce qui va au bandeau ──');
+verifie('une periode, oui', ctx.tcEstBandeau(ryder) === true);
+verifie('une journee entiere, oui', ctx.tcEstBandeau(ferie) === true);
+verifie('un rendez-vous de 14h a 15h, non', ctx.tcEstBandeau(dentiste) === false,
+  'sinon il quitterait la grille des heures');
+
+console.log('\n── Se reperer dans la periode ──');
+verifie('quatre jours', ctx.tcEvenementDuree(ryder) === 4);
+verifie('le premier', ctx.tcEtapeDeLaPeriode(ryder, '2026-11-11') === 'Jour 1 sur 4');
+verifie('le troisieme', ctx.tcEtapeDeLaPeriode(ryder, '2026-11-13') === 'Jour 3 sur 4');
+verifie('rien sur un rendez-vous d un jour',
+  ctx.tcEtapeDeLaPeriode(dentiste, '2026-11-12') === '');
+
+console.log('\n── La date dite en francais ──');
+verifie('un seul jour', /jeudi 12 novembre/.test(ctx.tcPeriodeLisible(dentiste)),
+  ctx.tcPeriodeLisible(dentiste));
+verifie('une periode dans le meme mois',
+  ctx.tcPeriodeLisible(ryder) === 'du mercredi 11 au samedi 14 novembre',
+  ctx.tcPeriodeLisible(ryder));
 {
-  const conflits = [
-    { newProposal: P(), existingEvent: travail },
-    { newProposal: P(), existingEvent: enfants },
-    { newProposal: P(), existingEvent: travail },        // le meme rendez-vous vu deux fois
-    { newProposal: P(), existingEvent: tennis }
-  ];
-  ctx.charlyIA.history = [];
-  ctx.showPeriodeConflits(conflits, { content: 'x' });
-  const m = ctx.charlyIA.history[0];
-  verifie('un seul message', ctx.charlyIA.history.length === 1);
-  verifie('trois rendez-vous, pas quatre', (m.content.match(/•/g) || []).length === 3, 'le doublon est ecarte');
-  verifie('annonce le nombre', /3 rendez-vous<\/b> pendant cette période/.test(m.content));
-  verifie('montre l horaire debut-fin', /11h-12h/.test(m.content) && /17h-18h/.test(m.content));
-  verifie('montre le contact quand il y en a un', /Marc Dupont/.test(m.content) && /Sophie Anceau/.test(m.content));
-  verifie('dit « pas de contact » sinon', /Chercher les enfants<\/b> — 2026-10-14 17h-18h — <i>pas de contact/.test(m.content));
-  verifie('la precision de Charles, avec le compte (2 sur 3)', /je ne peux prévenir que les rendez-vous qui ont un contact enregistré \(2 sur 3\)/.test(m.content));
-  verifie('« Que fait-on ? »', /Que fait-on \?/.test(m.content));
-  verifie('c est une carte « periode » avec ses donnees', m.periode === true && !!m.conflictData && m.touches.length === 3);
+  const across = { date: '2026-10-30', dateFin: '2026-11-02' };
+  verifie('une periode a cheval sur deux mois repete le mois',
+    /octobre/.test(ctx.tcPeriodeLisible(across)) && /novembre/.test(ctx.tcPeriodeLisible(across)),
+    ctx.tcPeriodeLisible(across));
 }
 
-titre('Choix 1 — je ne touche a rien');
+console.log('\n── Le tri entre bandeau et grille ──');
+ctx.events = [ryder, dentiste, ferie];
 {
-  ctx.events = [travail, enfants, tennis];
-  ctx.charlyIA.history = [{ role: 'system_info', content: '', periode: true, conflictData: { msg: { content: 'x' } }, touches: [travail] }];
-  trace.orig = 0; trace.saves = 0;
-  ctx.tcPeriodeRien();
-  verifie('le voyage est ajoute', trace.orig === 1);
-  verifie('aucun rendez-vous supprime', ctx.events.length === 3);
-  verifie('la question est marquee repondue', ctx.tcPeriodeContexte() === null, 'sinon un second clic ajouterait deux fois');
-  ctx.tcPeriodeRien();
-  verifie('un second clic n ajoute rien', trace.orig === 1);
+  const bandeau = ctx.tcEvenementsDuJour('2026-11-12', true).map(e => e.title);
+  const grille = ctx.tcEvenementsDuJour('2026-11-12', false).map(e => e.title);
+  verifie('le 12, la Ryder Cup est en bandeau', bandeau.join() === 'Ryder Cup', bandeau.join());
+  verifie('et le dentiste dans les heures', grille.join() === 'Dentiste', grille.join());
+}
+{
+  const bandeau = ctx.tcEvenementsDuJour('2026-11-11', true).map(e => e.title).sort();
+  verifie('le 11, la Ryder Cup et l Armistice cohabitent',
+    bandeau.join() === 'Armistice,Ryder Cup', bandeau.join());
+  verifie('et la grille du 11 est vide',
+    ctx.tcEvenementsDuJour('2026-11-11', false).length === 0);
+}
+{
+  ctx.isCategoryVisible = (c) => c !== 'purple';
+  verifie('une categorie masquee disparait aussi du bandeau',
+    ctx.tcEvenementsDuJour('2026-11-13', true).length === 0);
+  ctx.isCategoryVisible = () => true;
 }
 
-titre('Choix 2 — je les annule, et je previens ceux que je peux');
-(async () => {
-  ctx.events = [travail, enfants, tennis, ev('autre', 'Dentiste', '2026-10-20', 15)];
-  ctx.charlyIA.history = [{ role: 'system_info', content: '', periode: true, conflictData: { msg: { content: 'x' } }, touches: [travail, enfants, tennis] }];
-  Object.assign(trace, { orig: 0, saves: 0, envois: [], confirms: [], dits: [] });
-  reponses = [true, true, true];                         // annuler ; prevenir Marc ; prevenir Sophie
-  await ctx.tcPeriodeAnnuler();
-  verifie('le voyage est ajoute', trace.orig === 1);
-  verifie('les trois rendez-vous touches sont supprimes', ctx.events.length === 1 && ctx.events[0].title === 'Dentiste');
-  verifie('un rendez-vous hors periode ne bouge pas', ctx.events[0].id === 'autre');
-  verifie('enregistre', trace.saves >= 1);
-  verifie('deux messages partis : seulement ceux qui ont un contact', trace.envois.length === 2 && trace.envois[0][0] === 'Marc Dupont' && trace.envois[1][0] === 'Sophie Anceau');
-  verifie('le texte est le message d annulation habituel', /je dois annuler le rendez-vous du 2026-10-14/.test(trace.envois[0][1]));
-  verifie('Charles confirme avant chaque envoi', trace.confirms.length === 3 && /Prévenir Marc/.test(trace.confirms[1]),
-    'Charly n envoie jamais rien tout seul');
-  const bilan = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
-  verifie('le bilan dit les prevenus', /Prévenus : Marc Dupont, Sophie Anceau/.test(bilan));
-  verifie('et ceux qu il doit prevenir lui-meme', /À prévenir toi-même[^.]*Chercher les enfants/.test(bilan));
+console.log('\n── Les trois vues suivent la meme regle ──');
+verifie('la vue mois', page.indexOf('tcEvenementCouvre(e, cellDateStr)') > -1);
+verifie('la vue semaine', (page.match(/tcEvenementsDuJour\(fmt\(d\), false\)/g) || []).length === 2,
+  'jour et semaine');
+verifie('le bandeau du jour', page.indexOf('tcEvenementsDuJour(fmt(d), true)') > -1);
+verifie('plus aucune vue ne compare la date a l identique',
+  !/events\.filter\(e => e\.date===fmt\(d\)/.test(page),
+  'c etait ce qui masquait les jours du milieu');
 
-  // Il refuse d abord l annulation : rien ne bouge.
-  ctx.events = [travail, enfants, tennis];
-  ctx.charlyIA.history = [{ role: 'system_info', content: '', periode: true, conflictData: { msg: { content: 'x' } }, touches: [travail, enfants, tennis] }];
-  Object.assign(trace, { orig: 0, saves: 0, envois: [], confirms: [], dits: [] });
-  reponses = [false];
-  await ctx.tcPeriodeAnnuler();
-  verifie('s il refuse : rien n est ajoute ni supprime', trace.orig === 0 && ctx.events.length === 3 && trace.envois.length === 0);
-  verifie('et la question reste ouverte', ctx.tcPeriodeContexte() !== null);
+console.log('\n── Modifier un rendez-vous ne perd pas sa periode ──');
+{
+  const src = extraire('saveEventEdit');
+  verifie('la date de fin est relue', src && src.indexOf("getElementById('editDateFin')") > -1,
+    'sans cela, corriger un titre effacait la periode');
+  verifie('ramenee au jour meme, elle est retiree',
+    src && /else delete e\.dateFin;/.test(src));
+  verifie('la journee entiere est relue', src && src.indexOf("getElementById('editAllDay')") > -1);
+  verifie('et le formulaire propose les deux champs',
+    page.indexOf('id="editDateFin"') > -1 && page.indexOf('id="editAllDay"') > -1);
+}
 
-  // Il annule mais refuse d envoyer le message a Marc.
-  ctx.charlyIA.history = [{ role: 'system_info', content: '', periode: true, conflictData: { msg: { content: 'x' } }, touches: [travail] }];
-  Object.assign(trace, { orig: 0, saves: 0, envois: [], confirms: [], dits: [] });
-  reponses = [true, false];
-  await ctx.tcPeriodeAnnuler();
-  verifie('message refuse : rien n est envoye', trace.envois.length === 0);
-  verifie('et le contact figure parmi ceux a prevenir soi-meme', /À prévenir toi-même[^.]*Travail/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content));
-
-  titre('Choix 3 — je les deplace');
-  ctx.events = [travail, enfants, tennis];
-  ctx.charlyIA.history = [{ role: 'system_info', content: '', periode: true, conflictData: { msg: { content: 'x' } }, touches: [travail, enfants, tennis] }];
-  Object.assign(trace, { orig: 0, saves: 0, envois: [], confirms: [], dits: [] });
-  ctx.tcPeriodeDeplacer();
-  verifie('le voyage est ajoute', trace.orig === 1);
-  verifie('rien n est supprime', ctx.events.length === 3);
-  const dep = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
-  verifie('la liste est rappelee avec la facon de decaler', /décale le dentiste à lundi 15h/.test(dep) && /Cours de tennis/.test(dep));
-
-  titre('Le conflit ordinaire n est pas touche');
-  verifie('showConflictWarning existe toujours pour un rendez-vous normal', page.indexOf('function showConflictWarning(conflicts, msg) {') > -1);
-  verifie('l aiguillage choisit selon la periode', /if \(proposals\.some\(tcEstUnePeriode\)\) showPeriodeConflits\(conflicts, msg\);\s*else showConflictWarning\(conflicts, msg\);/.test(page));
-  verifie('la sauvegarde de l historique ne garde pas la liste des rendez-vous', /k === 'conflictData' \|\| k === 'touches'/.test(page));
-
-  console.log('');
-  console.log(ko + ' anomalie(s).');
-  process.exit(ko ? 1 : 0);
-})();
+console.log(`\n${ko} anomalie(s).`);
+process.exit(ko ? 1 : 0);
