@@ -4695,6 +4695,55 @@ const TC_PAS_UNE_PERSONNE = [
   'plaisir', 'ca', 'cela', 'ce', 'cette', 'ces', 'qui', 'quoi', 'tout', 'rien'
 ];
 
+/* Ce qui designe un endroit, pas quelqu'un. On regarde le premier mot
+   apres le determinant : « Lycee - Cite Scolaire Pasteur » commence
+   par « lycee ». Sans accents, comme tout ce qu'on compare. */
+const TC_LIEUX = [
+  'ecole', 'lycee', 'college', 'creche', 'universite', 'fac', 'faculte',
+  'mairie', 'prefecture', 'tribunal', 'commissariat', 'gendarmerie',
+  'cabinet', 'clinique', 'hopital', 'pharmacie', 'laboratoire', 'labo',
+  'centre', 'maison', 'salle', 'gymnase', 'piscine', 'stade', 'club',
+  'garage', 'concession', 'magasin', 'boutique', 'supermarche', 'marche',
+  'banque', 'agence', 'assurance', 'poste', 'bureau', 'societe', 'entreprise',
+  'restaurant', 'hotel', 'bar', 'cafe', 'cinema', 'theatre', 'musee',
+  'gare', 'aeroport', 'parking', 'ikea', 'leroy', 'castorama', 'decathlon'
+];
+
+/** « Lycee - Cite Scolaire Pasteur », « la mairie », « chez Ikea ». */
+function tcEstUnLieu(designation) {
+  const sans = tcSansAccents(designation).replace(/^(mon|ma|mes|le|la|les|l['’]|au|aux|du|des)\s*/, '').trim();
+  const premier = (sans.match(/^[a-z0-9]+/) || [''])[0];
+  return !!premier && TC_LIEUX.indexOf(premier) > -1;
+}
+
+/* Verbes par lesquels on donne un ordre a Charly. Une reponse a « qui
+   est-ce ? » ne commence pas par l'un d'eux. */
+const TC_VERBES_DE_DEMANDE = [
+  'enleve', 'supprime', 'retire', 'efface', 'annule',
+  'ajoute', 'rajoute', 'note', 'mets', 'met', 'cree', 'programme', 'planifie',
+  'decale', 'deplace', 'change', 'modifie', 'fixe', 'bloque',
+  'prevois', 'rappelle', 'calcule', 'reserve', 'trouve', 'cherche',
+  'envoie', 'previens', 'donne', 'montre', 'affiche', 'dis', 'ouvre', 'prends', 'prend'
+];
+
+/**
+ * Une phrase qui n'est pas une reponse a « qui est-ce ? ».
+ *
+ * Un nom tient en quelques mots. Cinq mots ou plus, ou un verbe
+ * d'ordre en tete, et c'est une demande -- qu'on ne doit pas jeter.
+ */
+function tcRessembleAUneDemande(texte) {
+  const mots = tcSansAccents(texte).replace(/[,.;:!?'’-]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (mots.length >= 5) return true;
+  return mots.length > 0 && TC_VERBES_DE_DEMANDE.indexOf(mots[0]) > -1;
+}
+
+/** « Sans contact », « quand meme », « pas dans mes contacts »... */
+function tcDitSansContact(texte) {
+  return /sans contact|quand m[eê]me|pas besoin d|(?:n['’]?est|ne (?:se trouve|figure)) pas (?:dans|parmi)|pas dans (?:mes|les|le|mon) (?:contacts?|carnet|r[ée]pertoire)/i
+    .test(String(texte || ''));
+}
+
 /**
  * La personne designee dans la phrase de l'utilisateur.
  *
@@ -4758,6 +4807,8 @@ function tcAttenteContact(msg, propositions) {
     if (msg && msg._sansContact && msg._sansContact[cle]) continue;
     // Deja repondu une fois : ce n'est pas quelqu'un.
     if (tcSurnomRefuse(nom)) continue;
+    // Un lieu : on ne lui demande pas son prenom.
+    if (tcEstUnLieu(nom)) continue;
     if (!tcContactDeProposition(msg, p)) return nom;
   }
   return null;
@@ -4850,9 +4901,22 @@ function tcPistesDeRecherche(texte, nom) {
 
 async function tcRepondreQuiEstCe(texte) {
   const attente = tcAttenteContactEnCours();
-  if (!attente) return;
+  if (!attente) return false;
   const msg = attente.msg, nom = attente.nom;
-  tcPousserMessageUtilisateur(texte);
+
+  // « Sans contact » en toutes lettres : ce que fait le bouton gris.
+  if (tcDitSansContact(texte)) {
+    tcPousserMessageUtilisateur(texte);
+    if (!msg._sansContact) msg._sansContact = {};
+    msg._sansContact[tcSansAccents(nom)] = true;
+    tcRetenirSurnom(nom, false);
+    charlyIA.history.push({
+      role: 'system_info',
+      content: '👤 D\'accord, je note le rendez-vous sans contact.'
+    });
+    renderCharlyChat();
+    return true;
+  }
 
   // La premiere piste qui mene a quelqu'un gagne.
   let trouves = [];
@@ -4861,6 +4925,13 @@ async function tcRepondreQuiEstCe(texte) {
     const essai = tcResoudreContact(pistes[i]);
     if (essai.length) { trouves = essai; break; }
   }
+
+  // Personne, et ca ne ressemble pas a un nom : c'est une autre
+  // demande. On ne la jette pas, on la laisse suivre son chemin. La
+  // question reste posee, avec ses boutons, pour plus tard.
+  if (!trouves.length && tcRessembleAUneDemande(texte)) return false;
+
+  tcPousserMessageUtilisateur(texte);
 
   if (trouves.length === 1) {
     if (!msg._contacts) msg._contacts = {};
@@ -4871,7 +4942,7 @@ async function tcRepondreQuiEstCe(texte) {
       content: '👤 ' + nom + ' = ' + trouves[0].name + '. Je m\'en souviendrai.'
     });
     renderCharlyChat();
-    return;
+    return true;
   }
 
   if (trouves.length > 1) {
@@ -4886,7 +4957,7 @@ async function tcRepondreQuiEstCe(texte) {
     const piste = pistes.find(function (p) { return tcResoudreContact(p).length > 1; });
     const champ = document.getElementById('tcRechContactRdv');
     if (champ && piste) { champ.value = piste; tcRendreContactsRdv(); }
-    return;
+    return true;
   }
 
   // Personne de ce nom : on ne laisse pas sans issue.
@@ -4896,6 +4967,7 @@ async function tcRepondreQuiEstCe(texte) {
       + 'Choisis-le dans la liste, ou note le rendez-vous sans contact.'
   });
   renderCharlyChat();
+  return true;
 }
 
 /** Noter le rendez-vous sans relier personne. */
@@ -4918,6 +4990,13 @@ function tcLigneContactProposition(msg, p, tempId) {
   const ouvrir = 'onclick="tcChoisirContactProposition(' + JSON.stringify(String(tempId || '')).replace(/"/g, '&quot;')
     + ',' + JSON.stringify(nom).replace(/"/g, '&quot;') + ')"';
 
+  if (tcEstUnLieu(nom) && !tcContactDeProposition(msg, p)) {
+    // Un lieu : rien a demander, mais on le dit, et on laisse relier --
+    // une ecole peut figurer dans le carnet avec son numero.
+    return '<div style="' + style + ' color:#9aa0a6;" ' + ouvrir + '>'
+      + '📍 <span data-notranslate>' + escapeHTMLSafe(nom) + '</span>'
+      + ' — un lieu, pas un contact <span style="color:var(--g-blue);">· relier</span></div>';
+  }
   if (tcSurnomRefuse(nom)) {
     // On ne repose plus la question, mais on ne l'efface pas non plus :
     // sans cette ligne, plus rien n'expliquerait pourquoi ce
@@ -11174,8 +11253,11 @@ async function charlySendMessage() {
   // réponse ne coûte aucun appel au modèle, elle se cherche dans le
   // carnet d'adresses. Une question posée attend sa réponse.
   if (tcAttenteContactEnCours()) {
-    await tcRepondreQuiEstCe(text);
-    return;
+    // Si ce n'etait pas une reponse a la question, le message continue
+    // son chemin : une demande ne se perd pas parce qu'une question
+    // attend.
+    const pris = await tcRepondreQuiEstCe(text);
+    if (pris) return;
   }
 
   // === RÉPONSE À « TU VEUX ANNULER CE RENDEZ-VOUS ? » ===

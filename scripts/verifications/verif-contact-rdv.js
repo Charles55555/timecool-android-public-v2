@@ -73,13 +73,15 @@ ctx.localStorage = {
   removeItem: (k) => { delete memoire[k]; }
 };
 [/const TC_SURNOMS_CLE = '[^']+';/,
- /const TC_PAS_UNE_PERSONNE = \[[\s\S]*?\];/].forEach((re) => {
+ /const TC_PAS_UNE_PERSONNE = \[[\s\S]*?\];/,
+ /const TC_LIEUX = \[[\s\S]*?\];/,
+ /const TC_VERBES_DE_DEMANDE = \[[\s\S]*?\];/].forEach((re) => {
   const m = page.match(re);
   if (m) vm.runInContext(m[0].replace('const ', 'var '), ctx);
   else { ko++; console.log('  KO  ' + re + ' introuvable'); }
 });
 
-['tcSansAccents', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
+['tcSansAccents', 'tcEstUnLieu', 'tcRessembleAUneDemande', 'tcDitSansContact', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
  'tcContactsPourRdv', 'tcContactDuRdv', 'tcCleSurnom', 'tcSurnoms', 'tcRetenirSurnom',
  'tcContactDuSurnom', 'tcContactDeProposition', 'tcLigneContactProposition',
  'tcAttenteContact', 'tcDesignationTutoyee', 'tcQuestionContact',
@@ -636,8 +638,8 @@ function fin() {
     page.indexOf('if (tcResoudreContact(nom).length > 0) {') > -1,
     '« mon osteopathe » pre-rempli ne pouvait donner qu « aucun contact trouve »');
   verifie('un nom tapé est intercepté avant le modele',
-    /if \(tcAttenteContactEnCours\(\)\) \{\s*await tcRepondreQuiEstCe\(text\);/.test(page),
-    'la question promet « donne-moi son nom » : il faut savoir le recevoir');
+    /if \(tcAttenteContactEnCours\(\)\) \{[\s\S]{0,400}?const pris = await tcRepondreQuiEstCe\(text\);\s*if \(pris\) return;/.test(page),
+    'la question promet « donne-moi son nom » : il faut savoir le recevoir -- et laisser passer ce qui n en est pas un');
   verifie('et qu un role vaut un nom',
     page.indexOf('OU par son rôle') > -1
     && page.indexOf('Ne remplis ce champ que si une personne est nommée') === -1,
