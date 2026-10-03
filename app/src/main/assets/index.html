@@ -10617,7 +10617,7 @@ function tcReponseOuiNon(text) {
  * valent l'annulation. Sinon null : ce n'est pas une reponse.
  */
 function tcReponseValidation(text) {
-  const t = tcSansAccents(text).replace(/[!.?,]/g, ' ').replace(/\s+/g, ' ').trim();
+  const t = tcSansAccents(text).replace(/[!.?,'’]/g, ' ').replace(/\s+/g, ' ').trim();
   if (/^(valide|valider|validez|valide[sz]?(-| )?(le|la|les|moi|tout)|ajoute(-| )?(le|la|les|tout)|ajoute[sz]? quand meme|valide[sz]? quand meme|quand meme|c est bon|c est ok|parfait|nickel|ok pour moi|confirme[sz]?)(\s|$)/.test(t)) return 'oui';
   if (/^(n ajoute (pas|rien)|ajoute (pas|rien)|pas maintenant|laisse|laisse tomber|annule l ajout|abandonne)(\s|$)/.test(t)) return 'non';
   const ouiNon = tcReponseOuiNon(text);
