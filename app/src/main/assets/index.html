@@ -4702,8 +4702,8 @@ const TC_LIEUX = [
   'ecole', 'lycee', 'college', 'creche', 'universite', 'fac', 'faculte',
   'mairie', 'prefecture', 'tribunal', 'commissariat', 'gendarmerie',
   'cabinet', 'clinique', 'hopital', 'pharmacie', 'laboratoire', 'labo',
-  'centre', 'maison', 'salle', 'gymnase', 'piscine', 'stade', 'club',
-  'garage', 'concession', 'magasin', 'boutique', 'supermarche', 'marche',
+  'salle', 'gymnase', 'piscine', 'stade', 'club',
+  'garage', 'concession', 'magasin', 'boutique', 'supermarche',
   'banque', 'agence', 'assurance', 'poste', 'bureau', 'societe', 'entreprise',
   'restaurant', 'hotel', 'bar', 'cafe', 'cinema', 'theatre', 'musee',
   'gare', 'aeroport', 'parking', 'ikea', 'leroy', 'castorama', 'decathlon'
@@ -10630,6 +10630,50 @@ function tcRdvDesigne(candidats, text) {
   return restants.length === 1 ? restants[0] : null;
 }
 
+/* Les jours de semaine nommes dans une demande, en indices getDay()
+   (0 = dimanche). « Le samedi », « les samedis et dimanches », « tous
+   les lundis », « le week-end ». Null si aucun. */
+const TC_JOURS_SEMAINE = {
+  dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6
+};
+function tcJoursDansTexte(t) {
+  const sans = tcSansAccents(t);
+  const jours = {};
+  let trouve = false;
+  Object.keys(TC_JOURS_SEMAINE).forEach(function (j) {
+    if (new RegExp('\\b' + j + 's?\\b').test(sans)) { jours[TC_JOURS_SEMAINE[j]] = true; trouve = true; }
+  });
+  if (/\bweek-?ends?\b/.test(sans)) { jours[6] = true; jours[0] = true; trouve = true; }
+  return trouve ? jours : null;
+}
+
+/* « Jusqu'a fin octobre », « jusqu'a la fin du mois d'octobre »,
+   « jusqu'au 31 octobre », « jusqu'au 15 novembre ». La borne est le
+   dernier jour du mois, ou la date dite. Un mois deja passe vise
+   l'annee prochaine. Null si rien. */
+const TC_MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet',
+  'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+function tcBorneDeFin(t, maintenant) {
+  const sans = tcSansAccents(t);
+  const now = maintenant || new Date();
+  // « au » avant « a », sinon « jusqu'au 15 » lisait « a » puis « u ».
+  // Le mois est une alternative explicite, jamais une suite de lettres
+  // quelconque. « d\W* » avale l'apostrophe de « d'octobre ».
+  const m = sans.match(new RegExp(
+    'jusqu\\W*(?:au|a)\\s*(?:la\\s+)?(?:fin\\s+(?:du\\s+mois\\s+)?(?:de\\s+|d\\W*)?|(\\d{1,2})(?:er)?\\s+)?(' + TC_MOIS.join('|') + ')\\b'));
+  if (!m) return null;
+  const mois = TC_MOIS.indexOf(m[2]);
+  if (mois < 0) return null;
+  let annee = now.getFullYear();
+  const jour = m[1] ? Number(m[1]) : null;
+  // Le mois est passe : c'est celui de l'an prochain.
+  const dernierDuMois = new Date(annee, mois + 1, 0).getDate();
+  let fin = new Date(annee, mois, jour ? Math.min(jour, dernierDuMois) : dernierDuMois);
+  const aujourdhui = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (fin < aujourdhui) { annee++; fin = new Date(annee, mois, jour ? Math.min(jour, new Date(annee, mois + 1, 0).getDate()) : new Date(annee, mois + 1, 0).getDate()); }
+  return { debut: aujourdhui, fin: fin, label: 'jusqu’au ' + fin.getDate() + ' ' + TC_MOIS[mois] };
+}
+
 async function tcGererSuppressionRdv(text) {
   tcPousserMessageUtilisateur(text);
   tcDefinirStatutCharly('🗑️ Recherche du rendez-vous…', true);
@@ -10648,7 +10692,7 @@ async function tcGererSuppressionRdv(text) {
   }
 
   // Filtre par date/période mentionnée dans le texte.
-  const periode = tcPeriodeAgenda(t);
+  const periode = tcPeriodeAgenda(t) || tcBorneDeFin(t);
   if (periode) {
     const debutStr = tcISO(periode.debut);
     const finStr = periode.fin ? tcISO(periode.fin) : debutStr;
@@ -10661,6 +10705,17 @@ async function tcGererSuppressionRdv(text) {
       candidats = candidats.filter(e => e.date === dStr);
       filtreApplique = true;
     }
+  }
+
+  // Filtre par jour de semaine : « les samedis et dimanches », « le
+  // week-end ». Sans lui, tout ce qui tombait dans la periode partait.
+  const jours = tcJoursDansTexte(t);
+  if (jours) {
+    candidats = candidats.filter(e => {
+      const d = new Date(e.date + 'T12:00:00');
+      return !isNaN(d) && jours[d.getDay()];
+    });
+    filtreApplique = true;
   }
 
   // Filtre par heure : « demain 10h » vise le rendez-vous de 10h, pas
@@ -10678,18 +10733,22 @@ async function tcGererSuppressionRdv(text) {
     candidats = candidats.filter(e => Number(e.startH) >= 18);
   }
 
-  // Filtre par mot du titre (ex : "mon rdv chez le dentiste" -> "dentiste"),
-  // uniquement si aucun filtre contact/date/période n'a déjà tranché — un
-  // nom de contact ou une date explicite prime toujours sur un mot-clé
-  // approximatif du titre.
-  if (!filtreApplique) {
+  // Filtre par mot du titre (ex : "mon rdv chez le dentiste" -> "dentiste").
+  // Sans autre filtre, il decide seul. Apres une periode ou un jour, il
+  // restreint encore -- « les cours de piano le samedi jusqu'a fin
+  // octobre » ne vise pas tous les samedis -- mais ne vide jamais : un
+  // mot qui ne correspond a rien laisse la selection telle quelle.
+  {
     const motsVides = new Set(['annule','annuler','supprime','supprimer','efface','effacer',
       'enleve','enlève','enlever','retire','retirer','celui','celle','mon','ma','mes','les','des','une','avec','pour','chez',
-      'tous','toutes','rdv','rendez','vous','rendez-vous','svp','stp']);
+      'tous','toutes','tout','toute','chaque','rdv','rendez','vous','rendez-vous','svp','stp',
+      'jusqu','jusqua','jusquau','fin','partir','semaine','week-end','weekend','mois',
+      'lundi','lundis','mardi','mardis','mercredi','mercredis','jeudi','jeudis','vendredi','vendredis','samedi','samedis','dimanche','dimanches',
+      'janvier','fevrier','février','mars','avril','mai','juin','juillet','aout','août','septembre','octobre','novembre','decembre','décembre']);
     const motsMessage = t.split(/[^a-zà-ÿ0-9-]+/).filter(w => w.length >= 3 && !motsVides.has(w));
     if (motsMessage.length) {
       const parTitre = candidats.filter(e => e.title && motsMessage.some(w => e.title.toLowerCase().includes(w)));
-      if (parTitre.length) {
+      if (parTitre.length && (!filtreApplique || parTitre.length < candidats.length)) {
         candidats = parTitre;
         filtreApplique = true;
       }
@@ -10715,7 +10774,7 @@ async function tcGererSuppressionRdv(text) {
     tcDefinirStatutCharly('🔒 Assistant intelligent', false);
     tcSupprimerRdvs(candidats);
     return;
-  } else if (!/\b(tous|toutes|tout|toute|journée|journee|semaine|mois)\b/.test(t)) {
+  } else if (!jours && !tcBorneDeFin(t) && !/\b(tous|toutes|tout|toute|journée|journee|semaine|mois)\b/.test(t)) {
     // Plusieurs rendez-vous possibles pour une demande qui en vise un
     // seul : jamais deviner. On les liste et on demande lequel ; la
     // réponse (« celui de 16h », « le dermatologue ») est reconnue.

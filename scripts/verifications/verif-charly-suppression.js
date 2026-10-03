@@ -20,6 +20,7 @@ function source(nom) {
 }
 
 const noms = ['detecterSuppressionRdv', 'tcHeureDansTexte', 'tcReponseOuiNon', 'tcSansAccents',
+  'tcJoursDansTexte', 'tcBorneDeFin',
   'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcSupprimerRdvs', 'tcAnnulerSuppressionRdv',
   'tcRdvDesigne', 'tcRdvRemplace',
   'tcPeriodeAgenda', 'tcISO', 'parseFrenchDateFromText', 'tcComparerEvenements',
@@ -41,6 +42,12 @@ function contexte() {
     saveEventsToStorage() {}, addDemarche() {}, tcDernierMessageCharly: () => null,
   };
   vm.createContext(ctx);
+  // Les deux constantes que lisent tcJoursDansTexte et tcBorneDeFin.
+  ['TC_JOURS_SEMAINE', 'TC_MOIS'].forEach((c) => {
+    const m = page.match(new RegExp('const ' + c + ' = [\\s\\S]*?;\\n'));
+    if (!m) throw new Error('constante introuvable : ' + c);
+    vm.runInContext(m[0], ctx);
+  });
   vm.runInContext(noms.map(source).join('\n') +
     '\n;globalThis.attente = () => _tcSuppressionEnAttente; globalThis.choix = () => _tcSuppressionChoix;', ctx);
   vm.runInContext('let _tcSuppressionEnAttente = null; let _tcSuppressionChoix = null;', ctx);
