@@ -98,6 +98,33 @@ verifie('jusqu\'à vendredi → aujourd hui au 9', JSON.stringify(per('mes rdv j
 verifie('jusqu\'à lundi (aujourd hui) → aujourd hui seul', JSON.stringify(per('mes rdv jusqu\'à lundi')) === JSON.stringify(['2026-10-05', '2026-10-05']));
 verifie('sans periode : null', per('mes rdv') === null);
 
+titre('Un jour de la semaine nomme (capture du 04/10)');
+verifie('« Je ne pourrai pas honorer mes rdv de ce lundi » : reconnu', D('Je ne pourrai pas honorer mes rdv de ce lundi'));
+verifie('« lundi prochain » : reconnu', D('Je ne pourrai pas honorer mes rendez-vous lundi prochain'));
+verifie('« mardi et jeudi » : reconnu', D('Je ne pourrai pas honorer mes rdv mardi et jeudi'));
+verifie('ce lundi, un lundi : aujourd hui', JSON.stringify(per('mes rdv de ce lundi')) === JSON.stringify(['2026-10-05', '2026-10-05']));
+verifie('lundi prochain, un lundi : la semaine suivante', JSON.stringify(per('mes rdv lundi prochain')) === JSON.stringify(['2026-10-12', '2026-10-12']));
+verifie('mardi et jeudi : deux dates, pas l intervalle', JSON.stringify(ctx.tcPeriodeContrainte('mes rdv mardi et jeudi').jours) === JSON.stringify(['2026-10-06', '2026-10-08']));
+{
+  // Le cas de la capture : on est SAMEDI 3 octobre, « ce lundi » = le 5.
+  const SAMEDI = new Date(2026, 9, 3, 10, 0, 0);
+  class DateSamedi extends Date {
+    constructor(...a) { if (a.length) super(...a); else super(SAMEDI.getTime()); }
+    static now() { return SAMEDI.getTime(); }
+  }
+  const c2 = { String, Number, Array, Object, RegExp, Date: DateSamedi };
+  vm.createContext(c2);
+  ['tcSansAccents', 'tcISO', 'tcPeriodeAgenda', 'tcPeriodeContrainte'].forEach((n) => { vm.runInContext(extraire(n), c2); });
+  const p = c2.tcPeriodeContrainte('Je ne pourrai pas honorer mes rdv de ce lundi');
+  verifie('depuis un samedi, « ce lundi » = lundi 5 octobre', p && p.jours.length === 1 && p.jours[0] === '2026-10-05', p && p.jours.join());
+  verifie('et non samedi 3 (la consultation de la capture)', p && p.jours.indexOf('2026-10-03') < 0);
+  verifie('le libelle dit « ce lundi »', p && p.label === 'ce lundi', p && p.label);
+  const q = c2.tcPeriodeContrainte('mes rdv lundi prochain');
+  verifie('depuis un samedi, « lundi prochain » = le 5 aussi', q && q.jours[0] === '2026-10-05');
+}
+verifie('« mon rdv de lundi 10h » : une heure precise, pas ceci', !D('Je ne peux pas honorer mon rdv de lundi 10h'));
+verifie('« annule mes rendez-vous de lundi » : la suppression', !D('Annule mes rendez-vous de lundi'));
+
 titre('Le message : sans rien ajouter, la liste limitee a huit');
 (async () => {
   // Une semaine chargee : 12 rendez-vous.

@@ -14926,6 +14926,27 @@ function tcPeriodeContrainte(text) {
     const ecart = (cible - jour0.getDay() + 7) % 7;
     return { debut: jour0, fin: plus(ecart), label: 'jusqu’à ' + m[1] };
   }
+  // Un ou plusieurs jours de la semaine nommes : « ce lundi », « lundi
+  // prochain », « mardi et jeudi ». La prochaine occurrence de chacun.
+  const noms = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const trouves = [];
+  noms.forEach(function (nom, idx) {
+    if (new RegExp('\\b' + nom + 's?\\b').test(sans)) trouves.push(idx);
+  });
+  if (trouves.length) {
+    const prochain = /prochain/.test(sans);
+    const dates = trouves.map(function (idx) {
+      let ecart = (idx - jour0.getDay() + 7) % 7;
+      if (prochain && ecart === 0) ecart = 7;
+      return plus(ecart);
+    }).sort(function (a, b) { return a - b; });
+    const libelle = trouves.map(function (idx) { return noms[idx]; }).join(' et ');
+    return {
+      debut: dates[0], fin: dates[dates.length - 1],
+      label: (trouves.length === 1 ? (prochain ? '' : 'ce ') : '') + libelle + (trouves.length === 1 && prochain ? ' prochain' : ''),
+      jours: dates.map(function (d) { return tcISO(d); })
+    };
+  }
   if (/toute la semaine|la semaine/.test(sans)) return tcPeriodeAgenda('cette semaine');
   return null;
 }
@@ -14948,7 +14969,10 @@ function tcDetecterContrainte(text) {
 function tcRdvDeLaPeriode(periode) {
   const debut = tcISO(periode.debut);
   const fin = tcISO(periode.fin || periode.debut);
-  return events.filter(function (e) { return e.mode === mode && e.date >= debut && e.date <= fin; }).sort(tcComparerEvenements);
+  return events.filter(function (e) {
+    return e.mode === mode && e.date >= debut && e.date <= fin
+      && (!periode.jours || periode.jours.indexOf(e.date) > -1);
+  }).sort(tcComparerEvenements);
 }
 
 /**
