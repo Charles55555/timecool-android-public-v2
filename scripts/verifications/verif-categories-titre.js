@@ -32,7 +32,7 @@ const ctx = { console, String, RegExp };
 vm.createContext(ctx);
 if (!mCat) { ko++; console.log('  KO  catMap introuvable'); }
 else vm.runInContext(mCat[0].replace('const ', 'var '), ctx);
-['tcSansAccents', 'tcCategorieDeProposition'].forEach((n) => {
+['tcSansAccents', 'tcCategorieDuTitre', 'tcCategorieDeProposition'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
@@ -59,7 +59,9 @@ verifie('« Cours de tennis » donne sport → sport', C('Cours de tennis', 'spo
 verifie('« Soirée libre entre amis » donne famille → famille', C('Soirée libre entre amis', 'famille') === 'famille');
 
 titre('Sans indice, comportement d avant');
-verifie('« Rendez-vous banque » (rdv), aucun mot : sante comme avant', C('Rendez-vous banque', 'rdv') === 'sante');
+verifie('« Rendez-vous banque » (rdv) → travail (administratif)', C('Rendez-vous banque', 'rdv') === 'travail');
+verifie('« Rendez-vous avocat » (rdv) → travail', C('Rendez-vous avocat', 'rdv') === 'travail');
+verifie('« Rendez-vous Marc » (rdv), aucun indice : sante comme avant', C('Rendez-vous Marc', 'rdv') === 'sante');
 verifie('« Truc » categorie inconnue → green', C('Truc', 'xyz') === 'green');
 
 titre('La consigne n enseigne plus « rdv »');

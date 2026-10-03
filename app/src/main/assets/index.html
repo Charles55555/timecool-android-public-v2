@@ -19,13 +19,13 @@
   /* Code couleur officiel des categories TimeCool.
      Source unique : le JS lit ces memes valeurs via TC_COULEURS_CATEGORIES.
      Ne jamais ecrire une de ces couleurs en dur ailleurs. */
-  --cat-travail:#3B7DEA;    --cat-travail-bg:#e8f0fe;
-  --cat-sante:#EA4335;      --cat-sante-bg:#fce8e6;
-  --cat-famille:#F9AB00;    --cat-famille-bg:#fff8e1;
-  --cat-amis:#9334EA;       --cat-amis-bg:#f3e8fd;
-  --cat-sport:#34A853;      --cat-sport-bg:#e8f5e9;
-  --cat-personnel:#4FC3F7;  --cat-personnel-bg:#E1F5FE;
-  --cat-voyages:#E8710A;    --cat-voyages-bg:#fff0e6;
+  --cat-travail:#8AB4F8;    --cat-travail-bg:#E8F0FE;  --cat-travail-texte:#1A56B8;
+  --cat-sante:#F6A5A0;      --cat-sante-bg:#FDECEA;  --cat-sante-texte:#B3261E;
+  --cat-famille:#FFCC80;    --cat-famille-bg:#FFF3E0;  --cat-famille-texte:#8A4300;
+  --cat-amis:#D1B3F2;       --cat-amis-bg:#F3E8FD;  --cat-amis-texte:#6B21A8;
+  --cat-sport:#A8DDB5;      --cat-sport-bg:#E8F5E9;  --cat-sport-texte:#1B6B2F;
+  --cat-personnel:#B3E5FC;  --cat-personnel-bg:#E1F5FE;  --cat-personnel-texte:#01579B;
+  --cat-voyages:#80DEEA;    --cat-voyages-bg:#E0F7FA;  --cat-voyages-texte:#005A63;
 }
 html,body { font-family:'Google Sans',Roboto,Arial,'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif; background:var(--bg); color:var(--text); height:100%; overflow:hidden; -webkit-font-smoothing:antialiased; }
 body { display:flex; flex-direction:column; }
@@ -2913,6 +2913,7 @@ async function loadEventsFromStorage() {
       // Fusionner avec les events démo existants
       const demoEvents = events.filter(e => e.mode !== 'user' && !(e.id && e.id.startsWith('charly_ai_')));
       events = [...demoEvents, ...userEvents];
+      tcReparerCategories();
     }
   } catch(err) { console.warn('Chargement events:', err); }
 }
@@ -3751,15 +3752,15 @@ function renderMenu() {
    diverger. Reutilisable partout dans l'app : ne jamais recopier une de
    ces valeurs en dur. */
 var TC_COULEURS_CATEGORIES = {
-  travail:   { color: '#3B7DEA', bg: '#e8f0fe' },
-  sante:     { color: '#EA4335', bg: '#fce8e6' },
-  famille:   { color: '#F9AB00', bg: '#fff8e1' },
-  amis:      { color: '#9334EA', bg: '#f3e8fd' },
-  sport:     { color: '#34A853', bg: '#e8f5e9' },
-  personnel: { color: '#4FC3F7', bg: '#E1F5FE' },
+  travail:   { color: '#8AB4F8', bg: '#E8F0FE', texte: '#1A56B8' },
+  sante:     { color: '#F6A5A0', bg: '#FDECEA', texte: '#B3261E' },
+  famille:   { color: '#FFCC80', bg: '#FFF3E0', texte: '#8A4300' },
+  amis:      { color: '#D1B3F2', bg: '#F3E8FD', texte: '#6B21A8' },
+  sport:     { color: '#A8DDB5', bg: '#E8F5E9', texte: '#1B6B2F' },
+  personnel: { color: '#B3E5FC', bg: '#E1F5FE', texte: '#01579B' },
   // Propre a l agenda : aucun equivalent dans Mes disponibilites, on ne
   // se rend pas disponible « pour un trajet ».
-  voyages:   { color: '#E8710A', bg: '#fff0e6' }
+  voyages:   { color: '#80DEEA', bg: '#E0F7FA', texte: '#005A63' }
 };
 
 /* Anciens identifiants d agenda, ou la couleur SERVAIT d identifiant
@@ -3789,6 +3790,7 @@ var DISPO_CATEGORIES = [
   var c = TC_COULEURS_CATEGORIES[cat.id];
   cat.color = c.color;
   cat.bg = c.bg;
+  cat.texte = c.texte;
   return cat;
 });
 
@@ -3809,6 +3811,7 @@ const AGENDA_CATEGORIES = [
 ].map(function (c) {
   c.color = TC_COULEURS_CATEGORIES[c.id].color;
   c.bg = TC_COULEURS_CATEGORIES[c.id].bg;
+  c.texte = TC_COULEURS_CATEGORIES[c.id].texte;
   return c;
 });
 
@@ -4200,7 +4203,7 @@ function renderMonth() {
       dayEvents.slice(0, maxShown).forEach(ev => {
         const color = catColor(ev.cat);
         const startStr = String(ev.startH).padStart(2,'0') + ':' + String(ev.startM).padStart(2,'0');
-        html += `<div class="month-event-pill" style="background:${color};">${startStr} ${escapeHTMLSafe(ev.title)}</div>`;
+        html += `<div class="month-event-pill${tcTexteSombre(color) ? ' chip-texte-sombre' : ''}" style="background:${color};">${startStr} ${escapeHTMLSafe(ev.title)}</div>`;
       });
       if (dayEvents.length > maxShown) {
         html += `<div class="month-event-more">+${dayEvents.length - maxShown} autres</div>`;
@@ -4230,14 +4233,18 @@ function escapeHTMLSafe(str) {
  * luminance decide de la couleur du texte plutot qu une liste de
  * categories a tenir a jour a chaque ajout.
  */
-function tcAppliquerCouleurEvenement(el, cat) {
-  const couleur = catColor(cat);
-  el.style.background = couleur;
+/** Vrai si le texte doit etre sombre sur ce fond : la luminance decide. */
+function tcTexteSombre(couleur) {
   const r = parseInt(couleur.substr(1, 2), 16);
   const v = parseInt(couleur.substr(3, 2), 16);
   const b = parseInt(couleur.substr(5, 2), 16);
-  const luminance = (0.299 * r + 0.587 * v + 0.114 * b) / 255;
-  if (luminance > 0.6) el.classList.add('chip-texte-sombre');
+  return (0.299 * r + 0.587 * v + 0.114 * b) / 255 > 0.6;
+}
+
+function tcAppliquerCouleurEvenement(el, cat) {
+  const couleur = catColor(cat);
+  el.style.background = couleur;
+  if (tcTexteSombre(couleur)) el.classList.add('chip-texte-sombre');
 }
 
 function renderWeek() {
@@ -9903,29 +9910,55 @@ function validateAgendaProposal(tempId) {
  * modele n'a rien dit de plus precis que loisir : ces moments vont dans
  * « Mon temps libre », quoi qu'il ait ecrit.
  */
+/** La categorie que dit un TITRE, ou null s il ne dit rien. */
+function tcCategorieDuTitre(titreBrut) {
+  const titre = tcSansAccents(titreBrut);
+  if (/temps libre|\brepos\b|detente|sieste|journee pour (moi|soi)|\blibre\b/.test(titre)) return 'personnel';
+  const TITRES = [
+    ['sante', /\b(medecin|docteur|dr|dentiste|kine|kinesitherapeute|osteo|osteopathe|hopital|clinique|analyses?|radio|irm|dermato|ophtalmo|cardiologue|pediatre|pharmacie|infirmier|infirmiere|orthodontiste|consultation|vaccin|medicaments?)\b/],
+    ['famille', /\b(maman|papa|mere|pere|parents|mamie|papy|mamy|grand-?mere|grand-?pere|grands-parents|enfants?|fils|fille|filles|frere|soeur|oncle|tante|cousin|cousine|famille|belle-?mere|beau-?pere)\b/],
+    ['travail', /\b(reunion|client|clients|bureau|entretien|visio|conference|presentation|projet|equipe|boulot|avocat|notaire|banque|impots|comptable)\b/],
+    ['sport', /\b(tennis|golf|foot|football|piscine|natation|running|footing|yoga|gym|musculation|velo|randonnee|padel|badminton|escalade)\b/],
+    ['voyages', /\b(gare|train|vol|avion|aeroport|voyage|taxi|trajet)\b/],
+    ['amis', /\b(restaurant|diner|cinema|concert|soiree|bar|apero|sortie|anniversaire|theatre|spectacle)\b/]
+  ];
+  for (let i = 0; i < TITRES.length; i++) {
+    if (TITRES[i][1].test(titre)) return TITRES[i][0];
+  }
+  return null;
+}
+
 function tcCategorieDeProposition(p, catMap) {
   const brute = String((p && p.category) || '').toLowerCase().trim();
   const dite = catMap[brute] || null;
-  const titre = tcSansAccents(p && p.title);
   // « rdv » et « loisir » ne disent rien de la nature du rendez-vous :
   // « rdv » est le mot rendez-vous, et catMap le rangeait en Sante.
   const vague = !dite || brute === 'rdv' || brute === 'loisir' || brute === 'loisirs';
-  if (/temps libre|\brepos\b|detente|sieste|journee pour (moi|soi)|\blibre\b/.test(titre)
-      && (vague || dite === 'amis')) return 'personnel';
-  if (vague) {
-    const TITRES = [
-      ['sante', /\b(medecin|docteur|dr|dentiste|kine|kinesitherapeute|osteo|osteopathe|hopital|clinique|analyses?|radio|irm|dermato|ophtalmo|cardiologue|pediatre|pharmacie|infirmier|infirmiere|orthodontiste|consultation|vaccin|medicaments?)\b/],
-      ['famille', /\b(maman|papa|mere|pere|parents|mamie|papy|mamy|grand-?mere|grand-?pere|grands-parents|enfants?|fils|fille|filles|frere|soeur|oncle|tante|cousin|cousine|famille|belle-?mere|beau-?pere)\b/],
-      ['travail', /\b(reunion|client|clients|bureau|entretien|visio|conference|presentation|projet|equipe|boulot)\b/],
-      ['sport', /\b(tennis|golf|foot|football|piscine|natation|running|footing|yoga|gym|musculation|velo|randonnee|padel|badminton|escalade)\b/],
-      ['voyages', /\b(gare|train|vol|avion|aeroport|voyage|taxi|trajet)\b/],
-      ['amis', /\b(restaurant|diner|cinema|concert|soiree|bar|apero|sortie|anniversaire|theatre|spectacle)\b/]
-    ];
-    for (let i = 0; i < TITRES.length; i++) {
-      if (TITRES[i][1].test(titre)) return TITRES[i][0];
-    }
-  }
+  const parTitre = tcCategorieDuTitre(p && p.title);
+  if (parTitre === 'personnel' && (vague || dite === 'amis')) return 'personnel';
+  if (vague && parTitre) return parTitre;
   return dite || 'green';
+}
+
+/**
+ * Repare les categories fausses des rendez-vous crees par Charly.
+ *
+ * Il ecrivait « rdv » (traduit en Sante) ou « loisir » (traduit en Amis)
+ * quand il ne savait pas : « chez maman » sortait rouge, « golf »
+ * violet. A l ouverture, ces deux categories-la, et seulement pour les
+ * rendez-vous crees par Charly, sont relues d apres le titre. Ce que
+ * l utilisateur a range lui-meme ne bouge pas.
+ */
+function tcReparerCategories() {
+  let change = 0;
+  (Array.isArray(events) ? events : []).forEach(function (e) {
+    if (!e || !e.id || String(e.id).indexOf('charly_ai_') !== 0) return;
+    if (e.cat !== 'sante' && e.cat !== 'amis') return;
+    const n = tcCategorieDuTitre(e.title);
+    if (n && n !== e.cat) { e.cat = n; change++; }
+  });
+  if (change) { try { saveEventsToStorage(); } catch (err) {} }
+  return change;
 }
 
 function validateAgendaProposalFromMsg(msg) {
@@ -16524,10 +16557,10 @@ function tcFiltreCategorieHTML() {
     + ' padding:10px 14px; border-radius:12px; background:' + cat.bg + ';'
     + ' border:1.5px solid ' + cat.color + ';">'
     + '<span style="font-size:18px;">' + cat.icon + '</span>'
-    + '<div style="flex:1; font-size:12.5px; color:' + cat.color + '; font-weight:600;">'
+    + '<div style="flex:1; font-size:12.5px; color:' + cat.texte + '; font-weight:600;">'
     + 'Qui peut r\u00e9server pour \u00ab ' + cat.label + ' \u00bb</div>'
     + '<button onclick="tcRetirerFiltreCategorie()" style="background:#fff; border:1px solid '
-    + cat.color + '; color:' + cat.color + '; border-radius:8px; padding:4px 10px;'
+    + cat.color + '; color:' + cat.texte + '; border-radius:8px; padding:4px 10px;'
     + ' font-size:12px; cursor:pointer;">Tout voir</button></div>';
 }
 
@@ -16688,7 +16721,7 @@ function renderContactsListHTML(contacts) {
   // turquoise la-bas, pour la meme chose.
   const CATS = DISPO_CATEGORIES.map(function (cat) {
     return { id: cat.id, icon: cat.icon, short: cat.label,
-             color: cat.color, bg: cat.bg };
+             color: cat.color, texte: cat.texte, bg: cat.bg };
   });
 
   // Grouper par première lettre
@@ -16737,7 +16770,7 @@ function renderContactsListHTML(contacts) {
           <div style="display:flex; flex-wrap:wrap; gap:6px; ${c.blocked ? 'opacity:0.4; pointer-events:none;' : ''}">
             ${CATS.map(cat => {
               const active = cats.indexOf(cat.id) > -1;
-              return `<button onclick="toggleContactCat('${c.id}','${cat.id}')" style="padding:6px 10px; background:${active ? cat.bg : '#f8f9fa'}; color:${active ? cat.color : '#9aa0a6'}; border:1.5px solid ${active ? cat.color : '#e8eaed'}; border-radius:20px; font-size:11px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">${cat.icon} ${cat.short}</button>`;
+              return `<button onclick="toggleContactCat('${c.id}','${cat.id}')" style="padding:6px 10px; background:${active ? cat.bg : '#f8f9fa'}; color:${active ? (cat.texte || cat.color) : '#9aa0a6'}; border:1.5px solid ${active ? cat.color : '#e8eaed'}; border-radius:20px; font-size:11px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">${cat.icon} ${cat.short}</button>`;
             }).join('')}
           </div>
           ${c.blocked
@@ -21161,8 +21194,8 @@ function renderDispo() {
     } else {
       plages.forEach(function(p, idx) {
         html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
-        html += '<div style="flex:1;font-size:12.5px;color:' + cat.color + ';line-height:1.5;font-weight:500;">' + phraseDispo(p) + '</div>';
-        html += '<button onclick="editDispoPlage(\'' + cat.id + '\',' + idx + ')" style="background:#fff;border:1px solid ' + cat.color + ';color:' + cat.color + ';font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;">\u270f\ufe0f</button>';
+        html += '<div style="flex:1;font-size:12.5px;color:' + cat.texte + ';line-height:1.5;font-weight:500;">' + phraseDispo(p) + '</div>';
+        html += '<button onclick="editDispoPlage(\'' + cat.id + '\',' + idx + ')" style="background:#fff;border:1px solid ' + cat.color + ';color:' + cat.texte + ';font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;">\u270f\ufe0f</button>';
         html += '<button onclick="deleteDispoPlage(\'' + cat.id + '\',' + idx + ')" style="background:#fff;border:1px solid #f5b8b3;color:#ea4335;font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;">\u2715</button>';
         html += '</div>';
       });
@@ -21173,7 +21206,7 @@ function renderDispo() {
     if (plages.length > 0) {
       if (combien > 0) {
         html += '<div onclick="tcVoirContactsDeCategorie(\'' + cat.id + '\')"'
-          + ' style="font-size:12px;color:' + cat.color + ';margin-top:6px;cursor:pointer;'
+          + ' style="font-size:12px;color:' + cat.texte + ';margin-top:6px;cursor:pointer;'
           + 'text-decoration:underline;">'
           + '\ud83d\udc65 ' + combien + ' contact' + (combien > 1 ? 's' : '')
           + ' peu' + (combien > 1 ? 'vent' : 't') + ' r\u00e9server dans ces heures \u203a</div>';
@@ -21190,7 +21223,7 @@ function renderDispo() {
 
     // Bouton toujours visible
     html += '<div style="padding:0 16px 16px;">';
-    html += '<button onclick="openDispoForm(\'' + cat.id + '\')" style="width:100%;padding:12px;background:' + cat.color + ';color:#fff;border:none;border-radius:10px;font-size:13.5px;font-weight:600;cursor:pointer;">';
+    html += '<button onclick="openDispoForm(\'' + cat.id + '\')" style="width:100%;padding:12px;background:' + cat.color + ';color:#333;border:none;border-radius:10px;font-size:13.5px;font-weight:600;cursor:pointer;">';
     html += '+ Ajouter une plage';
     html += '</button>';
     html += '</div>';
@@ -21256,7 +21289,7 @@ function openDispoForm(catId, existing) {
 
   html += '<div style="display:flex;gap:10px;">';
   html += '<button onclick="closeDispoForm()" style="flex:1;padding:14px;background:#f1f3f4;color:#5f6368;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">Annuler</button>';
-  html += '<button onclick="saveDispoPlage(\'' + catId + '\')" style="flex:2;padding:14px;background:' + cat.color + ';color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">Enregistrer</button>';
+  html += '<button onclick="saveDispoPlage(\'' + catId + '\')" style="flex:2;padding:14px;background:' + cat.color + ';color:#333;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">Enregistrer</button>';
   html += '</div>';
 
   modal.innerHTML = html;
