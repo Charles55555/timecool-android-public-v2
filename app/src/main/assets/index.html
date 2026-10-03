@@ -3220,7 +3220,8 @@ Utilise-la dès que l'utilisateur donne un début et une fin : « du 11 au 14 »
 « toute la semaine prochaine », « mes vacances du 1er au 15 août ».
 Sans heure précisée sur une période, mets 00:00-23:59.
 NE confonds PAS avec la récurrence : « tous les mardis » reste une ligne par occurrence.
-Catégories : travail, sport, famille, rdv, repas, pause, trajet, preparation, administratif, loisir
+Catégories : travail, sport, famille, rdv, repas, pause, trajet, preparation, administratif, loisir, temps_libre
+temps_libre = « Mon temps libre » : temps libre, repos, détente, sieste, journée pour soi. Ne mets JAMAIS ces moments en loisir.
 Le lieu n'est ajouté (5e champ) que si l'utilisateur l'a donné, ou pour changer explicitement le
 lieu d'un rendez-vous existant. Absent, le lieu déjà connu du rendez-vous modifié est conservé
 automatiquement — ne le redemande donc JAMAIS pour un simple changement d'horaire ou de titre.
@@ -9894,6 +9895,20 @@ function validateAgendaProposal(tempId) {
   validateAgendaProposalFromMsg(msg);
 }
 
+/**
+ * La categorie d'un rendez-vous propose. Celle que le modele a ecrite,
+ * sauf si le titre dit « temps libre », « repos », « detente » et que le
+ * modele n'a rien dit de plus precis que loisir : ces moments vont dans
+ * « Mon temps libre », quoi qu'il ait ecrit.
+ */
+function tcCategorieDeProposition(p, catMap) {
+  const dite = catMap[p && p.category] || null;
+  const titre = tcSansAccents(p && p.title);
+  const tempsLibre = /temps libre|\brepos\b|detente|sieste|journee pour (moi|soi)|\blibre\b/.test(titre);
+  if (tempsLibre && (!dite || dite === 'amis' || dite === 'green')) return 'personnel';
+  return dite || 'green';
+}
+
 function validateAgendaProposalFromMsg(msg) {
   const proposals = extractAgendaProposals(msg.content);
   if (!proposals || !proposals.length) { showToast('Aucune proposition à valider'); return; }
@@ -9921,6 +9936,7 @@ function validateAgendaProposalFromMsg(msg) {
     repas:'famille', dejeuner:'famille', diner:'famille', petit_dejeuner:'famille',
     rdv:'sante', medical:'sante', urgent:'sante', medecin:'sante', sante:'sante',
     personnel:'personnel', pause:'personnel', repos:'personnel',
+    temps_libre:'personnel', 'temps libre':'personnel', libre:'personnel', detente:'personnel', perso:'personnel',
     trajet:'voyages', deplacement:'voyages', voyage:'voyages'
   };
   // Détecter si c'est une modification (message contient "déplace", "modifie", "change", "annule")
@@ -10000,7 +10016,7 @@ function validateAgendaProposalFromMsg(msg) {
       startH: p.startH, startM: p.startM,
       endH: p.endH, endM: p.endM,
       title: p.title,
-      cat: catMap[p.category] || 'green',
+      cat: tcCategorieDeProposition(p, catMap),
       mode: mode === 'pro' ? 'pro' : 'user',
       id: 'charly_ai_' + Date.now() + '_' + idx,
       ...(lieuFinal ? { lieu: lieuFinal } : {}),
