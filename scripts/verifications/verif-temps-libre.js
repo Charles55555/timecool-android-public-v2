@@ -33,7 +33,7 @@ const ctx = { console, String, RegExp };
 vm.createContext(ctx);
 if (!mCat) { ko++; console.log('  KO  catMap introuvable'); }
 else vm.runInContext(mCat[0].replace('const ', 'var '), ctx);
-['tcSansAccents', 'tcCategorieDuTitre', 'tcCategorieDeProposition'].forEach((n) => {
+['tcSansAccents', 'tcCategorieDesPersonnes', 'tcCategorieDuTitre', 'tcCategorieDeProposition'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });

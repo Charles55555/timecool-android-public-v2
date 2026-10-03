@@ -90,7 +90,7 @@ const ctx = { console, String, RegExp, Array, saves: 0 };
 ctx.events = [];
 ctx.saveEventsToStorage = () => { ctx.saves++; };
 vm.createContext(ctx);
-['tcSansAccents', 'tcCategorieDuTitre', 'tcReparerCategories'].forEach((n) => {
+['tcSansAccents', 'tcCategorieDesPersonnes', 'tcCategorieDuTitre', 'tcReparerCategories'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });

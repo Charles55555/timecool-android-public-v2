@@ -9910,6 +9910,14 @@ function validateAgendaProposal(tempId) {
  * modele n'a rien dit de plus precis que loisir : ces moments vont dans
  * « Mon temps libre », quoi qu'il ait ecrit.
  */
+/** Avec QUI : famille, amis, ou null. Ce qui compte pour un repas. */
+function tcCategorieDesPersonnes(titreBrut) {
+  const titre = tcSansAccents(titreBrut);
+  if (/\b(maman|papa|mere|pere|parents|mamie|papy|mamy|grand-?mere|grand-?pere|grands-parents|enfants?|fils|fille|filles|frere|soeur|oncle|tante|cousin|cousine|famille|belle-?mere|beau-?pere)\b/.test(titre)) return 'famille';
+  if (/\b(amis?|copains|copines|potes|collegues?)\b/.test(titre)) return 'amis';
+  return null;
+}
+
 /** La categorie que dit un TITRE, ou null s il ne dit rien. */
 function tcCategorieDuTitre(titreBrut) {
   const titre = tcSansAccents(titreBrut);
@@ -9920,7 +9928,7 @@ function tcCategorieDuTitre(titreBrut) {
     ['travail', /\b(reunion|client|clients|bureau|entretien|visio|conference|presentation|projet|equipe|boulot|avocat|notaire|banque|impots|comptable)\b/],
     ['sport', /\b(tennis|golf|foot|football|piscine|natation|running|footing|yoga|gym|musculation|velo|randonnee|padel|badminton|escalade)\b/],
     ['voyages', /\b(gare|train|vol|avion|aeroport|voyage|taxi|trajet)\b/],
-    ['amis', /\b(restaurant|diner|cinema|concert|soiree|bar|apero|sortie|anniversaire|theatre|spectacle)\b/]
+    ['amis', /\b(restaurant|diner|cinema|concert|soiree|bar|apero|sortie|anniversaire|theatre|spectacle|amis?|copains|copines|potes|collegues)\b/]
   ];
   for (let i = 0; i < TITRES.length; i++) {
     if (TITRES[i][1].test(titre)) return TITRES[i][0];
@@ -9935,6 +9943,11 @@ function tcCategorieDeProposition(p, catMap) {
   // « rdv » est le mot rendez-vous, et catMap le rangeait en Sante.
   const vague = !dite || brute === 'rdv' || brute === 'loisir' || brute === 'loisirs';
   const parTitre = tcCategorieDuTitre(p && p.title);
+  // Un repas : catMap le rangeait toujours en Famille. Ce qui compte,
+  // c'est avec qui -- « dejeuner avec des amis » n'est pas la famille.
+  if (brute === 'repas' || brute === 'dejeuner' || brute === 'diner' || brute === 'petit_dejeuner') {
+    return tcCategorieDesPersonnes(p && p.title) || dite;
+  }
   if (parTitre === 'personnel' && (vague || dite === 'amis')) return 'personnel';
   if (vague && parTitre) return parTitre;
   return dite || 'green';
@@ -9953,8 +9966,12 @@ function tcReparerCategories() {
   let change = 0;
   (Array.isArray(events) ? events : []).forEach(function (e) {
     if (!e || !e.id || String(e.id).indexOf('charly_ai_') !== 0) return;
-    if (e.cat !== 'sante' && e.cat !== 'amis') return;
-    const n = tcCategorieDuTitre(e.title);
+    if (e.cat !== 'sante' && e.cat !== 'amis' && e.cat !== 'famille') return;
+    // Un repas range en Famille d'office : seul un titre qui parle
+    // d'amis le fait changer. Le reste de la Famille ne bouge pas.
+    const n = e.cat === 'famille'
+      ? (tcCategorieDesPersonnes(e.title) === 'amis' ? 'amis' : null)
+      : tcCategorieDuTitre(e.title);
     if (n && n !== e.cat) { e.cat = n; change++; }
   });
   if (change) { try { saveEventsToStorage(); } catch (err) {} }
