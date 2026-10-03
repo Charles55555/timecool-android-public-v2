@@ -4202,7 +4202,7 @@ function renderMonth() {
       const maxShown = 3;
       dayEvents.slice(0, maxShown).forEach(ev => {
         const color = catColor(ev.cat);
-        const startStr = String(ev.startH).padStart(2,'0') + ':' + String(ev.startM).padStart(2,'0');
+        const startStr = tcHorairePlage(ev);
         html += `<div class="month-event-pill${tcTexteSombre(color) ? ' chip-texte-sombre' : ''}" style="background:${color};">${startStr} ${escapeHTMLSafe(ev.title)}</div>`;
       });
       if (dayEvents.length > maxShown) {
@@ -4233,6 +4233,21 @@ function escapeHTMLSafe(str) {
  * luminance decide de la couleur du texte plutot qu une liste de
  * categories a tenir a jour a chaque ajout.
  */
+/**
+ * L'horaire d'un rendez-vous, compact : « 9h-10h30 ». Sans zero
+ * inutile, pour tenir dans une colonne de la semaine ou une puce du
+ * mois. Une journee entiere : « Journee ». Sans heure de fin, le
+ * debut seul.
+ */
+function tcHorairePlage(e) {
+  if (!e) return '';
+  if (e.allDay) return 'Journée';
+  const h = function (hh, mm) { return Number(hh) + 'h' + (Number(mm) ? String(mm).padStart(2, '0') : ''); };
+  const debut = h(e.startH, e.startM);
+  const aUneFin = (Number(e.endH) * 60 + Number(e.endM)) > (Number(e.startH) * 60 + Number(e.startM));
+  return aUneFin ? debut + '-' + h(e.endH, e.endM) : debut;
+}
+
 /** Vrai si le texte doit etre sombre sur ce fond : la luminance decide. */
 function tcTexteSombre(couleur) {
   const r = parseInt(couleur.substr(1, 2), 16);
@@ -4344,7 +4359,7 @@ function renderWeek() {
         evt.style.height = `${Math.max(dm*(44/60)-2, 42)}px`;
         evt.style.left = `${50 + di*colWidth + 1}px`;
         evt.style.width = `${colWidth - 2}px`;
-        evt.innerHTML = `<div class="week-event-title">${e.title}</div><div class="week-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')}</div>`;
+        evt.innerHTML = `<div class="week-event-title">${e.title}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         evt.onclick = () => openEventModal(e);
         body.appendChild(evt);
       });
