@@ -75,13 +75,14 @@ ctx.localStorage = {
 [/const TC_SURNOMS_CLE = '[^']+';/,
  /const TC_PAS_UNE_PERSONNE = \[[\s\S]*?\];/,
  /const TC_LIEUX = \[[\s\S]*?\];/,
+ /const TC_PETITS_MOTS = \[[\s\S]*?\];/,
  /const TC_VERBES_DE_DEMANDE = \[[\s\S]*?\];/].forEach((re) => {
   const m = page.match(re);
   if (m) vm.runInContext(m[0].replace('const ', 'var '), ctx);
   else { ko++; console.log('  KO  ' + re + ' introuvable'); }
 });
 
-['tcSansAccents', 'tcEstUnLieu', 'tcRessembleAUneDemande', 'tcDitSansContact', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
+['tcSansAccents', 'tcEstUnLieu', 'tcMotsUtiles', 'tcDesignationSansPetitMot', 'tcContactsParMots', 'tcRessembleAUneDemande', 'tcDitSansContact', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
  'tcContactsPourRdv', 'tcContactDuRdv', 'tcCleSurnom', 'tcSurnoms', 'tcRetenirSurnom',
  'tcContactDuSurnom', 'tcContactDeProposition', 'tcLigneContactProposition',
  'tcAttenteContact', 'tcDesignationTutoyee', 'tcQuestionContact',
@@ -422,7 +423,7 @@ titre('Repondre « oui », comme tout le monde');
     ctx.tcAttenteContact(poser(), [{ contact: 'William Ayache' }]) === 'William Ayache',
     'on ne choisit pas a la place de quelqu un entre deux fiches identiques');
   verifie('et elle dit qu ils sont deux',
-    ctx.tcQuestionContact('William Ayache').indexOf('2 contacts portent ce nom') > -1,
+    ctx.tcQuestionContact('William Ayache').indexOf('Je vois 2 contacts avec') > -1,
     ctx.tcQuestionContact('William Ayache').split('\n')[0]);
 
   let msg = poser();

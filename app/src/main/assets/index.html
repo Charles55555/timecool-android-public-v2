@@ -4837,8 +4837,13 @@ function tcQuestionContact(designation) {
   // l'application ne connaissait pas la personne.
   const homonymes = tcResoudreContact(designation);
   if (homonymes.length > 1) {
-    return homonymes.length + ' contacts portent ce nom : ' + designation + '.\n'
-      + 'Lequel est-ce ? Choisis-le dans la liste.';
+    // « Portent ce nom » etait faux pour « mon dentiste » : ces fiches
+    // contiennent le mot, elles ne portent pas un nom. On le dit tel
+    // quel, et on montre les candidats quand ils sont peu nombreux.
+    const mot = tcDesignationSansPetitMot(designation) || designation;
+    return 'Je vois ' + homonymes.length + ' contacts avec « ' + mot + ' » — c\'est l\'un d\'eux ?\n'
+      + (homonymes.length <= 3 ? 'Touche le bon, ou note le rendez-vous sans contact.'
+                                : 'Choisis-le dans la liste, ou note le rendez-vous sans contact.');
   }
 
   return 'Qui est ' + qui + ' ? Est-ce qu\'il existe dans tes contacts ?\n'
@@ -4948,7 +4953,7 @@ async function tcRepondreQuiEstCe(texte) {
   if (trouves.length > 1) {
     charlyIA.history.push({
       role: 'system_info',
-      content: '👤 ' + trouves.length + ' contacts portent ce nom — lequel est-ce ?'
+      content: '👤 Je vois ' + trouves.length + ' contacts avec « ' + (tcDesignationSansPetitMot(nom) || nom) + ' » — lequel ?'
     });
     renderCharlyChat();
     tcChoisirContactProposition(msg.tempId || '', nom);
@@ -5025,6 +5030,21 @@ function tcLigneContactProposition(msg, p, tempId) {
 }
 
 /** Demande qui est la personne, la recherche deja remplie de son nom. */
+/** Un des candidats proposes en bouton : relie, retient, referme la question. */
+function tcRelierContactProposition(tempId, nom, id) {
+  const msg = tcMessageProposition(tempId);
+  if (!msg || !id) return;
+  const cle = tcSansAccents(nom);
+  if (!msg._contacts) msg._contacts = {};
+  msg._contacts[cle] = id;
+  if (msg._sansContact) delete msg._sansContact[cle];
+  if (tcRetenirSurnom(nom, id)) {
+    const c = contactsList.find(function (x) { return x.id === id; });
+    if (c) showToast('👤 « ' + nom + ' » = ' + c.name + ' — je m\'en souviens');
+  }
+  renderCharlyChat();
+}
+
 function tcChoisirContactProposition(tempId, nom) {
   const msg = tcMessageProposition(tempId);
   if (!msg) return;
@@ -5050,7 +5070,9 @@ function tcChoisirContactProposition(tempId, nom) {
   // precisement designer une personne.
   if (tcResoudreContact(nom).length > 0) {
     const champ = document.getElementById('tcRechContactRdv');
-    if (champ) { champ.value = nom; tcRendreContactsRdv(); }
+    // Le mot utile, pas la phrase : « mon dentiste » pre-remplirait
+    // une recherche que la liste ne saurait pas lire.
+    if (champ) { champ.value = tcDesignationSansPetitMot(nom) || nom; tcRendreContactsRdv(); }
   }
 }
 
@@ -5087,9 +5109,14 @@ function tcContactsPourRdv(q) {
   if (!Array.isArray(contactsList)) return [];
   const recherche = tcSansAccents(q).trim();
   const vus = tcDernierRdvParContact();
+  // Le meme moteur que Charly pour le nom (mots utiles, en debut de
+  // mot) : ce qu'il annonce est ce que la liste montre. Telephone et
+  // email restent cherches tels quels, chiffres et arobases compris.
+  const mots = tcMotsUtiles(q);
+  const parNom = mots.length ? tcContactsParMots(mots) : [];
   const liste = recherche
     ? contactsList.filter(function (c) {
-        return tcSansAccents(c.name).indexOf(recherche) > -1
+        return parNom.indexOf(c) > -1
           || tcSansAccents(c.phone).indexOf(recherche) > -1
           || tcSansAccents(c.email).indexOf(recherche) > -1;
       })
@@ -5121,18 +5148,40 @@ function tcClasserContacts(liste, vus) {
  * « Michel Dupont » et « Jean-Michel Aubert », mais pas « Carmichel ».
  * Sans cela, un prenom court ramenerait la moitie du carnet.
  */
-function tcResoudreContact(nom) {
-  const q = tcSansAccents(nom).trim();
-  if (!q || !Array.isArray(contactsList)) return [];
-  const mots = q.split(/\s+/).filter(Boolean);
-  const trouves = contactsList.filter(function (c) {
+/* Les petits mots qui precedent une designation et ne nomment
+   personne : « mon dentiste », « chez le coiffeur », « avec ma mere ». */
+const TC_PETITS_MOTS = ['mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'son', 'sa', 'ses',
+  'notre', 'votre', 'leur', 'leurs', 'le', 'la', 'les', 'l', 'un', 'une', 'du', 'de',
+  'd', 'des', 'au', 'aux', 'chez', 'avec', 'et', 'a'];
+
+/** Les mots qui comptent, sans accents ni majuscules : « mon dentiste » → ['dentiste']. */
+function tcMotsUtiles(texte) {
+  return tcSansAccents(texte).split(/[^a-z0-9@.+-]+/).filter(function (m) {
+    return m && TC_PETITS_MOTS.indexOf(m) < 0;
+  });
+}
+
+/** La designation telle qu'on l'affiche, sans son petit mot : « mon dentiste » → « dentiste ». */
+function tcDesignationSansPetitMot(designation) {
+  return String(designation || '').replace(/^\s*(mon|ma|mes|ton|ta|tes|son|sa|ses|notre|votre|le|la|les|un|une|l['’])\s*/i, '').trim();
+}
+
+/** Les contacts dont le nom contient chacun des mots utiles, en debut de mot. */
+function tcContactsParMots(mots) {
+  if (!mots.length || !Array.isArray(contactsList)) return [];
+  return contactsList.filter(function (c) {
     const n = tcSansAccents(c.name);
     return mots.every(function (mot) {
       const propre = mot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       return new RegExp('(^|[^a-z0-9])' + propre).test(n);
     });
   });
-  return tcClasserContacts(trouves);
+}
+
+function tcResoudreContact(nom) {
+  // « mon dentiste » cherche « dentiste » : les petits mots ne nomment
+  // personne, et les compter faisait tomber sur des fiches au hasard.
+  return tcClasserContacts(tcContactsParMots(tcMotsUtiles(nom)));
 }
 
 /** Ce qui distingue un contact d'un homonyme : telephone, email, ou rien. */
@@ -9418,8 +9467,21 @@ function renderChatMessage(m) {
       // rendez-vous est pris.
       const idMsg = m.tempId || '';
       const nomJs = JSON.stringify(contactAttendu).replace(/"/g, '&quot;');
+      // Deux ou trois candidats : un bouton chacun, un seul geste. Au-dela,
+      // la liste, pre-remplie du mot utile.
+      const candidats = tcResoudreContact(contactAttendu);
+      const enLigne = (candidats.length >= 2 && candidats.length <= 3)
+        ? candidats.map(function (c) {
+            return '<button onclick="tcRelierContactProposition(\'' + idMsg + '\', ' + nomJs + ', \'' + escapeHTMLSafe(c.id) + '\')"'
+              + ' style="padding:9px 14px; background:#e8f0fe; color:var(--g-blue); border:1.5px solid #c8d7ee; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; max-width:100%; text-align:left;">'
+              + '👤 <span data-notranslate>' + escapeHTMLSafe(c.name) + '</span>'
+              + (tcDetailContact(c) ? '<span style="display:block; font-size:11px; font-weight:400; color:var(--text-sec);">' + tcDetailContact(c) + '</span>' : '')
+              + '</button>';
+          }).join('')
+        : '';
       html += `
           <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+            ${enLigne}
             <button onclick="tcChoisirContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#fff8e1; color:#8a6500; border:1.5px solid #fbbc04; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">👤 Choisir dans mes contacts</button>
             <button onclick="tcIgnorerContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:10px; font-size:12px; cursor:pointer;">Noter sans contact</button>
           </div>
