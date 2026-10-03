@@ -9851,6 +9851,7 @@ function validateAgendaProposalFromMsg(msg) {
   }
 
   let added = 0;
+  let doublons = 0;
   const datesUsed = new Set();
   expandedProposals.forEach((p, idx) => {
     // Détermination de la date pour ce créneau
@@ -9880,6 +9881,9 @@ function validateAgendaProposalFromMsg(msg) {
         events.splice(i, 1);
       }
     }
+
+    // Deja la, a l'identique : on ne cree pas une deuxieme ligne.
+    if (tcDoublonExact(dateStr, p)) { doublons++; return; }
 
     datesUsed.add(dateStr);
     // Le lieu explicite de la proposition prime ; à défaut (modification
@@ -9931,7 +9935,7 @@ function validateAgendaProposalFromMsg(msg) {
     categorie:'rdv',
     detail:`Charly IA a créé ${added} créneaux dans ton agenda — ${datesList}.`
   });
-  charlyIA.history.push({role:'system_info', content:`✅ ${added} créneaux ajoutés à ton agenda — ${datesList}`});
+  charlyIA.history.push({role:'system_info', content:`✅ ${added} créneaux ajoutés à ton agenda — ${datesList}${doublons ? ' (' + doublons + ' déjà présent' + (doublons > 1 ? 's' : '') + ', non dupliqué' + (doublons > 1 ? 's' : '') + ')' : ''}`});
   // Injecter le follow-up si Charly avait posé une question après le bloc [AGENDA]
   const followUpMsg = charlyIA.history.slice().reverse().find(m => m._followUp);
   if (followUpMsg && followUpMsg._followUp) {
@@ -10604,6 +10608,54 @@ function tcReponseOuiNon(text) {
   if (/^(oui|ouais|ok|okay|d'accord|daccord|vas-y|vas y|go|yes|confirme|je confirme|c'est ca|exact)(\s|$)/.test(t)) return true;
   if (/^(non|no|nan|annule pas|laisse|laisse tomber|stop)(\s|$)/.test(t)) return false;
   return null;
+}
+
+/**
+ * Un accord ou un refus tape au clavier, la ou un bouton attend.
+ * « Valide », « valide quand meme », « ajoute-les », « c'est bon »
+ * valent le bouton vert ; « non », « laisse tomber », « n'ajoute pas »
+ * valent l'annulation. Sinon null : ce n'est pas une reponse.
+ */
+function tcReponseValidation(text) {
+  const t = tcSansAccents(text).replace(/[!.?,]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/^(valide|valider|validez|valide[sz]?(-| )?(le|la|les|moi|tout)|ajoute(-| )?(le|la|les|tout)|ajoute[sz]? quand meme|valide[sz]? quand meme|quand meme|c est bon|c est ok|parfait|nickel|ok pour moi|confirme[sz]?)(\s|$)/.test(t)) return 'oui';
+  if (/^(n ajoute (pas|rien)|ajoute (pas|rien)|pas maintenant|laisse|laisse tomber|annule l ajout|abandonne)(\s|$)/.test(t)) return 'non';
+  const ouiNon = tcReponseOuiNon(text);
+  return ouiNon === true ? 'oui' : (ouiNon === false ? 'non' : null);
+}
+
+/** Le dernier conflit signale, tant que personne n'y a repondu. */
+function tcConflitEnAttente() {
+  if (!Array.isArray(charlyIA.history)) return null;
+  for (let i = charlyIA.history.length - 1; i >= 0; i--) {
+    const m = charlyIA.history[i];
+    if (m && m.conflictData) return m._resolu ? null : m;
+  }
+  return null;
+}
+
+/** La derniere proposition d'agenda que personne n'a encore validee. */
+function tcPropositionEnAttente() {
+  if (!Array.isArray(charlyIA.history)) return null;
+  for (let i = charlyIA.history.length - 1; i >= 0; i--) {
+    const m = charlyIA.history[i];
+    if (!m || m.role !== 'assistant') continue;
+    const props = extractAgendaProposals(m.content);
+    if (props && props.length) return m._validated ? null : m;
+  }
+  return null;
+}
+
+/** Deja dans l'agenda, a l'identique : meme titre, meme date, memes heures. */
+function tcDoublonExact(dateStr, p, ev) {
+  const meme = function (e) {
+    return e && e.date === dateStr
+      && tcSansAccents(e.title).trim() === tcSansAccents(p.title).trim()
+      && Number(e.startH) === Number(p.startH) && Number(e.startM) === Number(p.startM)
+      && Number(e.endH) === Number(p.endH) && Number(e.endM) === Number(p.endM);
+  };
+  if (ev) return meme(ev);
+  return (Array.isArray(events) ? events : []).some(meme);
 }
 
 let _tcSuppressionEnAttente = null;
@@ -11366,6 +11418,34 @@ async function charlySendMessage() {
     return;
   }
 
+
+  // === RÉPONSE À « QUE VEUX-TU FAIRE ? » OU À UNE PROPOSITION QUI ATTEND ===
+  // Un accord tapé fait ce que fait le bouton ; le modèle n'est jamais
+  // consulté. Sans cette branche, « valide quand même » partait au
+  // modèle, qui répondait « c'est déjà fait » sans rien avoir fait.
+  {
+    const conflit = tcConflitEnAttente();
+    const proposition = conflit ? null : tcPropositionEnAttente();
+    if (conflit || proposition) {
+      const reponse = tcReponseValidation(text);
+      if (reponse === 'oui') {
+        tcPousserMessageUtilisateur(text);
+        if (conflit) forceAddDespiteConflict();
+        else validateAgendaProposal(proposition.tempId || '');
+        return;
+      }
+      if (reponse === 'non') {
+        tcPousserMessageUtilisateur(text);
+        if (conflit) { cancelConflictedAdd(); }
+        else {
+          proposition._validated = true;
+          charlyIA.history.push({ role: 'system_info', content: '❌ D\'accord, je n\'ajoute rien.' });
+          renderCharlyChat();
+        }
+        return;
+      }
+    }
+  }
 
   // === INTERCEPTION SALUTATIONS — reponse fixe garantie ===
   const _greetings = ['bonjour','bonsoir','salut','coucou','hello','hi','hey','yo','bjr','bsr'];
@@ -14417,6 +14497,8 @@ function detectConflicts(newProposals) {
     if (!newP.date) return;
     const existing = events.filter(e => e.date === newP.date);
     existing.forEach(ev => {
+      // Le meme rendez-vous, deja la : rien a arbitrer, il sera saute.
+      if (tcDoublonExact(newP.date, newP, ev)) return;
       // Conversion en minutes pour comparaison
       const newStart = newP.startH * 60 + newP.startM;
       const newEnd = newP.endH * 60 + newP.endM;
@@ -14466,6 +14548,14 @@ validateAgendaProposalFromMsg = function(msg) {
   // nettoyage ciblé de la fonction d'origine.
   if (isModif) {
     _origValidateAgendaProposalFromMsg(msg);
+    return;
+  }
+
+  // Tout est deja dans l'agenda, a l'identique : rien a ajouter, et on
+  // le dit -- sinon le bouton semblait n'avoir rien fait.
+  if (proposals.every(p => p.date && tcDoublonExact(p.date, p))) {
+    charlyIA.history.push({ role: 'system_info', content: '✅ Déjà dans ton agenda, rien à ajouter.' });
+    renderCharlyChat();
     return;
   }
 
@@ -14519,11 +14609,15 @@ function forceAddDespiteConflict() {
   // Trouver le dernier conflictData
   const lastConflict = [...charlyIA.history].reverse().find(m => m.conflictData);
   if (!lastConflict) return;
+  // Repondu : un « oui » tape ensuite ne doit pas ajouter une 2e fois.
+  lastConflict._resolu = true;
   // Ajouter quand même les événements
   _origValidateAgendaProposalFromMsg(lastConflict.conflictData.msg);
 }
 
 function cancelConflictedAdd() {
+  const lastConflict = [...charlyIA.history].reverse().find(m => m.conflictData);
+  if (lastConflict) lastConflict._resolu = true;
   charlyIA.history.push({role:'system_info', content:'❌ Ajout annulé. Tu peux demander à Charly de proposer d\'autres créneaux.'});
   renderCharlyChat();
 }

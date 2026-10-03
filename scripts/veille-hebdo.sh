@@ -34,6 +34,12 @@ for h in timecool.fr api.timecool.fr; do
   if [ "$jours" -lt 20 ]; then alerter "certificat de $h expire dans $jours jours"; else noter "certificat $h : $jours jours"; fi
 done
 
+# SSH : une seule adresse qui tient beaucoup de connexions (épuisement du
+# port 22 le 03/10/2026, 212.112.98.73). Au-delà de 5, on le signale.
+max_ip=$(ss -tn '( sport = :22 )' 2>/dev/null | awk 'NR>1{n=split($5,a,":"); ip=a[1]; for(i=2;i<n;i++) ip=ip":"a[i]; print ip}' | sort | uniq -c | sort -rn | head -1)
+nb=$(echo "$max_ip" | awk '{print $1+0}')
+if [ "${nb:-0}" -gt 5 ]; then alerter "SSH : $nb connexions depuis $(echo "$max_ip" | awk '{print $2}')"; else noter "SSH : ${nb:-0} connexion(s) max par adresse"; fi
+
 # Mises à jour et redémarrage
 maj=$(apt list --upgradable 2>/dev/null | grep -c upgradable)
 noter "$maj mise(s) à jour système en attente"

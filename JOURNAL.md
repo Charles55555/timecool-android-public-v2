@@ -24,6 +24,17 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
+- **SSH saturé le 03/10 vers 03h30 UTC, réglé par la session du PC** :
+  212.112.98.73 faisait de la force brute en tenant 100+ connexions non
+  authentifiées, soit le plafond MaxStartups (10:30:100). Plus personne
+  n'entrait. fail2ban l'a bannie à 03:33, mais le bannissement ne coupe
+  pas les sessions déjà ouvertes. Correctif durable :
+  `/etc/ssh/sshd_config.d/10-timecool-anti-epuisement.conf` avec
+  `PerSourceMaxStartups 5`, `PerSourceNetBlockSize 32:128`,
+  `LoginGraceTime 30`, `MaxStartups 10:50:60` (sshd -t, reload), sessions
+  tuées par `ss -K`. La veille hebdomadaire signale désormais toute adresse
+  qui tient plus de 5 connexions SSH.
+
 - **Version web mise en ligne le 03/10 à 04h04** (session serveur, à la demande
   de Charles) : commit `70f1f22` de la session du PC (aide, 16 questions,
   recherche). Contrôles verts avant.
