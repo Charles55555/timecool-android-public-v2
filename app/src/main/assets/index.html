@@ -15256,19 +15256,33 @@ function renderHelp() {
     {q: '📋 Que sont les "Journal d’activité" ?', a: 'C\'est l\'historique des actions que Charly a réalisées pour toi (prises de RDV, créations d\'agenda, réservations) ainsi que le suivi automatique de tes rendez-vous. Tu peux y voir le statut de chaque démarche en temps réel.'},
     {q: '📄 Comment importer un PDF dans Charly IA ?', a: 'Va dans Charly IA, clique sur le bouton "+" à gauche du micro, choisis "Fichiers", sélectionne ton PDF (par exemple une invitation de mariage). Charly extrait automatiquement les dates et te propose de les ajouter à ton agenda.'},
     {q: '⚠️ Que se passe-t-il en cas de conflit d\'agenda ?', a: 'Si tu essaies d\'ajouter un RDV qui chevauche un autre, TimeCool t\'alerte avec 3 options : ajouter quand même, demander à Charly de réorganiser, ou annuler.'},
-    {q: '🔒 Mes données sont-elles privées ?', a: 'Oui, tes données restent stockées localement sur ton appareil. Elles ne sont pas envoyées à des serveurs tiers, sauf quand tu utilises Charly IA qui dialogue avec OpenAI.'},
+    {q: '🔒 Mes données sont-elles privées ?', a: 'Tes rendez-vous sont chiffrés sur ton appareil. Ils sont aussi conservés sur les serveurs de TimeCool, situés en Allemagne chez notre hébergeur européen : c\'est ce qui permet de les sauvegarder, d\'envoyer tes rappels par email et de les recopier dans Google Agenda. Nous ne les vendons pas et nous ne les exploitons pas. Quand tu écris à Charly, ta demande part chez notre fournisseur d\'intelligence artificielle le temps de te répondre.'},
     {q: '🌍 Dans quelles langues TimeCool est-il disponible ?', a: 'TimeCool est disponible en 17 langues européennes. Change de langue à tout moment dans Paramètres → Langue. La traduction est automatique, donc certaines formulations peuvent être imparfaites.'},
     {q: '🎂 Comment ajouter un anniversaire ?', a: 'Va dans Menu → Anniversaires → "+ Ajouter un anniversaire". Tu peux aussi demander à Charly IA : "Ajoute l\'anniversaire de Marie le 15 juin".'},
-    {q: '🔧 Comment activer Charly IA ?', a: 'Va dans Menu → Configuration IA. Saisis ta clé API OpenAI, enregistre, puis teste la connexion.'}
+    {q: '🔧 Comment activer Charly IA ?', a: 'Il est déjà actif : Charly fonctionne dès ton inscription, sans réglage et sans clé à fournir. L\'intelligence artificielle est prise en charge par TimeCool. Si tu préfères utiliser ta propre clé, c\'est possible dans Menu → Configuration IA, mais ce n\'est pas nécessaire.'},
+    {q: '📅 TimeCool se synchronise-t-il avec Google Agenda ?', a: 'Oui. Va dans Paramètres → 📅 Google Agenda, puis « Relier mon Google Agenda ». Deux cases te laissent choisir : envoyer tes rendez-vous TimeCool vers Google, et laisser Charly lire ton Google Agenda. La seconde est décochée au départ.'},
+    {q: '🚗 TimeCool tient-il compte du temps de trajet ?', a: 'Oui. Quand deux rendez-vous se suivent à des adresses différentes, TimeCool estime la durée du trajet avec le trafic du moment, et te prévient si le temps manque entre les deux.'},
+    {q: '🔔 Puis-je prévenir quelqu\'un d\'un retard ?', a: 'Ouvre le rendez-vous : trois boutons préparent le message à ta place — un retard, une annulation ou un décalage. Le texte s\'adapte au contact, en tutoiement ou en vouvoiement, et tu peux le modifier avant d\'envoyer.'},
+    {q: '👥 Comment relier un rendez-vous à un contact ?', a: 'Dis simplement à Charly « rendez-vous avec Michel ». Il cherche dans tes contacts et, si plusieurs Michel existent, il te demande lequel. Tu peux aussi lui apprendre un surnom : dis-lui « mon ostéopathe » une fois, il s\'en souviendra.'},
+    {q: '🕐 Charly peut-il me proposer des créneaux libres ?', a: 'Oui. Demande-lui « quand suis-je libre jeudi ? » : il regarde ton agenda réel et te propose des horaires, au lieu de te renvoyer un formulaire à remplir.'},
+    {q: '⏰ Comment régler mes rappels ?', a: 'Va dans Paramètres → Rappels. Tu choisis le délai : 5, 10 ou 30 minutes avant, 1 heure, 2 heures, ou la veille. Le téléphone te réveille tout seul à l\'heure dite, même sans connexion.'},
+    {q: '🔄 Comment l\'application se met-elle à jour ?', a: 'Toute seule. Sur Android, TimeCool vérifie s\'il existe une version plus récente et l\'installe sans rien te demander. Sur le web, tu as toujours la dernière version en ouvrant la page.'},
+    {q: '💶 Combien coûte l\'intelligence artificielle ?', a: 'Rien pour toi. L\'intelligence artificielle de Charly est prise en charge par TimeCool : elle est incluse dans l\'application, tu n\'as rien à payer en plus.'}
   ];
   c.innerHTML = `
     <div style="background:linear-gradient(135deg, #e8f0fe, #fff); border:1px solid #c8d7ee; border-radius:14px; padding:18px; margin-bottom:18px;">
       <div style="font-size:16px; font-weight:700; color:var(--g-blue); margin-bottom:6px;">👋 Bienvenue dans l'aide TimeCool</div>
       <div style="font-size:13px; color:var(--text); line-height:1.5;">Tu trouveras ici les réponses aux questions les plus fréquentes.</div>
     </div>
+    <div style="position:relative; margin-bottom:16px;">
+      <input id="tcAideRecherche" type="search" oninput="tcFiltrerAide(this.value)" autocomplete="off"
+        placeholder="Rechercher dans l'aide…"
+        style="width:100%; padding:12px 14px 12px 40px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; color:var(--text); background:#fff; box-sizing:border-box; -webkit-appearance:none;">
+      <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:15px; pointer-events:none; opacity:.6;">🔍</span>
+    </div>
     <div style="font-size:12px; font-weight:700; color:var(--text-sec); text-transform:uppercase; padding:0 4px 10px; letter-spacing:0.5px;">📚 Questions fréquentes</div>
     ${faq.map(item => `
-      <details style="background:#fff; border:1px solid var(--border); border-radius:12px; margin-bottom:8px; overflow:hidden;">
+      <details data-aide style="background:#fff; border:1px solid var(--border); border-radius:12px; margin-bottom:8px; overflow:hidden;">
         <summary style="padding:14px 16px; cursor:pointer; font-size:14px; font-weight:500; color:var(--text); list-style:none; display:flex; justify-content:space-between; align-items:center;">
           <span>${item.q}</span>
           <span style="font-size:18px; color:var(--text-sec);">+</span>
@@ -15276,6 +15290,9 @@ function renderHelp() {
         <div style="padding:0 16px 14px; font-size:13px; color:var(--text-sec); line-height:1.6;">${item.a}</div>
       </details>
     `).join('')}
+    <div id="tcAideAucun" style="display:none; padding:18px 16px; text-align:center; font-size:13px; color:var(--text-sec); background:#fff; border:1px solid var(--border); border-radius:12px;">
+      Aucune réponse ne correspond.<br>Écris ta question plus bas, on te répondra.
+    </div>
     <div style="font-size:12px; font-weight:700; color:var(--text-sec); text-transform:uppercase; padding:24px 4px 10px; letter-spacing:0.5px;">💌 Envoyer un commentaire</div>
     <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px;">
       <div style="font-size:13px; color:var(--text); margin-bottom:12px; line-height:1.5;">Ton avis est précieux pour améliorer TimeCool.</div>
@@ -15289,6 +15306,24 @@ function renderHelp() {
       © 2026 — Tous droits réservés
     </div>
   `;
+}
+
+/* Filtre les questions sur ce qui est deja ecrit dedans.
+   On lit textContent plutot qu'un attribut : les reponses contiennent
+   des guillemets doubles, qui auraient casse l'attribut. Une question
+   masquee se referme, sinon elle resterait ouverte en reapparaissant. */
+function tcFiltrerAide(terme) {
+  const cherche = tcSansAccents(String(terme || '').toLowerCase()).trim();
+  const blocs = document.querySelectorAll('#helpContent details[data-aide]');
+  let visibles = 0;
+  blocs.forEach(function (bloc) {
+    const texte = tcSansAccents(bloc.textContent.toLowerCase());
+    const trouve = cherche === '' || texte.indexOf(cherche) !== -1;
+    bloc.style.display = trouve ? '' : 'none';
+    if (trouve) { visibles++; } else { bloc.open = false; }
+  });
+  const aucun = document.getElementById('tcAideAucun');
+  if (aucun) { aucun.style.display = visibles === 0 ? 'block' : 'none'; }
 }
 
 function sendFeedback() {
