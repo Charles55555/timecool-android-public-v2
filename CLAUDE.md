@@ -6,6 +6,19 @@ servi sur `timecool.fr/app/` et embarqué dans l'APK.
 
 Charles est le porteur du projet. Réponses en français.
 
+**Toute session neuve reprend seule, sans rien demander à Charles.**
+Avant de lui répondre, même à un simple « bonjour » : lire `JOURNAL.md`
+en entier, les notes de mémoire, et `git log --oneline -30`. Puis
+enchaîner sur ce qui est en cours. Ne jamais lui demander de résumer
+l'historique, ni de dire « lis le journal » : il perd deux à trois jours
+à chaque changement de session, et il l'a dit avec colère le 03/10. C'est
+à la session de retrouver le fil, pas à lui de le redonner.
+
+**Un seul interlocuteur (03/10) :** Charles parle à la session de son PC.
+La session du serveur reste en arrière-plan (sentinelle, veille,
+sauvegardes, mises en ligne demandées par la session du PC avec sa
+validation citée) et ne lui écrit qu'en cas de panne réelle.
+
 **Lire `JOURNAL.md` avant de commencer**, et y noter ce qu'on entame et
 ce qu'on laisse. Plusieurs sessions travaillent sur ce dépôt : le
 04/09/2026, deux d'entre elles ont corrigé le même défaut en parallèle
