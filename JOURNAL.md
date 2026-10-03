@@ -24,6 +24,10 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
+- **Version web mise en ligne le 03/10 à 04h04** (session serveur, à la demande
+  de Charles) : commit `70f1f22` de la session du PC (aide, 16 questions,
+  recherche). Contrôles verts avant.
+
 - **Plesk mis à niveau en 18.0.81.2 le 01/10** (session du PC, ligne collée
   par Charles ; sauvegardes préalables dans `/root/avant-plesk-18.0.81/`).
   Services et TimeCool vérifiés sains. Mises à jour automatiques Ubuntu et
@@ -47,8 +51,10 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   appliqué : fichiers `/var/lib/psa/dumps` + `/var/backups/timecool`,
   incrémentiel quotidien vers le cloud IONOS, 03h00 heure du serveur (UTC,
   soit 5h à Paris), 7 jours. Console : backup.1and1.com, compte
-  NGCS_C5A96_3517.admin. Reste : vérifier la première copie le 02/10
-  (**session serveur seulement**, pour ne pas le faire deux fois).
+  NGCS_C5A96_3517.admin. **Première copie constatée** : 02/10 à 03h29 UTC,
+  statut ok. Mais le plan ne tourne que du lundi au vendredi (prochaine :
+  lundi 05/10) : le samedi et le dimanche ne sont pas copiés. À corriger
+  dans la console (Planification → cocher samedi et dimanche).
   Vérifié le 01/10 par la session du PC : `timecool_prod` est connue de
   Plesk (abonnement timecool.fr) et présente dans la sauvegarde de la nuit
   (`dumps/domains/timecool.fr/databases/timecool_prod_1`, 01/10 00h08). 
