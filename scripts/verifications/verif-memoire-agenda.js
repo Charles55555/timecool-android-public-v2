@@ -78,6 +78,25 @@ titre('Le scenario de Charles : cree par Charly, supprime a la main');
   verifie('et dit que sa memoire ne fait pas foi', /la liste ci-dessus a raison, pas ta mémoire|la liste ci-dessus a raison, pas ta memoire/.test(agenda));
 }
 
+titre('Une carte pas encore validee reste lisible');
+{
+  // Reserve de la session du serveur, 04/10 : « decale-la a 16h » avant
+  // de cliquer doit encore pouvoir lire la carte. Elle n'est pas dans
+  // l'agenda, elle ne peut donc pas etre perimee.
+  ctx.charlyIA.history = [
+    { role: 'user', content: 'vendredi 14h golf' },
+    { role: 'assistant', content: carte, tempId: 't2' },          // pas de _validated
+    { role: 'user', content: 'décale-la à 16h' }
+  ];
+  const texte = ctx.tcHistoriquePourIA().map((m) => m.content).join('\n');
+  verifie('la carte non validee part intacte', texte.indexOf('2026-10-16 | 11:00-13:00') > -1,
+    'sinon le modele ne sait plus quoi decaler');
+  verifie('et une carte validee est bien effacee, elle', (() => {
+    ctx.charlyIA.history[1]._validated = true;
+    return ctx.tcHistoriquePourIA().map((m) => m.content).join('\n').indexOf('2026-10-16') < 0;
+  })());
+}
+
 titre('Un message sans carte est inchange');
 {
   ctx.charlyIA.history = [{ role: 'assistant', content: 'Bonjour ! Que puis-je faire ?' }];

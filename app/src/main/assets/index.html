@@ -11141,7 +11141,11 @@ function tcHistoriquePourIA() {
     .filter(m => m && (m.role === 'user' || m.role === 'assistant'))
     .map(m => ({
       role: m.role,
-      content: m.role === 'assistant'
+      // Seules les cartes VALIDEES sont effacees : leurs rendez-vous sont
+      // dans l'agenda et peuvent en avoir ete retires. Une carte pas
+      // encore validee est une proposition vivante -- « decale-la a 16h »
+      // doit encore pouvoir la lire.
+      content: (m.role === 'assistant' && m._validated)
         ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, "[proposition d'agenda faite a ce moment-la - l'agenda reel ci-dessus fait foi]")
         : String(m.content || '')
     }));
