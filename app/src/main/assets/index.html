@@ -2936,9 +2936,13 @@ Tu réponds MAXIMUM 3 lignes — jamais plus, sauf si l'utilisateur demande des 
 Tu termines par une action proposée ou une question courte — SAUF quand tu viens
 d'exécuter la demande : dans ce cas tu confirmes simplement ce que tu as fait.
 Tu poses UNE seule question à la fois, jamais plusieurs.
-La formule "Sauf erreur de ma part" est RESERVEE aux cas où tu contredis l'utilisateur ou signales un problème : chevauchement d'horaires, rendez-vous introuvable, date qui n'existe pas, demande portant sur le passé.
+Ne dis JAMAIS "Sauf erreur de ma part", ni aucune formule de precaution en tete de phrase : dis directement ce que tu vois.
 Pour une simple information manquante, pose la question directement — "Quel jour ?", "À quelle heure ?" — sans préambule.
 Ne commence JAMAIS deux réponses de suite par la même formule : c’est un tic, et ça s’entend.
+
+CHEVAUCHEMENT : si un créneau demandé recouvre un rendez-vous de l'AGENDA RÉEL, ne pose JAMAIS la question en texte ("je bloque quand même ?").
+Propose dans [AGENDA] les parties libres autour du rendez-vous existant (ex : demande 9h-18h, travail 11h-13h déjà noté → propose 09:00-11:00 et 13:00-18:00),
+et dis-le en une ligne. C'est l'application qui signale un conflit, pas toi.
 
 ═══ RÈGLE MÈRE — AU-DESSUS DE TOUTES LES AUTRES ═══
 Tu exécutes UNIQUEMENT si la demande est claire, nette et précise.
@@ -3033,11 +3037,11 @@ Nouveau créneau un jour DIFFÉRENT → compté "annulation".
 Comptabilisé symétriquement, quelle que soit la partie à l'origine ; tracé dans les deux agendas (initiateur et receveur).
 
 --- Cas particuliers d'annulation ---
-Aucun RDV trouvé sur la période → "Sauf erreur de ma part, je ne vois aucun rendez-vous [période] dans ton agenda. Peux-tu préciser ?"
-Ambiguïté de contact (deux "Marie" par exemple) → "Sauf erreur de ma part, tu as deux RDV avec 'Marie' [jour] : [détail 1] et [détail 2]. Laquelle ?"
+Aucun RDV trouvé sur la période → "Je ne vois aucun rendez-vous [période] dans ton agenda. Peux-tu préciser ?"
+Ambiguïté de contact (deux "Marie" par exemple) → "Tu as deux RDV avec 'Marie' [jour] : [détail 1] et [détail 2]. Laquelle ?"
 RDV déjà annulé ou inexistant → "Je suis désolé, je ne comprends pas ta demande : je ne vois aucun rendez-vous prévu correspondant."
-RDV déjà passé → "Sauf erreur de ma part, ta demande concerne un rendez-vous déjà passé."
-Date inexistante (ex : 31 février) → "Sauf erreur de ma part, je n'ai pas compris ta demande. Cette date n'existe pas."
+RDV déjà passé → "Ta demande concerne un rendez-vous déjà passé."
+Date inexistante (ex : 31 février) → "Je n'ai pas compris ta demande. Cette date n'existe pas."
 Annulation et reprogrammation dans le même message → traite comme un déplacement (CAS 6).
 L'utilisateur dit "annule pas" juste après, avant l'envoi → annule ta propre action en cours.
 RDV pas encore confirmé par le contact → précise que tu ne peux rien annuler ; si l'utilisateur insiste, envoie un message d'excuse annulant la demande en cours.
@@ -10530,7 +10534,7 @@ async function tcGererDemandeCreneau(text, intent) {
   if (!r.creneaux.length) {
     charlyIA.history.push({
       role: 'assistant',
-      content: 'Sauf erreur de ma part, je ne vois aucun créneau libre ' + quand
+      content: 'Je ne vois aucun créneau libre ' + quand
         + '. Tu veux que je regarde plus loin ?'
     });
     renderCharlyChat();
@@ -10611,7 +10615,7 @@ async function tcGererConsultationAgenda(text, intent) {
     const todayStr = tcISO(new Date());
     const matches = evs.filter(e => e.title && e.title.toLowerCase().includes(nomLower) && e.date >= todayStr).sort(tcComparerEvenements);
     if (!matches.length) {
-      reply = `Sauf erreur de ma part, je ne vois aucun rendez-vous à venir avec "${intent.contact}" dans ton agenda.`;
+      reply = `Je ne vois aucun rendez-vous à venir avec "${intent.contact}" dans ton agenda.`;
     } else {
       const lignes = matches.map(e => `• ${tcFormaterDateHumaine(e.date)} ${tcFormaterHeure(e)} — ${e.title}`).join('\n');
       reply = (matches.length > 1 ? `Tu as ${matches.length} rendez-vous avec "${intent.contact}" :\n` : `Tu as un rendez-vous avec "${intent.contact}" :\n`) + lignes;
@@ -10874,12 +10878,12 @@ async function tcGererSuppressionRdv(text) {
   let reply;
   if (!candidats.length) {
     reply = filtreApplique
-      ? "Sauf erreur de ma part, je ne vois aucun rendez-vous correspondant dans ton agenda. Peux-tu préciser ?"
-      : "Sauf erreur de ma part, je ne vois aucun rendez-vous dans ton agenda. Peux-tu préciser lequel tu veux annuler ?";
+      ? "Je ne vois aucun rendez-vous correspondant dans ton agenda. Peux-tu préciser ?"
+      : "Je ne vois aucun rendez-vous dans ton agenda. Peux-tu préciser lequel tu veux annuler ?";
     charlyIA.history.push({role: 'assistant', content: reply});
   } else if (!filtreApplique && candidats.length > 1) {
     // Aucune précision de date/contact et plusieurs RDV existent : jamais deviner, on demande la période.
-    reply = "Sauf erreur de ma part, tu as plusieurs rendez-vous dans ton agenda. Peux-tu préciser lequel (date, heure ou nom) ou quelle période annuler ?";
+    reply = "Tu as plusieurs rendez-vous dans ton agenda. Peux-tu préciser lequel (date, heure ou nom) ou quelle période annuler ?";
     charlyIA.history.push({role: 'assistant', content: reply});
   } else if (candidats.length === 1) {
     // Un seul rendez-vous correspond : la demande est comprise, elle est
@@ -11125,6 +11129,24 @@ async function tcRepondreDeplacement(text) {
  * vrais rendez-vous et ne peut que deviner — c'est la cause racine du
  * bug rapporté (un faux conflit annoncé un jour réellement libre).
  */
+/**
+ * La conversation telle qu'on la renvoie au modele : sans les cartes
+ * [AGENDA] de ses anciens messages. Elles decrivaient l'agenda d'un
+ * moment ; depuis, des rendez-vous ont pu etre supprimes a la main, et
+ * le modele preferait sa memoire a l'agenda reel. Son seul souvenir des
+ * rendez-vous doit etre la liste relue a chaque message.
+ */
+function tcHistoriquePourIA() {
+  return (Array.isArray(charlyIA.history) ? charlyIA.history : [])
+    .filter(m => m && (m.role === 'user' || m.role === 'assistant'))
+    .map(m => ({
+      role: m.role,
+      content: m.role === 'assistant'
+        ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, "[proposition d'agenda faite a ce moment-la - l'agenda reel ci-dessus fait foi]")
+        : String(m.content || '')
+    }));
+}
+
 function tcAgendaSnapshotPourIA() {
   const now = new Date();
   const debutStr = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
@@ -11153,7 +11175,9 @@ ${tronque ? `\n… et ${evs.length - MAX} de plus, non affichés ici (période t
 répondre à une consultation d'agenda, ou identifier quel rendez-vous modifier ou annuler.
 Ne dis JAMAIS qu'un rendez-vous existe s'il n'apparaît pas ci-dessus, et ne dis JAMAIS qu'un
 créneau est pris si la liste ne montre rien à cette date et cette heure — dans ce cas
-l'utilisateur est libre, ne l'invente jamais.`;
+l'utilisateur est libre, ne l'invente jamais.
+Si un de tes propres messages precedents mentionne un rendez-vous qui n'apparait pas ci-dessus,
+c'est qu'il a ete supprime depuis : la liste ci-dessus a raison, pas ta memoire.`;
 }
 
 async function tcGererRechercheProfessionnel(text, profession, lieu) {
@@ -11723,7 +11747,7 @@ JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY
         {role:'system',
          content: tcPromptSysteme() + tcLangInstruction(),
          volatil: dateContext + '\n\n' + tcAgendaSnapshotPourIA()},
-        ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
+        ...tcHistoriquePourIA()
       ];
       reply = await callOpenAI(messages);
     }
@@ -14535,7 +14559,7 @@ ${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | rdv
         {role:'system',
          content: tcPromptSysteme() + tcLangInstruction(),
          volatil: dateContext + '\n\n' + tcAgendaSnapshotPourIA()},
-        ...charlyIA.history.filter(m => m.role==='user' || m.role==='assistant').map(m => ({role:m.role, content:m.content}))
+        ...tcHistoriquePourIA()
       ];
       reply = await callOpenAI(messages);
     }
