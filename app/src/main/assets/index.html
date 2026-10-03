@@ -9356,7 +9356,45 @@ function addDemarche(d) {
 }
 
 // ═══ CHARLY CHAT — Conversation conversationnelle ═══
+/* La conversation, gardee sur l'appareil. Pas de prefixe « tc_ » :
+   la synchronisation ignore cette cle, et ne la purge pas. */
+const TC_CHARLY_HISTORIQUE_CLE = 'timecool_charly_historique';
+const TC_CHARLY_HISTORIQUE_MAX = 10;
+
+/** Les dix derniers echanges, sans ce qui ne se rejoue pas (boutons d'un conflit). */
+function tcSauverHistoriqueCharly() {
+  try {
+    const liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
+      .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system_info'); })
+      .slice(-TC_CHARLY_HISTORIQUE_MAX);
+    localStorage.setItem(TC_CHARLY_HISTORIQUE_CLE, JSON.stringify(liste, function (k, v) {
+      return k === 'conflictData' ? undefined : v;
+    }));
+  } catch (e) {}
+}
+
+/** Remet la conversation enregistree, si rien n'a encore ete dit. Une seule fois. */
+function tcChargerHistoriqueCharly() {
+  if (charlyIA._historiqueCharge) return;
+  charlyIA._historiqueCharge = true;
+  if (Array.isArray(charlyIA.history) && charlyIA.history.length) return;
+  try {
+    const brut = localStorage.getItem(TC_CHARLY_HISTORIQUE_CLE);
+    const liste = brut ? JSON.parse(brut) : null;
+    if (Array.isArray(liste) && liste.length) charlyIA.history = liste;
+  } catch (e) {}
+}
+
+/** Le bouton « Recommencer » efface aussi ce qui etait enregistre. */
+function tcEffacerHistoriqueCharly() {
+  try { localStorage.removeItem(TC_CHARLY_HISTORIQUE_CLE); } catch (e) {}
+}
+
 function renderCharlyChat() {
+  // A chaque affichage, les dix derniers messages sont enregistres :
+  // tout ce qui change la conversation finit par un affichage.
+  tcChargerHistoriqueCharly();
+  tcSauverHistoriqueCharly();
   const body = document.getElementById('charlyChatBody');
   if (!charlyIA.history.length) {
     // Welcome message
@@ -12262,6 +12300,7 @@ async function simulateDemoReply(userText) {
 async function resetCharlyChat() {
   if (charlyIA.history.length && !await tcConfirm('Effacer la conversation actuelle ?')) return;
   charlyIA.history = [];
+  tcEffacerHistoriqueCharly();
   renderCharlyChat();
 }
 
@@ -12746,10 +12785,12 @@ function hideAuthFlow() {
   const h = new Date().getHours();
   const sal = h < 18 ? 'Bonjour' : 'Bonsoir';
   const fname = userAccount ? userAccount.firstname : '';
-  charlyIA.history = [];
+  tcChargerHistoriqueCharly();
   const _accueil = sal + (fname ? ' ' + fname : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par où on commence ?';
   // appText : texte de l'app (pas une donnee personnelle) -> traduisible
-  charlyIA.history.push({role:'assistant', content: _accueil, appText: true, fr: _accueil});
+  // L'accueil ne s'ajoute que si la conversation est vide : sinon il
+  // s'empilerait a chaque connexion, et elle ne doit plus jamais se vider.
+  if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueil, appText: true, fr: _accueil});
   renderCharlyChat();
   tcSyncCharlyGreeting();
 }
@@ -13609,9 +13650,9 @@ function showWelcomeSplash(firstname) {
   const hG = new Date().getHours();
   const salG = hG < 18 ? 'Bonjour' : 'Bonsoir';
   const fnameG = userAccount ? userAccount.firstname : '';
-  charlyIA.history = [];
+  tcChargerHistoriqueCharly();
   const _accueilG = salG + (fnameG ? ' ' + fnameG : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par où on commence ?';
-  charlyIA.history.push({role:'assistant', content: _accueilG, appText: true, fr: _accueilG});
+  if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueilG, appText: true, fr: _accueilG});
   if (typeof tcSyncCharlyGreeting === 'function') setTimeout(tcSyncCharlyGreeting, 600);
   setTimeout(renderCharlyChat, 300);
 
