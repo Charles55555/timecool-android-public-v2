@@ -117,7 +117,7 @@ verifie('ce que Charles a cree a la main ne bouge pas', parId('rdv_manuel') === 
 verifie('trois reparations, un seul enregistrement', n === 3 && ctx.saves === 1, n + ' reparations, ' + ctx.saves + ' enregistrement(s)');
 ctx.saves = 0;
 verifie('deuxieme passage : rien a reparer, rien enregistre', ctx.tcReparerCategories() === 0 && ctx.saves === 0);
-verifie('branchee au chargement des evenements', /events = \[\.\.\.demoEvents, \.\.\.userEvents\];\s*tcReparerCategories\(\);/.test(page));
+verifie('branchee au chargement des evenements', /events = \[\.\.\.demoEvents, \.\.\.userEvents\];\s*(?:tcDedoublonnerRendezVous\(\);\s*)?tcReparerCategories\(\);/.test(page));
 
 console.log('');
 console.log(ko + ' anomalie(s).');

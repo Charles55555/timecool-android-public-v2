@@ -2913,6 +2913,7 @@ async function loadEventsFromStorage() {
       // Fusionner avec les events démo existants
       const demoEvents = events.filter(e => e.mode !== 'user' && !(e.id && e.id.startsWith('charly_ai_')));
       events = [...demoEvents, ...userEvents];
+      tcDedoublonnerRendezVous();
       tcReparerCategories();
     }
   } catch(err) { console.warn('Chargement events:', err); }
@@ -9991,6 +9992,38 @@ function tcReparerCategories() {
   });
   if (change) { try { saveEventsToStorage(); } catch (err) {} }
   return change;
+}
+
+/**
+ * Retire les doublons EXACTS crees par Charly : meme jour, meme titre,
+ * memes heures. Une serie validee deux fois laissait deux exemplaires
+ * empiles. On garde le plus renseigne -- adresse, puis contact -- et on
+ * enregistre une seule fois. Ce que l'utilisateur a saisi lui-meme
+ * (id sans « charly_ai_ ») ne bouge jamais.
+ *
+ * @returns {number} le nombre de doublons retires
+ */
+function tcDedoublonnerRendezVous() {
+  if (!Array.isArray(events)) return 0;
+  const groupes = {};
+  events.forEach(function (e) {
+    if (!e || !e.id || String(e.id).indexOf('charly_ai_') !== 0) return;
+    const cle = [e.date, tcSansAccents(e.title).trim(), e.startH, e.startM, e.endH, e.endM, e.mode || ''].join('|');
+    (groupes[cle] = groupes[cle] || []).push(e);
+  });
+  const aRetirer = [];
+  Object.keys(groupes).forEach(function (cle) {
+    const g = groupes[cle];
+    if (g.length < 2) return;
+    const poids = function (e) { return (e.lieu ? 2 : 0) + (e.contact ? 1 : 0); };
+    // Le plus renseigne d'abord ; a egalite, le premier de la liste.
+    const gardee = g.reduce(function (m, e) { return poids(e) > poids(m) ? e : m; }, g[0]);
+    g.forEach(function (e) { if (e !== gardee) aRetirer.push(e); });
+  });
+  if (!aRetirer.length) return 0;
+  events = events.filter(function (e) { return aRetirer.indexOf(e) < 0; });
+  try { saveEventsToStorage(); } catch (err) {}
+  return aRetirer.length;
 }
 
 function validateAgendaProposalFromMsg(msg) {
