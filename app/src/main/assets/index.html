@@ -3121,7 +3121,7 @@ Celui-là porte déjà son propre rappel, au délai choisi par l'utilisateur.
 Exemple pour "Rappelle-moi de prendre mes médicaments à 8h" :
 "C'est fait ! ⏰ Je t'ai ajouté ça dans ton agenda !"
 [AGENDA]
-2026-06-03 | 08:00-08:15 | 💊 Médicaments | rdv
+2026-06-03 | 08:00-08:15 | 💊 Médicaments | sante
 [/AGENDA]
 
 ═══ CAS 14 — SÉCURITÉ ET INTÉGRITÉ DE CHARLY ═══
@@ -3196,7 +3196,7 @@ Tu ne demandes la date QUE si l'utilisateur ne donne AUCUNE indication temporell
 Pour tout événement à ajouter, utilise EXACTEMENT ce format :
 
 [AGENDA]
-2026-05-06 | 10:00-11:00 | Rendez-vous médecin | rdv
+2026-05-06 | 10:00-11:00 | Rendez-vous médecin | sante
 [/AGENDA]
 
 Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE | LIEU (5e champ, facultatif) | CONTACT (6e champ, facultatif)
@@ -3209,7 +3209,7 @@ et tu ne demandes JAMAIS « lequel ? » ni « comment s'appelle-t-il ? » : l'ap
 personne, la lui fait désigner une seule fois si elle est inconnue, et s'en souvient ensuite.
 Ne remplis ce champ que si le rendez-vous est avec quelqu'un : « faire les courses » → pas de 6e champ.
 Si le lieu est absent mais qu'il y a un contact, mets « - » en 5e champ :
-2026-05-06 | 14:00-15:00 | Rendez-vous dentiste | rdv | - | Michel
+2026-05-06 | 14:00-15:00 | Rendez-vous dentiste | sante | - | Michel
 
 ÉVÉNEMENT SUR PLUSIEURS JOURS : ajoute la date de fin après la date de début, séparée par « > ».
 [AGENDA]
@@ -3220,8 +3220,10 @@ Utilise-la dès que l'utilisateur donne un début et une fin : « du 11 au 14 »
 « toute la semaine prochaine », « mes vacances du 1er au 15 août ».
 Sans heure précisée sur une période, mets 00:00-23:59.
 NE confonds PAS avec la récurrence : « tous les mardis » reste une ligne par occurrence.
-Catégories : travail, sport, famille, rdv, repas, pause, trajet, preparation, administratif, loisir, temps_libre
+Catégories : travail, sport, famille, sante, repas, pause, trajet, preparation, administratif, loisir, temps_libre
 temps_libre = « Mon temps libre » : temps libre, repos, détente, sieste, journée pour soi. Ne mets JAMAIS ces moments en loisir.
+sante = médecin, dentiste, kiné, hôpital, analyses. famille = maman, papa, parents, enfants, grands-parents, repas de famille.
+N'écris JAMAIS « rdv » comme catégorie : « rendez-vous » est un mot, pas une catégorie. Choisis selon la nature du rendez-vous.
 Le lieu n'est ajouté (5e champ) que si l'utilisateur l'a donné, ou pour changer explicitement le
 lieu d'un rendez-vous existant. Absent, le lieu déjà connu du rendez-vous modifié est conservé
 automatiquement — ne le redemande donc JAMAIS pour un simple changement d'horaire ou de titre.
@@ -9902,10 +9904,27 @@ function validateAgendaProposal(tempId) {
  * « Mon temps libre », quoi qu'il ait ecrit.
  */
 function tcCategorieDeProposition(p, catMap) {
-  const dite = catMap[p && p.category] || null;
+  const brute = String((p && p.category) || '').toLowerCase().trim();
+  const dite = catMap[brute] || null;
   const titre = tcSansAccents(p && p.title);
-  const tempsLibre = /temps libre|\brepos\b|detente|sieste|journee pour (moi|soi)|\blibre\b/.test(titre);
-  if (tempsLibre && (!dite || dite === 'amis' || dite === 'green')) return 'personnel';
+  // « rdv » et « loisir » ne disent rien de la nature du rendez-vous :
+  // « rdv » est le mot rendez-vous, et catMap le rangeait en Sante.
+  const vague = !dite || brute === 'rdv' || brute === 'loisir' || brute === 'loisirs';
+  if (/temps libre|\brepos\b|detente|sieste|journee pour (moi|soi)|\blibre\b/.test(titre)
+      && (vague || dite === 'amis')) return 'personnel';
+  if (vague) {
+    const TITRES = [
+      ['sante', /\b(medecin|docteur|dr|dentiste|kine|kinesitherapeute|osteo|osteopathe|hopital|clinique|analyses?|radio|irm|dermato|ophtalmo|cardiologue|pediatre|pharmacie|infirmier|infirmiere|orthodontiste|consultation|vaccin|medicaments?)\b/],
+      ['famille', /\b(maman|papa|mere|pere|parents|mamie|papy|mamy|grand-?mere|grand-?pere|grands-parents|enfants?|fils|fille|filles|frere|soeur|oncle|tante|cousin|cousine|famille|belle-?mere|beau-?pere)\b/],
+      ['travail', /\b(reunion|client|clients|bureau|entretien|visio|conference|presentation|projet|equipe|boulot)\b/],
+      ['sport', /\b(tennis|golf|foot|football|piscine|natation|running|footing|yoga|gym|musculation|velo|randonnee|padel|badminton|escalade)\b/],
+      ['voyages', /\b(gare|train|vol|avion|aeroport|voyage|taxi|trajet)\b/],
+      ['amis', /\b(restaurant|diner|cinema|concert|soiree|bar|apero|sortie|anniversaire|theatre|spectacle)\b/]
+    ];
+    for (let i = 0; i < TITRES.length; i++) {
+      if (TITRES[i][1].test(titre)) return TITRES[i][0];
+    }
+  }
   return dite || 'green';
 }
 
@@ -11794,7 +11813,7 @@ INFORMATIONS TEMPORELLES CRITIQUES (À RESPECTER ABSOLUMENT)
 
 ⚠️ FORMAT OBLIGATOIRE pour proposer un événement :
 [AGENDA]
-${tY}-${tM}-${tD} | 15:00-16:00 | Rendez-vous banque | rdv
+${tY}-${tM}-${tD} | 15:00-16:00 | Rendez-vous banque | administratif
 [/AGENDA]
 
 JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY-MM-DD.`;
@@ -14611,7 +14630,7 @@ async function charlyProcessMessage() {
 
 ⚠️ FORMAT OBLIGATOIRE pour proposer un événement :
 [AGENDA]
-${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | rdv
+${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | CATEGORIE_DE_LA_LISTE
 [/AGENDA]`;
 
       const messages = [
