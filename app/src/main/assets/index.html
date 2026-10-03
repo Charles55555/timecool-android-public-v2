@@ -9394,7 +9394,7 @@ function tcSauverHistoriqueCharly() {
       .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system_info'); })
       .slice(-TC_CHARLY_HISTORIQUE_MAX);
     localStorage.setItem(TC_CHARLY_HISTORIQUE_CLE, JSON.stringify(liste, function (k, v) {
-      return k === 'conflictData' ? undefined : v;
+      return (k === 'conflictData' || k === 'touches') ? undefined : v;
     }));
   } catch (e) {}
 }
@@ -14826,13 +14826,153 @@ validateAgendaProposalFromMsg = function(msg) {
   // Détection de conflits avant ajout (cas normal)
   const conflicts = detectConflicts(proposals);
   if (conflicts.length > 0) {
-    showConflictWarning(conflicts, msg);
+    if (proposals.some(tcEstUnePeriode)) showPeriodeConflits(conflicts, msg);
+    else showConflictWarning(conflicts, msg);
     return;
   }
 
   // Pas de conflit → on appelle l'ancienne fonction
   _origValidateAgendaProposalFromMsg(msg);
 };
+
+/** Une periode : plus de 20 h de long, ou un titre qui dit voyage, vacances... */
+function tcEstUnePeriode(p) {
+  if (!p) return false;
+  const duree = (Number(p.endH) * 60 + Number(p.endM)) - (Number(p.startH) * 60 + Number(p.startM));
+  const titre = tcSansAccents(p.title);
+  return duree >= 20 * 60 || /\b(voyage|vacances|conges?|deplacement|absent|absence|sejour)\b/.test(titre);
+}
+
+/** Les rendez-vous existants touches par une periode, sans doublon, dans l'ordre. */
+function tcRdvTouchesParPeriode(conflicts) {
+  const touches = [];
+  (conflicts || []).forEach(function (c) {
+    if (c && c.existingEvent && touches.indexOf(c.existingEvent) < 0) touches.push(c.existingEvent);
+  });
+  return touches.sort(tcComparerEvenements);
+}
+
+/**
+ * Une periode (voyage, vacances) touche des rendez-vous : UN message,
+ * trois choix. « Je ne peux prevenir que les rendez-vous qui ont un
+ * contact enregistre » est dit tel quel.
+ */
+function showPeriodeConflits(conflicts, msg) {
+  const touches = tcRdvTouchesParPeriode(conflicts);
+  const periode = conflicts[0].newProposal;
+  const avec = touches.filter(function (e) { return !!tcContactDuRdv(e); }).length;
+  const lignes = touches.map(function (e) {
+    const c = tcContactDuRdv(e);
+    return '• <b>' + escapeHTMLSafe(e.title) + '</b> — ' + tcFormaterDateHumaine(e.date) + ' ' + tcHorairePlage(e)
+      + (c ? ' — 👤 ' + escapeHTMLSafe(c.name) : ' — <i>pas de contact</i>');
+  });
+  const html = '🗓️ <b>' + escapeHTMLSafe(periode.title) + '</b> est prêt à être noté.<br><br>'
+    + 'Tu as <b>' + touches.length + ' rendez-vous</b> pendant cette période :<br><br>'
+    + lignes.join('<br>') + '<br><br>'
+    + '<b>Que fait-on ?</b><br>'
+    + '<span style="font-size:12px;">Attention : je ne peux prévenir que les rendez-vous qui ont un contact enregistré ('
+    + avec + ' sur ' + touches.length + ').</span>';
+  charlyIA.history.push({
+    role: 'system_info', content: html, isHTML: true,
+    conflictData: { conflicts, msg }, periode: true, touches: touches
+  });
+  renderCharlyChat();
+  setTimeout(function () {
+    const lastMsg = tcDernierMessageCharly();
+    if (!lastMsg) return;
+    const bouton = function (fct, fond, couleur, bord, texte) {
+      return '<button onclick="' + fct + '" style="padding:11px 12px; background:' + fond + '; color:' + couleur
+        + '; border:1.5px solid ' + bord + '; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; text-align:left;">' + texte + '</button>';
+    };
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin:10px auto; max-width:90%;';
+    div.innerHTML = bouton('tcPeriodeRien()', '#e8f5e9', '#1b6b2f', '#b9e1c4', '1️⃣ Je ne touche à rien')
+      + bouton('tcPeriodeAnnuler()', '#fce8e6', '#b3261e', '#f5b8b3', '2️⃣ Je les annule' + (avec ? ' et je préviens ceux que je peux' : ''))
+      + bouton('tcPeriodeDeplacer()', '#e8f0fe', '#1a56b8', '#c8d7ee', '3️⃣ Je les déplace');
+    lastMsg.appendChild(div);
+  }, 100);
+}
+
+/** Le dernier message « periode » auquel personne n'a repondu. */
+function tcPeriodeContexte() {
+  const liste = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  for (let i = liste.length - 1; i >= 0; i--) {
+    const m = liste[i];
+    if (m && m.periode && m.conflictData) return m._resolu ? null : m;
+  }
+  return null;
+}
+
+/** 1 — Je ne touche a rien : le voyage s'ajoute, les rendez-vous restent. */
+function tcPeriodeRien() {
+  const ctx = tcPeriodeContexte();
+  if (!ctx) return;
+  ctx._resolu = true;
+  _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+}
+
+/**
+ * 2 — Je les annule : le voyage s'ajoute, les rendez-vous touches sont
+ * supprimes. Pour chacun qui a un contact, le message d'annulation
+ * habituel est montre et c'est Charles qui l'envoie ; Charly n'envoie
+ * jamais rien tout seul. Les autres sont listes : a prevenir lui-meme.
+ */
+async function tcPeriodeAnnuler() {
+  const ctx = tcPeriodeContexte();
+  if (!ctx) return;
+  const touches = (ctx.touches || []).filter(function (e) { return events.indexOf(e) > -1; });
+  if (!await tcConfirm('Annuler ' + touches.length + ' rendez-vous et noter le voyage ?')) return;
+  ctx._resolu = true;
+  _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+  events = events.filter(function (e) { return touches.indexOf(e) < 0; });
+  saveEventsToStorage();
+  render();
+
+  const prevenus = [], aPrevenirSoi = [];
+  for (let i = 0; i < touches.length; i++) {
+    const ev = touches[i];
+    const contact = tcContactDuRdv(ev);
+    if (!contact) { aPrevenirSoi.push(ev); continue; }
+    const texte = tcRemplirModele(tcModeleMessage('annule', tcVouvoiement(contact)), tcValeursDuRdv(contact.name, ev));
+    if (await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »')) {
+      const chemin = await tcTransmettrePrevenance(contact, texte);
+      tcDirePrevenance(chemin, contact.name);
+      prevenus.push(contact.name);
+    } else {
+      aPrevenirSoi.push(ev);
+    }
+  }
+  let bilan = '✅ ' + touches.length + ' rendez-vous annulés.';
+  if (prevenus.length) bilan += ' Prévenus : ' + prevenus.join(', ') + '.';
+  if (aPrevenirSoi.length) {
+    bilan += ' À prévenir toi-même (pas de contact ou message non envoyé) : '
+      + aPrevenirSoi.map(function (e) { return e.title + ' ' + tcFormaterDateHumaine(e.date); }).join(' ; ') + '.';
+  }
+  charlyIA.history.push({ role: 'system_info', content: bilan });
+  renderCharlyChat();
+}
+
+/**
+ * 3 — Je les deplace : le voyage s'ajoute, rien n'est supprime, la liste
+ * est rappelee avec la facon de les decaler un par un (« decale le
+ * dentiste a lundi 15h »). Le message au contact part de la fiche du
+ * rendez-vous, bouton « Je decale ».
+ */
+function tcPeriodeDeplacer() {
+  const ctx = tcPeriodeContexte();
+  if (!ctx) return;
+  ctx._resolu = true;
+  _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+  const lignes = (ctx.touches || []).map(function (e) {
+    return '• ' + e.title + ' — ' + tcFormaterDateHumaine(e.date) + ' ' + tcHorairePlage(e);
+  });
+  charlyIA.history.push({
+    role: 'system_info',
+    content: '🗓️ Voyage noté. Rien n\'est supprimé. Pour déplacer un rendez-vous, dis-moi par exemple « décale le dentiste à lundi 15h » :\n'
+      + lignes.join('\n')
+  });
+  renderCharlyChat();
+}
 
 function showConflictWarning(conflicts, msg) {
   // Construire un message d'alerte
