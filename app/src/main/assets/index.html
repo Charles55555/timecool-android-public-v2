@@ -2938,7 +2938,8 @@ Tu réponds MAXIMUM 3 lignes — jamais plus, sauf si l'utilisateur demande des 
 Tu termines par une action proposée ou une question courte — SAUF quand tu viens
 d'exécuter la demande : dans ce cas tu confirmes simplement ce que tu as fait.
 Tu poses UNE seule question à la fois, jamais plusieurs.
-Ne dis JAMAIS "Sauf erreur de ma part", ni aucune formule de precaution en tete de phrase : dis directement ce que tu vois.
+N'emploie la formule « Sauf erreur de ma part » QUE pour dire que tu n'as pas compris : "Sauf erreur de ma part, je n'ai pas bien compris ta demande. Tu veux dire … ?" Ne devine jamais, ne réponds jamais à côté.
+Pour tout le reste, aucune formule de précaution en tête de phrase : dis directement ce que tu vois.
 Pour une simple information manquante, pose la question directement — "Quel jour ?", "À quelle heure ?" — sans préambule.
 Ne commence JAMAIS deux réponses de suite par la même formule : c’est un tic, et ça s’entend.
 
@@ -10748,7 +10749,7 @@ function detecterConsultationAgenda(text) {
   }
 
   const declencheurPeriode = /\b(qu'est-ce que j'ai|qu'ai-je|qu est ce que j ai|mon planning|mes rdv|mes rendez-vous|montre[- ]moi mon agenda|qu'est-ce qu'il y a|qu'est ce qu'il y a)\b/;
-  const periode = tcPeriodeAgenda(t);
+  const periode = tcPeriodeAgenda(t) || tcPeriodeJourNomme(t);
   if (declencheurPeriode.test(t)) {
     return { type: 'periode', periode: periode || { debut: new Date(new Date().setHours(0,0,0,0)), fin: null, label: null } };
   }
@@ -10792,10 +10793,18 @@ async function tcGererConsultationAgenda(text, intent) {
       reply = (matches.length > 1 ? `Tu as ${matches.length} rendez-vous avec "${intent.contact}" :\n` : `Tu as un rendez-vous avec "${intent.contact}" :\n`) + lignes;
     }
   } else {
+    // La periode trouvee doit dire ce que la phrase dit : « mes rdv de ce
+    // lundi » repondu par un samedi etait pire qu'une question.
+    if (!tcPeriodeCoherente(text, intent.periode)) {
+      charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('De quel jour parles-tu exactement ? (par exemple « lundi 5 octobre »)') });
+      tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+      renderCharlyChat();
+      return;
+    }
     const { debut, fin, label } = intent.periode;
     const debutStr = tcISO(debut);
     const finStr = fin ? tcISO(fin) : debutStr;
-    const matches = evs.filter(e => e.date >= debutStr && e.date <= finStr).sort(tcComparerEvenements);
+    const matches = evs.filter(e => e.date >= debutStr && e.date <= finStr && (!intent.periode.jours || intent.periode.jours.indexOf(e.date) > -1)).sort(tcComparerEvenements);
     if (!matches.length) {
       reply = `Tu es libre ${label || 'sur cette période'} ! 🎉 Tu veux qu'on planifie quelque chose ?`;
     } else {
@@ -10981,11 +10990,17 @@ async function tcGererSuppressionRdv(text) {
   }
 
   // Filtre par date/période mentionnée dans le texte.
-  const periode = tcPeriodeAgenda(t) || tcBorneDeFin(t);
+  const periode = tcPeriodeAgenda(t) || tcBorneDeFin(t) || tcPeriodeJourNomme(text);
+  if (periode && !tcPeriodeCoherente(text, periode)) {
+    charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('De quel jour parles-tu exactement ? (par exemple « lundi 5 octobre »)') });
+    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    renderCharlyChat();
+    return;
+  }
   if (periode) {
     const debutStr = tcISO(periode.debut);
     const finStr = periode.fin ? tcISO(periode.fin) : debutStr;
-    candidats = candidats.filter(e => e.date >= debutStr && e.date <= finStr);
+    candidats = candidats.filter(e => e.date >= debutStr && e.date <= finStr && (!periode.jours || periode.jours.indexOf(e.date) > -1));
     filtreApplique = true;
   } else {
     const dateParsee = parseFrenchDateFromText(text);
@@ -14898,6 +14913,48 @@ function showPeriodeConflits(conflicts, msg) {
       + bouton('tcPeriodeDeplacer()', '#e8f0fe', '#1a56b8', '#c8d7ee', '3️⃣ Je les déplace');
     lastMsg.appendChild(div);
   }, 100);
+}
+
+/** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
+function tcPhraseNonCompris(question) {
+  return 'Sauf erreur de ma part, je n\'ai pas bien compris ta demande. ' + question;
+}
+
+/** Les jours de la semaine NOMMES dans une phrase, en indices getDay() (0 = dimanche). */
+function tcJoursNommes(text) {
+  const sans = tcSansAccents(String(text || '').toLowerCase());
+  const noms = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const trouves = [];
+  noms.forEach(function (nom, idx) {
+    if (new RegExp('\\b' + nom + 's?\\b').test(sans)) trouves.push(idx);
+  });
+  return trouves;
+}
+
+/**
+ * La periode trouvee dit-elle ce que la phrase dit ? Si la phrase nomme
+ * un jour de la semaine, la periode doit le contenir. « Mes rdv de ce
+ * lundi » repondu par un samedi est incoherent : on ne repond pas, on
+ * demande.
+ */
+function tcPeriodeCoherente(text, periode) {
+  const nommes = tcJoursNommes(text);
+  if (!nommes.length || !periode) return true;
+  const presents = {};
+  if (periode.jours) {
+    periode.jours.forEach(function (j) { presents[new Date(j + 'T12:00:00').getDay()] = true; });
+  } else {
+    const fin = periode.fin || periode.debut;
+    for (let d = new Date(periode.debut), n = 0; d <= fin && n < 400; d.setDate(d.getDate() + 1), n++) {
+      presents[d.getDay()] = true;
+    }
+  }
+  return nommes.every(function (j) { return presents[j]; });
+}
+
+/** Un jour nomme, resolu en periode ; null si la phrase n'en nomme aucun. */
+function tcPeriodeJourNomme(text) {
+  return tcJoursNommes(text).length ? tcPeriodeContrainte(text) : null;
 }
 
 /**

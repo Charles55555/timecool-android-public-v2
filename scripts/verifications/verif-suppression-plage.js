@@ -97,7 +97,7 @@ vm.createContext(ctx);
   if (src) vm.runInContext(src, ctx);
   else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
-['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcJoursDansTexte', 'tcBorneDeFin', 'tcGererSuppressionRdv'].forEach((n) => {
+['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcJoursDansTexte', 'tcBorneDeFin', 'tcJoursNommes', 'tcPhraseNonCompris', 'tcPeriodeContrainte', 'tcPeriodeCoherente', 'tcPeriodeJourNomme', 'tcGererSuppressionRdv'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx);
   else { ko++; console.log('  KO  ' + n + ' introuvable'); }

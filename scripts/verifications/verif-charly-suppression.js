@@ -21,6 +21,7 @@ function source(nom) {
 
 const noms = ['detecterSuppressionRdv', 'tcHeureDansTexte', 'tcReponseOuiNon', 'tcSansAccents',
   'tcJoursDansTexte', 'tcBorneDeFin',
+  'tcJoursNommes', 'tcPhraseNonCompris', 'tcPeriodeContrainte', 'tcPeriodeCoherente', 'tcPeriodeJourNomme',
   'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcSupprimerRdvs', 'tcAnnulerSuppressionRdv',
   'tcRdvDesigne', 'tcRdvRemplace',
   'tcPeriodeAgenda', 'tcISO', 'parseFrenchDateFromText', 'tcComparerEvenements',

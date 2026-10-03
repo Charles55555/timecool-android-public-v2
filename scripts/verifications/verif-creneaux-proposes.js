@@ -352,7 +352,7 @@ titre('Ce que Charly répond');
 
 titre('Le tic de langage');
 verifie('la formule est interdite partout (04/10)',
-  page.indexOf('Ne dis JAMAIS "Sauf erreur de ma part"') > -1
+  page.indexOf('QUE pour dire que tu n\'as pas compris') > -1
   && page.indexOf('En cas de doute ou d\'incompréhension, utilise la formule') === -1,
   'elle s appliquait a toute question, donc a presque tout');
 verifie('une info manquante se demande sans préambule',

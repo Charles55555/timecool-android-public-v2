@@ -113,9 +113,10 @@ titre('Les deux chemins (OpenAI, Anthropic) passent par le meme filtre');
 
 titre('Plus de « Sauf erreur de ma part »');
 {
-  const n = (page.match(/Sauf erreur de ma part, /g) || []).length;
+  // Depuis le 04/10 (apres-midi) la formule revient, pour UN seul usage : dire qu'on n'a pas compris.
+  const n = (page.match(/Sauf erreur de ma part, (?!je n\\?'ai pas bien compris)/g) || []).length;
   verifie('aucune phrase ne commence plus par la formule', n === 0, 'reste ' + n);
-  verifie('la consigne l interdit', /Ne dis JAMAIS "Sauf erreur de ma part"/.test(page));
+  verifie('la consigne la reserve a l incomprehension', /QUE pour dire que tu n'as pas compris/.test(page));
   verifie('la consigne ne la RESERVE plus', !/est RESERVEE aux cas/.test(page));
   verifie('les phrases en dur reprennent une majuscule', /"Je ne vois aucun rendez-vous correspondant/.test(page) && /"Tu as plusieurs rendez-vous/.test(page));
 }
