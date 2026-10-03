@@ -190,6 +190,95 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
   Ne pas proposer de les nettoyer.
 - Les **clés API en clair** : corrigées le 07/09.
 
+## Comment travailler avec Charles
+
+Relu le 04/10/2026 dans la conversation du 1er au 30 septembre (« PC
+BUREAU PRINCIPAL AU LABO OLD ») et les trois jours suivants. Ses mots,
+avec la date. Valable pour toute session, sur le PC comme sur le serveur.
+
+**Le circuit, en trois temps** (04/10) : « moi je te fais voir un sujet
+un problème un bug si on doit corriger avant de le corriger tu vas
+m'expliquer comment tu vas faire et tu attends ma validation pour coder
+une fois que tu as une validation pour coder tu crées la nouvelle mise
+à jour que ça soit sur le web ou sur l'application sans même demander
+mon avis moi je te donne une seule fois une demande de validation et
+c'est à chaque fois pour le codage pour le reste tu n'as pas besoin
+d'attendre ma validation ».
+- Il montre → on explique comment on va faire → son « ok » → on code,
+  on vérifie, on met en ligne (web **et** Android), on lui donne le
+  numéro. Une seule question par sujet, avant le code.
+- Tout le reste (diagnostic, serveur, sauvegardes, journal) : sans lui.
+- Sa formule depuis le 20/09, répétée des dizaines de fois : « dis-moi
+  comment tu comptes faire et attends ma validation avant de modifier
+  quoi que ce soit ».
+
+**Vérifier avant de toucher** (29/09) : « Est-ce que la prochaine fois
+tu pourras vérifier avant de changer quoi que ce soit parce que là comme
+ça c'est inquiétant ». Un changement d'écran se regarde d'abord sur ce
+qu'il voit, lui (téléphone, web), pas seulement dans le code.
+
+**Court, et finir par qui fait quoi** (02/09, 05/09) : « à chaque fois
+tes explications ou commentaires sont trop longs va falloir les réduire
+de moitié ou sinon fais-moi à la fin des conclusions qui doit faire
+quoi ? » ; « tu peux me faire des réponses 2 fois plus courtes ? ».
+Donc : deux fois plus court qu'on ne croit nécessaire, sans jargon
+(« comme si tu parlais à un enfant de 10 ans », 29/09), et terminer par
+**Toi — … / Moi — …**.
+
+**Une seule question à la fois, en mots simples** (03/10) : « J'ai rien
+compris, pose-moi des questions claires et je vais te répondre » ; puis
+« Je t'ai dit pose-moi question par question ». Une question, oui/non si
+possible, en texte — pas de menu à choix multiples. Quand il dit « fais
+ce qui te semble le plus logique », on tranche soi-même.
+
+**Ne pas le faire attendre, ne pas en faire le facteur** (03-04/10) :
+« j'en ai marre de faire le facteur entre vous 2 » ; « Non le manuel me
+coûte en fait que je suis obligé d'attendre ». Les deux sessions se
+parlent directement quand c'est nécessaire — mais depuis le 04/10 il a
+dit à la session du PC : « Pour l'instant tu dis rien » à l'autre. Un
+seul interlocuteur : la session du PC. L'autre reste en coulisses
+(sentinelle, veille, sauvegardes) et ne lui écrit qu'en cas de vraie
+panne.
+
+**Mots de passe et sécurité, phase de test** (01/09, 04/09, 30/09) :
+« plus de couches de mots de passe supplémentaires pour la sécurité
+TimeCool [...] privilégie les permissions système et les accès déjà en
+place. Si un risque existe, signale-le une fois brièvement, sans
+insister ni complexifier » ; « nous sommes en phase de test et il faut
+tout simplifier sans mot de passe ou sans clé pour ne plus perdre de
+temps » ; il donne volontiers ses identifiants, tout sera changé au
+lancement. Une seule limite tenue : ne pas stocker les mots de passe des
+utilisateurs en clair — demandé trois fois, refusé, ne plus y revenir.
+
+**Ne pas proposer d'options quand il a déjà choisi** (02/09) : « À
+l'avenir, n'affiche plus d'options ou d'alternatives, exécute. » Quand
+il relance une décision prise, on l'exécute ; une réserve se dit une
+fois, en une phrase.
+
+**Fluidité avant tout** (03/09, 20/09) : « 15 secondes c'est trop long,
+il faut maximum 1 seconde » ; « est-ce que ça va pas ralentir l'ensemble
+du fonctionnement ». Avant de coder une fonction qui pourrait ralentir
+navigation, chargement ou import, le prévenir.
+
+**Ses textes commerciaux** : ce sont des brouillons ; répondre à la
+question technique, sans avertissement ni correction de fond.
+
+**Un compte neuf doit tout pouvoir faire tout de suite** : un nouvel
+utilisateur bloqué par un réglage absent est un bug, pas une question.
+
+**Ce qu'il ne veut plus voir** : des lignes à coller lui-même ; deux
+fenêtres ; « transmets-lui » ; des raccourcis clavier quand il est sur
+son téléphone (y demander d'abord : PC ou téléphone ?) ; des promesses
+de Charly non tenues (« c'est déjà fait » sans l'avoir fait) ; le tic
+« Sauf erreur de ma part ».
+
+**Au démarrage d'une session** : lire ce journal et `git log`, puis
+enchaîner. Ne jamais lui demander de résumer où on en est — « ça fait 3
+jours que je galère » (04/10) quand personne ne l'a prévenu d'un
+changement de mode. Si une session démarre en mode auto et qu'une mise
+en ligne est refusée : le lui dire en une ligne, ne pas bâtir de
+contournement.
+
 ## Ce que seule la session du PC peut faire
 
 Regarder la base, lire les journaux du serveur, déployer la version web,
