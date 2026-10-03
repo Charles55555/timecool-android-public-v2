@@ -36,7 +36,7 @@ done
 
 # SSH : une seule adresse qui tient beaucoup de connexions (épuisement du
 # port 22 le 03/10/2026, 212.112.98.73). Au-delà de 5, on le signale.
-max_ip=$(ss -tn '( sport = :22 )' 2>/dev/null | awk 'NR>1{n=split($5,a,":"); ip=a[1]; for(i=2;i<n;i++) ip=ip":"a[i]; print ip}' | sort | uniq -c | sort -rn | head -1)
+max_ip=$(ss -tn '( sport = :22 )' 2>/dev/null | awk 'NR>1 && $1 !~ /^(FIN-WAIT|TIME-WAIT|CLOSE|LAST-ACK|CLOSING)/ {n=split($5,a,":"); ip=a[1]; for(i=2;i<n;i++) ip=ip":"a[i]; print ip}' | sort | uniq -c | sort -rn | head -1)
 nb=$(echo "$max_ip" | awk '{print $1+0}')
 if [ "${nb:-0}" -gt 5 ]; then alerter "SSH : $nb connexions depuis $(echo "$max_ip" | awk '{print $2}')"; else noter "SSH : ${nb:-0} connexion(s) max par adresse"; fi
 
