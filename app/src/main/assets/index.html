@@ -9451,6 +9451,19 @@ function renderCharlyChat() {
   setTimeout(() => { body.scrollTop = body.scrollHeight; }, 50);
 }
 
+/** Une phrase qui n'apporte rien devant une carte : « C'est noté ! 👍 », « Parfait ! 🎉 J'ajoute ça… ». */
+function tcAccuseSeul(texte) {
+  // Que des mots d'accuse : tout autre mot (« attention », un horaire…) est une information.
+  const t = String(texte || '').toLowerCase().replace(/[^a-zà-ÿ'’ ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || String(texte).length > 70 || String(texte).indexOf('?') > -1) return false;
+  return /^(parfait|c['’]est noté|noté|ok|d['’]accord|bien sûr|super|très bien|entendu|voilà|c['’]est fait)( (j['’]ajoute ça( tout de suite)?( dans ton agenda)?|c['’]est (noté|fait)|je (le )?m['’]en occupe|je l['’]ajoute( tout de suite)?|je m['’]en occupe))?$/.test(t);
+}
+
+/** La suite sur la notification : Charles n'en veut plus. */
+function tcSuiteSurNotification(texte) {
+  return /préviendrai|te rappellerai|notification/i.test(String(texte || ''));
+}
+
 function renderChatMessage(m) {
   if (m.role === 'user') {
     return `
@@ -9486,7 +9499,7 @@ function renderChatMessage(m) {
     }
 
     // Store follow-up on the message object for use after validation
-    if (proposals && proposals.length && textAfter && !m._followUp && !/préviendrai|te rappellerai|notification/i.test(textAfter)) {
+    if (proposals && proposals.length && textAfter && !m._followUp && !tcSuiteSurNotification(textAfter)) {
       m._followUp = textAfter;
     }
     // [PLACES] : résultats Google Places, injectés par tcGererRechercheProfessionnel
@@ -9531,7 +9544,7 @@ function renderChatMessage(m) {
       <div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">
         <div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>
         <div style="flex:1; max-width:calc(100% - 50px);">
-          <div style="padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+          <div style="${(displayProposals.length && !contactAttendu && tcAccuseSeul(cleanContent)) ? 'display:none; ' : ''}padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
             ${escapeHTML(cleanContent).replace(/\n/g,'<br>') || '...'}
           </div>
     `;
@@ -10181,6 +10194,7 @@ function validateAgendaProposalFromMsg(msg) {
   charlyIA.history.push({role:'assistant', content:`✅ C'est noté : ${added > 1 ? added + ' créneaux ajoutés' : 'rendez-vous ajouté'} à ton agenda. Tu peux aller vérifier.${doublons ? ' (' + doublons + ' déjà présent' + (doublons > 1 ? 's' : '') + ', non dupliqué' + (doublons > 1 ? 's' : '') + ')' : ''}`});
   // Injecter le follow-up si Charly avait posé une question après le bloc [AGENDA]
   const followUpMsg = charlyIA.history.slice().reverse().find(m => m._followUp);
+  if (followUpMsg && followUpMsg._followUp && tcSuiteSurNotification(followUpMsg._followUp)) followUpMsg._followUp = null;
   if (followUpMsg && followUpMsg._followUp) {
     setTimeout(() => {
       charlyIA.history.push({role:'assistant', content: followUpMsg._followUp});
