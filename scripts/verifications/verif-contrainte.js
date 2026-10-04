@@ -201,6 +201,7 @@ titre('Le message : sans rien ajouter, la liste limitee a huit');
     const a = src.indexOf("bouton('tcPeriodeAnnuler()'"), b = src.indexOf("bouton('tcPeriodeDeplacer()'"), c = src.indexOf("bouton('tcPeriodeRien()'");
     verifie('les choix : annuler, deplacer, puis la sortie', a > -1 && b > a && c > b);
     verifie('la sortie dit « Annuler : je ne touche à rien »', src.indexOf('3️⃣ Annuler : je ne touche à rien') > -1);
+  verifie('annuler et deplacer disent « et je m’excuse » quand il y a quelqu un a prevenir', src.split("(avec ? ' et je m’excuse' : '')").length === 3);
   }
   console.log(ko + ' anomalie(s).');
   process.exit(ko ? 1 : 0);

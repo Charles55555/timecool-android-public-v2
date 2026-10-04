@@ -15375,8 +15375,8 @@ function showContrainte(touches, label) {
     const div = document.createElement('div');
     div.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin:10px auto; max-width:90%;';
     // Qui dit imprevu veut agir : annuler ou deplacer d'abord, la sortie en dernier.
-    div.innerHTML = bouton('tcPeriodeAnnuler()', '#fce8e6', '#b3261e', '#f5b8b3', '1️⃣ Je les annule' + (avec ? ' et je préviens ceux que je peux' : ''))
-      + bouton('tcPeriodeDeplacer()', '#e8f0fe', '#1a56b8', '#c8d7ee', '2️⃣ Je les déplace')
+    div.innerHTML = bouton('tcPeriodeAnnuler()', '#fce8e6', '#b3261e', '#f5b8b3', '1️⃣ Je les annule' + (avec ? ' et je m’excuse' : ''))
+      + bouton('tcPeriodeDeplacer()', '#e8f0fe', '#1a56b8', '#c8d7ee', '2️⃣ Je les déplace' + (avec ? ' et je m’excuse' : ''))
       + bouton('tcPeriodeRien()', '#f1f3f4', 'var(--text-sec)', 'var(--border)', '3️⃣ Annuler : je ne touche à rien');
     lastMsg.appendChild(div);
   }, 100);
@@ -18813,8 +18813,8 @@ const TC_MSG_MODELES = {
     icone: '📅',
     quand: 'Part quand tu changes l’heure ou proposes un autre créneau.',
     variables: ['[Prénom]', '[date]', '[heure]'],
-    tu: "Bonjour [Prénom], je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux te proposer :",
-    vous: "Bonjour [Prénom], je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux vous proposer :"
+    tu: "Bonjour [Prénom], désolé(e), je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux te proposer :",
+    vous: "Bonjour [Prénom], désolé(e), je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux vous proposer :"
   }
 };
 
