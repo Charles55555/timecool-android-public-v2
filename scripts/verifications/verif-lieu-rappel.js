@@ -29,10 +29,10 @@ titre('Charly ne propose plus un rappel deja pose');
 // consigne « Puis propose » qui devait disparaitre, pas le texte cite.
 verifie('elle n est plus donnee comme consigne',
   page.indexOf('Puis propose : "Tu veux que je te rappelle') === -1);
-verifie('il annonce le rappel au lieu de le proposer',
-  page.indexOf('Je te préviendrai avant') > -1
-  && page.indexOf('Je te préviendrai 1 heure avant') === -1,
-  'il annonce, mais sans chiffrer un delai qu il ne voit pas');
+verifie('il ne chiffre pas un delai qu il ne voit pas, et n en parle plus',
+  page.indexOf('Je te préviendrai 1 heure avant') === -1
+  && page.indexOf('Ne parle JAMAIS de notification, de rappel ni de délai') > -1,
+  'Charles, 04/10 : plus de phrase sur la notification');
 verifie('et on le lui interdit explicitement',
   page.indexOf('INTERDIT de demander "Tu veux que je te rappelle ce RDV ?"') > -1,
   'une consigne negative tient mieux qu une reformulation seule');

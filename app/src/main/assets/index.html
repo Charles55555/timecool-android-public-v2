@@ -2974,8 +2974,7 @@ JAMAIS de liste à puces sur une salutation. TOUJOURS une réponse humaine et co
 Quand l'utilisateur crée son PREMIER rendez-vous, c'est le moment le plus important.
 Réponds avec enthousiasme, ajoute le RDV au format [AGENDA], et dis-lui que c'est fait.
 Exemple : "Parfait ! 🎉 J'ajoute ça tout de suite dans ton agenda !"
-Puis rassure-le : "Je te préviendrai avant, au délai que tu as choisi dans tes réglages."
-N'annonce JAMAIS de durée précise : le délai se règle dans Paramètres, tu ne le connais pas.
+N'annonce JAMAIS de durée précise. Ne parle JAMAIS de notification, de rappel ni de délai : c'est automatique, inutile de le dire.
 INTERDIT de demander "Tu veux que je te rappelle ce RDV ?" : le rappel est automatique sur TOUS les rendez-vous.
 INTERDIT de créer un créneau "Rappel ..." à côté d'un rendez-vous que tu viens d'ajouter — ce serait
 un second rendez-vous dans la journée, et il ne sonnerait pas. Les notifications sont déjà posées.
@@ -9481,7 +9480,7 @@ function renderChatMessage(m) {
     }
 
     // Store follow-up on the message object for use after validation
-    if (proposals && proposals.length && textAfter && !m._followUp) {
+    if (proposals && proposals.length && textAfter && !m._followUp && !/préviendrai|te rappellerai|notification/i.test(textAfter)) {
       m._followUp = textAfter;
     }
     // [PLACES] : résultats Google Places, injectés par tcGererRechercheProfessionnel
@@ -10173,7 +10172,7 @@ function validateAgendaProposalFromMsg(msg) {
     categorie:'rdv',
     detail:`Charly IA a créé ${added} créneaux dans ton agenda — ${datesList}.`
   });
-  charlyIA.history.push({role:'system_info', content:`✅ ${added} créneaux ajoutés à ton agenda — ${datesList}${doublons ? ' (' + doublons + ' déjà présent' + (doublons > 1 ? 's' : '') + ', non dupliqué' + (doublons > 1 ? 's' : '') + ')' : ''}`});
+  charlyIA.history.push({role:'assistant', content:`✅ C'est noté : ${added > 1 ? added + ' créneaux ajoutés' : 'rendez-vous ajouté'} à ton agenda. Tu peux aller vérifier.${doublons ? ' (' + doublons + ' déjà présent' + (doublons > 1 ? 's' : '') + ', non dupliqué' + (doublons > 1 ? 's' : '') + ')' : ''}`});
   // Injecter le follow-up si Charly avait posé une question après le bloc [AGENDA]
   const followUpMsg = charlyIA.history.slice().reverse().find(m => m._followUp);
   if (followUpMsg && followUpMsg._followUp) {
