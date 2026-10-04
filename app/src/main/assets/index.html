@@ -10303,11 +10303,79 @@ function tcDemarrerNouveauRdv() {
   renderCharlyChat();
 }
 
+const TC_QUESTION_IMPREVU = 'Tu veux réorganiser ton agenda !\nQuel jour, et quelle partie : le matin, l\'après-midi, toute la journée, ou à partir de quelle heure ? (ex : demain après-midi)';
+
+/** Reste-t-il une réponse à attendre ? Nombre d'essais restants (2 au départ). */
+let _tcImprevuEnAttente = 0;
+
+/** Charly ouvre la conversation avec sa question ; la réponse est lue par tcRepondreImprevu. */
+function tcDemarrerImprevu() {
+  charlyIA.history.push({ role: 'assistant', content: TC_QUESTION_IMPREVU });
+  _tcImprevuEnAttente = 2;
+  renderCharlyChat();
+}
+
+/**
+ * La partie de la journée visee, en minutes depuis minuit :
+ * « apres-midi », « le matin », « ce soir », « a partir de 15h »,
+ * « jusqu'a 11h30 ». Sans precision : toute la journee.
+ */
+function tcPlageImprevu(text) {
+  const sans = tcSansAccents(String(text || '').toLowerCase());
+  const heure = function (h, m) { return parseInt(h, 10) * 60 + (m ? parseInt(m, 10) : 0); };
+  let m = sans.match(/\b(?:a partir de|apres|des)\s*(\d{1,2})\s*(?:h|:)\s*(\d{2})?/);
+  if (m) { const h = heure(m[1], m[2]); return { debut: h, fin: 1440, precise: true, label: 'à partir de ' + m[1] + 'h' + (m[2] || '') }; }
+  m = sans.match(/\b(?:jusqu.?a|avant)\s*(\d{1,2})\s*(?:h|:)\s*(\d{2})?/);
+  if (m) { const h = heure(m[1], m[2]); return { debut: 0, fin: h, precise: true, label: 'jusqu\'à ' + m[1] + 'h' + (m[2] || '') }; }
+  if (/apres-?midi/.test(sans)) return { debut: 720, fin: 1080, precise: true, label: 'l\'après-midi' };
+  if (/\bmatin(?:ee)?\b/.test(sans)) return { debut: 0, fin: 720, precise: true, label: 'le matin' };
+  if (/\bsoir(?:ee)?\b/.test(sans)) return { debut: 1080, fin: 1440, precise: true, label: 'le soir' };
+  return { debut: 0, fin: 1440, precise: false, label: '' };
+}
+
+/** Le jour visé ; sans jour mais avec une partie de journée (« cet après-midi »), c'est aujourd'hui. */
+function tcPeriodeImprevu(text) {
+  const p = tcPeriodeContrainte(text);
+  if (p) return p;
+  return (tcPlageImprevu(text).precise || /aujourd'?hui|ce jour/i.test(String(text || ''))) ? tcPeriodeAgenda("aujourd'hui") : null;
+}
+
+/** La réponse à la question de Charly. Faux : ce n'en était pas une, le message suit son chemin. */
+async function tcRepondreImprevu(text) {
+  const periode = tcPeriodeImprevu(text);
+  if (!periode) {
+    _tcImprevuEnAttente -= 1;
+    if (_tcImprevuEnAttente <= 0) return false;
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('Quel jour veux-tu réorganiser ?') });
+    renderCharlyChat();
+    return true;
+  }
+  _tcImprevuEnAttente = 0;
+  tcPousserMessageUtilisateur(text);
+  const plage = tcPlageImprevu(text);
+  const label = (periode.label + ' ' + plage.label).trim();
+  const touches = tcRdvDeLaPeriode(periode).filter(function (e) {
+    if (e.allDay) return true;
+    return (e.startH * 60 + e.startM) < plage.fin && (e.endH * 60 + e.endM) > plage.debut;
+  });
+  if (!touches.length) {
+    charlyIA.history.push({ role: 'assistant', content: 'Tu n\'as aucun rendez-vous ' + label + ' : rien à réorganiser.' });
+    renderCharlyChat();
+    return true;
+  }
+  showContrainte(touches, label);
+  return true;
+}
+
 function charlyQuickAction(action) {
+  _tcImprevuEnAttente = 0;
   // Retard : le message au contact est prepare ici, jamais laisse au modele.
   if (action === 'retard') { tcPrevenirRetard(); return; }
   // Nouveau rdv : une seule question, posee par Charly, qui demande tout.
   if (action === 'rdv') { tcDemarrerNouveauRdv(); return; }
+  // Imprevu : une seule question, puis l'agenda est regarde sans rien redemander.
+  if (action === 'impprevu') { tcDemarrerImprevu(); return; }
   // Agenda : ouvrir la page checklist au lieu d'envoyer un message
   if (action === 'agenda') {
     _agendaChecked = new Set();
@@ -10329,8 +10397,7 @@ function charlyQuickAction(action) {
   }
   const prompts = {
     trajet: "J'aimerais calculer un trajet. Demande-moi les adresses de départ et d'arrivée et l'heure du rendez-vous.",
-    reserver: "J'aimerais faire une réservation (restaurant ou hôtel). Pose-moi les questions nécessaires.",
-    impprevu: "J'ai un imprévu et je dois réorganiser ma journée. Aide-moi."
+    reserver: "J'aimerais faire une réservation (restaurant ou hôtel). Pose-moi les questions nécessaires."
   };
   const prompt = prompts[action];
   if (!prompt) return;
@@ -11728,6 +11795,12 @@ async function charlySendMessage() {
     // attend.
     const pris = await tcRepondreQuiEstCe(text);
     if (pris) return;
+  }
+
+  // === RÉPONSE À « TU VEUX RÉORGANISER TON AGENDA ? » ===
+  // Sans cle API non plus : l'agenda se lit ici, pas chez le modele.
+  if (_tcImprevuEnAttente > 0) {
+    if (await tcRepondreImprevu(text)) return;
   }
 
   // === RÉPONSE À « TU VEUX ANNULER CE RENDEZ-VOUS ? » ===
