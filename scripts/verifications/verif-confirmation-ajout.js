@@ -9,6 +9,7 @@ verifie('singulier : rendez-vous ajouté ; pluriel : N créneaux', page.indexOf(
 verifie('il invite à vérifier', page.indexOf('Tu peux aller vérifier.') > -1);
 verifie('la suite sur la notification est écartée', page.indexOf('préviendrai|te rappellerai|notification') > -1);
 verifie('la consigne ne fait plus parler de notification', page.indexOf('Puis rassure-le : "Je te préviendrai') === -1);
+verifie('plus de seconde ligne grise « Ton RDV a bien été ajouté »', page.indexOf('Ton RDV a bien été ajouté à ton agenda') === -1);
 console.log('');
 console.log(ko + ' anomalie(s).');
 process.exit(ko ? 1 : 0);

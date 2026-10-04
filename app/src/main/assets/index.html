@@ -10242,16 +10242,6 @@ function validateAgendaProposalFromMsg(msg) {
     }
   }
 
-  // Message de guidage sans navigation automatique
-  if (!charlyIA.history.slice(-3).some(m => m._followUp)) {
-    setTimeout(() => {
-      charlyIA.history.push({
-        role: 'system_info',
-        content: '✅ Ton RDV a bien été ajouté à ton agenda ! Tu peux aller dans 📅 l’agenda pour le visualiser.'
-      });
-      renderCharlyChat();
-    }, 500);
-  }
 }
 
 function autoResizeCharly(el) {
