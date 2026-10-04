@@ -100,7 +100,7 @@ titre('Une carte pas encore validee reste lisible');
 titre('Un message sans carte est inchange');
 {
   ctx.charlyIA.history = [{ role: 'assistant', content: 'Bonjour ! Que puis-je faire ?' }];
-  verifie('rien a retirer, rien retire', ctx.tcHistoriquePourIA()[0].content === 'Bonjour ! Que puis-je faire ?');
+  verifie('rien a retirer, rien retire', ctx.tcHistoriquePourIA().filter((m) => m.role === "assistant")[0].content === 'Bonjour ! Que puis-je faire ?');
 }
 
 titre('Les deux chemins (OpenAI, Anthropic) passent par le meme filtre');

@@ -10260,9 +10260,19 @@ async function tcPrevenirRetard() {
   renderCharlyChat();
 }
 
+const TC_QUESTION_NOUVEAU_RDV = 'Quel jour, à quelle heure, et avec qui ou pour quoi ? (ex : demain 14h30, Dr Martin)';
+
+/** Charly ouvre la conversation avec sa question ; la réponse suit le chemin normal. */
+function tcDemarrerNouveauRdv() {
+  charlyIA.history.push({ role: 'assistant', content: TC_QUESTION_NOUVEAU_RDV });
+  renderCharlyChat();
+}
+
 function charlyQuickAction(action) {
   // Retard : le message au contact est prepare ici, jamais laisse au modele.
   if (action === 'retard') { tcPrevenirRetard(); return; }
+  // Nouveau rdv : une seule question, posee par Charly, qui demande tout.
+  if (action === 'rdv') { tcDemarrerNouveauRdv(); return; }
   // Agenda : ouvrir la page checklist au lieu d'envoyer un message
   if (action === 'agenda') {
     _agendaChecked = new Set();
@@ -10283,7 +10293,6 @@ function charlyQuickAction(action) {
     return;
   }
   const prompts = {
-    rdv: "J'aimerais prendre un rendez-vous. Pose-moi les questions pour préparer ma demande.",
     trajet: "J'aimerais calculer un trajet. Demande-moi les adresses de départ et d'arrivée et l'heure du rendez-vous.",
     reserver: "J'aimerais faire une réservation (restaurant ou hôtel). Pose-moi les questions nécessaires.",
     impprevu: "J'ai un imprévu et je dois réorganiser ma journée. Aide-moi."
@@ -11359,7 +11368,7 @@ async function tcRepondreDeplacement(text) {
  * rendez-vous doit etre la liste relue a chaque message.
  */
 function tcHistoriquePourIA() {
-  return (Array.isArray(charlyIA.history) ? charlyIA.history : [])
+  const liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
     .filter(m => m && (m.role === 'user' || m.role === 'assistant'))
     .map(m => ({
       role: m.role,
@@ -11371,6 +11380,9 @@ function tcHistoriquePourIA() {
         ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, "[proposition d'agenda faite a ce moment-la - l'agenda reel ci-dessus fait foi]")
         : String(m.content || '')
     }));
+  // Charly peut parler le premier : l'API veut un message utilisateur en tete.
+  if (liste.length && liste[0].role === 'assistant') liste.unshift({ role: 'user', content: '(début de la conversation)' });
+  return liste;
 }
 
 function tcAgendaSnapshotPourIA() {
