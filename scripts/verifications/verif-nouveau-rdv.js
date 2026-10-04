@@ -15,7 +15,8 @@ function extraire(nom) {
   return null;
 }
 const q = (page.match(/const TC_QUESTION_NOUVEAU_RDV = '([^']*)'/) || [])[1] || '';
-verifie('la question demande le jour, l heure et avec qui / pour quoi', /jour/.test(q) && /heure/.test(q) && /avec qui/.test(q), q);
+verifie('la question demande le jour, l heure, l adresse et avec qui / pourquoi', /jour/.test(q) && /heure/.test(q) && /adresse/.test(q) && /avec qui/.test(q), q);
+verifie('elle annonce d abord : Tu veux créer un nouveau rendez-vous !', q.indexOf('Tu veux créer un nouveau rendez-vous !') === 0);
 verifie('une seule question', (q.match(/\?/g) || []).length === 1, q);
 
 const ctx = { charlyIA: { history: [] }, rendu: 0, renderCharlyChat() { ctx.rendu++; } };
