@@ -3,6 +3,8 @@
 // Charles, 04/10 : retirer Calculer trajet et Réserver ; garder Créer
 // mon agenda, Créer un nouveau rdv, Gérer un imprévu, et ajouter
 // Prévenir d'un retard ; une ligne d'aide au-dessus.
+// L'onglet retard ouvre la feuille habituelle (le nombre de minutes,
+// puis le message à relire) : le modèle « retard » attend [minutes].
 const fs = require('fs');
 const vm = require('vm');
 
@@ -53,65 +55,71 @@ class DateFixe extends Date {
   constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); }
   static now() { return FIXE.getTime(); }
 }
-const trace = { confirms: [], envois: [], dits: 0 };
+const trace = { confirms: [], envois: [], feuilles: [] };
 let reponses = [];
 const ctx = {
-  console, String, Number, Array, Object, Promise, Date: DateFixe,
+  console, Date: DateFixe,
   mode: 'user', events: [], charlyIA: { history: [] },
-  contacts: { c1: { name: 'Marc Dupont' } },
-  tcContactDuRdv: (e) => (e && e.contact ? ctx.contacts[e.contact] || null : null),
+  contactsList: [{ id: 'c1', name: 'Marc Dupont', phone: '06' }],
+  _prevenirName: '', _prevenirContact: null, _prevenirEventRef: null,
   tcFormaterDateHumaine: (d) => d,
   renderCharlyChat: () => {},
-  tcModeleMessage: (a) => 'Bonjour [Prénom], je serai en retard pour le rendez-vous du [date] à [heure].',
+  tcModeleMessage: () => "Bonjour [Prénom], j'aurai environ [minutes] minutes de retard.",
   tcVouvoiement: () => false,
-  tcRemplirModele: (t, v) => t.replace('[Prénom]', v['[Prénom]']).replace('[date]', v['[date]']).replace('[heure]', v['[heure]']),
-  tcValeursDuRdv: (nom, ev) => ({ '[Prénom]': nom.split(' ')[0], '[date]': ev.date, '[heure]': ev.startH + 'h' }),
   tcConfirm: async (t) => { trace.confirms.push(t); return reponses.length ? reponses.shift() : true; },
   tcTransmettrePrevenance: async (c, t) => { trace.envois.push([c.name, t]); return 'sms'; },
-  tcDirePrevenance: () => { trace.dits++; },
+  tcDirePrevenance: () => {},
+  tcSupprimerRdvs: () => {},
+  prevenirRetard() { trace.feuilles.push({ nom: ctx._prevenirName, titre: ctx._prevenirEventRef && ctx._prevenirEventRef.title }); },
   tcComparerEvenements: (a, b) => (a.date + String(a.startH).padStart(2, '0')) < (b.date + String(b.startH).padStart(2, '0')) ? -1 : 1
 };
 vm.createContext(ctx);
-['tcISO', 'tcHorairePlage', 'tcPrevenirRetard'].forEach((n) => {
+['tcISO', 'tcSansAccents', 'tcHorairePlage', 'tcContactDuRdv', 'tcRemplirModele', 'tcValeursDuRdv', 'tcProchainRdv', 'tcPrevenirDepuisChat', 'tcPrevenirRetard'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
 const ev = (id, title, date, h, m, extra) => Object.assign({ id: id, title: title, date: date, startH: h, startM: m, endH: h + 1, endM: m, mode: 'user' }, extra || {});
-const reinit = (liste, rep) => { ctx.events = liste; ctx.charlyIA.history = []; Object.assign(trace, { confirms: [], envois: [], dits: 0 }); reponses = rep || []; };
+const reinit = (liste, rep) => { ctx.events = liste; ctx.charlyIA.history = []; Object.assign(trace, { confirms: [], envois: [], feuilles: [] }); reponses = rep || []; };
 const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
 
 (async () => {
   titre('Prévenir d un retard : le cas normal');
-  reinit([ev('a', 'Dentiste', '2026-10-05', 15, 0, { contact: 'c1' })], [true]);
+  reinit([ev('a', 'Dentiste', '2026-10-05', 15, 0, { contact: 'c1' })]);
   await ctx.tcPrevenirRetard();
-  verifie('Charles confirme avant l envoi, avec le rendez-vous et le texte', trace.confirms.length === 1 && /Prévenir Marc Dupont/.test(trace.confirms[0]) && /Dentiste/.test(trace.confirms[0]) && /je serai en retard/.test(trace.confirms[0]), trace.confirms[0]);
+  verifie('la feuille habituelle s ouvre, sur le bon rendez-vous et le bon contact', trace.feuilles.length === 1 && trace.feuilles[0].titre === 'Dentiste' && trace.feuilles[0].nom === 'Marc Dupont', JSON.stringify(trace.feuilles));
+  verifie('rien ne part sans elle', trace.envois.length === 0 && trace.confirms.length === 0);
+
+  titre('Avec le nombre de minutes (depuis le chat)');
+  reinit([ev('a', 'Dentiste', '2026-10-05', 15, 0, { contact: 'c1' })], [true]);
+  await ctx.tcPrevenirDepuisChat('retard', ctx.events[0], 10);
+  verifie('Charles valide, avec le rendez-vous et le texte complet', trace.confirms.length === 1 && /Prévenir Marc Dupont/.test(trace.confirms[0]) && /Dentiste/.test(trace.confirms[0]) && /environ 10 minutes de retard/.test(trace.confirms[0]), trace.confirms[0]);
   verifie('le message part, une seule fois', trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont');
   verifie('Charly le dit', /prévenu\(e\) de ton retard/.test(dernier().content));
   reinit([ev('a', 'Dentiste', '2026-10-05', 15, 0, { contact: 'c1' })], [false]);
-  await ctx.tcPrevenirRetard();
+  await ctx.tcPrevenirDepuisChat('retard', ctx.events[0], 10);
   verifie('s il refuse, rien ne part', trace.envois.length === 0);
 
   titre('Quel rendez-vous ?');
-  reinit([ev('lointain', 'Plus tard', '2026-10-05', 17, 0, { contact: 'c1' }), ev('proche', 'Dentiste', '2026-10-05', 11, 0, { contact: 'c1' })], [true]);
+  reinit([ev('lointain', 'Plus tard', '2026-10-05', 17, 0, { contact: 'c1' }), ev('proche', 'Dentiste', '2026-10-05', 11, 0, { contact: 'c1' })]);
   await ctx.tcPrevenirRetard();
-  verifie('le plus proche, pas le premier de la liste', /Dentiste/.test(trace.confirms[0]) && !/Plus tard/.test(trace.confirms[0]));
-  reinit([ev('commence', 'Rendez-vous commence', '2026-10-05', 9, 40, { contact: 'c1' })], [true]);
+  verifie('le plus proche, pas le premier de la liste', trace.feuilles[0] && trace.feuilles[0].titre === 'Dentiste');
+  reinit([ev('commence', 'Rendez-vous commence', '2026-10-05', 9, 40, { contact: 'c1' })]);
   await ctx.tcPrevenirRetard();
-  verifie('commence il y a 20 minutes : encore le « prochain » (c est le retard)', trace.confirms.length === 1);
+  verifie('commence il y a 20 minutes : encore le « prochain » (c est le retard)', trace.feuilles.length === 1);
   reinit([ev('passe', 'Trop tard', '2026-10-05', 8, 0, { contact: 'c1' })]);
   await ctx.tcPrevenirRetard();
-  verifie('commence il y a 2 h : plus a prevenir', trace.confirms.length === 0 && /aucun rendez-vous à venir/.test(dernier().content));
-  reinit([Object.assign(ev('j', 'Journee', '2026-10-05', 0, 0, { contact: 'c1' }), { allDay: true }), ev('d', 'Demain', '2026-10-06', 9, 0, { contact: 'c1' })], [true]);
+  verifie('commence il y a 2 h : plus a prevenir', trace.feuilles.length === 0 && /aucun rendez-vous à venir/.test(dernier().content));
+  reinit([Object.assign(ev('j', 'Journee', '2026-10-05', 0, 0, { contact: 'c1' }), { allDay: true }), ev('d', 'Demain', '2026-10-06', 9, 0, { contact: 'c1' })]);
   await ctx.tcPrevenirRetard();
-  verifie('une journee entiere n est pas « le prochain »', /Demain/.test(trace.confirms[0]));
+  verifie('une journee entiere n est pas « le prochain »', trace.feuilles[0] && trace.feuilles[0].titre === 'Demain');
   reinit([Object.assign(ev('p', 'Pro', '2026-10-05', 12, 0, { contact: 'c1' }), { mode: 'pro' })]);
   await ctx.tcPrevenirRetard();
-  verifie('l autre mode (pro) est ignore', trace.confirms.length === 0);
+  verifie('l autre mode (pro) est ignore', trace.feuilles.length === 0);
 
   titre('Sans contact : il le dit');
   reinit([ev('a', 'Coiffeur', '2026-10-05', 14, 0)]);
   await ctx.tcPrevenirRetard();
-  verifie('aucun message, aucune confirmation', trace.envois.length === 0 && trace.confirms.length === 0);
+  verifie('aucune feuille, aucun message', trace.feuilles.length === 0 && trace.envois.length === 0);
   verifie('Charly explique et dit quoi faire', /Coiffeur/.test(dernier().content) && /pas de contact enregistré/.test(dernier().content) && /relier un/.test(dernier().content), dernier().content);
   reinit([]);
   await ctx.tcPrevenirRetard();

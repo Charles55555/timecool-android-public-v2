@@ -19,7 +19,7 @@ function source(nom) {
   throw new Error('fonction non fermée : ' + nom);
 }
 
-const noms = ['detecterSuppressionRdv', 'tcHeureDansTexte', 'tcReponseOuiNon', 'tcSansAccents',
+const noms = ['detecterSuppressionRdv', 'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcHeureDansTexte', 'tcReponseOuiNon', 'tcSansAccents',
   'tcJoursDansTexte', 'tcBorneDeFin',
   'tcJoursNommes', 'tcPhraseNonCompris', 'tcPeriodeContrainte', 'tcPeriodeCoherente', 'tcPeriodeJourNomme',
   'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcSupprimerRdvs', 'tcAnnulerSuppressionRdv',

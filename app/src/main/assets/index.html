@@ -10267,32 +10267,126 @@ function charlyQuickReply(text) {
  * vous) préparé, et c'est l'utilisateur qui valide l'envoi. Sans
  * contact enregistré, Charly le dit : il ne peut prévenir personne.
  */
-async function tcPrevenirRetard() {
+function tcProchainRdv() {
   const now = new Date();
   const aujourdhui = tcISO(now);
   const minutes = now.getHours() * 60 + now.getMinutes();
-  const prochains = events.filter(function (e) {
-    return e.mode === mode && !e.allDay
+  const prochains = (Array.isArray(events) ? events : []).filter(function (e) {
+    return e && e.mode === mode && !e.allDay
       && (e.date > aujourdhui || (e.date === aujourdhui && (e.startH * 60 + e.startM) >= minutes - 30));
   }).sort(tcComparerEvenements);
-  const dire = function (texte) {
-    charlyIA.history.push({ role: 'assistant', content: texte });
+  return prochains[0] || null;
+}
+
+/** L'onglet « Prévenir d'un retard » : le prochain rendez-vous, puis la feuille habituelle. */
+async function tcPrevenirRetard() {
+  const ev = tcProchainRdv();
+  if (!ev) {
+    charlyIA.history.push({ role: 'assistant', content: 'Tu n\'as aucun rendez-vous à venir : personne à prévenir.' });
     renderCharlyChat();
-  };
-  if (!prochains.length) { dire('Tu n\'as aucun rendez-vous à venir : personne à prévenir.'); return; }
-  const ev = prochains[0];
-  const quand = tcFormaterDateHumaine(ev.date) + ' ' + tcHorairePlage(ev);
-  const contact = tcContactDuRdv(ev);
-  if (!contact) {
-    dire('Ton prochain rendez-vous est « ' + ev.title + ' » (' + quand + '), mais il n\'a pas de contact enregistré : je ne peux pas le prévenir. Touche-le pour en relier un.');
     return;
   }
-  const texte = tcRemplirModele(tcModeleMessage('retard', tcVouvoiement(contact)), tcValeursDuRdv(contact.name, ev));
-  if (!await tcConfirm('Prévenir ' + contact.name + ' de ton retard pour « ' + ev.title + ' » (' + quand + ') ?\n\n« ' + texte + ' »')) return;
+  await tcPrevenirDepuisChat('retard', ev, null);
+}
+
+/**
+ * Prévenir le contact d'un rendez-vous depuis Charly : retard (avec ou
+ * sans le nombre de minutes) ou annulation. Le message vient des modèles
+ * des Paramètres, est relu, et c'est l'utilisateur qui valide l'envoi.
+ * Sans contact enregistré, Charly le dit.
+ */
+async function tcPrevenirDepuisChat(type, ev, minutes) {
+  const quand = tcFormaterDateHumaine(ev.date) + ' ' + tcHorairePlage(ev);
+  const contact = tcContactDuRdv(ev);
+  const dire = function (texte) { charlyIA.history.push({ role: 'assistant', content: texte }); renderCharlyChat(); };
+  if (!contact) {
+    dire('« ' + ev.title + ' » (' + quand + ') n\'a pas de contact enregistré : je ne peux prévenir personne. Touche le rendez-vous pour en relier un.');
+    return;
+  }
+  if (type === 'retard' && !minutes) {
+    // La feuille habituelle : le nombre de minutes, puis le message a relire.
+    _prevenirName = contact.name; _prevenirContact = contact; _prevenirEventRef = ev;
+    prevenirRetard();
+    return;
+  }
+  const valeurs = tcValeursDuRdv(contact.name, ev);
+  if (minutes) valeurs['[minutes]'] = String(minutes);
+  const texte = tcRemplirModele(tcModeleMessage(type === 'retard' ? 'retard' : 'annule', tcVouvoiement(contact)), valeurs);
+  const question = type === 'retard'
+    ? 'Prévenir ' + contact.name + ' de ton retard pour « ' + ev.title + ' » (' + quand + ') ?\n\n« ' + texte + ' »'
+    : 'Envoyer ce message à ' + contact.name + ' et annuler « ' + ev.title + ' » (' + quand + ') ?\n\n« ' + texte + ' »';
+  if (!await tcConfirm(question)) return;
   const chemin = await tcTransmettrePrevenance(contact, texte);
   tcDirePrevenance(chemin, contact.name);
+  if (type !== 'retard') { tcSupprimerRdvs([ev]); return; }
   charlyIA.history.push({ role: 'system_info', content: '⏰ ' + contact.name + ' est prévenu(e) de ton retard pour « ' + ev.title + ' ».' });
   renderCharlyChat();
+}
+
+/**
+ * Le rendez-vous que désigne une phrase, parmi ceux à venir : par un
+ * jour (« demain »), une heure (« de 15h »), un contact (« Marc ») ou un
+ * mot du titre (« le dentiste »). Un jour seul suffit s'il n'y en a
+ * qu'un. null si rien ne le désigne.
+ */
+function tcRdvVise(text) {
+  const t = String(text || '').toLowerCase();
+  const aujourdhui = tcISO(new Date());
+  let liste = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === mode && e.date >= aujourdhui; }).sort(tcComparerEvenements);
+  const periode = tcPeriodeAgenda(t) || tcPeriodeJourNomme(text);
+  if (periode) {
+    const debut = tcISO(periode.debut), fin = tcISO(periode.fin || periode.debut);
+    liste = liste.filter(function (e) { return e.date >= debut && e.date <= fin && (!periode.jours || periode.jours.indexOf(e.date) > -1); });
+  }
+  const heure = tcHeureDansTexte(t);
+  if (heure) {
+    const parHeure = liste.filter(function (e) { return Number(e.startH) === heure.h && (heure.m === null || Number(e.startM) === heure.m); });
+    if (parHeure.length) liste = parHeure;
+  }
+  const mots = tcMotsDeRdv(text);
+  const parContact = liste.filter(function (e) { const c = tcContactDuRdv(e); return c && c.name && tcTitreContient(c.name, mots); });
+  if (parContact.length) return parContact[0];
+  const parTitre = liste.filter(function (e) { return e.title && tcTitreContient(e.title, mots); });
+  if (parTitre.length) return parTitre[0];
+  if (periode && liste.length === 1) return liste[0];
+  return null;
+}
+
+/**
+ * « Préviens Marc que j'aurai 10 min de retard », « je serai en retard
+ * chez le dentiste », « dis à Sophie que j'annule » : { type, minutes },
+ * ou null. Jamais une question sur le fonctionnement (« comment… »).
+ */
+function tcDetecterPrevenance(text) {
+  const t = tcSansAccents(String(text || '')).replace(/[’‘]/g, "'");
+  if (/\bcomment\b/.test(t)) return null;
+  const verbe = /(previen|prevenir|avertis|avertir|informe|informer|\bdis (a|au|aux)\b|dire (a|au|aux)\b|fais savoir|envoie[sz]? (un |lui |leur )?(message|sms|texto|mail|mot)|ecris (a|au)\b)/.test(t);
+  const moi = /\b(je|j')/.test(t);
+  if (/\bretard\b/.test(t) && (verbe || moi)) {
+    const m = t.match(/(\d{1,3})\s*(min\b|mn\b|minutes?)/);
+    let minutes = m ? parseInt(m[1], 10) : null;
+    if (!minutes && /quart d'?heure/.test(t)) minutes = 15;
+    if (!minutes && /demi-?\s?heure/.test(t)) minutes = 30;
+    return { type: 'retard', minutes: minutes || null };
+  }
+  if (verbe && /(annul|ne viendrai pas|ne pourrai pas venir|ne peux pas venir|ne viens pas|ne viens plus)/.test(t)) {
+    return { type: 'annule', minutes: null };
+  }
+  return null;
+}
+
+/** La demande écrite : on trouve le rendez-vous, puis on prévient. */
+async function tcGererPrevenance(text, intent) {
+  tcPousserMessageUtilisateur(text);
+  const ev = tcRdvVise(text) || (intent.type === 'retard' ? tcProchainRdv() : null);
+  if (!ev) {
+    charlyIA.history.push({ role: 'assistant', content: intent.type === 'retard'
+      ? 'Tu n\'as aucun rendez-vous à venir : personne à prévenir.'
+      : 'Quel rendez-vous veux-tu annuler ? Dis-moi par exemple : « préviens Marc que j\'annule le rendez-vous de demain ».' });
+    renderCharlyChat();
+    return;
+  }
+  await tcPrevenirDepuisChat(intent.type, ev, intent.minutes);
 }
 
 const TC_QUESTION_NOUVEAU_RDV = 'Tu veux créer un nouveau rendez-vous !\nQuel jour, à quelle heure, à quelle adresse et avec qui ou pourquoi ? (ex : demain 14h30, Dr Martin)';
@@ -10464,6 +10558,8 @@ function detecterRechercheProfessionnel(text) {
   }
   // Une personne deja nommee n'est pas a chercher.
   if (/\b(s['’]appelle|il s['’]agit de|mon contact)\b/.test(t)) return null;
+  // « mon dentiste », « ma kiné » : une personne connue, pas a chercher.
+  if (new RegExp('(?:^|[^a-zà-ÿ])(mon|ma)\\s+(?:\\S+\\s+)?(' + TC_PROFESSIONS.join('|') + ')(?![a-zà-ÿ])').test(t)) return null;
 
   // Le declencheur doit s'adresser a Charly. « trouve » seul attrapait
   // « il se trouve au 36 avenue », et lancait une recherche payante.
@@ -10881,22 +10977,24 @@ async function tcGererDemandeCreneau(text, intent) {
  * tcAgendaSnapshotPourIA).
  */
 function detecterConsultationAgenda(text) {
-  const t = text.toLowerCase().trim();
+  const t = text.toLowerCase().replace(/[\u2019\u2018\u00b4]/g, "'").trim();
   // Une création/modification/suppression peut mentionner les mêmes mots de
   // période ("demain", "cette semaine") : jamais une consultation dans ce cas.
-  if (/\b(ajoute|crée|cree|planifie|prends?[- ]?(un|moi)|réserve|reserve|annule|annuler|supprime|supprimer|efface|effacer|enlève|enleve|déplace|deplace|décale|decale|repousse|avance|reprogramme)\b/.test(t)) return null;
+  if (/\b(ajoute|crée|cree|planifie|prends?[- ]?(un|moi)|réserve|reserve|annule|annuler|supprime|supprimer|efface|effacer|enlève|enleve|déplace|deplace|décale|decale|repousse|avance|reprogramme|note|noter|change|changer|modifie|modifier|remplace|reporte|bouge|mets|préviens|previens|prévenir|prevenir)\b/.test(t)) return null;
 
   if (/\b(prochain (rdv|rendez-vous)|mon prochain (rdv|rendez-vous))\b/.test(t)) {
     return { type: 'prochain' };
   }
+  // « Quand suis-je libre cette semaine ? » demande un créneau, pas la liste.
+  if (/\bquand\b/.test(t)) return null;
 
   const mContact = t.match(/(?:rdv|rendez-vous)\s+avec\s+([a-zà-ÿ' -]+?)[\s?!.]*$/i);
   if (mContact && mContact[1].trim()) {
     return { type: 'contact', contact: mContact[1].trim() };
   }
 
-  const declencheurPeriode = /\b(qu'est-ce que j'ai|qu'ai-je|qu est ce que j ai|mon planning|mes rdv|mes rendez-vous|montre[- ]moi mon agenda|qu'est-ce qu'il y a|qu'est ce qu'il y a)\b/;
-  const periode = tcPeriodeAgenda(t) || tcPeriodeJourNomme(t);
+  const declencheurPeriode = /\b(qu'est-ce que j'ai|qu'ai-je|qu est ce que j ai|mon planning|mon programme|mon emploi du temps|mes rdv|mes rendez-vous|(montre|affiche|voir|regarde|consulte|ouvre)[- ]?(moi )?mon agenda|mon agenda (de|du|pour)|liste[- ]moi|dis-moi ce que j'ai|ce que j'ai de prévu|qu'est-ce qu'il y a|qu'est ce qu'il y a|j'ai quoi|j ai quoi|je fais quoi|j'ai quelque chose|suis-je libre|je suis libre|suis-je dispo|je suis dispo|est-ce que je suis libre)\b/;
+  const periode = tcPeriodeAgenda(t) || tcPeriodeJourNomme(t) || tcPeriodeContrainte(t);
   if (declencheurPeriode.test(t)) {
     return { type: 'periode', periode: periode || { debut: new Date(new Date().setHours(0,0,0,0)), fin: null, label: null } };
   }
@@ -10965,6 +11063,34 @@ async function tcGererConsultationAgenda(text, intent) {
   renderCharlyChat();
 }
 
+/** Les mots d'une phrase qui peuvent designer un rendez-vous : sans les verbes, les jours, les mots creux. */
+const TC_MOTS_CREUX = new Set(('annule annuler annules annulation supprime supprimer supprimes efface effacer enleve enlever retire retirer '
+  + 'deplace deplacer decale decaler change changer modifie modifier previens prevenir prevenez avertis avertir informe envoie envoyer message texto mail '
+  + 'retard minutes minute heure heures quart demi peux peut veux veut voudrais pourrais pourrai serai vais aurai suis etre faut dois merci '
+  + 'tout tous toute toutes pour avec chez dans celui celle cette plus mais finalement rendez vous rendez-vous aussi juste encore comme quand '
+  + 'parce mettre mets agenda prochain prochaine demain apres aujourd matin soir midi journee semaine mois partir jusqu depuis '
+  + 'lundi mardi mercredi jeudi vendredi samedi dimanche janvier fevrier mars avril juin juillet aout septembre octobre novembre decembre').split(' '));
+function tcMotsDeRdv(text) {
+  return tcSansAccents(text).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4 && !TC_MOTS_CREUX.has(w); });
+}
+
+/** Un titre (ou un nom) contient-il l'un de ces mots ? « golf » trouve « Partie de golf », « kine » trouve « Kiné ». */
+function tcTitreContient(titre, mots) {
+  const motsTitre = tcSansAccents(titre).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3; });
+  return mots.some(function (m) {
+    return motsTitre.some(function (v) { return v === m || (v.length >= 4 && (v.startsWith(m) || m.startsWith(v))); });
+  });
+}
+
+/** La phrase nomme-t-elle un rendez-vous de l'agenda, ou un contact ? */
+function tcMotDeLAgenda(text) {
+  const mots = tcMotsDeRdv(text);
+  if (!mots.length) return false;
+  const liste = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === mode && e.title; });
+  if (liste.some(function (e) { return tcTitreContient(e.title, mots); })) return true;
+  return (Array.isArray(contactsList) ? contactsList : []).some(function (c) { return c && c.name && tcTitreContient(c.name, mots); });
+}
+
 /**
  * Reconnaît une demande de suppression/annulation de RDV formulée à
  * l'impératif ("annule…", "supprime…") — jamais une question sur le
@@ -10980,7 +11106,7 @@ function detecterSuppressionRdv(text) {
   // l'autre, la phrase partait au modèle, qui répondait « c'est fait »
   // sans rien pouvoir supprimer.
   if (!/\b(rdv|rendez-vous|rendez vous|agenda|journée|journee|semaine)\b/.test(t)
-      && !tcHeureDansTexte(t) && !tcPeriodeAgenda(t)) return null;
+      && !tcHeureDansTexte(t) && !tcPeriodeAgenda(t) && !tcMotDeLAgenda(t)) return null;
   return true;
 }
 
@@ -11202,6 +11328,12 @@ async function tcGererSuppressionRdv(text) {
       if (parTitre.length && (!filtreApplique || parTitre.length < candidats.length)) {
         candidats = parTitre;
         filtreApplique = true;
+      } else if (!parTitre.length && filtreApplique
+          && events.some(e => e.mode === mode && e.title && motsMessage.some(w => e.title.toLowerCase().includes(w)))) {
+        // Le mot designe un rendez-vous qui existe, mais pas dans la periode
+        // (« le golf de jeudi » quand le golf est vendredi) : on n'en
+        // supprime pas un autre a sa place.
+        candidats = [];
       }
     }
   }
@@ -11315,7 +11447,7 @@ let _tcDeplacementEnAttente = null;
 
 /** « déplace », « décale », « repousse », « reporte », « avance », « bouge ». */
 function tcEstDeplacement(text) {
-  return /\b(deplac|decal|repouss|report|avanc|boug)/.test(tcSansAccents(text));
+  return /\b(deplac|decal|repouss|report|avanc|boug|chang|modif|remplac)/.test(tcSansAccents(text));
 }
 
 /**
@@ -11897,6 +12029,23 @@ async function charlySendMessage() {
     return;
   }
 
+  // === PRÉVENIR : « préviens Marc que j'aurai 10 min de retard », « je serai en retard chez le dentiste » ===
+  // Le message vient des modèles des Paramètres, relu et validé ici ; jamais laissé au modèle,
+  // et jamais la liste « pas encore disponible » (sms, message).
+  const _prevenance = tcDetecterPrevenance(text);
+  if (_prevenance) {
+    await tcGererPrevenance(text, _prevenance);
+    return;
+  }
+
+  // === IMPRÉVU sans jour : « j'ai un imprévu », « je dois réorganiser ma journée » ===
+  // La même question que l'onglet ; avec un jour, c'est une contrainte (juste en dessous).
+  if (/\b(imprevu|reorganis)/.test(tcSansAccents(text)) && !tcPeriodeContrainte(text)) {
+    tcPousserMessageUtilisateur(text);
+    tcDemarrerImprevu();
+    return;
+  }
+
   // === CONTRAINTE : « je ne pourrai pas honorer mes rendez-vous demain / cette semaine » ===
   // Le meme message a trois choix que pour un voyage ; jamais laisse au modele.
   if (tcDetecterContrainte(text)) {
@@ -12021,7 +12170,9 @@ async function charlySendMessage() {
   ];
   // Exclure les messages des boutons rapides de l'interception FAQ
   const _isQuickAction = text.includes('Pose-moi les questions') || text.includes('quick_action_') || text.includes('Voici ce que j') || text.includes('vie quotidienne');
-  const _faqMatch = !_isQuickAction && _faq.find(f => f.keys.some(k => tcContientMot(text.toLowerCase(), k)));
+  // Une heure ou un jour : c'est un rendez-vous, pas une question sur TimeCool (« rdv privé demain 10h »).
+  const _ressembleRdv = !!tcHeureDansTexte(text.toLowerCase()) || !!tcPeriodeAgenda(text);
+  const _faqMatch = !_isQuickAction && !_ressembleRdv && _faq.find(f => f.keys.some(k => tcContientMot(text.toLowerCase(), k)));
   if (_faqMatch) {
     charlyIA.history.push({role:'user', content:text});
     inp.value = ''; inp.style.height = 'auto';
@@ -15171,10 +15322,15 @@ function tcPeriodeContrainte(text) {
  */
 function tcDetecterContrainte(text) {
   const t = tcSansAccents(String(text || '').toLowerCase());
-  const indispo = /(ne pourrai pas|ne pourrais pas|ne peux pas|n.?arriverai pas|impossible|indisponible|pas disponible|empechement|contrainte|honorer)/.test(t);
-  const objet = /(rdv|rendez-?vous|honorer|agenda|programme|engagements)/.test(t);
+  // Un verbe de suppression : c'est une suppression, pas une contrainte.
+  if (/\b(annule|supprime|efface|enleve|retire)/.test(t)) return false;
+  const indispo = /(ne pourrai pas|ne pourrais pas|ne peux pas|n.?arriverai pas|impossible|indisponible|pas disponible|empechement|contrainte|honorer|malade|imprevu|reorganis)/.test(t);
+  // « J'ai un empechement demain » se comprend sans le mot rendez-vous.
+  const fort = /(indisponible|pas disponible|empechement|contrainte|malade|imprevu|reorganis)/.test(t);
+  const objet = fort || /(rdv|rendez-?vous|honorer|agenda|programme|engagements)/.test(t);
   if (!indispo || !objet) return false;
-  if (tcHeureDansTexte(String(text || '').toLowerCase())) return false;
+  // Une heure precise vise UN rendez-vous ; « a partir de 15h » est une periode.
+  if (tcHeureDansTexte(String(text || '').toLowerCase()) && !tcPlageImprevu(text).precise) return false;
   return !!tcPeriodeContrainte(text);
 }
 
@@ -15230,13 +15386,19 @@ async function tcGererContrainte(text) {
   tcPousserMessageUtilisateur(text);
   const periode = tcPeriodeContrainte(text);
   if (!periode) return;
-  const touches = tcRdvDeLaPeriode(periode);
+  // « demain matin », « a partir de 15h » : seule cette partie du jour.
+  const plage = tcPlageImprevu(text);
+  const label = (periode.label + ' ' + plage.label).trim();
+  const touches = tcRdvDeLaPeriode(periode).filter(function (e) {
+    if (e.allDay) return true;
+    return (e.startH * 60 + e.startM) < plage.fin && (e.endH * 60 + e.endM) > plage.debut;
+  });
   if (!touches.length) {
-    charlyIA.history.push({ role: 'assistant', content: 'Tu n\'as aucun rendez-vous ' + periode.label + ' : rien à annuler.' });
+    charlyIA.history.push({ role: 'assistant', content: 'Tu n\'as aucun rendez-vous ' + label + ' : rien à annuler.' });
     renderCharlyChat();
     return;
   }
-  showContrainte(touches, periode.label);
+  showContrainte(touches, label);
 }
 
 /** Le dernier message « periode » auquel personne n'a repondu. */
