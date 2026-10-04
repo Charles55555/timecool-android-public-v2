@@ -4569,6 +4569,25 @@ async function tcTempsDeTrajet(lieu) {
     + flou;
 }
 
+/** Le crayon d'une ligne de la fiche : il ouvre « Modifier », directement sur ce champ. */
+function tcCrayonFiche(champ) {
+  return '<span onclick="event.stopPropagation(); openEditEventModal(\'' + champ + '\')" aria-label="Modifier" style="cursor:pointer; font-size:15px; padding:2px 6px;">✏️</span>';
+}
+
+/** Une ligne « Lieu » ou « Avec » encore vide : elle invite à la remplir. */
+function tcLigneVideFiche(champ) {
+  const lieu = champ === 'lieu';
+  const icone = lieu
+    ? 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z'
+    : 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z';
+  return '<div class="event-detail-row" onclick="openEditEventModal(\'' + champ + '\')" style="cursor:pointer;">'
+    + '<svg viewBox="0 0 24 24"><path d="' + icone + '"/></svg>'
+    + '<div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">'
+    + (lieu ? 'Lieu' : 'Avec') + tcCrayonFiche(champ) + '</div>'
+    + '<div class="event-detail-value" style="color:var(--text-sec); font-style:italic;">'
+    + (lieu ? 'Ajouter un lieu' : 'Ajouter un contact') + '</div></div></div>';
+}
+
 function openEventModal(e) {
   currentEvent = e;
   document.getElementById('emTitle').textContent = e.title;
@@ -4581,15 +4600,15 @@ function openEventModal(e) {
   document.getElementById('emBody').innerHTML = `
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><div><div class="event-detail-label">Date</div><div class="event-detail-value">${dateStr}</div></div></div>
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg><div><div class="event-detail-label">Horaire</div><div class="event-detail-value">${timeStr}</div></div></div>
-    ${e.lieu ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><div style="flex:1;"><div class="event-detail-label">Lieu</div><div class="event-detail-value">${escapeHTML(e.lieu)}</div>
+    ${e.lieu ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Lieu${tcCrayonFiche('lieu')}</div><div class="event-detail-value">${escapeHTML(e.lieu)}</div>
       <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
         <button onclick="tcYAller(${JSON.stringify(e.lieu).replace(/"/g, '&quot;')})" style="padding:8px 14px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\ud83d\uddfa\ufe0f Y aller</button>
         <button onclick="tcTempsDeTrajet(${JSON.stringify(e.lieu).replace(/"/g, '&quot;')})" style="padding:8px 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue); border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\u23f1\ufe0f Combien de temps ?</button>
         <span id="emTrajet" style="font-size:12px; align-self:center; flex:1 1 auto; min-width:0;"></span>
       </div>
 
-    </div></div>` : ''}
-    ${tcContactDuRdv(e) ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div><div class="event-detail-label">Avec</div><div class="event-detail-value" data-notranslate>${escapeHTML(tcContactDuRdv(e).name || '')}</div></div></div>` : ''}
+    </div></div>` : tcLigneVideFiche('lieu')}
+    ${tcContactDuRdv(e) ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Avec${tcCrayonFiche('contact')}</div><div class="event-detail-value" data-notranslate>${escapeHTML(tcContactDuRdv(e).name || '')}</div></div></div>` : tcLigneVideFiche('contact')}
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Confidentialité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Sur votre appareil</div></div></div>
   `;
   const actions = document.getElementById('emActions');
@@ -5338,7 +5357,7 @@ function tcMajLigneContactRdv() {
   ligne.innerHTML = tcLigneContactHTML(champ ? champ.value : '');
 }
 
-function openEditEventModal() {
+function openEditEventModal(champ) {
   const e = currentEvent;
   if (!e) return;
   document.getElementById('emBody').innerHTML = `
@@ -5400,6 +5419,13 @@ function openEditEventModal() {
     <button onclick="closeEventModal()" style="flex:1; padding:10px; background:#f1f3f4; color:var(--text); border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Annuler</button>
     <button onclick="saveEventEdit()" style="flex:2; padding:10px; background:var(--g-blue); color:white; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">✅ Enregistrer</button>
   `;
+  // Venu du crayon d'une ligne : on va droit au champ.
+  if (champ === 'lieu') {
+    const l = document.getElementById('editLieu');
+    if (l) { l.scrollIntoView({ block: 'center' }); l.focus(); }
+  } else if (champ === 'contact') {
+    tcChoisirContactRdv();
+  }
 }
 
 function saveEventEdit() {
