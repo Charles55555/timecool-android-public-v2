@@ -1690,12 +1690,12 @@ if (window.pdfjsLib) {
     </button>
   </div>
   <!-- Quick action buttons -->
+  <div id="charlyQuickIntro" style="padding:8px 14px 0; background:#fff; font-size:11.5px; color:var(--text-sec);">Touche l'option qui correspond à ton besoin : Charly te guide.</div>
   <div id="charlyQuickActions" style="display:flex; gap:6px; padding:10px 12px; background:#fff; border-bottom:1px solid var(--border); overflow-x:auto; -webkit-overflow-scrolling:touch;">
     <button onclick="charlyQuickAction('agenda')" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">📅 Créer mon agenda</button>
-    <button onclick="charlyQuickAction('rdv')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🩺 Prendre RDV</button>
-    <button onclick="charlyQuickAction('trajet')" style="flex-shrink:0; padding:8px 12px; background:#fef7e0; color:#8a6500; border:1px solid #fbd784; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🚗 Calculer trajet</button>
-    <button onclick="charlyQuickAction('reserver')" style="flex-shrink:0; padding:8px 12px; background:#f3e8fd; color:#6f3fc4; border:1px solid #d4b3f5; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🍽️ Réserver</button>
-    <button onclick="charlyQuickAction('impprevu')" style="flex-shrink:0; padding:8px 12px; background:#fce8e6; color:var(--g-red); border:1px solid #f5b8b3; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⚡ Gérer imprévu</button>
+    <button onclick="charlyQuickAction('rdv')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">➕ Créer un nouveau rdv</button>
+    <button onclick="charlyQuickAction('impprevu')" style="flex-shrink:0; padding:8px 12px; background:#fce8e6; color:var(--g-red); border:1px solid #f5b8b3; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⚡ Gérer un imprévu</button>
+    <button onclick="charlyQuickAction('retard')" style="flex-shrink:0; padding:8px 12px; background:#fff4e0; color:#8a6500; border:1px solid #fbd784; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⏰ Prévenir d'un retard</button>
   </div>
   <!-- Chat body -->
   <div class="main" id="charlyChatBody" style="background:#f7f9fc; padding:14px 12px 90px;"></div>
@@ -10226,7 +10226,43 @@ function charlyQuickReply(text) {
   document.getElementById('charlyInput').focus();
 }
 
+/**
+ * « Prévenir d'un retard » : le prochain rendez-vous (ou celui qui a
+ * commencé il y a moins de 30 minutes), le message au contact (tu /
+ * vous) préparé, et c'est l'utilisateur qui valide l'envoi. Sans
+ * contact enregistré, Charly le dit : il ne peut prévenir personne.
+ */
+async function tcPrevenirRetard() {
+  const now = new Date();
+  const aujourdhui = tcISO(now);
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const prochains = events.filter(function (e) {
+    return e.mode === mode && !e.allDay
+      && (e.date > aujourdhui || (e.date === aujourdhui && (e.startH * 60 + e.startM) >= minutes - 30));
+  }).sort(tcComparerEvenements);
+  const dire = function (texte) {
+    charlyIA.history.push({ role: 'assistant', content: texte });
+    renderCharlyChat();
+  };
+  if (!prochains.length) { dire('Tu n\'as aucun rendez-vous à venir : personne à prévenir.'); return; }
+  const ev = prochains[0];
+  const quand = tcFormaterDateHumaine(ev.date) + ' ' + tcHorairePlage(ev);
+  const contact = tcContactDuRdv(ev);
+  if (!contact) {
+    dire('Ton prochain rendez-vous est « ' + ev.title + ' » (' + quand + '), mais il n\'a pas de contact enregistré : je ne peux pas le prévenir. Touche-le pour en relier un.');
+    return;
+  }
+  const texte = tcRemplirModele(tcModeleMessage('retard', tcVouvoiement(contact)), tcValeursDuRdv(contact.name, ev));
+  if (!await tcConfirm('Prévenir ' + contact.name + ' de ton retard pour « ' + ev.title + ' » (' + quand + ') ?\n\n« ' + texte + ' »')) return;
+  const chemin = await tcTransmettrePrevenance(contact, texte);
+  tcDirePrevenance(chemin, contact.name);
+  charlyIA.history.push({ role: 'system_info', content: '⏰ ' + contact.name + ' est prévenu(e) de ton retard pour « ' + ev.title + ' ».' });
+  renderCharlyChat();
+}
+
 function charlyQuickAction(action) {
+  // Retard : le message au contact est prepare ici, jamais laisse au modele.
+  if (action === 'retard') { tcPrevenirRetard(); return; }
   // Agenda : ouvrir la page checklist au lieu d'envoyer un message
   if (action === 'agenda') {
     _agendaChecked = new Set();
