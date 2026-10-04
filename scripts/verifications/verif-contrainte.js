@@ -195,6 +195,13 @@ titre('Le message : sans rien ajouter, la liste limitee a huit');
   verifie('et avant l interception de suppression', iC > -1 && iS > -1 && iC < iS, 'sinon « annule... » la prendrait');
 
   console.log('');
+  {
+    // Charles, 04/10 : qui dit imprevu veut agir ; la sortie passe en dernier.
+    const src = extraire('showContrainte') || '';
+    const a = src.indexOf("bouton('tcPeriodeAnnuler()'"), b = src.indexOf("bouton('tcPeriodeDeplacer()'"), c = src.indexOf("bouton('tcPeriodeRien()'");
+    verifie('les choix : annuler, deplacer, puis la sortie', a > -1 && b > a && c > b);
+    verifie('la sortie dit « Annuler : je ne touche à rien »', src.indexOf('3️⃣ Annuler : je ne touche à rien') > -1);
+  }
   console.log(ko + ' anomalie(s).');
   process.exit(ko ? 1 : 0);
 })();

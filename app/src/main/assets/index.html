@@ -15374,9 +15374,10 @@ function showContrainte(touches, label) {
     };
     const div = document.createElement('div');
     div.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin:10px auto; max-width:90%;';
-    div.innerHTML = bouton('tcPeriodeRien()', '#e8f5e9', '#1b6b2f', '#b9e1c4', '1️⃣ Je ne touche à rien')
-      + bouton('tcPeriodeAnnuler()', '#fce8e6', '#b3261e', '#f5b8b3', '2️⃣ Je les annule' + (avec ? ' et je préviens ceux que je peux' : ''))
-      + bouton('tcPeriodeDeplacer()', '#e8f0fe', '#1a56b8', '#c8d7ee', '3️⃣ Je les déplace');
+    // Qui dit imprevu veut agir : annuler ou deplacer d'abord, la sortie en dernier.
+    div.innerHTML = bouton('tcPeriodeAnnuler()', '#fce8e6', '#b3261e', '#f5b8b3', '1️⃣ Je les annule' + (avec ? ' et je préviens ceux que je peux' : ''))
+      + bouton('tcPeriodeDeplacer()', '#e8f0fe', '#1a56b8', '#c8d7ee', '2️⃣ Je les déplace')
+      + bouton('tcPeriodeRien()', '#f1f3f4', 'var(--text-sec)', 'var(--border)', '3️⃣ Annuler : je ne touche à rien');
     lastMsg.appendChild(div);
   }, 100);
 }
