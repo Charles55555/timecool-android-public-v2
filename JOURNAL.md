@@ -24,6 +24,8 @@ formulaires de connexion ont été corrigés deux fois en parallèle.
 
 ## En attente de Charles
 
+- **Veille du 05/10** : rien d'alarmant. Disque 14 %, certificats valides 50 jours et plus, SSH calme, copie IONOS ok le 05/10 à 03h29 UTC (toujours du lundi au vendredi seulement). 4 mises à jour système en attente, et redémarrage demandé depuis le 01/10 : à faire à un moment calme, par root, après avoir prévu la relance de la session serveur.
+
 - **SSH saturé le 03/10 vers 03h30 UTC, réglé par la session du PC** :
   212.112.98.73 faisait de la force brute en tenant 100+ connexions non
   authentifiées, soit le plafond MaxStartups (10:30:100). Plus personne
