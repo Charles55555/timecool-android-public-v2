@@ -60,7 +60,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 ['tcSansAccents', 'tcISO', 'tcHeureDansTexte', 'tcHorairePlage', 'tcPeriodeAgenda', 'tcPeriodeContrainte', 'tcDetecterContrainte',
- 'tcPlageImprevu', 'tcRdvDeLaPeriode', 'showContrainte', 'tcGererContrainte', 'tcPeriodeContexte', 'tcPeriodeRien', 'tcPeriodeAnnuler', 'tcPeriodeDeplacer'
+ 'tcPlageImprevu', 'tcRdvDeLaPeriode', 'showContrainte', 'tcGererContrainte', 'tcMemoriserSuppression', 'tcPeriodeContexte', 'tcPeriodeRien', 'tcPeriodeAnnuler', 'tcPeriodeDeplacer'
 ].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }

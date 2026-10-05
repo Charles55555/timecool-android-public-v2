@@ -83,6 +83,7 @@ const ctx = {
   tcDemarrerImprevu() {}
 };
 vm.createContext(ctx);
+vm.runInContext('let _tcMarcheArriere = { type: "suppression", rdvs: [] };', ctx);
 ['TC_JOURS_SEMAINE', 'TC_MOIS', 'TC_PROFESSIONS', 'TC_TRAJET_DECLENCHEURS', 'TC_WEB_DECLENCHEURS', 'TC_MOTS_CREUX'].forEach((c) => {
   const src = extraireConst(c, c === 'TC_MOTS_CREUX' ? "\\.split\\(' '\\)\\);\\n" : (c.indexOf('DECLENCHEURS') > -1 || c === 'TC_PROFESSIONS' ? '\\];\\n' : ';\\n'));
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  constante introuvable : ' + c); }
@@ -98,11 +99,11 @@ if (modeles) vm.runInContext(modeles, ctx); else { ko++; console.log('  KO  TC_M
  'tcPhraseNonCompris', 'parseFrenchDateFromText', 'tcContactDuRdv', 'tcRemplirModele', 'tcValeursDuRdv', 'tcModeleMessage',
  'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
  'tcDetecterContrainte', 'tcRdvDeLaPeriode', 'tcGererContrainte',
- 'detecterSuppressionRdv', 'tcGererSuppressionRdv', 'tcSupprimerRdvs', 'tcRdvDesigne',
+ 'detecterSuppressionRdv', 'tcGererSuppressionRdv', 'tcMemoriserSuppression', 'tcSupprimerRdvs', 'tcRdvDesigne',
  'tcProchainRdv', 'tcRdvVise', 'tcDetecterPrevenance', 'tcGererPrevenance', 'tcPrevenirDepuisChat', 'tcPrevenirRetard',
  'detecterConsultationAgenda', 'detecterDemandeCreneau',
  'extraireLieuDuTexte', 'detecterRechercheProfessionnel', 'extraireAdresseDuTexte', 'detecterDemandeTrajet', 'detecterRechercheWeb',
- 'tcEstDeplacement'
+ 'tcEstDeplacement', 'tcDetecterMarcheArriere'
 ].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
@@ -115,6 +116,7 @@ function route(text) {
   const t = text.toLowerCase();
   if (greetings.includes(t.replace(/[!?.\s]/g, '').trim())) return 'salutation';
   const r = vm.runInContext('(function (text) {' +
+    "  if (tcDetecterMarcheArriere(text)) return 'marche-arriere';" +
     "  if (tcDetecterPrevenance(text)) return 'prevenance';" +
     "  if (/\\b(imprevu|reorganis)/.test(tcSansAccents(text)) && !tcPeriodeContrainte(text)) return 'imprevu';" +
     "  if (tcDetecterContrainte(text)) return 'contrainte';" +
@@ -135,7 +137,7 @@ function route(text) {
 titre('L ordre des traitements dans l application est celui du banc');
 {
   const src = extraire('charlySendMessage') || '';
-  const ordre = ['tcDetecterPrevenance(text)', 'tcDemarrerImprevu()', 'tcDetecterContrainte(text)', 'detecterSuppressionRdv(text)',
+  const ordre = ['tcDetecterMarcheArriere(text)', 'tcDetecterPrevenance(text)', 'tcDemarrerImprevu()', 'tcDetecterContrainte(text)', 'detecterSuppressionRdv(text)',
     'detecterConsultationAgenda(text)', 'detecterDemandeCreneau(text)', 'detecterRechercheProfessionnel(text)',
     'detecterDemandeTrajet(text)', 'detecterRechercheWeb(text)', 'const _faqMatch', 'const _unavailMatch'];
   const pos = ordre.map((o) => src.indexOf(o));
@@ -173,6 +175,17 @@ const corpus = [
   ['annule mon rdv', 'suppression'],
   ['comment annuler un rdv ?', 'faq'],
   ['annule', 'ia'],
+
+  /* Marche arrière */
+  ['je me suis trompé, tu peux les remettre ?', 'marche-arriere'],
+  ['remets-les', 'marche-arriere'],
+  ['Remets-le stp', 'marche-arriere'],
+  ['annule la suppression', 'marche-arriere'],
+  ['reviens en arrière', 'marche-arriere'],
+  ['remets le golf', 'marche-arriere'],
+  ["c'était une erreur", 'marche-arriere'],
+  ["je me suis trompé, c'est 16h", 'ia'],
+  ['remets un rdv demain 10h', 'ia'],
 
   /* Prévenir */
   ["préviens Marc que j'aurai 10 min de retard", 'prevenance'],

@@ -55,7 +55,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 ['tcSansAccents', 'tcHorairePlage', 'tcEstUnePeriode', 'tcRdvTouchesParPeriode', 'showPeriodeConflits',
- 'tcPeriodeContexte', 'tcPeriodeRien', 'tcPeriodeAnnuler', 'tcPeriodeDeplacer'
+ 'tcMemoriserSuppression', 'tcPeriodeContexte', 'tcPeriodeRien', 'tcPeriodeAnnuler', 'tcPeriodeDeplacer'
 ].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }

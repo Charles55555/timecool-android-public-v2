@@ -11409,7 +11409,76 @@ function tcConfirmerSuppressionRdv() {
 }
 
 /** Retire ces rendez-vous de l'agenda, et le dit précisément. */
+/** La dernière suppression ou le dernier déplacement, pour « remets-les ». */
+let _tcMarcheArriere = null;
+
+/** Garde de quoi remettre ces rendez-vous tels qu'ils étaient. */
+function tcMemoriserSuppression(cible) {
+  _tcMarcheArriere = { type: 'suppression', rdvs: cible.map(function (e) { return Object.assign({}, e); }) };
+}
+
+/**
+ * « Remets-les », « je me suis trompé », « annule la suppression »,
+ * « reviens en arrière ». Une heure dans la phrase, c'est autre chose
+ * (« je me suis trompé, c'est 16h ») ; « remets un rdv » aussi.
+ */
+function tcDetecterMarcheArriere(text) {
+  const t = tcSansAccents(String(text || '')).replace(/[’]/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || t.split(' ').length > 10) return false;
+  if (tcHeureDansTexte(t)) return false;
+  const explicite = /(annule (la|cette|ta) (suppression|annulation)|annule le deplacement|reviens en arriere|revenir en arriere|retour en arriere|marche arriere|restaure|retablis|\bundo\b)/.test(t);
+  if (explicite) return true;
+  const remettre = /\b(remets|remet|remettre|remettez)\b/.test(t) && !/\b(un|une)\b/.test(t);
+  const erreur = /(je me suis trompe|c'?etait une erreur|je n'?aurais pas du|pas voulu)/.test(t);
+  return !!_tcMarcheArriere && (remettre || erreur);
+}
+
+/** Remet la dernière suppression ou le dernier déplacement, et le dit. */
+async function tcMarcheArriere(text) {
+  tcPousserMessageUtilisateur(text);
+  const m = _tcMarcheArriere;
+  const dire = function (texte) { charlyIA.history.push({ role: 'system_info', content: texte }); renderCharlyChat(); };
+  if (!m) { dire('Je n\'ai rien à remettre : rien n\'a été supprimé ni déplacé récemment.'); return; }
+  _tcMarcheArriere = null;
+  const remis = [];
+  if (m.type === 'suppression') {
+    m.rdvs.forEach(function (copie) {
+      if (events.some(function (e) { return e.id === copie.id; })) return;
+      events.push(copie);
+      remis.push(copie);
+    });
+  } else {
+    m.rdvs.forEach(function (avant) {
+      const ev = events.find(function (e) { return e.id === avant.id; });
+      if (!ev) return;
+      ev.date = avant.date;
+      if (avant.dateFin) ev.dateFin = avant.dateFin; else delete ev.dateFin;
+      ev.startH = avant.startH; ev.startM = avant.startM; ev.endH = avant.endH; ev.endM = avant.endM;
+      remis.push(ev);
+    });
+  }
+  if (!remis.length) { dire('Ces rendez-vous sont déjà en place.'); return; }
+  saveEventsToStorage();
+  if (currentPage === 'calendar') render();
+  addDemarche({
+    icon: '↩️',
+    title: 'Marche arrière — ' + remis.length + ' rendez-vous',
+    summary: remis.map(function (e) { return e.title; }).join(' • '),
+    status: 'modifiee',
+    categorie: 'rdv',
+    detail: 'Charly IA a remis ' + remis.length + ' rendez-vous à la demande de l\'utilisateur.'
+  });
+  const contacts = [];
+  remis.forEach(function (e) { const c = tcContactDuRdv(e); if (c && contacts.indexOf(c.name) < 0) contacts.push(c.name); });
+  const ou = m.type === 'deplacement' ? (remis.length === 1 ? ' à sa place' : ' à leur place') : '';
+  dire('↩️ C\'est fait : ' + (remis.length === 1 ? '« ' + remis[0].title + ' » est remis' : remis.length + ' rendez-vous remis') + ou + ' :\n'
+    + remis.map(function (e) { return '• ' + e.title + ' — ' + tcFormaterDateHumaine(e.date) + ' ' + tcFormaterHeure(e); }).join('\n')
+    + (contacts.length ? '\nPense à prévenir ' + contacts.join(', ') + ' que c\'est maintenu.' : ''));
+  showToast('↩️ Rendez-vous remis');
+}
+
 function tcSupprimerRdvs(cible) {
+  tcMemoriserSuppression(cible);
   const ids = new Set(cible.map(e => e.id));
   let n = 0;
   for (let i = events.length - 1; i >= 0; i--) {
@@ -11425,9 +11494,9 @@ function tcSupprimerRdvs(cible) {
     categorie: 'rdv',
     detail: `Charly IA a annulé ${n} rendez-vous à la demande de l'utilisateur : ${cible.map(e => `${e.title} (${e.date})`).join(', ')}.`
   });
-  charlyIA.history.push({role: 'system_info', content: n === 1
+  charlyIA.history.push({role: 'system_info', content: (n === 1
     ? `✅ C'est fait : « ${cible[0].title} » (${tcFormaterDateHumaine(cible[0].date)} ${tcFormaterHeure(cible[0])}) est supprimé.`
-    : `✅ C'est fait : ${n} rendez-vous supprimés.`});
+    : `✅ C'est fait : ${n} rendez-vous supprimés.`) + ' Pour revenir en arrière, dis-moi « remets-' + (n === 1 ? 'le' : 'les') + ' ».'});
   renderCharlyChat();
   if (currentPage === 'calendar') render();
   showToast('✅ Rendez-vous annulé' + (n>1?'s':''));
@@ -11490,6 +11559,9 @@ function _tcLigneRdv(ev) {
  * un second.
  */
 function tcAppliquerDeplacement(liste) {
+  _tcMarcheArriere = { type: 'deplacement', rdvs: liste.map(function (x) {
+    return { id: x.ev.id, date: x.ev.date, dateFin: x.ev.dateFin, startH: x.ev.startH, startM: x.ev.startM, endH: x.ev.endH, endM: x.ev.endM };
+  }) };
   liste.forEach(function (x) {
     const ev = x.ev, p = x.p;
     ev.date = p.date;
@@ -11503,7 +11575,8 @@ function tcAppliquerDeplacement(liste) {
   const lignes = liste.map(x => '• ' + _tcLigneRdv(x.ev)).join('\n');
   charlyIA.history.push({role: 'system_info', isHTML: true,
     content: '✅ <b>C\'est fait, rendez-vous déplacé' + (liste.length > 1 ? 's' : '') + ' :</b><br>'
-      + escapeHTMLSafe(lignes).replace(/\n/g, '<br>')});
+      + escapeHTMLSafe(lignes).replace(/\n/g, '<br>')
+      + '<br><span style="font-size:12px; color:var(--text-sec);">Pour revenir en arrière, dis-moi « remets-' + (liste.length > 1 ? 'les' : 'le') + ' ».</span>'});
   addDemarche({
     icon: '📅',
     title: `Déplacement — ${liste.length} rendez-vous`,
@@ -11944,6 +12017,13 @@ async function charlySendMessage() {
   // === RÉPONSE À « VERS QUAND ? » (déplacer les rendez-vous d'une période) ===
   if (_tcDeplacementPeriode) {
     if (await tcRepondreDeplacementPeriode(text)) return;
+  }
+
+  // === MARCHE ARRIÈRE : « remets-les », « je me suis trompé », « annule la suppression » ===
+  // Jamais laissé au modèle : il répondait « rien n'a été modifié » après avoir tout supprimé.
+  if (tcDetecterMarcheArriere(text)) {
+    await tcMarcheArriere(text);
+    return;
   }
 
   // === « 1 », « 2 », « 3 » TAPÉS QUAND LES TROIS CHOIX D'UNE PÉRIODE ATTENDENT ===
@@ -15559,6 +15639,7 @@ async function tcPeriodeAnnuler() {
   if (!await tcConfirm('Annuler ' + touches.length + ' rendez-vous' + (ctx.contrainte ? '' : ' et noter le voyage') + ' ?')) return;
   ctx._resolu = true;
   if (!ctx.contrainte) _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
+  tcMemoriserSuppression(touches);
   events = events.filter(function (e) { return touches.indexOf(e) < 0; });
   saveEventsToStorage();
   render();
@@ -15583,6 +15664,7 @@ async function tcPeriodeAnnuler() {
     bilan += ' À prévenir toi-même (pas de contact ou message non envoyé) : '
       + aPrevenirSoi.map(function (e) { return e.title + ' ' + tcFormaterDateHumaine(e.date); }).join(' ; ') + '.';
   }
+  bilan += ' Pour revenir en arrière, dis-moi « remets-les ».';
   charlyIA.history.push({ role: 'system_info', content: bilan });
   renderCharlyChat();
 }
