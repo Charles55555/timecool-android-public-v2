@@ -5419,6 +5419,7 @@ function openEditEventModal(champ) {
     <button onclick="closeEventModal()" style="flex:1; padding:10px; background:#f1f3f4; color:var(--text); border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Annuler</button>
     <button onclick="saveEventEdit()" style="flex:2; padding:10px; background:var(--g-blue); color:white; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">✅ Enregistrer</button>
   `;
+  tcAutocompleterLieu(document.getElementById('editLieu'));
   // Venu du crayon d'une ligne : on va droit au champ.
   if (champ === 'lieu') {
     const l = document.getElementById('editLieu');
@@ -12514,6 +12515,107 @@ async function callAnthropic(messages) {
 // troisième service et vit dans son propre champ admin ; à défaut de
 // saisie il retombe sur le moteur fourni au lancement de la fonction.
 const TC_CSE_CX_PAR_DEFAUT = 'b5384d87b75fc4d3e';
+
+/**
+ * Propositions d'adresses et de lieux pour une saisie (Google Places
+ * Autocomplete). Jamais avant 3 lettres, jamais sans la clé Google ;
+ * vide si Google n'a rien ou si l'appel échoue. Le jeton de session
+ * fait facturer la saisie entière, pas chaque lettre.
+ */
+async function tcSuggestionsLieu(saisie, jeton) {
+  const cle = tcCleGoogle();
+  const texte = String(saisie || '').trim();
+  if (!cle || texte.length < 3) return [];
+  const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': cle },
+    body: JSON.stringify({ input: texte, languageCode: 'fr', regionCode: 'FR', sessionToken: jeton })
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (Array.isArray(data.suggestions) ? data.suggestions : []).map(function (sg) {
+    const p = sg.placePrediction || {};
+    const f = p.structuredFormat || {};
+    const complet = (p.text && p.text.text) || '';
+    return {
+      texte: complet,
+      principal: (f.mainText && f.mainText.text) || complet,
+      secondaire: (f.secondaryText && f.secondaryText.text) || ''
+    };
+  }).filter(function (x) { return x.texte; }).slice(0, 5);
+}
+
+/** Un jeton de session Google : une saisie = une facturation. */
+function tcJetonSession() {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+}
+
+/**
+ * Branche les propositions sous un champ : après une courte pause de
+ * frappe (300 ms) et 3 lettres, une liste apparaît ; toucher une ligne
+ * remplit le champ. Rien ne ralentit la frappe : l'appel part après la
+ * pause, et une réponse en retard est ignorée.
+ *
+ * @param {Object} [opts]
+ *   conteneur / avant : où poser la liste (par défaut juste sous le champ)
+ *   actif() : la liste ne sert que quand c'est vrai (le chat n'attend pas toujours une adresse)
+ *   auChoix(p) : appelée quand une proposition est choisie
+ */
+function tcAutocompleterLieu(input, opts) {
+  if (!input || input._tcAutocomplete) return;
+  input._tcAutocomplete = true;
+  opts = opts || {};
+  const liste = document.createElement('div');
+  liste.className = 'tc-suggestions';
+  liste.style.cssText = 'display:none; background:#fff; border:1.5px solid var(--border); border-radius:10px; margin:4px 0 8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,.08);';
+  (opts.conteneur || input.parentNode).insertBefore(liste, opts.avant || input.nextSibling);
+  let minuterie = null, jeton = null, derniere = '';
+  const cacher = function () { liste.style.display = 'none'; liste.innerHTML = ''; };
+  const montrer = function (propositions) {
+    if (!propositions.length) { cacher(); return; }
+    liste.innerHTML = propositions.map(function (p, i) {
+      return '<div data-i="' + i + '" style="padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; font-size:14px;">📍 <b>' + escapeHTMLSafe(p.principal) + '</b>'
+        + (p.secondaire ? '<div style="font-size:12px; color:var(--text-sec);">' + escapeHTMLSafe(p.secondaire) + '</div>' : '') + '</div>';
+    }).join('');
+    Array.prototype.forEach.call(liste.children, function (el, i) {
+      // Le champ garde le clavier : la liste ne se ferme pas avant le choix.
+      el.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      el.addEventListener('click', function () {
+        input.value = propositions[i].texte;
+        jeton = null;
+        cacher();
+        if (typeof opts.auChoix === 'function') opts.auChoix(propositions[i]);
+      });
+    });
+    liste.style.display = 'block';
+  };
+  input.addEventListener('input', function () {
+    if (opts.actif && !opts.actif()) { cacher(); return; }
+    const saisie = input.value.trim();
+    if (minuterie) clearTimeout(minuterie);
+    if (saisie.length < 3) { cacher(); return; }
+    minuterie = setTimeout(function () {
+      if (!jeton) jeton = tcJetonSession();
+      derniere = saisie;
+      tcSuggestionsLieu(saisie, jeton)
+        .then(function (props) { if (input.value.trim() === derniere) montrer(props); })
+        .catch(cacher);
+    }, 300);
+  });
+  input.addEventListener('blur', function () { setTimeout(cacher, 250); jeton = null; });
+}
+
+/* Le chat : des propositions quand Charly attend une adresse de trajet ; la choisir l'envoie. */
+window.addEventListener('load', function () {
+  const champ = document.getElementById('charlyInput');
+  const barre = document.getElementById('charlyInputBar');
+  if (!champ || !barre) return;
+  tcAutocompleterLieu(champ, {
+    conteneur: barre, avant: barre.firstElementChild,
+    actif: function () { return !!(_tcTrajetEtapes && (_tcTrajetEtapes.depart === null || _tcTrajetEtapes.arrivee === null)); },
+    auChoix: function () { charlySendMessage(); }
+  });
+});
 
 function tcCleGoogle() {
   let apiKeys = {};
