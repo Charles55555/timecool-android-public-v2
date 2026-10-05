@@ -4585,7 +4585,10 @@ function tcLigneVideFiche(champ) {
     + '<div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">'
     + (lieu ? 'Lieu' : 'Avec') + tcCrayonFiche(champ) + '</div>'
     + '<div class="event-detail-value" style="color:var(--text-sec); font-style:italic;">'
-    + (lieu ? 'Ajouter un lieu' : 'Ajouter un contact') + '</div></div></div>';
+    + (lieu ? 'Ajouter un lieu' : 'Ajouter un contact') + '</div>'
+    + '<div style="font-size:11.5px; color:var(--text-sec); margin-top:3px;">'
+    + (lieu ? 'Si tu précises le lieu, Charly pourra te guider et calculer le temps de trajet.' : 'Si tu précises le contact, Charly pourra le prévenir en cas d\'imprévu.')
+    + '</div></div></div>';
 }
 
 function openEventModal(e) {

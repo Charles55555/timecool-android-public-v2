@@ -22,10 +22,12 @@ const vide = fiche({ title: 'Travail', date: '2026-10-07', startH: 11, startM: 0
 verifie('vide : la ligne Lieu apparaît, avec « Ajouter un lieu »', /Ajouter un lieu/.test(vide), vide.slice(0, 80));
 verifie('vide : la ligne Avec apparaît, avec « Ajouter un contact »', /Ajouter un contact/.test(vide));
 verifie('vide : deux crayons', (vide.match(/✏️/g) || []).length === 2);
+verifie('vide : les deux phrases d aide (Charles, 05/10)', /Si tu précises le lieu, Charly pourra te guider/.test(vide) && /Si tu précises le contact, Charly pourra le prévenir/.test(vide));
 verifie('vide : le crayon mène au bon champ', /openEditEventModal\('lieu'\)/.test(vide) && /openEditEventModal\('contact'\)/.test(vide));
 const plein = fiche({ title: 'Dentiste', date: '2026-10-07', startH: 11, startM: 0, endH: 13, endM: 0, lieu: '12 rue des Lilas', contact: 'c1' });
 verifie('rempli : le lieu et le contact sont montrés', /12 rue des Lilas/.test(plein) && /Marc Dupont/.test(plein));
 verifie('rempli : plus d invitation', !/Ajouter un lieu/.test(plein) && !/Ajouter un contact/.test(plein));
+verifie('rempli : plus de phrase d aide non plus', !/Si tu précises/.test(plein));
 verifie('rempli : un crayon sur chaque ligne', (plein.match(/✏️/g) || []).length === 2);
 verifie('rempli : « Y aller » est toujours là', /Y aller/.test(plein));
 verifie('Modifier va droit au champ : lieu', /champ === 'lieu'[\s\S]*editLieu[\s\S]*focus\(\)/.test(extraire('openEditEventModal')));
