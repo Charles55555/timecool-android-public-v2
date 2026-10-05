@@ -155,7 +155,7 @@ titre('Choix 2 — je les annule, et je previens ceux que je peux');
   verifie('le voyage est ajoute', trace.orig === 1);
   verifie('rien n est supprime', ctx.events.length === 3);
   const dep = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
-  verifie('la liste est rappelee avec la facon de decaler', /décale le dentiste à lundi 15h/.test(dep) && /Cours de tennis/.test(dep));
+  verifie('Charly demande vers quand, puis fait le travail (Charles, 05/10)', /^Vers quand \?/.test(dep));
 
   titre('Le conflit ordinaire n est pas touche');
   verifie('showConflictWarning existe toujours pour un rendez-vous normal', page.indexOf('function showConflictWarning(conflicts, msg) {') > -1);

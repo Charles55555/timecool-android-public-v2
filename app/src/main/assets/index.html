@@ -11935,6 +11935,24 @@ async function charlySendMessage() {
     if (await tcRepondreImprevu(text)) return;
   }
 
+  // === RÉPONSE À « VERS QUAND ? » (déplacer les rendez-vous d'une période) ===
+  if (_tcDeplacementPeriode) {
+    if (await tcRepondreDeplacementPeriode(text)) return;
+  }
+
+  // === « 1 », « 2 », « 3 » TAPÉS QUAND LES TROIS CHOIX D'UNE PÉRIODE ATTENDENT ===
+  // Les boutons disparaissent au moindre réaffichage du chat.
+  {
+    const choix = tcChoixPeriode(text);
+    if (choix) {
+      tcPousserMessageUtilisateur(text);
+      if (choix === 'annuler') await tcPeriodeAnnuler();
+      else if (choix === 'deplacer') tcPeriodeDeplacer();
+      else tcPeriodeRien();
+      return;
+    }
+  }
+
   // === RÉPONSE À « TU VEUX ANNULER CE RENDEZ-VOUS ? » ===
   // Les boutons Oui / Non disparaissent au moindre réaffichage du chat,
   // et beaucoup répondent au clavier. Sans cette branche, le « oui »
@@ -15468,20 +15486,119 @@ async function tcPeriodeAnnuler() {
  * dentiste a lundi 15h »). Le message au contact part de la fiche du
  * rendez-vous, bouton « Je decale ».
  */
+/** Les rendez-vous d'une période à déplacer, en attente de « vers quand ? » ; et le nombre d'essais restants. */
+let _tcDeplacementPeriode = null;
+
+/** 3 — Je les déplace : Charly demande vers quand, puis fait le travail (tcRepondreDeplacementPeriode). */
 function tcPeriodeDeplacer() {
   const ctx = tcPeriodeContexte();
   if (!ctx) return;
   ctx._resolu = true;
   if (!ctx.contrainte) _origValidateAgendaProposalFromMsg(ctx.conflictData.msg);
-  const lignes = (ctx.touches || []).map(function (e) {
-    return '• ' + e.title + ' — ' + tcFormaterDateHumaine(e.date) + ' ' + tcHorairePlage(e);
-  });
-  charlyIA.history.push({
-    role: 'system_info',
-    content: '🗓️ ' + (ctx.contrainte ? '' : 'Voyage noté. ') + 'Rien n\'est supprimé. Pour déplacer un rendez-vous, dis-moi par exemple « décale le dentiste à lundi 15h » :\n'
-      + lignes.join('\n')
-  });
+  const touches = (ctx.touches || []).filter(function (e) { return events.indexOf(e) > -1; });
+  if (!touches.length) return;
+  _tcDeplacementPeriode = { touches: touches, essais: 2 };
+  charlyIA.history.push({ role: 'assistant', content: 'Vers quand ? Dis-moi un jour et une heure (ex : jeudi 15h, ou demain même heure).' });
   renderCharlyChat();
+}
+
+/**
+ * La réponse à « vers quand ? » : un jour (« jeudi », « demain », « 12
+ * octobre »), une heure (« 15h »), ou les deux. Un jour seul garde les
+ * horaires ; une heure seule garde le jour ; avec une heure, les
+ * rendez-vous s'enchaînent dans l'ordre, chacun avec sa durée. Faux si
+ * ce n'était pas une réponse (après un second essai) : le message suit
+ * son chemin.
+ */
+async function tcRepondreDeplacementPeriode(text) {
+  const attente = _tcDeplacementPeriode;
+  const t = String(text || '').toLowerCase();
+  const jour = parseFrenchDateFromText(t) || (function () { const p = tcPeriodeJourNomme(text) || tcPeriodeAgenda(t); return p ? p.debut : null; })();
+  const heure = tcHeureDansTexte(t);
+  if (!jour && !heure) {
+    attente.essais -= 1;
+    if (attente.essais <= 0) { _tcDeplacementPeriode = null; return false; }
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('Vers quand ? (ex : jeudi 15h, ou demain même heure)') });
+    renderCharlyChat();
+    return true;
+  }
+  _tcDeplacementPeriode = null;
+  tcPousserMessageUtilisateur(text);
+  const touches = attente.touches.filter(function (e) { return events.indexOf(e) > -1; }).sort(tcComparerEvenements);
+  if (!touches.length) return true;
+  const date = jour ? tcISO(jour) : null;
+  const FIN_JOUR = 23 * 60 + 59;
+  let curseur = heure ? heure.h * 60 + (heure.m || 0) : null;
+  // Les anciennes dates, avant qu'elles ne changent : le message au
+  // contact cite le rendez-vous tel qu'il le connaît.
+  const anciens = touches.map(function (e) { return { id: e.id, date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM, contact: e.contact }; });
+  const liste = touches.map(function (e) {
+    if (e.allDay || curseur === null) {
+      return { ev: e, p: { date: date || e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM } };
+    }
+    const duree = (e.endH * 60 + e.endM) - (e.startH * 60 + e.startM);
+    const debut = Math.min(curseur, FIN_JOUR);
+    const fin = Math.min(debut + Math.max(duree, 0), FIN_JOUR);
+    curseur = fin;
+    return { ev: e, p: { date: date || e.date, startH: Math.floor(debut / 60), startM: debut % 60, endH: Math.floor(fin / 60), endM: fin % 60 } };
+  });
+  // Ce que la nouvelle place chevauche : on déplace quand même (la
+  // demande est claire), mais on le dit.
+  const genes = [];
+  liste.forEach(function (x) {
+    (Array.isArray(events) ? events : []).forEach(function (o) {
+      if (!o || o.mode !== mode || o.allDay || touches.indexOf(o) > -1 || o.date !== x.p.date || genes.indexOf(o) > -1) return;
+      if ((o.startH * 60 + o.startM) < (x.p.endH * 60 + x.p.endM) && (o.endH * 60 + o.endM) > (x.p.startH * 60 + x.p.startM)) genes.push(o);
+    });
+  });
+  tcAppliquerDeplacement(liste);
+  if (genes.length) {
+    charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + genes.map(_tcLigneRdv).join(' ; ') + '.' });
+    renderCharlyChat();
+  }
+  await tcPrevenirDecalages(liste, anciens);
+  return true;
+}
+
+/**
+ * Un message par contact, celui de « Je décale » des Paramètres,
+ * complété de la nouvelle date. Chacun est relu et validé avant de partir.
+ */
+async function tcPrevenirDecalages(liste, anciens) {
+  const vus = {};
+  for (const x of liste) {
+    const c = tcContactDuRdv(x.ev);
+    if (!c || vus[c.id]) continue;
+    vus[c.id] = true;
+    const ancien = anciens.find(function (a) { return a.id === x.ev.id; }) || x.ev;
+    const valeursNouv = tcValeursDuRdv(c.name, x.ev);
+    const texte = tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
+      + ' le ' + valeursNouv['[date]'] + ' à ' + valeursNouv['[heure]'] + '.';
+    if (!await tcConfirm('Prévenir ' + c.name + ' ?\n\n« ' + texte + ' »')) continue;
+    const chemin = await tcTransmettrePrevenance(c, texte);
+    tcDirePrevenance(chemin, c.name);
+  }
+}
+
+/**
+ * « 1 », « 2 », « 3 », « je les annule », « rien » tapés quand les trois
+ * choix d'une période attendent : les boutons disparaissent au moindre
+ * réaffichage du chat. Trois mots au plus : une vraie demande (« annule
+ * mon rdv dentiste de demain ») n'est pas un choix.
+ */
+function tcChoixPeriode(text) {
+  const ctx = tcPeriodeContexte();
+  if (!ctx) return null;
+  const t = tcSansAccents(String(text || '')).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || t.split(' ').length > 3) return null;
+  // L'ordre affiché diffère : contrainte (annuler, déplacer, rien) ; voyage (rien, annuler, déplacer).
+  const ordre = ctx.contrainte ? ['annuler', 'deplacer', 'rien'] : ['rien', 'annuler', 'deplacer'];
+  if (/^[123]$/.test(t)) return ordre[Number(t) - 1];
+  if (/annul/.test(t)) return 'annuler';
+  if (/deplac|decal/.test(t)) return 'deplacer';
+  if (/\b(rien|garde|laisse|touche)/.test(t)) return 'rien';
+  return null;
 }
 
 function showConflictWarning(conflicts, msg) {

@@ -184,8 +184,7 @@ titre('Le message : sans rien ajouter, la liste limitee a huit');
   ctx.tcPeriodeDeplacer();
   const dep = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
   verifie('aucun voyage ajoute, rien supprime', trace.orig === 0 && ctx.events.length === 1);
-  verifie('ne dit pas « Voyage noté »', !/Voyage noté/.test(dep) && /Rien n'est supprimé/.test(dep), dep.slice(0, 60));
-  verifie('rappelle comment decaler', /décale le dentiste à lundi 15h/.test(dep));
+  verifie('ne dit pas « Voyage noté », et demande vers quand (Charles, 05/10)', !/Voyage noté/.test(dep) && /^Vers quand \?/.test(dep), dep.slice(0, 60));
 
   titre('Branche dans le chat, avant la suppression');
   const envoi = extraire('charlySendMessage') || '';
