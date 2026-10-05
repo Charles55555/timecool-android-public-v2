@@ -30,4 +30,8 @@ verifie('rempli : un crayon sur chaque ligne', (plein.match(/✏️/g) || []).le
 verifie('rempli : « Y aller » est toujours là', /Y aller/.test(plein));
 verifie('Modifier va droit au champ : lieu', /champ === 'lieu'[\s\S]*editLieu[\s\S]*focus\(\)/.test(extraire('openEditEventModal')));
 verifie('Modifier va droit au champ : contact', /champ === 'contact'[\s\S]*tcChoisirContactRdv\(\)/.test(extraire('openEditEventModal')));
+const edit = extraire('openEditEventModal') || '';
+verifie('aide sous « Avec qui ? » (Charles, 05/10)', edit.indexOf("Si tu précises le contact, Charly pourra le prévenir en cas d'imprévu.") > -1);
+verifie('aide sous « Lieu »', edit.indexOf('Si tu précises le lieu, Charly pourra te guider et calculer le temps de trajet.') > -1);
+verifie('chacune juste apres son champ', edit.indexOf('tcLigneContactHTML(e.contact)') < edit.indexOf('Si tu précises le contact') && edit.indexOf('id="editLieu"') < edit.indexOf('Si tu précises le lieu'));
 console.log(''); console.log(ko + ' anomalie(s).'); process.exit(ko ? 1 : 0);
