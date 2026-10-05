@@ -9496,6 +9496,20 @@ function tcSuiteSurNotification(texte) {
   return /préviendrai|te rappellerai|notification/i.test(String(texte || ''));
 }
 
+/** Une bulle de Charly (avatar + cadre blanc), avec ce HTML dedans : le même dessin que ses réponses. */
+function tcBulleCharly(interieur) {
+  return '<div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">'
+    + '<div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>'
+    + '<div style="flex:1; max-width:calc(100% - 50px);">'
+    + '<div style="padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">'
+    + interieur + '</div></div></div>';
+}
+
+/** Un cadre jaune ne sert qu'à poser une question : boutons, oui/non, choix d'une période. */
+function tcEstUnCadreAQuestion(m) {
+  return !!(m.periode || m.conflictData || m.contrainte || /<button|Réponds « oui »|Que fait-on/.test(String(m.content || '')));
+}
+
 function renderChatMessage(m) {
   if (m.role === 'user') {
     return `
@@ -9684,7 +9698,8 @@ function renderChatMessage(m) {
     `;
     return html;
   } else if (m.role === 'system_info') {
-    return `<div style="text-align:center; padding:6px 12px; font-size:11px; color:var(--text-sec); font-style:italic;">${escapeHTML(m.content)}</div>`;
+    // Ce que Charly vient de faire se dit dans sa bulle, comme une réponse (Charles, 05/10).
+    return tcBulleCharly(escapeHTML(m.content).replace(/\n/g, '<br>'));
   }
   return '';
 }
@@ -15847,6 +15862,8 @@ const _origRenderChatMessage = renderChatMessage;
 renderChatMessage = function(m) {
   if (m.role === 'user' && m.hidden) return ''; // messages cachés (import)
   if (m.role === 'system_info' && m.isHTML) {
+    // Seule une question garde son cadre jaune ; un compte rendu (« rendez-vous déplacé ») est une bulle de Charly.
+    if (!tcEstUnCadreAQuestion(m)) return tcBulleCharly(m.content);
     return `<div style="text-align:center; padding:14px 16px; margin:10px 0; background:#fff4e0; border:1px solid #fbd784; border-radius:14px; font-size:13px; color:#5f4500; line-height:1.6;">${m.content}</div>`;
   }
   return _origRenderChatMessage(m);
