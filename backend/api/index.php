@@ -368,6 +368,9 @@ function elementsPoser(array $ecritures): void
                     'INSERT INTO elements (compte_id, type, uid, contenu, version, supprime)
                      VALUES (?, ?, ?, ?, ?, ?)
                      ON DUPLICATE KEY UPDATE
+                       -- maj_le en PREMIER : une réécriture identique (redémarrage de TimeCool) ne doit pas
+                       -- passer pour une modification ; BINARY, sinon la collation ignore casse et accents.
+                       maj_le = IF(BINARY contenu <=> BINARY VALUES(contenu) AND supprime = VALUES(supprime), maj_le, NOW()),
                        contenu = VALUES(contenu),
                        version = VALUES(version),
                        supprime = VALUES(supprime)',
@@ -973,6 +976,17 @@ function googleAgendaLiaison(int $compteId): ?array
     }
 }
 
+/** Départ de la synchronisation, en secondes Unix (null : anciennes liaisons, ou colonne absente). */
+function googleAgendaDepuis(int $compteId): ?int
+{
+    try {
+        $r = Db::un('SELECT UNIX_TIMESTAMP(depuis) AS t FROM google_agenda WHERE compte_id = ?', [$compteId]);
+    } catch (PDOException $e) {
+        return null;
+    }
+    return is_array($r) && $r['t'] !== null ? (int) $r['t'] : null;
+}
+
 /** Le lien d'autorisation porte, chiffré, le compte qui l'a demandé. */
 function googleAgendaEtatCreer(int $compteId): string
 {
@@ -1002,7 +1016,7 @@ function googleAgendaPage(bool $reussi, string $message): never
     http_response_code($reussi ? 200 : 400);
     header('Content-Type: text/html; charset=utf-8');
     header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'");
-    $titre = $reussi ? 'Google Agenda est relié' : 'La liaison n’a pas abouti';
+    $titre = $reussi ? 'Google Agenda est synchronisé' : 'La synchronisation n’a pas abouti';
     $pastille = $reussi ? '✅' : '⚠️';
     $msg = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
     echo '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
@@ -1156,6 +1170,35 @@ function googleAgendaAcces(int $compteId): ?string
 }
 
 /**
+ * Ce rendez-vous doit-il aller chez Google ? (règle de Charles, 07/10)
+ *  - déjà recopié (un lien existe) : oui, pour le tenir à jour et le supprimer avec lui ;
+ *  - importé d'un fichier (.ics) : non, Google a déjà l'original — l'envoyer ferait un doublon ;
+ *  - sinon : seulement s'il a été créé ou modifié APRÈS la mise en route de la
+ *    synchronisation. Ce qui existait avant ne regarde pas Google Agenda.
+ * Les anciennes liaisons (pas de date de départ) gardent le comportement d'avant.
+ *
+ * @param array       $rdv      contenu du rendez-vous (JSON décodé)
+ * @param string      $uid      identifiant TimeCool
+ * @param string|null $googleId identifiant chez Google, s'il est déjà recopié
+ * @param string|null $majLe    dernière écriture côté serveur, « AAAA-MM-JJ HH:MM:SS »
+ * @param string|null $depuis   départ de la synchronisation, même format
+ */
+function googleAgendaDoitEnvoyer(array $rdv, string $uid, ?string $googleId, ?string $majLe, ?string $depuis): bool
+{
+    if ($googleId !== null) {
+        return true;
+    }
+    if (!empty($rdv['importe']) || strncmp($uid, 'ics_', 4) === 0) {
+        return false;
+    }
+    if ($depuis === null) {
+        return true;
+    }
+    // Deux dates « AAAA-MM-JJ HH:MM:SS » du même serveur se comparent comme du texte.
+    return $majLe !== null && $majLe > $depuis;
+}
+
+/**
  * Un passage de recopie pour un compte : crée, corrige et supprime
  * chez Google ce qui a changé dans TimeCool depuis le passage
  * précédent. Sans effet si le compte n'est pas relié ou si la case
@@ -1200,7 +1243,7 @@ function googleAgendaRecopier(int $compteId): void
 
         // 1. Ce qui existe dans TimeCool : créer ou corriger.
         $lignes = Db::tous(
-            "SELECT e.uid, e.contenu, g.google_id, g.empreinte
+            "SELECT e.uid, e.contenu, e.maj_le, g.google_id, g.empreinte
                FROM elements e
                LEFT JOIN google_agenda_liens g ON g.compte_id = e.compte_id AND g.uid = e.uid
               WHERE e.compte_id = ? AND e.type = 'rdv' AND e.supprime = 0",
@@ -1212,6 +1255,12 @@ function googleAgendaRecopier(int $compteId): void
             }
             $rdv = json_decode((string) $r['contenu'], true);
             if (!is_array($rdv)) {
+                continue;
+            }
+            // Seulement ce qui doit aller chez Google : voir googleAgendaDoitEnvoyer.
+            if (!googleAgendaDoitEnvoyer($rdv, (string) $r['uid'], $r['google_id'],
+                    is_string($r['maj_le'] ?? null) ? $r['maj_le'] : null,
+                    is_string($l['depuis'] ?? null) ? $l['depuis'] : null)) {
                 continue;
             }
             $contact = $rdv['contact'] ?? null;
@@ -2116,6 +2165,9 @@ switch ($route) {
                     'INSERT INTO elements (compte_id, type, uid, contenu, version, supprime)
                      VALUES (?, ?, ?, ?, ?, ?)
                      ON DUPLICATE KEY UPDATE
+                       -- maj_le en PREMIER : une réécriture identique (redémarrage de TimeCool) ne doit pas
+                       -- passer pour une modification ; BINARY, sinon la collation ignore casse et accents.
+                       maj_le = IF(BINARY contenu <=> BINARY VALUES(contenu) AND supprime = VALUES(supprime), maj_le, NOW()),
                        contenu = VALUES(contenu),
                        version = VALUES(version),
                        supprime = VALUES(supprime)',
@@ -3185,6 +3237,7 @@ switch ($route) {
             'email'      => $l['email_google'] ?? null,
             'envoyer'    => $l !== null && (int) $l['envoyer'] === 1,
             'lire_tout'  => $l !== null && (int) $l['lire_tout'] === 1,
+            'depuis'     => $l !== null ? googleAgendaDepuis((int) $compte['id']) : null,
             // 'acces_retire' : la personne a retiré l'accès chez Google.
             'erreur'     => $l['erreur'] ?? null,
         ]);
@@ -3214,14 +3267,14 @@ switch ($route) {
     case 'GET /google/agenda/retour':
         if (isset($_GET['error'])) {
             googleAgendaPage(false, $_GET['error'] === 'access_denied'
-                ? 'Vous avez refusé l’accès. Rien n’a été relié. Vous pouvez recommencer depuis les Paramètres de TimeCool.'
-                : 'Google a répondu par une erreur. Recommencez depuis les Paramètres de TimeCool.');
+                ? 'Vous avez refusé l’accès. Rien n’a été synchronisé. Vous pouvez recommencer depuis « Synchroniser avec Google Agenda », dans le menu de TimeCool.'
+                : 'Google a répondu par une erreur. Recommencez depuis « Synchroniser avec Google Agenda », dans le menu de TimeCool.');
         }
         $compteId = googleAgendaEtatLire((string) ($_GET['state'] ?? ''));
         $code = (string) ($_GET['code'] ?? '');
         $client = googleAgendaClient();
         if ($compteId === null || $code === '' || $client === null) {
-            googleAgendaPage(false, 'Ce lien a expiré ou n’est pas valable. Recommencez depuis les Paramètres de TimeCool.');
+            googleAgendaPage(false, 'Ce lien a expiré ou n’est pas valable. Recommencez depuis « Synchroniser avec Google Agenda », dans le menu de TimeCool.');
         }
 
         // Toutes les permissions demandées doivent avoir été cochées :
@@ -3239,7 +3292,7 @@ switch ($route) {
             'grant_type'    => 'authorization_code',
         ]);
         if ($jetons === null || !is_string($jetons['refresh_token'] ?? null)) {
-            googleAgendaPage(false, 'Google n’a pas confirmé l’accès. Recommencez depuis les Paramètres de TimeCool.');
+            googleAgendaPage(false, 'Google n’a pas confirmé l’accès. Recommencez depuis « Synchroniser avec Google Agenda », dans le menu de TimeCool.');
         }
 
         // L'adresse vient du jeton d'identité, reçu à l'instant de Google
@@ -3255,14 +3308,15 @@ switch ($route) {
         try {
             Db::req(
                 'INSERT INTO google_agenda
-                   (compte_id, email_google, jeton_renouvellement, jeton_acces, acces_expire_le)
-                 VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))
+                   (compte_id, email_google, jeton_renouvellement, jeton_acces, acces_expire_le, depuis)
+                 VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND), NOW())
                  ON DUPLICATE KEY UPDATE email_google = VALUES(email_google),
                    jeton_renouvellement = VALUES(jeton_renouvellement),
                    jeton_acces = VALUES(jeton_acces),
                    acces_expire_le = VALUES(acces_expire_le),
                    erreur = NULL,
-                   relie_le = NOW()',
+                   relie_le = NOW(),
+                   depuis = COALESCE(depuis, NOW())',
                 [
                     $compteId,
                     $email,
@@ -3278,7 +3332,7 @@ switch ($route) {
         googleAgendaRecopierPlusTard($compteId);
         googleAgendaPage(true, 'Votre Google Agenda'
             . ($email !== null ? ' (' . $email . ')' : '')
-            . ' est maintenant relié à TimeCool. Revenez dans l’application.');
+            . ' est maintenant synchronisé avec TimeCool. Revenez dans l’application.');
 
     case 'POST /google/agenda/reglages':
         $compte = Auth::compte();
@@ -3291,8 +3345,14 @@ switch ($route) {
                 $valeurs[] = $corps[$c] ? 1 : 0;
             }
         }
-        if ($champs === [] || googleAgendaLiaison((int) $compte['id']) === null) {
-            Rep::erreur(400, 'non_relie', 'Google Agenda n’est pas relié.');
+        $liaison = googleAgendaLiaison((int) $compte['id']);
+        if ($champs === [] || $liaison === null) {
+            Rep::erreur(400, 'non_relie', 'Google Agenda n’est pas synchronisé.');
+        }
+        // « Envoyer » remis en marche : la synchronisation repart d'ici ; ce qui s'est passé
+        // pendant la pause ne regarde pas Google Agenda.
+        if (!empty($corps['envoyer']) && (int) $liaison['envoyer'] !== 1) {
+            $champs[] = 'depuis = NOW()';
         }
         $valeurs[] = $compte['id'];
         Db::req('UPDATE google_agenda SET ' . implode(', ', $champs) . ' WHERE compte_id = ?', $valeurs);
@@ -3309,9 +3369,10 @@ switch ($route) {
             if (is_string($jeton) && $jeton !== '') {
                 googlePoster('https://oauth2.googleapis.com/revoke', ['token' => $jeton]);
             }
-            // Les rendez-vous déjà recopiés restent dans Google Agenda :
-            // délier arrête la recopie, n'efface rien chez Google.
-            Db::req('DELETE FROM google_agenda_liens WHERE compte_id = ?', [$compte['id']]);
+            // Les rendez-vous déjà recopiés restent dans Google Agenda : désynchroniser
+            // arrête la recopie, n'efface rien chez Google. Leurs liens sont GARDÉS : si l'on
+            // resynchronise, ils restent suivis (modifiés ou supprimés chez Google avec
+            // TimeCool) au lieu de rester orphelins — ou d'être recréés en double.
             Db::req('DELETE FROM google_agenda WHERE compte_id = ?', [$compte['id']]);
         }
         Rep::ok();

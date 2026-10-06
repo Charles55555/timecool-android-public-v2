@@ -1665,6 +1665,31 @@ if (window.pdfjsLib) {
 
 <!-- SETTINGS PAGE -->
 <!-- === PAGE MES DISPONIBILITES === -->
+<!-- === PAGE GOOGLE AGENDA (synchronisation) === -->
+<div class="page" id="page-google">
+  <div class="page-header" style="display:flex; align-items:flex-start; gap:10px;">
+    <button class="back-btn" onclick="tcRetour()" title="Retour" aria-label="Retour" style="margin-top:2px;">
+      <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    </button>
+    <div>
+      <div class="page-title">📅 Synchroniser avec Google Agenda</div>
+      <div class="page-subtitle">Tes rendez-vous TimeCool apparaissent aussi dans ton Google Agenda</div>
+    </div>
+  </div>
+  <div class="main"><div id="googleAgendaContent" style="padding:14px;">
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:14px; font-size:13.5px; line-height:1.6; color:var(--text);">
+      <div style="font-weight:600; margin-bottom:6px;">Comment ça marche</div>
+      <div>1. Tu as déjà un agenda Google ? <a href="#" onclick="navigate('importagenda'); return false;" style="color:var(--g-blue); font-weight:600;">Importe-le d’abord</a> : tes rendez-vous entrent dans TimeCool.</div>
+      <div>2. Tu synchronises : à partir de ce moment, chaque rendez-vous que tu crées ou modifies dans TimeCool, ou avec Charly, apparaît aussi dans ton Google Agenda.</div>
+      <div style="color:var(--text-sec); margin-top:6px;">Ce qui existait avant n’est pas renvoyé : pas de doublons. Tu peux garder Google Agenda aussi longtemps que tu veux.</div>
+    </div>
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+      <div style="padding:14px 16px; background:#e8f0fe; font-size:12px; font-weight:700; text-transform:uppercase; color:#1a73e8;">📅 Google Agenda</div>
+      <div id="tcGoogleAgendaZone"></div>
+    </div>
+  </div></div>
+</div>
+
 <!-- === PAGE IMPORT AGENDA === -->
 <div class="page" id="page-importagenda">
   <div class="page-header" style="display:flex; align-items:flex-start; gap:10px;">
@@ -3130,7 +3155,8 @@ Si on te compare à Google Agenda : "Google Agenda stocke tes RDV. Moi, je les c
 ═══ CAS 11 — FONCTIONNALITÉS NON DISPONIBLES ═══
 Ne dis JAMAIS "je ne peux pas". Redirige toujours positivement.
 Exemple : "Je ne peux pas encore appeler pour toi, mais je peux créer le RDV maintenant — tu veux ?"
-Exemple : "La synchro Google Calendar arrive bientôt ! En attendant, je gère ton agenda ici 😊"
+Exemple : "La synchro avec Outlook arrive bientôt ! En attendant, je gère ton agenda ici 😊"
+Google Agenda EXISTE déjà : menu ☰ → Synchroniser avec Google Agenda. Un seul sens (TimeCool vers Google), seulement ce qui est créé ou modifié après le départ de la synchronisation ; l'ancien agenda s'importe par fichier .ics (menu ☰ → Importer mon ancien agenda). Ne dis JAMAIS que la synchro Google arrive bientôt, et ne promets JAMAIS que tu lis Google Agenda.
 
 ═══ CAS 12 — IMPORT DE DOCUMENTS (PDF, invitation) ═══
 Si l'utilisateur mentionne un document, invite-le à utiliser le bouton + pour l'importer.
@@ -3633,6 +3659,7 @@ const menuItems = {
   user: [
     {id:'calendar', icon:'🗓️', label:'Mon agenda'},
     {id:'importagenda', icon:'📥', label:'Importer mon ancien agenda'},
+    {id:'google', icon:'📅', label:'Synchroniser avec Google Agenda'},
     {id:'assistant', icon:'⚡', label:'Charly IA'},
     {id:'contacts', icon:'👥', label:'Mes contacts'},
     {id:'pros', icon:'🌐', label:'Mes professionnels'},
@@ -3649,6 +3676,7 @@ const menuItems = {
   pro: [
     {id:'calendar', icon:'🗓️', label:'Mon agenda'},
     {id:'importagenda', icon:'📥', label:'Importer mon ancien agenda'},
+    {id:'google', icon:'📅', label:'Synchroniser avec Google Agenda'},
     {id:'assistant', icon:'⚡', label:'Charly IA'},
     {id:'contacts', icon:'👥', label:'Mes contacts'},
     {id:'pros', icon:'👥', label:'Mes clients'},
@@ -8307,11 +8335,6 @@ function renderSettingsInterne() {
 
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:#e8f0fe; font-size:12px; font-weight:700; text-transform:uppercase; color:#1a73e8;">📅 Google Agenda</div>
-      <div id="tcGoogleAgendaZone"></div>
-    </div>
-
-    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:#e8f5e9; font-size:12px; font-weight:700; text-transform:uppercase; color:#2e7d32;">💾 Sauvegarde & Restauration</div>
       <div onclick="exportTimeCoolData()" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
         <div>
@@ -8521,7 +8544,6 @@ function renderSettingsInterne() {
   // Les trois messages vivent hors du template ci-dessus : ils
   // dependent de l'onglet tutoiement/vouvoiement choisi.
   tcChoisirFormeMessages(_tcFormeAffichee);
-  tcGoogleAgendaAfficher();
 }
 
 // ═══ GROUP RDV (4 agendas en 1 clic) ═══
@@ -8751,6 +8773,7 @@ navigate = function(page) {
   else if (page==='dashboard') renderDashboard();
   else if (page==='premium') renderPremium();
   else if (page==='importagenda') renderImportAgenda();
+  else if (page==='google') tcGoogleAgendaAfficher();
   else if (page==='dispo') renderDispo();
   else if (page==='calendars') renderCalendarsPage();
   else if (page==='settings') renderSettings();
@@ -10364,12 +10387,16 @@ function validateAgendaProposalFromMsg(msg) {
     // doublon se voit et se supprime, un rendez-vous perdu non.
     let lieuHerite = null;
     let contactHerite = null;
+    // Importé d'un fichier : la marque suit le rendez-vous remplacé, sinon sa nouvelle
+    // version partirait chez Google alors que l'original y est déjà (doublon).
+    let importeHerite = false;
     if (isModification) {
       const evMode = mode === 'pro' ? 'pro' : 'user';
       const i = tcRdvRemplace(events, p.title, dateStr, evMode);
       if (i >= 0) {
         lieuHerite = events[i].lieu || null;
         contactHerite = events[i].contact || null;
+        importeHerite = !!events[i].importe || String(events[i].id).indexOf('ics_') === 0;
         events.splice(i, 1);
       }
     }
@@ -10391,6 +10418,7 @@ function validateAgendaProposalFromMsg(msg) {
       cat: tcCategorieDeProposition(p, catMap),
       mode: mode === 'pro' ? 'pro' : 'user',
       id: 'charly_ai_' + Date.now() + '_' + idx,
+      ...(importeHerite ? { importe: true } : {}),
       ...(lieuFinal ? { lieu: lieuFinal } : {}),
       // Sans personne designee, le rendez-vous se cree quand meme :
       // un contact manquant n'a jamais empeche un rendez-vous d'exister.
@@ -12426,8 +12454,13 @@ async function charlySendMessage() {
   const _unavailable = [
     { keys: ['téléphoner','telephoner','téléphone pour moi','téléphoner pour moi','appel pour moi','appelle pour moi','passer un appel','passe un appel','passer un coup de fil','coup de fil pour moi'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
-    { keys: ['google calendar','google agenda','synchronis','synchro','importer agenda','importer mes rdv','synchroniser'],
-      reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
+    // Avant Google : ce que TimeCool ne fait pas (encore), pour ne pas répondre « Oui ! » à côté.
+    { keys: ['apple calendar','agenda apple','calendrier apple','icloud','caldav','outlook'],
+      reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
+    { keys: ['lire mon google agenda','lis mon google agenda','lire google agenda','récupérer mon google agenda','recuperer mon google agenda','voir mon google agenda','importer google agenda','importer mon google agenda'],
+      reply: 'Pas encore : pour l’instant TimeCool envoie tes rendez-vous vers Google Agenda, il ne lit pas Google. Pour reprendre ton ancien agenda, importe-le : menu ☰ → Importer mon ancien agenda 😊' },
+    { keys: ['google calendar','google agenda','agenda google','calendrier google','calendrier de google','importer agenda','importer mes rdv'],
+      reply: 'Oui ! 😊 Ouvre le menu ☰ → Synchroniser avec Google Agenda → « Synchroniser mon agenda TimeCool avec mon agenda Google » : ce que tu crées ou modifies dans TimeCool apparaît aussi dans Google (un seul sens). Pour reprendre ton ancien agenda, importe-le d’abord : menu ☰ → Importer mon ancien agenda.' },
     { keys: ['envoyer email','envoyer un email','envoyer mail','envoyer un mail','email pour moi','mail pour moi','envoie un mail','envoie un email','tu peux envoyer','envoyer des emails','envoyer des mails','email','e-mail'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['payer','paiement','carte bleue','virement','régler','réglement'],
@@ -16921,7 +16954,7 @@ function renderHelp() {
     {q: '🌍 Dans quelles langues TimeCool est-il disponible ?', a: 'TimeCool est disponible en 17 langues européennes. Change de langue à tout moment dans Paramètres → Langue. La traduction est automatique, donc certaines formulations peuvent être imparfaites.'},
     {q: '🎂 Comment ajouter un anniversaire ?', a: 'Va dans Menu → Anniversaires → "+ Ajouter un anniversaire". Tu peux aussi demander à Charly IA : "Ajoute l\'anniversaire de Marie le 15 juin".'},
     {q: '🔧 Comment activer Charly IA ?', a: 'Il est déjà actif : Charly fonctionne dès ton inscription, sans réglage et sans clé à fournir. L\'intelligence artificielle est prise en charge par TimeCool. Si tu préfères utiliser ta propre clé, c\'est possible dans Menu → Configuration IA, mais ce n\'est pas nécessaire.'},
-    {q: '📅 TimeCool se synchronise-t-il avec Google Agenda ?', a: 'Oui. Va dans Paramètres → 📅 Google Agenda, puis « Relier mon Google Agenda ». Deux cases te laissent choisir : envoyer tes rendez-vous TimeCool vers Google, et laisser Charly lire ton Google Agenda. La seconde est décochée au départ.'},
+    {q: '📅 TimeCool se synchronise-t-il avec Google Agenda ?', a: 'Oui. Ouvre le menu ☰ → 📅 Synchroniser avec Google Agenda, puis « Synchroniser mon agenda TimeCool avec mon agenda Google ». À partir de ce moment, les rendez-vous que tu crées ou modifies dans TimeCool (ou avec Charly) apparaissent aussi dans ton Google Agenda. Pour reprendre ton ancien agenda, importe-le d’abord avec « Importer mon agenda existant » : ce qui existait avant la synchronisation n’est pas renvoyé dans Google, donc pas de doublons.'},
     {q: '🚗 TimeCool tient-il compte du temps de trajet ?', a: 'Oui. Quand deux rendez-vous se suivent à des adresses différentes, TimeCool estime la durée du trajet avec le trafic du moment, et te prévient si le temps manque entre les deux.'},
     {q: '🔔 Puis-je prévenir quelqu\'un d\'un retard ?', a: 'Ouvre le rendez-vous : trois boutons préparent le message à ta place — un retard, une annulation ou un décalage. Le texte s\'adapte au contact, en tutoiement ou en vouvoiement, et tu peux le modifier avant d\'envoyer.'},
     {q: '👥 Comment relier un rendez-vous à un contact ?', a: 'Dis simplement à Charly « rendez-vous avec Michel ». Il cherche dans tes contacts et, si plusieurs Michel existent, il te demande lequel. Tu peux aussi lui apprendre un surnom : dis-lui « mon ostéopathe » une fois, il s\'en souviendra.'},
@@ -18345,7 +18378,7 @@ async function tcGoogleAgendaAfficher() {
   const zone = document.getElementById('tcGoogleAgendaZone');
   if (!zone) return;
   if (!tcJeton()) {
-    zone.innerHTML = _tcGoogleAgendaLigne('Connectez-vous à votre compte TimeCool pour relier votre Google Agenda.');
+    zone.innerHTML = _tcGoogleAgendaLigne('Connectez-vous à votre compte TimeCool (menu → Mon profil) pour synchroniser votre Google Agenda.');
     return;
   }
   zone.innerHTML = _tcGoogleAgendaLigne('Vérification…');
@@ -18369,9 +18402,9 @@ async function tcGoogleAgendaAfficher() {
 
   if (!etat.relie) {
     zone.innerHTML =
-      _tcGoogleAgendaLigne('Reliez votre Google Agenda à TimeCool. Google vous demandera votre accord sur sa propre page.') +
+      _tcGoogleAgendaLigne('Synchronisez votre Google Agenda avec TimeCool. Google vous demandera votre accord sur sa propre page. À partir de là, les rendez-vous que vous créez ou modifiez dans TimeCool apparaissent aussi dans votre Google Agenda ; ce qui existait avant n’est pas envoyé.') +
       '<div style="padding:0 16px 16px;">' +
-        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Relier mon agenda TimeCool avec mon agenda Google</button>' +
+        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Synchroniser mon agenda TimeCool avec mon agenda Google</button>' +
       '</div>';
     return;
   }
@@ -18384,24 +18417,30 @@ async function tcGoogleAgendaAfficher() {
     zone.innerHTML =
       _tcGoogleAgendaLigne('⚠️ Google a retiré l’accès à ' + adresse + '. Vos rendez-vous ne sont plus recopiés.') +
       '<div style="padding:0 16px 16px;">' +
-        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Relier à nouveau</button>' +
+        '<button id="tcGoogleAgendaBouton" onclick="tcGoogleAgendaRelier()" style="width:100%; padding:12px; background:#1a73e8; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Synchroniser à nouveau</button>' +
       '</div>';
     return;
   }
 
   const envoyer = etat.envoyer === true;
+  // Départ de la synchronisation : ce qui s'est passé avant ne regarde pas Google Agenda.
+  let depuisTexte = '';
+  if (typeof etat.depuis === 'number' && etat.depuis > 0) {
+    const d = new Date(etat.depuis * 1000);
+    depuisTexte = ' depuis le ' + d.getDate() + ' ' + MONTHS[d.getMonth()].toLowerCase() + ' à ' + String(d.getHours()).padStart(2, '0') + 'h' + String(d.getMinutes()).padStart(2, '0');
+  }
   zone.innerHTML =
     '<div style="padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px;">' +
       '<div style="flex:1; min-width:0;">' +
-        '<div style="font-size:14px; font-weight:500;">✅ Relié</div>' +
+        '<div style="font-size:14px; font-weight:500;">✅ Synchronisé</div>' +
         '<div style="font-size:11px; color:var(--text-sec); margin-top:2px; overflow-wrap:anywhere;">' + adresse + '</div>' +
       '</div>' +
-      '<button id="tcGoogleAgendaDelier" onclick="tcGoogleAgendaDelier(this)" style="flex-shrink:0; padding:9px 14px; background:#fff; color:var(--g-red); border:1px solid #f5b8b3; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">Délier</button>' +
+      '<button id="tcGoogleAgendaDelier" onclick="tcGoogleAgendaDelier(this)" style="flex-shrink:0; padding:9px 14px; background:#fff; color:var(--g-red); border:1px solid #f5b8b3; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">Désynchroniser</button>' +
     '</div>' +
     '<div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px;">' +
       '<div style="flex:1;">' +
         '<div style="font-size:14px; font-weight:500;">Envoyer mes rendez-vous TimeCool vers Google Agenda</div>' +
-        '<div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Vos rendez-vous à venir y apparaissent quelques secondes après leur enregistrement.</div>' +
+        '<div style="font-size:11px; color:var(--text-sec); margin-top:2px;">' + (envoyer ? 'Les rendez-vous créés ou modifiés' + depuisTexte + ' y apparaissent quelques secondes après leur enregistrement.' + (depuisTexte ? ' Ce qui existait avant n’est pas envoyé.' : '') : 'Envoi en pause : vos rendez-vous ne partent pas vers Google Agenda. Remettez l’interrupteur pour reprendre à partir de maintenant.') + '</div>' +
       '</div>' +
       '<label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">' +
         '<input type="checkbox" id="tcGoogleAgendaEnvoyer" ' + (envoyer ? 'checked' : '') + ' onchange="tcGoogleAgendaReglerEnvoi(this); tcMajVisuelInterrupteur(this)" style="opacity:0; width:0; height:0;">' +
@@ -18416,7 +18455,9 @@ async function tcGoogleAgendaReglerEnvoi(caseEnvoyer) {
   const voulu = caseEnvoyer.checked;
   try {
     await tcAppel('POST', '/google/agenda/reglages', { envoyer: voulu });
-    showToast(voulu ? '✅ Vos rendez-vous partent vers Google Agenda' : 'Vos rendez-vous ne partent plus vers Google Agenda');
+    showToast(voulu ? '✅ À partir de maintenant, vos rendez-vous créés ou modifiés partent vers Google Agenda' : 'Envoi en pause : vos rendez-vous ne partent plus vers Google Agenda');
+    // Remis en marche, le serveur repose le départ : l'écran relit la date.
+    tcGoogleAgendaAfficher();
   } catch (e) {
     // Refusé : la case reprend l'état réel, plutôt que de mentir.
     caseEnvoyer.checked = !voulu;
@@ -18427,6 +18468,7 @@ async function tcGoogleAgendaReglerEnvoi(caseEnvoyer) {
 
 async function tcGoogleAgendaRelier() {
   const bouton = document.getElementById('tcGoogleAgendaBouton');
+  const libelle = bouton ? bouton.textContent : '';
   if (bouton) { bouton.disabled = true; bouton.textContent = 'Ouverture de Google…'; }
   try {
     const r = await tcAppel('POST', '/google/agenda/lien', {});
@@ -18439,7 +18481,7 @@ async function tcGoogleAgendaRelier() {
   } catch (e) {
     showToast('⚠️ ' + (e.message || 'Google Agenda indisponible'));
   } finally {
-    if (bouton) { bouton.disabled = false; bouton.textContent = 'Relier mon agenda TimeCool avec mon agenda Google'; }
+    if (bouton) { bouton.disabled = false; bouton.textContent = libelle; }
   }
 }
 
@@ -18449,10 +18491,11 @@ async function tcGoogleAgendaDelier(bouton) {
     bouton.dataset.confirme = '1';
     bouton.dataset.le = String(Date.now());
     bouton.textContent = 'Confirmer ?';
+    showToast('Les rendez-vous déjà copiés resteront dans votre Google Agenda');
     setTimeout(function () {
       if (bouton.isConnected && bouton.dataset.confirme === '1') {
         bouton.dataset.confirme = '';
-        bouton.textContent = 'Délier';
+        bouton.textContent = 'Désynchroniser';
       }
     }, 4000);
     return;
@@ -18463,9 +18506,9 @@ async function tcGoogleAgendaDelier(bouton) {
   bouton.disabled = true;
   try {
     await tcAppel('POST', '/google/agenda/deconnecter', {});
-    showToast('Google Agenda n’est plus relié');
+    showToast('Google Agenda n’est plus synchronisé');
   } catch (e) {
-    showToast('⚠️ ' + (e.message || 'Impossible de délier pour le moment'));
+    showToast('⚠️ ' + (e.message || 'Impossible d’arrêter la synchronisation pour le moment'));
   }
   tcGoogleAgendaAfficher();
 }
@@ -19941,7 +19984,9 @@ function tcCleReglage(k) {
 function tcSyncCanon(o) {
   if (o === null || typeof o !== 'object') return JSON.stringify(o);
   if (Array.isArray(o)) return '[' + o.map(tcSyncCanon).join(',') + ']';
-  return '{' + Object.keys(o).sort().map(function (k) {
+  // Une clé « undefined » (notes: undefined, recréée à chaque chargement) n'existe pas dans
+  // le JSON envoyé : l'ignorer, sinon tout l'agenda passe pour modifié à chaque redémarrage.
+  return '{' + Object.keys(o).filter(function (k) { return o[k] !== undefined; }).sort().map(function (k) {
     return JSON.stringify(k) + ':' + tcSyncCanon(o[k]);
   }).join(',') + '}';
 }
@@ -22069,6 +22114,7 @@ function importIcsData(event) {
           endH: hour + 1, endM: min,
           title: summary.replace(/\\n/g,' ').replace(/\\,/g,','),
           cat: 'blue', mode: 'user',
+          importe: true,
           id: 'ics_' + Date.now() + '_' + imported
         });
         imported++;
@@ -22893,7 +22939,8 @@ function processIcsImport(icsText, fileName, fileSize) {
       endH: hour + 1, endM: min,
       title: summary.replace(/\\n/g,' ').replace(/\\,/g,',').substring(0,80),
       cat: 'blue', mode: 'user',
-      id: 'ics_' + Date.now() + '_' + imported
+      importe: true,
+          id: 'ics_' + Date.now() + '_' + imported
     });
     imported++;
   });
@@ -22939,6 +22986,9 @@ function showImportSuccess(count, passes) {
          + ' comme historique.</span>';
   }
   html += '</div>';
+  // L'etape suivante du parcours d'un nouvel utilisateur : synchroniser, pour que ce qu'il
+  // cree desormais dans TimeCool apparaisse aussi dans son Google Agenda.
+  html += '<button onclick="navigate(\'google\')" style="width:100%;max-width:280px;padding:15px;background:#34a853;color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">\ud83d\udcc5 Synchroniser maintenant avec Google Agenda</button>';
   html += '<button onclick="navigate(\'calendar\')" style="width:100%;max-width:280px;padding:15px;background:#1a73e8;color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">Voir mon agenda</button>';
   html += '<button onclick="resetImport()" style="width:100%;max-width:280px;padding:12px;background:transparent;color:#5f6368;border:none;font-size:13px;cursor:pointer;">Importer un autre agenda</button>';
   html += '</div>';
