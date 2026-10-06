@@ -416,6 +416,15 @@ function compteParReference(string $reference): ?array
  */
 function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
 {
+    return categoriesPourPrendreRdv($titulaireId, $demandeur) !== [];
+}
+
+/**
+ * Les categories que le titulaire a cochees sur la fiche de ce demandeur
+ * (liste vide : pas de fiche, contact bloque, ou aucune categorie).
+ */
+function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
+{
     $tel = Empreinte::normaliserTelephone((string) $demandeur['telephone']);
     $email = Empreinte::normaliserEmail((string) $demandeur['email']);
 
@@ -437,11 +446,11 @@ function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
             continue;
         }
         if (!empty($c['blocked'])) {
-            return false;
+            return [];
         }
-        return is_array($c['categories'] ?? null) && $c['categories'] !== [];
+        return is_array($c['categories'] ?? null) ? array_values(array_filter($c['categories'], 'is_string')) : [];
     }
-    return false;   // aucune fiche : rien n'a été configuré pour ce demandeur
+    return [];   // aucune fiche : rien n'a ete configure pour ce demandeur
 }
 
 /**
@@ -543,16 +552,71 @@ function creneauRetenuEstLibre(int $titulaireId, string $debutSql, string $finSq
 }
 
 /**
+ * Les plages de disponibilite d un titulaire pour un jour (1 = lundi ...
+ * 7 = dimanche), en minutes, pour les categories donnees.
+ *
+ * $dispo : { categorie : [ { jours:[1..7], debut:"HH:MM", fin:"HH:MM" } ] }.
+ * Retourne null si le titulaire n a rien regle pour ces categories : l
+ * appelant applique alors les horaires par defaut, pour qu un compte neuf
+ * puisse recevoir des demandes des la premiere seconde.
+ */
+function dispoPlagesDuJour(array $dispo, array $categories, int $jourIso): ?array
+{
+    $regle = false;
+    $plages = [];
+    foreach ($categories as $cat) {
+        $liste = $dispo[$cat] ?? null;
+        if (!is_array($liste)) {
+            continue;
+        }
+        foreach ($liste as $p) {
+            if (!is_array($p) || !is_array($p['jours'] ?? null)
+                || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($p['debut'] ?? ''), $d)
+                || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($p['fin'] ?? ''), $f)) {
+                continue;
+            }
+            $regle = true;
+            if (!in_array($jourIso, array_map('intval', $p['jours']), true)) {
+                continue;
+            }
+            $debut = (int) $d[1] * 60 + (int) $d[2];
+            $fin = (int) $f[1] * 60 + (int) $f[2];
+            if ($fin > $debut) {
+                $plages[] = [$debut, $fin];
+            }
+        }
+    }
+    return $regle ? $plages : null;
+}
+
+/** Les disponibilites du titulaire, telles que son application les a synchronisees. */
+function dispoDuCompte(int $compteId): array
+{
+    $l = Db::un(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "reglage" AND uid = "timecool_disponibilites" AND supprime = 0',
+        [$compteId]
+    );
+    if (!$l) {
+        return [];
+    }
+    $c = json_decode((string) $l['contenu'], true);
+    $v = is_array($c) ? json_decode((string) ($c['v'] ?? ''), true) : null;
+    return is_array($v) ? $v : [];
+}
+
+/**
  * Créneaux libres dans l'agenda du titulaire — le SIEN, pas celui du
  * demandeur, ce qui était toute l'erreur de la version précédente.
  *
  * Un créneau d'une heure par jour, jours ouvrés, sur quinze jours.
  */
-function creneauxLibres(int $titulaireId, int $combien = 3): array
+function creneauxLibres(int $titulaireId, int $combien = 3, array $categories = []): array
 {
     $occupes = rdvOccupation($titulaireId);
+    $dispo = $categories === [] ? [] : dispoDuCompte($titulaireId);
 
-    $heures = [9, 10, 11, 14, 15, 16, 17];
+    $heuresParDefaut = [9, 10, 11, 14, 15, 16, 17];
     $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
     $mois = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
              'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -561,8 +625,21 @@ function creneauxLibres(int $titulaireId, int $combien = 3): array
     for ($j = 1; $j <= 15 && count($sortie) < $combien; $j++) {
         $t = strtotime("+$j day");
         $jsem = (int) date('w', $t);
-        if ($jsem === 0 || $jsem === 6) {
-            continue;   // week-end
+        $plages = dispoPlagesDuJour($dispo, $categories, $jsem === 0 ? 7 : $jsem);
+        if ($plages === null) {
+            // Rien de regle : jours ouvres, horaires par defaut.
+            if ($jsem === 0 || $jsem === 6) {
+                continue;
+            }
+            $heures = $heuresParDefaut;
+        } else {
+            $heures = [];
+            foreach ($plages as [$pd, $pf]) {
+                for ($m = (int) ceil($pd / 60) * 60; $m + 60 <= $pf; $m += 60) {
+                    $heures[$m / 60] = (int) ($m / 60);
+                }
+            }
+            sort($heures);
         }
         $date = date('Y-m-d', $t);
         foreach ($heures as $h) {
@@ -1963,7 +2040,8 @@ switch ($route) {
 
         $titre = Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom']);
         $autorise = autorisationPourPrendreRdv((int) $cible['id'], $moi);
-        $creneaux = $autorise ? creneauxLibres((int) $cible['id'], 3) : [];
+        $categoriesRdv = categoriesPourPrendreRdv((int) $cible['id'], $moi);
+        $creneaux = $autorise ? creneauxLibres((int) $cible['id'], 3, $categoriesRdv) : [];
 
         /*
          * Une seule demande en attente à la fois vers la même personne.
