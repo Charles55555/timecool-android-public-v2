@@ -4061,7 +4061,8 @@ let _tcMoisPanneauDate = null;
 
 /** Les jours (AAAA-MM-JJ) qui ont au moins un rendez-vous, dans le mode en cours. */
 function tcJoursAvecRdv() {
-  const jours = new Set();
+  // jour (AAAA-MM-JJ) → nombre de rendez-vous, dans le mode en cours.
+  const jours = new Map();
   (Array.isArray(events) ? events : []).forEach(function (e) {
     if (!e || e.mode !== mode || !e.date) return;
     const fin = tcEvenementFin(e);
@@ -4069,7 +4070,7 @@ function tcJoursAvecRdv() {
     for (let n = 0; n < 62 && !isNaN(d); n++) {
       const iso = tcISO(d);
       if (iso > fin) break;
-      jours.add(iso);
+      jours.set(iso, (jours.get(iso) || 0) + 1);
       d.setDate(d.getDate() + 1);
     }
   });
@@ -4082,7 +4083,7 @@ function tcJoursAvecRdv() {
  * rendez-vous ; puis la rangée des mois (4 avant, 7 après), l'année
  * rappelée quand elle change.
  */
-function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv) {
+function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv, choisiISO) {
   const an = moisDate.getFullYear(), mois = moisDate.getMonth();
   const premier = new Date(an, mois, 1);
   const dernier = new Date(an, mois + 1, 0);
@@ -4105,25 +4106,32 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv) {
       if (d.getMonth() !== mois) { html += '<div></div>'; continue; }
       const iso = tcISO(d);
       const auj = iso === aujourdhuiISO;
+      const choisi = !auj && iso === choisiISO;
+      // 1 à 3 points selon le nombre de rendez-vous, « + » au-delà (comme Google Agenda).
+      const nb = joursAvecRdv ? (joursAvecRdv.get ? (joursAvecRdv.get(iso) || 0) : (joursAvecRdv.has(iso) ? 1 : 0)) : 0;
+      const point = '<span style="display:inline-block; width:4px; height:4px; margin:0 1px; border-radius:50%; background:' + (auj ? 'var(--g-blue)' : 'var(--text-sec)') + ';"></span>';
+      let points = '';
+      for (let k = 0; k < Math.min(nb, 3); k++) points += point;
+      if (nb > 3) points += '<span style="font-size:9px; line-height:4px; vertical-align:top; color:var(--text-sec);">+</span>';
       html += '<div onclick="tcPanneauMoisAller(\'' + iso + '\')" data-jour="' + iso + '" style="cursor:pointer; padding:3px 0 2px;">'
         + '<div style="width:32px; height:32px; line-height:32px; margin:0 auto; border-radius:50%; font-size:14px;'
-        + (auj ? ' background:var(--g-blue); color:#fff; font-weight:600;' : '') + '">' + d.getDate() + '</div>'
-        + '<div style="height:6px; font-size:0;">' + (joursAvecRdv && joursAvecRdv.has(iso) ? '<span style="display:inline-block; width:5px; height:5px; border-radius:50%; background:' + (auj ? 'var(--g-blue)' : 'var(--text-sec)') + ';"></span>' : '') + '</div>'
+        + (auj ? ' background:var(--g-blue); color:#fff; font-weight:600;' : (choisi ? ' background:#e8f0fe; color:var(--g-blue); font-weight:600;' : '')) + '">' + d.getDate() + '</div>'
+        + '<div style="height:6px; font-size:0; white-space:nowrap;">' + points + '</div>'
         + '</div>';
     }
   }
   html += '</div>';
-  // La rangée des mois.
+  // La rangée des mois : cinq ans, deux avant et trois après.
   html += '<div id="tcMoisRangee" style="display:flex; gap:6px; overflow-x:auto; padding:8px 2px 2px; -webkit-overflow-scrolling:touch;">';
-  let anneeVue = new Date(an, mois - 4, 1).getFullYear();
-  for (let k = -4; k <= 7; k++) {
+  let anneeVue = new Date(an, mois - 24, 1).getFullYear();
+  for (let k = -24; k <= 36; k++) {
     const m = new Date(an, mois + k, 1);
     if (m.getFullYear() !== anneeVue) {
       anneeVue = m.getFullYear();
       html += '<div style="flex-shrink:0; align-self:center; font-size:13px; color:var(--text-sec); padding:0 4px;">' + anneeVue + '</div>';
     }
     const actif = k === 0;
-    html += '<button onclick="tcPanneauMoisChoisir(' + m.getFullYear() + ',' + m.getMonth() + ')" data-mois="' + m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '" style="flex-shrink:0; padding:7px 12px; border-radius:12px; border:1px solid ' + (actif ? 'var(--g-blue)' : 'var(--border)') + '; background:' + (actif ? 'var(--g-blue)' : '#f8f9fa') + '; color:' + (actif ? '#fff' : 'var(--text)') + '; font-size:13px; cursor:pointer;">' + TC_MOIS_COURTS[m.getMonth()] + '</button>';
+    html += '<button onclick="tcPanneauMoisChoisir(' + m.getFullYear() + ',' + m.getMonth() + ')" data-mois="' + m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '"' + (actif ? ' data-actif="1"' : '') + ' style="flex-shrink:0; padding:7px 12px; border-radius:12px; border:1px solid ' + (actif ? 'var(--g-blue)' : 'var(--border)') + '; background:' + (actif ? 'var(--g-blue)' : '#f8f9fa') + '; color:' + (actif ? '#fff' : 'var(--text)') + '; font-size:13px; cursor:pointer;">' + TC_MOIS_COURTS[m.getMonth()] + '</button>';
   }
   html += '</div>';
   return html;
@@ -4132,10 +4140,10 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv) {
 function tcDessinerPanneauMois() {
   const p = document.getElementById('tcMoisPanneau');
   if (!p || !_tcMoisPanneauDate) return;
-  p.innerHTML = tcPanneauMoisHTML(_tcMoisPanneauDate, tcISO(new Date()), tcJoursAvecRdv());
+  p.innerHTML = tcPanneauMoisHTML(_tcMoisPanneauDate, tcISO(new Date()), tcJoursAvecRdv(), tcISO(viewDate));
   // Le mois affiché au milieu de la rangée.
   setTimeout(function () {
-    const actif = p.querySelector('#tcMoisRangee button[style*="var(--g-blue)"]');
+    const actif = p.querySelector('#tcMoisRangee button[data-actif]');
     if (actif && actif.scrollIntoView) actif.scrollIntoView({ inline: 'center', block: 'nearest' });
   }, 0);
 }
@@ -4170,22 +4178,28 @@ function tcClicHorsPanneauMois(ev) {
 
 function tcPanneauMoisChanger(delta) {
   if (!_tcMoisPanneauDate) return;
-  _tcMoisPanneauDate = new Date(_tcMoisPanneauDate.getFullYear(), _tcMoisPanneauDate.getMonth() + delta, 1);
-  tcDessinerPanneauMois();
+  tcPanneauMoisChoisir(_tcMoisPanneauDate.getFullYear(), _tcMoisPanneauDate.getMonth() + delta);
 }
 
+/** Choisir un mois : la grille, mais aussi la vue du dessous et le titre (aujourd'hui si c'est ce mois-ci, sinon le 1er). */
 function tcPanneauMoisChoisir(an, mois) {
   _tcMoisPanneauDate = new Date(an, mois, 1);
+  const auj = new Date();
+  viewDate = (auj.getFullYear() === _tcMoisPanneauDate.getFullYear() && auj.getMonth() === _tcMoisPanneauDate.getMonth())
+    ? new Date(auj.getFullYear(), auj.getMonth(), auj.getDate())
+    : new Date(_tcMoisPanneauDate);
+  render();
   tcDessinerPanneauMois();
 }
 
 /** Toucher un jour : la vue en cours s'y rend, le panneau se referme. */
+/** Toucher un jour : la vue en cours s'y rend ; le panneau reste ouvert (le titre ou un clic à côté le referme). */
 function tcPanneauMoisAller(iso) {
   const p = String(iso || '').split('-').map(Number);
   if (p.length !== 3 || p.some(isNaN)) return;
   viewDate = new Date(p[0], p[1] - 1, p[2]);
-  tcFermerPanneauMois();
   render();
+  tcDessinerPanneauMois();
 }
 
 function render() {

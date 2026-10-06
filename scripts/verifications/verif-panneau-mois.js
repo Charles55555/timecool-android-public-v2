@@ -1,6 +1,7 @@
 // Le panneau du mois, comme Google Agenda : toucher « Octobre 2026 »
 // déplie la grille du mois (semaines, aujourd'hui, points), une rangée
-// de mois, et toucher un jour y emmène. Charles, 06/10.
+// de mois sur cinq ans ; choisir un mois ou un jour déplace la vue du
+// dessous, le panneau reste ouvert. Charles, 06/10 (vidéo).
 const fs = require('fs');
 const vm = require('vm');
 
@@ -55,55 +56,57 @@ vm.runInContext('let _tcMoisPanneauDate = null;', ctx);
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
+const cellule = (html, iso) => { const i = html.indexOf('data-jour="' + iso + '"'); const f = html.indexOf('data-jour=', i + 10); return html.slice(i, f < 0 ? html.indexOf('id="tcMoisRangee"') : f); };
+const nbPoints = (c) => (c.match(/width:4px; height:4px/g) || []).length;
 
 titre('La grille d octobre 2026');
-const html = vm.runInContext("tcPanneauMoisHTML(new Date(2026, 9, 1), '2026-10-06', new Set(['2026-10-01', '2026-10-03', '2026-10-20']))", ctx);
+const html = vm.runInContext("tcPanneauMoisHTML(new Date(2026, 9, 1), '2026-10-06', new Map([['2026-10-01', 1], ['2026-10-03', 2], ['2026-10-10', 3], ['2026-10-20', 7]]), '2026-10-20')", ctx);
 const semaines = (html.match(/background:#f1f3f4; border-radius:8px;">(\d+)</g) || []).map((x) => x.match(/>(\d+)</)[1]);
 verifie('titre « Octobre 2026 »', /Octobre 2026/.test(html));
 verifie('les semaines 40 à 44, comme Google', semaines.join(',') === '40,41,42,43,44', semaines.join(','));
 verifie('l en-tête L M M J V S D', /<div><\/div>(<div[^>]*>[LMJVSD]<\/div>){7}/.test(html));
 const jours = (html.match(/data-jour="(\d{4}-\d{2}-\d{2})"/g) || []).map((x) => x.slice(11, 21));
 verifie('31 jours, du 1er au 31, et rien avant le jeudi 1er', jours.length === 31 && jours[0] === '2026-10-01' && jours[30] === '2026-10-31' && /border-radius:8px;">40<\/div><div><\/div><div><\/div><div><\/div><div onclick="tcPanneauMoisAller\('2026-10-01'\)"/.test(html));
-const jour6 = html.slice(html.indexOf('data-jour="2026-10-06"'), html.indexOf('data-jour="2026-10-07"'));
-verifie('aujourd hui (le 6) est entouré en bleu', /background:var\(--g-blue\); color:#fff/.test(jour6));
-const jour3 = html.slice(html.indexOf('data-jour="2026-10-03"'), html.indexOf('data-jour="2026-10-04"'));
-const jour5 = html.slice(html.indexOf('data-jour="2026-10-05"'), html.indexOf('data-jour="2026-10-06"'));
-verifie('un point sous le 3 (rendez-vous), aucun sous le 5', /width:5px; height:5px/.test(jour3) && !/width:5px; height:5px/.test(jour5));
+verifie('aujourd hui (le 6) est entouré en bleu', /background:var\(--g-blue\); color:#fff/.test(cellule(html, '2026-10-06')));
+verifie('le jour choisi (le 20) est marqué en bleu clair', /background:#e8f0fe/.test(cellule(html, '2026-10-20')) && !/background:#e8f0fe/.test(cellule(html, '2026-10-21')));
+verifie('1 rendez-vous : 1 point ; 2 : 2 points ; 3 : 3 points', nbPoints(cellule(html, '2026-10-01')) === 1 && nbPoints(cellule(html, '2026-10-03')) === 2 && nbPoints(cellule(html, '2026-10-10')) === 3);
+verifie('7 rendez-vous : 3 points et « + » ; aucun : rien', nbPoints(cellule(html, '2026-10-20')) === 3 && />\+<\/span>/.test(cellule(html, '2026-10-20')) && nbPoints(cellule(html, '2026-10-05')) === 0 && !/>\+</.test(cellule(html, '2026-10-10')));
 verifie('toucher un jour appelle tcPanneauMoisAller avec sa date', /onclick="tcPanneauMoisAller\('2026-10-20'\)"/.test(html));
 
-titre('La rangée des mois');
+titre('La rangée des mois : cinq ans');
 const rangee = html.slice(html.indexOf('id="tcMoisRangee"'));
 const mois = (rangee.match(/data-mois="(\d{4}-\d{2})"/g) || []).map((x) => x.slice(11, 18));
-verifie('de juin 2026 à mai 2027 (4 avant, 7 après)', mois[0] === '2026-06' && mois[4] === '2026-10' && mois[mois.length - 1] === '2027-05' && mois.length === 12, mois.join(' '));
+verifie('d octobre 2024 à octobre 2029 (2 ans avant, 3 après)', mois[0] === '2024-10' && mois[mois.length - 1] === '2029-10' && mois.length === 61, mois[0] + ' … ' + mois[mois.length - 1] + ' (' + mois.length + ')');
 verifie('les noms courts : sept. oct. nov. déc.', /sept\.<\/button>/.test(rangee) && /oct\.<\/button>/.test(rangee) && /déc\.<\/button>/.test(rangee));
-verifie('oct. est en bleu, les autres non', (rangee.match(/background:var\(--g-blue\)/g) || []).length === 1 && /background:var\(--g-blue\); color:#fff; font-size:13px; cursor:pointer;">oct\./.test(rangee));
-verifie('« 2027 » rappelé entre déc. et janv.', /déc\.<\/button><div[^>]*>2027<\/div><button[^>]*>janv\./.test(rangee));
+verifie('oct. 2026 seul en bleu, marqué actif', (rangee.match(/data-actif="1"/g) || []).length === 1 && /data-mois="2026-10" data-actif="1"/.test(rangee));
+verifie('les années rappelées : 2025, 2026, 2027, 2028, 2029', ['2025', '2026', '2027', '2028', '2029'].every((a) => new RegExp('padding:0 4px;">' + a + '</div>').test(rangee)));
 verifie('toucher un mois le choisit', /onclick="tcPanneauMoisChoisir\(2027,0\)"/.test(rangee));
 
-titre('Les jours avec rendez-vous');
+titre('Les jours avec rendez-vous, comptés');
 ctx.events = [
-  { id: 'a', title: 'A', date: '2026-10-03', mode: 'user' },
+  { id: 'a', title: 'A', date: '2026-10-03', mode: 'user' }, { id: 'b', title: 'B', date: '2026-10-03', mode: 'user' },
   { id: 'v', title: 'Voyage', date: '2026-10-10', dateFin: '2026-10-12', mode: 'user' },
   { id: 'p', title: 'Pro', date: '2026-10-20', mode: 'pro' }
 ];
-const avec = vm.runInContext('Array.from(tcJoursAvecRdv()).sort().join(",")', ctx);
-verifie('le 3, et le voyage du 10 au 12 ; pas le rendez-vous pro', avec === '2026-10-03,2026-10-10,2026-10-11,2026-10-12', avec);
+const avec = vm.runInContext('Array.from(tcJoursAvecRdv().entries()).sort().map(([j, n]) => j + ":" + n).join(",")', ctx);
+verifie('le 3 (2 rendez-vous), le voyage du 10 au 12 ; pas le rendez-vous pro', avec === '2026-10-03:2,2026-10-10:1,2026-10-11:1,2026-10-12:1', avec);
 
-titre('Ouvrir, se déplacer, aller à un jour, fermer');
+titre('Ouvrir, choisir un mois, toucher un jour, fermer');
 ctx.tcBasculerPanneauMois();
 verifie('le panneau s ouvre sous l en-tête, sur le mois de la vue', panneau.style.display === 'block' && panneau.style.top === '120px' && /Octobre 2026/.test(panneau.innerHTML));
 verifie('un clic à côté le fermera', trace.ecoutes.indexOf('click') > -1);
 ctx.tcPanneauMoisChanger(1);
-verifie('mois suivant : Novembre 2026', /Novembre 2026/.test(panneau.innerHTML));
+verifie('mois suivant : la grille ET la vue vont au 1er novembre, le titre suit (render)', /Novembre 2026/.test(panneau.innerHTML) && ctx.viewDate.getMonth() === 10 && ctx.viewDate.getDate() === 1 && trace.rendus === 1);
 ctx.tcPanneauMoisChoisir(2027, 0);
-verifie('choisir janv. 2027 : la rangée va de sept. 2026 à août 2027, « 2027 » rappelé', /Janvier 2027/.test(panneau.innerHTML) && /2027<\/div>/.test(panneau.innerHTML) && /data-mois="2026-09"/.test(panneau.innerHTML) && /data-mois="2027-08"/.test(panneau.innerHTML));
-ctx.tcPanneauMoisAller('2027-01-15');
-verifie('toucher le 15 janvier : la vue y va, le panneau se ferme', ctx.viewDate.getFullYear() === 2027 && ctx.viewDate.getMonth() === 0 && ctx.viewDate.getDate() === 15 && trace.rendus === 1 && panneau.style.display === 'none' && trace.retires.indexOf('click') > -1);
+verifie('choisir janv. 2027 : la vue va au 1er janvier 2027, le panneau reste ouvert', /Janvier 2027/.test(panneau.innerHTML) && ctx.viewDate.getFullYear() === 2027 && ctx.viewDate.getMonth() === 0 && ctx.viewDate.getDate() === 1 && trace.rendus === 2 && panneau.style.display === 'block');
+ctx.tcPanneauMoisChoisir(2026, 9);
+verifie('revenir sur ce mois-ci : la vue va sur aujourd hui', ctx.viewDate.getFullYear() === 2026 && ctx.viewDate.getMonth() === 9 && ctx.viewDate.getDate() === 6);
+ctx.tcPanneauMoisAller('2026-10-15');
+verifie('toucher le 15 : la vue y va, le panneau reste ouvert et marque le 15', ctx.viewDate.getDate() === 15 && trace.rendus === 4 && panneau.style.display === 'block' && /background:#e8f0fe/.test(cellule(panneau.innerHTML, '2026-10-15')));
 ctx.tcBasculerPanneauMois();
-ctx.tcBasculerPanneauMois();
-verifie('toucher le titre deux fois ouvre puis ferme', panneau.style.display === 'none');
+verifie('toucher le titre referme', panneau.style.display === 'none' && trace.retires.indexOf('click') > -1);
 ctx.tcPanneauMoisAller('n importe quoi');
-verifie('une date illisible ne fait rien', trace.rendus === 1);
+verifie('une date illisible ne fait rien', trace.rendus === 4);
 
 titre('Branché');
 verifie('le titre « Octobre 2026 » se touche', /id="monthTitle" onclick="tcBasculerPanneauMois\(\)"/.test(page));
