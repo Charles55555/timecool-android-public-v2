@@ -1026,7 +1026,7 @@ if (window.pdfjsLib) {
   <div id="tcMoisPanneau" style="display:none; position:fixed; left:0; right:0; z-index:60; background:#fff; border-bottom:1px solid var(--border); box-shadow:0 8px 20px rgba(0,0,0,.12); padding:8px 10px 10px; overflow:auto;"></div>
   <div class="sub-header">
     <button class="nav-btn" onclick="prevPeriod()"><svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
-    <div class="month-title" id="monthTitle" onclick="tcBasculerPanneauMois()" style="cursor:pointer;" title="Choisir un jour"></div><span onclick="tcBasculerPanneauMois()" style="cursor:pointer; font-size:11px; color:var(--text-sec);">▾</span>
+    <div class="month-title" id="monthTitle" onclick="tcBasculerPanneauMois()" style="cursor:pointer;" title="Choisir un jour"></div><span onclick="tcBasculerPanneauMois()" style="cursor:pointer; font-size:14px; color:var(--text-sec); padding:0 4px;">▾</span>
     <button class="nav-btn" onclick="nextPeriod()"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
     <div style="flex:1;"></div>
     <button class="today-btn" onclick="goToToday()">Auj.</button>
@@ -4159,13 +4159,14 @@ function tcBasculerPanneauMois() {
   p.style.top = bas + 'px';
   p.style.maxHeight = 'calc(100vh - ' + bas + 'px)';
   p.style.display = 'block';
-  setTimeout(function () { document.addEventListener('click', tcClicHorsPanneauMois); }, 0);
+  // Phase de capture : évalué AVANT le bouton touché, qui sera peut-être redessiné (un mois choisi).
+  setTimeout(function () { document.addEventListener('click', tcClicHorsPanneauMois, true); }, 0);
 }
 
 function tcFermerPanneauMois() {
   const p = document.getElementById('tcMoisPanneau');
   if (p) p.style.display = 'none';
-  document.removeEventListener('click', tcClicHorsPanneauMois);
+  document.removeEventListener('click', tcClicHorsPanneauMois, true);
 }
 
 /** Toucher à côté referme le panneau (le titre, lui, le bascule). */

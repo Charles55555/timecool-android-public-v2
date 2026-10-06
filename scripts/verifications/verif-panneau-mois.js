@@ -110,6 +110,7 @@ verifie('une date illisible ne fait rien', trace.rendus === 4);
 
 titre('Branché');
 verifie('le titre « Octobre 2026 » se touche', /id="monthTitle" onclick="tcBasculerPanneauMois\(\)"/.test(page));
+verifie('le clic à côté est écouté en phase de capture, avant le bouton touché (sinon un mois choisi refermait le panneau — vidéo du 06/10)', (extraire('tcBasculerPanneauMois') || '').indexOf("addEventListener('click', tcClicHorsPanneauMois, true)") > -1 && (extraire('tcFermerPanneauMois') || '').indexOf("removeEventListener('click', tcClicHorsPanneauMois, true)") > -1);
 verifie('le panneau existe dans la page calendrier, caché au départ', /<div id="tcMoisPanneau" style="display:none; position:fixed;/.test(page));
 
 console.log('');
