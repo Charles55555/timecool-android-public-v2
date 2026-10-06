@@ -2564,7 +2564,9 @@ switch ($route) {
                 // recevait une erreur 500 au lieu d'une réponse claire.
                 $tDebut = strtotime($debut);
                 $tFin = strtotime($fin);
-                if ($tDebut === false || $tFin === false || $tFin <= $tDebut) {
+                $motif = '/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/';
+                if (!preg_match($motif, $debut) || !preg_match($motif, $fin)
+                    || $tDebut === false || $tFin === false || $tFin <= $tDebut) {
                     throw new RuntimeException('creneau_desordre');
                 }
                 Db::req(
