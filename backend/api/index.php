@@ -445,6 +445,104 @@ function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
 }
 
 /**
+ * Un texte venu d'une personne, destiné à être affiché dans l'agenda ou la
+ * messagerie d'une autre : sans balise. (Campagne de tests du 07/10 : un
+ * prénom « <img onerror=…> » arrivait tel quel et s'exécutait.)
+ */
+function texteSur(string $t): string
+{
+    return trim(preg_replace('/[<>"\x00-\x1F]+/u', '', $t) ?? '');
+}
+
+/**
+ * Les plages qu'occupe un rendez-vous, jour par jour, en minutes :
+ * [ 'AAAA-MM-JJ' => [[début, fin], …] ]. Une journée entière occupe tout
+ * le jour ; un rendez-vous sur plusieurs jours occupe la fin du premier,
+ * tout l'intermédiaire, le début du dernier.
+ */
+function rdvPlagesParJour(array $e): array
+{
+    $motif = '/^\d{4}-\d{2}-\d{2}$/';
+    $debut = $e['date'] ?? null;
+    if (!is_string($debut) || !preg_match($motif, $debut)) {
+        return [];
+    }
+    $fin = $e['dateFin'] ?? null;
+    if (!is_string($fin) || !preg_match($motif, $fin) || $fin < $debut) {
+        $fin = $debut;
+    }
+    $de = (int) ($e['startH'] ?? 0) * 60 + (int) ($e['startM'] ?? 0);
+    $a = (int) ($e['endH'] ?? 0) * 60 + (int) ($e['endM'] ?? 0);
+    $entier = !empty($e['allDay']);
+    $sortie = [];
+    $t = strtotime($debut . ' 12:00:00');   // midi : le changement d'heure ne fait pas sauter un jour
+    for ($n = 0; $n < 400; $n++, $t = strtotime('+1 day', $t)) {
+        $jour = date('Y-m-d', $t);
+        if ($jour > $fin) {
+            break;
+        }
+        if ($entier) {
+            $sortie[$jour][] = [0, 1440];
+        } elseif ($debut === $fin) {
+            $sortie[$jour][] = [$de, $a];
+        } elseif ($jour === $debut) {
+            $sortie[$jour][] = [$de, 1440];
+        } elseif ($jour === $fin) {
+            $sortie[$jour][] = [0, $a];
+        } else {
+            $sortie[$jour][] = [0, 1440];
+        }
+    }
+    return $sortie;
+}
+
+/** Ce qu'occupe un compte, jour par jour (ses rendez-vous non supprimés). */
+function rdvOccupation(int $compteId): array
+{
+    $occupes = [];
+    foreach (Db::tous(
+        'SELECT contenu FROM elements WHERE compte_id = ? AND type = "rdv" AND supprime = 0',
+        [$compteId]
+    ) as $l) {
+        $e = json_decode((string) $l['contenu'], true);
+        if (!is_array($e)) {
+            continue;
+        }
+        foreach (rdvPlagesParJour($e) as $jour => $plages) {
+            foreach ($plages as $p) {
+                $occupes[$jour][] = $p;
+            }
+        }
+    }
+    return $occupes;
+}
+
+/** Ce créneau [début, fin[ (minutes) est-il libre ce jour-là ? Bord à bord : libre. */
+function creneauEstLibre(array $occupes, string $jour, int $debut, int $fin): bool
+{
+    foreach ($occupes[$jour] ?? [] as $o) {
+        if ($debut < $o[1] && $fin > $o[0]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Le créneau choisi est-il encore libre dans l'agenda du titulaire ? À appeler
+ * DANS une transaction, après avoir verrouillé son compte : deux choix
+ * simultanés se suivent alors, et le second voit le premier.
+ */
+function creneauRetenuEstLibre(int $titulaireId, string $debutSql, string $finSql): bool
+{
+    $d = strtotime($debutSql);
+    $f = strtotime($finSql);
+    $jour = date('Y-m-d', $d);
+    $min = static fn(int $t): int => (int) date('G', $t) * 60 + (int) date('i', $t);
+    return creneauEstLibre(rdvOccupation($titulaireId), $jour, $min($d), $min($f));
+}
+
+/**
  * Créneaux libres dans l'agenda du titulaire — le SIEN, pas celui du
  * demandeur, ce qui était toute l'erreur de la version précédente.
  *
@@ -452,22 +550,7 @@ function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
  */
 function creneauxLibres(int $titulaireId, int $combien = 3): array
 {
-    $occupes = [];
-    $lignes = Db::tous(
-        'SELECT contenu FROM elements
-          WHERE compte_id = ? AND type = "rdv" AND supprime = 0',
-        [$titulaireId]
-    );
-    foreach ($lignes as $l) {
-        $e = json_decode((string) $l['contenu'], true);
-        if (!is_array($e) || !isset($e['date'])) {
-            continue;
-        }
-        $occupes[$e['date']][] = [
-            (int) ($e['startH'] ?? 0) * 60 + (int) ($e['startM'] ?? 0),
-            (int) ($e['endH'] ?? 0) * 60 + (int) ($e['endM'] ?? 0),
-        ];
-    }
+    $occupes = rdvOccupation($titulaireId);
 
     $heures = [9, 10, 11, 14, 15, 16, 17];
     $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -485,14 +568,7 @@ function creneauxLibres(int $titulaireId, int $combien = 3): array
         foreach ($heures as $h) {
             $debut = $h * 60;
             $fin = $debut + 60;
-            $libre = true;
-            foreach ($occupes[$date] ?? [] as $o) {
-                if ($debut < $o[1] && $fin > $o[0]) {
-                    $libre = false;
-                    break;
-                }
-            }
-            if (!$libre) {
+            if (!creneauEstLibre($occupes, $date, $debut, $fin)) {
                 continue;
             }
             $sortie[] = [
@@ -1635,8 +1711,8 @@ switch ($route) {
             'telephone'           => $telephone,
             'telephone_empreinte' => Empreinte::stockable($telephone),
             'mot_de_passe_hash'   => password_hash($motDePasse, algoMotDePasse()),
-            'prenom'              => Entree::requis('prenom', 100),
-            'nom'                 => Entree::requis('nom', 100),
+            'prenom'              => texteSur(Entree::requis('prenom', 100)),
+            'nom'                 => texteSur((string) Entree::requis('nom', 100)),
             'ville'               => Entree::requis('ville', 120),
             'code_postal'         => Entree::requis('code_postal', 16),
             'pays'                => Entree::texte('pays', 2) ?? 'FR',
@@ -1989,6 +2065,33 @@ switch ($route) {
             Rep::erreur(410, 'compte_absent', 'Le compte destinataire n existe plus.');
         }
 
+        /*
+         * Un seul choix passe, et seulement si le créneau est encore libre.
+         * (Campagne de tests du 07/10 : deux demandeurs obtenaient le même
+         * créneau, un créneau rempli entre-temps par le titulaire se
+         * réservait quand même, deux choix simultanés répondaient 200 tous
+         * les deux.) Tout se joue dans une transaction : à la moindre
+         * raison de refuser, la demande reste « en attente ».
+         */
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            $pris = Db::req(
+                'UPDATE rdv SET statut = "choisi", repondu_le = NOW()
+                  WHERE id = ? AND organisateur_id = ? AND statut = "attente"',
+                [$rdvId, $moi['id']]
+            );
+            if ($pris->rowCount() === 0) {
+                $pdo->rollBack();
+                Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+            }
+            // L'agenda du titulaire est verrouillé le temps de la vérification et de l'écriture.
+            Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$cible['id']]);
+            if (!creneauRetenuEstLibre((int) $cible['id'], (string) $creneau['debut'], (string) $creneau['fin'])) {
+                $pdo->rollBack();
+                Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris. Redemande un rendez-vous pour voir les créneaux libres.');
+            }
+
         $debut = strtotime($creneau['debut']);
         $fin = strtotime($creneau['fin']);
         $entree = static function (string $titre) use ($debut, $fin, $rdvId): array {
@@ -2003,23 +2106,29 @@ switch ($route) {
             ];
         };
 
-        Db::req('UPDATE rdv_creneaux SET retenu = 1 WHERE id = ?', [$creneau['id']]);
-        Db::req('UPDATE rdv SET statut = "choisi", repondu_le = NOW() WHERE id = ?', [$rdvId]);
+            Db::req('UPDATE rdv_creneaux SET retenu = 1 WHERE id = ?', [$creneau['id']]);
 
-        // Chacun voit le nom de l'autre dans son agenda.
-        elementsPoser([
-            ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-             'contenu' => $entree(trim($cible['prenom'] . ' ' . $cible['nom']))],
-            ['compte_id' => (int) $cible['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-             'contenu' => $entree(trim($moi['prenom'] . ' ' . $moi['nom']))],
-        ]);
+            // Chacun voit le nom de l'autre dans son agenda (sans balise : texteSur).
+            elementsPoser([
+                ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
+                 'contenu' => $entree(texteSur($cible['prenom'] . ' ' . $cible['nom']))],
+                ['compte_id' => (int) $cible['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
+                 'contenu' => $entree(texteSur($moi['prenom'] . ' ' . $moi['nom']))],
+            ]);
 
-        messagePoser(
-            $moi, $cible,
-            'Rendez-vous confirmé : ' . $creneau['libelle'] . ' à '
-                . date('H\\hi', $debut) . '.',
-            $rdvId
-        );
+            messagePoser(
+                $moi, $cible,
+                'Rendez-vous confirmé : ' . $creneau['libelle'] . ' à '
+                    . date('H\\hi', $debut) . '.',
+                $rdvId
+            );
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
 
         Rep::ok([
             'date'   => date('Y-m-d', $debut),
@@ -2685,7 +2794,7 @@ switch ($route) {
                 'SELECT * FROM comptes WHERE id = ?',
                 [$rdvBase['organisateur_id']]
             );
-            $qui = trim((string) ($lien['prenom_destinataire'] ?? '')) ?: 'Ton contact';
+            $qui = texteSur((string) ($lien['prenom_destinataire'] ?? '')) ?: 'Ton contact';
             $filUid = 'lien_rdv_' . $lien['rdv_id'];
 
             if ($rang === -1) {
@@ -2700,6 +2809,20 @@ switch ($route) {
                     );
                 }
             } else {
+                // Le créneau est-il encore libre chez l'organisateur ? Son compte est verrouillé le
+                // temps de la vérification : deux liens sur le même créneau se suivent, et le second
+                // voit le premier. Sinon 409, le lien n'est pas consommé (rollback).
+                $creneauRetenu = Db::un(
+                    'SELECT * FROM rdv_creneaux WHERE rdv_id = ? AND rang = ?',
+                    [$lien['rdv_id'], $rang]
+                );
+                if ($organisateur !== null && $creneauRetenu !== null) {
+                    Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$organisateur['id']]);
+                    if (!creneauRetenuEstLibre((int) $organisateur['id'], (string) $creneauRetenu['debut'], (string) $creneauRetenu['fin'])) {
+                        $pdo->rollBack();
+                        Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris. Choisis-en un autre.');
+                    }
+                }
                 Db::req(
                     'UPDATE rdv SET statut = "choisi", repondu_le = NOW() WHERE id = ?',
                     [$lien['rdv_id']]

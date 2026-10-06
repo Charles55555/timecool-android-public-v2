@@ -73,12 +73,13 @@ const TC_BACKEND = {
         // « 2026-09-01 14:00:00 » — découpé sans passer par Date(),
         // pour que l'heure affichée soit celle proposée et non une
         // conversion vers le fuseau du destinataire.
-        const p = String(c.debut).split(/[ T:]/);
+        // (« 2026-09-01 14:30:00 » : année, mois, jour, heure, minutes — les secondes ne servent pas)
+        const q = String(c.debut).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/) || [];
         return {
           rang: c.rang,
-          label: c.libelle || (p[2] + '/' + p[1] + '/' + p[0]),
-          h: parseInt(p[3], 10) || 0,
-          m: parseInt(p[4], 10) || 0
+          label: c.libelle || (q[3] + '/' + q[2] + '/' + q[1]),
+          h: parseInt(q[4], 10) || 0,
+          m: parseInt(q[5], 10) || 0
         };
       })
     };
@@ -94,7 +95,7 @@ const TC_BACKEND = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jeton: token, rang: rang })
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) { const err = new Error('HTTP ' + r.status); err.status = r.status; throw err; }
     return true;
   }
 };
@@ -123,12 +124,13 @@ function getRangDemande() {
   return (v >= 1 && v <= 3) ? v : null;
 }
 
-function renderSlots(data) {
+function renderSlots(data, avertissement) {
   const el = document.getElementById('content');
   const rangVoulu = getRangDemande();
   const vise = data.slots.findIndex(function (s) { return s.rang === rangVoulu; });
 
-  let html = '<div class="lead"><b>' + escapeHTML(data.organizerName) + '</b> te propose un rendez-vous. '
+  let html = (avertissement ? '<div class="lead" style="color:#b3261e;">' + escapeHTML(avertissement) + '</div>' : '')
+    + '<div class="lead"><b>' + escapeHTML(data.organizerName) + '</b> te propose un rendez-vous. '
     + (vise >= 0
         ? 'Confirme le créneau que tu as choisi, ou prends-en un autre :'
         : 'Choisis le créneau qui te convient :')
@@ -190,9 +192,19 @@ async function chooseSlot(idx) {
     if (idx === -1) {
       renderState('👍', '<span class="success">C\'est noté !</span><br>La personne qui t\'a contacté(e) va te proposer d\'autres créneaux.');
     } else {
-      renderState('✅', '<span class="success">Rendez-vous confirmé !</span><br>' + escapeHTML(s.label) + ', tu es prévenu(e).');
+      renderState('✅', '<span class="success">Rendez-vous confirmé !</span><br>' + escapeHTML(s.label) + ' à ' + ('0' + s.h).slice(-2) + 'h' + ('0' + s.m).slice(-2) + ', tu es prévenu(e).');
     }
   } catch(e) {
+    if (e && e.status === 409 && idx >= 0) {
+      // Ce créneau vient d'être pris : le lien n'est pas consommé, on propose les autres.
+      _currentData.slots.splice(idx, 1);
+      if (_currentData.slots.length > 0) {
+        renderSlots(_currentData, 'Ce créneau vient d’être pris. Choisis-en un autre :');
+      } else {
+        renderState('😕', 'Les créneaux proposés viennent d’être pris.<br>La personne qui t’a contacté(e) va t’en proposer d’autres.');
+      }
+      return;
+    }
     renderState('⏰', 'Ce lien a expiré ou a déjà été utilisé.');
   }
 }

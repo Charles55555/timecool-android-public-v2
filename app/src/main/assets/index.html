@@ -4583,7 +4583,7 @@ function renderWeek() {
         evt.style.height = `${Math.max(dm*(44/60)-2, 42)}px`;
         evt.style.left = `${50 + di*colWidth + 1}px`;
         evt.style.width = `${colWidth - 2}px`;
-        evt.innerHTML = `<div class="week-event-title">${e.title}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
+        evt.innerHTML = `<div class="week-event-title">${escapeHTMLSafe(e.title)}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         evt.onclick = () => openEventModal(e);
         body.appendChild(evt);
       });
@@ -4683,7 +4683,7 @@ function renderDay() {
     tcAppliquerCouleurEvenement(evt, e.cat);
     evt.style.top = `${sm*(48/60)+8}px`;
     evt.style.height = `${Math.max(dm*(48/60)-6, 42)}px`;
-    evt.innerHTML = `<div class="day-event-title">${e.title}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}</div>`;
+    evt.innerHTML = `<div class="day-event-title">${escapeHTMLSafe(e.title)}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}</div>`;
     evt.onclick = () => openEventModal(e);
     body.appendChild(evt);
   });
@@ -9591,7 +9591,7 @@ function renderDemarches() {
       <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:10px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px;">
           <div style="flex:1;">
-            <div style="font-size:14px; font-weight:600; color:var(--text);">${d.icon || '📋'} ${d.title}</div>
+            <div style="font-size:14px; font-weight:600; color:var(--text);">${d.icon || '📋'} ${escapeHTMLSafe(d.title)}</div>
             <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">${dateStr}</div>
           </div>
           <span style="display:inline-block; padding:4px 10px; background:${color}22; color:${color}; border-radius:12px; font-size:10px; font-weight:600; white-space:nowrap;">${label}</span>
@@ -9860,7 +9860,7 @@ function renderChatMessage(m) {
                   ${items.map(p => `
                     <div style="padding:6px 0; display:flex; gap:10px; align-items:flex-start;">
                       <span style="font-size:12px; font-weight:600; color:var(--g-blue); min-width:90px;">${p.start}-${p.end}</span>
-                      <span style="flex:1; font-size:13px; color:var(--text);">${p.title}${
+                      <span style="flex:1; font-size:13px; color:var(--text);">${escapeHTMLSafe(p.title)}${
                         // Le lieu etait transmis et enregistre, mais jamais
                         // montre : on validait sans pouvoir relire l'adresse.
                         p.lieu ? `<div style="font-size:11.5px; color:var(--text-sec); margin-top:2px;">📍 ${escapeHTMLSafe(p.lieu)}</div>` : ''
@@ -16034,7 +16034,7 @@ function showConflictWarning(conflicts, msg) {
     const dateStr = new Date(y, mo-1, d).toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
     const evStart = String(c.existingEvent.startH).padStart(2,'0') + 'h' + String(c.existingEvent.startM).padStart(2,'0');
     const evEnd = String(c.existingEvent.endH).padStart(2,'0') + 'h' + String(c.existingEvent.endM).padStart(2,'0');
-    return `• <b>${c.newProposal.title}</b> (${c.newProposal.start}-${c.newProposal.end}) le <b>${dateStr}</b><br>&nbsp;&nbsp;⚠️ Conflit avec <b>${c.existingEvent.title}</b> (${evStart}-${evEnd})`;
+    return `• <b>${escapeHTMLSafe(c.newProposal.title)}</b> (${c.newProposal.start}-${c.newProposal.end}) le <b>${dateStr}</b><br>&nbsp;&nbsp;⚠️ Conflit avec <b>${escapeHTMLSafe(c.existingEvent.title)}</b> (${evStart}-${evEnd})`;
   }).join('<br><br>');
 
   const html = `⚠️ <b>${conflicts.length} conflit${conflicts.length>1?'s':''} détecté${conflicts.length>1?'s':''}</b><br><br>${conflictDescs}<br><br>Que veux-tu faire ?`;
@@ -20044,6 +20044,26 @@ function tcSyncPoserEmpreintes(e) {
  * vient de recevoir serait considéré comme une modification locale et
  * renvoyé au serveur au tour suivant.
  */
+/**
+ * Un élément reçu du serveur peut avoir été posé par UN AUTRE compte (rendez-vous créé
+ * par une prise de rendez-vous, conversation, contact) : ses textes affichés ne portent
+ * jamais de balise. (Campagne de tests du 07/10 : un prénom « <img onerror=…> » arrivait
+ * dans l'agenda d'un autre utilisateur et s'y exécutait.) Défense en profondeur : les
+ * endroits qui affichent échappent aussi.
+ */
+function tcAssainirRecu(type, contenu) {
+  if (!contenu || typeof contenu !== 'object' || Array.isArray(contenu)) return contenu;
+  const champs = type === 'rdv' ? ['title', 'lieu', 'notes'] : (type === 'conversation' ? ['with'] : (type === 'contact' ? ['name'] : []));
+  let copie = null;
+  champs.forEach(function (c) {
+    if (typeof contenu[c] === 'string' && /[<>]/.test(contenu[c])) {
+      copie = copie || Object.assign({}, contenu);
+      copie[c] = contenu[c].replace(/[<>]/g, '');
+    }
+  });
+  return copie || contenu;
+}
+
 async function tcSyncAppliquer(elements) {
   const parType = {};
   elements.forEach(function (e) {
@@ -20070,10 +20090,11 @@ async function tcSyncAppliquer(elements) {
         if (i !== undefined) { liste[i] = null; touche = true; }
         delete empreintes[cle];
       } else if (e.contenu) {
-        if (i !== undefined) liste[i] = e.contenu; else liste.push(e.contenu);
+        const contenuSur = tcAssainirRecu(type, e.contenu);
+        if (i !== undefined) liste[i] = contenuSur; else liste.push(contenuSur);
         // Pas d'empreinte pour un objet en lecture seule : elle servirait
         // uniquement à détecter une modification locale, qui n'existe pas.
-        if (!t.lectureSeule) empreintes[cle] = tcSyncEmpreinte(e.contenu);
+        if (!t.lectureSeule) empreintes[cle] = tcSyncEmpreinte(contenuSur);
         touche = true;
       }
       recus++;
@@ -23058,7 +23079,7 @@ function showReminderNotification(ev, minutesBefore) {
   notif.innerHTML = `
     <span style="font-size:24px;">⏰</span>
     <div style="flex:1;">
-      <div style="font-size:13px; font-weight:700; margin-bottom:2px;">${ev.title}</div>
+      <div style="font-size:13px; font-weight:700; margin-bottom:2px;">${escapeHTMLSafe(ev.title)}</div>
       <div style="font-size:12px; opacity:0.9;">${label} — ${timeStr}</div>
     </div>
     <button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,0.2); border:none; color:white; border-radius:8px; padding:4px 10px; cursor:pointer; font-size:12px;">✕</button>
