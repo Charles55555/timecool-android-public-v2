@@ -67,6 +67,21 @@ body { display:flex; flex-direction:column; }
 .month-title { font-size:19px; font-weight:400; color:var(--text); }
 .nav-btn { width:34px; height:34px; border:none; background:transparent; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .nav-btn svg { width:18px; height:18px; fill:var(--text-sec); }
+.mois-ouvert #weekNumberBadge, .mois-ouvert #timezoneBadge { display:none !important; }
+/* En-tête du mois : « Octobre 2026 ▾ » tient sur une ligne, les flèches gardent leur taille (le triangle prend de la place) */
+#page-calendar .sub-header { gap:4px; padding-left:10px; padding-right:10px; }
+.sub-header .nav-btn { flex-shrink:0; }
+.month-title { font-size:17px; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.today-btn { padding:6px 10px; }
+@media (max-width:340px) { #page-calendar .sub-header { padding-left:8px; padding-right:8px; } }
+/* Paysage ou fenêtre très basse : le panneau passe à gauche, l'agenda à droite (sinon il ne resterait que 1 ou 2 heures) */
+@media (max-height:500px) and (min-width:560px) {
+  #page-calendar.active.mois-ouvert { display:grid; grid-template-columns:minmax(300px,46%) 1fr; grid-template-rows:auto auto minmax(0,1fr); }
+  #page-calendar.active.mois-ouvert > .sub-header { grid-column:1 / -1; grid-row:1; }
+  #page-calendar.active.mois-ouvert > #tcMoisPanneau { grid-column:1; grid-row:2 / 4; max-height:none !important; border-bottom:none !important; border-right:1px solid var(--border); }
+  #page-calendar.active.mois-ouvert > .view-tabs { grid-column:2; grid-row:2; }
+  #page-calendar.active.mois-ouvert > .main { grid-column:2; grid-row:3; min-height:0; }
+}
 .today-btn { padding:6px 14px; border:1px solid var(--border); background:#fff; border-radius:18px; font-size:13px; font-weight:500; color:var(--text-sec); cursor:pointer; }
 
 .view-tabs { display:flex; padding:0 8px; border-bottom:1px solid var(--border); background:#fff; }
@@ -1023,7 +1038,6 @@ if (window.pdfjsLib) {
 
 <!-- CALENDAR -->
 <div class="page active" id="page-calendar">
-  <div id="tcMoisPanneau" style="display:none; position:fixed; left:0; right:0; z-index:60; background:#fff; border-bottom:1px solid var(--border); box-shadow:0 8px 20px rgba(0,0,0,.12); padding:8px 10px 10px; overflow:auto;"></div>
   <div class="sub-header">
     <button class="nav-btn" onclick="prevPeriod()"><svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
     <div class="month-title" id="monthTitle" onclick="tcBasculerPanneauMois()" style="cursor:pointer;" title="Choisir un jour"></div><span onclick="tcBasculerPanneauMois()" style="cursor:pointer; font-size:14px; color:var(--text-sec); padding:0 4px;">▾</span>
@@ -1036,6 +1050,7 @@ if (window.pdfjsLib) {
       <div class="msg-menu" id="calendarViewMenu" style="right:0; top:38px; min-width:200px;"></div>
     </div>
   </div>
+  <div id="tcMoisPanneau" style="display:none; flex-shrink:0; background:#fff; border-bottom:1px solid var(--border); padding:2px 10px 8px; overflow-y:auto; max-height:46vh;"></div>
   <div id="weekNumberBadge" style="display:none; text-align:center; font-size:11px; color:var(--text-sec); padding:2px 0 6px;"></div>
   <div id="timezoneBadge" style="text-align:center; font-size:10.5px; color:var(--text-sec); padding:0 0 6px;"></div>
   <div class="view-tabs">
@@ -3968,7 +3983,9 @@ function navigate(page) {
 // ═══ CALENDAR ═══
 function switchView(v, keepDate) {
   // Si on bascule sur la vue Jour depuis l'onglet (pas depuis une case du mois), revenir à aujourd'hui
-  if (v === 'day' && !keepDate) viewDate = new Date();
+  // (panneau du mois ouvert : le jour qu'on y a choisi est gardé)
+  const panneauOuvert = document.getElementById('tcMoisPanneau');
+  if (v === 'day' && !keepDate && !(panneauOuvert && panneauOuvert.style.display === 'block')) viewDate = new Date();
   currentView = v;
   document.querySelectorAll('.view-tabs .tab').forEach(t => t.classList.remove('active'));
   const tabIdx = v==='day' ? 0 : v==='week' ? 1 : v==='month' ? 2 : -1;
@@ -4060,16 +4077,24 @@ const TC_MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.
 let _tcMoisPanneauDate = null;
 
 /** Les jours (AAAA-MM-JJ) qui ont au moins un rendez-vous, dans le mode en cours. */
-function tcJoursAvecRdv() {
-  // jour (AAAA-MM-JJ) → nombre de rendez-vous, dans le mode en cours.
+function tcJoursAvecRdv(moisDate) {
+  // jour (AAAA-MM-JJ) → nombre de rendez-vous, dans le mode en cours, comme les vues les montrent.
   const jours = new Map();
+  // Fenêtre : le mois affiché (sans elle, un voyage d'un an coûterait 365 tours par rendez-vous).
+  const debutISO = moisDate ? tcISO(new Date(moisDate.getFullYear(), moisDate.getMonth(), 1)) : '0000-00-00';
+  const finISO = moisDate ? tcISO(new Date(moisDate.getFullYear(), moisDate.getMonth() + 1, 0)) : '9999-99-99';
   (Array.isArray(events) ? events : []).forEach(function (e) {
     if (!e || e.mode !== mode || !e.date) return;
+    // Un type d'événement ou un agenda masqué (menu ⋮) ne laisse pas de point : l'agenda dessous ne le montre pas.
+    if (!isCategoryVisible(e.cat) || !isCalendarVisible(e.calendarId)) return;
     const fin = tcEvenementFin(e);
-    let d = new Date(e.date + 'T12:00:00');
-    for (let n = 0; n < 62 && !isNaN(d); n++) {
+    if (e.date > finISO || fin < debutISO) return;
+    const debutJ = e.date > debutISO ? e.date : debutISO;
+    const finJ = fin < finISO ? fin : finISO;
+    const d = new Date(debutJ + 'T12:00:00');
+    for (let n = 0; n < 400 && !isNaN(d); n++) {
       const iso = tcISO(d);
-      if (iso > fin) break;
+      if (iso > finJ) break;
       jours.set(iso, (jours.get(iso) || 0) + 1);
       d.setDate(d.getDate() + 1);
     }
@@ -4090,17 +4115,19 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv, choisiISO) {
   // La grille commence le lundi de la semaine du 1er.
   const debut = new Date(premier);
   debut.setDate(premier.getDate() - ((premier.getDay() + 6) % 7));
-  let html = '<div style="display:flex; align-items:center; justify-content:space-between; padding:2px 4px 6px;">'
+  // Centré et de largeur raisonnable, même sur un grand écran.
+  let html = '<div style="max-width:480px; margin:0 auto;">';
+  html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:0 2px 2px;">'
     + '<button onclick="tcPanneauMoisChanger(-1)" class="nav-btn" aria-label="Mois précédent"><svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>'
-    + '<div style="font-size:16px; font-weight:600;">' + MONTHS[mois] + ' ' + an + '</div>'
+    + '<div style="font-size:15px; font-weight:600;">' + MONTHS[mois] + ' ' + an + '</div>'
     + '<button onclick="tcPanneauMoisChanger(1)" class="nav-btn" aria-label="Mois suivant"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>'
     + '</div>';
-  html += '<div style="display:grid; grid-template-columns:28px repeat(7, 1fr); gap:2px 0; text-align:center; font-size:13px;">';
-  html += '<div></div>' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (j) { return '<div style="font-size:11px; color:var(--text-sec); padding:4px 0;">' + j + '</div>'; }).join('');
+  html += '<div style="display:grid; grid-template-columns:26px repeat(7, 1fr); gap:1px 0; text-align:center; font-size:13px;">';
+  html += '<div></div>' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (j) { return '<div style="font-size:11px; color:var(--text-sec); padding:2px 0;">' + j + '</div>'; }).join('');
   for (let semaine = 0; semaine < 6; semaine++) {
     const lundi = new Date(debut); lundi.setDate(debut.getDate() + semaine * 7);
     if (lundi > dernier) break;
-    html += '<div style="font-size:11px; color:var(--text-sec); display:flex; align-items:center; justify-content:center; background:#f1f3f4; border-radius:8px;">' + getISOWeek(lundi) + '</div>';
+    html += '<div style="font-size:11px; color:var(--text-sec); display:flex; align-items:center; justify-content:center; background:#f1f3f4; border-radius:8px; margin:2px 0;">' + getISOWeek(lundi) + '</div>';
     for (let j = 0; j < 7; j++) {
       const d = new Date(lundi); d.setDate(lundi.getDate() + j);
       if (d.getMonth() !== mois) { html += '<div></div>'; continue; }
@@ -4113,8 +4140,8 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv, choisiISO) {
       let points = '';
       for (let k = 0; k < Math.min(nb, 3); k++) points += point;
       if (nb > 3) points += '<span style="font-size:9px; line-height:4px; vertical-align:top; color:var(--text-sec);">+</span>';
-      html += '<div onclick="tcPanneauMoisAller(\'' + iso + '\')" data-jour="' + iso + '" style="cursor:pointer; padding:3px 0 2px;">'
-        + '<div style="width:32px; height:32px; line-height:32px; margin:0 auto; border-radius:50%; font-size:14px;'
+      html += '<div onclick="tcPanneauMoisAller(\'' + iso + '\')" data-jour="' + iso + '" style="cursor:pointer; padding:1px 0 0;">'
+        + '<div style="width:30px; height:30px; line-height:30px; margin:0 auto; border-radius:50%; font-size:14px;'
         + (auj ? ' background:var(--g-blue); color:#fff; font-weight:600;' : (choisi ? ' background:#e8f0fe; color:var(--g-blue); font-weight:600;' : '')) + '">' + d.getDate() + '</div>'
         + '<div style="height:6px; font-size:0; white-space:nowrap;">' + points + '</div>'
         + '</div>';
@@ -4122,7 +4149,7 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv, choisiISO) {
   }
   html += '</div>';
   // La rangée des mois : cinq ans, deux avant et trois après.
-  html += '<div id="tcMoisRangee" style="display:flex; gap:6px; overflow-x:auto; padding:8px 2px 2px; -webkit-overflow-scrolling:touch;">';
+  html += '<div id="tcMoisRangee" style="display:flex; gap:6px; overflow-x:auto; padding:6px 2px 2px; -webkit-overflow-scrolling:touch;">';
   let anneeVue = new Date(an, mois - 24, 1).getFullYear();
   for (let k = -24; k <= 36; k++) {
     const m = new Date(an, mois + k, 1);
@@ -4131,20 +4158,32 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv, choisiISO) {
       html += '<div style="flex-shrink:0; align-self:center; font-size:13px; color:var(--text-sec); padding:0 4px;">' + anneeVue + '</div>';
     }
     const actif = k === 0;
-    html += '<button onclick="tcPanneauMoisChoisir(' + m.getFullYear() + ',' + m.getMonth() + ')" data-mois="' + m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '"' + (actif ? ' data-actif="1"' : '') + ' style="flex-shrink:0; padding:7px 12px; border-radius:12px; border:1px solid ' + (actif ? 'var(--g-blue)' : 'var(--border)') + '; background:' + (actif ? 'var(--g-blue)' : '#f8f9fa') + '; color:' + (actif ? '#fff' : 'var(--text)') + '; font-size:13px; cursor:pointer;">' + TC_MOIS_COURTS[m.getMonth()] + '</button>';
+    html += '<button onclick="tcPanneauMoisChoisir(' + m.getFullYear() + ',' + m.getMonth() + ')" data-mois="' + m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '"' + (actif ? ' data-actif="1"' : '') + ' style="flex-shrink:0; padding:8px 12px; border-radius:12px; border:1px solid ' + (actif ? 'var(--g-blue)' : 'var(--border)') + '; background:' + (actif ? 'var(--g-blue)' : '#f8f9fa') + '; color:' + (actif ? '#fff' : 'var(--text)') + '; font-size:13px; cursor:pointer;">' + TC_MOIS_COURTS[m.getMonth()] + '</button>';
   }
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
 function tcDessinerPanneauMois() {
   const p = document.getElementById('tcMoisPanneau');
   if (!p || !_tcMoisPanneauDate) return;
-  p.innerHTML = tcPanneauMoisHTML(_tcMoisPanneauDate, tcISO(new Date()), tcJoursAvecRdv(), tcISO(viewDate));
-  // Le mois affiché au milieu de la rangée.
+  const cle = _tcMoisPanneauDate.getFullYear() + '-' + (_tcMoisPanneauDate.getMonth() + 1);
+  const ancienne = p.querySelector('#tcMoisRangee');
+  // Caché (panneau fermé, autre page), un défilement vaut 0 : on ne le garde que si le panneau est visible.
+  const affiche = p.offsetWidth > 0;
+  const defilement = (affiche && ancienne && ancienne.getAttribute('data-centre') === cle) ? ancienne.scrollLeft : null;
+  p.innerHTML = tcPanneauMoisHTML(_tcMoisPanneauDate, tcISO(new Date()), tcJoursAvecRdv(_tcMoisPanneauDate), tcISO(viewDate));
+  const rangee = p.querySelector('#tcMoisRangee');
+  if (defilement !== null && rangee) { rangee.setAttribute('data-centre', cle); rangee.scrollLeft = defilement; return; }
+  // Le mois affiché au milieu de la rangée — horizontalement SEULEMENT : scrollIntoView ferait aussi
+  // défiler le panneau vers le bas et cacherait son titre et ses flèches.
   setTimeout(function () {
-    const actif = p.querySelector('#tcMoisRangee button[data-actif]');
-    if (actif && actif.scrollIntoView) actif.scrollIntoView({ inline: 'center', block: 'nearest' });
+    const r = p.querySelector('#tcMoisRangee');
+    const actif = r && r.querySelector('button[data-actif]');
+    if (!actif) return;
+    const rb = r.getBoundingClientRect(), ab = actif.getBoundingClientRect();
+    r.scrollLeft += (ab.left + ab.width / 2) - (rb.left + rb.width / 2);
+    if (p.offsetWidth > 0) r.setAttribute('data-centre', cle);
   }, 0);
 }
 
@@ -4154,27 +4193,19 @@ function tcBasculerPanneauMois() {
   if (p.style.display === 'block') { tcFermerPanneauMois(); return; }
   _tcMoisPanneauDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
   tcDessinerPanneauMois();
-  const sous = document.querySelector('#page-calendar .sub-header');
-  const bas = sous ? sous.getBoundingClientRect().bottom : 100;
-  p.style.top = bas + 'px';
-  p.style.maxHeight = 'calc(100vh - ' + bas + 'px)';
   p.style.display = 'block';
-  // Phase de capture : évalué AVANT le bouton touché, qui sera peut-être redessiné (un mois choisi).
-  setTimeout(function () { document.addEventListener('click', tcClicHorsPanneauMois, true); }, 0);
+  // Toujours montré depuis le haut (titre et flèches), même si on l'avait fait défiler avant de le fermer.
+  p.scrollTop = 0;
+  // L'écran se divise : le panneau en haut, l'agenda dessous (le numéro de semaine et le fuseau s'effacent).
+  const page = document.getElementById('page-calendar');
+  if (page) page.classList.add('mois-ouvert');
 }
 
 function tcFermerPanneauMois() {
   const p = document.getElementById('tcMoisPanneau');
   if (p) p.style.display = 'none';
-  document.removeEventListener('click', tcClicHorsPanneauMois, true);
-}
-
-/** Toucher à côté referme le panneau (le titre, lui, le bascule). */
-function tcClicHorsPanneauMois(ev) {
-  const p = document.getElementById('tcMoisPanneau');
-  const titre = document.getElementById('monthTitle');
-  if (!p || p.contains(ev.target) || (titre && (ev.target === titre || ev.target === titre.nextElementSibling))) return;
-  tcFermerPanneauMois();
+  const page = document.getElementById('page-calendar');
+  if (page) page.classList.remove('mois-ouvert');
 }
 
 function tcPanneauMoisChanger(delta) {
@@ -4193,8 +4224,7 @@ function tcPanneauMoisChoisir(an, mois) {
   tcDessinerPanneauMois();
 }
 
-/** Toucher un jour : la vue en cours s'y rend, le panneau se referme. */
-/** Toucher un jour : la vue en cours s'y rend ; le panneau reste ouvert (le titre ou un clic à côté le referme). */
+/** Toucher un jour : la vue en cours s'y rend ; le panneau reste ouvert (le titre ou le triangle le referme). */
 function tcPanneauMoisAller(iso) {
   const p = String(iso || '').split('-').map(Number);
   if (p.length !== 3 || p.some(isNaN)) return;
@@ -4205,6 +4235,15 @@ function tcPanneauMoisAller(iso) {
 
 function render() {
   document.getElementById('monthTitle').textContent = `${MONTHS[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+
+  // Panneau du mois ouvert : il suit la période affichée dessous.
+  try {
+    const panneauMois = document.getElementById('tcMoisPanneau');
+    if (panneauMois && panneauMois.style.display === 'block') {
+      _tcMoisPanneauDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+      tcDessinerPanneauMois();
+    }
+  } catch (e) { console.warn('Panneau du mois :', e); }
 
   // Numéro de semaine — affiché uniquement en vue Semaine, sous le titre du mois
   const wnBadge = document.getElementById('weekNumberBadge');
