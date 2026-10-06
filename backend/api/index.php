@@ -2559,6 +2559,14 @@ switch ($route) {
                 if (!is_string($debut) || !is_string($fin)) {
                     throw new RuntimeException('creneau_incomplet');
                 }
+                // La base refuse une fin qui ne suit pas le début
+                // (ck_creneaux_ordre) : sans ce contrôle, l'appelant
+                // recevait une erreur 500 au lieu d'une réponse claire.
+                $tDebut = strtotime($debut);
+                $tFin = strtotime($fin);
+                if ($tDebut === false || $tFin === false || $tFin <= $tDebut) {
+                    throw new RuntimeException('creneau_desordre');
+                }
                 Db::req(
                     'INSERT INTO rdv_creneaux (rdv_id, rang, debut, fin, libelle)
                      VALUES (?, ?, ?, ?, ?)',
@@ -2589,6 +2597,9 @@ switch ($route) {
             $pdo->rollBack();
             if ($e instanceof RuntimeException && $e->getMessage() === 'creneau_incomplet') {
                 Rep::erreur(400, 'creneau_incomplet', 'Chaque créneau doit porter un début et une fin.');
+            }
+            if ($e instanceof RuntimeException && $e->getMessage() === 'creneau_desordre') {
+                Rep::erreur(400, 'creneau_invalide', 'Chaque créneau doit finir après son début.');
             }
             throw $e;
         }
