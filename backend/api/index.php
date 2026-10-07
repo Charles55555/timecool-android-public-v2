@@ -463,6 +463,37 @@ function texteSur(string $t): string
     return trim(preg_replace('/[<>"\x00-\x1F]+/u', '', $t) ?? '');
 }
 
+
+/**
+ * L identifiant de la fiche, dans le carnet de ce titulaire, qui correspond
+ * a cette personne (meme telephone ou meme email). Null si aucune : le
+ * rendez-vous n aura alors pas de contact rattache.
+ */
+function ficheContactDe(int $titulaireId, array $personne): ?string
+{
+    $tel = Empreinte::normaliserTelephone((string) ($personne['telephone'] ?? ''));
+    $email = Empreinte::normaliserEmail((string) ($personne['email'] ?? ''));
+    $fiches = Db::tous(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "contact" AND supprime = 0',
+        [$titulaireId]
+    );
+    foreach ($fiches as $f) {
+        $c = json_decode((string) $f['contenu'], true);
+        if (!is_array($c) || !isset($c['id']) || !is_string($c['id']) || $c['id'] === '') {
+            continue;
+        }
+        $memeTel = $tel !== '' && isset($c['phone']) && $c['phone'] !== ''
+            && Empreinte::normaliserTelephone((string) $c['phone']) === $tel;
+        $memeMail = $email !== '' && isset($c['email']) && $c['email'] !== ''
+            && Empreinte::normaliserEmail((string) $c['email']) === $email;
+        if ($memeTel || $memeMail) {
+            return $c['id'];
+        }
+    }
+    return null;
+}
+
 /**
  * Les plages qu'occupe un rendez-vous, jour par jour, en minutes :
  * [ 'AAAA-MM-JJ' => [[début, fin], …] ]. Une journée entière occupe tout
@@ -2172,8 +2203,9 @@ switch ($route) {
 
         $debut = strtotime($creneau['debut']);
         $fin = strtotime($creneau['fin']);
-        $entree = static function (string $titre) use ($debut, $fin, $rdvId): array {
+        $entree = static function (string $titre, ?string $contact = null) use ($debut, $fin, $rdvId): array {
             return [
+                ...($contact !== null ? ['contact' => $contact] : []),
                 'id'     => 'tc_rdv_' . $rdvId,
                 'date'   => date('Y-m-d', $debut),
                 'startH' => (int) date('G', $debut), 'startM' => (int) date('i', $debut),
@@ -2189,9 +2221,9 @@ switch ($route) {
             // Chacun voit le nom de l'autre dans son agenda (sans balise : texteSur).
             elementsPoser([
                 ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-                 'contenu' => $entree(texteSur($cible['prenom'] . ' ' . $cible['nom']))],
+                 'contenu' => $entree(texteSur($cible['prenom'] . ' ' . $cible['nom']), ficheContactDe((int) $moi['id'], $cible))],
                 ['compte_id' => (int) $cible['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-                 'contenu' => $entree(texteSur($moi['prenom'] . ' ' . $moi['nom']))],
+                 'contenu' => $entree(texteSur($moi['prenom'] . ' ' . $moi['nom']), ficheContactDe((int) $cible['id'], $moi))],
             ]);
 
             messagePoser(

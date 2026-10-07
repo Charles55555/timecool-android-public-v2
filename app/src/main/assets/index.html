@@ -544,7 +544,7 @@ body.maj-visible .toast { bottom:152px; }
 .msg-menu-sep { height:1px; background:var(--border); margin:5px 0; }
 .msg-filterbar { display:flex; align-items:center; gap:8px; padding:10px 16px; background:#e8f0fe; font-size:13px; color:#1a73e8; font-weight:500; }
 .msg-filterbar button { margin-left:auto; background:none; border:none; color:#1a73e8; font-size:13px; cursor:pointer; font-weight:600; }
-.msg-sheet-ov { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:60; display:flex; align-items:flex-end; }
+.msg-sheet-ov { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:250; display:flex; align-items:flex-end; }
 .msg-sheet { width:100%; background:#fff; border-radius:18px 18px 0 0; padding:8px 0 16px; animation:tcSheetUp .2s ease; }
 @keyframes tcSheetUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
 .msg-sheet-h { padding:12px 20px 8px; font-size:15px; font-weight:600; color:var(--text); }
@@ -19555,7 +19555,6 @@ function openPrevenirFromEvent() {
   // Sans contact, il n'y a personne a prevenir : on le demande, plutot
   // que d'ouvrir une feuille qui proposerait de prevenir le titre du
   // rendez-vous.
-  showToast('👤 Avec qui est ce rendez-vous ?');
   tcChoisirContactRdv(function (id) {
     if (!id) return;
     ev.contact = id;
