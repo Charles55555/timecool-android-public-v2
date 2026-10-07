@@ -20094,6 +20094,7 @@ async function tcSyncAppliquer(elements) {
         // Pas d'empreinte pour un objet en lecture seule : elle servirait
         // uniquement à détecter une modification locale, qui n'existe pas.
         if (!t.lectureSeule) empreintes[cle] = tcSyncEmpreinte(contenuSur);
+        _tcSyncVusIci[cle] = true;
         touche = true;
       }
       recus++;
@@ -20139,6 +20140,7 @@ async function tcSyncPousser() {
       const cle = type + ':' + uid;
       const emp = tcSyncEmpreinte(o);
       presentes[cle] = emp;
+      _tcSyncVusIci[cle] = true;
       if (connues[cle] !== emp) aEnvoyer.push({ type: type, uid: uid, contenu: o });
     });
   });
@@ -20168,6 +20170,8 @@ async function tcSyncPousser() {
     // Un objet en lecture seule absent d'ici n'a pas été supprimé ici :
     // annoncer sa disparition l'effacerait chez tout le monde.
     if (TC_SYNC_TYPES[type] && TC_SYNC_TYPES[type].lectureSeule) return;
+    // Jamais eu dans cet onglet : un autre onglet l a cree, ce n est pas une suppression.
+    if (!_tcSyncVusIci[cle]) return;
     const v = vues[type];
     if (v && v.presentes === 0 && v.connues >= TC_SYNC_SEUIL_DISPARITION) {
       if (!v.signale) {
@@ -20297,6 +20301,30 @@ function tcPreparerAppareilPourCompte() {
    defaut, et la suppression n'est pas annoncee. */
 const TC_SYNC_SEUIL_DISPARITION = 5;
 
+/*
+ * Les objets que CET onglet a eus en memoire, au moins une fois.
+ *
+ * Les empreintes (ce que l appareil croit connaitre) sont partagees entre
+ * les onglets par le stockage du navigateur ; la liste des rendez-vous, elle,
+ * est propre a chaque onglet. Un onglet ouvert en double voyait donc un
+ * rendez-vous cree dans l autre, ne le trouvait pas chez lui, et annoncait
+ * au serveur que l utilisateur l avait supprime : il disparaissait sous
+ * ses yeux. Une suppression n est annoncee que pour un objet que cet onglet
+ * a vraiment eu : l absence d un objet jamais vu ici n est pas un geste.
+ */
+const _tcSyncVusIci = {};
+
+/** Note tout ce que cet onglet a en memoire a l instant. */
+function tcSyncNoterVus() {
+  Object.keys(TC_SYNC_TYPES).forEach(function (type) {
+    const t = TC_SYNC_TYPES[type];
+    (t.lire() || []).forEach(function (o) {
+      const uid = t.id(o);
+      if (uid) _tcSyncVusIci[type + ':' + uid] = true;
+    });
+  });
+}
+
 let _tcSyncEnCours = false;
 let _tcSyncMinuteur = null;
 let _tcSyncBientot = null;
@@ -20409,6 +20437,33 @@ function tcSyncPlanifier() {
 function tcSyncDemarrer() {
   if (_tcSyncMinuteur) return;
   _tcSyncMinuteur = true;
+  tcSyncNoterVus();
+  /*
+   * Un autre onglet vient d enregistrer : on recharge sa version. L evenement
+   * n est emis QUE dans les autres onglets, jamais dans celui qui ecrit.
+   */
+  let _tcRechargeAutreOnglet = null;
+  window.addEventListener('storage', function (e) {
+    const cle = e.key;
+    if (cle !== TC_EVENTS_KEY && cle !== TC_TASKS_KEY && cle !== 'timecool_birthdays' && cle !== 'timecool_contacts') return;
+    if (_tcRechargeAutreOnglet) clearTimeout(_tcRechargeAutreOnglet);
+    _tcRechargeAutreOnglet = setTimeout(async function () {
+      _tcRechargeAutreOnglet = null;
+      try {
+        if (cle === TC_EVENTS_KEY) await loadEventsFromStorage();
+        else if (cle === TC_TASKS_KEY) loadTasks();
+        else if (cle === 'timecool_birthdays') loadBirthdays();
+        else loadContacts();
+        tcSyncNoterVus();
+        if (typeof render === 'function') render();
+        if (typeof currentPage !== 'undefined') {
+          if (currentPage === 'tasks' && typeof renderTasks === 'function') renderTasks();
+          if (currentPage === 'birthdays' && typeof renderBirthdays === 'function') renderBirthdays();
+          if (currentPage === 'contacts' && typeof renderContactsList === 'function') renderContactsList();
+        }
+      } catch (err) { console.warn('Rechargement depuis un autre onglet :', err); }
+    }, 250);
+  });
   tcSyncTour();
   tcSyncPlanifier();
 
