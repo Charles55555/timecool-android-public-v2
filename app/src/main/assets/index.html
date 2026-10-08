@@ -9723,6 +9723,7 @@ function tcEstUnCadreAQuestion(m) {
 }
 
 function renderChatMessage(m) {
+  if (m && m._groupe) return tcRendreGroupe(m);
   if (m.role === 'user') {
     return `
       <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
@@ -12371,6 +12372,14 @@ async function charlySendMessage() {
   const _prevenance = tcDetecterPrevenance(text);
   if (_prevenance) {
     await tcGererPrevenance(text, _prevenance);
+    return;
+  }
+
+  // === RENDEZ-VOUS À PLUSIEURS : « trouve-nous un créneau avec William Ayache et Stéphane Lévy » ===
+  // Le serveur cherche chez tout le monde ; jamais laissé au modèle, qui n'a pas accès aux autres agendas.
+  const _groupe = tcDetecterRdvGroupe(text);
+  if (_groupe) {
+    await tcGererRdvGroupe(text, _groupe);
     return;
   }
 
@@ -18229,6 +18238,177 @@ async function confirmRdvContact(contactId, rang) {
 }
 
 
+/* ══════════════════════════════════════════════════════════════
+   RENDEZ-VOUS À PLUSIEURS
+   « Prends-moi un rendez-vous avec William Ayache et Stéphane Lévy » :
+   Charly demande au serveur les créneaux où tout le monde est libre
+   (seul « libre ou pas » sort des agendas des autres, jamais leur
+   contenu), puis le rendez-vous s'inscrit dans tous les agendas.
+   ══════════════════════════════════════════════════════════════ */
+
+/** Les mots du texte, sans accents ni ponctuation, bordés d'espaces. */
+function tcMotsDuTexte(texte) {
+  return ' ' + tcSansAccents(String(texte || '')).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+}
+
+/**
+ * Les contacts cités dans la phrase qui ont un compte TimeCool : par leur
+ * nom complet, ou par leur seul prénom quand il est unique parmi eux.
+ */
+function tcComptesCitesDansTexte(texte) {
+  const t = tcMotsDuTexte(texte);
+  const avecCompte = (Array.isArray(contactsList) ? contactsList : []).filter(function (c) {
+    return c && c.referenceCompte && !c.blocked && String(c.name || '').trim();
+  });
+  const prenoms = {};
+  avecCompte.forEach(function (c) {
+    const p = tcMotsDuTexte(c.name).trim().split(' ')[0];
+    prenoms[p] = (prenoms[p] || 0) + 1;
+  });
+  const trouves = [], vus = {};
+  avecCompte.forEach(function (c) {
+    if (vus[c.referenceCompte]) return;
+    const mots = tcMotsDuTexte(c.name).trim().split(' ').filter(Boolean);
+    const nomComplet = mots.length >= 2 && mots.every(function (w) { return t.indexOf(' ' + w + ' ') > -1; });
+    const prenomSeul = mots[0].length >= 4 && prenoms[mots[0]] === 1 && t.indexOf(' ' + mots[0] + ' ') > -1;
+    if (nomComplet || prenomSeul) { vus[c.referenceCompte] = true; trouves.push(c); }
+  });
+  return trouves;
+}
+
+/**
+ * « Trouve-nous un créneau avec A et B » : au moins deux contacts avec compte
+ * dans la même phrase, et un mot de rendez-vous. Sinon, rien : le message
+ * suit son chemin habituel.
+ */
+function tcDetecterRdvGroupe(texte) {
+  const t = tcSansAccents(String(texte || '').toLowerCase());
+  if (!/(rendez-?vous|\brdv\b|creneau|reunion|se voir|se retrouver|nous voir|se rencontrer|disponibilit)/.test(t)) return null;
+  if (/(annul|supprim|deplac|decal|retard|previen|avertis)/.test(t)) return null;
+  const contacts = tcComptesCitesDansTexte(texte);
+  if (contacts.length < 2) return null;
+  let duree = 1;
+  const chiffre = t.match(/(?:pendant|duree(?: de)?)\s*(\d)\s*(?:h|heures?)\b/) || t.match(/\bde\s*(\d)\s*heures?\b/);
+  if (chiffre) duree = parseInt(chiffre[1], 10);
+  else if (/\bdeux heures?\b/.test(t)) duree = 2;
+  else if (/\btrois heures?\b/.test(t)) duree = 3;
+  return { contacts: contacts, duree: Math.min(3, Math.max(1, duree)) };
+}
+
+async function tcGererRdvGroupe(texte, intention) {
+  tcPousserMessageUtilisateur(texte);
+  await tcProposerRdvGroupe(intention.contacts.map(function (c) { return c.referenceCompte; }), intention.duree, '');
+}
+
+/** Interroge le serveur et pose la carte de choix dans la conversation. */
+async function tcProposerRdvGroupe(references, duree, preambule) {
+  const attente = { role: 'assistant', content: '🔎 Je regarde les agendas pour trouver un créneau commun…' };
+  charlyIA.history.push(attente);
+  renderCharlyChat();
+  let r;
+  try {
+    r = await TC_BACKEND.proposerRdvGroupe(references, duree);
+  } catch (e) {
+    charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
+    charlyIA.history.push({ role: 'assistant', content: '❌ ' + (e && e.message ? e.message : 'Je n’arrive pas à interroger les agendas pour le moment.') });
+    renderCharlyChat();
+    return;
+  }
+  charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
+  charlyIA.history.push({
+    role: 'assistant',
+    content: 'Rendez-vous à plusieurs',
+    _groupe: {
+      id: 'g' + Date.now(), references: references, duree: r.duree || duree, etat: 'choix',
+      creneaux: Array.isArray(r.creneaux) ? r.creneaux : [], invites: r.invites || [], sansAcces: r.sans_acces || [],
+      preambule: preambule || ''
+    }
+  });
+  renderCharlyChat();
+}
+
+function tcListeDePrenoms(l) {
+  const noms = (l || []).map(function (p) { return escapeHTMLSafe(p); });
+  if (noms.length <= 1) return noms.join('');
+  return noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1];
+}
+
+/** La carte : les créneaux à toucher, ou le résultat une fois confirmé. */
+function tcRendreGroupe(m) {
+  const g = m._groupe;
+  let h = '';
+  if (g.preambule) h += '<div style="margin-bottom:8px;">' + escapeHTMLSafe(g.preambule) + '</div>';
+
+  if (g.etat === 'fait' && g.resultat) {
+    const r = g.resultat;
+    h += '✅ C’est noté : <b>' + escapeHTMLSafe(r.libelle || '') + ' à ' + escapeHTMLSafe((r.heure || '').replace(':', 'h'))
+      + '</b>, avec ' + tcListeDePrenoms(r.inclus) + '. Chacun l’a dans son agenda.';
+    if (r.exclus && r.exclus.length) h += '<div style="margin-top:6px; color:#8a6500;">Pas ajouté chez ' + tcListeDePrenoms(r.exclus) + ' : déjà pris à ce moment-là.</div>';
+    return tcBulleCharly(h);
+  }
+
+  if (!g.creneaux.length) {
+    h += g.invites.length
+      ? 'Je n’ai trouvé aucun créneau libre dans les deux semaines qui viennent, pour toi, ' + tcListeDePrenoms(g.invites) + '.'
+      : 'Je ne peux consulter l’agenda d’aucune de ces personnes : je n’ai pas pu chercher de créneau commun.';
+  } else {
+    const complets = g.creneaux.filter(function (s) { return s.manquants.length === 0; }).length;
+    h += complets === g.creneaux.length
+      ? 'Voici les créneaux où vous êtes tous libres (toi, ' + tcListeDePrenoms(g.invites) + ') :'
+      : (complets > 0
+        ? 'Voici les meilleurs créneaux. Sous certains, une personne n’est pas libre :'
+        : 'Aucun créneau où tout le monde est libre. Voici ceux où le plus de monde l’est :');
+    h += '<div style="margin-top:8px;">';
+    g.creneaux.forEach(function (s, i) {
+      const fin = s.heure + (s.duree || g.duree);
+      const lib = s.libelle.charAt(0).toUpperCase() + s.libelle.slice(1);
+      h += '<button ' + (g.etat === 'choix' ? '' : 'disabled ') + 'onclick="tcConfirmerRdvGroupe(\'' + g.id + '\',' + i + ')" '
+        + 'style="display:block; width:100%; text-align:left; margin-bottom:6px; padding:10px 12px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:10px; font-size:13.5px; font-weight:600; cursor:pointer;">'
+        + '🕐 ' + escapeHTMLSafe(lib) + ' · ' + s.heure + 'h–' + fin + 'h'
+        + (s.manquants.length ? '<div style="font-weight:400; font-size:11.5px; color:#8a6500; margin-top:2px;">Pas libre : ' + tcListeDePrenoms(s.manquants) + '</div>' : '')
+        + '</button>';
+    });
+    h += '</div>';
+    if (g.etat === 'envoi') h += '<div style="margin-top:4px; color:var(--text-sec);">⏳ Je l’inscris dans les agendas…</div>';
+  }
+  if (g.sansAcces.length) {
+    h += '<div style="margin-top:8px; font-size:12px; color:var(--text-sec);">Je ne peux pas voir l’agenda de '
+      + tcListeDePrenoms(g.sansAcces) + ' : je ne l’ai pas compté. Tu peux lui écrire un message.</div>';
+  }
+  return tcBulleCharly(h);
+}
+
+/** Un créneau est touché : le serveur le revérifie et l'inscrit chez tout le monde. */
+async function tcConfirmerRdvGroupe(id, i) {
+  const m = charlyIA.history.find(function (x) { return x && x._groupe && x._groupe.id === id; });
+  if (!m || m._groupe.etat !== 'choix') return;
+  const g = m._groupe, s = g.creneaux[i];
+  if (!s) return;
+  g.etat = 'envoi';
+  renderCharlyChat();
+  let r;
+  try {
+    r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree);
+  } catch (e) {
+    if (e && e.code === 'creneau_pris') {
+      g.etat = 'perdu';
+      charlyIA.history.splice(charlyIA.history.indexOf(m), 1);
+      await tcProposerRdvGroupe(g.references, g.duree, 'Ce créneau vient d’être pris. Je relance la recherche :');
+      return;
+    }
+    g.etat = 'choix';
+    renderCharlyChat();
+    showToast('❌ ' + ((e && e.message) || 'Impossible pour le moment.'));
+    return;
+  }
+  g.etat = 'fait';
+  g.resultat = r;
+  renderCharlyChat();
+  showToast('✅ Rendez-vous confirmé');
+  // Le serveur l'a écrit dans tous les agendas : on va le chercher tout de suite.
+  tcSyncTour();
+}
+
 /**
  * Ce contact utilise-t-il TimeCool ?
  *
@@ -18837,6 +19017,16 @@ const TC_BACKEND = {
   /** Retient un créneau : le rendez-vous s'inscrit dans les deux agendas. */
   async choisirCreneauRdv(rdv, rang) {
     return tcAppel('POST', '/rdv/choisir', { rdv: rdv, rang: rang });
+  },
+
+  /** Les creneaux ou tout le monde est libre, pour un rendez-vous a plusieurs. */
+  async proposerRdvGroupe(references, duree) {
+    return tcAppel('POST', '/rdv/groupe/proposer', { references: references, duree: duree });
+  },
+
+  /** Inscrit le creneau choisi dans tous les agendas. */
+  async confirmerRdvGroupe(references, date, heure, duree) {
+    return tcAppel('POST', '/rdv/groupe/confirmer', { references: references, date: date, heure: heure, duree: duree });
   },
 
   async envoyerMessage(reference, texte, langue) {

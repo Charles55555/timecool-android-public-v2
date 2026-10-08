@@ -583,6 +583,143 @@ function creneauRetenuEstLibre(int $titulaireId, string $debutSql, string $finSq
 }
 
 /**
+ * Les heures de debut possibles d une personne un jour donne (0 = dimanche),
+ * d apres ses disponibilites pour les categories voulues. Rien de regle :
+ * horaires par defaut en semaine, pour qu un compte neuf puisse etre invite
+ * des la premiere seconde.
+ */
+function heuresPermisesDuJour(array $dispo, array $categories, int $jsem): array
+{
+    $plages = dispoPlagesDuJour($dispo, $categories, $jsem === 0 ? 7 : $jsem);
+    if ($plages === null) {
+        return ($jsem === 0 || $jsem === 6) ? [] : [9, 10, 11, 14, 15, 16, 17];
+    }
+    $heures = [];
+    foreach ($plages as [$pd, $pf]) {
+        for ($m = (int) ceil($pd / 60) * 60; $m + 60 <= $pf; $m += 60) {
+            $heures[] = (int) ($m / 60);
+        }
+    }
+    $heures = array_values(array_unique($heures));
+    sort($heures);
+    return $heures;
+}
+
+/** Cette personne est-elle libre sur ces heures pleines : permises par ses disponibilites, et rien dans son agenda ? */
+function personneDisponible(array $occupes, array $permises, string $jour, int $heure, int $duree): bool
+{
+    for ($k = 0; $k < $duree; $k++) {
+        if (!in_array($heure + $k, $permises, true)) {
+            return false;
+        }
+    }
+    return creneauEstLibre($occupes, $jour, $heure * 60, ($heure + $duree) * 60);
+}
+
+/**
+ * Les creneaux ou le plus de monde est libre, pour un rendez-vous a plusieurs.
+ *
+ * L agenda de l organisateur doit etre libre. Chaque invite est libre ou non :
+ * seul ce booleen sort, jamais le contenu de son agenda. Un creneau par jour,
+ * sur quatorze jours ; d abord ceux ou tout le monde est libre, puis ceux ou
+ * il manque le moins de monde. Un creneau ou personne n est libre est ecarte.
+ *
+ * $invites : [ [ 'id' => int, 'prenom' => string, 'categories' => string[] ], ... ]
+ */
+function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $combien = 3): array
+{
+    $occOrg = rdvOccupation($organisateurId);
+    $occupes = [];
+    $dispos = [];
+    foreach ($invites as $inv) {
+        $occupes[$inv['id']] = rdvOccupation((int) $inv['id']);
+        $dispos[$inv['id']] = dispoDuCompte((int) $inv['id']);
+    }
+    $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    $mois = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+             'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+    $candidats = [];
+    for ($j = 1; $j <= 14; $j++) {
+        $t = strtotime("+$j day");
+        $jsem = (int) date('w', $t);
+        $date = date('Y-m-d', $t);
+        $permises = [];
+        foreach ($invites as $inv) {
+            $permises[$inv['id']] = heuresPermisesDuJour($dispos[$inv['id']], $inv['categories'], $jsem);
+        }
+        $meilleur = null;
+        for ($h = 8; $h + $duree <= 20; $h++) {
+            if (!creneauEstLibre($occOrg, $date, $h * 60, ($h + $duree) * 60)) {
+                continue;
+            }
+            $manquants = [];
+            foreach ($invites as $inv) {
+                if (!personneDisponible($occupes[$inv['id']], $permises[$inv['id']], $date, $h, $duree)) {
+                    $manquants[] = $inv['prenom'];
+                }
+            }
+            if (count($manquants) >= count($invites)) {
+                continue;
+            }
+            if ($meilleur === null || count($manquants) < count($meilleur['manquants'])) {
+                $meilleur = [
+                    'date'      => $date,
+                    'heure'     => $h,
+                    'minute'    => 0,
+                    'duree'     => $duree,
+                    'libelle'   => $jours[$jsem] . ' ' . (int) date('j', $t) . ' ' . $mois[(int) date('n', $t)],
+                    'manquants' => $manquants,
+                ];
+            }
+        }
+        if ($meilleur !== null) {
+            $candidats[] = $meilleur;
+        }
+    }
+    usort($candidats, static fn(array $a, array $b): int => count($a['manquants']) <=> count($b['manquants']));
+    return array_slice($candidats, 0, $combien);
+}
+
+/**
+ * Les invites d un rendez-vous a plusieurs : ceux dont l agenda peut etre
+ * consulte (le titulaire a coche une categorie pour l organisateur, et ne l a
+ * pas bloque). Les autres vont dans $sansAcces, sans dire pourquoi : un
+ * contact bloque ne doit pas le savoir, ni l organisateur le deviner.
+ */
+function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces): array
+{
+    if (!is_array($references) || $references === [] || count($references) > 12) {
+        Rep::erreur(400, 'participants_invalides', 'Indiquez de 1 a 12 personnes.');
+    }
+    $invites = [];
+    $vus = [(int) $moi['id'] => true];
+    foreach ($references as $ref) {
+        if (!is_string($ref)) {
+            continue;
+        }
+        $c = compteParReference($ref);
+        if ($c === null || isset($vus[(int) $c['id']])) {
+            continue;
+        }
+        $vus[(int) $c['id']] = true;
+        $categories = categoriesPourPrendreRdv((int) $c['id'], $moi);
+        if ($categories === []) {
+            $sansAcces[] = texteSur((string) $c['prenom']);
+            continue;
+        }
+        $invites[] = [
+            'id'         => (int) $c['id'],
+            'compte'     => $c,
+            'prenom'     => texteSur((string) $c['prenom']),
+            'nom'        => texteSur((string) $c['nom']),
+            'categories' => $categories,
+        ];
+    }
+    return $invites;
+}
+
+/**
  * Les plages de disponibilite d un titulaire pour un jour (1 = lundi ...
  * 7 = dimanche), en minutes, pour les categories donnees.
  *
@@ -2244,6 +2381,137 @@ switch ($route) {
             'date'   => date('Y-m-d', $debut),
             'heure'  => date('H:i', $debut),
             'libelle' => $creneau['libelle'],
+        ]);
+
+    /*
+     * Rendez-vous a plusieurs : les creneaux ou tout le monde (ou presque)
+     * est libre. Rien n est garde cote serveur entre la recherche et la
+     * confirmation : tout est reverifie au moment de confirmer.
+     */
+    case 'POST /rdv/groupe/proposer':
+        $moi = Auth::compte();
+        $corps = Entree::corps();
+        $duree = (int) ($corps['duree'] ?? 1);
+        if ($duree < 1 || $duree > 3) {
+            $duree = 1;
+        }
+        $sansAcces = [];
+        $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
+        $creneaux = $invites === [] ? [] : creneauxCommuns((int) $moi['id'], $invites, $duree, 3);
+        Rep::ok([
+            'creneaux'   => $creneaux,
+            'invites'    => array_column($invites, 'prenom'),
+            'sans_acces' => $sansAcces,
+            'duree'      => $duree,
+        ]);
+
+    case 'POST /rdv/groupe/confirmer':
+        $moi = Auth::compte();
+        $corps = Entree::corps();
+        $jour = (string) ($corps['date'] ?? '');
+        $heure = (int) ($corps['heure'] ?? -1);
+        $duree = (int) ($corps['duree'] ?? 1);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $jour) || $duree < 1 || $duree > 3
+            || $heure < 8 || $heure + $duree > 20) {
+            Rep::erreur(400, 'creneau_invalide', 'Creneau invalide.');
+        }
+        $debutTs = strtotime($jour . sprintf(' %02d:00:00', $heure));
+        if ($debutTs === false || $debutTs <= time() || $debutTs > strtotime('+30 day')) {
+            Rep::erreur(400, 'creneau_invalide', 'Creneau invalide.');
+        }
+        $sansAcces = [];
+        $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
+        if ($invites === []) {
+            Rep::erreur(409, 'creneau_pris', 'Personne n est joignable pour ce rendez-vous.');
+        }
+        $debutSql = date('Y-m-d H:i:s', $debutTs);
+        $finTs = $debutTs + $duree * 3600;
+        $finSql = date('Y-m-d H:i:s', $finTs);
+        $jsem = (int) date('w', $debutTs);
+
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            // Verrous dans l ordre des identifiants : deux confirmations
+            // croisees ne peuvent pas s attendre l une l autre.
+            $ids = array_merge([(int) $moi['id']], array_column($invites, 'id'));
+            sort($ids);
+            foreach ($ids as $idCompte) {
+                Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$idCompte]);
+            }
+            if (!creneauRetenuEstLibre((int) $moi['id'], $debutSql, $finSql)) {
+                $pdo->rollBack();
+                Rep::erreur(409, 'creneau_pris', 'Ce creneau vient d etre pris dans ton agenda. Relance la recherche.');
+            }
+            $inclus = [];
+            $exclus = [];
+            foreach ($invites as $inv) {
+                $permises = heuresPermisesDuJour(dispoDuCompte($inv['id']), $inv['categories'], $jsem);
+                if (personneDisponible(rdvOccupation($inv['id']), $permises, $jour, $heure, $duree)) {
+                    $inclus[] = $inv;
+                } else {
+                    $exclus[] = $inv['prenom'];
+                }
+            }
+            if ($inclus === []) {
+                $pdo->rollBack();
+                Rep::erreur(409, 'creneau_pris', 'Plus personne n est libre sur ce creneau. Relance la recherche.');
+            }
+
+            $uid = 'tc_grp_' . bin2hex(random_bytes(8));
+            $moiNom = texteSur(trim($moi['prenom'] . ' ' . $moi['nom']));
+            $entree = static function (string $titre) use ($jour, $heure, $duree, $uid): array {
+                return [
+                    'id'     => $uid,
+                    'date'   => $jour,
+                    'startH' => $heure, 'startM' => 0,
+                    'endH'   => $heure + $duree, 'endM' => 0,
+                    'title'  => mb_substr($titre, 0, 120),
+                    'cat'    => 'travail',
+                    'mode'   => 'user',
+                ];
+            };
+            $prenomsInclus = array_column($inclus, 'prenom');
+            $ecritures = [[
+                'compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => $uid,
+                'contenu'   => $entree(implode(', ', $prenomsInclus)),
+            ]];
+            foreach ($inclus as $inv) {
+                $autres = array_values(array_filter($prenomsInclus, static fn(string $p): bool => $p !== $inv['prenom']));
+                $ecritures[] = [
+                    'compte_id' => $inv['id'], 'type' => 'rdv', 'uid' => $uid,
+                    'contenu'   => $entree(implode(', ', array_merge([$moiNom], $autres))),
+                ];
+            }
+            elementsPoser($ecritures);
+
+            $joursNoms = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+            $moisNoms = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+                         'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+            $libelle = $joursNoms[$jsem] . ' ' . (int) date('j', $debutTs) . ' ' . $moisNoms[(int) date('n', $debutTs)];
+            foreach ($inclus as $inv) {
+                $autres = array_values(array_filter($prenomsInclus, static fn(string $p): bool => $p !== $inv['prenom']));
+                messagePoser(
+                    $moi, $inv['compte'],
+                    'Rendez-vous confirmé : ' . $libelle . ' à ' . date('H\hi', $debutTs)
+                        . ', avec ' . implode(', ', array_merge([$moiNom], $autres)) . '.'
+                );
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        Rep::ok([
+            'date'    => $jour,
+            'heure'   => date('H:i', $debutTs),
+            'libelle' => $libelle,
+            'duree'   => $duree,
+            'inclus'  => $prenomsInclus,
+            'exclus'  => $exclus,
         ]);
 
     /* Message libre d un compte à un autre. */
