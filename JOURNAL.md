@@ -22,7 +22,33 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## Point du 09/10/2026 (session du PC, chef de projet)
+
+**Dernière version : v2.0.293.** Semaine du 03 au 09/10, tout en ligne (web, Android, API) :
+rendez-vous entre comptes fiabilisés (plus de double réservation, noms piégés bloqués, heures
+correctes sur la page du lien), créneaux proposés selon « Mes disponibilités », bouton
+« Prévenir » de la fiche réparé (il s'ouvrait derrière la fiche), deux onglets ne suppriment
+plus un rendez-vous, rendez-vous à plusieurs via Charly (routes `/rdv/groupe/proposer` et
+`/rdv/groupe/confirmer`), règle du 09/10 « tout contact qui a TimeCool peut être consulté,
+sauf blocage ; les catégories ne sont qu'une limite facultative », APK publié aussi sous
+`timecool-X.Y.Z.apk` (bouton du site), connexion Google sur le site web (code en ligne).
+
+**Nouvelle organisation décidée le 09/10 :** une session chef de projet sur le PC parle avec
+Charles et délègue aux autres sessions (serveur, et bientôt « Testeurs » = utilisateurs
+virtuels, accès minimal). Consignes communes dans `CLAUDE.md` du Bureau du PC (copie :
+`~/memoire-claude-pc/CLAUDE-bureau-pc.md`). Une session jumelle « CHEF DE PROJET OCTOBRE
+2026 » peut être ouverte sur le PC : avant de toucher au code, demander à l'autre où elle en est.
+
+**À faire, dans l'ordre validé :** défauts restants de la campagne 1 (notification qui cache
+les boutons en bas, décaler/annuler sur un seul agenda, « Je décale » depuis la fiche contact,
+avatar « JD », lien public : créneaux passés ou de nuit acceptés, pas de limite de requêtes) ;
+préférence de notification par contact ; fuseaux horaires (plus tard, validé « plus tard »).
+
 ## En attente de Charles
+
+- **Connexion Google sur le site web** : déclarer `https://timecool.fr` dans « Origines JavaScript autorisées » du client « Application Web » (console Google). Charles fera le réglage plus tard.
+
+- **Transfert IONOS** : Charles doit le faire ; ensuite vérifier DNS, site, API, email d'inscription, certificat.
 
 - **Alerte sentinelle du 06/10, 22h55 UTC — corrigée** : `POST /rdv/lien/creer` répondait 500 quand un créneau finissait avant son début (contrainte `ck_creneaux_ordre`). Appels venus de l'adresse de Charles, agent « node » : vraisemblablement des contrôles de la session du PC. L'API vérifie désormais l'ordre et répond 400 `creneau_invalide`. Aucun utilisateur touché.
 
