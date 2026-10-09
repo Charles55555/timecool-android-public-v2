@@ -41,8 +41,20 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   const julian = await inscrire('Julian');
   dire(!!charles.ref && !!julian.ref, 'deux comptes créés', charles.ref + ' / ' + julian.ref);
 
-  // ── Julian n'a rien configuré ─────────────────────────────────────
-  console.log('\nJulian n a rien configuré pour Charles :');
+  // ── Règle du 09/10 : il suffit que l autre ait un compte ─────────────
+  console.log('\nMarie n a rien configuré du tout (pas de fiche, rien à cocher) :');
+  const marie = await inscrire('Marie');
+  const dm = await appel('POST', '/rdv/demander', { reference: marie.ref }, charles.jeton);
+  dire(dm.code === 200 && dm.d.mode === 'creneaux' && dm.d.creneaux.length === 3, 'Charles obtient des créneaux tout de suite',
+    dm.d ? dm.d.mode : dm.code);
+
+  // ── Julian a BLOQUÉ Charles : seul refus possible ──────────────────
+  console.log('\nJulian a bloqué Charles :');
+  await appel('POST', '/sync', {
+    elements: [{ type: 'contact', uid: 'ct_charles', contenu: {
+      id: 'ct_charles', name: 'Charles Verif', phone: charles.tel, email: '',
+      blocked: true, isTimeCool: true } }],
+  }, julian.jeton);
   const d1 = await appel('POST', '/rdv/demander', { reference: julian.ref }, charles.jeton);
   dire(d1.code === 200 && d1.d.mode === 'messagerie', 'la demande part en messagerie',
     d1.d ? d1.d.mode : d1.code);
@@ -95,7 +107,7 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   dire(/disponible/.test(texte), 'et il demande quelque chose de précis');
 
   // ── Julian autorise Charles ───────────────────────────────────────
-  console.log('\nJulian ajoute Charles à ses contacts, avec une catégorie :');
+  console.log('\nJulian débloque Charles, avec une catégorie (limite facultative) :');
   await appel('POST', '/sync', {
     elements: [{ type: 'contact', uid: 'ct_charles', contenu: {
       id: 'ct_charles', name: 'Charles Verif', phone: charles.tel, email: '',

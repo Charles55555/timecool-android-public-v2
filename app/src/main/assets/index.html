@@ -13900,6 +13900,41 @@ function tcGoogleErreur(detail) {
 /** Jeton conservé le temps de compléter l'inscription. */
 let tcPreuveGoogle = null;
 
+/*
+ * Identifiant du client Google de type « Application Web » : celui qui sert deja
+ * d audience au jeton sur Android (MainActivity) et que le serveur verifie
+ * (google_client_ids). Sur le site, l origine https://timecool.fr doit etre
+ * declaree dans la console Google (« Origines JavaScript autorisees »).
+ */
+const TC_GOOGLE_CLIENT_ID_WEB = '696652298607-q4b7qk6qno95apbfp1fb8r3hnn48rv2o.apps.googleusercontent.com';
+
+/** Navigateur : le bouton officiel de Google ; le jeton rendu suit le chemin d Android. */
+function tcConnexionGoogleWeb() {
+  // Une page file:// a l origine « null », qui ne peut pas etre declaree dans la console Google.
+  if (location.protocol === 'file:' || typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+    showToast('ℹ️ Connexion Google indisponible ici — utilise ton email, ou l\'application Android');
+    return;
+  }
+  try {
+    google.accounts.id.initialize({
+      client_id: TC_GOOGLE_CLIENT_ID_WEB,
+      callback: function (reponse) {
+        const fenetre = document.getElementById('googleSignInOverlay');
+        if (fenetre) fenetre.remove();
+        // Le jeton n est pas lu ici : c est le serveur qui en verifie la signature.
+        if (reponse && reponse.credential) tcGoogleJeton(reponse.credential);
+        else showToast('❌ Connexion Google impossible — réessaie ou utilise ton email');
+      },
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+    tcShowGoogleFallbackButton();
+  } catch (e) {
+    console.warn('Connexion Google (web) :', e);
+    showToast('❌ Connexion Google impossible — réessaie ou utilise ton email');
+  }
+}
+
 async function signInWithGoogle() {
   if (tcEstApplicationNative() && typeof window.TimeCoolNatif.connexionGoogle === 'function') {
     tcBalise('1_bouton_google');
@@ -13913,9 +13948,8 @@ async function signInWithGoogle() {
     return;
   }
 
-  // Navigateur : impossible depuis une page file://, dont l'origine est
-  // « null » et ne peut pas être déclarée dans la console Google.
-  showToast('ℹ️ Connexion Google disponible dans l\'application Android');
+  // Navigateur : Google Identity Services, meme jeton que sur Android.
+  tcConnexionGoogleWeb();
 }
 
 function showGoogleEmailInput() {
