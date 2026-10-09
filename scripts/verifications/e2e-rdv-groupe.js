@@ -32,18 +32,27 @@ async function elementsDe(c, type) {
 }
 (async () => {
   console.log('-- comptes de test --');
-  const O = await creer('Olivia', 1), A = await creer('Alice', 2), B = await creer('Bob', 3), C = await creer('Carl', 4);
+  const O = await creer('Olivia', 1), A = await creer('Alice', 2), B = await creer('Bob', 3), C = await creer('Carl', 4), D = await creer('Dana', 5);
   console.log('  ' + [O, A, B, C].map((x) => x.prenom + ':' + x.ref).join('  '));
-  // A, B et C ont Olivia dans leurs contacts. A et B ont coche « travail » ; C n a rien coche.
-  await poserFiche(A, O, ['travail']); await poserFiche(B, O, ['travail']); await poserFiche(C, O, []);
+  // Regle du 09/10 : tout compte TimeCool peut etre consulte, sauf s il bloque.
+  // A : limite a « travail » ; B : fiche sans categorie ; C : a BLOQUE Olivia ; D : n a meme pas Olivia dans ses contacts.
+  await poserFiche(A, O, ['travail']); await poserFiche(B, O, []); await poserFiche(C, O, [], true);
 
   console.log('-- recherche --');
   let r = await appel('POST', '/rdv/groupe/proposer', O.jeton, { references: [A.ref, B.ref, C.ref] });
   verifie('HTTP 200', r.status === 200, r.status);
   const p = r.data || {};
   verifie('3 creneaux, tous complets (Alice et Bob libres)', Array.isArray(p.creneaux) && p.creneaux.length === 3 && p.creneaux.every((c) => c.manquants.length === 0), JSON.stringify(p.creneaux));
-  verifie('Carl (aucune categorie cochee) est mis de cote sans explication', JSON.stringify(p.sans_acces) === '["Carl"]' && JSON.stringify(p.invites) === '["Alice","Bob"]', JSON.stringify([p.sans_acces, p.invites]));
+  verifie('Carl (qui a bloque Olivia) est mis de cote sans explication', JSON.stringify(p.sans_acces) === '["Carl"]' && JSON.stringify(p.invites) === '["Alice","Bob"]', JSON.stringify([p.sans_acces, p.invites]));
   verifie('jamais un week-end (aucune disponibilite reglee)', p.creneaux.every((c) => { const j = new Date(c.date + 'T12:00:00').getDay(); return j !== 0 && j !== 6; }));
+
+  console.log('-- regle ouverte --');
+  r = await appel('POST', '/rdv/groupe/proposer', O.jeton, { references: [D.ref] });
+  verifie('Dana n a meme pas Olivia dans ses contacts : elle est quand meme consultee', JSON.stringify((r.data || {}).invites) === '["Dana"]' && (r.data.creneaux || []).length === 3, JSON.stringify(r.data));
+  r = await appel('POST', '/rdv/demander', O.jeton, { reference: D.ref });
+  verifie('rendez-vous a deux avec Dana : des creneaux, sans rien cocher', (r.data || {}).mode === 'creneaux' && (r.data.creneaux || []).length === 3, JSON.stringify(r.brut));
+  r = await appel('POST', '/rdv/demander', O.jeton, { reference: C.ref });
+  verifie('rendez-vous a deux avec Carl (qui a bloque) : meme reponse qu un agenda plein, aucun creneau', (r.data || {}).mode === 'messagerie', JSON.stringify(r.brut));
 
   console.log('-- confirmation --');
   const s1 = p.creneaux[0];
@@ -60,7 +69,7 @@ async function elementsDe(c, type) {
   const convA = await elementsDe(A, 'conversation');
   verifie('Alice a recu un message de confirmation', convA.some((e) => /Rendez-vous confirm/.test(JSON.stringify(e.contenu))), convA.length + ' conversation(s)');
   const convC = await elementsDe(C, 'conversation');
-  verifie('Carl (non inclus) n a rien recu', convC.length === 0);
+  verifie('Carl (non inclus) n a recu aucune confirmation de rendez-vous', !convC.some((e) => /Rendez-vous confirm/.test(JSON.stringify(e.contenu))));
 
   console.log('-- conflits --');
   r = await appel('POST', '/rdv/groupe/confirmer', O.jeton, { references: [A.ref, B.ref], date: s1.date, heure: s1.heure, duree: 1 });

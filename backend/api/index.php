@@ -420,9 +420,19 @@ function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
 }
 
 /**
- * Les categories que le titulaire a cochees sur la fiche de ce demandeur
- * (liste vide : pas de fiche, contact bloque, ou aucune categorie).
+ * Les categories d horaires qui s appliquent a ce demandeur.
+ *
+ * Regle (Charles, 09/10) : tout contact qui a un compte TimeCool peut
+ * demander un rendez-vous, comme on peut ecrire sur WhatsApp a quiconque
+ * l a. Rien a cocher. Seul le blocage refuse : liste vide. Les categories
+ * cochees sur la fiche ne sont plus qu une limite facultative ; sans
+ * choix, toutes les disponibilites du titulaire valent.
  */
+function categoriesToutesPourRdv(): array
+{
+    return ['travail', 'sante', 'famille', 'amis', 'sport', 'personnel'];
+}
+
 function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
 {
     $tel = Empreinte::normaliserTelephone((string) $demandeur['telephone']);
@@ -448,9 +458,10 @@ function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
         if (!empty($c['blocked'])) {
             return [];
         }
-        return is_array($c['categories'] ?? null) ? array_values(array_filter($c['categories'], 'is_string')) : [];
+        $choisies = is_array($c['categories'] ?? null) ? array_values(array_filter($c['categories'], 'is_string')) : [];
+        return $choisies !== [] ? $choisies : categoriesToutesPourRdv();
     }
-    return [];   // aucune fiche : rien n'a ete configure pour ce demandeur
+    return categoriesToutesPourRdv();   // aucune fiche : ouvert, sauf blocage
 }
 
 /**

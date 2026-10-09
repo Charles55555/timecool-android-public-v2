@@ -107,6 +107,9 @@ jobs:
           SRC=app/build/outputs/apk/release/app-release.apk
           [ -f "$SRC" ] || SRC=app/build/outputs/apk/release/app-release-unsigned.apk
           cp "$SRC" dist/timecool.apk
+          # Meme fichier, nomme avec sa version : c est celui que propose le site,
+          # pour qu on sache toujours laquelle est sur le telephone.
+          cp "$SRC" "dist/timecool-${{ steps.version.outputs.name }}.apk"
           ls -lh dist/timecool.apk
 
       - name: Vérifier la signature
@@ -143,4 +146,5 @@ jobs:
 
           Téléchargement permanent (pointe toujours vers la dernière version) :
           https://github.com/${{ github.repository }}/releases/latest/download/timecool.apk" \
-            dist/timecool.apk
+            dist/timecool.apk \
+            "dist/timecool-${{ steps.version.outputs.name }}.apk"

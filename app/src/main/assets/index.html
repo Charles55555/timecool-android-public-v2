@@ -18033,9 +18033,9 @@ function renderContactsListHTML(contacts) {
             </div>
           </div>
 
-          <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:2px;">Il peut me prendre un RDV pour\u00a0:</div>
-          <div style="font-size:10.5px; color:#9aa0a6; margin-bottom:7px; font-style:italic;">(clique sur une ou plusieurs cat\u00e9gories pour te rendre disponible)</div>
-          ${legendeAPoser ? `<div style="font-size:11px; color:#9aa0a6; margin-bottom:6px;"><span style="color:var(--g-blue); font-weight:600;">\u25cf Color\u00e9</span> = autoris\u00e9 &nbsp;\u00b7&nbsp; <span style="font-weight:600;">\u25cf Gris</span> = non autoris\u00e9</div>` : ''}
+          <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:2px;">Il peut me prendre un RDV. Pour limiter \u00e0 certaines heures\u00a0:</div>
+          <div style="font-size:10.5px; color:#9aa0a6; margin-bottom:7px; font-style:italic;">(choisis une ou plusieurs cat\u00e9gories \u2014 sans choix\u00a0: toutes tes disponibilit\u00e9s)</div>
+          ${legendeAPoser ? `<div style="font-size:11px; color:#9aa0a6; margin-bottom:6px;"><span style="color:var(--g-blue); font-weight:600;">\u25cf Color\u00e9</span> = heures retenues &nbsp;\u00b7&nbsp; <span style="font-weight:600;">\u25cf Gris</span> = non retenues</div>` : ''}
           <div style="display:flex; flex-wrap:wrap; gap:6px; ${c.blocked ? 'opacity:0.4; pointer-events:none;' : ''}">
             ${CATS.map(cat => {
               const active = cats.indexOf(cat.id) > -1;
@@ -22740,20 +22740,10 @@ function renderDispo() {
     }
     // Qui peut reserver dans ces heures. Sans cette ligne, une plage
     // ouverte a personne ressemble a une plage ouverte a tous.
-    var combien = tcContactsAutorises(cat.id);
+    // Tout contact qui a TimeCool peut reserver dans ces heures, sauf s il est bloque.
     if (plages.length > 0) {
-      if (combien > 0) {
-        html += '<div onclick="tcVoirContactsDeCategorie(\'' + cat.id + '\')"'
-          + ' style="font-size:12px;color:' + cat.texte + ';margin-top:6px;cursor:pointer;'
-          + 'text-decoration:underline;">'
-          + '\ud83d\udc65 ' + combien + ' contact' + (combien > 1 ? 's' : '')
-          + ' peu' + (combien > 1 ? 'vent' : 't') + ' r\u00e9server dans ces heures \u203a</div>';
-      } else {
-        html += '<div onclick="tcVoirContactsDeCategorie(\'' + cat.id + '\')"'
-          + ' style="font-size:12px;color:#ea4335;margin-top:6px;font-weight:500;'
-          + 'cursor:pointer;text-decoration:underline;">'
-          + '\u26a0\ufe0f Aucun contact autoris\u00e9 \u2014 personne ne peut r\u00e9server \u203a</div>';
-      }
+      html += '<div style="font-size:12px;color:' + cat.texte + ';margin-top:6px;">'
+        + '\ud83d\udc65 Tes contacts qui ont TimeCool peuvent r\u00e9server dans ces heures</div>';
     }
 
     html += '</div>';

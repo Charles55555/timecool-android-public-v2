@@ -78,11 +78,12 @@ verifie('les libelles ne commencent plus par « Pour »',
   && page.indexOf("label: 'Mon travail'") > -1);
 
 console.log('\n── La ligne n apparait que si une plage existe ──');
-verifie('elle est conditionnee aux plages',
-  /if \(plages\.length > 0\) \{[\s\S]{0,200}tcContactsAutorises|var combien = tcContactsAutorises\(cat\.id\);\s*\n\s*if \(plages\.length > 0\)/.test(page),
-  'annoncer « 0 contact » sur une categorie fermee serait du bruit');
-verifie('zero s affiche en rouge',
-  page.indexOf('color:#ea4335;margin-top:6px;font-weight:500;') > -1);
+// Regle du 09/10 : tout contact qui a TimeCool peut reserver, sauf s il est bloque.
+// Plus de compte « autorises », donc plus d alerte rouge « 0 contact ».
+verifie('la ligne n apparait que si une plage existe, et dit la regle',
+  /if \(plages\.length > 0\) \{\s+html \+= '<div style="font-size:12px;color:' \+ cat\.texte \+ ';margin-top:6px;">'\s+\+ '\\ud83d\\udc65 Tes contacts qui ont TimeCool peuvent r\\u00e9server dans ces heures<\/div>';/.test(page));
+verifie('l alerte rouge « aucun contact autorise » n existe plus',
+  page.indexOf('Aucun contact autoris') === -1 && page.indexOf('color:#ea4335;margin-top:6px;font-weight:500;') === -1);
 
 console.log(`\n${ko} anomalie(s).`);
 process.exit(ko ? 1 : 0);
