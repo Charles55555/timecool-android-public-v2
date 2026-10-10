@@ -3773,6 +3773,26 @@ function fmt(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2
 function sameDay(a,b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
 function isProClosed(dayIdx) { return dayIdx===3||dayIdx===5||dayIdx===6; }
 
+/* Premier jour de la semaine (reglage d'affichage) : 1 = lundi (defaut), 0 = dimanche, 6 = samedi.
+   Lu en direct dans le stockage : un reglage recu d'un autre appareil agit tout de suite.
+   Ne touche NI aux disponibilites, NI aux calculs du serveur (ISO, lundi = 1), NI au numero de semaine ISO. */
+const TC_PREMIERS_JOURS = [
+  { val: '1', nom: 'Lundi', desc: 'Comme en France et en Europe' },
+  { val: '0', nom: 'Dimanche', desc: 'Comme aux États-Unis ou au Canada' },
+  { val: '6', nom: 'Samedi', desc: 'Comme dans une partie du Moyen-Orient' }
+];
+function tcPremierJourSemaine() {
+  try { const v = localStorage.getItem('tc_premier_jour_semaine'); if (v === '0' || v === '6') return parseInt(v, 10); } catch (e) {}
+  return 1;
+}
+/* Combien de jours entre le premier jour de la semaine et cette date (0 a 6). */
+function tcDecalageSemaine(date) { return (date.getDay() - tcPremierJourSemaine() + 7) % 7; }
+/* Les sept jours dans l'ordre affiche, en indices getDay() (0 = dimanche). */
+function tcJoursEnOrdre() { const p = tcPremierJourSemaine(); return [0, 1, 2, 3, 4, 5, 6].map(function (i) { return (p + i) % 7; }); }
+/* Le lundi d'une semaine affichee (sert au numero de semaine ISO, qui ne change jamais). */
+function tcLundiDeLaSemaine(debut) { const l = new Date(debut.getFullYear(), debut.getMonth(), debut.getDate()); l.setDate(l.getDate() + ((8 - tcPremierJourSemaine()) % 7)); return l; }
+function tcNomPremierJour() { const p = tcPremierJourSemaine(); return (TC_PREMIERS_JOURS.find(function (x) { return x.val === String(p); }) || TC_PREMIERS_JOURS[0]).nom; }
+
 // ═══ MODE SWITCH ═══
 function switchMode(m) {
   if (m === 'pro' && !FEATURES.MODE_PRO) return; // Mode Pro éteint
@@ -4200,9 +4220,9 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv, choisiISO) {
   const an = moisDate.getFullYear(), mois = moisDate.getMonth();
   const premier = new Date(an, mois, 1);
   const dernier = new Date(an, mois + 1, 0);
-  // La grille commence le lundi de la semaine du 1er.
+  // La grille commence le premier jour de la semaine (reglage) de la semaine du 1er.
   const debut = new Date(premier);
-  debut.setDate(premier.getDate() - ((premier.getDay() + 6) % 7));
+  debut.setDate(premier.getDate() - tcDecalageSemaine(premier));
   // Centré et de largeur raisonnable, même sur un grand écran.
   let html = '<div style="max-width:480px; margin:0 auto;">';
   html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:0 2px 2px;">'
@@ -4211,11 +4231,11 @@ function tcPanneauMoisHTML(moisDate, aujourdhuiISO, joursAvecRdv, choisiISO) {
     + '<button onclick="tcPanneauMoisChanger(1)" class="nav-btn" aria-label="Mois suivant"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>'
     + '</div>';
   html += '<div style="display:grid; grid-template-columns:26px repeat(7, 1fr); gap:1px 0; text-align:center; font-size:13px;">';
-  html += '<div></div>' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(function (j) { return '<div style="font-size:11px; color:var(--text-sec); padding:2px 0;">' + j + '</div>'; }).join('');
+  html += '<div></div>' + tcJoursEnOrdre().map(function (g) { return ['D', 'L', 'M', 'M', 'J', 'V', 'S'][g]; }).map(function (j) { return '<div style="font-size:11px; color:var(--text-sec); padding:2px 0;">' + j + '</div>'; }).join('');
   for (let semaine = 0; semaine < 6; semaine++) {
     const lundi = new Date(debut); lundi.setDate(debut.getDate() + semaine * 7);
     if (lundi > dernier) break;
-    html += '<div style="font-size:11px; color:var(--text-sec); display:flex; align-items:center; justify-content:center; background:#f1f3f4; border-radius:8px; margin:2px 0;">' + getISOWeek(lundi) + '</div>';
+    html += '<div style="font-size:11px; color:var(--text-sec); display:flex; align-items:center; justify-content:center; background:#f1f3f4; border-radius:8px; margin:2px 0;">' + getISOWeek(tcLundiDeLaSemaine(lundi)) + '</div>';
     for (let j = 0; j < 7; j++) {
       const d = new Date(lundi); d.setDate(lundi.getDate() + j);
       if (d.getMonth() !== mois) { html += '<div></div>'; continue; }
@@ -4337,7 +4357,7 @@ function render() {
   const wnBadge = document.getElementById('weekNumberBadge');
   if (wnBadge) {
     if (currentView === 'week') {
-      wnBadge.textContent = 'Semaine ' + getISOWeek(viewDate);
+      wnBadge.textContent = 'Semaine ' + getISOWeek(tcLundiDeLaSemaine(new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate() - tcDecalageSemaine(viewDate))));
       wnBadge.style.display = 'block';
     } else {
       wnBadge.style.display = 'none';
@@ -4442,13 +4462,13 @@ function renderMonth() {
   const monthNum = viewDate.getMonth() + 1;
   const headerBg = monthNum % 2 === 0 ? '#e8f0fe' : '#fff';
   header.style.background = headerBg;
-  header.innerHTML = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d => `<div>${d}</div>`).join('');
+  header.innerHTML = tcJoursEnOrdre().map(g => DAYS_SHORT[(g + 6) % 7]).map(d => `<div>${d}</div>`).join('');
   body.innerHTML = '';
 
-  // Calcul du premier jour du mois et du décalage pour démarrer un lundi
+  // Calcul du premier jour du mois et du décalage pour démarrer au premier jour de la semaine choisi
   const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
   const lastDay = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0);
-  let startOffset = (firstDay.getDay() + 6) % 7; // Lundi = 0
+  let startOffset = tcDecalageSemaine(firstDay); // 0 = le premier jour de la semaine choisi
   const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7;
 
   const todayStr = fmt(today);
@@ -4552,7 +4572,7 @@ function renderWeek() {
   header.innerHTML = '<div></div>';
   body.innerHTML = '';
   const d0 = new Date(viewDate);
-  const wd = (d0.getDay()+6)%7;
+  const wd = tcDecalageSemaine(d0);
   d0.setDate(d0.getDate()-wd);
   const weekDates = [];
   for (let i=0; i<7; i++) {
@@ -4562,12 +4582,12 @@ function renderWeek() {
     const col = document.createElement('div');
     col.className = 'week-day-header';
     if (sameDay(d, today)) col.classList.add('today');
-    if (mode==='pro' && isProClosed(i)) col.classList.add('closed');
+    if (mode==='pro' && isProClosed((d.getDay()+6)%7)) col.classList.add('closed');
     // Alternating header background based on week number
     const jan1 = new Date(viewDate.getFullYear(), 0, 1);
     const weekNum = Math.ceil(((viewDate - jan1) / 86400000 + jan1.getDay() + 1) / 7);
     if (weekNum % 2 === 0 && !sameDay(d, today)) col.classList.add('current-week');
-    col.innerHTML = `<div class="week-day-name" data-notranslate>${tcDayShort(i)}</div><div class="week-day-num" data-notranslate>${d.getDate()}</div>`;
+    col.innerHTML = `<div class="week-day-name" data-notranslate>${tcDayShort((d.getDay()+6)%7)}</div><div class="week-day-num" data-notranslate>${d.getDate()}</div>`;
     // Le nom de la fete, pas un simple point : celui-ci obligeait a
     // ouvrir la vue Jour pour savoir de quoi il s agissait. La colonne
     // est etroite, le texte est donc petit et coupe si besoin — mais il
@@ -4619,7 +4639,7 @@ function renderWeek() {
     for (let i=0; i<7; i++) {
       const cell = document.createElement('div');
       cell.className = 'hour-cell';
-      if (mode==='pro' && isProClosed(i)) cell.classList.add('closed');
+      if (mode==='pro' && isProClosed((weekDates[i].getDay()+6)%7)) cell.classList.add('closed');
       row.appendChild(cell);
     }
     body.appendChild(row);
@@ -8873,6 +8893,10 @@ function renderSettingsInterne() {
       </div>
       <div onclick="openSettingsModal('hours')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
         <div><div style="font-size:14px;">Plage horaire de ma journée</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_hours_label">${agendaStartH}h00 → ${agendaEndH}h00</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
+      </div>
+      <div onclick="openSettingsModal('weekstart')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div><div style="font-size:14px;">Premier jour de la semaine</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_weekstart_label">${tcNomPremierJour()}</div></div>
         <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
       </div>
     </div>
@@ -15582,6 +15606,18 @@ function applyAgendaHours(start, end) {
   showToast(`✅ Agenda : ${start}h → ${end}h`);
 }
 
+// ─── Premier jour de la semaine ───
+function applyPremierJourSemaine(val) {
+  if (val !== '0' && val !== '6') val = '1';
+  savePreference('tc_premier_jour_semaine', val);
+  const el = document.getElementById('settings_weekstart_label');
+  if (el) el.textContent = tcNomPremierJour();
+  closeSettingsModal();
+  if (currentPage === 'calendar') render();
+  try { if (typeof tcSyncBientot === 'function') tcSyncBientot(); } catch (e) {}
+  showToast('✅ La semaine commence le ' + tcNomPremierJour().toLowerCase());
+}
+
 // ─── Modal générique paramètres ───
 let _settingsModalContent = null;
 
@@ -15623,6 +15659,22 @@ function openSettingsModal(type) {
           <div onclick="applyTimezone('${tz.tz}')" style="padding:12px 16px; margin-bottom:6px; border-radius:10px; border:1.5px solid ${currentTimezone===tz.tz?'var(--g-blue)':'var(--border)'}; background:${currentTimezone===tz.tz?'#e8f0fe':'var(--bg)'}; cursor:pointer; display:flex; align-items:center; gap:12px;">
             <span style="font-size:14px; flex:1; color:var(--text);">${tz.display}</span>
             ${currentTimezone===tz.tz?'<span style="color:var(--g-blue);">✓</span>':''}
+          </div>
+        `).join('')}
+      </div>`;
+  } else if (type === 'weekstart') {
+    const actuel = String(tcPremierJourSemaine());
+    html = `
+      <div style="padding:16px 0;">
+        <div style="font-size:16px; font-weight:600; margin-bottom:6px;">🗓️ Premier jour de la semaine</div>
+        <div style="font-size:12px; color:var(--text-sec); margin-bottom:16px;">Change l'ordre des jours dans la semaine et le mois</div>
+        ${TC_PREMIERS_JOURS.map(j => `
+          <div onclick="applyPremierJourSemaine('${j.val}')" style="padding:14px 16px; margin-bottom:8px; border-radius:12px; border:2px solid ${actuel===j.val?'var(--g-blue)':'var(--border)'}; background:${actuel===j.val?'#e8f0fe':'var(--bg)'}; cursor:pointer; display:flex; align-items:center; gap:12px;">
+            <div style="flex:1;">
+              <div style="font-size:14px; font-weight:600; color:var(--text);">${j.nom}</div>
+              <div style="font-size:12px; color:var(--text-sec); margin-top:2px;">${j.desc}</div>
+            </div>
+            ${actuel===j.val?'<span style="color:var(--g-blue); font-size:18px;">✓</span>':''}
           </div>
         `).join('')}
       </div>`;

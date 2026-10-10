@@ -784,3 +784,19 @@ jusque-là qu'un drapeau local, sans effet pour la personne concernée.
 
 **Appairage** : écran refait, et transfert chiffré de tout le contenu du
 mobile vers le nouvel appareil.
+
+## 10/10/2026 (session adjointe) — Premier jour de la semaine
+
+**Codé et commité sur main, PAS publié.** Page seulement : ni serveur, ni SQL.
+
+- Paramètres → Affichage, sous « Plage horaire de ma journée » : « Premier jour de la semaine »
+  (Lundi par défaut, Dimanche, Samedi), même style que les autres lignes (« Modifier › » + fenêtre centrée).
+  Clé `tc_premier_jour_semaine` ('1' | '0' | '6'), synchronisée avec les autres réglages (pas dans
+  `TC_SYNC_DEJA_SYNCHRONISE`). Lue en direct dans le stockage : un réglage reçu d'un autre appareil agit tout de suite.
+- Suivent le réglage : la vue semaine (colonnes, noms, « aujourd'hui », jours fermés du mode pro qui restent
+  jeudi/samedi/dimanche), la grille du mois (en-têtes, premières cases), le panneau du mois (lettres, rangées,
+  numéro de semaine de chaque rangée = celui de son lundi).
+- Ne bougent pas : « Mes disponibilités » (L M M J V S D), les calculs du serveur, le numéro de semaine ISO
+  (sous le titre : celui du lundi de la semaine affichée), Charly (« cette semaine » reste du lundi au dimanche).
+- Suite `verif-premier-jour-semaine` (lundi/dimanche/samedi : ordre des en-têtes, première date de 70 semaines,
+  changement de mois et d'année, 1er janvier, 29 février, aucun jour sauté ni doublé, « aujourd'hui » dans la bonne colonne).

@@ -85,7 +85,7 @@ const ctx = {
 vm.createContext(ctx);
 ['MONTHS', 'TC_MOIS_COURTS'].forEach((c) => { const src = extraireConst(c); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + c + ' introuvable'); } });
 vm.runInContext('let _tcMoisPanneauDate = null;', ctx);
-['tcISO', 'getISOWeek', 'tcEvenementFin', 'tcJoursAvecRdv', 'tcPanneauMoisHTML', 'tcDessinerPanneauMois', 'tcBasculerPanneauMois',
+['tcPremierJourSemaine', 'tcDecalageSemaine', 'tcJoursEnOrdre', 'tcLundiDeLaSemaine', 'tcISO', 'getISOWeek', 'tcEvenementFin', 'tcJoursAvecRdv', 'tcPanneauMoisHTML', 'tcDessinerPanneauMois', 'tcBasculerPanneauMois',
  'tcFermerPanneauMois', 'tcPanneauMoisChanger', 'tcPanneauMoisChoisir', 'tcPanneauMoisAller'
 ].forEach((n) => {
   const src = extraire(n);
