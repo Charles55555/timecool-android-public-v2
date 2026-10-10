@@ -11157,6 +11157,21 @@ function tcMinutesDeHeure(hhmm) {
   return (h >= 0 && h < 24 && mi >= 0 && mi < 60) ? h * 60 + mi : null;
 }
 
+/** Retire d'une liste de plages {debut, fin} ce que recouvrent les plages protégées. */
+function tcSansTempsProtege(plages, protegees) {
+  let reste = plages.map(function (p) { return { debut: p.debut, fin: p.fin }; });
+  protegees.forEach(function (x) {
+    const suite = [];
+    reste.forEach(function (p) {
+      if (x.fin <= p.debut || x.debut >= p.fin) { suite.push(p); return; }
+      if (x.debut > p.debut) suite.push({ debut: p.debut, fin: x.debut });
+      if (x.fin < p.fin) suite.push({ debut: x.fin, fin: p.fin });
+    });
+    reste = suite;
+  });
+  return reste;
+}
+
 function tcHeureLisible(minutes) {
   const h = Math.floor(minutes / 60), m = minutes % 60;
   return h + 'h' + (m ? String(m).padStart(2, '0') : '');
@@ -11173,7 +11188,7 @@ function tcHeureLisible(minutes) {
 function tcPlagesDuJour(date) {
   if (typeof loadDispo === 'function' && !_dispoData) loadDispo();
   const jour = ((date.getDay() + 6) % 7) + 1;        // 1 = lundi … 7 = dimanche
-  const brutes = [];
+  const brutes = [], protegees = [];
   Object.keys(_dispoData || {}).forEach(function (cat) {
     const plages = _dispoData[cat];
     if (!Array.isArray(plages)) return;
@@ -11181,11 +11196,12 @@ function tcPlagesDuJour(date) {
       if (!p || !Array.isArray(p.jours) || p.jours.indexOf(jour) === -1) return;
       const d = tcMinutesDeHeure(p.debut), f = tcMinutesDeHeure(p.fin);
       if (d === null || f === null || f <= d) return;
-      brutes.push({ debut: d, fin: f });
+      // « Mon temps libre » est protégé : jamais proposé, même s'il recouvre une plage ouverte.
+      (cat === 'personnel' ? protegees : brutes).push({ debut: d, fin: f });
     });
   });
   if (!brutes.length) {
-    return { plages: [{ debut: 9 * 60, fin: 18 * 60 }], defaut: true };
+    return { plages: tcSansTempsProtege([{ debut: 9 * 60, fin: 18 * 60 }], protegees), defaut: true };
   }
   brutes.sort(function (a, b) { return a.debut - b.debut; });
   const fusion = [brutes[0]];
@@ -11194,7 +11210,7 @@ function tcPlagesDuJour(date) {
     if (brutes[i].debut <= dernier.fin) dernier.fin = Math.max(dernier.fin, brutes[i].fin);
     else fusion.push(brutes[i]);
   }
-  return { plages: fusion, defaut: false };
+  return { plages: tcSansTempsProtege(fusion, protegees), defaut: false };
 }
 
 /** Ce qui est déjà pris ce jour-là, en minutes, journées entières comprises. */
@@ -18137,7 +18153,7 @@ function renderContactsListHTML(contacts) {
   // main et avaient diverge -- \u00ab Mon temps libre \u00bb etait vert ici,
   // turquoise la-bas, pour la meme chose.
   const CATS = DISPO_CATEGORIES.map(function (cat) {
-    return { id: cat.id, icon: cat.icon, short: cat.label,
+    return { id: cat.id, icon: cat.icon, short: cat.id === 'personnel' ? 'Même en temps libre' : cat.label,
              color: cat.color, texte: cat.texte, bg: cat.bg };
   });
 
@@ -18183,6 +18199,7 @@ function renderContactsListHTML(contacts) {
 
           <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:2px;">Il peut me prendre un RDV. Pour limiter \u00e0 certaines heures\u00a0:</div>
           <div style="font-size:10.5px; color:#9aa0a6; margin-bottom:7px; font-style:italic;">(choisis une ou plusieurs cat\u00e9gories \u2014 sans choix\u00a0: toutes tes disponibilit\u00e9s)</div>
+          <div style="font-size:10.5px; color:#9aa0a6; margin:-3px 0 7px; font-style:italic;">☀️ « Même en temps libre » : il peut me déranger pendant les heures que je protège.</div>
           ${legendeAPoser ? `<div style="font-size:11px; color:#9aa0a6; margin-bottom:6px;"><span style="color:var(--g-blue); font-weight:600;">\u25cf Color\u00e9</span> = heures retenues &nbsp;\u00b7&nbsp; <span style="font-weight:600;">\u25cf Gris</span> = non retenues</div>` : ''}
           <div style="display:flex; flex-wrap:wrap; gap:6px; ${c.blocked ? 'opacity:0.4; pointer-events:none;' : ''}">
             ${CATS.map(cat => {
@@ -22814,7 +22831,7 @@ function tcOuvrirPlagesDouces() {
   if (!_dispoData) loadDispo();
   var ouvertes = 0;
   DISPO_CATEGORIES.forEach(function (cat) {
-    if ((_dispoData[cat.id] || []).length > 0) return;
+    if (cat.id === 'personnel' || (_dispoData[cat.id] || []).length > 0) return;   // vide = rien de protégé
     _dispoData[cat.id] = TC_PLAGES_DOUCES.map(function (p) {
       return { jours: [2, 4], debut: p.debut, fin: p.fin };
     });
@@ -22931,8 +22948,10 @@ function formatHeure(h) {
   return h.replace(':', 'h');
 }
 
-function phraseDispo(plage) {
-  return 'Je suis disponible ' + formatJours(plage.jours) + ' de ' + formatHeure(plage.debut) + ' \u00e0 ' + formatHeure(plage.fin);
+function phraseDispo(plage, catId) {
+  // « Mon temps libre » est du temps protégé : on y est tranquille, on n'y est pas disponible.
+  return (catId === 'personnel' ? 'Je suis tranquille ' : 'Je suis disponible ')
+    + formatJours(plage.jours) + ' de ' + formatHeure(plage.debut) + ' à ' + formatHeure(plage.fin);
 }
 
 /**
@@ -22981,12 +23000,18 @@ function renderDispo() {
     html += '<span style="font-size:24px;">' + cat.icon + '</span>';
     html += '<div style="flex:1;">';
     html += '<div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:3px;">' + cat.label + '</div>';
+    // À l'envers des cinq autres : ses plages sont du temps PROTÉGÉ.
+    if (cat.id === 'personnel') {
+      html += '<div style="font-size:12.5px;color:#5f6368;line-height:1.5;margin-bottom:6px;">Pendant ces heures, personne ne peut me prendre un rendez-vous, sauf les contacts que j’autorise (ex. ma famille).</div>';
+    }
     if (plages.length === 0) {
-      html += '<div style="font-size:12.5px;color:#9aa0a6;line-height:1.5;">Aucune plage ouverte \u2014 personne ne peut r\u00e9server.</div>';
+      html += cat.id === 'personnel'
+        ? '<div style="font-size:12.5px;color:#9aa0a6;line-height:1.5;">Aucune plage protégée pour l’instant.</div>'
+        : '<div style="font-size:12.5px;color:#9aa0a6;line-height:1.5;">Aucune plage ouverte — personne ne peut réserver.</div>';
     } else {
       plages.forEach(function(p, idx) {
         html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">';
-        html += '<div style="flex:1;font-size:12.5px;color:' + cat.texte + ';line-height:1.5;font-weight:500;">' + phraseDispo(p) + '</div>';
+        html += '<div style="flex:1;font-size:12.5px;color:' + cat.texte + ';line-height:1.5;font-weight:500;">' + phraseDispo(p, cat.id) + '</div>';
         html += '<button onclick="editDispoPlage(\'' + cat.id + '\',' + idx + ')" style="background:#fff;border:1px solid ' + cat.color + ';color:' + cat.texte + ';font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;">\u270f\ufe0f</button>';
         html += '<button onclick="deleteDispoPlage(\'' + cat.id + '\',' + idx + ')" style="background:#fff;border:1px solid #f5b8b3;color:#ea4335;font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;">\u2715</button>';
         html += '</div>';
@@ -22995,7 +23020,9 @@ function renderDispo() {
     // Qui peut reserver dans ces heures. Sans cette ligne, une plage
     // ouverte a personne ressemble a une plage ouverte a tous.
     // Tout contact qui a TimeCool peut reserver dans ces heures, sauf s il est bloque.
-    if (plages.length > 0 && !exigee) {
+    if (plages.length > 0 && cat.id === 'personnel') {
+      html += '<div style="font-size:12px;color:' + cat.texte + ';margin-top:6px;">🔒 Protégé : sauf les contacts autorisés sur leur fiche</div>';
+    } else if (plages.length > 0 && !exigee) {
       html += '<div style="font-size:12px;color:' + cat.texte + ';margin-top:6px;">'
         + '\ud83d\udc65 Tes contacts enregistr\u00e9s qui ont TimeCool peuvent r\u00e9server seuls dans ces heures</div>';
     }

@@ -35,7 +35,7 @@ const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/b
 
 titre('1. La règle « libre ou occupé », exécutée sous PHP');
 verifie('un PHP est disponible', !!PHP);
-const noms = ['texteSur', 'rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'creneauRetenuEstLibre', 'dispoPlagesDuJour', 'dispoDuCompte', 'creneauxLibres'];
+const noms = ['texteSur', 'rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'creneauRetenuEstLibre', 'plagesDeCategorie', 'retirerPlages', 'dispoPlagesDuJour', 'dispoDuCompte', 'creneauxLibres'];
 const sources = noms.map((n) => fonction(api, n));
 verifie('les fonctions existent dans l\'API', sources.every(Boolean), noms.filter((n, i) => !sources[i]).join(', '));
 if (PHP && sources.every(Boolean)) {

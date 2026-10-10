@@ -40,7 +40,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 ['tcISO', 'tcFormaterDateHumaine', 'tcEvenementFin', 'tcEvenementCouvre',
- 'tcMinutesDeHeure', 'tcHeureLisible', 'tcPlagesDuJour', 'tcOccupationsDuJour',
+ 'tcSansTempsProtege', 'tcMinutesDeHeure', 'tcHeureLisible', 'tcPlagesDuJour', 'tcOccupationsDuJour',
  'tcCreneauxDisponibles', 'tcPeriodeAgenda', 'detecterDemandeCreneau',
  'tcGererDemandeCreneau'].forEach((n) => {
   const src = extraire(n);

@@ -25,7 +25,7 @@ function fonction(texte, nom) {
 const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/bin/php'].find((p) => fs.existsSync(p));
 
 titre('1. Les creneaux communs, executes sous PHP');
-const noms = ['rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'dispoPlagesDuJour', 'dispoDuCompte', 'heuresPermisesDuJour', 'personneDisponible', 'creneauxCommuns'];
+const noms = ['rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'plagesDeCategorie', 'retirerPlages', 'dispoPlagesDuJour', 'dispoDuCompte', 'heuresPermisesDuJour', 'personneDisponible', 'creneauxCommuns'];
 const src = noms.map((n) => fonction(api, n));
 verifie('les fonctions existent dans l API', src.every(Boolean), noms.filter((n, i) => !src[i]).join(','));
 if (PHP && src.every(Boolean)) {

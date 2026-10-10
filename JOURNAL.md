@@ -22,6 +22,26 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — « Mon temps libre » = temps protégé
+
+**Codé et commité sur main, PAS publié.**
+
+- « Mon temps libre » (catégorie `personnel`) est à l'envers : ses plages sont du temps PROTÉGÉ.
+  Serveur : elles sont retirées des heures permises de tout demandeur, même si une plage travail,
+  santé… les recouvre (`dispoPlagesDuJour`, donc rendez-vous à deux et à plusieurs). `personnel`
+  n'est plus une catégorie ouvrante par défaut.
+- Exception : la pastille « Même en temps libre » (`personnel` dans `categories` de la fiche)
+  veut dire « il peut me déranger pendant mes heures protégées ». Elle ne limite aucune heure.
+- `/rdv/choisir` refuse (409 neutre, comme un créneau pris) un créneau devenu protégé, ou un
+  contact devenu bloqué. `/rdv/groupe/confirmer` reverifie chaque invité avec ses catégories.
+- `/rdv/proposer-creneau` (le titulaire choisit lui-même) n'applique PAS la protection :
+  c'est son propre choix.
+- Écran : bloc « Mon temps libre » réécrit, phrase « Je suis tranquille… », ligne « 🔒 Protégé… ».
+  Au décochage, `personnel` reste vide. Les créneaux que Charly propose n'incluent jamais le
+  temps protégé.
+- Suites : `verif-temps-protege` (nouvelle, verte) ; `verif-temps-protege-e2e` vise l'API EN LIGNE,
+  rouge tant que l'API n'est pas déployée.
+
 ## 10/10/2026 (session adjointe) — « Toujours attendre ma validation »
 
 **Codé et commité sur main, PAS publié** (l'API, le web et l'APK partent avec le chef principal).

@@ -18,7 +18,7 @@ function fonction(texte, nom) {
   return null;
 }
 const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/bin/php'].find((p) => fs.existsSync(p));
-const noms = ['rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'dispoPlagesDuJour', 'dispoDuCompte', 'creneauxLibres'];
+const noms = ['rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'plagesDeCategorie', 'retirerPlages', 'dispoPlagesDuJour', 'dispoDuCompte', 'creneauxLibres'];
 const src = noms.map((n) => fonction(api, n));
 verifie('les fonctions existent', src.every(Boolean), noms.filter((n, i) => !src[i]).join(','));
 verifie('/rdv/demander transmet les categories (validation, carnet, blocage)', /categoriesPourRdvAutomatique\(\(int\) \$cible\['id'\], \$moi\)/.test(api) && /creneauxLibres\(\(int\) \$cible\['id'\], 3, \$categoriesRdv\)/.test(api));

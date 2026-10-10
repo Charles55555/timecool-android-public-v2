@@ -44,7 +44,7 @@ class Db {
 ${src.join('\n')}
 $res = []; function t(string $n, bool $ok, string $d = ''): void { global $res; $res[] = [$n, $ok, $d]; }
 $moi = ['telephone' => '0611223344', 'email' => 'charles@exemple.fr', 'reference' => 'REFCH'];
-$toutes = ['travail', 'sante', 'famille', 'amis', 'sport', 'personnel'];
+$toutes = ['travail', 'sante', 'famille', 'amis', 'sport'];   // « personnel » (temps libre) n ouvre rien : il est protege
 Db::$l = [];
 t('aucune fiche : inconnu du carnet, la demande passe par la messagerie', categoriesPourPrendreRdv(1, $moi) === [] && !autorisationPourPrendreRdv(1, $moi));
 Db::$l = [['id' => 'c1', 'phone' => '06 11 22 33 44']];
@@ -77,6 +77,12 @@ t('validation decochee, fiche reconnue par la reference du compte : automatique'
 Db::$l = [['id' => 'c2', 'referenceCompte' => 'REFCH', 'blocked' => true]];
 t('fiche bloquee reconnue par la reference : messagerie', categoriesPourRdvAutomatique(1, $moi) === []);
 Db::$reg = null;
+Db::$l = [['id' => 'c1', 'phone' => '0611223344', 'categories' => ['personnel']]];
+t('pastille « temps libre » seule : toutes les heures ouvertes + marqueur « peut deranger »', categoriesPourPrendreRdv(1, $moi) === array_merge($toutes, ['personnel']));
+Db::$l = [['id' => 'c1', 'phone' => '0611223344', 'categories' => ['sante', 'personnel']]];
+t('sante + temps libre : limite a la sante, et peut deranger', categoriesPourPrendreRdv(1, $moi) === ['sante', 'personnel']);
+Db::$l = [['id' => 'c1', 'phone' => '0611223344', 'blocked' => true, 'categories' => ['personnel']]];
+t('bloque, meme avec le temps libre : refuse', categoriesPourPrendreRdv(1, $moi) === []);
 echo json_encode($res);
 `;
   const f = path.join(os.tmpdir(), 'verif-acces-' + process.pid + '.php');

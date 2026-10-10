@@ -433,7 +433,8 @@ function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
  */
 function categoriesToutesPourRdv(): array
 {
-    return ['travail', 'sante', 'famille', 'amis', 'sport', 'personnel'];
+    // « Mon temps libre » (personnel) n ouvre rien : c est du temps PROTEGE (10/10).
+    return ['travail', 'sante', 'famille', 'amis', 'sport'];
 }
 
 function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
@@ -462,7 +463,17 @@ function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
             return [];
         }
         $choisies = is_array($c['categories'] ?? null) ? array_values(array_filter($c['categories'], 'is_string')) : [];
-        return $choisies !== [] ? $choisies : categoriesToutesPourRdv();
+        // Sur une fiche, la pastille « Mon temps libre » ne limite aucune heure : elle veut
+        // dire « il peut me deranger meme pendant mon temps libre ». Elle reste dans la liste
+        // comme marqueur, et dispoPlagesDuJour ne retire alors plus le temps protege.
+        $ouvrantes = array_values(array_diff($choisies, ['personnel']));
+        if ($ouvrantes === []) {
+            $ouvrantes = categoriesToutesPourRdv();
+        }
+        if (in_array('personnel', $choisies, true)) {
+            $ouvrantes[] = 'personnel';
+        }
+        return $ouvrantes;
     }
     return [];   // aucune fiche : inconnu du carnet, la demande passe par la messagerie
 }
@@ -866,34 +877,103 @@ function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces): arr
  *
  * $dispo : { categorie : [ { jours:[1..7], debut:"HH:MM", fin:"HH:MM" } ] }.
  * Aucune plage reglee = aucune plage : rien n est reservable. Il n y a plus
- * d horaires par defaut caches cote serveur (10/10) ; l application ouvre
- * elle-meme deux plages quand le titulaire decoche la validation.
+ * d horaires par defaut caches cote serveur ; l application ouvre elle-meme
+ * deux plages quand le titulaire decoche la validation.
+ *
+ * « Mon temps libre » (personnel) est a l envers : ses plages sont du temps
+ * PROTEGE. Elles sont RETIREES des heures permises, meme si elles recouvrent
+ * une plage travail, sante, famille... — le temps libre gagne toujours. Seule
+ * exception : un contact dont la fiche porte « personnel » (liste $categories)
+ * peut deranger pendant ce temps-la.
  */
 function dispoPlagesDuJour(array $dispo, array $categories, int $jourIso): array
 {
     $plages = [];
     foreach ($categories as $cat) {
-        $liste = $dispo[$cat] ?? null;
-        if (!is_array($liste)) {
+        if ($cat === 'personnel') {
             continue;
         }
-        foreach ($liste as $p) {
-            if (!is_array($p) || !is_array($p['jours'] ?? null)
-                || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($p['debut'] ?? ''), $d)
-                || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($p['fin'] ?? ''), $f)) {
-                continue;
-            }
-            if (!in_array($jourIso, array_map('intval', $p['jours']), true)) {
-                continue;
-            }
-            $debut = (int) $d[1] * 60 + (int) $d[2];
-            $fin = (int) $f[1] * 60 + (int) $f[2];
-            if ($fin > $debut) {
-                $plages[] = [$debut, $fin];
-            }
+        foreach (plagesDeCategorie($dispo, (string) $cat, $jourIso) as $p) {
+            $plages[] = $p;
+        }
+    }
+    if (!in_array('personnel', $categories, true)) {
+        $plages = retirerPlages($plages, plagesDeCategorie($dispo, 'personnel', $jourIso));
+    }
+    return $plages;
+}
+
+/** Les plages d UNE categorie pour un jour ISO, en minutes. Les plages mal formees sont ecartees. */
+function plagesDeCategorie(array $dispo, string $cat, int $jourIso): array
+{
+    $liste = $dispo[$cat] ?? null;
+    if (!is_array($liste)) {
+        return [];
+    }
+    $plages = [];
+    foreach ($liste as $p) {
+        if (!is_array($p) || !is_array($p['jours'] ?? null)
+            || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($p['debut'] ?? ''), $d)
+            || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($p['fin'] ?? ''), $f)) {
+            continue;
+        }
+        if (!in_array($jourIso, array_map('intval', $p['jours']), true)) {
+            continue;
+        }
+        $debut = (int) $d[1] * 60 + (int) $d[2];
+        $fin = (int) $f[1] * 60 + (int) $f[2];
+        if ($fin > $debut) {
+            $plages[] = [$debut, $fin];
         }
     }
     return $plages;
+}
+
+/** Retire de $plages tout ce que recouvrent les plages $interdites (13h-20h retire de 9h-19h : 9h-13h reste). */
+function retirerPlages(array $plages, array $interdites): array
+{
+    foreach ($interdites as [$ia, $ib]) {
+        $reste = [];
+        foreach ($plages as [$a, $b]) {
+            if ($ib <= $a || $ia >= $b) {
+                $reste[] = [$a, $b];
+                continue;
+            }
+            if ($ia > $a) {
+                $reste[] = [$a, $ia];
+            }
+            if ($ib < $b) {
+                $reste[] = [$ib, $b];
+            }
+        }
+        $plages = $reste;
+    }
+    return $plages;
+}
+
+/**
+ * Le creneau tombe-t-il dans le temps libre PROTEGE du titulaire ?
+ * Faux pour un contact autorise (« personnel » dans $categories). A utiliser a
+ * la confirmation : un creneau propose, puis temps libre ajoute entre-temps.
+ */
+function creneauDansTempsProtege(int $titulaireId, array $categories, string $debutSql, string $finSql): bool
+{
+    if (in_array('personnel', $categories, true)) {
+        return false;
+    }
+    $d = strtotime($debutSql);
+    $f = strtotime($finSql);
+    $debut = (int) date('G', $d) * 60 + (int) date('i', $d);
+    $fin = (int) date('G', $f) * 60 + (int) date('i', $f);
+    if ($fin <= $debut) {
+        $fin = 1440;
+    }
+    foreach (plagesDeCategorie(dispoDuCompte($titulaireId), 'personnel', (int) date('N', $d)) as [$a, $b]) {
+        if ($debut < $b && $fin > $a) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /** Les disponibilites du titulaire, telles que son application les a synchronisees. */
@@ -2471,7 +2551,12 @@ switch ($route) {
             }
             // L'agenda du titulaire est verrouillé le temps de la vérification et de l'écriture.
             Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$cible['id']]);
-            if (!creneauRetenuEstLibre((int) $cible['id'], (string) $creneau['debut'], (string) $creneau['fin'])) {
+            // Temps libre du titulaire (sauf contact autorise) ou contact bloque depuis :
+            // meme refus neutre qu un creneau pris.
+            $catsRetenues = categoriesPourPrendreRdv((int) $cible['id'], $moi);
+            if ($catsRetenues === []
+                || creneauDansTempsProtege((int) $cible['id'], $catsRetenues, (string) $creneau['debut'], (string) $creneau['fin'])
+                || !creneauRetenuEstLibre((int) $cible['id'], (string) $creneau['debut'], (string) $creneau['fin'])) {
                 $pdo->rollBack();
                 Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris. Redemande un rendez-vous pour voir les créneaux libres.');
             }

@@ -29,7 +29,7 @@ const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/b
 
 titre('1. Les règles, exécutées sous PHP');
 const noms = ['memeReference', 'validationRdvExigee', 'categoriesToutesPourRdv', 'categoriesPourPrendreRdv', 'categoriesPourRdvAutomatique',
-  'autorisationPourPrendreRdv', 'rdvLibelleJour', 'rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'dispoPlagesDuJour', 'dispoDuCompte',
+  'autorisationPourPrendreRdv', 'rdvLibelleJour', 'rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'plagesDeCategorie', 'retirerPlages', 'dispoPlagesDuJour', 'dispoDuCompte',
   'heuresPermisesDuJour', 'creneauxLibres'];
 const src = noms.map((n) => fonction(api, n));
 verifie('les fonctions existent dans l API', src.every(Boolean), noms.filter((n, i) => !src[i]).join(','));
@@ -54,7 +54,7 @@ class Db {
 ${src.join('\n')}
 $res = []; function t(string $n, bool $ok, string $d = ''): void { global $res; $res[] = [$n, $ok, $d]; }
 $moi = ['telephone' => '0611223344', 'email' => 'charles@exemple.fr', 'reference' => 'REFCH'];
-$toutes = ['travail', 'sante', 'famille', 'amis', 'sport', 'personnel'];
+$toutes = ['travail', 'sante', 'famille', 'amis', 'sport'];   // le temps libre (personnel) est protege, il n ouvre rien
 
 // La matrice : seul « decoche + connu + non bloque » est automatique.
 $etats = ['jamais regle' => null, 'coche' => ['id' => 'tc_rdv_validation', 'v' => '1'], 'decoche' => ['id' => 'tc_rdv_validation', 'v' => '0']];
@@ -184,8 +184,8 @@ vm.runInContext('loadDispo(); tcBasculerValidationRdv(false)', ctx);
 verifie('decoche : le reglage est enregistre a « 0 » et la synchronisation est lancee', mem.tc_rdv_validation === '0' && ctx._sync === 1);
 verifie('decoche : une categorie qui a deja une plage n est pas touchee', JSON.stringify(ctx._dispoData.travail) === JSON.stringify([{ jours: [6], debut: '10:00', fin: '11:00' }]));
 const douces = JSON.stringify([{ jours: [2, 4], debut: '11:00', fin: '12:00' }, { jours: [2, 4], debut: '14:00', fin: '15:00' }]);
-verifie('decoche : chaque categorie vide recoit 11h-12h et 14h-15h, les mardis et jeudis',
-  ['sante', 'famille', 'amis', 'sport', 'personnel'].every((c) => JSON.stringify(ctx._dispoData[c]) === douces));
+verifie('decoche : chaque categorie vide (sauf le temps libre, qui reste vide) recoit 11h-12h et 14h-15h, les mardis et jeudis',
+  ['sante', 'famille', 'amis', 'sport'].every((c) => JSON.stringify(ctx._dispoData[c]) === douces) && ctx._dispoData.personnel.length === 0);
 verifie('et c est enregistre dans « Mes disponibilites » (ce que lit le serveur)', JSON.parse(mem.timecool_disponibilites).sante.length === 2);
 verifie('decoche : la fenetre « C est ouvert, en douceur » s ouvre, en disant que des plages ont ete creees', JSON.stringify(ctx._fenetres) === '[true]' && ctx._toasts.length === 0);
 const fen = fonction(page, 'tcFenetreOuvertureDouce') || '';
@@ -207,7 +207,7 @@ verifie('et la fenetre dit alors « plages ci-dessous » (rien de cree)', ctx._f
 // Toutes les plages supprimees a la main : la phrase de l ecran est vraie
 ctx._dispoData = { travail: [], sante: [], famille: [], amis: [], sport: [], personnel: [] };
 vm.runInContext('renderDispo()', ctx);
-verifie('toutes les plages supprimees : « Aucune plage ouverte — personne ne peut reserver » (vrai cote serveur)', (zone.innerHTML.match(/Aucune plage ouverte/g) || []).length === 6);
+verifie('toutes les plages supprimees : « Aucune plage ouverte — personne ne peut reserver » (vrai cote serveur), et rien de protege dans le temps libre', (zone.innerHTML.match(/Aucune plage ouverte/g) || []).length === 5 && /Aucune plage prot/.test(zone.innerHTML));
 
 titre('4. La page : la demande recue dans la messagerie');
 const c2 = { _toasts: [] };
