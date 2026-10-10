@@ -81,7 +81,7 @@ console.log('\n── La ligne n apparait que si une plage existe ──');
 // Regle du 09/10 : tout contact qui a TimeCool peut reserver, sauf s il est bloque.
 // Plus de compte « autorises », donc plus d alerte rouge « 0 contact ».
 verifie('la ligne n apparait que si une plage existe ET la validation est decochee, et dit la regle',
-  /if \(plages\.length > 0 && !exigee\) \{\s+html \+= '<div style="font-size:12px;color:' \+ cat\.texte \+ ';margin-top:6px;">'\s+\+ '\\ud83d\\udc65 Tes contacts enregistr\\u00e9s qui ont TimeCool peuvent r\\u00e9server seuls dans ces heures<\/div>';/.test(page));
+  /if \(plages\.length > 0 && !exigee\) \{\s+html \+= '<div style="font-size:12px;color:' \+ cat\.texte \+ ';margin-top:6px;">'\s+\+ '👥 ' \+ tcPhraseContactsAutorises\(cat\.id\) \+ '<\/div>';/.test(page));
 verifie('l alerte rouge « aucun contact autorise » n existe plus',
   page.indexOf('Aucun contact autoris') === -1 && page.indexOf('color:#ea4335;margin-top:6px;font-weight:500;') === -1);
 

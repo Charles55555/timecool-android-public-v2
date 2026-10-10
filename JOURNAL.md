@@ -22,6 +22,25 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — contacts classés : un non classé passe par la messagerie
+
+**Codé et commité sur main, PAS publié.** Il y a du serveur (API) : à publier avec le web et l'APK.
+
+- Règle (Charles, 10/10) : un contact NON CLASSÉ (aucune catégorie travail / santé / famille / amis /
+  sport sur sa fiche ; la pastille « temps libre » seule ne classe personne) passe par la messagerie,
+  comme un inconnu. Un contact CLASSÉ réserve seul (case décochée, non bloqué) uniquement dans les
+  plages de SES catégories. `categoriesPourPrendreRdv` n'a plus de repli « toutes les catégories ».
+  Vaut pour /rdv/demander, /rdv/choisir (reverif), /rdv/groupe/proposer et /confirmer.
+- Mes disponibilités : « 👥 Choisir qui » sous chaque bloc ouvrant, avec « N choisis » ; la liste de TOUS
+  les contacts, une case chacun (cochés d'abord, puis TimeCool, puis alphabétique), recherche en haut,
+  60 lignes à la fois (3 313 contacts sans ralentir), « Terminé ». Cocher = ajouter la catégorie sur la
+  fiche (même donnée que la pastille, enregistrée par saveContacts). Un contact bloqué n'est ni compté
+  ni coché. La ligne « me déranger quand même » du temps libre ouvre la même liste.
+- Textes : conseil de la page Contacts (texte de Charles, « Mes disponibilités » cliquable), fiche
+  contact (« Il peut réserver seul dans les plages de : »), cadre gris, fenêtre « C'est ouvert, en douceur ».
+- Suites : `verif-contacts-classes` (nouvelle) ; `verif-contacts-classes-e2e` vise l'API EN LIGNE, rouge
+  tant que l'API n'est pas déployée ; les e2e existants classent désormais leurs contacts.
+
 ## 10/10/2026 (session adjointe) — « Choisir qui peut me déranger », tous les panneaux au centre
 
 **Codé et commité sur main, PAS publié.** Aucun changement serveur.

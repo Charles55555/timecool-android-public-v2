@@ -18167,7 +18167,7 @@ function renderContacts() {
 
   c.innerHTML = `
     <div style="font-size:13px;color:#5f6368;margin-bottom:14px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">
-      \u{1F4A1} Choisis, pour chaque personne, ce qu'elle peut r\u00e9server chez toi.
+      \u{1F4A1} Rien à régler : tes contacts peuvent déjà te demander un rendez-vous, tu valides dans ta messagerie. Pour laisser ta famille, tes amis ou tes collègues réserver seuls, coche-les en une fois depuis <a href="#" onclick="navigate('dispo'); return false;" style="color:var(--g-blue); font-weight:600;">Mes disponibilités</a>.
     </div>
 
     ${tcContactsEnTeteHTML()}
@@ -18249,8 +18249,8 @@ function renderContactsListHTML(contacts) {
             </div>
           </div>
 
-          <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:2px;">Il peut me prendre un RDV. Pour limiter \u00e0 certaines heures\u00a0:</div>
-          <div style="font-size:10.5px; color:#9aa0a6; margin-bottom:7px; font-style:italic;">(choisis une ou plusieurs cat\u00e9gories \u2014 sans choix\u00a0: toutes tes disponibilit\u00e9s)</div>
+          <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:2px;">Il peut réserver seul dans les plages de :</div>
+          <div style="font-size:10.5px; color:#9aa0a6; margin-bottom:3px; font-style:italic;">(sans choix : il passe par ma messagerie)</div>
           <div style="font-size:10.5px; color:#9aa0a6; margin:-3px 0 7px; font-style:italic;">☀️ « Même en temps libre » : il peut me déranger pendant les heures que je protège.</div>
           ${legendeAPoser ? `<div style="font-size:11px; color:#9aa0a6; margin-bottom:6px;"><span style="color:var(--g-blue); font-weight:600;">\u25cf Color\u00e9</span> = heures retenues &nbsp;\u00b7&nbsp; <span style="font-weight:600;">\u25cf Gris</span> = non retenues</div>` : ''}
           <div style="display:flex; flex-wrap:wrap; gap:6px; ${c.blocked ? 'opacity:0.4; pointer-events:none;' : ''}">
@@ -18261,7 +18261,7 @@ function renderContactsListHTML(contacts) {
           </div>
           ${c.blocked
             ? `<div class="ct-blocked">\u{1F6AB}<div><b>Acc\u00e8s bloqu\u00e9 volontairement.</b> Ce contact ne pourra plus prendre de RDV automatiquement. Ses nouvelles demandes de RDV arriveront dans ta messagerie s\u00e9curis\u00e9e et attendront ta validation \u2014 Ce contact ne sait pas qu'il est bloqu\u00e9. Clique sur <b>D\u00e9bloquer l'acc\u00e8s</b> pour le d\u00e9bloquer.</div></div>`
-            : (cats.length === 0 ? `<div style="font-size:11px; color:#ea4335; margin-top:8px; font-style:italic;">${escapeHTMLSafe(prenom)} ne peut pas me prendre de rendez-vous</div>` : '')}
+            : (cats.length === 0 ? `<div style="font-size:11px; color:#9aa0a6; margin-top:8px; font-style:italic;">${escapeHTMLSafe(prenom)} passe par ma messagerie : je valide chaque demande</div>` : '')}
 
           <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
             <span style="font-size:11.5px; color:var(--text-sec);">Je lui dis :</span>
@@ -22932,6 +22932,7 @@ function tcFenetreOuvertureDouce(plagesCreees) {
     : '<p style="' + ligne + '">Tes plages horaires sont déjà réglées. Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement dans ces plages-là</b>, visibles juste en dessous. Le reste de ton agenda reste fermé.</p>'
       + '<p style="' + ligne + '">Pour une catégorie vide, j’ouvre moi-même deux petits créneaux, <b>les mardis et les jeudis</b> :</p>' + heures
       + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>';
+  corps += '<p style="' + ligne + '">Pour que quelqu’un réserve seul, coche-le avec <b>👥 Choisir qui</b>, sous la catégorie qui lui va.</p>';
   tcFenetreCentree('🎉 C’est ouvert, en douceur', corps);
 }
 
@@ -23025,9 +23026,142 @@ function formatHeure(h) {
   return h.replace(':', 'h');
 }
 
+/* ══════════════════════════════════════════════════════════════
+   CHOISIR QUI
+   Un contact reserve seul uniquement s'il est classe dans une categorie
+   (travail, sante, famille, amis, sport), et seulement dans les plages de
+   cette categorie. Cette liste classe tout le carnet d'un coup : une case
+   par contact, c'est la meme donnee que la pastille de la fiche
+   (contact.categories), enregistree et synchronisee comme elle.
+   ══════════════════════════════════════════════════════════════ */
+
+/** « 3 contacts peuvent réserver seuls dans ces heures », juste. */
+function tcPhraseContactsAutorises(catId) {
+  const n = tcContactsAutorises(catId);
+  if (n === 0) return 'Aucun contact ne peut encore réserver seul dans ces heures';
+  if (n === 1) return '1 contact peut réserver seul dans ces heures';
+  return n + ' contacts peuvent réserver seuls dans ces heures';
+}
+
+/** Combien de contacts non bloques portent cette categorie sur leur fiche (un bloque ne reserve jamais : il n est pas compte). */
+function tcCompterChoisis(catId) {
+  if (!Array.isArray(contactsList)) return 0;
+  return contactsList.filter(function (c) {
+    return c && !c.blocked && Array.isArray(c.categories) && c.categories.indexOf(catId) > -1;
+  }).length;
+}
+
+/** Le bouton « 👥 Choisir qui », sous un bloc ouvrant. */
+function tcBoutonChoisirQui(cat) {
+  const n = tcCompterChoisis(cat.id);
+  return '<div id="tcChoisirQui_' + cat.id + '" onclick="tcChoisirQui(\'' + cat.id + '\')" role="button" tabindex="0"'
+    + ' style="display:flex;align-items:center;gap:10px;padding:12px 16px;margin:-4px 0 14px;border:1.5px solid ' + cat.color + ';background:' + cat.bg
+    + ';border-radius:14px;cursor:pointer;color:' + cat.texte + ';font-size:14px;font-weight:600;">'
+    + '<span style="font-size:20px;">👥</span><span style="flex:1;">Choisir qui</span>'
+    + '<span id="tcChoisirQuiN_' + cat.id + '" style="font-size:12.5px;font-weight:500;">' + n + ' choisi' + (n > 1 ? 's' : '') + '</span>'
+    + '<span style="font-size:22px;line-height:1;">›</span></div>';
+}
+
+var _tcQui = null;
+
+/** La liste de TOUS les contacts, une case chacun. Deja coches d'abord, puis inscrits TimeCool, puis ordre alphabetique. */
+function tcChoisirQui(catId) {
+  const cat = DISPO_CATEGORIES.find(function (c) { return c.id === catId; });
+  if (!cat || !Array.isArray(contactsList)) return;
+  tcQuiFermer(true);
+  const choisi = function (c) { return !c.blocked && Array.isArray(c.categories) && c.categories.indexOf(catId) > -1; };
+  // L'ordre est fixe a l'ouverture : cocher ne fait pas sauter les lignes sous le doigt.
+  const ordre = contactsList.filter(function (c) { return c && c.id; }).sort(function (a, b) {
+    return (choisi(b) ? 1 : 0) - (choisi(a) ? 1 : 0)
+      || (isTimeCoolUser(b) ? 1 : 0) - (isTimeCoolUser(a) ? 1 : 0)
+      || (a.name || '').localeCompare(b.name || '', 'fr');
+  }).map(function (c) { return c.id; });
+  _tcQui = { cat: cat, ordre: ordre, recherche: '', max: 60 };
+  const o = document.createElement('div');
+  o.id = 'tcQuiOverlay';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overscroll-behavior:contain;';
+  o.onclick = function (e) { if (e.target === o) tcQuiFermer(); };
+  const perso = catId === 'personnel';
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px;max-height:90vh;max-height:90dvh;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;">'
+    + '<div style="padding:18px 20px 8px;">'
+    + '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:26px;">' + cat.icon + '</span>'
+    + '<div style="flex:1;font-size:17px;font-weight:700;color:#1a1a2e;line-height:1.3;">' + (perso ? 'Qui peut me déranger même en temps libre' : 'Qui peut réserver seul : ' + cat.label) + '</div></div>'
+    + '<div id="tcQuiCompteur" style="font-size:13px;font-weight:600;color:' + cat.texte + ';margin-top:6px;"></div>'
+    + (perso ? '<div style="font-size:12px;color:#5f6368;margin-top:4px;line-height:1.45;">Il faut aussi qu’il soit classé dans une autre catégorie pour réserver seul.</div>' : '')
+    + '<input id="tcQuiRecherche" type="search" placeholder="Chercher un contact…" autocomplete="off" style="width:100%;box-sizing:border-box;margin-top:10px;padding:11px 14px;border:1.5px solid #e8eaed;border-radius:12px;font-size:15px;">'
+    + '</div>'
+    + '<div id="tcQuiListe" style="flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px;"></div>'
+    + '<div style="padding:10px 20px 16px;border-top:1px solid #e8eaed;"><button onclick="tcQuiFermer()" style="width:100%;padding:14px;background:var(--g-blue);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">Terminé</button></div>'
+    + '</div>';
+  document.body.appendChild(o);
+  document.getElementById('tcQuiRecherche').oninput = function () { _tcQui.recherche = this.value; _tcQui.max = 60; tcQuiRendre(); };
+  document.getElementById('tcQuiListe').onchange = function (e) {
+    const c = e.target;
+    if (c && c.dataset && c.dataset.id) tcQuiCocher(c.dataset.id, c.checked);
+  };
+  tcQuiRendre();
+}
+
+/** Dessine les lignes (soixante a la fois : un carnet de plusieurs milliers ne doit rien ralentir). */
+function tcQuiRendre() {
+  const s = _tcQui; if (!s) return;
+  const zone = document.getElementById('tcQuiListe'); if (!zone) return;
+  const par = {};
+  contactsList.forEach(function (c) { if (c && c.id) par[c.id] = c; });
+  const q = s.recherche.trim().toLowerCase();
+  const visibles = s.ordre.map(function (id) { return par[id]; }).filter(function (c) {
+    if (!c) return false;
+    return !q || (c.name || '').toLowerCase().indexOf(q) > -1 || (c.phone || '').toLowerCase().indexOf(q) > -1 || (c.email || '').toLowerCase().indexOf(q) > -1;
+  });
+  let h = '';
+  visibles.slice(0, s.max).forEach(function (c) {
+    const coche = !c.blocked && Array.isArray(c.categories) && c.categories.indexOf(s.cat.id) > -1;
+    h += '<label style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;cursor:' + (c.blocked ? 'default' : 'pointer') + ';' + (c.blocked ? 'opacity:.5;' : '') + '">'
+      + '<input type="checkbox" data-id="' + escapeHTMLSafe(c.id) + '"' + (coche ? ' checked' : '') + (c.blocked ? ' disabled' : '') + ' style="width:22px;height:22px;flex-shrink:0;">'
+      + '<span style="flex:1;min-width:0;font-size:15px;color:#1a1a2e;overflow-wrap:anywhere;">' + escapeHTMLSafe(c.name || '?') + (c.blocked ? ' <span style="font-size:11.5px;color:#9aa0a6;">bloqué</span>' : '') + '</span>'
+      + (isTimeCoolUser(c) ? '<span class="tc-badge"><i>✓</i>TIMECOOL</span>' : '')
+      + '</label>';
+  });
+  if (!visibles.length) h = '<div style="padding:24px 12px;text-align:center;color:#5f6368;font-size:14px;">' + (q ? 'Aucun contact ne correspond.' : 'Aucun contact pour l’instant.') + '</div>';
+  if (visibles.length > s.max) {
+    h += '<button onclick="_tcQui.max += 60; tcQuiRendre()" style="width:100%;margin:6px 0 10px;padding:12px;background:#f1f3f4;color:#5f6368;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">Afficher plus (' + (visibles.length - s.max) + ' restants)</button>';
+  }
+  zone.innerHTML = h;
+  tcQuiCompteur();
+}
+
+function tcQuiCompteur() {
+  const s = _tcQui; if (!s) return;
+  const n = tcCompterChoisis(s.cat.id);
+  const el = document.getElementById('tcQuiCompteur');
+  if (el) el.textContent = n === 0 ? 'Personne de choisi' : n + ' choisi' + (n > 1 ? 's' : '');
+}
+
+/** Cocher ajoute la categorie sur la fiche, decocher la retire : la meme donnee que la pastille. */
+function tcQuiCocher(contactId, coche) {
+  const s = _tcQui; if (!s) return;
+  const c = contactsList.find(function (x) { return x.id === contactId; });
+  if (!c || c.blocked) return;
+  if (!Array.isArray(c.categories)) c.categories = [];
+  const i = c.categories.indexOf(s.cat.id);
+  if (coche && i === -1) c.categories.push(s.cat.id);
+  if (!coche && i > -1) c.categories.splice(i, 1);
+  saveContacts();
+  tcQuiCompteur();
+}
+
+function tcQuiFermer(sansMiseAJour) {
+  const o = document.getElementById('tcQuiOverlay');
+  if (o) o.remove();
+  _tcQui = null;
+  // Les comptes de « Mes disponibilites » se remettent a jour.
+  const p = document.getElementById('page-dispo');
+  if (!sansMiseAJour && p && p.classList.contains('active') && typeof renderDispo === 'function') renderDispo();
+}
+
 /** La ligne qui mene au reglage de l'exception : les contacts qui peuvent deranger pendant le temps libre. */
 function tcLigneQuiPeutDeranger() {
-  return '<div id="tcQuiPeutDeranger" onclick="tcVoirContactsDeCategorie(\'personnel\')" role="button" tabindex="0"'
+  return '<div id="tcQuiPeutDeranger" onclick="tcChoisirQui(\'personnel\')" role="button" tabindex="0"'
     + ' style="display:flex;align-items:center;gap:10px;padding:14px 16px;margin:-4px 0 14px;border:1.5px solid #b3e5fc;background:#e1f5fe;border-radius:14px;cursor:pointer;color:#01579b;font-size:14px;font-weight:600;">'
     + '<span style="font-size:20px;">👥</span><span style="flex:1;">Choisir qui peut me déranger quand même</span><span style="font-size:22px;line-height:1;">›</span></div>';
 }
@@ -23065,9 +23199,9 @@ function renderDispo() {
     html += 'Pour l’instant, personne ne réserve tout seul : chaque demande de rendez-vous arrive dans ta messagerie, et tu choisis le créneau. ';
     html += 'Personne ne voit jamais ton agenda.';
   } else {
-    html += 'Tes contacts enregistrés qui ont TimeCool réservent tout seuls, dans les créneaux que tu ouvres ci-dessous. ';
+    html += 'Seuls les contacts que tu as classés (avec 👥 Choisir qui, sous chaque catégorie) réservent tout seuls, et seulement dans les plages de leur catégorie. ';
     html += 'Eux ne voient jamais ton agenda — uniquement ces créneaux. ';
-    html += 'Quelqu’un qui n’est pas dans tes contacts, ou que tu as bloqué, passe toujours par ta messagerie.';
+    html += 'Un contact non classé, quelqu’un qui n’est pas dans tes contacts, ou un contact bloqué, passe toujours par ta messagerie.';
   }
   html += '</div>';
   html += tcCadreValidationRdv(exigee);
@@ -23108,7 +23242,7 @@ function renderDispo() {
       html += '<div style="font-size:12px;color:' + cat.texte + ';margin-top:6px;">🔒 Protégé : sauf les contacts autorisés sur leur fiche</div>';
     } else if (plages.length > 0 && !exigee) {
       html += '<div style="font-size:12px;color:' + cat.texte + ';margin-top:6px;">'
-        + '\ud83d\udc65 Tes contacts enregistr\u00e9s qui ont TimeCool peuvent r\u00e9server seuls dans ces heures</div>';
+        + '👥 ' + tcPhraseContactsAutorises(cat.id) + '</div>';
     }
 
     html += '</div>';
@@ -23123,7 +23257,7 @@ function renderDispo() {
 
     html += '</div>';
     // Sous « Mon temps libre » : le chemin vers l'exception (la ligne reste cliquable même quand le bloc est gris).
-    if (cat.id === 'personnel') html += tcLigneQuiPeutDeranger();
+    html += cat.id === 'personnel' ? tcLigneQuiPeutDeranger() : tcBoutonChoisirQui(cat);
   });
 
   c.innerHTML = html;
@@ -23230,7 +23364,7 @@ function updateFormJoursUI() {
 /** Depuis la fenetre d'une plage de temps libre : fermer la fenetre et ouvrir le choix des contacts. */
 function tcAutoriserDepuisPlage() {
   closeDispoForm();
-  tcVoirContactsDeCategorie('personnel');
+  tcChoisirQui('personnel');
 }
 
 function closeDispoForm() {

@@ -109,9 +109,11 @@ t('aucun temps libre regle : rien de protege', !$v('2026-10-16 13:00:00', '2026-
 // Les fiches : la pastille « temps libre » est un marqueur, pas une limite d heures
 Db::$fiches = [['id' => 'c1', 'phone' => '0611223344']];
 $moi = ['telephone' => '0611223344', 'email' => '', 'reference' => 'R'];
-t('aucune pastille : les cinq categories ouvrantes, jamais le temps libre', categoriesPourPrendreRdv(1, $moi) === $ouvrantes);
+t('aucune pastille : non classe, rien d ouvert (messagerie)', categoriesPourPrendreRdv(1, $moi) === []);
+Db::$fiches = [['id' => 'c1', 'phone' => '0611223344', 'categories' => ['travail', 'sante', 'famille', 'amis', 'sport']]];
+t('les cinq pastilles ouvrantes : les cinq categories, jamais le temps libre', categoriesPourPrendreRdv(1, $moi) === $ouvrantes);
 Db::$fiches = [['id' => 'c1', 'phone' => '0611223344', 'categories' => ['personnel']]];
-t('pastille temps libre seule : toutes les heures ouvertes + « peut deranger »', categoriesPourPrendreRdv(1, $moi) === $avecExc);
+t('pastille temps libre seule : ne classe personne, messagerie', categoriesPourPrendreRdv(1, $moi) === []);
 Db::$fiches = [['id' => 'c1', 'phone' => '0611223344', 'categories' => ['travail', 'personnel']]];
 t('travail + temps libre : limite au travail + « peut deranger »', categoriesPourPrendreRdv(1, $moi) === ['travail', 'personnel']);
 
@@ -145,7 +147,7 @@ verifie('le message du 409 ne dit rien du temps libre', !/temps libre|prot[eé]g
 titre('3. L ecran « Mes disponibilites » : le bloc « Mon temps libre »');
 const mem = {};
 const ctx = {
-  console, _dispoData: null, _toasts: [], _sync: 0,
+  console, contactsList: [], _dispoData: null, _toasts: [], _sync: 0,
   localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } },
   showToast: (m) => ctx._toasts.push(m), tcSyncBientot: () => { ctx._sync++; },
   JOURS_FULL: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
@@ -165,7 +167,7 @@ vm.createContext(ctx);
   const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); }
 });
 ['loadDispo', 'saveDispo', 'formatJours', 'formatHeure', 'phraseDispo', 'tcValidationRdvExigee', 'tcOuvrirPlagesDouces',
-  'tcCadreValidationRdv', 'tcLigneQuiPeutDeranger', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+  'tcCadreValidationRdv', 'tcContactsAutorises', 'tcCompterChoisis', 'tcPhraseContactsAutorises', 'tcBoutonChoisirQui', 'tcLigneQuiPeutDeranger', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 
 const vendredi = { jours: [5], debut: '13:00', fin: '20:00' };
 verifie('la phrase du temps libre : « Je suis tranquille le vendredi de 13h00 à 20h00 »', ctx.phraseDispo(vendredi, 'personnel') === 'Je suis tranquille le vendredi de 13h00 à 20h00', ctx.phraseDispo(vendredi, 'personnel'));
@@ -182,7 +184,7 @@ verifie('le bloc dit le sens : « Pendant ces heures, personne ne peut me prendr
 verifie('ses plages disent « tranquille », jamais « disponible »', /Je suis tranquille le vendredi de 13h00 à 20h00/.test(libre) && !/Je suis disponible/.test(libre));
 verifie('la ligne « réservent seuls » est remplacée par « 🔒 Protégé : sauf les contacts autorisés sur leur fiche »', /🔒 Protégé : sauf les contacts autorisés sur leur fiche/.test(libre) && !/r.servent seuls|peuvent r.server seuls/.test(libre));
 const travail = bloc('travail');
-verifie('le bloc « Mon travail » ne change pas : « disponible » et « réserver seuls »', /Je suis disponible le lundi de 09h00 à 12h00/.test(travail) && /peuvent réserver seuls dans ces heures/.test(travail) && !/Pendant ces heures, personne/.test(travail));
+verifie('le bloc « Mon travail » ne change pas : « disponible » et « réserver seuls »', /Je suis disponible le lundi de 09h00 à 12h00/.test(travail) && /Aucun contact ne peut encore réserver seul dans ces heures/.test(travail) && !/Pendant ces heures, personne/.test(travail));
 verifie('un seul bloc porte la phrase du temps protégé', (h.match(/Pendant ces heures, personne ne peut me prendre/g) || []).length === 1);
 ctx._dispoData = { travail: [], sante: [], famille: [], amis: [], sport: [], personnel: [] };
 vm.runInContext('renderDispo()', ctx);
@@ -219,7 +221,7 @@ verifie('seul le temps libre est regle : la journee de repli (9h-18h) en est aus
 titre('5. La fiche d un contact');
 verifie('la pastille dit son sens : « Même en temps libre »', /short: cat\.id === 'personnel' \? 'Même en temps libre' : cat\.label/.test(page));
 verifie('une ligne d aide, en mots simples : « il peut me déranger pendant les heures que je protège »', /« Même en temps libre » : il peut me déranger pendant les heures que je protège\./.test(page));
-verifie('le reste de l aide ne change pas', /Il peut me prendre un RDV\. Pour limiter /.test(page) && /toutes tes disponibilit/.test(page));
+verifie('la fiche dit « Il peut réserver seul dans les plages de : (sans choix : il passe par ma messagerie) »', /Il peut réserver seul dans les plages de :/.test(page) && /sans choix : il passe par ma messagerie/.test(page));
 
 console.log('');
 console.log(ko + ' anomalie(s).');

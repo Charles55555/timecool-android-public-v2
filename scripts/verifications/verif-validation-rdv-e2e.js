@@ -54,7 +54,7 @@ const conversation = async (jeton, ref) => (await elements(jeton)).find((e) => e
 
   // Le carnet de Tania : Camille (connue), Boris (bloqué). Ines n y est pas.
   await poser(titulaire.jeton, [
-    { type: 'contact', uid: 'ct_camille', contenu: { id: 'ct_camille', name: 'Camille Valid', phone: contact.tel, email: '', isTimeCool: true } },
+    { type: 'contact', uid: 'ct_camille', contenu: { id: 'ct_camille', name: 'Camille Valid', phone: contact.tel, email: '', categories: ['travail'], isTimeCool: true } },
     { type: 'contact', uid: 'ct_boris', contenu: { id: 'ct_boris', name: 'Boris Valid', phone: bloque.tel, email: '', blocked: true, isTimeCool: true } },
   ]);
 
@@ -153,7 +153,7 @@ const conversation = async (jeton, ref) => (await elements(jeton)).find((e) => e
 
   console.log('\nRendez-vous à plusieurs : même règle :');
   await poser(titulaire.jeton, [reglage('tc_rdv_validation', '0'), dispo(plages([1, 2, 3, 4, 5], '09:00', '18:00')),
-    { type: 'contact', uid: 'ct_axel', contenu: { id: 'ct_axel', name: 'Axel Valid', phone: autre.tel, email: '', isTimeCool: true } }]);
+    { type: 'contact', uid: 'ct_axel', contenu: { id: 'ct_axel', name: 'Axel Valid', phone: autre.tel, email: '', categories: ['travail'], isTimeCool: true } }]);
   const g1 = await appel('POST', '/rdv/groupe/proposer', { references: [titulaire.ref], duree: 1 }, autre.jeton);
   dire(g1.code === 200 && g1.d.invites.length === 1, 'décochée, Axel (dans son carnet) peut la consulter', JSON.stringify(g1.d.invites));
   const g2 = await appel('POST', '/rdv/groupe/proposer', { references: [titulaire.ref], duree: 1 }, inconnu.jeton);

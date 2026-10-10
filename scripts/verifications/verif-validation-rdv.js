@@ -59,7 +59,8 @@ $toutes = ['travail', 'sante', 'famille', 'amis', 'sport'];   // le temps libre 
 // La matrice : seul « decoche + connu + non bloque » est automatique.
 $etats = ['jamais regle' => null, 'coche' => ['id' => 'tc_rdv_validation', 'v' => '1'], 'decoche' => ['id' => 'tc_rdv_validation', 'v' => '0']];
 $gens = [
-  'contact enregistre' => [['id' => 'c1', 'phone' => '06 11 22 33 44']],
+  'contact classe travail' => [['id' => 'c1', 'phone' => '06 11 22 33 44', 'categories' => ['travail']]],
+  'contact enregistre non classe' => [['id' => 'c1', 'phone' => '06 11 22 33 44']],
   'inconnu' => [['id' => 'c9', 'phone' => '0699999999']],
   'contact bloque' => [['id' => 'c1', 'phone' => '0611223344', 'blocked' => true]],
   'carnet vide' => [],
@@ -68,7 +69,7 @@ foreach ($etats as $etat => $reg) {
   foreach ($gens as $gen => $fiches) {
     Db::$reg = $reg; Db::$fiches = $fiches;
     $auto = categoriesPourRdvAutomatique(1, $moi) !== [];
-    $attendu = $etat === 'decoche' && $gen === 'contact enregistre';
+    $attendu = $etat === 'decoche' && $gen === 'contact classe travail';
     t('validation ' . $etat . ', ' . $gen . ' : ' . ($attendu ? 'automatique' : 'messagerie'), $auto === $attendu);
   }
 }
@@ -141,7 +142,7 @@ verifie('et elle n est pas dans la liste « jamais transfere »', !/TC_JAMAIS_TR
 
 const mem = {};
 const ctx = {
-  console, _dispoData: null, _toasts: [], _sync: 0,
+  console, contactsList: [], _dispoData: null, _toasts: [], _sync: 0,
   localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } },
   showToast: (m) => ctx._toasts.push(m), tcSyncBientot: () => { ctx._sync++; },
   _fenetres: [], tcFenetreOuvertureDouce: (p) => ctx._fenetres.push(p),
@@ -163,7 +164,7 @@ vm.createContext(ctx);
   const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); }
 });
 ['loadDispo', 'saveDispo', 'formatJours', 'formatHeure', 'phraseDispo', 'tcValidationRdvExigee', 'tcOuvrirPlagesDouces', 'tcBasculerValidationRdv',
-  'tcCadreValidationRdv', 'tcLigneQuiPeutDeranger', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+  'tcCadreValidationRdv', 'tcContactsAutorises', 'tcCompterChoisis', 'tcPhraseContactsAutorises', 'tcBoutonChoisirQui', 'tcLigneQuiPeutDeranger', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 
 verifie('compte neuf (rien enregistre) : la case est cochee', vm.runInContext('tcValidationRdvExigee()', ctx) === true);
 vm.runInContext('renderDispo()', ctx);
@@ -196,8 +197,8 @@ verifie('son texte est celui valide par Charles (mardis et jeudis, 11h-12h, 14h-
 verifie('et si des plages existaient deja, la fenetre le dit autrement, en citant quand meme les mardis et jeudis 11h-12h / 14h-15h', /plages horaires sont déjà réglées/.test(fen) && (fen.match(/les mardis et les jeudis/g) || []).length === 2 && (fen.match(/de 14h à 15h/g) || []).length >= 1);
 h = zone.innerHTML;
 verifie('decoche : plus rien de grise, case decochee', !/aria-disabled="true"/.test(h) && !/id="dispoValidation" checked/.test(h) && !/opacity:0\.45/.test(h));
-verifie('decoche : le cadre gris dit la regle (contacts enregistres, inconnu et bloque par la messagerie)', /contacts enregistr.s qui ont TimeCool r.servent tout seuls/.test(h) && /pas dans tes contacts/.test(h));
-verifie('decoche : la ligne « reservent seuls dans ces heures » reapparait', /peuvent r.server seuls dans ces heures/.test(h));
+verifie('decoche : le cadre gris dit la regle (contacts classes seulement, dans les plages de leur categorie ; non classe, inconnu ou bloque : messagerie)', /Seuls les contacts que tu as class.s/.test(h) && /seulement dans les plages de leur cat.gorie/.test(h) && /Un contact non class., quelqu.un qui n.est pas dans tes contacts, ou un contact bloqu., passe toujours par ta messagerie/.test(h));
+verifie('decoche : la ligne « N contacts peuvent réserver seuls dans ces heures » reapparait (ici : aucun contact classe)', /Aucun contact ne peut encore r.server seul dans ces heures/.test(h));
 // On recoche : rien n est efface
 vm.runInContext('tcBasculerValidationRdv(true)', ctx);
 verifie('recoche : reglage a « 1 », aucune plage supprimee', mem.tc_rdv_validation === '1' && JSON.parse(mem.timecool_disponibilites).sante.length === 2);

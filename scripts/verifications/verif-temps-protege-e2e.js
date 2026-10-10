@@ -44,8 +44,8 @@ const fiche = (uid, p, extra) => ({ type: 'contact', uid, contenu: Object.assign
   dire(!!t.ref && !!normal.ref && !!autorise.ref, 'trois comptes sonde créés');
 
   // Tania : validation décochée, ses contacts réservent seuls. Nina est une fiche ordinaire ;
-  // Axel porte la pastille « Même en temps libre » (categories: ['personnel']).
-  await poser(t.jeton, [reglage('tc_rdv_validation', '0'), fiche('ct_nina', normal), fiche('ct_axel', autorise, { categories: ['personnel'] })]);
+  // Nina est classee travail ; Axel aussi, et il porte la pastille « Même en temps libre ».
+  await poser(t.jeton, [reglage('tc_rdv_validation', '0'), fiche('ct_nina', normal, { categories: ['travail'] }), fiche('ct_axel', autorise, { categories: ['travail', 'personnel'] })]);
 
   console.log('\nTravail 13h-19h, temps libre 13h-20h tous les jours : le temps libre gagne :');
   await poser(t.jeton, [dispo({ travail: [{ jours: TOUS, debut: '13:00', fin: '19:00' }], personnel: [{ jours: TOUS, debut: '13:00', fin: '20:00' }] })]);

@@ -110,7 +110,7 @@ console.log('\n-- L ordre de la page --');
   const debut = page.indexOf('function renderContacts() {');
   const bloc = page.slice(debut, debut + 3500);
   const ou = (t) => bloc.indexOf(t);
-  const phrase = ou('Choisis, pour chaque');
+  const phrase = ou('Rien à régler');
   const recherche = ou('contactsSearchInput');
   const reglette = ou('tcRegletteHTML');
   const liste = ou('contactsListContainer');

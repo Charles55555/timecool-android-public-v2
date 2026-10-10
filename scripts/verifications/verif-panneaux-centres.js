@@ -78,7 +78,7 @@ verifie('hors perimetre, laisses tels quels : recherche (en haut), champ de Char
 
 titre('3. « Choisir qui peut me déranger quand même »');
 const ctx = {
-  console, _dispoData: { travail: [], sante: [], famille: [], amis: [], sport: [], personnel: [{ jours: [5], debut: '13:00', fin: '20:00' }] },
+  console, contactsList: [], _dispoData: { travail: [], sante: [], famille: [], amis: [], sport: [], personnel: [{ jours: [5], debut: '13:00', fin: '20:00' }] },
   localStorage: { getItem: () => '0', setItem() {}, removeItem() {} }, tcSyncBientot() {}, showToast() {},
   JOURS_FULL: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'], JOURS_LABELS: ['L', 'M', 'M', 'J', 'V', 'S', 'D'],
   DISPO_CATEGORIES: [
@@ -99,10 +99,10 @@ ctx.document = {
   createElement: () => fabrique(),
   body: { appendChild: (c) => corps.push(c) },
 };
-ctx.tcVoirContactsDeCategorie = (c) => ctx.appels.push('contacts:' + c);
+ctx.tcChoisirQui = (c) => ctx.appels.push('qui:' + c);
 vm.createContext(ctx);
 ['var TC_DISPO_KEY = [^;]*;', 'var TC_RDV_VALIDATION_KEY = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); });
-['formatJours', 'formatHeure', 'phraseDispo', 'tcValidationRdvExigee', 'tcCadreValidationRdv', 'tcLigneQuiPeutDeranger', 'renderDispo',
+['formatJours', 'formatHeure', 'phraseDispo', 'tcValidationRdvExigee', 'tcCadreValidationRdv', 'tcContactsAutorises', 'tcCompterChoisis', 'tcPhraseContactsAutorises', 'tcBoutonChoisirQui', 'tcLigneQuiPeutDeranger', 'renderDispo',
   'openDispoForm', 'tcAutoriserDepuisPlage'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 ctx.closeDispoForm = () => ctx.appels.push('ferme');
 vm.runInContext('renderDispo()', ctx);
@@ -110,7 +110,7 @@ let h = zone.innerHTML;
 const iLibre = h.indexOf('>Mon temps libre<');
 const iCarteFin = h.indexOf('id="tcQuiPeutDeranger"');
 verifie('la ligne « Choisir qui peut me déranger quand même » est presente SOUS le bloc « Mon temps libre »', iCarteFin > iLibre && iLibre > -1 && /Choisir qui peut me déranger quand même/.test(h));
-verifie('elle est cliquable et branchee sur la categorie « personnel »', /id="tcQuiPeutDeranger" onclick="tcVoirContactsDeCategorie\('personnel'\)"/.test(h) && /role="button"/.test(h));
+verifie('elle est cliquable et branchee sur la liste « Choisir qui » de la categorie « personnel »', /id="tcQuiPeutDeranger" onclick="tcChoisirQui\('personnel'\)"/.test(h) && /role="button"/.test(h));
 verifie('une seule ligne, et rien de tel sous les autres blocs', (h.match(/tcQuiPeutDeranger"/g) || []).length === 1 && h.indexOf('id="tcQuiPeutDeranger"') > h.lastIndexOf('+ Ajouter une plage') - 400);
 ctx.localStorage.getItem = () => null;   // case cochee : les blocs sont gris
 vm.runInContext('renderDispo()', ctx);
@@ -132,7 +132,7 @@ f = corps[corps.length - 1].kids[0].innerHTML;
 verifie('les autres blocs gardent 9h-18h et n ont pas la ligne', /id="dispoDebut" value="09:00"/.test(f) && /id="dispoFin" value="18:00"/.test(f) && !/tcAutoriserDepuisPlage|Choisir qui peut me déranger/.test(f));
 ctx.appels.length = 0;
 vm.runInContext('tcAutoriserDepuisPlage()', ctx);
-verifie('depuis la fenetre : elle se ferme puis ouvre Mes contacts sur « personnel »', ctx.appels.join(',') === 'ferme,contacts:personnel', ctx.appels.join(','));
+verifie('depuis la fenetre : elle se ferme puis ouvre la liste « Choisir qui » du temps libre', ctx.appels.join(',') === 'ferme,qui:personnel', ctx.appels.join(','));
 
 // La liste des contacts et son bandeau
 const c2 = { _contactsTimeCool: false, _contactsCategorie: 'personnel', _contactsLettre: '', contactsSearchQuery: '', isTimeCoolUser: () => false, TC_CONTACTS_SEUIL: 12, tcLettreContact: () => 'A' };

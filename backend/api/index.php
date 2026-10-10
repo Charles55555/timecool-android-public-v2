@@ -428,8 +428,11 @@ function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
  * dans son carnet, sans blocage. Dans tous les autres cas — validation
  * exigee, inconnu, bloque — la demande passe par sa messagerie, et le
  * demandeur recoit la meme reponse : il ne peut pas les distinguer.
- * Les categories cochees sur la fiche ne sont qu une limite facultative ;
- * sans choix, toutes les disponibilites du titulaire valent.
+ * Un contact NON CLASSE (aucune categorie travail, sante, famille, amis ou sport
+ * cochee sur sa fiche) passe par la messagerie, exactement comme un inconnu : le
+ * titulaire n a pas a classer 3 000 contacts pour etre protege. Un contact CLASSE
+ * ne reserve que dans les plages de SES categories. La pastille « temps libre »
+ * seule ne classe personne : elle ne sert qu avec une categorie ouvrante.
  */
 function categoriesToutesPourRdv(): array
 {
@@ -466,9 +469,9 @@ function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
         // Sur une fiche, la pastille « Mon temps libre » ne limite aucune heure : elle veut
         // dire « il peut me deranger meme pendant mon temps libre ». Elle reste dans la liste
         // comme marqueur, et dispoPlagesDuJour ne retire alors plus le temps protege.
-        $ouvrantes = array_values(array_diff($choisies, ['personnel']));
+        $ouvrantes = array_values(array_intersect($choisies, categoriesToutesPourRdv()));
         if ($ouvrantes === []) {
-            $ouvrantes = categoriesToutesPourRdv();
+            return [];   // non classe : la demande passe par la messagerie, comme un inconnu
         }
         if (in_array('personnel', $choisies, true)) {
             $ouvrantes[] = 'personnel';
