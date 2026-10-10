@@ -22805,8 +22805,9 @@ function tcValidationRdvExigee() {
 }
 
 /* « Démarrer doucement » : au décochage, chaque catégorie sans plage reçoit
-   deux petites plages, du lundi au vendredi. Plus aucun horaire caché ailleurs :
-   ce qui est à l'écran est ce qui s'applique. */
+   deux petites plages, les mardis et les jeudis (texte validé par Charles le
+   10/10). Plus aucun horaire caché ailleurs : ce qui est à l'écran est ce qui
+   s'applique. */
 var TC_PLAGES_DOUCES = [{ debut: '11:00', fin: '12:00' }, { debut: '14:00', fin: '15:00' }];
 
 function tcOuvrirPlagesDouces() {
@@ -22815,7 +22816,7 @@ function tcOuvrirPlagesDouces() {
   DISPO_CATEGORIES.forEach(function (cat) {
     if ((_dispoData[cat.id] || []).length > 0) return;
     _dispoData[cat.id] = TC_PLAGES_DOUCES.map(function (p) {
-      return { jours: [1, 2, 3, 4, 5], debut: p.debut, fin: p.fin };
+      return { jours: [2, 4], debut: p.debut, fin: p.fin };
     });
     ouvertes++;
   });
@@ -22828,11 +22829,40 @@ function tcBasculerValidationRdv(coche) {
   var douces = coche ? 0 : tcOuvrirPlagesDouces();
   if (typeof tcSyncBientot === 'function') tcSyncBientot();
   renderDispo();
-  showToast(coche
-    ? '✅ Tu valides chaque demande dans ta messagerie'
-    : (douces > 0
-      ? '✅ Tes contacts réservent seuls. J’ai ouvert des plages pour toi : change-les quand tu veux.'
-      : '✅ Tes contacts enregistrés réservent seuls'));
+  if (coche) { showToast('✅ Tu valides chaque demande dans ta messagerie'); return; }
+  tcFenetreOuvertureDouce(douces > 0);
+}
+
+function tcFermerOuvertureDouce() {
+  var o = document.getElementById('tcOuvertureDouceOverlay');
+  if (o) o.remove();
+}
+
+/**
+ * La fenêtre qui explique ce qui vient de s'ouvrir, au décochage. Un petit
+ * message fugace ne suffisait pas : il faut pouvoir le lire tranquillement.
+ * Texte validé par Charles le 10/10, écrit pour un enfant de 10 ans.
+ */
+function tcFenetreOuvertureDouce(plagesCreees) {
+  tcFermerOuvertureDouce();
+  var o = document.createElement('div');
+  o.id = 'tcOuvertureDouceOverlay';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:flex-end;justify-content:center;';
+  o.onclick = function (e) { if (e.target === o) tcFermerOuvertureDouce(); };
+  var ligne = 'font-size:15px;color:#1a1a2e;line-height:1.55;margin:0 0 12px;';
+  var corps = plagesCreees
+    ? '<p style="' + ligne + '">J’ai ouvert pour toi deux petits créneaux, <b>les mardis et les jeudis</b> :</p>'
+      + '<div style="font-size:17px;font-weight:700;color:#1a3d6e;line-height:1.7;margin:0 0 14px 8px;">🕚 de 11h à 12h<br>🕑 de 14h à 15h</div>'
+      + '<p style="' + ligne + '">Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement à ces heures-là</b>. Le reste de ton agenda reste fermé.</p>'
+      + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>'
+    : '<p style="' + ligne + '">Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement dans les plages horaires ci-dessous</b>. Le reste de ton agenda reste fermé.</p>'
+      + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>';
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:22px 20px 20px;">'
+    + '<div style="font-size:20px;font-weight:700;color:#1a1a2e;margin-bottom:14px;">🎉 C’est ouvert, en douceur</div>'
+    + corps
+    + '<button onclick="tcFermerOuvertureDouce()" style="width:100%;padding:14px;background:var(--g-blue);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;">Compris</button>'
+    + '</div>';
+  document.body.appendChild(o);
 }
 
 /** La case, dans un cadre bien visible, juste sous l'explication. */

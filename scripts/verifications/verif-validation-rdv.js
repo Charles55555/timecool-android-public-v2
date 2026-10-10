@@ -86,7 +86,7 @@ t('aucune plage : aucune heure, semaine comme week-end', heuresPermisesDuJour([]
 t('aucune plage : aucun creneau propose', creneauxLibres(1, 3, $toutes) === []);
 Db::$dispo = ['travail' => [], 'sante' => [], 'famille' => [], 'amis' => [], 'sport' => [], 'personnel' => []];
 t('toutes les plages supprimees : aucun creneau (la phrase de l ecran est vraie)', creneauxLibres(1, 3, $toutes) === []);
-Db::$dispo = ['travail' => [['jours' => [1, 2, 3, 4, 5], 'debut' => '11:00', 'fin' => '12:00'], ['jours' => [1, 2, 3, 4, 5], 'debut' => '14:00', 'fin' => '15:00']]];
+Db::$dispo = ['travail' => [['jours' => [2, 4], 'debut' => '11:00', 'fin' => '12:00'], ['jours' => [2, 4], 'debut' => '14:00', 'fin' => '15:00']]];
 $c = creneauxLibres(1, 3, $toutes);
 $ok = count($c) === 3;
 foreach ($c as $x) { $ok = $ok && in_array($x['heure'], [11, 14], true) && (int) date('w', strtotime($x['date'])) % 6 !== 0; }
@@ -144,6 +144,7 @@ const ctx = {
   console, _dispoData: null, _toasts: [], _sync: 0,
   localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } },
   showToast: (m) => ctx._toasts.push(m), tcSyncBientot: () => { ctx._sync++; },
+  _fenetres: [], tcFenetreOuvertureDouce: (p) => ctx._fenetres.push(p),
   JOURS_FULL: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
   DISPO_CATEGORIES: [
     { id: 'travail', icon: 'T', label: 'Mon travail', color: '#aaa', bg: '#bbb', texte: '#333' },
@@ -182,10 +183,16 @@ mem.timecool_disponibilites = JSON.stringify({ travail: [{ jours: [6], debut: '1
 vm.runInContext('loadDispo(); tcBasculerValidationRdv(false)', ctx);
 verifie('decoche : le reglage est enregistre a « 0 » et la synchronisation est lancee', mem.tc_rdv_validation === '0' && ctx._sync === 1);
 verifie('decoche : une categorie qui a deja une plage n est pas touchee', JSON.stringify(ctx._dispoData.travail) === JSON.stringify([{ jours: [6], debut: '10:00', fin: '11:00' }]));
-const douces = JSON.stringify([{ jours: [1, 2, 3, 4, 5], debut: '11:00', fin: '12:00' }, { jours: [1, 2, 3, 4, 5], debut: '14:00', fin: '15:00' }]);
-verifie('decoche : chaque categorie vide recoit 11h-12h et 14h-15h, du lundi au vendredi',
+const douces = JSON.stringify([{ jours: [2, 4], debut: '11:00', fin: '12:00' }, { jours: [2, 4], debut: '14:00', fin: '15:00' }]);
+verifie('decoche : chaque categorie vide recoit 11h-12h et 14h-15h, les mardis et jeudis',
   ['sante', 'famille', 'amis', 'sport', 'personnel'].every((c) => JSON.stringify(ctx._dispoData[c]) === douces));
 verifie('et c est enregistre dans « Mes disponibilites » (ce que lit le serveur)', JSON.parse(mem.timecool_disponibilites).sante.length === 2);
+verifie('decoche : la fenetre « C est ouvert, en douceur » s ouvre, en disant que des plages ont ete creees', JSON.stringify(ctx._fenetres) === '[true]' && ctx._toasts.length === 0);
+const fen = fonction(page, 'tcFenetreOuvertureDouce') || '';
+verifie('son texte est celui valide par Charles (mardis et jeudis, 11h-12h, 14h-15h, seulement a ces heures-la, reste ferme)',
+  /C’est ouvert, en douceur/.test(fen) && /les mardis et les jeudis/.test(fen) && /de 11h à 12h/.test(fen) && /de 14h à 15h/.test(fen)
+  && /mais seulement à ces heures-là/.test(fen) && /Le reste de ton agenda reste fermé/.test(fen) && /comme tu préfères, juste en dessous/.test(fen) && /Compris/.test(fen));
+verifie('et si des plages existaient deja, la fenetre le dit autrement (plages ci-dessous)', /seulement dans les plages horaires ci-dessous/.test(fen));
 h = zone.innerHTML;
 verifie('decoche : plus rien de grise, case decochee', !/aria-disabled="true"/.test(h) && !/id="dispoValidation" checked/.test(h) && !/opacity:0\.45/.test(h));
 verifie('decoche : le cadre gris dit la regle (contacts enregistres, inconnu et bloque par la messagerie)', /contacts enregistr.s qui ont TimeCool r.servent tout seuls/.test(h) && /pas dans tes contacts/.test(h));
@@ -196,6 +203,7 @@ verifie('recoche : reglage a « 1 », aucune plage supprimee', mem.tc_rdv_valida
 // Decoche une 2e fois : ne duplique rien
 vm.runInContext('tcBasculerValidationRdv(false)', ctx);
 verifie('decoche une deuxieme fois : les plages ne sont pas dupliquees', JSON.parse(mem.timecool_disponibilites).sante.length === 2);
+verifie('et la fenetre dit alors « plages ci-dessous » (rien de cree)', ctx._fenetres[ctx._fenetres.length - 1] === false);
 // Toutes les plages supprimees a la main : la phrase de l ecran est vraie
 ctx._dispoData = { travail: [], sante: [], famille: [], amis: [], sport: [], personnel: [] };
 vm.runInContext('renderDispo()', ctx);
