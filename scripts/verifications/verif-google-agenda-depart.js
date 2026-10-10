@@ -133,7 +133,7 @@ titre('L\'aide et Charly disent la vérité');
 const faq = (page.match(/\{q: '📅 TimeCool se synchronise-t-il avec Google Agenda \?', a: '([^\n]*)'\}/) || [])[1] || '';
 verifie('l\'aide parle de « Synchroniser mon agenda TimeCool avec mon agenda Google » et d\'« Importer mon agenda existant »', /Synchroniser mon agenda TimeCool avec mon agenda Google/.test(faq) && /Importer mon agenda existant/.test(faq), faq.slice(0, 80));
 verifie('l\'aide promet « pas de doublons » et ne parle plus de la case « Laisser Charly lire » (pas construite)', /pas de doublons/.test(faq) && !/Deux cases|Laisser Charly lire|Relier/.test(faq));
-const iCle = page.indexOf("{ keys: ['google calendar','google agenda','agenda google','calendrier google','calendrier de google','importer agenda','importer mes rdv'],");
+const iCle = page.indexOf("{ keys: ['google calendar','google agenda','agenda google','calendrier google','calendrier de google','importer agenda','importer mes rdv','synchroniser avec mon ancien agenda','synchroniser mon ancien agenda'],");
 const reponse = iCle > -1 ? page.slice(page.indexOf("reply: '", iCle), page.indexOf("' },", page.indexOf("reply: '", iCle))) : '';
 verifie('Charly ne répond plus « Pas encore » à une question sur Google Agenda : il explique où synchroniser', /^reply: 'Oui !/.test(reponse) && /Synchroniser mon agenda TimeCool avec mon agenda Google/.test(reponse) && !/Pas encore/.test(reponse), reponse.slice(0, 80));
 

@@ -565,6 +565,10 @@ body.maj-visible .toast { bottom:152px; }
 .ct-act.blk.on { border-color:#ea4335; background:#fce8e6; color:#ea4335; }
 .ct-blocked { display:flex; align-items:center; gap:8px; margin-top:10px; padding:9px 12px; border-radius:10px;
   background:#fce8e6; border:1px solid #f5b5ae; font-size:11.5px; color:#b31412; line-height:1.45; }
+.tc-rassurant { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; margin-bottom:14px; border-radius:12px;
+  background:#e6f4ea; border:1.5px solid #9fd3ad; color:#1e4d2b; font-size:13.5px; line-height:1.55; }
+.tc-rassurant .tc-rassurant-cadenas { font-size:26px; line-height:1; flex-shrink:0; }
+.tc-rassurant b { display:block; font-size:14.5px; margin-bottom:3px; color:#14532d; }
 .ct-act.rdv { border-color:#34a853; background:#e6f4ea; color:#1e7e34; }
 .ct-act.inv { border-color:#fbbc04; background:#fff8e1; color:#8a6100; }
 .tc-badge { display:inline-flex; align-items:center; gap:4px; margin-left:6px; padding:2px 7px 2px 4px; border-radius:99px;
@@ -1672,20 +1676,36 @@ if (window.pdfjsLib) {
       <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     </button>
     <div>
-      <div class="page-title">📅 Synchroniser avec Google Agenda</div>
-      <div class="page-subtitle">Tes rendez-vous TimeCool apparaissent aussi dans ton Google Agenda</div>
+      <div class="page-title">📅 Synchroniser avec mon ancien agenda</div>
+      <div class="page-subtitle">Tes rendez-vous TimeCool apparaissent aussi dans ton ancien agenda (Google ou Outlook)</div>
     </div>
   </div>
   <div class="main"><div id="googleAgendaContent" style="padding:14px;">
+    <div class="tc-rassurant" id="tcRassurantSynchro">
+      <span class="tc-rassurant-cadenas">🔒</span>
+      <div><b>Ton ancien agenda ne risque rien.</b>TimeCool ne supprime, ne modifie et ne déplace jamais rien dans ton ancien agenda. Il lit (pour importer) ou il ajoute (pour synchroniser), c’est tout. Tu peux continuer à l’utiliser comme avant.</div>
+    </div>
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:14px; font-size:13.5px; line-height:1.6; color:var(--text);">
       <div style="font-weight:600; margin-bottom:6px;">Comment ça marche</div>
-      <div>1. Tu as déjà un agenda Google ? <a href="#" onclick="navigate('importagenda'); return false;" style="color:var(--g-blue); font-weight:600;">Importe-le d’abord</a> : tes rendez-vous entrent dans TimeCool.</div>
-      <div>2. Tu synchronises : à partir de ce moment, chaque rendez-vous que tu crées ou modifies dans TimeCool, ou avec Charly, apparaît aussi dans ton Google Agenda.</div>
-      <div style="color:var(--text-sec); margin-top:6px;">Ce qui existait avant n’est pas renvoyé : pas de doublons. Tu peux garder Google Agenda aussi longtemps que tu veux.</div>
+      <div>1. Tu as déjà un agenda Google ou Outlook ? <a href="#" onclick="navigate('importagenda'); return false;" style="color:var(--g-blue); font-weight:600;">Importe-le d’abord</a> : tes rendez-vous entrent dans TimeCool.</div>
+      <div>2. Tu synchronises : à partir de ce moment, chaque rendez-vous que tu crées ou modifies dans TimeCool, ou avec Charly, apparaît aussi dans ton ancien agenda.</div>
+      <div style="color:var(--text-sec); margin-top:6px;">Ce qui existait avant n’est pas renvoyé : pas de doublons. Tu peux garder ton ancien agenda aussi longtemps que tu veux.</div>
     </div>
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden;">
       <div style="padding:14px 16px; background:#e8f0fe; font-size:12px; font-weight:700; text-transform:uppercase; color:#1a73e8;">📅 Google Agenda</div>
       <div id="tcGoogleAgendaZone"></div>
+    </div>
+    <div id="tcOutlookCarte" style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-top:14px;">
+      <div style="padding:14px 16px; background:#e3f0fb; font-size:12px; font-weight:700; text-transform:uppercase; color:#0f5aa8; display:flex; align-items:center; gap:8px;">
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="0" y="0" width="6.5" height="6.5" fill="#f25022"/><rect x="7.5" y="0" width="6.5" height="6.5" fill="#7fba00"/><rect x="0" y="7.5" width="6.5" height="6.5" fill="#00a4ef"/><rect x="7.5" y="7.5" width="6.5" height="6.5" fill="#ffb900"/></svg>
+        Outlook <span style="margin-left:auto; text-transform:none; font-weight:600; color:#5f6368;">bientôt</span>
+      </div>
+      <div id="tcOutlookAgendaZone">
+        <div style="padding:14px 16px; font-size:12.5px; color:var(--text-sec); line-height:1.5;">Synchronisez votre agenda Outlook avec TimeCool. Microsoft vous demandera votre accord sur sa propre page. À partir de là, les rendez-vous que vous créez ou modifiez dans TimeCool apparaissent aussi dans votre agenda Outlook ; ce qui existait avant n’est pas envoyé.</div>
+        <div style="padding:0 16px 16px;">
+          <button id="tcOutlookAgendaBouton" onclick="tcOutlookAgendaRelier()" style="width:100%; padding:12px; background:#0f6cbd; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">Synchroniser mon agenda TimeCool avec mon agenda Outlook</button>
+        </div>
+      </div>
     </div>
   </div></div>
 </div>
@@ -1701,7 +1721,12 @@ if (window.pdfjsLib) {
       <div class="page-subtitle">Récupère tous tes rendez-vous en quelques secondes</div>
     </div>
   </div>
-  <div class="main"><div id="importAgendaContent" style="padding:14px;"></div></div>
+  <div class="main"><div style="padding:14px 14px 0;">
+    <div class="tc-rassurant" id="tcRassurantImport">
+      <span class="tc-rassurant-cadenas">🔒</span>
+      <div><b>Ton ancien agenda ne risque rien.</b>TimeCool ne supprime, ne modifie et ne déplace jamais rien dans ton ancien agenda. Il lit (pour importer) ou il ajoute (pour synchroniser), c’est tout. Tu peux continuer à l’utiliser comme avant.</div>
+    </div>
+  </div><div id="importAgendaContent" style="padding:14px;"></div></div>
 </div>
 
 <div class="page" id="page-dispo">
@@ -3155,8 +3180,8 @@ Si on te compare à Google Agenda : "Google Agenda stocke tes RDV. Moi, je les c
 ═══ CAS 11 — FONCTIONNALITÉS NON DISPONIBLES ═══
 Ne dis JAMAIS "je ne peux pas". Redirige toujours positivement.
 Exemple : "Je ne peux pas encore appeler pour toi, mais je peux créer le RDV maintenant — tu veux ?"
-Exemple : "La synchro avec Outlook arrive bientôt ! En attendant, je gère ton agenda ici 😊"
-Google Agenda EXISTE déjà : menu ☰ → Synchroniser avec Google Agenda. Un seul sens (TimeCool vers Google), seulement ce qui est créé ou modifié après le départ de la synchronisation ; l'ancien agenda s'importe par fichier .ics (menu ☰ → Importer mon ancien agenda). Ne dis JAMAIS que la synchro Google arrive bientôt, et ne promets JAMAIS que tu lis Google Agenda.
+Exemple : "La synchro avec Outlook arrive bientôt : la page ☰ → Synchroniser avec mon ancien agenda le montre déjà. En attendant, je gère ton agenda ici 😊" (ne promets JAMAIS qu'elle marche déjà)
+Google Agenda EXISTE déjà : menu ☰ → Synchroniser avec mon ancien agenda (carte Google). Un seul sens (TimeCool vers Google), seulement ce qui est créé ou modifié après le départ de la synchronisation ; l'ancien agenda s'importe par fichier .ics (menu ☰ → Importer mon ancien agenda). Ne dis JAMAIS que la synchro Google arrive bientôt, et ne promets JAMAIS que tu lis Google Agenda.
 
 ═══ CAS 12 — IMPORT DE DOCUMENTS (PDF, invitation) ═══
 Si l'utilisateur mentionne un document, invite-le à utiliser le bouton + pour l'importer.
@@ -3659,7 +3684,7 @@ const menuItems = {
   user: [
     {id:'calendar', icon:'🗓️', label:'Mon agenda'},
     {id:'importagenda', icon:'📥', label:'Importer mon ancien agenda'},
-    {id:'google', icon:'📅', label:'Synchroniser avec Google Agenda'},
+    {id:'google', icon:'📅', label:'Synchroniser avec mon ancien agenda'},
     {id:'assistant', icon:'⚡', label:'Charly IA'},
     {id:'contacts', icon:'👥', label:'Mes contacts'},
     {id:'pros', icon:'🌐', label:'Mes professionnels'},
@@ -3676,7 +3701,7 @@ const menuItems = {
   pro: [
     {id:'calendar', icon:'🗓️', label:'Mon agenda'},
     {id:'importagenda', icon:'📥', label:'Importer mon ancien agenda'},
-    {id:'google', icon:'📅', label:'Synchroniser avec Google Agenda'},
+    {id:'google', icon:'📅', label:'Synchroniser avec mon ancien agenda'},
     {id:'assistant', icon:'⚡', label:'Charly IA'},
     {id:'contacts', icon:'👥', label:'Mes contacts'},
     {id:'pros', icon:'👥', label:'Mes clients'},
@@ -12594,12 +12619,14 @@ async function charlySendMessage() {
     { keys: ['téléphoner','telephoner','téléphone pour moi','téléphoner pour moi','appel pour moi','appelle pour moi','passer un appel','passe un appel','passer un coup de fil','coup de fil pour moi'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     // Avant Google : ce que TimeCool ne fait pas (encore), pour ne pas répondre « Oui ! » à côté.
-    { keys: ['apple calendar','agenda apple','calendrier apple','icloud','caldav','outlook'],
+    { keys: ['outlook','agenda outlook','calendrier outlook','microsoft outlook','synchroniser outlook','synchro outlook'],
+      reply: 'Pas encore, mais bientôt ! 🔜 La page ☰ → Synchroniser avec mon ancien agenda montre déjà la carte Outlook : elle s’activera dans une prochaine version. Pour reprendre ton agenda Outlook dès maintenant, importe-le : menu ☰ → Importer mon ancien agenda 😊' },
+    { keys: ['apple calendar','agenda apple','calendrier apple','icloud','caldav'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['lire mon google agenda','lis mon google agenda','lire google agenda','récupérer mon google agenda','recuperer mon google agenda','voir mon google agenda','importer google agenda','importer mon google agenda'],
       reply: 'Pas encore : pour l’instant TimeCool envoie tes rendez-vous vers Google Agenda, il ne lit pas Google. Pour reprendre ton ancien agenda, importe-le : menu ☰ → Importer mon ancien agenda 😊' },
-    { keys: ['google calendar','google agenda','agenda google','calendrier google','calendrier de google','importer agenda','importer mes rdv'],
-      reply: 'Oui ! 😊 Ouvre le menu ☰ → Synchroniser avec Google Agenda → « Synchroniser mon agenda TimeCool avec mon agenda Google » : ce que tu crées ou modifies dans TimeCool apparaît aussi dans Google (un seul sens). Pour reprendre ton ancien agenda, importe-le d’abord : menu ☰ → Importer mon ancien agenda.' },
+    { keys: ['google calendar','google agenda','agenda google','calendrier google','calendrier de google','importer agenda','importer mes rdv','synchroniser avec mon ancien agenda','synchroniser mon ancien agenda'],
+      reply: 'Oui ! 😊 Ouvre le menu ☰ → Synchroniser avec mon ancien agenda → « Synchroniser mon agenda TimeCool avec mon agenda Google » : ce que tu crées ou modifies dans TimeCool apparaît aussi dans Google (un seul sens). Pour reprendre ton ancien agenda, importe-le d’abord : menu ☰ → Importer mon ancien agenda.' },
     { keys: ['envoyer email','envoyer un email','envoyer mail','envoyer un mail','email pour moi','mail pour moi','envoie un mail','envoie un email','tu peux envoyer','envoyer des emails','envoyer des mails','email','e-mail'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['payer','paiement','carte bleue','virement','régler','réglement'],
@@ -17127,7 +17154,7 @@ function renderHelp() {
     {q: '🌍 Dans quelles langues TimeCool est-il disponible ?', a: 'TimeCool est disponible en 17 langues européennes. Change de langue à tout moment dans Paramètres → Langue. La traduction est automatique, donc certaines formulations peuvent être imparfaites.'},
     {q: '🎂 Comment ajouter un anniversaire ?', a: 'Va dans Menu → Anniversaires → "+ Ajouter un anniversaire". Tu peux aussi demander à Charly IA : "Ajoute l\'anniversaire de Marie le 15 juin".'},
     {q: '🔧 Comment activer Charly IA ?', a: 'Il est déjà actif : Charly fonctionne dès ton inscription, sans réglage et sans clé à fournir. L\'intelligence artificielle est prise en charge par TimeCool. Si tu préfères utiliser ta propre clé, c\'est possible dans Menu → Configuration IA, mais ce n\'est pas nécessaire.'},
-    {q: '📅 TimeCool se synchronise-t-il avec Google Agenda ?', a: 'Oui. Ouvre le menu ☰ → 📅 Synchroniser avec Google Agenda, puis « Synchroniser mon agenda TimeCool avec mon agenda Google ». À partir de ce moment, les rendez-vous que tu crées ou modifies dans TimeCool (ou avec Charly) apparaissent aussi dans ton Google Agenda. Pour reprendre ton ancien agenda, importe-le d’abord avec « Importer mon agenda existant » : ce qui existait avant la synchronisation n’est pas renvoyé dans Google, donc pas de doublons.'},
+    {q: '📅 TimeCool se synchronise-t-il avec Google Agenda ?', a: 'Oui. Ouvre le menu ☰ → 📅 Synchroniser avec mon ancien agenda, puis « Synchroniser mon agenda TimeCool avec mon agenda Google ». À partir de ce moment, les rendez-vous que tu crées ou modifies dans TimeCool (ou avec Charly) apparaissent aussi dans ton Google Agenda. Pour reprendre ton ancien agenda, importe-le d’abord avec « Importer mon agenda existant » : ce qui existait avant la synchronisation n’est pas renvoyé dans Google, donc pas de doublons. Outlook : bientôt, la même page montre déjà sa carte.'},
     {q: '🚗 TimeCool tient-il compte du temps de trajet ?', a: 'Oui. Quand deux rendez-vous se suivent à des adresses différentes, TimeCool estime la durée du trajet avec le trafic du moment, et te prévient si le temps manque entre les deux.'},
     {q: '🔔 Puis-je prévenir quelqu\'un d\'un retard ?', a: 'Ouvre le rendez-vous : trois boutons préparent le message à ta place — un retard, une annulation ou un décalage. Le texte s\'adapte au contact, en tutoiement ou en vouvoiement, et tu peux le modifier avant d\'envoyer.'},
     {q: '👥 Comment relier un rendez-vous à un contact ?', a: 'Dis simplement à Charly « rendez-vous avec Michel ». Il cherche dans tes contacts et, si plusieurs Michel existent, il te demande lequel. Tu peux aussi lui apprendre un surnom : dis-lui « mon ostéopathe » une fois, il s\'en souviendra.'},
@@ -18712,6 +18739,16 @@ async function tcAppel(methode, chemin, corps, avecAuth = true) {
    adresse. L'accord se donne sur la page de Google, dans le
    navigateur ; au retour, l'écran se remet à jour tout seul.
    ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Outlook : la carte est déjà là, la liaison arrive plus tard (Microsoft Graph).
+ * Pour l'instant le bouton dit simplement que c'est pour bientôt : aucun appel au
+ * serveur. Quand le chantier sera fait, seule cette fonction change (comme
+ * tcGoogleAgendaRelier), et la zone tcOutlookAgendaZone se remplira selon l'état.
+ */
+function tcOutlookAgendaRelier() {
+  tcAlert('Outlook arrive dans une prochaine version.');
+}
 
 let _tcGoogleAgendaEnAttente = false;
 

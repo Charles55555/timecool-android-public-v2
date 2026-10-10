@@ -33,7 +33,7 @@ const user = ordre(menus.slice(menus.indexOf('user: ['), menus.indexOf('pro: [')
 const pro = ordre(menus.slice(menus.indexOf('pro: [')));
 verifie('mode particulier : agenda, import, google, Charly…', user.slice(0, 4).join(',') === 'calendar,importagenda,google,assistant', user.slice(0, 5).join(','));
 verifie('mode pro : même place', pro.slice(0, 4).join(',') === 'calendar,importagenda,google,assistant', pro.slice(0, 5).join(','));
-verifie('le libellé : « 📅 Synchroniser avec Google Agenda »', (menus.match(/\{id:'google', icon:'📅', label:'Synchroniser avec Google Agenda'\}/g) || []).length === 2);
+verifie('le libellé : « 📅 Synchroniser avec mon ancien agenda »', (menus.match(/\{id:'google', icon:'📅', label:'Synchroniser avec mon ancien agenda'\}/g) || []).length === 2 && !/Synchroniser avec Google Agenda/.test(menus));
 verifie('l entrée n est pas cachée par un drapeau de fonction', !/google:\s*'/.test(page.slice(page.indexOf('const FEATURE_BY_PAGE'), page.indexOf('const FEATURE_BY_PAGE') + 200)));
 
 titre('La page');
@@ -41,11 +41,11 @@ const iPage = page.indexOf('<div class="page" id="page-google">');
 const iImport = page.indexOf('<div class="page" id="page-importagenda">');
 const bloc = iPage > -1 ? page.slice(iPage, iImport) : '';
 verifie('elle existe, avant la page d import', iPage > -1 && iImport > iPage);
-verifie('titre « Synchroniser avec Google Agenda », sous-titre sans promesse inverse', /page-title">📅 Synchroniser avec Google Agenda</.test(bloc) && /Tes rendez-vous TimeCool apparaissent aussi dans ton Google Agenda/.test(bloc));
+verifie('titre « Synchroniser avec mon ancien agenda », sous-titre sans promesse inverse', /page-title">📅 Synchroniser avec mon ancien agenda</.test(bloc) && /Tes rendez-vous TimeCool apparaissent aussi dans ton ancien agenda \(Google ou Outlook\)/.test(bloc));
 verifie('un bouton retour (tcRetour, comme les autres pages)', /class="back-btn" onclick="tcRetour\(\)"/.test(bloc));
 verifie('elle contient la zone que dessine tcGoogleAgendaAfficher', /id="tcGoogleAgendaZone"/.test(bloc));
 verifie('le mode d emploi en deux étapes : importer d abord (lien vers l import), puis synchroniser', /onclick="navigate\('importagenda'\); return false;"/.test(bloc) && /2\. Tu synchronises/.test(bloc));
-verifie('il dit « pas de doublons » et que Google Agenda peut être gardé', /pas de doublons/.test(bloc) && /garder Google Agenda/.test(bloc));
+verifie('il dit « pas de doublons » et que l ancien agenda peut être gardé', /pas de doublons/.test(bloc) && /garder ton ancien agenda/.test(bloc));
 verifie('il ne promet jamais le sens Google → TimeCool', !/Google (vers|→) TimeCool|dans les deux sens|aussi dans TimeCool|apparaît dans TimeCool/i.test(bloc));
 verifie('la zone n existe plus qu une fois dans la page (plus dans les Paramètres)', (page.match(/id="tcGoogleAgendaZone"/g) || []).length === 1);
 

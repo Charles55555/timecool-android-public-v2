@@ -22,6 +22,24 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — « Synchroniser avec mon ancien agenda », encadré rassurant, carte Outlook
+
+**Codé et commité sur main, PAS publié.** Aucun changement serveur.
+
+- Menu : « Synchroniser avec Google Agenda » devient « Synchroniser avec mon ancien agenda » (même clé
+  `google`, même page `page-google`). Le titre de la page suit ; le sous-titre et le mode d'emploi parlent
+  de l'ancien agenda (Google ou Outlook) puisque la page a maintenant deux cartes.
+- Encadré vert doux avec cadenas, EN HAUT des pages Importer et Synchroniser, même texte et même dessin :
+  « Ton ancien agenda ne risque rien… ». Sur la page Importer il est hors du contenu que les étapes
+  réécrivent, donc il reste affiché pendant tout le parcours.
+- Carte Outlook sous celle de Google (même structure, bouton « Synchroniser mon agenda TimeCool avec mon
+  agenda Outlook »). `tcOutlookAgendaRelier()` affiche « Outlook arrive dans une prochaine version. » et ne
+  fait AUCUN appel réseau : c'est elle qui deviendra la vraie liaison (Microsoft Graph).
+- Charly : Outlook = « pas encore, mais bientôt », renvoie à la carte et propose l'import ; la clé
+  « synchroniser avec mon ancien agenda » mène à la réponse Google. L'aide dit « Outlook : bientôt ».
+- Suites : `verif-menu-ancien-agenda` (nouvelle) ; verif-page-google, verif-google-revue,
+  verif-google-agenda-depart mises à jour.
+
 ## 10/10/2026 (session adjointe) — « Mon temps libre » = temps protégé
 
 **Codé et commité sur main, PAS publié.**

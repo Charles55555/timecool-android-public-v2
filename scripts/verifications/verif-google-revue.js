@@ -56,7 +56,7 @@ const iLire = liste.indexOf("keys: ['lire mon google agenda'");
 const iGoogle = liste.indexOf("keys: ['google calendar','google agenda','agenda google'");
 verifie('Apple / Outlook (pas encore) et « lire mon Google Agenda » (pas encore) passent AVANT l entrée Google', iApple > -1 && iLire > -1 && iGoogle > -1 && iApple < iGoogle && iLire < iGoogle);
 const clesGoogle = (liste.slice(iGoogle, liste.indexOf(']', iGoogle)).match(/'([^']+)'/g) || []).map((x) => x.slice(1, -1));
-verifie('les clés de l entrée Google parlent toutes de Google ou d import ; plus « synchro » seul', clesGoogle.length > 0 && clesGoogle.every((k) => /google|importer/.test(k)) && !clesGoogle.some((k) => /^synchro/.test(k)), clesGoogle.join(' | '));
+verifie('les clés de l entrée Google parlent toutes de Google, d import ou de « mon ancien agenda » ; plus « synchro » seul', clesGoogle.length > 0 && clesGoogle.every((k) => /google|importer|ancien agenda/.test(k)) && !clesGoogle.some((k) => k === 'synchro' || k === 'synchroniser' || k === 'synchronisation'), clesGoogle.join(' | '));
 verifie('la réponse Google dit « un seul sens » et renvoie à « Importer mon ancien agenda »', /un seul sens/.test(liste.slice(iGoogle, iGoogle + 600)) && /Importer mon ancien agenda/.test(liste.slice(iGoogle, iGoogle + 600)));
 verifie('« lire mon Google Agenda » : TimeCool ne lit pas Google, il envoie', /il ne lit pas Google/.test(liste.slice(iLire, iLire + 700)));
 // Mise en scène : quelle entrée répond ?
