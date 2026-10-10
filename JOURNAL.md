@@ -22,6 +22,26 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — savoir QUI m'écrit
+
+**Codé et commité sur main, PAS publié.** Il y a du serveur (API) : à publier avec le web et l'APK.
+
+- Quand une demande de rendez-vous part en messagerie, le serveur joint au message « demande_rdv » les
+  coordonnées d'inscription du demandeur (`demandeur` : prénom, nom, téléphone, email, cree_le), chez le
+  TITULAIRE seulement, et seulement si le demandeur n'est pas dans son carnet (`identiteDemandeur`, même
+  règle que `ficheContactDe`). Le demandeur ne reçoit rien sur le titulaire.
+- Messagerie : carte d'identité dans le cadre « Demande de rendez-vous » (nom, téléphone, email, « sur
+  TimeCool depuis le … », « Pas dans tes contacts »), bouton « ➕ Ajouter à mes contacts » : crée la fiche
+  (sans catégorie) puis propose de la classer (5 catégories, « Plus tard »). La carte disparaît dès que
+  la fiche existe.
+- /rdv/proposer-creneau : une personne hors carnet entre dans le carnet dans la même transaction (sans
+  catégorie : elle reste en messagerie pour la suite) et le rendez-vous est rattaché à sa fiche. Pas
+  d'ajout automatique sur « Refuser et bloquer » (la fiche bloquée existe déjà, sans téléphone ni email).
+- Texte de la demande : « Salut {prénom} 👋 Je voudrais prendre rendez-vous avec toi sur TimeCool. Tu me
+  proposes un créneau ? Merci ! ».
+- Suites : `verif-qui-ecrit` (nouvelle) ; `verif-qui-ecrit-e2e` vise l'API EN LIGNE, rouge tant qu'elle
+  n'est pas déployée.
+
 ## 10/10/2026 (session adjointe) — contacts classés : un non classé passe par la messagerie
 
 **Codé et commité sur main, PAS publié.** Il y a du serveur (API) : à publier avec le web et l'APK.

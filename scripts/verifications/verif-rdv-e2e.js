@@ -104,7 +104,7 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   dire(/👋/.test(texte), 'avec un emoji');
   dire(!/souhaite prendre rendez-vous avec vous/.test(texte),
     'ce n est plus une notification à la troisième personne');
-  dire(/disponible/.test(texte), 'et il demande quelque chose de précis');
+  dire(/disponible|créneau/.test(texte), 'et il demande quelque chose de précis (un créneau)');
 
   // ── Julian autorise Charles ───────────────────────────────────────
   console.log('\nJulian débloque Charles, avec une catégorie (limite facultative) :');

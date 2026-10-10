@@ -1053,9 +1053,51 @@ function creneauxLibres(int $titulaireId, int $combien = 3, array $categories = 
  */
 function messageDemandeRdv(array $de, array $vers): string
 {
-    return "Salut " . $vers['prenom'] . " 👋 J'ai essayé de prendre rendez-vous avec toi "
-        . "sur TimeCool, mais ton agenda ne semble pas encore configuré pour la prise "
-        . "d'un rendez-vous instantané. SVP tu me dis quand tu es disponible ? Merci !";
+    return "Salut " . $vers['prenom'] . " 👋 Je voudrais prendre rendez-vous avec toi "
+        . "sur TimeCool. Tu me proposes un créneau ? Merci !";
+}
+
+/**
+ * Qui demande ? Les coordonnees que le demandeur a donnees a son inscription,
+ * jointes a sa demande chez le TITULAIRE seulement (comme un appel entrant :
+ * il vient vers lui). Null quand le demandeur est deja dans le carnet du
+ * titulaire : la carte n a alors rien a apprendre.
+ */
+function identiteDemandeur(int $titulaireId, array $demandeur): ?array
+{
+    if (ficheContactDe($titulaireId, $demandeur) !== null) {
+        return null;
+    }
+    return [
+        'prenom'    => texteSur((string) $demandeur['prenom']),
+        'nom'       => texteSur((string) $demandeur['nom']),
+        'telephone' => (string) $demandeur['telephone'],
+        'email'     => (string) $demandeur['email'],
+        'cree_le'   => date('c', (int) strtotime((string) ($demandeur['cree_le'] ?? 'now'))),
+    ];
+}
+
+/**
+ * Cree la fiche de cette personne dans le carnet du titulaire : ses
+ * coordonnees, sa reference de compte, aucune categorie (elle reste donc en
+ * messagerie tant que le titulaire ne l a pas classee). Rend l identifiant.
+ */
+function creerFicheContact(array $titulaire, array $personne): string
+{
+    $id = 'contact_' . bin2hex(random_bytes(6));
+    elementsPoser([[
+        'compte_id' => (int) $titulaire['id'], 'type' => 'contact', 'uid' => $id,
+        'contenu'   => [
+            'id'              => $id,
+            'name'            => texteSur(trim($personne['prenom'] . ' ' . $personne['nom'])),
+            'phone'           => (string) $personne['telephone'],
+            'email'           => (string) $personne['email'],
+            'referenceCompte' => (string) $personne['reference'],
+            'isTimeCool'      => true,
+            'createdAt'       => date('c'),
+        ],
+    ]]);
+    return $id;
 }
 
 /**
@@ -1355,7 +1397,8 @@ function messagePoser(
     string $texte,
     ?int $rdvId = null,
     ?string $langueImposee = null,
-    ?string $genre = null
+    ?string $genre = null,
+    ?array $demandeur = null
 ): void
 {
     $maintenant = date('c');
@@ -1401,6 +1444,10 @@ function messagePoser(
         // l'expediteur garde ses mots : il doit se relire tel qu'il a
         // ecrit, pas retraduit.
         $sienne = $ligne;
+        // Les coordonnees du demandeur ne vont que chez le destinataire, jamais dans l autre sens.
+        if ($sens === 'them' && $demandeur !== null) {
+            $sienne['demandeur'] = $demandeur;
+        }
         if ($sens === 'them' && $traduit !== null) {
             $sienne['texte']    = $traduit;
             $sienne['original'] = $texte;
@@ -2477,7 +2524,8 @@ switch ($route) {
             // même réponse dans les trois cas. Le message n'est déposé
             // qu'à la première demande.
             if (!$reprise) {
-                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible), $rdvId, null, 'demande_rdv');
+                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible), $rdvId, null, 'demande_rdv',
+                    identiteDemandeur((int) $cible['id'], $moi));
             }
             Rep::ok([
                 'mode'    => 'messagerie',
@@ -2849,6 +2897,11 @@ switch ($route) {
                     'mode'   => 'user',
                 ];
             };
+            // Un inconnu a qui on propose un creneau entre dans le carnet (sans categorie :
+            // il reste en messagerie tant qu on ne l a pas classe). Meme transaction.
+            if (ficheContactDe((int) $moi['id'], $demandeur) === null) {
+                creerFicheContact($moi, $demandeur);
+            }
             elementsPoser([
                 ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
                  'contenu' => $entree(texteSur($demandeur['prenom'] . ' ' . $demandeur['nom']), ficheContactDe((int) $moi['id'], $demandeur))],

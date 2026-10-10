@@ -6394,7 +6394,9 @@ function tcConversationsAffichables() {
           // Une demande de rendez-vous reçue : de quoi y répondre depuis la messagerie.
           rdv: typeof t.rdv === 'number' ? t.rdv : 0,
           genre: typeof t.genre === 'string' ? t.genre : '',
-          traite: t.traite === true
+          traite: t.traite === true,
+          // Qui demande : ses coordonnees d'inscription, jointes par le serveur chez le titulaire seulement.
+          demandeur: (t.demandeur && typeof t.demandeur === 'object') ? t.demandeur : null
         };
       })
     };
@@ -6520,7 +6522,7 @@ function openConversation(id) {
       </div>`;
   }
   const demandeRdv = tcDemandeRdvEnAttente(msg);
-  if (demandeRdv) body.innerHTML += tcCadreDemandeRdv(demandeRdv, msg.with);
+  if (demandeRdv) body.innerHTML += tcCadreDemandeRdv(demandeRdv, msg.with, msg.reference);
   if (mode==='pro' && msg.isCancellation && !msg.accepted) {
     body.innerHTML += `
       <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
@@ -6571,12 +6573,112 @@ function tcDemandeRdvEnAttente(msg) {
   return null;
 }
 
-function tcCadreDemandeRdv(demande, nom) {
+/**
+ * Cette personne est-elle deja dans mes contacts ? Meme regle que le serveur (ficheContactDe) :
+ * meme reference de compte, meme telephone ou meme email.
+ */
+function tcContactConnu(demandeur, reference) {
+  if (!Array.isArray(contactsList)) return false;
+  const tel = demandeur && demandeur.telephone ? tcNormaliserTelephone(String(demandeur.telephone)) : '';
+  const mail = demandeur && demandeur.email ? String(demandeur.email).trim().toLowerCase() : '';
+  return contactsList.some(function (c) {
+    if (!c) return false;
+    if (reference && c.referenceCompte && c.referenceCompte === reference) return true;
+    if (tel && c.phone && tcNormaliserTelephone(String(c.phone)) === tel) return true;
+    return !!(mail && c.email && String(c.email).trim().toLowerCase() === mail);
+  });
+}
+
+/** La carte d'identite d'un inconnu qui demande un rendez-vous : qui est-ce, et l'ajouter. */
+function tcCarteDemandeurHTML(demande, reference) {
+  const d = demande && demande.demandeur;
+  if (!d || tcContactConnu(d, reference)) return '';
+  const nom = escapeHTMLSafe(((d.prenom || '') + ' ' + (d.nom || '')).trim() || 'Inconnu');
+  let depuis = '';
+  if (d.cree_le) {
+    const dt = new Date(d.cree_le);
+    if (!isNaN(dt.getTime())) {
+      depuis = ('0' + dt.getDate()).slice(-2) + '/' + ('0' + (dt.getMonth() + 1)).slice(-2) + '/' + dt.getFullYear();
+    }
+  }
+  return '<div id="tcCarteDemandeur" style="background:#fff; border:1px solid #f0d58a; border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:12.5px; line-height:1.6; color:#1a1a2e;">'
+    + '<div style="font-weight:700; font-size:14px;">🪪 ' + nom + '</div>'
+    + (d.telephone ? '<div>📞 ' + escapeHTMLSafe(d.telephone) + '</div>' : '')
+    + (d.email ? '<div style="overflow-wrap:anywhere;">✉️ ' + escapeHTMLSafe(d.email) + '</div>' : '')
+    + (depuis ? '<div style="color:#5f6368;">Sur TimeCool depuis le ' + depuis + '</div>' : '')
+    + '<div style="color:#5f6368; margin-bottom:8px;">Pas dans tes contacts.</div>'
+    + '<button onclick="tcAjouterDemandeur()" style="width:100%; padding:10px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue); border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">➕ Ajouter à mes contacts</button>'
+    + '</div>';
+}
+
+/** « ➕ Ajouter à mes contacts » : crée la fiche (sans catégorie), puis propose de la classer. */
+function tcAjouterDemandeur() {
+  const msg = tcConversationParId(_currentConvId);
+  const demande = tcDemandeRdvEnAttente(msg);
+  const d = demande && demande.demandeur;
+  if (!msg || !d || tcContactConnu(d, msg.reference)) return;
+  const nom = ((d.prenom || '') + ' ' + (d.nom || '')).trim() || msg.with;
+  const c = {
+    id: 'contact_' + Date.now(),
+    name: nom,
+    phone: d.telephone || '',
+    email: d.email || '',
+    referenceCompte: msg.reference || '',
+    isTimeCool: true,
+    createdAt: new Date().toISOString()
+  };
+  contactsList.push(c);
+  saveContacts();
+  showToast('✅ ' + nom + ' ajouté à tes contacts');
+  openConversation(_currentConvId);   // la fiche existe : la carte disparaît
+  tcProposerClasserContact(c.id);
+}
+
+/** Facultatif : classer tout de suite le contact qu'on vient d'ajouter. Sans classement, il reste en messagerie. */
+function tcProposerClasserContact(contactId) {
+  const c = contactsList.find(function (x) { return x.id === contactId; });
+  if (!c) return;
+  tcFermerClasserContact();
+  const o = document.createElement('div');
+  o.id = 'tcClasserOverlay';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overscroll-behavior:contain;';
+  o.onclick = function (e) { if (e.target === o) tcFermerClasserContact(); };
+  const prenom = escapeHTMLSafe(String(c.name || '').split(' ')[0]);
+  const boutons = DISPO_CATEGORIES.filter(function (cat) { return cat.id !== 'personnel'; }).map(function (cat) {
+    return '<button onclick="tcClasserContact(\'' + contactId + '\',\'' + cat.id + '\')" style="display:flex;align-items:center;gap:10px;width:100%;padding:13px 14px;margin-bottom:8px;background:' + cat.bg
+      + ';color:' + cat.texte + ';border:1.5px solid ' + cat.color + ';border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;text-align:left;"><span style="font-size:20px;">' + cat.icon + '</span>' + cat.label + '</button>';
+  }).join('');
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:420px;border-radius:20px;padding:22px 20px 18px;max-height:90vh;max-height:90dvh;overflow-y:auto;box-sizing:border-box;">'
+    + '<div style="font-size:19px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">Classer ' + prenom + ' ?</div>'
+    + '<div style="font-size:13.5px;color:#5f6368;line-height:1.5;margin-bottom:14px;">Facultatif. Une personne classée pourra réserver seule dans les plages de sa catégorie. Sans catégorie, elle passe toujours par ta messagerie.</div>'
+    + boutons
+    + '<button onclick="tcFermerClasserContact()" style="width:100%;padding:13px;background:#f1f3f4;color:#5f6368;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">Plus tard</button>'
+    + '</div>';
+  document.body.appendChild(o);
+}
+
+function tcFermerClasserContact() {
+  const o = document.getElementById('tcClasserOverlay');
+  if (o) o.remove();
+}
+
+function tcClasserContact(contactId, catId) {
+  const c = contactsList.find(function (x) { return x.id === contactId; });
+  const cat = DISPO_CATEGORIES.find(function (x) { return x.id === catId; });
+  tcFermerClasserContact();
+  if (!c || !cat) return;
+  c.categories = [catId];
+  saveContacts();
+  showToast('✅ ' + String(c.name || '').split(' ')[0] + ' classé : ' + cat.label);
+}
+
+function tcCadreDemandeRdv(demande, nom, reference) {
   const prenom = escapeHTMLSafe(String(nom || '').split(' ')[0]);
   return '<div style="margin-top:16px; padding:14px; background:#fff8e1; border:1px solid #fbbc04; border-radius:14px;">'
     + '<div style="font-size:13px; font-weight:600; color:#5f4500; margin-bottom:4px;">📅 Demande de rendez-vous</div>'
     + '<div style="font-size:12px; color:#5f4500; line-height:1.5; margin-bottom:12px;">' + prenom
     + ' voudrait un rendez-vous avec toi. Choisis un créneau, ou refuse.</div>'
+    + tcCarteDemandeurHTML(demande, reference)
     + '<div style="display:flex; flex-direction:column; gap:8px;">'
     + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-green);" onclick="tcProposerCreneauRdv(' + demande.rdv + ')">✅ Proposer un créneau</button>'
     + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--text-sec);" onclick="tcRefuserBloquerRdv(' + demande.rdv + ')">🚫 Refuser et bloquer</button>'
