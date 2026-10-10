@@ -166,7 +166,7 @@ verifie('prevenir ou annuler : jamais intercepte ici', det('préviens William Ay
 titre('4. Branchements dans la page');
 verifie('Charly intercepte avant le modele (apres « prevenir »)', page.indexOf('const _prevenance = tcDetecterPrevenance(text);') < page.indexOf('const _groupe = tcDetecterRdvGroupe(text);') && page.indexOf('const _groupe = tcDetecterRdvGroupe(text);') < page.indexOf('// === IMPRÉVU sans jour'));
 verifie('la carte est dessinee par renderChatMessage', /function renderChatMessage\(m\) \{\s+if \(m && m\._groupe\) return tcRendreGroupe\(m\);/.test(page));
-verifie('les deux appels au serveur existent', /async proposerRdvGroupe\(references, duree\)/.test(page) && /\/rdv\/groupe\/proposer/.test(page) && /\/rdv\/groupe\/confirmer/.test(page));
+verifie('les deux appels au serveur existent', /async proposerRdvGroupe\(references, duree, type\)/.test(page) && /\/rdv\/groupe\/proposer/.test(page) && /\/rdv\/groupe\/confirmer/.test(page));
 const confirmer = fonction(page, 'tcConfirmerRdvGroupe') || '';
 verifie('creneau pris (409) : la recherche est relancee seule', /e\.code === 'creneau_pris'/.test(confirmer) && /tcProposerRdvGroupe\(g\.references, g\.duree/.test(confirmer));
 verifie('apres confirmation, la synchronisation ramene le rendez-vous', /tcSyncTour\(\)/.test(confirmer));

@@ -12,7 +12,8 @@ const ctx = {
   tcRappelDuRdv: () => 0, TC_DELAIS_RAPPEL: [], tcLigneContactHTML: () => '', tcEstPrevenable: () => false
 };
 vm.createContext(ctx);
-vm.runInContext(['tcCrayonFiche', 'tcLigneVideFiche'].map(extraire).join('\n'), ctx);
+vm.runInContext(page.match(/const TC_TYPES_RDV = \[[\s\S]*?\n\];/)[0], ctx);
+vm.runInContext(['tcCrayonFiche', 'tcLigneVideFiche', 'tcTypeRdvValide', 'tcIconeType'].map(extraire).join('\n'), ctx);
 const corps = extraire('openEventModal');
 verifie('openEventModal trouvée', !!corps);
 let rendu = '';

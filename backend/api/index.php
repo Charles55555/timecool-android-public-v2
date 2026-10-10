@@ -1061,10 +1061,35 @@ function creneauxLibres(int $titulaireId, int $combien = 3, array $categories = 
  * notification du système. Un ton sec ferait passer une demande banale
  * pour un reproche.
  */
-function messageDemandeRdv(array $de, array $vers): string
+function messageDemandeRdv(array $de, array $vers, ?string $type = null): string
 {
+    $mot = motTypeRdv($type);
     return "Salut " . $vers['prenom'] . " 👋 Je voudrais prendre rendez-vous avec toi "
-        . "sur TimeCool. Tu me proposes un créneau ? Merci !";
+        . "sur TimeCool" . ($mot !== '' ? ', ' . $mot : '') . ". Tu me proposes un créneau ? Merci !";
+}
+
+/** Le type d'un rendez-vous, ou null s'il n'est pas l'un des trois connus (téléphone, en personne, visio). */
+function typeRdvValide(mixed $v): ?string
+{
+    return is_string($v) && in_array($v, ['telephone', 'physique', 'visio'], true) ? $v : null;
+}
+
+/** « par téléphone », « en personne », « en visio » ; vide quand le type est inconnu. */
+function motTypeRdv(?string $type): string
+{
+    return match ($type) {
+        'telephone' => 'par téléphone',
+        'physique'  => 'en personne',
+        'visio'     => 'en visio',
+        default     => '',
+    };
+}
+
+/** Le mot du type précédé d'une espace, pour « Rendez-vous confirmé par téléphone : … ». */
+function motTypeMessage(?string $type): string
+{
+    $m = motTypeRdv($type);
+    return $m === '' ? '' : ' ' . $m;
 }
 
 /**
@@ -1408,7 +1433,8 @@ function messagePoser(
     ?int $rdvId = null,
     ?string $langueImposee = null,
     ?string $genre = null,
-    ?array $demandeur = null
+    ?array $demandeur = null,
+    ?string $type = null
 ): void
 {
     $maintenant = date('c');
@@ -1419,6 +1445,10 @@ function messagePoser(
     // « demande_rdv » : le destinataire peut y repondre par un creneau ou un refus.
     if ($genre !== null) {
         $ligne['genre'] = $genre;
+    }
+    // Le type demandé (téléphone, en personne, visio) : le titulaire le retrouve pour répondre.
+    if ($type !== null) {
+        $ligne['type'] = $type;
     }
 
     // Chacun lit TimeCool dans sa langue, et le serveur les connait
@@ -2486,6 +2516,7 @@ switch ($route) {
         }
 
         $titre = Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom']);
+        $typeRdv = typeRdvValide(Entree::corps()['type'] ?? null);
         $categoriesRdv = categoriesPourRdvAutomatique((int) $cible['id'], $moi);
         $creneaux = $categoriesRdv !== [] ? creneauxLibres((int) $cible['id'], 3, $categoriesRdv) : [];
 
@@ -2520,11 +2551,14 @@ switch ($route) {
             // Les créneaux d'une demande reprise sont recalculés :
             // l'agenda du destinataire a pu changer entre-temps.
             Db::req('DELETE FROM rdv_creneaux WHERE rdv_id = ?', [$rdvId]);
+            if ($typeRdv !== null) {
+                Db::req('UPDATE rdv SET type = ? WHERE id = ?', [$typeRdv, $rdvId]);
+            }
         } else {
             Db::req(
-                'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, statut)
-                 VALUES (?, ?, ?, "attente")',
-                [$moi['id'], $cible['id'], $titre]
+                'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, statut, type)
+                 VALUES (?, ?, ?, "attente", ?)',
+                [$moi['id'], $cible['id'], $titre, $typeRdv]
             );
             $rdvId = (int) Db::pdo()->lastInsertId();
         }
@@ -2534,8 +2568,8 @@ switch ($route) {
             // même réponse dans les trois cas. Le message n'est déposé
             // qu'à la première demande.
             if (!$reprise) {
-                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible), $rdvId, null, 'demande_rdv',
-                    identiteDemandeur((int) $cible['id'], $moi));
+                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible, $typeRdv), $rdvId, null, 'demande_rdv',
+                    identiteDemandeur((int) $cible['id'], $moi), $typeRdv);
             }
             Rep::ok([
                 'mode'    => 'messagerie',
@@ -2624,9 +2658,11 @@ switch ($route) {
 
         $debut = strtotime($creneau['debut']);
         $fin = strtotime($creneau['fin']);
-        $entree = static function (string $titre, ?string $contact = null) use ($debut, $fin, $rdvId): array {
+        $typeRdv = typeRdvValide($rdv['type'] ?? null);
+        $entree = static function (string $titre, ?string $contact = null) use ($debut, $fin, $rdvId, $typeRdv): array {
             return [
                 ...($contact !== null ? ['contact' => $contact] : []),
+                ...($typeRdv !== null ? ['type' => $typeRdv] : []),
                 'id'     => 'tc_rdv_' . $rdvId,
                 'date'   => date('Y-m-d', $debut),
                 'startH' => (int) date('G', $debut), 'startM' => (int) date('i', $debut),
@@ -2649,7 +2685,7 @@ switch ($route) {
 
             messagePoser(
                 $moi, $cible,
-                'Rendez-vous confirmé : ' . $creneau['libelle'] . ' à '
+                'Rendez-vous confirmé' . motTypeMessage($typeRdv) . ' : ' . $creneau['libelle'] . ' à '
                     . date('H\\hi', $debut) . '.',
                 $rdvId
             );
@@ -2679,6 +2715,7 @@ switch ($route) {
         if ($duree < 1 || $duree > 3) {
             $duree = 1;
         }
+        $typeRdv = typeRdvValide($corps['type'] ?? null) ?? 'physique';
         $sansAcces = [];
         $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
         $creneaux = $invites === [] ? [] : creneauxCommuns((int) $moi['id'], $invites, $duree, 3);
@@ -2687,6 +2724,7 @@ switch ($route) {
             'invites'    => array_column($invites, 'prenom'),
             'sans_acces' => $sansAcces,
             'duree'      => $duree,
+            'type'       => $typeRdv,
         ]);
 
     case 'POST /rdv/groupe/confirmer':
@@ -2703,6 +2741,7 @@ switch ($route) {
         if ($debutTs === false || $debutTs <= time() || $debutTs > strtotime('+30 day')) {
             Rep::erreur(400, 'creneau_invalide', 'Creneau invalide.');
         }
+        $typeRdv = typeRdvValide($corps['type'] ?? null) ?? 'physique';
         $sansAcces = [];
         $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
         if ($invites === []) {
@@ -2744,9 +2783,10 @@ switch ($route) {
 
             $uid = 'tc_grp_' . bin2hex(random_bytes(8));
             $moiNom = texteSur(trim($moi['prenom'] . ' ' . $moi['nom']));
-            $entree = static function (string $titre) use ($jour, $heure, $duree, $uid): array {
+            $entree = static function (string $titre) use ($jour, $heure, $duree, $uid, $typeRdv): array {
                 return [
                     'id'     => $uid,
+                    'type'   => $typeRdv,
                     'date'   => $jour,
                     'startH' => $heure, 'startM' => 0,
                     'endH'   => $heure + $duree, 'endM' => 0,
@@ -2777,7 +2817,7 @@ switch ($route) {
                 $autres = array_values(array_filter($prenomsInclus, static fn(string $p): bool => $p !== $inv['prenom']));
                 messagePoser(
                     $moi, $inv['compte'],
-                    'Rendez-vous confirmé : ' . $libelle . ' à ' . date('H\hi', $debutTs)
+                    'Rendez-vous confirmé' . motTypeMessage($typeRdv) . ' : ' . $libelle . ' à ' . date('H\hi', $debutTs)
                         . ', avec ' . implode(', ', array_merge([$moiNom], $autres)) . '.'
                 );
             }
@@ -2794,6 +2834,7 @@ switch ($route) {
             'heure'   => date('H:i', $debutTs),
             'libelle' => $libelle,
             'duree'   => $duree,
+            'type'    => $typeRdv,
             'inclus'  => $prenomsInclus,
             'exclus'  => $exclus,
         ]);
@@ -2863,6 +2904,8 @@ switch ($route) {
             Rep::erreur(410, 'compte_absent', 'Cette personne n a plus de compte.');
         }
 
+        $typeRdv = typeRdvValide($corps['type'] ?? null) ?? typeRdvValide($rdv['type'] ?? null);
+
         $pdo = Db::pdo();
         $pdo->beginTransaction();
         try {
@@ -2889,15 +2932,19 @@ switch ($route) {
 
             $libelle = rdvLibelleJour($debutTs);
             Db::req('DELETE FROM rdv_creneaux WHERE rdv_id = ?', [$rdvId]);
+            if ($typeRdv !== null) {
+                Db::req('UPDATE rdv SET type = ? WHERE id = ?', [$typeRdv, $rdvId]);
+            }
             Db::req(
                 'INSERT INTO rdv_creneaux (rdv_id, rang, debut, fin, libelle, retenu)
                  VALUES (?, 1, ?, ?, ?, 1)',
                 [$rdvId, $debutSql, $finSql, $libelle]
             );
 
-            $entree = static function (string $titre, ?string $contact = null) use ($debutTs, $finTs, $rdvId): array {
+            $entree = static function (string $titre, ?string $contact = null) use ($debutTs, $finTs, $rdvId, $typeRdv): array {
                 return [
                     ...($contact !== null ? ['contact' => $contact] : []),
+                    ...($typeRdv !== null ? ['type' => $typeRdv] : []),
                     'id'     => 'tc_rdv_' . $rdvId,
                     'date'   => date('Y-m-d', $debutTs),
                     'startH' => (int) date('G', $debutTs), 'startM' => (int) date('i', $debutTs),
@@ -2921,7 +2968,7 @@ switch ($route) {
 
             messagePoser(
                 $moi, $demandeur,
-                'Rendez-vous confirmé : ' . $libelle . ' à ' . date('H\\hi', $debutTs) . '.',
+                'Rendez-vous confirmé' . motTypeMessage($typeRdv) . ' : ' . $libelle . ' à ' . date('H\\hi', $debutTs) . '.',
                 $rdvId
             );
             demandeRdvTraitee($moi, $demandeur, $rdvId);
@@ -2938,6 +2985,7 @@ switch ($route) {
             'heure'   => date('H:i', $debutTs),
             'libelle' => $libelle,
             'duree'   => $minutes,
+            'type'    => $typeRdv,
         ]);
 
     /*

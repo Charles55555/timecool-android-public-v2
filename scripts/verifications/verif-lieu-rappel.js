@@ -53,7 +53,7 @@ verifie('l exemple des medicaments est conserve',
 
 titre('Les appareils jetteront leur copie du prompt');
 verifie('la version a change',
-  page.indexOf("TC_PROMPT_VERSION = 'v10-rappels'") > -1,
+  page.indexOf("TC_PROMPT_VERSION = 'v11-type-rdv'") > -1,
   'sans quoi ils garderaient l ancienne consigne des mois');
 
 titre('Le rappel reel existe bien');

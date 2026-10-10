@@ -26,7 +26,7 @@ function fonction(texte, nom) {
 const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/bin/php'].find((p) => fs.existsSync(p));
 
 titre('1. Le serveur, execute sous PHP');
-const noms = ['texteSur', 'memeReference', 'ficheContactDe', 'messageDemandeRdv', 'identiteDemandeur', 'creerFicheContact', 'messagePoser'];
+const noms = ['texteSur', 'memeReference', 'ficheContactDe', 'motTypeRdv', 'messageDemandeRdv', 'identiteDemandeur', 'creerFicheContact', 'messagePoser'];
 const src = noms.map((n) => fonction(api, n));
 verifie('les fonctions existent dans l API', src.every(Boolean), noms.filter((n, i) => !src[i]).join(','));
 if (PHP && src.every(Boolean)) {
@@ -117,7 +117,7 @@ titre('2. Les routes');
 const dem = api.slice(api.indexOf("case 'POST /rdv/demander':"), api.indexOf("case 'POST /rdv/choisir':"));
 const prop = api.slice(api.indexOf("case 'POST /rdv/proposer-creneau':"), api.indexOf("case 'POST /rdv/refuser':"));
 const ref = api.slice(api.indexOf("case 'POST /rdv/refuser':"), api.indexOf('// SYNCHRONISATION ENTRE APPAREILS'));
-verifie('/rdv/demander : les coordonnees sont jointes au message « demande_rdv » (identiteDemandeur)', /'demande_rdv',\s+identiteDemandeur\(\(int\) \$cible\['id'\], \$moi\)\)/.test(dem));
+verifie('/rdv/demander : les coordonnees sont jointes au message « demande_rdv » (identiteDemandeur)', /'demande_rdv',\s+identiteDemandeur\(\(int\) \$cible\['id'\], \$moi\), \$typeRdv\)/.test(dem));
 verifie('messagePoser : « demandeur » ne va QUE dans l exemplaire du destinataire (sens « them »)', /if \(\$sens === 'them' && \$demandeur !== null\) \{\s+\$sienne\['demandeur'\] = \$demandeur;/.test(fonction(api, 'messagePoser') || ''));
 verifie('la reponse au demandeur ne contient aucune coordonnee du titulaire', !/telephone|email/.test(dem.slice(dem.indexOf("'mode'    => 'messagerie'"), dem.indexOf('foreach ($creneaux as $rang'))));
 verifie('proposer-creneau : une personne hors carnet entre dans le carnet, DANS la transaction, avant l ecriture du rendez-vous', /ficheContactDe\(\(int\) \$moi\['id'\], \$demandeur\) === null\) \{\s+creerFicheContact\(\$moi, \$demandeur\);/.test(prop) && prop.indexOf('beginTransaction()') < prop.indexOf('creerFicheContact(') && prop.indexOf('creerFicheContact(') < prop.indexOf('elementsPoser([') && prop.indexOf('elementsPoser([') < prop.indexOf('$pdo->commit()'));
@@ -148,8 +148,9 @@ const demande = { from: 'them', rdv: 42, genre: 'demande_rdv', traite: false, de
 ctx.tcConversationParId = () => ({ serveur: true, reference: 'REFINES', with: 'Inès Testeur', thread: [demande] });
 ctx.escapeHTMLSafe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 vm.createContext(ctx);
+vm.runInContext(page.match(/const TC_TYPES_RDV = \[[\s\S]*?\n\];/)[0], ctx);
 vm.runInContext('var _tcRdvTraites = {};', ctx);
-['tcNormaliserTelephone', 'tcContactConnu', 'tcCarteDemandeurHTML', 'tcDemandeRdvEnAttente', 'tcAjouterDemandeur', 'tcProposerClasserContact', 'tcFermerClasserContact', 'tcClasserContact', 'tcCadreDemandeRdv']
+['tcTypeRdvValide', 'tcNormaliserTelephone', 'tcContactConnu', 'tcCarteDemandeurHTML', 'tcDemandeRdvEnAttente', 'tcAjouterDemandeur', 'tcProposerClasserContact', 'tcFermerClasserContact', 'tcClasserContact', 'tcCadreDemandeRdv']
   .forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 const carte = vm.runInContext('tcCarteDemandeurHTML(' + JSON.stringify(demande) + ', "REFINES")', ctx);
 const texte = carte.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');

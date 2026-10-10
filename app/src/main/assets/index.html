@@ -1644,6 +1644,10 @@ if (window.pdfjsLib) {
         <div class="info-label">Agenda</div>
         <select id="newEvtCalendar" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;"></select>
       </div>
+      <div style="padding:10px 0; border-bottom:1px solid #eee;">
+        <div class="info-label">Comment</div>
+        <div id="newEvtComment" style="padding-top:6px;"></div>
+      </div>
       <div style="display:flex; gap:10px; padding:10px 0; border-bottom:1px solid #eee;">
         <div style="flex:1;">
           <div class="info-label">Date</div>
@@ -3309,6 +3313,14 @@ Ne remplis ce champ que si le rendez-vous est avec quelqu'un : « faire les cour
 Si le lieu est absent mais qu'il y a un contact, mets « - » en 5e champ :
 2026-05-06 | 14:00-15:00 | Rendez-vous dentiste | sante | - | Michel
 
+TYPE (7e champ, facultatif) : comment se passe le rendez-vous — « telephone », « physique » ou « visio ».
+Mets-le dès que l'utilisateur le dit : « appelle-moi », « par téléphone », « au téléphone » → telephone ;
+« en visio », « visioconférence », « sur Zoom / Teams / Meet » → visio ;
+« on se voit », « chez toi », « chez moi », « en personne », « sur place » → physique.
+Sans précision, laisse ce champ vide (pas de 7e champ) et NE POSE PAS de question : un rendez-vous ordinaire est « en personne ».
+Si les champs 5 et 6 sont absents, garde leurs « - » :
+2026-05-06 | 14:00-14:30 | Appel Michel | travail | - | Michel | telephone
+
 ÉVÉNEMENT SUR PLUSIEURS JOURS : ajoute la date de fin après la date de début, séparée par « > ».
 [AGENDA]
 2026-11-11>2026-11-14 | 00:00-23:59 | Ryder Cup 2026 | loisir
@@ -3397,7 +3409,7 @@ function tcMigrateClaudeModel(id) {
 /* Change de valeur à chaque fois qu'il faut jeter les copies gardées
    par les appareils. */
 const TC_PROMPT_VERSION_KEY = 'timecool_prompt_version';
-const TC_PROMPT_VERSION = 'v10-rappels';
+const TC_PROMPT_VERSION = 'v11-type-rdv';
 
 // Charger configuration et démarches depuis localStorage au démarrage
 function loadCharlyIAConfig() {
@@ -4631,7 +4643,7 @@ function renderWeek() {
         evt.style.height = `${Math.max(dm*(44/60)-2, 42)}px`;
         evt.style.left = `${50 + di*colWidth + 1}px`;
         evt.style.width = `${colWidth - 2}px`;
-        evt.innerHTML = `<div class="week-event-title">${escapeHTMLSafe(e.title)}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
+        evt.innerHTML = `<div class="week-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         evt.onclick = () => openEventModal(e);
         body.appendChild(evt);
       });
@@ -4731,7 +4743,7 @@ function renderDay() {
     tcAppliquerCouleurEvenement(evt, e.cat);
     evt.style.top = `${sm*(48/60)+8}px`;
     evt.style.height = `${Math.max(dm*(48/60)-6, 42)}px`;
-    evt.innerHTML = `<div class="day-event-title">${escapeHTMLSafe(e.title)}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}</div>`;
+    evt.innerHTML = `<div class="day-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}</div>`;
     evt.onclick = () => openEventModal(e);
     body.appendChild(evt);
   });
@@ -4858,7 +4870,7 @@ function tcLigneVideFiche(champ) {
 
 function openEventModal(e) {
   currentEvent = e;
-  document.getElementById('emTitle').textContent = e.title;
+  document.getElementById('emTitle').textContent = tcIconeType(e) + e.title;
   const dateStr = tcPeriodeLisible(e);
   // Une journee entiere n'a pas d'horaire : afficher « 00:00 - 23:59 »
   // serait exact et incomprehensible.
@@ -5641,6 +5653,9 @@ function openEditEventModal(champ) {
         box-sizing:border-box; margin-bottom:14px; cursor:pointer; min-height:22px;">${tcLigneContactHTML(e.contact)}</div>
       <div style="font-size:11.5px; color:var(--text-sec); margin:-8px 0 14px 2px;">Si tu précises le contact, Charly pourra le prévenir en cas d'imprévu.</div>
 
+      <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">COMMENT</div>
+      <div style="margin-bottom:14px;">${tcTypeBlocHTML('editTypeRdv', e.type)}</div>
+
       <div style="display:flex; gap:10px; margin-bottom:14px;">
         <div style="flex:1;">
           <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">DATE</div>
@@ -5750,6 +5765,9 @@ function saveEventEdit() {
     if (champContact.value) e.contact = champContact.value;
     else delete e.contact;
   }
+  // Seul un type choisi s'ecrit : un ancien rendez-vous qu'on ouvre pour changer l'heure reste sans type.
+  const champType = document.getElementById('editTypeRdv');
+  if (champType && tcTypeRdvValide(champType.value)) e.type = champType.value;
   closeEventModal();
   saveEventsToStorage();
   scheduleAllReminders();
@@ -6444,7 +6462,9 @@ function tcConversationsAffichables() {
           genre: typeof t.genre === 'string' ? t.genre : '',
           traite: t.traite === true,
           // Qui demande : ses coordonnees d'inscription, jointes par le serveur chez le titulaire seulement.
-          demandeur: (t.demandeur && typeof t.demandeur === 'object') ? t.demandeur : null
+          demandeur: (t.demandeur && typeof t.demandeur === 'object') ? t.demandeur : null,
+          // Le type demande (telephone, physique, visio), pour pre-choisir la reponse.
+          type: typeof t.type === 'string' ? t.type : ''
         };
       })
     };
@@ -6720,6 +6740,85 @@ function tcClasserContact(contactId, catId) {
   showToast('✅ ' + String(c.name || '').split(' ')[0] + ' classé : ' + cat.label);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   LE TYPE D'UN RENDEZ-VOUS
+   Trois types, un seul geste : par telephone, en personne, en visio.
+   Valeurs stockees : 'telephone' | 'physique' | 'visio'. Un rendez-vous
+   sans type vaut « en personne » (aucune icone : rien n'a ete dit).
+   ══════════════════════════════════════════════════════════════ */
+const TC_TYPES_RDV = [
+  { id: 'telephone', icone: '📞', libelle: 'Par téléphone', mot: 'par téléphone' },
+  { id: 'physique', icone: '🤝', libelle: 'En personne', mot: 'en personne' },
+  { id: 'visio', icone: '🎥', libelle: 'En visio', mot: 'en visio' }
+];
+
+/** Le type s'il est l'un des trois, sinon chaine vide. */
+function tcTypeRdvValide(v) {
+  return TC_TYPES_RDV.some(function (x) { return x.id === v; }) ? v : '';
+}
+
+/** « 📞 » devant le titre d'un rendez-vous qui porte un type ; rien sinon. */
+function tcIconeType(e) {
+  const type = e && tcTypeRdvValide(e.type);
+  if (!type) return '';
+  return TC_TYPES_RDV.find(function (x) { return x.id === type; }).icone + ' ';
+}
+
+/** Les trois pastilles. appel(type) rend le code JavaScript du clic. */
+function tcTypePastillesHTML(selection, appel) {
+  return TC_TYPES_RDV.map(function (x) {
+    const actif = x.id === selection;
+    return '<button type="button" aria-pressed="' + actif + '" onclick="' + appel(x.id) + '" style="flex:1 1 auto; padding:10px 8px; border-radius:20px; font-size:13px; cursor:pointer; white-space:nowrap;'
+      + (actif ? ' background:#e8f0fe; color:#1a73e8; border:1.5px solid #1a73e8; font-weight:700;' : ' background:#f8f9fa; color:#5f6368; border:1.5px solid #e8eaed; font-weight:500;')
+      + '">' + x.icone + ' ' + x.libelle + '</button>';
+  }).join('');
+}
+
+/**
+ * Le bloc « comment » d'un formulaire : les pastilles et un champ cache qui porte la valeur.
+ * Valeur vide = rien n'a encore ete choisi : « En personne » est montre comme pre-selection
+ * sans rien ecrire sur un rendez-vous ancien qu'on ouvre juste pour changer l'heure.
+ */
+function tcTypeBlocHTML(prefixe, valeur) {
+  const v = tcTypeRdvValide(valeur);
+  return '<div id="' + prefixe + 'Zone" style="display:flex; gap:6px; flex-wrap:wrap;">'
+    + tcTypePastillesHTML(v || 'physique', function (id) { return "tcTypePastilleClic('" + prefixe + "','" + id + "')"; })
+    + '</div><input type="hidden" id="' + prefixe + '" value="' + v + '">';
+}
+
+function tcTypePastilleClic(prefixe, type) {
+  const champ = document.getElementById(prefixe);
+  const zone = document.getElementById(prefixe + 'Zone');
+  if (!champ || !zone) return;
+  champ.value = tcTypeRdvValide(type);
+  zone.innerHTML = tcTypePastillesHTML(champ.value, function (id) { return "tcTypePastilleClic('" + prefixe + "','" + id + "')"; });
+}
+
+/** Le type que dit une phrase : « appelle-moi », « en visio », « on se voit »... Chaine vide si elle n'en dit aucun. */
+function tcTypeDansTexte(texte) {
+  const t = tcSansAccents(String(texte || '').toLowerCase());
+  if (/\b(en )?visio(conference)?\b|\bvisio\b|\bzoom\b|\bteams\b|\bgoogle meet\b|\ben ligne\b|\bvideo\b/.test(t)) return 'visio';
+  if (/par telephone|au telephone|\bappelle[- ]?moi\b|\bappel\b|coup de fil|\btelephoner\b|\bte telephone\b|\bappeler\b/.test(t)) return 'telephone';
+  if (/on se voit|\bchez (toi|moi|lui|elle|eux)\b|en personne|sur place|se voir|nous voir|en vrai|en presentiel|physiquement/.test(t)) return 'physique';
+  return '';
+}
+
+/**
+ * Le type d'une proposition de Charly : celui qu'il a ecrit dans la ligne [AGENDA] s'il l'a fait,
+ * sinon celui que dit la demande de l'utilisateur. Chaine vide : rien n'a ete precise.
+ */
+function tcTypeDeProposition(msg, p) {
+  const direct = p && tcTypeRdvValide(p.type);
+  if (direct) return direct;
+  if (!msg || !Array.isArray(charlyIA.history)) return '';
+  const rang = charlyIA.history.indexOf(msg);
+  const avant = rang > -1 ? charlyIA.history.slice(0, rang) : charlyIA.history;
+  for (let i = avant.length - 1; i >= 0; i--) {
+    if (avant[i] && avant[i].role === 'user') return tcTypeDansTexte(avant[i].content);
+  }
+  return '';
+}
+
 function tcCadreDemandeRdv(demande, nom, reference) {
   const prenom = escapeHTMLSafe(String(nom || '').split(' ')[0]);
   return '<div style="margin-top:16px; padding:14px; background:#fff8e1; border:1px solid #fbbc04; border-radius:14px;">'
@@ -6728,7 +6827,7 @@ function tcCadreDemandeRdv(demande, nom, reference) {
     + ' voudrait un rendez-vous avec toi. Choisis un créneau, ou refuse.</div>'
     + tcCarteDemandeurHTML(demande, reference)
     + '<div style="display:flex; flex-direction:column; gap:8px;">'
-    + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-green);" onclick="tcProposerCreneauRdv(' + demande.rdv + ')">✅ Proposer un créneau</button>'
+    + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-green);" onclick="tcProposerCreneauRdv(' + demande.rdv + ',\'' + tcTypeRdvValide(demande.type) + '\')">✅ Proposer un créneau</button>'
     + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--text-sec);" onclick="tcRefuserBloquerRdv(' + demande.rdv + ')">🚫 Refuser et bloquer</button>'
     + '</div></div>';
 }
@@ -6746,7 +6845,7 @@ function tcFermerCreneauRdv() {
 }
 
 /** Le titulaire choisit un jour, une heure et une durée. */
-function tcProposerCreneauRdv(rdv) {
+function tcProposerCreneauRdv(rdv, typeDemande) {
   tcFermerCreneauRdv();
   const demain = new Date(Date.now() + 86400000);
   const jour = demain.getFullYear() + '-' + ('0' + (demain.getMonth() + 1)).slice(-2) + '-' + ('0' + demain.getDate()).slice(-2);
@@ -6756,7 +6855,8 @@ function tcProposerCreneauRdv(rdv) {
   o.onclick = function (e) { if (e.target === o) tcFermerCreneauRdv(); };
   const champ = 'width:100%;box-sizing:border-box;padding:12px;font-size:15px;border:1.5px solid #e8eaed;border-radius:10px;margin-top:6px;';
   o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px;padding:20px;max-height:90vh;overflow-y:auto;box-sizing:border-box;">'
-    + '<div style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:16px;">📅 Choisis le créneau</div>'
+    + '<div style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:12px;">📅 Choisis le créneau</div>'
+    + '<div style="margin-bottom:14px;">' + tcTypeBlocHTML('tcCrType', tcTypeRdvValide(typeDemande) || 'physique') + '</div>'
     + '<label style="font-size:13px;color:#5f6368;display:block;margin-bottom:12px;">Jour'
     + '<input type="date" id="tcRdvDate" value="' + jour + '" min="' + jour + '" style="' + champ + '"></label>'
     + '<label style="font-size:13px;color:#5f6368;display:block;margin-bottom:12px;">Heure'
@@ -6785,7 +6885,7 @@ async function tcEnvoyerCreneauRdv(rdv) {
   if (bouton) bouton.disabled = true;
   erreur('');
   try {
-    await TC_BACKEND.proposerCreneauRdv(rdv, date, heure, duree);
+    await TC_BACKEND.proposerCreneauRdv(rdv, date, heure, duree, (document.getElementById('tcCrType') || {}).value);
   } catch (e) {
     if (bouton) bouton.disabled = false;
     erreur(e.message || 'Impossible pour le moment. Réessaie.');
@@ -7703,6 +7803,9 @@ function updateProfileSelector() {
 function openCreateModal() {
   document.getElementById('newEvtTitle').value = '';
   document.getElementById('newEvtDesc').value = '';
+  // « En personne » est pre-selectionne ; un geste suffit pour changer.
+  const zoneComment = document.getElementById('newEvtComment');
+  if (zoneComment) zoneComment.innerHTML = tcTypeBlocHTML('newEvtTypeRdv', 'physique');
   const calSel = document.getElementById('newEvtCalendar');
   if (calSel) {
     calSel.innerHTML = customCalendars.map(c => `<option value="${c.id}">⬤ ${escapeHTMLSafe(c.name)}</option>`).join('');
@@ -7805,7 +7908,8 @@ function saveNewEvent() {
   events.push(Object.assign({
     date, startH:sh, startM:sm, endH:eh, endM:em,
     title, cat:type, calendarId, mode, id:'new_'+Date.now()
-  }, allDay ? { allDay: true } : {}, periode));
+  }, allDay ? { allDay: true } : {}, periode,
+  tcTypeRdvValide((document.getElementById('newEvtTypeRdv') || {}).value) ? { type: document.getElementById('newEvtTypeRdv').value } : {}));
   saveEventsToStorage();
   closeCreateModal();
   showToast('✅ Événement créé');
@@ -10020,6 +10124,7 @@ function tcEstUnCadreAQuestion(m) {
 
 function renderChatMessage(m) {
   if (m && m._groupe) return tcRendreGroupe(m);
+  if (m && m._questionType) return tcRendreQuestionType(m);
   if (m.role === 'user') {
     return `
       <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
@@ -10291,7 +10396,7 @@ function extractAgendaProposals(content) {
       // Le 6e champ est le nom de la personne, tel que l'utilisateur
       // l'a prononce. Charly ne le cherche pas dans le carnet : c'est
       // l'application qui s'en charge, plus bas.
-      let m1 = line.match(/(\d{4}-\d{2}-\d{2})(?:\s*>\s*(\d{4}-\d{2}-\d{2}))?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?\s*(?:\|\s*([^|]+?))?\s*(?:\|\s*([^|]+?))?$/);
+      let m1 = line.match(/(\d{4}-\d{2}-\d{2})(?:\s*>\s*(\d{4}-\d{2}-\d{2}))?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]+?)\s*(?:\|\s*(\w+))?\s*(?:\|\s*([^|]+?))?\s*(?:\|\s*([^|]+?))?\s*(?:\|\s*([^|]+?))?$/);
       if (m1) {
         const debut = fixPastYear(m1[1]);
         const fin = m1[2] ? fixPastYear(m1[2]) : '';
@@ -10309,7 +10414,9 @@ function extractAgendaProposals(content) {
           // Un tiret marque un lieu absent quand seul le contact est
           // donne : sans lui, les deux champs se confondraient.
           lieu: (m1[9] && m1[9].trim() !== '-') ? m1[9].trim() : null,
-          contact: m1[10] ? m1[10].trim() : null
+          contact: m1[10] ? m1[10].trim() : null,
+          // 7e champ, facultatif : telephone | physique | visio (les anciennes lignes n'en ont pas).
+          type: m1[11] ? tcTypeRdvValide(m1[11].trim().toLowerCase()) : ''
         });
         return;
       }
@@ -10716,6 +10823,7 @@ function validateAgendaProposalFromMsg(msg) {
       mode: mode === 'pro' ? 'pro' : 'user',
       id: 'charly_ai_' + Date.now() + '_' + idx,
       ...(importeHerite ? { importe: true } : {}),
+      ...(tcTypeDeProposition(msg, p) ? { type: tcTypeDeProposition(msg, p) } : {}),
       ...(lieuFinal ? { lieu: lieuFinal } : {}),
       // Sans personne designee, le rendez-vous se cree quand meme :
       // un contact manquant n'a jamais empeche un rendez-vous d'exister.
@@ -18588,10 +18696,10 @@ function tcRestaurerZonesRdv() {
  * Tout passe désormais par le serveur : c'est l'agenda du destinataire
  * qui fournit les créneaux, et l'inscription se fait des deux côtés.
  */
-async function requestRdvContact(contactId) {
+async function requestRdvContact(contactId, type) {
   const c = contactsList.find(function (x) { return x.id === contactId; });
   if (!c) return;
-  if (_tcZonesRdv[contactId]) { tcPoserZoneRdv(contactId, null); return; }   // second clic = replier
+  if (!type && _tcZonesRdv[contactId]) { tcPoserZoneRdv(contactId, null); return; }   // second clic = replier
 
   const encadre = function (fond, bordure, couleur, html) {
     tcPoserZoneRdv(contactId, '<div style="margin-top:12px; padding:12px 14px; background:' + fond
@@ -18607,11 +18715,22 @@ async function requestRdvContact(contactId) {
     return;
   }
 
+  // Trois pastilles, un seul geste : comment ? Le choix part avec la demande.
+  if (!tcTypeRdvValide(type)) {
+    encadre('#f8f9fa', 'var(--border)', 'var(--text)',
+      '<div style="font-weight:600; margin-bottom:8px;">Comment ?</div>'
+      + '<div style="display:flex; gap:6px; flex-wrap:wrap;">'
+      + tcTypePastillesHTML('', function (id) { return "requestRdvContact('" + contactId + "','" + id + "')"; })
+      + '</div>'
+      + '<div onclick="requestRdvContact(\'' + contactId + '\')" style="text-align:center; font-size:12px; color:var(--text-sec); margin-top:10px; cursor:pointer;">Annuler</div>');
+    return;
+  }
+
   encadre('#f8f9fa', 'var(--border)', 'var(--text-sec)', '⏳ Envoi de ta demande…');
 
   let r;
   try {
-    r = await TC_BACKEND.demanderRdv(c.referenceCompte);
+    r = await TC_BACKEND.demanderRdv(c.referenceCompte, undefined, type);
   } catch (e) {
     encadre('#fce8e6', '#f5b8b3', '#c5221f',
       '❌ ' + escapeHTMLSafe(e.message || 'Demande impossible pour le moment.'));
@@ -18743,17 +18862,48 @@ function tcDetecterRdvGroupe(texte) {
 
 async function tcGererRdvGroupe(texte, intention) {
   tcPousserMessageUtilisateur(texte);
-  await tcProposerRdvGroupe(intention.contacts.map(function (c) { return c.referenceCompte; }), intention.duree, '');
+  const references = intention.contacts.map(function (c) { return c.referenceCompte; });
+  const type = tcTypeDansTexte(texte);
+  if (type) {
+    await tcProposerRdvGroupe(references, intention.duree, '', type);
+    return;
+  }
+  // Il ne l'a pas dit : une seule question, comme « Avec qui ? ».
+  charlyIA.history.push({ role: 'assistant', content: 'Par téléphone, en personne ou en visio ?',
+    _questionType: { id: 'q' + Date.now(), references: references, duree: intention.duree, etat: 'choix' } });
+  renderCharlyChat();
+}
+
+/** La carte de la question : trois boutons. */
+function tcRendreQuestionType(m) {
+  const q = m._questionType;
+  const boutons = TC_TYPES_RDV.map(function (x) {
+    return '<button ' + (q.etat === 'choix' ? '' : 'disabled ') + 'onclick="tcRepondreTypeGroupe(\'' + q.id + '\',\'' + x.id + '\')" '
+      + 'style="flex:1 1 auto; padding:10px 8px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:20px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;'
+      + (q.type === x.id ? ' background:#1a73e8; color:#fff;' : '') + '">' + x.icone + ' ' + x.libelle + '</button>';
+  }).join('');
+  return tcBulleCharly('Par téléphone, en personne ou en visio ?<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">' + boutons + '</div>');
+}
+
+/** Une pastille est touchee : la recherche du creneau commun part avec ce type. */
+async function tcRepondreTypeGroupe(id, type) {
+  const m = charlyIA.history.find(function (x) { return x && x._questionType && x._questionType.id === id; });
+  if (!m || m._questionType.etat !== 'choix' || !tcTypeRdvValide(type)) return;
+  const q = m._questionType;
+  q.etat = 'fait';
+  q.type = type;
+  renderCharlyChat();
+  await tcProposerRdvGroupe(q.references, q.duree, '', type);
 }
 
 /** Interroge le serveur et pose la carte de choix dans la conversation. */
-async function tcProposerRdvGroupe(references, duree, preambule) {
+async function tcProposerRdvGroupe(references, duree, preambule, type) {
   const attente = { role: 'assistant', content: '🔎 Je regarde les agendas pour trouver un créneau commun…' };
   charlyIA.history.push(attente);
   renderCharlyChat();
   let r;
   try {
-    r = await TC_BACKEND.proposerRdvGroupe(references, duree);
+    r = await TC_BACKEND.proposerRdvGroupe(references, duree, type);
   } catch (e) {
     charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
     charlyIA.history.push({ role: 'assistant', content: '❌ ' + (e && e.message ? e.message : 'Je n’arrive pas à interroger les agendas pour le moment.') });
@@ -18767,7 +18917,7 @@ async function tcProposerRdvGroupe(references, duree, preambule) {
     _groupe: {
       id: 'g' + Date.now(), references: references, duree: r.duree || duree, etat: 'choix',
       creneaux: Array.isArray(r.creneaux) ? r.creneaux : [], invites: r.invites || [], sansAcces: r.sans_acces || [],
-      preambule: preambule || ''
+      preambule: preambule || '', type: tcTypeRdvValide(type) || 'physique'
     }
   });
   renderCharlyChat();
@@ -18834,12 +18984,12 @@ async function tcConfirmerRdvGroupe(id, i) {
   renderCharlyChat();
   let r;
   try {
-    r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree);
+    r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree, g.type);
   } catch (e) {
     if (e && e.code === 'creneau_pris') {
       g.etat = 'perdu';
       charlyIA.history.splice(charlyIA.history.indexOf(m), 1);
-      await tcProposerRdvGroupe(g.references, g.duree, 'Ce créneau vient d’être pris. Je relance la recherche :');
+      await tcProposerRdvGroupe(g.references, g.duree, 'Ce créneau vient d’être pris. Je relance la recherche :', g.type);
       return;
     }
     g.etat = 'choix';
@@ -19465,9 +19615,10 @@ const TC_BACKEND = {
    *   soit { mode:'messagerie', rdv, message }. Le demandeur ne peut
    *   pas distinguer un agenda plein d'un accès non accordé.
    */
-  async demanderRdv(reference, titre) {
-    return tcAppel('POST', '/rdv/demander',
-      titre ? { reference: reference, titre: titre } : { reference: reference });
+  async demanderRdv(reference, titre, type) {
+    const corps = titre ? { reference: reference, titre: titre } : { reference: reference };
+    if (tcTypeRdvValide(type)) corps.type = type;   // telephone | physique | visio
+    return tcAppel('POST', '/rdv/demander', corps);
   },
 
   /** Retient un créneau : le rendez-vous s'inscrit dans les deux agendas. */
@@ -19476,8 +19627,10 @@ const TC_BACKEND = {
   },
 
   /** Le titulaire choisit lui-meme le creneau d une demande recue : inscrit dans les deux agendas. */
-  async proposerCreneauRdv(rdv, date, debut, duree) {
-    return tcAppel('POST', '/rdv/proposer-creneau', { rdv: rdv, date: date, debut: debut, duree: duree });
+  async proposerCreneauRdv(rdv, date, debut, duree, type) {
+    const corps = { rdv: rdv, date: date, debut: debut, duree: duree };
+    if (tcTypeRdvValide(type)) corps.type = type;
+    return tcAppel('POST', '/rdv/proposer-creneau', corps);
   },
 
   /** Le titulaire refuse et bloque : le demandeur n en est pas informe. */
@@ -19486,13 +19639,17 @@ const TC_BACKEND = {
   },
 
   /** Les creneaux ou tout le monde est libre, pour un rendez-vous a plusieurs. */
-  async proposerRdvGroupe(references, duree) {
-    return tcAppel('POST', '/rdv/groupe/proposer', { references: references, duree: duree });
+  async proposerRdvGroupe(references, duree, type) {
+    const corps = { references: references, duree: duree };
+    if (tcTypeRdvValide(type)) corps.type = type;
+    return tcAppel('POST', '/rdv/groupe/proposer', corps);
   },
 
   /** Inscrit le creneau choisi dans tous les agendas. */
-  async confirmerRdvGroupe(references, date, heure, duree) {
-    return tcAppel('POST', '/rdv/groupe/confirmer', { references: references, date: date, heure: heure, duree: duree });
+  async confirmerRdvGroupe(references, date, heure, duree, type) {
+    const corps = { references: references, date: date, heure: heure, duree: duree };
+    if (tcTypeRdvValide(type)) corps.type = type;
+    return tcAppel('POST', '/rdv/groupe/confirmer', corps);
   },
 
   async envoyerMessage(reference, texte, langue) {

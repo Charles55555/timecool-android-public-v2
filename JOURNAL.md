@@ -22,6 +22,31 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — le TYPE d'un rendez-vous (étape 1)
+
+**Codé et commité sur main, PAS publié.** Il y a du SQL (migration 010) et du serveur : la migration d'abord.
+
+- Trois types : `telephone` | `physique` | `visio` (« 📞 Par téléphone » · « 🤝 En personne » · « 🎥 En visio »).
+  Pas de lieu, de lien visio ni de durée dans cette étape.
+- **Migration `backend/sql/010_type_rendez_vous.sql`** : `rdv.type ENUM('telephone','physique','visio') NULL`,
+  ajoutée seulement si elle manque (rejouable). À passer AVANT de déployer l'API : `/rdv/demander` écrit
+  la colonne.
+- Serveur : `/rdv/demander` (champ `type`, gardé sur la ligne rdv, repris si la demande est reprise),
+  `/rdv/choisir` et `/rdv/proposer-creneau` (le choix du titulaire prime) l'écrivent dans les DEUX agendas
+  (champ `type` de l'élément rdv) et le disent : « Rendez-vous confirmé par téléphone : … » ;
+  `/rdv/groupe/proposer` et `/confirmer` : `type` dans le corps, « physique » par défaut. La demande :
+  « …sur TimeCool, par téléphone. Tu me proposes un créneau ? ». Sans type : textes et agendas comme avant.
+- Application : fiche contact (trois pastilles + « Annuler » avant d'appeler le serveur), fenêtre
+  « Proposer un créneau » (pastilles en haut, pré-sélection = le type demandé), formulaire de rendez-vous
+  (création : « En personne » pré-sélectionné ; modification : seul un type choisi s'écrit), icône devant
+  le titre (semaine, jour, fiche) pour les rendez-vous qui portent un type ; sans type : aucune icône.
+- Charly : ligne [AGENDA] à 7e champ facultatif (rétrocompatible), mots reconnus (« appelle-moi », « par
+  téléphone », « en visio », « visioconférence », « on se voit », « chez toi/moi », « en personne »),
+  prompt `v11-type-rdv`. Rendez-vous à plusieurs sans type dit : une question « Par téléphone, en personne
+  ou en visio ? ». Rendez-vous ordinaire sans précision : aucun type, aucune question.
+- Suites : `verif-type-rdv` (nouvelle) ; `verif-type-rdv-e2e` vise l'API EN LIGNE, rouge tant que la
+  migration et l'API ne sont pas passées.
+
 ## 10/10/2026 (session adjointe) — vocabulaire calme + formulaire « Nouveau contact »
 
 **Codé et commité sur main, PAS publié.** Page seulement ; aucun texte serveur concerné.

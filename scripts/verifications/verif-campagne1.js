@@ -134,8 +134,8 @@ verifie('les noms sont nettoyés dès l\'inscription (prénom et nom)', /'prenom
 
 titre('2. L\'application : titres échappés, éléments reçus assainis');
 const sites = [
-  ['semaine', '<div class="week-event-title">${escapeHTMLSafe(e.title)}</div>'],
-  ['jour', '<div class="day-event-title">${escapeHTMLSafe(e.title)}</div>'],
+  ['semaine', '<div class="week-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div>'],
+  ['jour', '<div class="day-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div>'],
   ['journal d\'activité', "${d.icon || '📋'} ${escapeHTMLSafe(d.title)}</div>"],
   ['carte de proposition', '${escapeHTMLSafe(p.title)}${'],
   ['conflit (nouveau)', '<b>${escapeHTMLSafe(c.newProposal.title)}</b>'],
