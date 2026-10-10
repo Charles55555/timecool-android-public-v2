@@ -26,7 +26,7 @@ function extraire(nom) {
 }
 
 const ctx = { console, contactsList: [], contactsSearchQuery: '', _contactsLettre: '',
-              _contactsCategorie: '', _contactsTimeCool: false, TC_CONTACTS_SEUIL: 200 };
+              _contactsCategorie: '', _contactsTimeCool: false, _contactsRecents: false, TC_CONTACTS_SEUIL: 200 };
 vm.createContext(ctx);
 ['tcLettreContact', 'tcContactsParLettre', 'tcContactsParLettres',
  'tcContactsAffiches'].forEach((n) => {

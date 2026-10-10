@@ -30,7 +30,7 @@ function extraire(nom) {
 
 const ctx = {
   console, contactsList: [], contactsSearchQuery: '',
-  _contactsLettre: '', _contactsCategorie: '', _contactsTimeCool: false,
+  _contactsLettre: '', _contactsCategorie: '', _contactsTimeCool: false, _contactsRecents: false,
   TC_CONTACTS_SEUIL: 200
 };
 vm.createContext(ctx);
@@ -114,10 +114,10 @@ titre('Les filtres ne s empilent pas');
 
 titre('La place dans la page');
 verifie('le bouton est pose au-dessus de la reglette',
-  page.indexOf('${tcBoutonTimeCoolHTML()}') > -1
-  && page.indexOf('${tcBoutonTimeCoolHTML()}') < page.indexOf('${tcRegletteHTML()}'));
+  page.indexOf('${tcLigneFiltresHTML()}') > -1
+  && page.indexOf('${tcLigneFiltresHTML()}') < page.indexOf('${tcRegletteHTML()}'));
 verifie('la reglette s efface pendant le filtre',
-  page.indexOf('if (_contactsCategorie || _contactsTimeCool) return \'\';') > -1);
+  page.indexOf('if (_contactsCategorie || _contactsTimeCool || _contactsRecents) return \'\';') > -1);
 
 console.log('');
 console.log(ko + ' anomalie(s).');

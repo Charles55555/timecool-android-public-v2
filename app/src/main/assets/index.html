@@ -18010,6 +18010,7 @@ let _contactsLettre = '';
 
 /** N'afficher que les contacts deja inscrits sur TimeCool. */
 let _contactsTimeCool = false;
+let _contactsRecents = false;
 
 /**
  * La categorie sur laquelle la page est filtree, ou ''.
@@ -18061,6 +18062,7 @@ function tcContactsAffiches() {
   if (!Array.isArray(contactsList)) return [];
   // Les inscrits l'emportent aussi sur la reglette : on vient voir qui
   // est deja la, pas parcourir l'alphabet.
+  if (_contactsRecents) return tcContactsRecents();
   if (_contactsTimeCool) {
     return contactsList.filter(function (c) { return isTimeCoolUser(c); })
       .sort(function (a, b) { return (a.name || '').localeCompare(b.name || '', 'fr'); });
@@ -18112,6 +18114,7 @@ function tcContactsAffiches() {
  */
 function tcVoirContactsDeCategorie(catId) {
   _contactsTimeCool = false;
+  _contactsRecents = false;
   _contactsCategorie = catId;
   _contactsLettre = '';
   contactsSearchQuery = '';
@@ -18148,6 +18151,76 @@ function tcFiltreCategorieHTML() {
     + ' font-size:12px; cursor:pointer;">Tout voir</button></div>';
 }
 
+/**
+ * Les contacts ajoutes UN PAR UN dans les 30 derniers jours, du plus recent au plus ancien.
+ *
+ * Un import du telephone n'est pas « recent » : ses fiches portent origine:'telephone'
+ * (ou 'exemple' pour les contacts d'exemple). Les fiches importees avant cette version n'ont
+ * pas de marque : toute fiche creee dans une rafale (plus de 20 fiches la meme minute) est
+ * exclue, sinon un nouvel import les ferait toutes remonter.
+ */
+function tcContactsRecents() {
+  if (!Array.isArray(contactsList)) return [];
+  const maintenant = Date.now();
+  const limite = maintenant - 30 * 86400000;
+  const parMinute = {};
+  contactsList.forEach(function (c) {
+    if (c && typeof c.createdAt === 'string') {
+      const m = c.createdAt.slice(0, 16);
+      parMinute[m] = (parMinute[m] || 0) + 1;
+    }
+  });
+  return contactsList.filter(function (c) {
+    if (!c || typeof c.createdAt !== 'string') return false;
+    if (c.origine === 'telephone' || c.origine === 'exemple') return false;
+    const t = Date.parse(c.createdAt);
+    if (isNaN(t) || t < limite || t > maintenant + 86400000) return false;
+    return (parMinute[c.createdAt.slice(0, 16)] || 0) <= 20;
+  }).sort(function (a, b) { return Date.parse(b.createdAt) - Date.parse(a.createdAt); });
+}
+
+function tcCompterRecents() {
+  return tcContactsRecents().length;
+}
+
+/** « Ajouté le 10/10 », sous le nom, dans la vue des contacts recents. */
+function tcLigneAjouteLe(c) {
+  const t = Date.parse(c && c.createdAt);
+  if (isNaN(t)) return '';
+  const d = new Date(t);
+  return '<div style="font-size:11.5px; color:var(--text-sec); margin-top:1px;">Ajouté le '
+    + ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '</div>';
+}
+
+/** Les recents, ou revenir a la liste ordinaire. Exclusif avec « TimeCool », la lettre, la categorie et la recherche. */
+function tcBasculerRecents() {
+  _contactsRecents = !_contactsRecents;
+  _contactsTimeCool = false;
+  _contactsCategorie = '';
+  _contactsLettre = '';
+  contactsSearchQuery = '';
+  renderContacts();
+}
+
+/** Le bouton « 🆕 Mes contacts récents (N) » : toujours la, avec « (0) » quand il n'y a personne. */
+function tcBoutonRecentsHTML() {
+  const n = tcCompterRecents();
+  const actif = _contactsRecents;
+  return '<button onclick="tcBasculerRecents()" style="flex:1 1 150px; min-width:0;'
+    + ' padding:11px; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;'
+    + (actif
+        ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
+        : ' background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);')
+    + '">🆕 ' + (actif ? 'Tout voir' : 'Mes contacts récents (' + n + ')') + '</button>';
+}
+
+/** Les deux filtres sur une ligne : les recents a gauche, TimeCool a droite (l'un sous l'autre si l'ecran est etroit). */
+function tcLigneFiltresHTML() {
+  if (_contactsCategorie) return '';
+  return '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">'
+    + tcBoutonRecentsHTML() + tcBoutonTimeCoolHTML() + '</div>';
+}
+
 /** Combien de contacts sont deja sur TimeCool. */
 function tcCompterTimeCool() {
   if (!Array.isArray(contactsList)) return 0;
@@ -18157,6 +18230,7 @@ function tcCompterTimeCool() {
 /** N'afficher que les inscrits, ou revenir a la liste ordinaire. */
 function tcBasculerTimeCool() {
   _contactsTimeCool = !_contactsTimeCool;
+  _contactsRecents = false;
   _contactsCategorie = '';
   _contactsLettre = '';
   contactsSearchQuery = '';
@@ -18174,10 +18248,10 @@ function tcBoutonTimeCoolHTML() {
   const n = tcCompterTimeCool();
   if (n === 0) {
     return '<div style="text-align:center; font-size:12px; color:var(--text-sec);'
-      + ' margin-bottom:12px;">Aucun de tes contacts n\u2019utilise encore TimeCool.</div>';
+      + ' flex:1 1 150px; align-self:center;">Aucun de tes contacts n\u2019utilise encore TimeCool.</div>';
   }
   const actif = _contactsTimeCool;
-  return '<button onclick="tcBasculerTimeCool()" style="width:100%; margin-bottom:12px;'
+  return '<button onclick="tcBasculerTimeCool()" style="flex:1 1 150px; min-width:0;'
     + ' padding:11px; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;'
     + (actif
         ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
@@ -18188,6 +18262,7 @@ function tcBoutonTimeCoolHTML() {
 /** Touche une lettre : la meme lettre deux fois la referme. */
 function tcChoisirLettre(lettre) {
   _contactsTimeCool = false;
+  _contactsRecents = false;
   _contactsLettre = (_contactsLettre === lettre) ? '' : lettre;
   contactsSearchQuery = '';
   renderContacts();
@@ -18197,7 +18272,7 @@ function tcChoisirLettre(lettre) {
 function tcRegletteHTML() {
   // Pendant un filtre par categorie, la reglette n'a plus de sens :
   // on regarde une poignee de personnes, pas un alphabet.
-  if (_contactsCategorie || _contactsTimeCool) return '';
+  if (_contactsCategorie || _contactsTimeCool || _contactsRecents) return '';
   if (!tcContactsParLettres()) return '';
   const compte = tcContactsParLettre();
   const lettres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(['#']);
@@ -18256,7 +18331,7 @@ function tcContactsEnTeteHTML() {
 
 /** La liste, ou l'invitation a choisir. */
 function tcContactsListeHTML() {
-  if (!_contactsCategorie && !_contactsTimeCool && tcContactsParLettres()
+  if (!_contactsCategorie && !_contactsTimeCool && !_contactsRecents && tcContactsParLettres()
       && !_contactsLettre && !contactsSearchQuery.trim()) {
     return tcContactsInviteHTML();
   }
@@ -18280,7 +18355,7 @@ function renderContacts() {
     </div>
 
     ${tcFiltreCategorieHTML()}
-    ${tcBoutonTimeCoolHTML()}
+    ${tcLigneFiltresHTML()}
     ${tcRegletteHTML()}
 
     <div id="contactsListContainer">
@@ -18339,6 +18414,7 @@ function renderContactsListHTML(contacts) {
             <div data-notranslate style="width:42px; height:42px; border-radius:50%; background:${color}; color:white; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; flex-shrink:0;">${initials}</div>
             <div style="flex:1; min-width:0;">
               <div style="font-size:14px; font-weight:600; color:var(--text);"><span data-notranslate>${escapeHTMLSafe(c.name)}</span>${onTC ? '<span class="tc-badge"><i>\u2713</i>TIMECOOL</span>' : ''}</div>
+              ${_contactsRecents ? tcLigneAjouteLe(c) : ''}
               ${tcLigneCoordonnee(c, 'phone')}
               ${tcLigneCoordonnee(c, 'email')}
             </div>
@@ -19835,7 +19911,7 @@ function renderContactsList() {
   // contraire.
   // Chercher un nom quitte aussi la liste des inscrits : on cherche
   // dans tout le carnet.
-  if (contactsSearchQuery.trim()) { _contactsLettre = ''; _contactsTimeCool = false; }
+  if (contactsSearchQuery.trim()) { _contactsLettre = ''; _contactsTimeCool = false; _contactsRecents = false; }
   container.innerHTML = tcContactsListeHTML();
   tcRestaurerZonesRdv();
 }
@@ -21936,6 +22012,7 @@ function tcContactsRecus(json) {
       // Renseigne depuis le carnet Android. Etait force a vide, ce qui
       // rendait indetectable tout contact inscrit avec son e-mail.
       email: (c.email || '').trim(),
+      origine: 'telephone',   // import en masse : jamais « recent »
       createdAt: new Date().toISOString()
     });
     ajoutes++;
@@ -22001,6 +22078,7 @@ function importDemoContactSamples() {
         contactsList.push({
           id: 'contact_' + Date.now() + '_' + Math.floor(Math.random()*1000),
           ...s,
+          origine: 'exemple',
           createdAt: new Date().toISOString()
         });
       }

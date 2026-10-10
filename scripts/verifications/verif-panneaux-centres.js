@@ -135,7 +135,7 @@ vm.runInContext('tcAutoriserDepuisPlage()', ctx);
 verifie('depuis la fenetre : elle se ferme puis ouvre la liste « Choisir qui » du temps libre', ctx.appels.join(',') === 'ferme,qui:personnel', ctx.appels.join(','));
 
 // La liste des contacts et son bandeau
-const c2 = { _contactsTimeCool: false, _contactsCategorie: 'personnel', _contactsLettre: '', contactsSearchQuery: '', isTimeCoolUser: () => false, TC_CONTACTS_SEUIL: 12, tcLettreContact: () => 'A' };
+const c2 = { _contactsTimeCool: false, _contactsRecents: false, _contactsCategorie: 'personnel', _contactsLettre: '', contactsSearchQuery: '', isTimeCoolUser: () => false, TC_CONTACTS_SEUIL: 12, tcLettreContact: () => 'A' };
 c2.DISPO_CATEGORIES = ctx.DISPO_CATEGORIES;
 c2.contactsList = [
   { id: '1', name: 'Zoé' }, { id: '2', name: 'Alain', categories: ['personnel'] }, { id: '3', name: 'Marie', categories: ['travail'] }, { id: '4', name: 'Basile', categories: ['personnel', 'sante'] },

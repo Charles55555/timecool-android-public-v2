@@ -51,7 +51,7 @@ console.log('\n── Les six categories ──');
 console.log('\n── Le filtre par categorie ──');
 {
   const ctx = { console, contactsList: [], contactsSearchQuery: '',
-                _contactsLettre: '', _contactsCategorie: '', _contactsTimeCool: false, TC_CONTACTS_SEUIL: 200 };
+                _contactsLettre: '', _contactsCategorie: '', _contactsTimeCool: false, _contactsRecents: false, TC_CONTACTS_SEUIL: 200 };
   vm.createContext(ctx);
   ['tcLettreContact', 'tcContactsParLettres', 'tcContactsAffiches']
     .forEach((n) => { const src = extraire(n); if (src) vm.runInContext(src, ctx); });
@@ -94,7 +94,7 @@ verifie('et on peut le retirer',
   page.indexOf('function tcRetirerFiltreCategorie()') > -1
   && page.indexOf('Tout voir') > -1);
 verifie('la reglette s efface pendant le filtre',
-  page.indexOf('if (_contactsCategorie || _contactsTimeCool) return') > -1,
+  page.indexOf('if (_contactsCategorie || _contactsTimeCool || _contactsRecents) return') > -1,
   'un alphabet sur trois personnes n aurait aucun sens');
 
 console.log(`\n${ko} anomalie(s).`);

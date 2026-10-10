@@ -22,6 +22,24 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — « 🆕 Mes contacts récents (N) »
+
+**Codé et commité sur main, PAS publié.** Page seulement, aucun changement serveur.
+
+- Sur la page Contacts, un bouton « 🆕 Mes contacts récents (N) » à GAUCHE de « 👥 Mes contacts TimeCool »,
+  même ligne, deux moitiés (flex, 8 px, l'un sous l'autre si l'écran est étroit) ; toujours visible, avec
+  « (0) » quand il n'y a personne. Exclusif avec TimeCool, la lettre, la catégorie et la recherche ;
+  un second toucher revient à la vue normale.
+- « Récent » = ajouté UN PAR UN dans les 30 derniers jours (`createdAt`) : à la main, par « ➕ Ajouter à mes
+  contacts », par « ajouter aux contacts » d'un lieu, ou automatiquement à la proposition d'un créneau
+  (le serveur pose déjà `createdAt` : rien à changer côté serveur). L'import du téléphone (`tcContactsRecus`)
+  marque ses fiches `origine:'telephone'`, les contacts d'exemple `origine:'exemple'` : jamais récents.
+  Les fiches importées avant la marque : toute fiche d'une « rafale » (plus de 20 fiches la même minute)
+  est exclue, donc un nouvel import ne fait pas remonter tout le carnet.
+- La vue des récents : du plus récent au plus ancien, « Ajouté le 10/10 » sous le nom, même fiche
+  (pastilles, menu).
+- Suite : `verif-contacts-recents` (nouvelle).
+
 ## 10/10/2026 (session adjointe) — savoir QUI m'écrit
 
 **Codé et commité sur main, PAS publié.** Il y a du serveur (API) : à publier avec le web et l'APK.
