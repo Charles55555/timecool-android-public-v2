@@ -114,17 +114,27 @@ console.log('\n-- L ordre de la page --');
   const recherche = ou('contactsSearchInput');
   const reglette = ou('tcRegletteHTML');
   const liste = ou('contactsListContainer');
-  const boutons = ou('importPhoneContacts');
+  const entete = ou('tcContactsEnTeteHTML');
 
   verifie('la phrase vient en premier',
-    phrase > -1 && phrase < recherche, 'position ' + phrase);
+    phrase > -1 && phrase < entete, 'position ' + phrase);
+  // Charles, 10/10 : importer et ajouter sont les premiers gestes sur cette page,
+  // pas la derniere ligne sous une liste vide. Le compte est a cote.
+  verifie('puis le compte et les boutons Importer / Ajouter, avant la recherche',
+    entete > -1 && entete < recherche);
   verifie('puis la recherche, avant la reglette',
     recherche > -1 && recherche < reglette);
   verifie('puis la reglette, avant la liste',
     reglette > -1 && reglette < liste);
-  verifie('les deux gros boutons passent en dernier',
-    boutons > liste,
-    'ils servent une fois par an, la recherche a chaque visite');
+  verifie('plus de gros boutons sous la liste',
+    bloc.indexOf('importPhoneContacts', liste) === -1);
+  const tete = (function (nom) { const d = page.indexOf('function ' + nom + '('); let n = 0; for (let j = page.indexOf('{', d); j < page.length; j++) { if (page[j] === '{') n++; else if (page[j] === '}') { n--; if (n === 0) return page.slice(d, j + 1); } } return ''; })('tcContactsEnTeteHTML');
+  verifie('l en-tete porte le compte, Importer et Ajouter',
+    /toLocaleString/.test(tete) && /' contacts/.test(tete) && /importPhoneContacts\(\)/.test(tete) && /addContactManually\(\)/.test(tete));
+  verifie('l invitation sous les lettres ne repete plus le compte',
+    !/toLocaleString/.test((function (nom) { const d = page.indexOf('function ' + nom + '('); let n = 0; for (let j = page.indexOf('{', d); j < page.length; j++) { if (page[j] === '{') n++; else if (page[j] === '}') { n--; if (n === 0) return page.slice(d, j + 1); } } return ''; })('tcContactsInviteHTML')));
+  verifie('le sous-titre dit ce que chacun peut faire',
+    page.indexOf('Mes contacts, et ce que chacun peut faire chez moi') > -1);
 }
 
 console.log('\n-- Ce qui a disparu --');

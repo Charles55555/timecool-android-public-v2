@@ -1209,7 +1209,7 @@ if (window.pdfjsLib) {
 <div class="page" id="page-contacts">
   <div class="page-header">
     <div class="page-title">👥 Mes contacts</div>
-    <div class="page-subtitle">Qui peut me prendre un rendez-vous ?</div>
+    <div class="page-subtitle">Mes contacts, et ce que chacun peut faire chez moi</div>
   </div>
   <div class="main"><div id="contactsContent" style="padding:14px;"></div></div>
 </div>
@@ -18125,13 +18125,24 @@ function tcRegletteHTML() {
  * soit.
  */
 function tcContactsInviteHTML() {
-  const total = Array.isArray(contactsList) ? contactsList.length : 0;
-  return '<div style="text-align:center; padding:36px 20px; color:var(--text-sec);">'
-    + '<div style="font-size:40px; margin-bottom:12px;">\ud83d\udc65</div>'
-    + '<div style="font-size:17px; font-weight:700; color:var(--text); margin-bottom:6px;">'
-    + total.toLocaleString('fr-FR') + ' contacts</div>'
+  return '<div style="text-align:center; padding:28px 20px; color:var(--text-sec);">'
     + '<div style="font-size:12.5px; line-height:1.6;">Touche une lettre ci-dessus,<br>'
     + 'ou cherche un nom dans la barre de recherche.</div></div>';
+}
+
+/**
+ * Le compte et les deux gestes de depart, en haut de la page : importer et
+ * ajouter sont les premieres choses a faire, pas la derniere ligne sous une
+ * liste vide (demande de Charles, 10/10). Le nombre permet de verifier du
+ * premier coup d oeil qu un import s est bien passe.
+ */
+function tcContactsEnTeteHTML() {
+  const total = Array.isArray(contactsList) ? contactsList.length : 0;
+  return '<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">'
+    + '<div style="font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; margin-right:auto;">\ud83d\udc65 ' + total.toLocaleString('fr-FR') + ' contacts</div>'
+    + '<button onclick="importPhoneContacts()" style="padding:10px 14px; background:var(--g-blue); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">\ud83d\udcf1 Importer mes contacts</button>'
+    + '<button onclick="addContactManually()" style="padding:10px 14px; background:var(--g-green); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">+ Ajouter</button>'
+    + '</div>';
 }
 
 /** La liste, ou l'invitation a choisir. */
@@ -18151,8 +18162,8 @@ function renderContacts() {
     <div style="font-size:13px;color:#5f6368;margin-bottom:14px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">
       \u{1F4A1} Choisis, pour chaque personne, ce qu'elle peut r\u00e9server chez toi.
     </div>
-    </div>
 
+    ${tcContactsEnTeteHTML()}
 
     <div style="margin-bottom:14px; position:relative;">
       <span style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:16px; color:var(--text-sec);">🔍</span>
@@ -18167,14 +18178,6 @@ function renderContacts() {
       ${tcContactsListeHTML()}
     </div>
 
-    <div style="display:flex; gap:8px; margin-bottom:14px;">
-      <button onclick="importPhoneContacts()" style="flex:1; padding:12px; background:var(--g-blue); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-        📱 Importer mes contacts
-      </button>
-      <button onclick="addContactManually()" style="flex:1; padding:12px; background:var(--g-green); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-        + Ajouter
-      </button>
-    </div>
   `;
   tcRestaurerZonesRdv();
 }
