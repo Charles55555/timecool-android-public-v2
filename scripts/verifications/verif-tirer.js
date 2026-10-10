@@ -167,8 +167,8 @@ titre('Ce que fait le rafraichissement');
     'un rechargement ferait perdre ce qui est en cours de saisie');
   verifie('deux tirages a la suite n en lancent qu un',
     src && src.indexOf('if (_tirerEnCours) return;') > -1);
-  verifie('il laisse la place au bandeau de mise a jour',
-    src && src.indexOf("getElementById('tcBandeauMaj')") > -1);
+  verifie('il ne touche plus au bandeau de mise a jour (reserve aux vraies versions)',
+    src && src.indexOf("getElementById('tcBandeauMaj')") === -1);
 }
 
 titre('La bonne verification selon le support');
@@ -200,17 +200,15 @@ titre('Rien ne gene le defilement');
     src && src.indexOf('if (document._tirerInitialise) return;') > -1);
 }
 
-titre('Apres le geste, sans nouvelle version : un message fugace, pas de bandeau');
+titre('Apres le geste, sans nouvelle version : rien du tout');
 {
   const src = extraire('tcRafraichirTout');
-  // Charles, 10/10 : le bandeau « Tout est a jour » + « Recharger » a chaque
-  // tirage ne servait a rien. Le bandeau est reserve a une vraie mise a jour.
+  // Charles, 10/10 : ni bandeau, ni bouton, ni message quand il n y a rien
+  // de neuf. Le bandeau « Recharger » est reserve a une vraie mise a jour.
   verifie('plus de bandeau ni de bouton Recharger pour « rien de neuf »',
     src && src.indexOf('tcAfficherBandeauMaj(') === -1 && src.indexOf("'" + 'Recharger' + "'") === -1);
-  verifie('un message fugace « Tout est a jour » confirme le geste',
-    src && /showToast\('\\u2705 Tout est \\u00e0 jour'\)/.test(src));
-  verifie('il ne passe pas devant une vraie mise a jour',
-    src && src.indexOf('if (!maj || maj.hidden)') > -1);
+  verifie('et pas de message « Tout est a jour » non plus',
+    src && src.indexOf('Tout est') === -1);
 }
 
 console.log('');

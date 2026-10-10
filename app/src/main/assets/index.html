@@ -15251,13 +15251,9 @@ async function tcRafraichirTout() {
 
   // Le bandeau des mises a jour a pris la main : il annonce deja une
   // nouvelle version, on ne lui passe pas devant.
-  const maj = document.getElementById('tcBandeauMaj');
-  if (!maj || maj.hidden) {
-    // Rien de neuf : un message fugace, sans bouton. Le bandeau avec
-    // « Recharger » a chaque tirage ne servait a rien (Charles, 10/10) ;
-    // il ne s'affiche que pour une vraie nouvelle version.
-    if (typeof showToast === 'function') showToast('\u2705 Tout est \u00e0 jour');
-  }
+  // Rien de neuf : on ne dit rien du tout (Charles, 10/10 : « meme pas la
+  // peine »). Le bandeau « Recharger » ne s'affiche que pour une vraie
+  // nouvelle version, et il a deja pris la main dans ce cas.
   _tirerEnCours = false;
 }
 
