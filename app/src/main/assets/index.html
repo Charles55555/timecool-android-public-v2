@@ -18248,9 +18248,9 @@ function tcContactsInviteHTML() {
 function tcContactsEnTeteHTML() {
   const total = Array.isArray(contactsList) ? contactsList.length : 0;
   return '<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">'
-    + '<div style="font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; margin-right:auto;">\ud83d\udc65 ' + total.toLocaleString('fr-FR') + ' contacts</div>'
     + '<button onclick="importPhoneContacts()" style="padding:10px 14px; background:var(--g-blue); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">\ud83d\udcf1 Importer mes contacts</button>'
     + '<button onclick="addContactManually()" style="padding:10px 14px; background:var(--g-green); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">+ Ajouter</button>'
+    + '<div style="font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; margin-left:auto;">\ud83d\udc65 ' + total.toLocaleString('fr-FR') + ' contacts</div>'
     + '</div>';
 }
 
