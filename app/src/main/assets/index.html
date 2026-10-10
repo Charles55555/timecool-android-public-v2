@@ -217,6 +217,29 @@ body { display:flex; flex-direction:column; }
 .info-value { font-size:14px; color:var(--text); }
 .info-content { flex:1; }
 .info-lock { font-size:11px; color:var(--g-green); margin-top:4px; }
+/* Mon profil : une bande compacte, puis des cartes (deux colonnes des 700 px, une sur telephone). */
+.profil-entete { display:flex; align-items:center; gap:14px; padding:14px 16px; min-height:90px; box-sizing:border-box; background:linear-gradient(135deg, #e8f0fe 0%, #e0f2f1 100%); }
+.profil-entete .profile-avatar { width:60px; height:60px; font-size:22px; margin:0; flex-shrink:0; }
+.profil-entete-texte { flex:1; min-width:0; }
+.profil-entete-nom { font-size:18px; font-weight:700; line-height:1.25; overflow-wrap:anywhere; }
+.profil-entete-ville { font-size:12.5px; color:var(--text-sec); margin-top:2px; }
+.profil-entete-pastille { margin-top:6px; display:inline-block; padding:3px 10px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500; }
+.profil-grille { display:grid; grid-template-columns:minmax(0, 1fr); gap:12px; padding:14px; align-items:start; }
+@media (min-width:700px) { .profil-grille { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+.profil-carte { background:#fff; border:1px solid var(--border); border-radius:16px; padding:12px 14px 6px; box-sizing:border-box; min-width:0; }
+.profil-carte-tete { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.profil-carte-titre { flex:1; min-width:0; font-size:14px; font-weight:700; color:var(--text); }
+.profil-crayon { flex-shrink:0; background:#f1f3f4; border:none; border-radius:10px; width:34px; height:34px; font-size:15px; cursor:pointer; }
+.profil-champ { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:9px 0; border-top:1px solid #f1f3f4; }
+.profil-champ-lib { flex:0 0 auto; max-width:45%; font-size:12px; color:var(--text-sec); }
+.profil-champ-val { flex:1 1 auto; min-width:0; font-size:14px; color:var(--text); text-align:right; overflow-wrap:anywhere; }
+.profil-champ-val.vide { color:#bdc1c6; }
+.profil-champ.long { flex-direction:column; align-items:flex-start; gap:2px; }
+.profil-champ.long .profil-champ-lib { max-width:100%; }
+.profil-champ.long .profil-champ-val { text-align:left; width:100%; }
+.profil-verrou { font-size:11px; color:var(--g-green); margin-top:2px; }
+.profil-rien { padding:10px 0 12px; border-top:1px solid #f1f3f4; font-size:13px; color:var(--text-sec); }
+.profil-rien a { color:var(--g-blue); font-weight:600; cursor:pointer; margin-left:6px; }
 
 .card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; cursor:pointer; display:flex; align-items:center; gap:12px; }
 .card-premium { border:2px solid var(--g-blue); background:linear-gradient(135deg, #f0f7ff 0%, #fff 100%); position:relative; }
@@ -5810,46 +5833,22 @@ function renderProfile() {
     const depuis = a.createdAt
       ? new Date(a.createdAt).toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' })
       : null;
-    const nonRenseigne = '<span style="color:var(--text-sec); opacity:.7;">Non renseigné</span>';
-
-    c.innerHTML = `
-      <div class="profile-hero">
-        <div class="profile-avatar profile-avatar-user">${initiales}</div>
-        <div class="profile-name">${prenom} ${nom}</div>
-        <div class="profile-sub">${ville || ''}</div>
-        <div style="margin-top:8px; display:inline-block; padding:4px 12px; background:#fff; border-radius:12px; font-size:11px; color:var(--g-blue); font-weight:500;">🔒 Profil protégé</div>
-      </div>
-      <div class="info-section"><div class="info-section-title">📝 Identité</div>
-        ${infoRow('Date de naissance', a.birth || nonRenseigne)}
-        ${infoRow('Genre', a.gender || nonRenseigne)}</div>
-      <div class="info-section"><div class="info-section-title">📧 Coordonnées</div>
-        ${infoRow('Email', a.email || nonRenseigne)}
-        ${infoRow('Mobile', tel || nonRenseigne)}
-        ${infoRow('Ville', ville || nonRenseigne)}</div>
-      <div class="info-section"><div class="info-section-title">🏥 Santé</div>
-        ${infoRow('Sécurité Sociale', a.ssn || nonRenseigne, !!a.ssn)}
-        ${infoRow('Mutuelle', a.mutual || nonRenseigne, !!a.mutual)}
-        ${infoRow('Groupe sanguin', a.bloodType || nonRenseigne)}
-        ${infoRow('Allergies', a.allergies || nonRenseigne)}
-        ${infoRow('À prévenir', a.emergency || nonRenseigne)}</div>
-      <div class="info-section"><div class="info-section-title">🛂 Identité légale</div>
-        ${infoRow('CNI', a.cni || nonRenseigne, !!a.cni)}
-        ${infoRow('Passeport', a.passport || nonRenseigne, !!a.passport)}</div>
-      <div class="info-section"><div class="info-section-title">💳 Bancaire</div>
-        ${infoRow('Banque', a.bank || nonRenseigne)}
-        ${infoRow('IBAN', a.iban || nonRenseigne, !!a.iban)}</div>
-      <div class="info-section"><div class="info-section-title">💼 Profession</div>
-        ${infoRow('Métier', a.job || nonRenseigne)}
-        ${infoRow('Entreprise', a.company || nonRenseigne)}</div>
-      <div class="info-section"><div class="info-section-title">👨‍👩‍👧 Famille</div>
-        ${infoRow('Situation', a.family || nonRenseigne)}
-        ${infoRow('Enfants', a.children || nonRenseigne)}</div>
-      <div class="info-section"><div class="info-section-title">🔐 Compte</div>
-        ${depuis ? infoRow('Membre depuis', depuis) : ''}
-        ${a.reference ? infoRow('Identifiant', a.reference) : ''}</div>
-      <div style="padding:18px; background:var(--bg-soft); margin:16px; border-radius:12px; font-size:12px; color:var(--text-sec); text-align:center; line-height:1.6;">
+    // Une rubrique = une carte. [cle, icone, titre, [[libelle, valeur, chiffree?], ...]]
+    const rubriques = [
+      ['identite', '📝', 'Identité', [['Date de naissance', a.birth], ['Genre', a.gender]]],
+      ['coordonnees', '📧', 'Coordonnées', [['Email', a.email], ['Mobile', tel], ['Ville', ville]]],
+      ['sante', '🏥', 'Santé', [['Sécurité Sociale', a.ssn, true], ['Mutuelle', a.mutual, true], ['Groupe sanguin', a.bloodType], ['Allergies', a.allergies], ['À prévenir', a.emergency]]],
+      ['legale', '🛂', 'Identité légale', [['CNI', a.cni, true], ['Passeport', a.passport, true]]],
+      ['bancaire', '💳', 'Bancaire', [['Banque', a.bank], ['IBAN', a.iban, true]]],
+      ['profession', '💼', 'Profession', [['Métier', a.job], ['Entreprise', a.company]]],
+      ['famille', '👨‍👩‍👧', 'Famille', [['Situation', a.family], ['Enfants', a.children]]],
+      ['compte', '🔐', 'Compte', [['Membre depuis', depuis], ['Identifiant', a.reference]]]
+    ];
+    c.innerHTML = tcProfilEnteteHTML(initiales, (prenom + ' ' + nom).trim(), ville)
+      + '<div class="profil-grille">' + rubriques.map(tcProfilCarteHTML).join('') + '</div>'
+      + `<div style="padding:18px; background:var(--bg-soft); margin:16px; border-radius:12px; font-size:12px; color:var(--text-sec); text-align:center; line-height:1.6;">
         Ton profil n'affiche que ce que tu as réellement saisi.<br>
-        Les rubriques encore « Non renseigné » ne sont pas éditables pour le moment.
+        Les rubriques vides (—) ne sont pas encore modifiables.
       </div>`;
   } else {
     const profileId = currentProfile.pro;
@@ -5897,6 +5896,55 @@ function renderProfile() {
           ${infoRow('IBAN cabinet', 'FR76 **** **** **** **** 789', true)}</div>`;
     }
   }
+}
+
+/** L'en-tete compact : avatar, nom, ville et « Profil protege » sur une seule bande. */
+function tcProfilEnteteHTML(initiales, nom, ville) {
+  return '<div class="profil-entete">'
+    + '<div class="profile-avatar profile-avatar-user">' + initiales + '</div>'
+    + '<div class="profil-entete-texte">'
+    + '<div class="profil-entete-nom">' + escapeHTMLSafe(nom) + '</div>'
+    + (ville ? '<div class="profil-entete-ville">' + escapeHTMLSafe(ville) + '</div>' : '')
+    + '<span class="profil-entete-pastille">🔒 Profil protégé</span>'
+    + '</div></div>';
+}
+
+function tcProfilVide(v) {
+  return v === null || v === undefined || String(v).trim() === '';
+}
+
+/** Un champ sur UNE ligne : le libelle a gauche, la valeur a droite (« — » si vide). Une valeur longue se replie sous le libelle. */
+function tcProfilChampHTML(libelle, valeur, chiffre) {
+  const vide = tcProfilVide(valeur);
+  const texte = vide ? '—' : String(valeur);
+  const long = !vide && texte.length > 26;
+  return '<div class="profil-champ' + (long ? ' long' : '') + '">'
+    + '<div class="profil-champ-lib">' + escapeHTMLSafe(libelle) + '</div>'
+    + '<div class="profil-champ-val' + (vide ? ' vide' : '') + '">' + escapeHTMLSafe(texte)
+    + (chiffre && !vide ? '<div class="profil-verrou">🔒 Donnée chiffrée</div>' : '')
+    + '</div></div>';
+}
+
+/** Une carte : titre et icone, crayon en haut a droite, un champ par ligne. Tous vides : « Rien pour l'instant » + « Compléter ». */
+function tcProfilCarteHTML(r) {
+  const cle = r[0], icone = r[1], titre = r[2], champs = r[3];
+  const modifiable = cle !== 'compte';   // le compte (date, identifiant) ne se modifie pas
+  const rempli = champs.some(function (f) { return !tcProfilVide(f[1]); });
+  if (!rempli && !modifiable) return '';
+  return '<div class="profil-carte" id="profilCarte_' + cle + '">'
+    + '<div class="profil-carte-tete"><span style="font-size:20px;">' + icone + '</span>'
+    + '<div class="profil-carte-titre">' + escapeHTMLSafe(titre) + '</div>'
+    + (modifiable ? '<button class="profil-crayon" onclick="tcModifierRubrique(\'' + cle + '\')" aria-label="Modifier ' + escapeHTMLSafe(titre) + '">✏️</button>' : '')
+    + '</div>'
+    + (rempli
+      ? champs.map(function (f) { return tcProfilChampHTML(f[0], f[1], f[2]); }).join('')
+      : '<div class="profil-rien">Rien pour l’instant<a onclick="tcModifierRubrique(\'' + cle + '\')">Compléter</a></div>')
+    + '</div>';
+}
+
+/** Le crayon d'une carte (et « Completer »). La modification du profil n'existe pas encore : on le dit, on ne fait semblant de rien. */
+function tcModifierRubrique(cle) {
+  tcAlert('La modification de ton profil arrive dans une prochaine version.');
 }
 
 function infoRow(label, value, sensitive=false) {

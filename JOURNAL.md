@@ -22,6 +22,23 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — « Mon profil » en cartes
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Page Mon profil (compte particulier) : en-tête compact d'environ 90 px (avatar, nom en gras, ville,
+  « Profil protégé »), puis huit cartes (Identité, Coordonnées, Santé, Identité légale, Bancaire,
+  Profession, Famille, Compte) en grille : deux colonnes dès 700 px, une sur téléphone.
+- Un champ par ligne : libellé gris à gauche, valeur à droite ; une valeur longue (plus de 26 caractères)
+  se replie sous le libellé. Champ vide : « — » gris clair. Carte entièrement vide : « Rien pour
+  l'instant » + « Compléter ». La carte Compte (date, identifiant) n'a ni crayon ni « Compléter » et
+  disparaît si elle est vide. Les champs saisis sont maintenant échappés.
+- **Il n'existe pas encore d'édition du profil** : le crayon et « Compléter » affichent « La
+  modification de ton profil arrive dans une prochaine version. » (tcModifierRubrique : c'est elle qu'il
+  faudra brancher). Décision sensible à prendre avant (santé, IBAN, pièces d'identité : stockés où ?).
+- Les profils pro (démo) ne changent pas.
+- Suite : `verif-profil-cartes` (nouvelle).
+
 ## 10/10/2026 (session adjointe) — « 🆕 Mes contacts récents (N) »
 
 **Codé et commité sur main, PAS publié.** Page seulement, aucun changement serveur.

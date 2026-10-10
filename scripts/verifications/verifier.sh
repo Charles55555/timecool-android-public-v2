@@ -109,6 +109,7 @@ lancer verif-contact-rdv      "$PAGE"
 lancer verif-creneaux-proposes "$PAGE"
 lancer verif-cache-prompt      "$PAGE"
 lancer verif-initiales         "$PAGE"
+lancer verif-profil-cartes    "$PAGE"
 lancer verif-messages          "$PAGE"
 
 
