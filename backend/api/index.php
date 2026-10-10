@@ -404,29 +404,32 @@ function compteParReference(string $reference): ?array
 }
 
 /**
- * Le titulaire a-t-il autorisé ce demandeur à lui prendre rendez-vous ?
+ * Ce demandeur peut-il prendre rendez-vous SANS attendre la validation du titulaire ?
  *
- * L'autorisation est une fiche contact, chez LUI, portant le numéro ou
- * l'email du demandeur et au moins une catégorie cochée. Un contact
- * bloqué n'autorise rien — et ne le saura jamais : la réponse rendue au
- * demandeur est la même que pour un agenda plein.
+ * Oui seulement si le titulaire a décoché « Toujours attendre ma validation »
+ * ET que le demandeur est dans son carnet (numéro, email ou référence de
+ * compte), sans blocage. Un inconnu, un contact bloqué ou une validation
+ * exigée n'autorisent rien — et le demandeur ne le saura jamais : la réponse
+ * rendue est la même que pour un agenda plein.
  *
  * Seul un booléen sort d'ici. Le reste du carnet du titulaire n'est ni
  * lu ni transmis.
  */
 function autorisationPourPrendreRdv(int $titulaireId, array $demandeur): bool
 {
-    return categoriesPourPrendreRdv($titulaireId, $demandeur) !== [];
+    return categoriesPourRdvAutomatique($titulaireId, $demandeur) !== [];
 }
 
 /**
  * Les categories d horaires qui s appliquent a ce demandeur.
  *
- * Regle (Charles, 09/10) : tout contact qui a un compte TimeCool peut
- * demander un rendez-vous, comme on peut ecrire sur WhatsApp a quiconque
- * l a. Rien a cocher. Seul le blocage refuse : liste vide. Les categories
- * cochees sur la fiche ne sont plus qu une limite facultative ; sans
- * choix, toutes les disponibilites du titulaire valent.
+ * Regle (Charles, 10/10). Une demande n est AUTOMATIQUE que si le titulaire
+ * a decoche « Toujours attendre ma validation » ET que le demandeur est
+ * dans son carnet, sans blocage. Dans tous les autres cas — validation
+ * exigee, inconnu, bloque — la demande passe par sa messagerie, et le
+ * demandeur recoit la meme reponse : il ne peut pas les distinguer.
+ * Les categories cochees sur la fiche ne sont qu une limite facultative ;
+ * sans choix, toutes les disponibilites du titulaire valent.
  */
 function categoriesToutesPourRdv(): array
 {
@@ -452,7 +455,7 @@ function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
             && Empreinte::normaliserTelephone((string) $c['phone']) === $tel;
         $memeMail = isset($c['email']) && $c['email'] !== ''
             && Empreinte::normaliserEmail((string) $c['email']) === $email;
-        if (!$memeTel && !$memeMail) {
+        if (!$memeTel && !$memeMail && !memeReference($c, $demandeur)) {
             continue;
         }
         if (!empty($c['blocked'])) {
@@ -461,7 +464,137 @@ function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
         $choisies = is_array($c['categories'] ?? null) ? array_values(array_filter($c['categories'], 'is_string')) : [];
         return $choisies !== [] ? $choisies : categoriesToutesPourRdv();
     }
-    return categoriesToutesPourRdv();   // aucune fiche : ouvert, sauf blocage
+    return [];   // aucune fiche : inconnu du carnet, la demande passe par la messagerie
+}
+
+/** La fiche porte-t-elle la reference de compte de cette personne ? (reference connue, jamais vide) */
+function memeReference(array $fiche, array $personne): bool
+{
+    $r = $fiche['referenceCompte'] ?? null;
+    $p = $personne['reference'] ?? null;
+    return is_string($r) && $r !== '' && is_string($p) && $p !== '' && hash_equals($p, $r);
+}
+
+/**
+ * Le titulaire exige-t-il de valider lui-meme chaque demande de rendez-vous ?
+ *
+ * Reglage synchronise comme les autres (famille « reglage », cle
+ * tc_rdv_validation). COCHE tant qu il n a rien choisi : un compte neuf, ou
+ * ancien sans valeur enregistree, attend sa validation. Seul « 0 » ouvre
+ * aux demandes automatiques.
+ */
+function validationRdvExigee(int $titulaireId): bool
+{
+    $l = Db::un(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "reglage" AND uid = "tc_rdv_validation" AND supprime = 0',
+        [$titulaireId]
+    );
+    if (!$l) {
+        return true;
+    }
+    $c = json_decode((string) $l['contenu'], true);
+    $v = is_array($c) ? ($c['v'] ?? null) : null;
+    return !($v === '0' || $v === 0 || $v === false);
+}
+
+/**
+ * Les categories d horaires ouvertes a ce demandeur pour une prise de
+ * rendez-vous AUTOMATIQUE, ou [] quand la demande doit passer par la
+ * messagerie du titulaire (validation exigee, inconnu de son carnet, bloque).
+ */
+function categoriesPourRdvAutomatique(int $titulaireId, array $demandeur): array
+{
+    if (validationRdvExigee($titulaireId)) {
+        return [];
+    }
+    return categoriesPourPrendreRdv($titulaireId, $demandeur);
+}
+
+/** « lundi 12 octobre », pour un horodatage. */
+function rdvLibelleJour(int $ts): string
+{
+    $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    $mois = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+             'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    return $jours[(int) date('w', $ts)] . ' ' . (int) date('j', $ts) . ' ' . $mois[(int) date('n', $ts)];
+}
+
+/**
+ * Marque « traitee » la demande de rendez-vous dans la messagerie du
+ * titulaire : ses appareils en retirent les boutons.
+ */
+function demandeRdvTraitee(array $titulaire, array $demandeur, int $rdvId): void
+{
+    $l = Db::un(
+        'SELECT contenu FROM elements WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+        [$titulaire['id'], $demandeur['reference']]
+    );
+    $conv = $l ? json_decode((string) $l['contenu'], true) : null;
+    if (!is_array($conv) || !is_array($conv['thread'] ?? null)) {
+        return;
+    }
+    $change = false;
+    foreach ($conv['thread'] as $i => $m) {
+        if (is_array($m) && (int) ($m['rdv'] ?? 0) === $rdvId && ($m['genre'] ?? '') === 'demande_rdv') {
+            $conv['thread'][$i]['traite'] = true;
+            $change = true;
+        }
+    }
+    if (!$change) {
+        return;
+    }
+    elementsPoser([[
+        'compte_id' => (int) $titulaire['id'], 'type' => 'conversation',
+        'uid' => (string) $demandeur['reference'], 'contenu' => $conv,
+    ]]);
+}
+
+/**
+ * Bloque cette personne dans le carnet du titulaire : sa fiche passe a
+ * blocked:true, ou une fiche est creee (nom et reference de compte, rien
+ * d autre). Elle ne l apprend jamais.
+ */
+function bloquerContact(array $titulaire, array $personne): void
+{
+    $tel = Empreinte::normaliserTelephone((string) ($personne['telephone'] ?? ''));
+    $email = Empreinte::normaliserEmail((string) ($personne['email'] ?? ''));
+    $fiches = Db::tous(
+        'SELECT uid, contenu FROM elements
+          WHERE compte_id = ? AND type = "contact" AND supprime = 0',
+        [$titulaire['id']]
+    );
+    foreach ($fiches as $f) {
+        $c = json_decode((string) $f['contenu'], true);
+        if (!is_array($c)) {
+            continue;
+        }
+        $memeTel = $tel !== '' && isset($c['phone']) && $c['phone'] !== ''
+            && Empreinte::normaliserTelephone((string) $c['phone']) === $tel;
+        $memeMail = $email !== '' && isset($c['email']) && $c['email'] !== ''
+            && Empreinte::normaliserEmail((string) $c['email']) === $email;
+        if ($memeTel || $memeMail || memeReference($c, $personne)) {
+            $c['blocked'] = true;
+            elementsPoser([[
+                'compte_id' => (int) $titulaire['id'], 'type' => 'contact',
+                'uid' => (string) $f['uid'], 'contenu' => $c,
+            ]]);
+            return;
+        }
+    }
+    $id = 'contact_' . bin2hex(random_bytes(6));
+    elementsPoser([[
+        'compte_id' => (int) $titulaire['id'], 'type' => 'contact', 'uid' => $id,
+        'contenu'   => [
+            'id'              => $id,
+            'name'            => texteSur(trim($personne['prenom'] . ' ' . $personne['nom'])),
+            'phone'           => '',
+            'email'           => '',
+            'referenceCompte' => (string) $personne['reference'],
+            'blocked'         => true,
+            'createdAt'       => date('c'),
+        ],
+    ]]);
 }
 
 /**
@@ -498,7 +631,7 @@ function ficheContactDe(int $titulaireId, array $personne): ?string
             && Empreinte::normaliserTelephone((string) $c['phone']) === $tel;
         $memeMail = $email !== '' && isset($c['email']) && $c['email'] !== ''
             && Empreinte::normaliserEmail((string) $c['email']) === $email;
-        if ($memeTel || $memeMail) {
+        if ($memeTel || $memeMail || memeReference($c, $personne)) {
             return $c['id'];
         }
     }
@@ -596,15 +729,11 @@ function creneauRetenuEstLibre(int $titulaireId, string $debutSql, string $finSq
 /**
  * Les heures de debut possibles d une personne un jour donne (0 = dimanche),
  * d apres ses disponibilites pour les categories voulues. Rien de regle :
- * horaires par defaut en semaine, pour qu un compte neuf puisse etre invite
- * des la premiere seconde.
+ * aucune heure. Ce qui est a l ecran est ce qui s applique.
  */
 function heuresPermisesDuJour(array $dispo, array $categories, int $jsem): array
 {
     $plages = dispoPlagesDuJour($dispo, $categories, $jsem === 0 ? 7 : $jsem);
-    if ($plages === null) {
-        return ($jsem === 0 || $jsem === 6) ? [] : [9, 10, 11, 14, 15, 16, 17];
-    }
     $heures = [];
     foreach ($plages as [$pd, $pf]) {
         for ($m = (int) ceil($pd / 60) * 60; $m + 60 <= $pf; $m += 60) {
@@ -694,9 +823,10 @@ function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $c
 
 /**
  * Les invites d un rendez-vous a plusieurs : ceux dont l agenda peut etre
- * consulte (le titulaire a coche une categorie pour l organisateur, et ne l a
- * pas bloque). Les autres vont dans $sansAcces, sans dire pourquoi : un
- * contact bloque ne doit pas le savoir, ni l organisateur le deviner.
+ * consulte sans attendre : le titulaire a decoche « Toujours attendre ma
+ * validation », l organisateur est dans son carnet et n est pas bloque. Les
+ * autres vont dans $sansAcces, sans dire pourquoi : un contact bloque, un
+ * inconnu ou une validation exigee ne doivent pas se distinguer.
  */
 function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces): array
 {
@@ -714,7 +844,7 @@ function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces): arr
             continue;
         }
         $vus[(int) $c['id']] = true;
-        $categories = categoriesPourPrendreRdv((int) $c['id'], $moi);
+        $categories = categoriesPourRdvAutomatique((int) $c['id'], $moi);
         if ($categories === []) {
             $sansAcces[] = texteSur((string) $c['prenom']);
             continue;
@@ -735,13 +865,12 @@ function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces): arr
  * 7 = dimanche), en minutes, pour les categories donnees.
  *
  * $dispo : { categorie : [ { jours:[1..7], debut:"HH:MM", fin:"HH:MM" } ] }.
- * Retourne null si le titulaire n a rien regle pour ces categories : l
- * appelant applique alors les horaires par defaut, pour qu un compte neuf
- * puisse recevoir des demandes des la premiere seconde.
+ * Aucune plage reglee = aucune plage : rien n est reservable. Il n y a plus
+ * d horaires par defaut caches cote serveur (10/10) ; l application ouvre
+ * elle-meme deux plages quand le titulaire decoche la validation.
  */
-function dispoPlagesDuJour(array $dispo, array $categories, int $jourIso): ?array
+function dispoPlagesDuJour(array $dispo, array $categories, int $jourIso): array
 {
-    $regle = false;
     $plages = [];
     foreach ($categories as $cat) {
         $liste = $dispo[$cat] ?? null;
@@ -754,7 +883,6 @@ function dispoPlagesDuJour(array $dispo, array $categories, int $jourIso): ?arra
                 || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($p['fin'] ?? ''), $f)) {
                 continue;
             }
-            $regle = true;
             if (!in_array($jourIso, array_map('intval', $p['jours']), true)) {
                 continue;
             }
@@ -765,7 +893,7 @@ function dispoPlagesDuJour(array $dispo, array $categories, int $jourIso): ?arra
             }
         }
     }
-    return $regle ? $plages : null;
+    return $plages;
 }
 
 /** Les disponibilites du titulaire, telles que son application les a synchronisees. */
@@ -788,14 +916,14 @@ function dispoDuCompte(int $compteId): array
  * Créneaux libres dans l'agenda du titulaire — le SIEN, pas celui du
  * demandeur, ce qui était toute l'erreur de la version précédente.
  *
- * Un créneau d'une heure par jour, jours ouvrés, sur quinze jours.
+ * Un créneau d'une heure par jour, dans les plages ouvertes du titulaire,
+ * sur quinze jours. Aucune plage ouverte, aucun créneau.
  */
 function creneauxLibres(int $titulaireId, int $combien = 3, array $categories = []): array
 {
     $occupes = rdvOccupation($titulaireId);
     $dispo = $categories === [] ? [] : dispoDuCompte($titulaireId);
 
-    $heuresParDefaut = [9, 10, 11, 14, 15, 16, 17];
     $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
     $mois = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
              'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -805,21 +933,14 @@ function creneauxLibres(int $titulaireId, int $combien = 3, array $categories = 
         $t = strtotime("+$j day");
         $jsem = (int) date('w', $t);
         $plages = dispoPlagesDuJour($dispo, $categories, $jsem === 0 ? 7 : $jsem);
-        if ($plages === null) {
-            // Rien de regle : jours ouvres, horaires par defaut.
-            if ($jsem === 0 || $jsem === 6) {
-                continue;
+        // Rien de regle : aucune heure, donc aucun creneau ce jour-la.
+        $heures = [];
+        foreach ($plages as [$pd, $pf]) {
+            for ($m = (int) ceil($pd / 60) * 60; $m + 60 <= $pf; $m += 60) {
+                $heures[$m / 60] = (int) ($m / 60);
             }
-            $heures = $heuresParDefaut;
-        } else {
-            $heures = [];
-            foreach ($plages as [$pd, $pf]) {
-                for ($m = (int) ceil($pd / 60) * 60; $m + 60 <= $pf; $m += 60) {
-                    $heures[$m / 60] = (int) ($m / 60);
-                }
-            }
-            sort($heures);
         }
+        sort($heures);
         $date = date('Y-m-d', $t);
         foreach ($heures as $h) {
             $debut = $h * 60;
@@ -1150,13 +1271,18 @@ function messagePoser(
     array $vers,
     string $texte,
     ?int $rdvId = null,
-    ?string $langueImposee = null
+    ?string $langueImposee = null,
+    ?string $genre = null
 ): void
 {
     $maintenant = date('c');
     $ligne = ['texte' => $texte, 'le' => $maintenant];
     if ($rdvId !== null) {
         $ligne['rdv'] = $rdvId;
+    }
+    // « demande_rdv » : le destinataire peut y repondre par un creneau ou un refus.
+    if ($genre !== null) {
+        $ligne['genre'] = $genre;
     }
 
     // Chacun lit TimeCool dans sa langue, et le serveur les connait
@@ -2202,10 +2328,12 @@ switch ($route) {
      * Demande de rendez-vous.
      *
      * Deux issues, et le demandeur ne peut pas les distinguer d'un
-     * refus : soit le titulaire l'a autorisé et a des créneaux libres,
-     * et on les lui propose ; soit non, et la demande part dans les deux
-     * messageries. Un contact bloqué tombe dans le second cas sans
-     * jamais l'apprendre.
+     * refus : soit le titulaire a décoché « Toujours attendre ma
+     * validation », le connaît et a des créneaux libres, et on les lui
+     * propose ; soit non, et la demande part dans les deux messageries,
+     * où le titulaire choisit lui-même. Un inconnu, un contact bloqué ou
+     * une validation exigée tombent dans le second cas sans jamais
+     * l'apprendre.
      */
     case 'POST /rdv/demander':
         $moi = Auth::compte();
@@ -2218,9 +2346,8 @@ switch ($route) {
         }
 
         $titre = Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom']);
-        $autorise = autorisationPourPrendreRdv((int) $cible['id'], $moi);
-        $categoriesRdv = categoriesPourPrendreRdv((int) $cible['id'], $moi);
-        $creneaux = $autorise ? creneauxLibres((int) $cible['id'], 3, $categoriesRdv) : [];
+        $categoriesRdv = categoriesPourRdvAutomatique((int) $cible['id'], $moi);
+        $creneaux = $categoriesRdv !== [] ? creneauxLibres((int) $cible['id'], 3, $categoriesRdv) : [];
 
         /*
          * Une seule demande en attente à la fois vers la même personne.
@@ -2267,7 +2394,7 @@ switch ($route) {
             // même réponse dans les trois cas. Le message n'est déposé
             // qu'à la première demande.
             if (!$reprise) {
-                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible), $rdvId);
+                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible), $rdvId, null, 'demande_rdv');
             }
             Rep::ok([
                 'mode'    => 'messagerie',
@@ -2548,6 +2675,160 @@ switch ($route) {
         }
 
         messagePoser($moi, $cible, Entree::requis('texte', 2000), null, $imposee);
+        Rep::ok();
+
+    /*
+     * Le titulaire repond a une demande recue dans sa messagerie en
+     * choisissant LUI-MEME le creneau. Meme mecanique que /rdv/choisir :
+     * transaction, comptes verrouilles, creneau reverifie dans les DEUX
+     * agendas, rendez-vous ecrit des deux cotes, confirmation en message.
+     */
+    case 'POST /rdv/proposer-creneau':
+        $moi = Auth::compte();
+        $rdvId = Entree::entier('rdv');
+        $corps = Entree::corps();
+        $jour = (string) ($corps['date'] ?? '');
+        $minutes = (int) ($corps['duree'] ?? 60);
+        if ($rdvId === null || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $jour)
+            || !preg_match('/^(\d{1,2}):(\d{2})$/', (string) ($corps['debut'] ?? ''), $hm)
+            || (int) $hm[1] > 23 || (int) $hm[2] > 59
+            || $minutes < 15 || $minutes > 480 || $minutes % 15 !== 0) {
+            Rep::erreur(400, 'creneau_invalide', 'Creneau invalide.');
+        }
+        $debutTs = strtotime($jour . sprintf(' %02d:%02d:00', (int) $hm[1], (int) $hm[2]));
+        if ($debutTs === false || date('Y-m-d', $debutTs) !== $jour
+            || $debutTs <= time() || $debutTs > strtotime('+365 day')
+            || date('Y-m-d', $debutTs + $minutes * 60) !== $jour) {
+            Rep::erreur(400, 'creneau_invalide', 'Creneau invalide.');
+        }
+        $finTs = $debutTs + $minutes * 60;
+        $debutSql = date('Y-m-d H:i:s', $debutTs);
+        $finSql = date('Y-m-d H:i:s', $finTs);
+
+        $rdv = Db::un(
+            'SELECT * FROM rdv WHERE id = ? AND invite_compte_id = ? AND statut = "attente"',
+            [$rdvId, $moi['id']]
+        );
+        if ($rdv === null) {
+            Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+        }
+        $demandeur = Db::un('SELECT * FROM comptes WHERE id = ? AND cloture_le IS NULL', [$rdv['organisateur_id']]);
+        if ($demandeur === null) {
+            Rep::erreur(410, 'compte_absent', 'Cette personne n a plus de compte.');
+        }
+
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            $pris = Db::req(
+                'UPDATE rdv SET statut = "choisi", repondu_le = NOW()
+                  WHERE id = ? AND invite_compte_id = ? AND statut = "attente"',
+                [$rdvId, $moi['id']]
+            );
+            if ($pris->rowCount() === 0) {
+                $pdo->rollBack();
+                Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+            }
+            // Les deux agendas sont verrouillés dans l ordre des identifiants.
+            $ids = [(int) $moi['id'], (int) $demandeur['id']];
+            sort($ids);
+            foreach ($ids as $idCompte) {
+                Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$idCompte]);
+            }
+            if (!creneauRetenuEstLibre((int) $moi['id'], $debutSql, $finSql)
+                || !creneauRetenuEstLibre((int) $demandeur['id'], $debutSql, $finSql)) {
+                $pdo->rollBack();
+                Rep::erreur(409, 'creneau_pris', 'Ce créneau n est plus libre. Choisis-en un autre.');
+            }
+
+            $libelle = rdvLibelleJour($debutTs);
+            Db::req('DELETE FROM rdv_creneaux WHERE rdv_id = ?', [$rdvId]);
+            Db::req(
+                'INSERT INTO rdv_creneaux (rdv_id, rang, debut, fin, libelle, retenu)
+                 VALUES (?, 1, ?, ?, ?, 1)',
+                [$rdvId, $debutSql, $finSql, $libelle]
+            );
+
+            $entree = static function (string $titre, ?string $contact = null) use ($debutTs, $finTs, $rdvId): array {
+                return [
+                    ...($contact !== null ? ['contact' => $contact] : []),
+                    'id'     => 'tc_rdv_' . $rdvId,
+                    'date'   => date('Y-m-d', $debutTs),
+                    'startH' => (int) date('G', $debutTs), 'startM' => (int) date('i', $debutTs),
+                    'endH'   => (int) date('G', $finTs), 'endM' => (int) date('i', $finTs),
+                    'title'  => $titre,
+                    'cat'    => 'travail',
+                    'mode'   => 'user',
+                ];
+            };
+            elementsPoser([
+                ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
+                 'contenu' => $entree(texteSur($demandeur['prenom'] . ' ' . $demandeur['nom']), ficheContactDe((int) $moi['id'], $demandeur))],
+                ['compte_id' => (int) $demandeur['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
+                 'contenu' => $entree(texteSur($moi['prenom'] . ' ' . $moi['nom']), ficheContactDe((int) $demandeur['id'], $moi))],
+            ]);
+
+            messagePoser(
+                $moi, $demandeur,
+                'Rendez-vous confirmé : ' . $libelle . ' à ' . date('H\\hi', $debutTs) . '.',
+                $rdvId
+            );
+            demandeRdvTraitee($moi, $demandeur, $rdvId);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        Rep::ok([
+            'date'    => date('Y-m-d', $debutTs),
+            'heure'   => date('H:i', $debutTs),
+            'libelle' => $libelle,
+            'duree'   => $minutes,
+        ]);
+
+    /*
+     * Le titulaire refuse et bloque : la demande est close, la fiche du
+     * demandeur passe a blocked:true (ou est creee). Rien n est envoye au
+     * demandeur : il ne saura pas.
+     */
+    case 'POST /rdv/refuser':
+        $moi = Auth::compte();
+        $rdvId = Entree::entier('rdv');
+        if ($rdvId === null) {
+            Rep::erreur(400, 'champs_manquants', 'Champ rdv requis.');
+        }
+        $rdv = Db::un(
+            'SELECT * FROM rdv WHERE id = ? AND invite_compte_id = ? AND statut = "attente"',
+            [$rdvId, $moi['id']]
+        );
+        if ($rdv === null) {
+            Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+        }
+        $demandeur = Db::un('SELECT * FROM comptes WHERE id = ?', [$rdv['organisateur_id']]);
+        if ($demandeur === null) {
+            Rep::erreur(410, 'compte_absent', 'Cette personne n a plus de compte.');
+        }
+
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            Db::req(
+                'UPDATE rdv SET statut = "refuse", repondu_le = NOW()
+                  WHERE organisateur_id = ? AND invite_compte_id = ? AND statut = "attente"',
+                [$demandeur['id'], $moi['id']]
+            );
+            bloquerContact($moi, $demandeur);
+            demandeRdvTraitee($moi, $demandeur, $rdvId);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
         Rep::ok();
 
     // ═══════════════════════════════════════════════════════════

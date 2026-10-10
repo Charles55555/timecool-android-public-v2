@@ -45,7 +45,7 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   console.log('\nMarie n a rien configuré du tout (pas de fiche, rien à cocher) :');
   const marie = await inscrire('Marie');
   const dm = await appel('POST', '/rdv/demander', { reference: marie.ref }, charles.jeton);
-  dire(dm.code === 200 && dm.d.mode === 'creneaux' && dm.d.creneaux.length === 3, 'Charles obtient des créneaux tout de suite',
+  dire(dm.code === 200 && dm.d.mode === 'messagerie', 'rien configuré : la demande attend la validation de Marie',
     dm.d ? dm.d.mode : dm.code);
 
   // ── Julian a BLOQUÉ Charles : seul refus possible ──────────────────
@@ -111,7 +111,11 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   await appel('POST', '/sync', {
     elements: [{ type: 'contact', uid: 'ct_charles', contenu: {
       id: 'ct_charles', name: 'Charles Verif', phone: charles.tel, email: '',
-      categories: ['travail'], isTimeCool: true } }],
+      categories: ['travail'], isTimeCool: true } },
+      // « Toujours attendre ma validation » décoché + plages de l ecran : Julian accepte les reservations seules.
+      { type: 'reglage', uid: 'tc_rdv_validation', contenu: { id: 'tc_rdv_validation', v: '0' } },
+      { type: 'reglage', uid: 'timecool_disponibilites', contenu: { id: 'timecool_disponibilites',
+        v: JSON.stringify({ travail: [{ jours: [1, 2, 3, 4, 5], debut: '09:00', fin: '18:00' }] }) } }],
   }, julian.jeton);
 
   const d2 = await appel('POST', '/rdv/demander', { reference: julian.ref }, charles.jeton);

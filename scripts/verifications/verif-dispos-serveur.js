@@ -21,8 +21,8 @@ const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/b
 const noms = ['rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'dispoPlagesDuJour', 'dispoDuCompte', 'creneauxLibres'];
 const src = noms.map((n) => fonction(api, n));
 verifie('les fonctions existent', src.every(Boolean), noms.filter((n, i) => !src[i]).join(','));
-verifie('/rdv/demander transmet les categories de la fiche', /categoriesPourPrendreRdv\(\(int\) \$cible\['id'\], \$moi\)/.test(api) && /creneauxLibres\(\(int\) \$cible\['id'\], 3, \$categoriesRdv\)/.test(api));
-verifie('refus conserve : contact bloque ou sans categorie = liste vide, autorisation = liste non vide', /return categoriesPourPrendreRdv\(\$titulaireId, \$demandeur\) !== \[\];/.test(api) && /if \(!empty\(\$c\['blocked'\]\)\) \{\s+return \[\];/.test(api));
+verifie('/rdv/demander transmet les categories (validation, carnet, blocage)', /categoriesPourRdvAutomatique\(\(int\) \$cible\['id'\], \$moi\)/.test(api) && /creneauxLibres\(\(int\) \$cible\['id'\], 3, \$categoriesRdv\)/.test(api));
+verifie('automatique seulement si validation decochee ET dans le carnet ET non bloque', /return categoriesPourRdvAutomatique\(\$titulaireId, \$demandeur\) !== \[\];/.test(api) && /if \(!empty\(\$c\['blocked'\]\)\) \{\s+return \[\];/.test(api) && /if \(validationRdvExigee\(\$titulaireId\)\) \{\s+return \[\];/.test(api));
 if (PHP && src.every(Boolean)) {
   const h = `<?php
 declare(strict_types=1);
@@ -46,17 +46,17 @@ $dispo = ['travail' => [['jours' => [2, 4], 'debut' => '09:00', 'fin' => '12:00'
 t('mardi, travail : 9h-12h', dispoPlagesDuJour($dispo, ['travail'], 2) === [[540, 720]]);
 t('lundi, travail : aucune plage (jour non coche)', dispoPlagesDuJour($dispo, ['travail'], 1) === []);
 t('plusieurs categories : on additionne', dispoPlagesDuJour($dispo, ['travail', 'sante'], 2) === [[540, 720], [840, 960]]);
-t('categorie vide : rien de regle (null)', dispoPlagesDuJour($dispo, ['famille'], 2) === null);
-t('categorie inconnue : rien de regle (null)', dispoPlagesDuJour($dispo, ['sport'], 2) === null);
-t('plage mal formee ignoree', dispoPlagesDuJour(['travail' => [['jours' => [1], 'debut' => 'x', 'fin' => '10:00'], 'oops']], ['travail'], 1) === null);
+t('categorie vide : rien de regle (aucune plage)', dispoPlagesDuJour($dispo, ['famille'], 2) === []);
+t('categorie inconnue : rien de regle (aucune plage)', dispoPlagesDuJour($dispo, ['sport'], 2) === []);
+t('plage mal formee ignoree', dispoPlagesDuJour(['travail' => [['jours' => [1], 'debut' => 'x', 'fin' => '10:00'], 'oops']], ['travail'], 1) === []);
 t('fin avant debut ignoree', dispoPlagesDuJour(['travail' => [['jours' => [1], 'debut' => '10:00', 'fin' => '09:00']]], ['travail'], 1) === []);
 
 // Creneaux proposes
 Db::$lignes = []; Db::$dispo = null;
 $c = creneauxLibres(1, 3, ['travail']);
-t('aucune dispo reglee : horaires par defaut, jours ouvres (compte neuf)', count($c) === 3 && count(array_filter(array_column($c, 'date'), $ouvre)) === 3 && in_array($c[0]['heure'], [9, 10, 11, 14, 15, 16, 17], true), json_encode($c));
+t('aucune dispo reglee : aucun creneau, plus d horaires par defaut caches', $c === [], json_encode($c));
 $c = creneauxLibres(1, 3, []);
-t('sans categorie : horaires par defaut', count($c) === 3);
+t('sans categorie : aucun creneau', $c === []);
 
 Db::$dispo = ['travail' => [['jours' => [2, 4], 'debut' => '14:00', 'fin' => '16:00']]];
 $c = creneauxLibres(1, 3, ['travail']);

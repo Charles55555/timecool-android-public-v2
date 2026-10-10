@@ -44,7 +44,9 @@ declare(strict_types=1);
 date_default_timezone_set('Europe/Paris');
 class Db {
   public static array $lignes = [];
+  public static ?array $dispo = null;
   public static function tous(string $sql, array $p = []): array { return self::$lignes; }
+  public static function un(string $sql, array $p = []): ?array { return self::$dispo === null ? null : ['contenu' => json_encode(['id' => 'x', 'v' => json_encode(self::$dispo)])]; }
 }
 ${sources.join('\n')}
 $res = [];
@@ -83,15 +85,16 @@ t('un voyage posé entre-temps bloque ses jours intermédiaires', !creneauRetenu
 
 // Les créneaux proposés
 $demain = date('Y-m-d', strtotime('+1 day'));
+Db::$dispo = ['travail' => [['jours' => [1, 2, 3, 4, 5], 'debut' => '09:00', 'fin' => '18:00']]];   // les plages sont celles de l ecran : plus d horaires par defaut caches
 Db::$lignes = [['contenu' => json_encode(['date' => $demain, 'dateFin' => date('Y-m-d', strtotime('+20 day')), 'startH' => 9, 'startM' => 0, 'endH' => 18, 'endM' => 0])]];
 t('un rendez-vous de 20 jours bloque toute la fenêtre : aucun créneau proposé', creneauxLibres(1) === [], json_encode(creneauxLibres(1)));
 $fin3 = date('Y-m-d', strtotime('+3 day'));
 Db::$lignes = [['contenu' => json_encode(['date' => $demain, 'dateFin' => $fin3, 'startH' => 9, 'startM' => 0, 'endH' => 18, 'endM' => 0])]];
-$c = creneauxLibres(1);
+$c = creneauxLibres(1, 3, ['travail']);
 $apres = array_filter($c, static fn($x) => $x['date'] > $fin3);
 t('un voyage jusqu\\'à +3 jours : tous les créneaux proposés sont APRÈS', count($c) === 3 && count($apres) === 3, json_encode(array_column($c, 'date')));
 Db::$lignes = [];
-$c = creneauxLibres(1);
+$c = creneauxLibres(1, 3, ['travail']);
 $dates = array_column($c, 'date');
 t('agenda vide : 3 créneaux, jours distincts, triés, jamais le week-end', count($c) === 3 && count(array_unique($dates)) === 3 && $dates === array_values($dates) && array_filter($dates, static fn($d) => in_array((int) date('w', strtotime($d)), [0, 6], true)) === [], json_encode($dates));
 

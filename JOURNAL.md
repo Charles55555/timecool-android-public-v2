@@ -22,6 +22,25 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — « Toujours attendre ma validation »
+
+**Codé et commité sur main, PAS publié** (l'API, le web et l'APK partent avec le chef principal).
+
+- Réglage `tc_rdv_validation` (famille « réglage », coché tant qu'il n'a pas de valeur). Lu côté
+  serveur par `validationRdvExigee`.
+- Une demande n'est automatique que si la case est décochée, que le demandeur est dans le carnet
+  du titulaire (téléphone, email, ou référence de compte de la fiche) et qu'il n'est pas bloqué.
+  Sinon : messagerie, avec la même réponse pour le demandeur. Vaut aussi pour les rendez-vous à
+  plusieurs (invité qui exige sa validation, inconnu ou bloqué = « sans accès »).
+- Plus d'horaires par défaut cachés côté serveur : aucune plage = rien de réservable. Au
+  décochage, l'application ouvre 11h-12h et 14h-15h (lun-ven) dans les catégories vides.
+- Messagerie : « Proposer un créneau » (`/rdv/proposer-creneau`, deux agendas, 409 si pris) et
+  « Refuser et bloquer » (`/rdv/refuser`, fiche bloquée, rien envoyé au demandeur).
+- Suites : `verif-validation-rdv` (nouvelle, verte) ; `verif-validation-rdv-e2e` et `verif-rdv-e2e`
+  visent l'API EN LIGNE : rouges tant que l'API n'est pas déployée, à relancer ensuite.
+- Les demandes reçues AVANT cette version n'ont pas de « genre » : elles restent des messages
+  simples, sans boutons.
+
 ## Point du 09/10/2026 (session du PC, chef de projet)
 
 **Dernière version : v2.0.293.** Semaine du 03 au 09/10, tout en ligne (web, Android, API) :

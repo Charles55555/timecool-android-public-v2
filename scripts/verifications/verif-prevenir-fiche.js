@@ -42,6 +42,7 @@ class Empreinte {
   public static function normaliserEmail(string $e): string { return strtolower(trim($e)); }
 }
 class Db { public static array $l = []; public static function tous(string $s, array $p = []): array { return self::$l; } }
+${fonction(api, 'memeReference')}
 ${src}
 $res = []; function t(string $n, bool $ok, string $d = ''): void { global $res; $res[] = [$n, $ok, $d]; }
 $fiche = static fn(array $c) => ['contenu' => json_encode($c)];
@@ -54,6 +55,9 @@ Db::$l = [$fiche(['name' => 'Sans id', 'phone' => '0611223344'])];
 t('fiche sans identifiant : ignoree', ficheContactDe(1, ['telephone' => '0611223344', 'email' => '']) === null);
 Db::$l = [['contenu' => 'pas du json']];
 t('fiche illisible : ignoree', ficheContactDe(1, ['telephone' => '0611223344', 'email' => '']) === null);
+Db::$l = [$fiche(['id' => 'c_r', 'name' => 'Par reference', 'referenceCompte' => 'REF123'])];
+t('meme reference de compte : fiche reconnue', ficheContactDe(1, ['telephone' => '', 'email' => '', 'reference' => 'REF123']) === 'c_r');
+t('reference differente : pas de rapprochement', ficheContactDe(1, ['telephone' => '', 'email' => '', 'reference' => 'AUTRE']) === null);
 echo json_encode($res);
 `;
   const fch = path.join(os.tmpdir(), 'verif-prevenir-' + process.pid + '.php');

@@ -6358,7 +6358,11 @@ function tcConversationsAffichables() {
           from: t.from,
           text: t.texte || '',
           time: heure(t.le),
-          original: typeof t.original === 'string' ? t.original : ''
+          original: typeof t.original === 'string' ? t.original : '',
+          // Une demande de rendez-vous reçue : de quoi y répondre depuis la messagerie.
+          rdv: typeof t.rdv === 'number' ? t.rdv : 0,
+          genre: typeof t.genre === 'string' ? t.genre : '',
+          traite: t.traite === true
         };
       })
     };
@@ -6483,6 +6487,8 @@ function openConversation(id) {
         </div>
       </div>`;
   }
+  const demandeRdv = tcDemandeRdvEnAttente(msg);
+  if (demandeRdv) body.innerHTML += tcCadreDemandeRdv(demandeRdv, msg.with);
   if (mode==='pro' && msg.isCancellation && !msg.accepted) {
     body.innerHTML += `
       <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
@@ -6510,6 +6516,114 @@ function openConversation(id) {
   if (currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
     setTimeout(function() { translatePageWithGoogle(currentLanguage, true); }, 120);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   DEMANDE DE RENDEZ-VOUS REÇUE
+   Quand une demande ne peut pas être automatique (tu attends ta
+   validation, ou la personne n'est pas dans tes contacts), elle arrive
+   ici. Deux réponses : proposer un créneau (inscrit chez vous deux), ou
+   refuser et bloquer (la personne n'en sait rien).
+   ══════════════════════════════════════════════════════════════ */
+
+// Demandes auxquelles on vient de répondre : le cadre disparaît sans attendre la synchronisation.
+var _tcRdvTraites = {};
+
+/** La demande de rendez-vous reçue et encore sans réponse dans cette conversation du serveur, ou null. */
+function tcDemandeRdvEnAttente(msg) {
+  if (!msg || !msg.serveur || !Array.isArray(msg.thread)) return null;
+  for (let i = msg.thread.length - 1; i >= 0; i--) {
+    const m = msg.thread[i];
+    if (m.from === 'them' && m.genre === 'demande_rdv' && m.rdv && !m.traite && !_tcRdvTraites[m.rdv]) return m;
+  }
+  return null;
+}
+
+function tcCadreDemandeRdv(demande, nom) {
+  const prenom = escapeHTMLSafe(String(nom || '').split(' ')[0]);
+  return '<div style="margin-top:16px; padding:14px; background:#fff8e1; border:1px solid #fbbc04; border-radius:14px;">'
+    + '<div style="font-size:13px; font-weight:600; color:#5f4500; margin-bottom:4px;">📅 Demande de rendez-vous</div>'
+    + '<div style="font-size:12px; color:#5f4500; line-height:1.5; margin-bottom:12px;">' + prenom
+    + ' voudrait un rendez-vous avec toi. Choisis un créneau, ou refuse.</div>'
+    + '<div style="display:flex; flex-direction:column; gap:8px;">'
+    + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-green);" onclick="tcProposerCreneauRdv(' + demande.rdv + ')">✅ Proposer un créneau</button>'
+    + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--text-sec);" onclick="tcRefuserBloquerRdv(' + demande.rdv + ')">🚫 Refuser et bloquer</button>'
+    + '</div></div>';
+}
+
+/** Après une réponse : le cadre disparaît, la synchronisation rapporte le reste. */
+async function tcApresReponseRdv(rdv) {
+  _tcRdvTraites[rdv] = true;
+  try { await tcSyncTour(); } catch (e) {}
+  if (_currentConvId && currentPage === 'conv') openConversation(_currentConvId);
+}
+
+function tcFermerCreneauRdv() {
+  const o = document.getElementById('tcCreneauRdvOverlay');
+  if (o) o.remove();
+}
+
+/** Le titulaire choisit un jour, une heure et une durée. */
+function tcProposerCreneauRdv(rdv) {
+  tcFermerCreneauRdv();
+  const demain = new Date(Date.now() + 86400000);
+  const jour = demain.getFullYear() + '-' + ('0' + (demain.getMonth() + 1)).slice(-2) + '-' + ('0' + demain.getDate()).slice(-2);
+  const o = document.createElement('div');
+  o.id = 'tcCreneauRdvOverlay';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:flex-end;justify-content:center;';
+  o.onclick = function (e) { if (e.target === o) tcFermerCreneauRdv(); };
+  const champ = 'width:100%;box-sizing:border-box;padding:12px;font-size:15px;border:1.5px solid #e8eaed;border-radius:10px;margin-top:6px;';
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;">'
+    + '<div style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:16px;">📅 Choisis le créneau</div>'
+    + '<label style="font-size:13px;color:#5f6368;display:block;margin-bottom:12px;">Jour'
+    + '<input type="date" id="tcRdvDate" value="' + jour + '" min="' + jour + '" style="' + champ + '"></label>'
+    + '<label style="font-size:13px;color:#5f6368;display:block;margin-bottom:12px;">Heure'
+    + '<input type="time" id="tcRdvHeure" value="11:00" style="' + champ + '"></label>'
+    + '<label style="font-size:13px;color:#5f6368;display:block;margin-bottom:12px;">Durée'
+    + '<select id="tcRdvDuree" style="' + champ + '"><option value="30">30 minutes</option><option value="60" selected>1 heure</option>'
+    + '<option value="90">1 h 30</option><option value="120">2 heures</option></select></label>'
+    + '<div id="tcRdvErreur" style="font-size:12.5px;color:#c5221f;min-height:18px;margin-bottom:10px;"></div>'
+    + '<div style="display:flex;gap:10px;">'
+    + '<button onclick="tcFermerCreneauRdv()" style="flex:1;padding:14px;background:#f1f3f4;color:#333;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">Annuler</button>'
+    + '<button id="tcRdvEnvoyer" onclick="tcEnvoyerCreneauRdv(' + rdv + ')" style="flex:2;padding:14px;background:var(--g-green);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">Confirmer</button>'
+    + '</div></div>';
+  document.body.appendChild(o);
+}
+
+async function tcEnvoyerCreneauRdv(rdv) {
+  const erreur = function (texte) {
+    const e = document.getElementById('tcRdvErreur');
+    if (e) e.textContent = texte;
+  };
+  const date = (document.getElementById('tcRdvDate') || {}).value;
+  const heure = (document.getElementById('tcRdvHeure') || {}).value;
+  const duree = parseInt((document.getElementById('tcRdvDuree') || {}).value, 10) || 60;
+  if (!date || !heure) { erreur('Choisis un jour et une heure.'); return; }
+  const bouton = document.getElementById('tcRdvEnvoyer');
+  if (bouton) bouton.disabled = true;
+  erreur('');
+  try {
+    await TC_BACKEND.proposerCreneauRdv(rdv, date, heure, duree);
+  } catch (e) {
+    if (bouton) bouton.disabled = false;
+    erreur(e.message || 'Impossible pour le moment. Réessaie.');
+    return;
+  }
+  tcFermerCreneauRdv();
+  showToast('✅ Rendez-vous confirmé chez vous deux');
+  tcApresReponseRdv(rdv);
+}
+
+async function tcRefuserBloquerRdv(rdv) {
+  if (!await tcConfirm('Refuser cette demande et bloquer la personne ? Elle ne sera pas prévenue.')) return;
+  try {
+    await TC_BACKEND.refuserRdv(rdv);
+  } catch (e) {
+    showToast('❌ ' + (e.message || 'Impossible pour le moment.'));
+    return;
+  }
+  showToast('🚫 Demande refusée, personne bloquée');
+  tcApresReponseRdv(rdv);
 }
 
 function acceptReprogram(convId) {
@@ -19053,6 +19167,16 @@ const TC_BACKEND = {
     return tcAppel('POST', '/rdv/choisir', { rdv: rdv, rang: rang });
   },
 
+  /** Le titulaire choisit lui-meme le creneau d une demande recue : inscrit dans les deux agendas. */
+  async proposerCreneauRdv(rdv, date, debut, duree) {
+    return tcAppel('POST', '/rdv/proposer-creneau', { rdv: rdv, date: date, debut: debut, duree: duree });
+  },
+
+  /** Le titulaire refuse et bloque : le demandeur n en est pas informe. */
+  async refuserRdv(rdv) {
+    return tcAppel('POST', '/rdv/refuser', { rdv: rdv });
+  },
+
   /** Les creneaux ou tout le monde est libre, pour un rendez-vous a plusieurs. */
   async proposerRdvGroupe(references, duree) {
     return tcAppel('POST', '/rdv/groupe/proposer', { references: references, duree: duree });
@@ -22669,6 +22793,63 @@ async function translatePageWithGoogle(targetLang, silent) {
 // === MES DISPONIBILITES ===
 var TC_DISPO_KEY = 'timecool_disponibilites';
 
+/*
+ * « Toujours attendre ma validation » : coché tant que la personne n'a rien
+ * choisi (compte neuf ou ancien). Synchronisé comme les autres réglages ;
+ * le serveur lit la même clé. Valeur '0' = décoché.
+ */
+var TC_RDV_VALIDATION_KEY = 'tc_rdv_validation';
+
+function tcValidationRdvExigee() {
+  try { return localStorage.getItem(TC_RDV_VALIDATION_KEY) !== '0'; } catch (e) { return true; }
+}
+
+/* « Démarrer doucement » : au décochage, chaque catégorie sans plage reçoit
+   deux petites plages, du lundi au vendredi. Plus aucun horaire caché ailleurs :
+   ce qui est à l'écran est ce qui s'applique. */
+var TC_PLAGES_DOUCES = [{ debut: '11:00', fin: '12:00' }, { debut: '14:00', fin: '15:00' }];
+
+function tcOuvrirPlagesDouces() {
+  if (!_dispoData) loadDispo();
+  var ouvertes = 0;
+  DISPO_CATEGORIES.forEach(function (cat) {
+    if ((_dispoData[cat.id] || []).length > 0) return;
+    _dispoData[cat.id] = TC_PLAGES_DOUCES.map(function (p) {
+      return { jours: [1, 2, 3, 4, 5], debut: p.debut, fin: p.fin };
+    });
+    ouvertes++;
+  });
+  if (ouvertes > 0) saveDispo();
+  return ouvertes;
+}
+
+function tcBasculerValidationRdv(coche) {
+  try { localStorage.setItem(TC_RDV_VALIDATION_KEY, coche ? '1' : '0'); } catch (e) {}
+  var douces = coche ? 0 : tcOuvrirPlagesDouces();
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
+  renderDispo();
+  showToast(coche
+    ? '✅ Tu valides chaque demande dans ta messagerie'
+    : (douces > 0
+      ? '✅ Tes contacts réservent seuls. J’ai ouvert des plages pour toi : change-les quand tu veux.'
+      : '✅ Tes contacts enregistrés réservent seuls'));
+}
+
+/** La case, dans un cadre bien visible, juste sous l'explication. */
+function tcCadreValidationRdv(exigee) {
+  var h = '<div style="border:2px solid #1a73e8;border-radius:14px;margin-bottom:16px;padding:14px 16px;background:#e8f0fe;">';
+  h += '<label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;">';
+  h += '<input type="checkbox" id="dispoValidation" ' + (exigee ? 'checked ' : '')
+    + 'onchange="tcBasculerValidationRdv(this.checked)" style="width:22px;height:22px;margin-top:2px;flex-shrink:0;">';
+  h += '<span style="font-size:14.5px;font-weight:700;color:#1a3d6e;line-height:1.4;">Toujours attendre ma validation pour une demande de rendez-vous</span></label>';
+  h += '<div style="font-size:12.5px;color:#1a3d6e;line-height:1.5;margin-top:8px;">'
+    + (exigee
+      ? 'Tes contacts te demandent un rendez-vous, tu valides dans ta messagerie.'
+      : 'Décoché : tes contacts enregistrés réservent seuls, dans tes plages ouvertes.')
+    + '</div></div>';
+  return h;
+}
+
 
 
 var JOURS_LABELS = ['L','M','M','J','V','S','D'];
@@ -22746,15 +22927,24 @@ function renderDispo() {
 
   var html = '<div style="font-size:13px;color:#5f6368;margin-bottom:16px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">';
   html += '\ud83d\udd12 <b>Cet espace reste confidentiel, et tu restes ma\u00eetre de ton agenda.</b><br>';
-  html += 'Tu ouvres seulement les cr\u00e9neaux que tu veux, et seulement aux contacts que tu choisis. ';
-  html += 'Eux ne voient jamais ton agenda \u2014 uniquement les cr\u00e9neaux que tu as ouverts. ';
-  html += 'Partout ailleurs, c\u2019est ferm\u00e9.';
+  var exigee = tcValidationRdvExigee();
+  if (exigee) {
+    html += 'Pour l’instant, personne ne réserve tout seul : chaque demande de rendez-vous arrive dans ta messagerie, et tu choisis le créneau. ';
+    html += 'Personne ne voit jamais ton agenda.';
+  } else {
+    html += 'Tes contacts enregistrés qui ont TimeCool réservent tout seuls, dans les créneaux que tu ouvres ci-dessous. ';
+    html += 'Eux ne voient jamais ton agenda — uniquement ces créneaux. ';
+    html += 'Quelqu’un qui n’est pas dans tes contacts, ou que tu as bloqué, passe toujours par ta messagerie.';
+  }
   html += '</div>';
+  html += tcCadreValidationRdv(exigee);
 
   DISPO_CATEGORIES.forEach(function(cat) {
     var plages = _dispoData[cat.id] || [];
 
-    html += '<div style="border:1.5px solid #e8eaed;border-radius:14px;margin-bottom:14px;overflow:hidden;background:#fff;">';
+    // Case cochée : les blocs sont gris et ne se modifient plus.
+    html += '<div' + (exigee ? ' aria-disabled="true"' : '') + ' style="border:1.5px solid #e8eaed;border-radius:14px;margin-bottom:14px;overflow:hidden;background:#fff;'
+      + (exigee ? 'opacity:0.45;filter:grayscale(1);pointer-events:none;' : '') + '">';
 
     // Header (non cliquable, toujours affiché)
     html += '<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 16px;">';
@@ -22775,9 +22965,9 @@ function renderDispo() {
     // Qui peut reserver dans ces heures. Sans cette ligne, une plage
     // ouverte a personne ressemble a une plage ouverte a tous.
     // Tout contact qui a TimeCool peut reserver dans ces heures, sauf s il est bloque.
-    if (plages.length > 0) {
+    if (plages.length > 0 && !exigee) {
       html += '<div style="font-size:12px;color:' + cat.texte + ';margin-top:6px;">'
-        + '\ud83d\udc65 Tes contacts qui ont TimeCool peuvent r\u00e9server dans ces heures</div>';
+        + '\ud83d\udc65 Tes contacts enregistr\u00e9s qui ont TimeCool peuvent r\u00e9server seuls dans ces heures</div>';
     }
 
     html += '</div>';
@@ -22794,6 +22984,8 @@ function renderDispo() {
   });
 
   c.innerHTML = html;
+  // Gris = pas modifiable, aussi au clavier.
+  if (exigee) c.querySelectorAll('[aria-disabled="true"] button').forEach(function (b) { b.disabled = true; });
 }
 
 function toggleDispoCat(catId) {

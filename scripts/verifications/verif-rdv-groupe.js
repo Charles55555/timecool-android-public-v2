@@ -47,10 +47,11 @@ $jour = static fn(int $plus): string => date('Y-m-d', strtotime("+$plus day"));
 $toutLeJour = static fn(int $de, int $a): array => ['date' => $jour($de), 'dateFin' => $jour($a), 'startH' => 0, 'startM' => 0, 'endH' => 23, 'endM' => 59, 'allDay' => true];
 $A = ['id' => 2, 'prenom' => 'Alice', 'categories' => ['travail']];
 $B = ['id' => 3, 'prenom' => 'Bob', 'categories' => ['travail']];
+$defaut = ['travail' => [['jours' => [1, 2, 3, 4, 5], 'debut' => '09:00', 'fin' => '12:00'], ['jours' => [1, 2, 3, 4, 5], 'debut' => '14:00', 'fin' => '18:00']]];   // les plages de l ecran
 $iso = static function (string $d): int { $w = (int) date('w', strtotime($d)); return $w === 0 ? 7 : $w; };
 
 // Heures permises
-t('sans disponibilite : jours ouvres, horaires par defaut', heuresPermisesDuJour([], ['travail'], 2) === [9, 10, 11, 14, 15, 16, 17]);
+t('sans disponibilite : aucune heure (plus d horaires par defaut caches)', heuresPermisesDuJour([], ['travail'], 2) === []);
 t('sans disponibilite : week-end, rien', heuresPermisesDuJour([], ['travail'], 6) === [] && heuresPermisesDuJour([], ['travail'], 0) === []);
 t('avec disponibilites : 14h-16h le mardi', heuresPermisesDuJour(['travail' => [['jours' => [2], 'debut' => '14:00', 'fin' => '16:00']]], ['travail'], 2) === [14, 15]);
 t('avec disponibilites : le mercredi (non coche), rien', heuresPermisesDuJour(['travail' => [['jours' => [2], 'debut' => '14:00', 'fin' => '16:00']]], ['travail'], 3) === []);
@@ -62,7 +63,7 @@ t('deux heures de suite : 9h-11h accepte', personneDisponible([], [9, 10, 11, 14
 t('une heure libre dans les plages, mais l agenda est pris : refuse', !personneDisponible(rdvOccupation(99) + [$jour(2) => [[540, 600]]], [9, 10], $jour(2), 9, 1));
 
 // Tout le monde libre
-Db::$rdv = []; Db::$dispo = [];
+Db::$rdv = []; Db::$dispo = [2 => $defaut, 3 => $defaut];
 $c = creneauxCommuns(1, [$A, $B], 1, 3);
 $dates = array_column($c, 'date');
 t('agenda vide : 3 creneaux, tous complets, jours distincts', count($c) === 3 && count(array_filter($c, static fn($x) => $x['manquants'] !== [])) === 0 && count(array_unique($dates)) === 3, json_encode($c));
@@ -125,7 +126,7 @@ verifie('proposer : passe par invitesRdvGroupe (autorisation par fiche) et crene
 verifie('proposer : duree bornee a 1-3 heures', /\$duree < 1 \|\| \$duree > 3/.test(prop));
 const inv = fonction(api, 'invitesRdvGroupe') || '';
 verifie('de 1 a 12 personnes, refus sinon', /count\(\$references\) > 12/.test(inv) && /Rep::erreur\(400, 'participants_invalides'/.test(inv));
-verifie('un invite sans autorisation (ou bloque) est mis de cote sans dire pourquoi', /categoriesPourPrendreRdv\(\(int\) \$c\['id'\], \$moi\)/.test(inv) && /\$sansAcces\[\] = texteSur/.test(inv));
+verifie('un invite sans autorisation (ou bloque) est mis de cote sans dire pourquoi', /categoriesPourRdvAutomatique\(\(int\) \$c\['id'\], \$moi\)/.test(inv) && /\$sansAcces\[\] = texteSur/.test(inv));
 verifie('soi-meme et les doublons sont ignores', /\$vus = \[\(int\) \$moi\['id'\] => true\]/.test(inv) && /isset\(\$vus\[\(int\) \$c\['id'\]\]\)/.test(inv));
 verifie('confirmer : date, heure (8h-20h) et duree validees, creneau dans le futur et sous 30 jours', /\$heure < 8 \|\| \$heure \+ \$duree > 20/.test(conf) && /\$debutTs <= time\(\) \|\| \$debutTs > strtotime\('\+30 day'\)/.test(conf));
 verifie('confirmer : transaction, verrous dans l ordre des identifiants', /beginTransaction\(\)/.test(conf) && /sort\(\$ids\);\s+foreach \(\$ids as \$idCompte\) \{\s+Db::un\('SELECT id FROM comptes WHERE id = \? FOR UPDATE'/.test(conf));
