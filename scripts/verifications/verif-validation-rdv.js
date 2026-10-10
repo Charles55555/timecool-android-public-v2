@@ -145,6 +145,7 @@ const ctx = {
   localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } },
   showToast: (m) => ctx._toasts.push(m), tcSyncBientot: () => { ctx._sync++; },
   _fenetres: [], tcFenetreOuvertureDouce: (p) => ctx._fenetres.push(p),
+  _protections: 0, tcFenetreProtection: () => { ctx._protections++; },
   JOURS_FULL: ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
   DISPO_CATEGORIES: [
     { id: 'travail', icon: 'T', label: 'Mon travail', color: '#aaa', bg: '#bbb', texte: '#333' },
@@ -191,8 +192,8 @@ verifie('decoche : la fenetre « C est ouvert, en douceur » s ouvre, en disant 
 const fen = fonction(page, 'tcFenetreOuvertureDouce') || '';
 verifie('son texte est celui valide par Charles (mardis et jeudis, 11h-12h, 14h-15h, seulement a ces heures-la, reste ferme)',
   /C’est ouvert, en douceur/.test(fen) && /les mardis et les jeudis/.test(fen) && /de 11h à 12h/.test(fen) && /de 14h à 15h/.test(fen)
-  && /mais seulement à ces heures-là/.test(fen) && /Le reste de ton agenda reste fermé/.test(fen) && /comme tu préfères, juste en dessous/.test(fen) && /Compris/.test(fen));
-verifie('et si des plages existaient deja, la fenetre le dit autrement (plages ci-dessous)', /seulement dans les plages horaires ci-dessous/.test(fen));
+  && /mais seulement à ces heures-là/.test(fen) && /Le reste de ton agenda reste fermé/.test(fen) && /comme tu préfères, juste en dessous/.test(fen));
+verifie('et si des plages existaient deja, la fenetre le dit autrement, en citant quand meme les mardis et jeudis 11h-12h / 14h-15h', /plages horaires sont déjà réglées/.test(fen) && (fen.match(/les mardis et les jeudis/g) || []).length === 2 && (fen.match(/de 14h à 15h/g) || []).length >= 1);
 h = zone.innerHTML;
 verifie('decoche : plus rien de grise, case decochee', !/aria-disabled="true"/.test(h) && !/id="dispoValidation" checked/.test(h) && !/opacity:0\.45/.test(h));
 verifie('decoche : le cadre gris dit la regle (contacts enregistres, inconnu et bloque par la messagerie)', /contacts enregistr.s qui ont TimeCool r.servent tout seuls/.test(h) && /pas dans tes contacts/.test(h));
@@ -200,6 +201,11 @@ verifie('decoche : la ligne « reservent seuls dans ces heures » reapparait', /
 // On recoche : rien n est efface
 vm.runInContext('tcBasculerValidationRdv(true)', ctx);
 verifie('recoche : reglage a « 1 », aucune plage supprimee', mem.tc_rdv_validation === '1' && JSON.parse(mem.timecool_disponibilites).sante.length === 2);
+verifie('recoche : la fenetre « Tu es protege » s ouvre (pas un simple message fugace)', ctx._protections === 1 && ctx._toasts.length === 0);
+const prot = fonction(page, 'tcFenetreProtection') || '';
+verifie('son texte est celui valide par Charles', /Tu es protégé/.test(prot) && /sans ton accord/.test(prot) && /toi qui choisis le créneau, ou qui refuses/.test(prot) && /restent enregistrées, en gris/.test(prot));
+const centree = fonction(page, 'tcFenetreCentree') || '';
+verifie('les deux fenetres sont au centre de l ecran, avec un bouton Compris', /align-items:center;justify-content:center/.test(centree) && /Compris/.test(centree));
 // Decoche une 2e fois : ne duplique rien
 vm.runInContext('tcBasculerValidationRdv(false)', ctx);
 verifie('decoche une deuxieme fois : les plages ne sont pas dupliquees', JSON.parse(mem.timecool_disponibilites).sante.length === 2);

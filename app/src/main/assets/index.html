@@ -22883,7 +22883,7 @@ function tcBasculerValidationRdv(coche) {
   var douces = coche ? 0 : tcOuvrirPlagesDouces();
   if (typeof tcSyncBientot === 'function') tcSyncBientot();
   renderDispo();
-  if (coche) { showToast('✅ Tu valides chaque demande dans ta messagerie'); return; }
+  if (coche) { tcFenetreProtection(); return; }
   tcFenetreOuvertureDouce(douces > 0);
 }
 
@@ -22898,22 +22898,37 @@ function tcFermerOuvertureDouce() {
  * Texte validé par Charles le 10/10, écrit pour un enfant de 10 ans.
  */
 function tcFenetreOuvertureDouce(plagesCreees) {
+  var ligne = 'font-size:15px;color:#1a1a2e;line-height:1.55;margin:0 0 12px;';
+  var heures = '<div style="font-size:17px;font-weight:700;color:#1a3d6e;line-height:1.7;margin:0 0 14px 8px;">🕚 de 11h à 12h<br>🕑 de 14h à 15h</div>';
+  var corps = plagesCreees
+    ? '<p style="' + ligne + '">J’ai ouvert pour toi deux petits créneaux, <b>les mardis et les jeudis</b> :</p>' + heures
+      + '<p style="' + ligne + '">Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement à ces heures-là</b>. Le reste de ton agenda reste fermé.</p>'
+      + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>'
+    : '<p style="' + ligne + '">Tes plages horaires sont déjà réglées. Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement dans ces plages-là</b>, visibles juste en dessous. Le reste de ton agenda reste fermé.</p>'
+      + '<p style="' + ligne + '">Pour une catégorie vide, j’ouvre moi-même deux petits créneaux, <b>les mardis et les jeudis</b> :</p>' + heures
+      + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>';
+  tcFenetreCentree('🎉 C’est ouvert, en douceur', corps);
+}
+
+/** La fenêtre inverse, quand on recoche : tout est de nouveau protégé. Texte validé par Charles le 10/10. */
+function tcFenetreProtection() {
+  var ligne = 'font-size:15px;color:#1a1a2e;line-height:1.55;margin:0 0 12px;';
+  tcFenetreCentree('🔒 Tu es protégé',
+    '<p style="' + ligne + '">Plus personne ne peut prendre un rendez-vous dans ton agenda sans ton accord.</p>'
+    + '<p style="' + ligne + '">Chaque demande arrive dans ta messagerie : c’est toi qui choisis le créneau, ou qui refuses.</p>'
+    + '<p style="' + ligne + '">Tes plages horaires restent enregistrées, en gris, pour la prochaine fois.</p>');
+}
+
+/** Une fenêtre au centre de l'écran, avec un titre, un corps et un bouton « Compris ». */
+function tcFenetreCentree(titre, corpsHTML) {
   tcFermerOuvertureDouce();
   var o = document.createElement('div');
   o.id = 'tcOuvertureDouceOverlay';
-  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:flex-end;justify-content:center;';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
   o.onclick = function (e) { if (e.target === o) tcFermerOuvertureDouce(); };
-  var ligne = 'font-size:15px;color:#1a1a2e;line-height:1.55;margin:0 0 12px;';
-  var corps = plagesCreees
-    ? '<p style="' + ligne + '">J’ai ouvert pour toi deux petits créneaux, <b>les mardis et les jeudis</b> :</p>'
-      + '<div style="font-size:17px;font-weight:700;color:#1a3d6e;line-height:1.7;margin:0 0 14px 8px;">🕚 de 11h à 12h<br>🕑 de 14h à 15h</div>'
-      + '<p style="' + ligne + '">Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement à ces heures-là</b>. Le reste de ton agenda reste fermé.</p>'
-      + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>'
-    : '<p style="' + ligne + '">Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement dans les plages horaires ci-dessous</b>. Le reste de ton agenda reste fermé.</p>'
-      + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>';
-  o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:22px 20px 20px;">'
-    + '<div style="font-size:20px;font-weight:700;color:#1a1a2e;margin-bottom:14px;">🎉 C’est ouvert, en douceur</div>'
-    + corps
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:440px;border-radius:20px;padding:22px 20px 20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+    + '<div style="font-size:20px;font-weight:700;color:#1a1a2e;margin-bottom:14px;">' + titre + '</div>'
+    + corpsHTML
     + '<button onclick="tcFermerOuvertureDouce()" style="width:100%;padding:14px;background:var(--g-blue);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;">Compris</button>'
     + '</div>';
   document.body.appendChild(o);
