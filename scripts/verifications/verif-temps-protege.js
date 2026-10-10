@@ -165,7 +165,7 @@ vm.createContext(ctx);
   const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); }
 });
 ['loadDispo', 'saveDispo', 'formatJours', 'formatHeure', 'phraseDispo', 'tcValidationRdvExigee', 'tcOuvrirPlagesDouces',
-  'tcCadreValidationRdv', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+  'tcCadreValidationRdv', 'tcLigneQuiPeutDeranger', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 
 const vendredi = { jours: [5], debut: '13:00', fin: '20:00' };
 verifie('la phrase du temps libre : « Je suis tranquille le vendredi de 13h00 à 20h00 »', ctx.phraseDispo(vendredi, 'personnel') === 'Je suis tranquille le vendredi de 13h00 à 20h00', ctx.phraseDispo(vendredi, 'personnel'));

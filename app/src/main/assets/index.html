@@ -273,11 +273,13 @@ body { display:flex; flex-direction:column; }
 .slot-btn:hover { background:var(--g-blue); color:white; }
 .slot-btn svg { width:18px; height:18px; fill:currentColor; }
 
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:none; align-items:flex-end; z-index:200; }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:none; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; overscroll-behavior:contain; z-index:200; }
 .modal-overlay.open { display:flex; }
-.modal { background:#fff; width:100%; border-radius:20px 20px 0 0; max-height:90vh; overflow-y:auto; animation:slideUp 0.3s; }
-@keyframes slideUp { from{transform:translateY(100%);} to{transform:translateY(0);} }
-.modal-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:10px auto; }
+/* Tout panneau s'ouvre au centre, bords arrondis, marge de 16 px ; plus haut que l'ecran, il defile
+   A L'INTERIEUR (jamais la page derriere). Aucun panneau ne monte plus du bas : un fondu simple. */
+.modal { background:#fff; width:100%; max-width:480px; border-radius:20px; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; animation:tcFondu 0.2s ease; }
+@keyframes tcFondu { from{opacity:0;} to{opacity:1;} }
+.modal-handle { display:none; }
 .modal-header { display:flex; align-items:center; padding:8px 16px 14px; gap:16px; border-bottom:1px solid var(--border); }
 .modal-title { flex:1; font-size:17px; font-weight:500; }
 .modal-close { border:none; background:transparent; font-size:14px; font-weight:500; padding:8px 12px; border-radius:18px; cursor:pointer; color:var(--text-sec); }
@@ -311,7 +313,7 @@ body.maj-visible .toast { bottom:152px; }
    systeme etranger a la charte. */
 .tc-mod-ov { position:fixed; inset:0; background:rgba(26,26,46,.55); backdrop-filter:blur(2px); display:flex; align-items:center; justify-content:center; padding:24px; z-index:10100; opacity:0; transition:opacity .18s; }
 .tc-mod-ov.on { opacity:1; }
-.tc-mod { background:#fff; border-radius:20px; box-shadow:0 8px 40px rgba(0,0,0,.22); width:100%; max-width:380px; padding:24px 22px 18px; transform:translateY(10px) scale(.98); transition:transform .18s; max-height:80vh; overflow-y:auto; }
+.tc-mod { background:#fff; border-radius:20px; box-shadow:0 8px 40px rgba(0,0,0,.22); width:100%; max-width:380px; padding:24px 22px 18px; transform:translateY(10px) scale(.98); transition:transform .18s; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; }
 .tc-mod-ov.on .tc-mod { transform:none; }
 .tc-mod-ic { font-size:34px; text-align:center; margin-bottom:10px; }
 .tc-mod-tt { font-size:16px; font-weight:700; color:var(--text); text-align:center; margin-bottom:8px; }
@@ -544,9 +546,8 @@ body.maj-visible .toast { bottom:152px; }
 .msg-menu-sep { height:1px; background:var(--border); margin:5px 0; }
 .msg-filterbar { display:flex; align-items:center; gap:8px; padding:10px 16px; background:#e8f0fe; font-size:13px; color:#1a73e8; font-weight:500; }
 .msg-filterbar button { margin-left:auto; background:none; border:none; color:#1a73e8; font-size:13px; cursor:pointer; font-weight:600; }
-.msg-sheet-ov { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:250; display:flex; align-items:flex-end; }
-.msg-sheet { width:100%; background:#fff; border-radius:18px 18px 0 0; padding:8px 0 16px; animation:tcSheetUp .2s ease; }
-@keyframes tcSheetUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+.msg-sheet-ov { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:250; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; overscroll-behavior:contain; }
+.msg-sheet { width:100%; max-width:480px; background:#fff; border-radius:18px; padding:8px 0 16px; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; animation:tcFondu .2s ease; }
 .msg-sheet-h { padding:12px 20px 8px; font-size:15px; font-weight:600; color:var(--text); }
 .msg-sheet-i { display:flex; align-items:center; gap:14px; padding:14px 20px; font-size:14.5px; color:var(--text); cursor:pointer; }
 .msg-sheet-i:active { background:#f1f3f4; }
@@ -1975,10 +1976,9 @@ if (window.pdfjsLib) {
 </style>
 
 <!-- ═══ MODALE PARAMÈTRES (v5.9) ═══ -->
-<div id="settingsModalOverlay" onclick="if(event.target===this)closeSettingsModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10002; align-items:flex-end; justify-content:center;">
-  <div style="background:var(--bg); width:100%; max-width:480px; border-radius:20px 20px 0 0; max-height:85vh; overflow-y:auto; padding:0 16px 32px; animation:slideUp 0.3s ease;">
-    <div style="width:36px; height:4px; background:var(--border); border-radius:2px; margin:10px auto 6px;"></div>
-    <div id="settingsModalBody" style="padding:4px 0;"></div>
+<div id="settingsModalOverlay" onclick="if(event.target===this)closeSettingsModal()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10002; align-items:center; padding:16px; box-sizing:border-box; justify-content:center;">
+  <div style="background:var(--bg); width:100%; max-width:480px; border-radius:20px; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; padding:6px 16px 24px; animation:tcFondu 0.2s ease;">
+        <div id="settingsModalBody" style="padding:4px 0;"></div>
   </div>
 </div>
 
@@ -6595,10 +6595,10 @@ function tcProposerCreneauRdv(rdv) {
   const jour = demain.getFullYear() + '-' + ('0' + (demain.getMonth() + 1)).slice(-2) + '-' + ('0' + demain.getDate()).slice(-2);
   const o = document.createElement('div');
   o.id = 'tcCreneauRdvOverlay';
-  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:flex-end;justify-content:center;';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overscroll-behavior:contain;';
   o.onclick = function (e) { if (e.target === o) tcFermerCreneauRdv(); };
   const champ = 'width:100%;box-sizing:border-box;padding:12px;font-size:15px;border:1.5px solid #e8eaed;border-radius:10px;margin-top:6px;';
-  o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;">'
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px;padding:20px;max-height:90vh;overflow-y:auto;box-sizing:border-box;">'
     + '<div style="font-size:18px;font-weight:700;color:#1a1a2e;margin-bottom:16px;">📅 Choisis le créneau</div>'
     + '<label style="font-size:13px;color:#5f6368;display:block;margin-bottom:12px;">Jour'
     + '<input type="date" id="tcRdvDate" value="' + jour + '" min="' + jour + '" style="' + champ + '"></label>'
@@ -13907,7 +13907,7 @@ function tcShowGoogleFallbackButton() {
   overlay.id = 'googleSignInOverlay';
   overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:99999; display:flex; align-items:center; justify-content:center; padding:20px;';
   overlay.innerHTML = `
-    <div style="background:#fff; width:100%; max-width:340px; border-radius:24px; padding:32px 24px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="background:#fff; width:100%; max-width:340px; border-radius:24px; padding:32px 24px; max-height:90vh; overflow-y:auto; box-sizing:border-box; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
       <div style="font-size:18px; font-weight:700; color:#202124; margin-bottom:16px;">Se connecter avec Google</div>
       <div id="tcGoogleRealButton" style="display:flex; justify-content:center; margin-bottom:16px;"></div>
       <button onclick="document.getElementById('googleSignInOverlay').remove()" style="padding:10px 24px; background:transparent; color:#1a73e8; border:1.5px solid #dadce0; border-radius:20px; font-size:13px; font-weight:600; cursor:pointer;">
@@ -14190,9 +14190,9 @@ let signupPhoneCountry = TC_PHONE_COUNTRIES.find(function(c) { return c.code ===
 function openPhoneCountryPicker() {
   const ov = document.createElement('div');
   ov.id = 'phoneCountryOverlay';
-  ov.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:99999; display:flex; align-items:flex-end; justify-content:center;';
+  ov.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;';
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
-  ov.innerHTML = '<div style="background:#fff; width:100%; max-width:420px; border-radius:20px 20px 0 0; padding:20px; max-height:70vh; overflow-y:auto;">' +
+  ov.innerHTML = '<div style="background:#fff; width:100%; max-width:420px; border-radius:20px; padding:20px; max-height:90vh; overflow-y:auto; box-sizing:border-box;">' +
     '<div style="font-size:16px; font-weight:600; margin-bottom:14px;">Indicatif du pays</div>' +
     TC_PHONE_COUNTRIES.map(function(c) {
       return '<div onclick="selectPhoneCountry(\'' + c.code + '\')" style="padding:12px 10px; display:flex; align-items:center; gap:12px; cursor:pointer; border-radius:10px;" onmouseover="this.style.background=\'#f1f3f4\'" onmouseout="this.style.background=\'transparent\'">' +
@@ -15491,11 +15491,11 @@ function initLanguageDisplay() {
 function openLanguageSelector() {
   const overlay = document.createElement('div');
   overlay.id = 'langModalOverlay';
-  overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:10000; display:flex; align-items:flex-end; justify-content:center;';
+  overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;';
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
   const modal = document.createElement('div');
-  modal.style.cssText = 'background:#fff; width:100%; max-width:480px; max-height:80vh; border-radius:20px 20px 0 0; padding:20px 0 30px; overflow-y:auto;';
+  modal.style.cssText = 'background:#fff; width:100%; max-width:480px; max-height:90vh; border-radius:20px; padding:20px 0 24px; overflow-y:auto; box-sizing:border-box;';
   modal.innerHTML = `
     <div style="padding:0 20px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
       <div style="font-size:16px; font-weight:600;">🌍 Choisir la langue</div>
@@ -17956,6 +17956,14 @@ function tcContactsAffiches() {
     return contactsList.filter(function (c) { return isTimeCoolUser(c); })
       .sort(function (a, b) { return (a.name || '').localeCompare(b.name || '', 'fr'); });
   }
+  // Temps libre : on vient CHOISIR qui peut deranger, donc tout le carnet est la, les
+  // contacts deja choisis d'abord (filtrer sur eux ne laisserait rien a choisir la premiere fois).
+  if (_contactsCategorie === 'personnel') {
+    const choisi = function (c) { return c && Array.isArray(c.categories) && c.categories.indexOf('personnel') > -1; };
+    return contactsList.filter(function (c) { return !!c; }).sort(function (a, b) {
+      return (choisi(b) ? 1 : 0) - (choisi(a) ? 1 : 0) || (a.name || '').localeCompare(b.name || '', 'fr');
+    });
+  }
   // Une categorie demandee l'emporte sur la reglette : on vient voir
   // qui peut reserver, pas parcourir l'alphabet.
   if (_contactsCategorie) {
@@ -18013,12 +18021,19 @@ function tcFiltreCategorieHTML() {
   if (!_contactsCategorie) return '';
   const cat = DISPO_CATEGORIES.find(function (c) { return c.id === _contactsCategorie; });
   if (!cat) return '';
+  const nChoisis = Array.isArray(contactsList) ? contactsList.filter(function (c) {
+    return c && Array.isArray(c.categories) && c.categories.indexOf(cat.id) > -1;
+  }).length : 0;
   return '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;'
     + ' padding:10px 14px; border-radius:12px; background:' + cat.bg + ';'
     + ' border:1.5px solid ' + cat.color + ';">'
     + '<span style="font-size:18px;">' + cat.icon + '</span>'
     + '<div style="flex:1; font-size:12.5px; color:' + cat.texte + '; font-weight:600;">'
-    + 'Qui peut r\u00e9server pour \u00ab ' + cat.label + ' \u00bb</div>'
+    + (cat.id === 'personnel'
+      ? 'Qui peut me déranger même en temps libre'
+        + '<div style="font-weight:500; font-size:11.5px; margin-top:2px;">Touche « Même en temps libre » sur la fiche d’un contact. '
+        + (nChoisis === 0 ? 'Personne pour l’instant.' : nChoisis + ' choisi' + (nChoisis > 1 ? 's' : '') + '.') + '</div>'
+      : 'Qui peut r\u00e9server pour \u00ab ' + cat.label + ' \u00bb') + '</div>'
     + '<button onclick="tcRetirerFiltreCategorie()" style="background:#fff; border:1px solid '
     + cat.color + '; color:' + cat.texte + '; border-radius:8px; padding:4px 10px;'
     + ' font-size:12px; cursor:pointer;">Tout voir</button></div>';
@@ -22926,7 +22941,7 @@ function tcFenetreCentree(titre, corpsHTML) {
   o.id = 'tcOuvertureDouceOverlay';
   o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
   o.onclick = function (e) { if (e.target === o) tcFermerOuvertureDouce(); };
-  o.innerHTML = '<div style="background:#fff;width:100%;max-width:440px;border-radius:20px;padding:22px 20px 20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">'
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:440px;border-radius:20px;padding:22px 20px 20px;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-height:90vh;overflow-y:auto;box-sizing:border-box;">'
     + '<div style="font-size:20px;font-weight:700;color:#1a1a2e;margin-bottom:14px;">' + titre + '</div>'
     + corpsHTML
     + '<button onclick="tcFermerOuvertureDouce()" style="width:100%;padding:14px;background:var(--g-blue);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px;">Compris</button>'
@@ -22998,6 +23013,13 @@ function formatJours(jours) {
 
 function formatHeure(h) {
   return h.replace(':', 'h');
+}
+
+/** La ligne qui mene au reglage de l'exception : les contacts qui peuvent deranger pendant le temps libre. */
+function tcLigneQuiPeutDeranger() {
+  return '<div id="tcQuiPeutDeranger" onclick="tcVoirContactsDeCategorie(\'personnel\')" role="button" tabindex="0"'
+    + ' style="display:flex;align-items:center;gap:10px;padding:14px 16px;margin:-4px 0 14px;border:1.5px solid #b3e5fc;background:#e1f5fe;border-radius:14px;cursor:pointer;color:#01579b;font-size:14px;font-weight:600;">'
+    + '<span style="font-size:20px;">👥</span><span style="flex:1;">Choisir qui peut me déranger quand même</span><span style="font-size:22px;line-height:1;">›</span></div>';
 }
 
 function phraseDispo(plage, catId) {
@@ -23090,6 +23112,8 @@ function renderDispo() {
     html += '</div>';
 
     html += '</div>';
+    // Sous « Mon temps libre » : le chemin vers l'exception (la ligne reste cliquable même quand le bloc est gris).
+    if (cat.id === 'personnel') html += tcLigneQuiPeutDeranger();
   });
 
   c.innerHTML = html;
@@ -23118,11 +23142,11 @@ function openDispoForm(catId, existing) {
 
   var overlay = document.createElement('div');
   overlay.id = 'dispoFormOverlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overscroll-behavior:contain;';
   overlay.onclick = function(e) { if (e.target === overlay) closeDispoForm(); };
 
   var modal = document.createElement('div');
-  modal.style.cssText = 'background:#fff;width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:20px;max-height:85vh;overflow-y:auto;';
+  modal.style.cssText = 'background:#fff;width:100%;max-width:480px;border-radius:20px;padding:20px;max-height:90vh;max-height:90dvh;overflow-y:auto;box-sizing:border-box;';
 
   var html = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">';
   html += '<span style="font-size:28px;">' + cat.icon + '</span>';
@@ -23130,6 +23154,11 @@ function openDispoForm(catId, existing) {
   html += '<button onclick="closeDispoForm()" style="background:transparent;border:none;font-size:22px;color:#9aa0a6;cursor:pointer;">\u2715</button>';
   html += '</div>';
 
+  if (catId === 'personnel') {
+    html += '<div style="font-size:12.5px;color:#5f6368;line-height:1.5;margin-bottom:12px;">Pendant ces heures, personne ne peut te prendre un rendez-vous, sauf les contacts que tu autorises.</div>';
+    html += '<div id="tcQuiPeutDerangerForm" onclick="tcAutoriserDepuisPlage()" role="button" tabindex="0" style="display:flex;align-items:center;gap:10px;padding:12px 14px;margin-bottom:18px;border:1.5px solid #b3e5fc;background:#e1f5fe;border-radius:12px;cursor:pointer;color:#01579b;font-size:13.5px;font-weight:600;">'
+      + '<span style="font-size:18px;">👥</span><span style="flex:1;">Choisir qui peut me déranger quand même</span><span style="font-size:20px;line-height:1;">›</span></div>';
+  }
   html += '<div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:10px;">Quels jours\u00a0?</div>';
   html += '<div style="display:flex;gap:6px;margin-bottom:10px;">';
   for (var i = 1; i <= 7; i++) {
@@ -23145,9 +23174,9 @@ function openDispoForm(catId, existing) {
   html += '<div style="font-size:14px;font-weight:600;color:#1a1a2e;margin-bottom:10px;">De quelle heure \u00e0 quelle heure\u00a0?</div>';
   html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:24px;">';
   html += '<div style="flex:1;"><div style="font-size:11px;color:#5f6368;margin-bottom:4px;">D\u00e9but</div>';
-  html += '<input type="time" id="dispoDebut" value="' + (existing ? existing.debut : '09:00') + '" step="1800" style="width:100%;padding:12px;border:1.5px solid #e8eaed;border-radius:10px;font-size:16px;box-sizing:border-box;"></div>';
+  html += '<input type="time" id="dispoDebut" value="' + (existing ? existing.debut : (catId === 'personnel' ? '13:00' : '09:00')) + '" step="1800" style="width:100%;padding:12px;border:1.5px solid #e8eaed;border-radius:10px;font-size:16px;box-sizing:border-box;"></div>';
   html += '<div style="flex:1;"><div style="font-size:11px;color:#5f6368;margin-bottom:4px;">Fin</div>';
-  html += '<input type="time" id="dispoFin" value="' + (existing ? existing.fin : '18:00') + '" step="1800" style="width:100%;padding:12px;border:1.5px solid #e8eaed;border-radius:10px;font-size:16px;box-sizing:border-box;"></div>';
+  html += '<input type="time" id="dispoFin" value="' + (existing ? existing.fin : (catId === 'personnel' ? '20:00' : '18:00')) + '" step="1800" style="width:100%;padding:12px;border:1.5px solid #e8eaed;border-radius:10px;font-size:16px;box-sizing:border-box;"></div>';
   html += '</div>';
 
   html += '<div style="display:flex;gap:10px;">';
@@ -23186,6 +23215,12 @@ function updateFormJoursUI() {
       btn.style.borderColor = 'transparent';
     }
   }
+}
+
+/** Depuis la fenetre d'une plage de temps libre : fermer la fenetre et ouvrir le choix des contacts. */
+function tcAutoriserDepuisPlage() {
+  closeDispoForm();
+  tcVoirContactsDeCategorie('personnel');
 }
 
 function closeDispoForm() {
@@ -24021,7 +24056,7 @@ function importTimeCoolData(event) {
 
 <!-- ADMIN PIN MODAL -->
 <div id="adminPinModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
-  <div style="background:var(--surface); border-radius:20px; padding:28px 24px; width:300px; max-width:90%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+  <div style="background:var(--surface); border-radius:20px; padding:28px 24px; width:300px; max-width:90%; max-height:90vh; overflow-y:auto; box-sizing:border-box; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
     <div style="font-size:32px; margin-bottom:8px;">🔐</div>
     <div style="font-size:18px; font-weight:700; color:var(--text); margin-bottom:4px;">Espace Administrateur</div>
     <div style="font-size:13px; color:var(--text-sec); margin-bottom:20px;">Saisir le code PIN</div>

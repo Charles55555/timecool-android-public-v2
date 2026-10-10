@@ -163,7 +163,7 @@ vm.createContext(ctx);
   const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); }
 });
 ['loadDispo', 'saveDispo', 'formatJours', 'formatHeure', 'phraseDispo', 'tcValidationRdvExigee', 'tcOuvrirPlagesDouces', 'tcBasculerValidationRdv',
-  'tcCadreValidationRdv', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+  'tcCadreValidationRdv', 'tcLigneQuiPeutDeranger', 'renderDispo'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 
 verifie('compte neuf (rien enregistre) : la case est cochee', vm.runInContext('tcValidationRdvExigee()', ctx) === true);
 vm.runInContext('renderDispo()', ctx);

@@ -22,6 +22,20 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — « Choisir qui peut me déranger », tous les panneaux au centre
+
+**Codé et commité sur main, PAS publié.** Aucun changement serveur.
+
+- « Mon temps libre » : une ligne « 👥 Choisir qui peut me déranger quand même › » sous le bloc (reste
+  cliquable même quand les blocs sont gris) et dans la fenêtre d'une plage (par défaut 13h-20h pour ce bloc).
+  Elle ouvre Mes contacts : TOUS les contacts, ceux déjà choisis d'abord (filtrer sur les seuls choisis
+  ne laissait rien à choisir la première fois), bandeau « Qui peut me déranger même en temps libre ».
+- Panneaux : tout s'ouvre centré, 4 coins arrondis, 16 px de marge, 90 % de la hauteur, défilement à
+  l'intérieur, fondu simple. Partagés : `.modal-overlay/.modal`, `.msg-sheet-ov/.msg-sheet`, `.tc-mod`.
+  En ligne : fenêtre de créneau, ajout de plage, indicatif, langue, paramètres, fenêtre « douceur »,
+  Google, code admin. Laissés tels quels : recherche (en haut), champ de Charly, menu latéral, toasts.
+- Suite : `verif-panneaux-centres` (nouvelle).
+
 ## 10/10/2026 (session adjointe) — « Synchroniser avec mon ancien agenda », encadré rassurant, carte Outlook
 
 **Codé et commité sur main, PAS publié.** Aucun changement serveur.
