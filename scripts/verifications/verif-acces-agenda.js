@@ -88,6 +88,14 @@ Db::$l = [['id' => 'c1', 'phone' => '0611223344', 'categories' => ['sante', 'per
 t('sante + temps libre : limite a la sante, et peut deranger', categoriesPourPrendreRdv(1, $moi) === ['sante', 'personnel']);
 Db::$l = [['id' => 'c1', 'phone' => '0611223344', 'blocked' => true, 'categories' => ['personnel']]];
 t('bloque, meme avec le temps libre : refuse', categoriesPourPrendreRdv(1, $moi) === []);
+// Deux fiches pour la meme personne (une creee a la proposition d un creneau, sans categorie ;
+// une importee du telephone, classee) : toutes comptent (defaut trouve par l e2e le 10/10).
+Db::$l = [['id' => 'auto', 'phone' => '0611223344', 'email' => 'charles@exemple.fr', 'referenceCompte' => 'REF1'], ['id' => 'tel', 'phone' => '06 11 22 33 44', 'categories' => ['travail']]];
+t('deux fiches, la premiere sans categorie : le classement de la seconde compte', categoriesPourPrendreRdv(1, $moi) === ['travail']);
+Db::$l = [['id' => 'a', 'phone' => '0611223344', 'categories' => ['travail']], ['id' => 'b', 'email' => 'charles@exemple.fr', 'categories' => ['famille', 'personnel']]];
+t('deux fiches classees : la reunion des categories, marqueur temps libre compris', categoriesPourPrendreRdv(1, $moi) === ['travail', 'famille', 'personnel']);
+Db::$l = [['id' => 'a', 'phone' => '0611223344', 'categories' => ['travail']], ['id' => 'b', 'email' => 'charles@exemple.fr', 'blocked' => true]];
+t('bloque sur une fiche = bloque, meme classe sur une autre', categoriesPourPrendreRdv(1, $moi) === []);
 echo json_encode($res);
 `;
   const f = path.join(os.tmpdir(), 'verif-acces-' + process.pid + '.php');

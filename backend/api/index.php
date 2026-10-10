@@ -450,6 +450,7 @@ function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
           WHERE compte_id = ? AND type = "contact" AND supprime = 0',
         [$titulaireId]
     );
+    $toutes = [];
     foreach ($fiches as $f) {
         $c = json_decode((string) $f['contenu'], true);
         if (!is_array($c)) {
@@ -462,23 +463,32 @@ function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
         if (!$memeTel && !$memeMail && !memeReference($c, $demandeur)) {
             continue;
         }
+        // Une personne peut avoir plusieurs fiches (une creee a la proposition d un
+        // creneau, une importee du telephone...) : TOUTES comptent. Bloquee sur l une,
+        // bloquee partout ; les categories sont la reunion de toutes.
         if (!empty($c['blocked'])) {
             return [];
         }
         $choisies = is_array($c['categories'] ?? null) ? array_values(array_filter($c['categories'], 'is_string')) : [];
-        // Sur une fiche, la pastille « Mon temps libre » ne limite aucune heure : elle veut
-        // dire « il peut me deranger meme pendant mon temps libre ». Elle reste dans la liste
-        // comme marqueur, et dispoPlagesDuJour ne retire alors plus le temps protege.
-        $ouvrantes = array_values(array_intersect($choisies, categoriesToutesPourRdv()));
-        if ($ouvrantes === []) {
-            return [];   // non classe : la demande passe par la messagerie, comme un inconnu
+        foreach ($choisies as $cat) {
+            $toutes[$cat] = true;
         }
-        if (in_array('personnel', $choisies, true)) {
-            $ouvrantes[] = 'personnel';
-        }
-        return $ouvrantes;
     }
-    return [];   // aucune fiche : inconnu du carnet, la demande passe par la messagerie
+    if ($toutes === []) {
+        return [];   // inconnu du carnet, ou aucune fiche classee : la demande passe par la messagerie
+    }
+    $choisies = array_keys($toutes);
+    // Sur une fiche, la pastille « Mon temps libre » ne limite aucune heure : elle veut
+    // dire « il peut me deranger meme pendant mon temps libre ». Elle reste dans la liste
+    // comme marqueur, et dispoPlagesDuJour ne retire alors plus le temps protege.
+    $ouvrantes = array_values(array_intersect($choisies, categoriesToutesPourRdv()));
+    if ($ouvrantes === []) {
+        return [];   // non classe : la demande passe par la messagerie, comme un inconnu
+    }
+    if (in_array('personnel', $choisies, true)) {
+        $ouvrantes[] = 'personnel';
+    }
+    return $ouvrantes;
 }
 
 /** La fiche porte-t-elle la reference de compte de cette personne ? (reference connue, jamais vide) */
