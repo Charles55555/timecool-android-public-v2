@@ -22,6 +22,26 @@ chantier, écrire ici une ligne — quel sujet, quels fichiers — et la
 pousser. La retirer en partant. Le 04/09, faute de cette ligne, les
 formulaires de connexion ont été corrigés deux fois en parallèle.
 
+## 10/10/2026 (session adjointe) — vocabulaire calme + formulaire « Nouveau contact »
+
+**Codé et commité sur main, PAS publié.** Page seulement ; aucun texte serveur concerné.
+
+- Vocabulaire : « réserver seul / réservent seuls / sans ton accord » ont disparu de toute l'application
+  (page Contacts, Mes disponibilités, fiche contact, fenêtres « douceur » et « Tu es protégé », Choisir qui,
+  panneau « Classer … ? »). Remplacé par « prendre rendez-vous directement » ; « Tu es protégé » dit
+  « Chaque demande de rendez-vous passe par toi. » ; « Mon temps libre » : « aucun rendez-vous ne peut
+  m'être proposé, sauf par les contacts que j'autorise ». La case « Toujours attendre ma validation… »
+  ne change pas. **GARDE-FOU** dans `verif-vocabulaire-formulaire` : la page ET l'API ne doivent plus
+  contenir ces formes (insensible à la casse et aux accents) ; il tourne à chaque livraison.
+- Fiche contact : « Ce contact fait partie de : » (cinq pastilles), case « Peut me joindre même pendant mon
+  temps libre » (la catégorie « personnel »), phrase grise « Sans choix, ses demandes de rendez-vous
+  arrivent dans ta messagerie. » La légende « heures retenues » et la ligne rouge ont disparu.
+- Formulaire « ➕ Nouveau contact » (bouton « + Ajouter ») et « ✏️ Modifier le contact » (menu ⋮ de la
+  fiche) : panneau centré, prénom + nom, mobile avec indicatif, e-mail, adresse avec propositions,
+  pastilles, case « temps libre ». Seul un prénom ou un nom est obligatoire. La fiche est créée sans
+  marque d'import (donc « récente »). Le même formulaire, pré-rempli, met à jour la fiche (ses autres
+  champs sont gardés ; si le mobile ou l'e-mail change, le lien avec un compte est refait).
+
 ## 10/10/2026 (session adjointe) — « Mon profil » en cartes
 
 **Codé et commité sur main, PAS publié.** Page seulement.

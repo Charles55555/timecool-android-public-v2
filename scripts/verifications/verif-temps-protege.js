@@ -179,13 +179,13 @@ vm.runInContext('renderDispo()', ctx);
 let h = zone.innerHTML;
 const bloc = (id) => { const d = h.indexOf('>' + ctx.DISPO_CATEGORIES.find((c) => c.id === id).label + '<'); const f = h.indexOf('+ Ajouter une plage', d); return h.slice(d, f); };
 const libre = bloc('personnel');
-verifie('le bloc dit le sens : « Pendant ces heures, personne ne peut me prendre un rendez-vous, sauf les contacts que j’autorise (ex. ma famille). »',
-  /Pendant ces heures, personne ne peut me prendre un rendez-vous, sauf les contacts que j’autorise \(ex\. ma famille\)\./.test(libre));
+verifie('le bloc dit le sens : « Pendant ces heures, aucun rendez-vous ne peut m’être proposé, sauf par les contacts que j’autorise (ex. ma famille). »',
+  /Pendant ces heures, aucun rendez-vous ne peut m’être proposé, sauf par les contacts que j’autorise \(ex\. ma famille\)\./.test(libre));
 verifie('ses plages disent « tranquille », jamais « disponible »', /Je suis tranquille le vendredi de 13h00 à 20h00/.test(libre) && !/Je suis disponible/.test(libre));
 verifie('la ligne « réservent seuls » est remplacée par « 🔒 Protégé : sauf les contacts autorisés sur leur fiche »', /🔒 Protégé : sauf les contacts autorisés sur leur fiche/.test(libre) && !/r.servent seuls|peuvent r.server seuls/.test(libre));
 const travail = bloc('travail');
-verifie('le bloc « Mon travail » ne change pas : « disponible » et « réserver seuls »', /Je suis disponible le lundi de 09h00 à 12h00/.test(travail) && /Aucun contact ne peut encore réserver seul dans ces heures/.test(travail) && !/Pendant ces heures, personne/.test(travail));
-verifie('un seul bloc porte la phrase du temps protégé', (h.match(/Pendant ces heures, personne ne peut me prendre/g) || []).length === 1);
+verifie('le bloc « Mon travail » ne change pas : « disponible » et « prendre rendez-vous directement »', /Je suis disponible le lundi de 09h00 à 12h00/.test(travail) && /Aucun contact ne peut encore prendre rendez-vous directement dans ces heures/.test(travail) && !/Pendant ces heures, aucun/.test(travail));
+verifie('un seul bloc porte la phrase du temps protégé', (h.match(/Pendant ces heures, aucun rendez-vous ne peut m’être proposé/g) || []).length === 1);
 ctx._dispoData = { travail: [], sante: [], famille: [], amis: [], sport: [], personnel: [] };
 vm.runInContext('renderDispo()', ctx);
 h = zone.innerHTML;
@@ -220,8 +220,8 @@ verifie('seul le temps libre est regle : la journee de repli (9h-18h) en est aus
 
 titre('5. La fiche d un contact');
 verifie('la pastille dit son sens : « Même en temps libre »', /short: cat\.id === 'personnel' \? 'Même en temps libre' : cat\.label/.test(page));
-verifie('une ligne d aide, en mots simples : « il peut me déranger pendant les heures que je protège »', /« Même en temps libre » : il peut me déranger pendant les heures que je protège\./.test(page));
-verifie('la fiche dit « Il peut réserver seul dans les plages de : (sans choix : il passe par ma messagerie) »', /Il peut réserver seul dans les plages de :/.test(page) && /sans choix : il passe par ma messagerie/.test(page));
+verifie('la fiche : la case « Peut me joindre même pendant mon temps libre » (la pastille « temps libre » devient une case)', /Peut me joindre même pendant mon temps libre/.test(page) && /toggleContactCat\('\$\{c\.id\}','personnel'\)/.test(page));
+verifie('la fiche dit « Ce contact fait partie de : » et « Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie. »', /Ce contact fait partie de :/.test(page) && /Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie\./.test(page));
 
 console.log('');
 console.log(ko + ' anomalie(s).');

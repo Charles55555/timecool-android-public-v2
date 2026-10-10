@@ -175,7 +175,7 @@ verifie('la case est dans un cadre bien visible, APRES le cadre gris et AVANT «
   && /border:2px solid #1a73e8/.test(h));
 verifie('cochee : les six blocs sont gris et non modifiables', (h.match(/aria-disabled="true"/g) || []).length === 6 && (h.match(/pointer-events:none/g) || []).length === 6 && zone.desactives === 6);
 verifie('cochee : la phrase courte de la regle', /Tes contacts te demandent un rendez-vous, tu valides dans ta messagerie\./.test(h));
-verifie('cochee : le cadre gris dit la regle en vigueur (personne ne reserve seul)', /personne ne r.serve tout seul/.test(h));
+verifie('cochee : le cadre gris dit la regle en vigueur (chaque demande arrive dans la messagerie)', /Pour l.instant, chaque demande de rendez-vous arrive dans ta messagerie, et tu choisis le cr.neau/.test(h));
 verifie('l ancienne phrase fausse a disparu (« seulement aux contacts que tu choisis », « Partout ailleurs »)', !/seulement aux contacts que tu choisis/.test(h) && !/Partout ailleurs/.test(h));
 verifie('rien n est ecrit quand on se contente d afficher', !('tc_rdv_validation' in mem) && ctx._sync === 0);
 
@@ -197,14 +197,14 @@ verifie('son texte est celui valide par Charles (mardis et jeudis, 11h-12h, 14h-
 verifie('et si des plages existaient deja, la fenetre le dit autrement, en citant quand meme les mardis et jeudis 11h-12h / 14h-15h', /plages horaires sont déjà réglées/.test(fen) && (fen.match(/les mardis et les jeudis/g) || []).length === 2 && (fen.match(/de 14h à 15h/g) || []).length >= 1);
 h = zone.innerHTML;
 verifie('decoche : plus rien de grise, case decochee', !/aria-disabled="true"/.test(h) && !/id="dispoValidation" checked/.test(h) && !/opacity:0\.45/.test(h));
-verifie('decoche : le cadre gris dit la regle (contacts classes seulement, dans les plages de leur categorie ; non classe, inconnu ou bloque : messagerie)', /Seuls les contacts que tu as class.s/.test(h) && /seulement dans les plages de leur cat.gorie/.test(h) && /Un contact non class., quelqu.un qui n.est pas dans tes contacts, ou un contact bloqu., passe toujours par ta messagerie/.test(h));
-verifie('decoche : la ligne « N contacts peuvent réserver seuls dans ces heures » reapparait (ici : aucun contact classe)', /Aucun contact ne peut encore r.server seul dans ces heures/.test(h));
+verifie('decoche : le cadre gris dit la regle (contacts classes seulement, dans les plages de leur categorie ; non classe, inconnu ou bloque : messagerie)', /Tes contacts class.s/.test(h) && /peuvent prendre rendez-vous directement, dans les plages de leur cat.gorie/.test(h) && /Un contact non class., quelqu.un qui n.est pas dans tes contacts, ou un contact bloqu., passe toujours par ta messagerie/.test(h));
+verifie('decoche : la ligne « N contacts peuvent prendre rendez-vous directement dans ces heures » reapparait (ici : aucun contact classe)', /Aucun contact ne peut encore prendre rendez-vous directement dans ces heures/.test(h));
 // On recoche : rien n est efface
 vm.runInContext('tcBasculerValidationRdv(true)', ctx);
 verifie('recoche : reglage a « 1 », aucune plage supprimee', mem.tc_rdv_validation === '1' && JSON.parse(mem.timecool_disponibilites).sante.length === 2);
 verifie('recoche : la fenetre « Tu es protege » s ouvre (pas un simple message fugace)', ctx._protections === 1 && ctx._toasts.length === 0);
 const prot = fonction(page, 'tcFenetreProtection') || '';
-verifie('son texte est celui valide par Charles', /Tu es protégé/.test(prot) && /sans ton accord/.test(prot) && /toi qui choisis le créneau, ou qui refuses/.test(prot) && /restent enregistrées, en gris/.test(prot));
+verifie('son texte est celui valide par Charles', /Tu es protégé/.test(prot) && /Chaque demande de rendez-vous passe par toi/.test(prot) && !/sans ton accord/.test(prot) && /toi qui choisis le créneau, ou qui refuses/.test(prot) && /restent enregistrées, en gris/.test(prot));
 const centree = fonction(page, 'tcFenetreCentree') || '';
 verifie('les deux fenetres sont au centre de l ecran, avec un bouton Compris', /align-items:center;justify-content:center/.test(centree) && /Compris/.test(centree));
 // Decoche une 2e fois : ne duplique rien

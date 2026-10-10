@@ -224,20 +224,20 @@ const h2 = zone.innerHTML;
 ['travail', 'sante', 'famille', 'amis', 'sport'].forEach((id) => verifie('un bouton « 👥 Choisir qui » sous le bloc « ' + id + ' »', new RegExp('id="tcChoisirQui_' + id + '" onclick="tcChoisirQui\\(\'' + id + '\'\\)"').test(h2) && /Choisir qui<\/span>/.test(h2)));
 verifie('pas de bouton « Choisir qui » ordinaire sous « Mon temps libre » : sa ligne « me déranger quand même » ouvre la meme liste', !/id="tcChoisirQui_personnel"/.test(h2) && /id="tcQuiPeutDeranger" onclick="tcChoisirQui\('personnel'\)"/.test(h2));
 verifie('le bouton dit combien sont choisis (les bloques ne comptent pas, comme dans la liste)', /id="tcChoisirQuiN_travail"[^>]*>1 choisi</.test(h2) && /id="tcChoisirQuiN_famille"[^>]*>1 choisi</.test(h2) && /id="tcChoisirQuiN_sante"[^>]*>0 choisi</.test(h2));
-verifie('la ligne « N contacts peuvent réserver seuls dans ces heures » compte les classes NON BLOQUES', /1 contact peut réserver seul dans ces heures/.test(h2), '');
-verifie('le cadre gris dit la regle', /Seuls les contacts que tu as classés \(avec 👥 Choisir qui, sous chaque catégorie\) réservent tout seuls, et seulement dans les plages de leur catégorie\./.test(h2) && /Un contact non classé, quelqu’un qui n’est pas dans tes contacts, ou un contact bloqué, passe toujours par ta messagerie\./.test(h2));
+verifie('la ligne « N contacts peuvent prendre rendez-vous directement dans ces heures » compte les classes NON BLOQUES', /1 contact peut prendre rendez-vous directement dans ces heures/.test(h2), '');
+verifie('le cadre gris dit la regle', /Tes contacts classés \(avec 👥 Choisir qui, sous chaque catégorie\) peuvent prendre rendez-vous directement, dans les plages de leur catégorie\./.test(h2) && /Un contact non classé, quelqu’un qui n’est pas dans tes contacts, ou un contact bloqué, passe toujours par ta messagerie\./.test(h2));
 mem.tc_rdv_validation = '1';
 vm.runInContext('renderDispo()', c2);
 verifie('case cochee : les boutons « Choisir qui » restent la, et ne sont PAS dans les blocs gris (donc cliquables)', /id="tcChoisirQui_travail"/.test(zone.innerHTML) && !/id="tcChoisirQui_travail"[^>]*opacity/.test(zone.innerHTML) && /aria-disabled="true"/.test(zone.innerHTML));
 
 const tip = page.match(/<div style="font-size:13px;color:#5f6368;margin-bottom:14px;line-height:1\.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">\s*[^\n]*\n\s*<\/div>/);
 verifie('Mes contacts : le conseil est le texte de Charles, avec « Mes disponibilités » cliquable',
-  !!tip && /Rien à régler : tes contacts peuvent déjà te demander un rendez-vous, tu valides dans ta messagerie\. Pour laisser ta famille, tes amis ou tes collègues réserver seuls, coche-les en une fois depuis <a href="#" onclick="navigate\('dispo'\); return false;"[^>]*>Mes disponibilités<\/a>\./.test(tip[0]), tip && tip[0].slice(0, 120));
+  !!tip && /Rien à régler : tes contacts peuvent déjà te demander un rendez-vous, tu valides dans ta messagerie\. Pour que ta famille, tes amis ou tes collègues puissent prendre rendez-vous directement, classe-les en une fois depuis <a href="#" onclick="navigate\('dispo'\); return false;"[^>]*>Mes disponibilités<\/a>\./.test(tip[0]), tip && tip[0].slice(0, 120));
 verifie('Mes contacts : l ancien conseil a disparu', !/Choisis, pour chaque personne/.test(page));
-verifie('fiche contact : « Il peut réserver seul dans les plages de : (sans choix : il passe par ma messagerie) »', /Il peut réserver seul dans les plages de :<\/div>/.test(page) && /\(sans choix : il passe par ma messagerie\)/.test(page) && !/Il peut me prendre un RDV/.test(page));
-verifie('fiche contact : sans categorie, ne dit plus « ne peut pas me prendre de rendez-vous »', !/ne peut pas me prendre de rendez-vous/.test(page) && /passe par ma messagerie : je valide chaque demande/.test(page));
+verifie('fiche contact : « Ce contact fait partie de : », puis la case « Peut me joindre même pendant mon temps libre », puis la phrase grise', /Ce contact fait partie de :<\/div>/.test(page) && /Peut me joindre même pendant mon temps libre/.test(page) && /Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie\./.test(page) && !/Il peut me prendre un RDV/.test(page));
+verifie('fiche contact : sans categorie, plus de ligne rouge ni de « ne peut pas me prendre de rendez-vous »', !/ne peut pas me prendre de rendez-vous/.test(page) && !/passe par ma messagerie : je valide chaque demande/.test(page));
 const douce = fonction(page, 'tcFenetreOuvertureDouce') || '';
-verifie('fenetre « C\'est ouvert, en douceur » : la phrase « Pour que quelqu’un réserve seul, coche-le avec 👥 Choisir qui, sous la catégorie qui lui va. »', /Pour que quelqu’un réserve seul, coche-le avec <b>👥 Choisir qui<\/b>, sous la catégorie qui lui va\./.test(douce) && douce.indexOf('Pour que quelqu’un') < douce.indexOf("tcFenetreCentree('🎉 C’est ouvert, en douceur', corps)"));
+verifie('fenetre « C\'est ouvert, en douceur » : la phrase « Pour que quelqu’un puisse prendre rendez-vous directement, coche-le avec 👥 Choisir qui, sous la catégorie qui lui va. »', /Pour que quelqu’un puisse prendre rendez-vous directement, coche-le avec <b>👥 Choisir qui<\/b>, sous la catégorie qui lui va\./.test(douce) && douce.indexOf('Pour que quelqu’un') < douce.indexOf("tcFenetreCentree('🎉 C’est ouvert, en douceur', corps)"));
 
 console.log('');
 console.log(ko + ' anomalie(s).');

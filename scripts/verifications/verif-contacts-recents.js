@@ -50,14 +50,16 @@ verifie('tri : du plus recent au plus ancien', ctx.tcContactsRecents().map((c) =
 verifie('le compte du bouton = la liste', ctx.tcCompterRecents() === 3);
 
 // Une rafale non marquee (fiches importees avant la marque)
-const rafale = (n, jours, minutes) => Array.from({ length: n }, (_, i) => ({ name: 'Importe ' + i, createdAt: new Date(Date.now() - jours * JOUR - minutes * 60000 - i * 100).toISOString() }));
+// Les fiches d'une rafale partent du milieu d'une minute : elles ne passent jamais d'une minute a l'autre pendant le test.
+const milieuDeMinute = (ms) => Math.floor(ms / 60000) * 60000 + 30000;
+const rafale = (n, jours, minutes) => Array.from({ length: n }, (_, i) => ({ name: 'Importe ' + i, createdAt: new Date(milieuDeMinute(Date.now() - jours * JOUR - minutes * 60000) + i * 100).toISOString() }));
 ctx.contactsList = [{ name: 'Seul', createdAt: il_y_a(0, 1) }].concat(rafale(25, 1, 600));
 verifie('une rafale non marquee (25 fiches la meme minute) n est PAS recente', noms() === 'Seul', noms());
 ctx.contactsList = [{ name: 'Seul', createdAt: il_y_a(0, 1) }].concat(rafale(20, 1, 600));
 verifie('vingt fiches la meme minute restent recentes (la limite est « plus de 20 »)', ctx.tcCompterRecents() === 21, String(ctx.tcCompterRecents()));
-ctx.contactsList = Array.from({ length: 3313 }, (_, i) => ({ name: 'Ancien ' + i, createdAt: new Date(Date.now() - 65 * JOUR - i * 700).toISOString() }));
+ctx.contactsList = Array.from({ length: 3313 }, (_, i) => ({ name: 'Ancien ' + i, createdAt: new Date(milieuDeMinute(Date.now() - 65 * JOUR) + i * 5).toISOString() }));
 verifie('les 3 313 contacts importes il y a deux mois : aucun', ctx.tcCompterRecents() === 0);
-ctx.contactsList = ctx.contactsList.concat(Array.from({ length: 3313 }, (_, i) => ({ name: 'Nouvel import ' + i, createdAt: new Date(Date.now() - 3600000).toISOString() })));
+ctx.contactsList = ctx.contactsList.concat(Array.from({ length: 3313 }, (_, i) => ({ name: 'Nouvel import ' + i, createdAt: new Date(milieuDeMinute(Date.now() - 3600000) + i * 5).toISOString() })));
 verifie('un nouvel import demain (3 313 fiches la meme minute, sans marque) ne les fait PAS remonter', ctx.tcCompterRecents() === 0, String(ctx.tcCompterRecents()));
 ctx.contactsList = ctx.contactsList.concat([{ name: 'Marie ajoutee a la main', createdAt: il_y_a(0, 5) }]);
 verifie('mais un ajout a la main le meme jour, hors de la rafale, remonte', noms() === 'Marie ajoutee a la main', noms());
@@ -69,7 +71,7 @@ titre('2. Quelles fiches sont creees « une par une » et lesquelles sont marque
 const imp = fonction(page, 'tcContactsRecus') || '';
 verifie('l import du telephone (tcContactsRecus, appele par importPhoneContacts) marque ses fiches origine:\'telephone\'', /origine: 'telephone'/.test(imp), '');
 verifie('les contacts d exemple sont marques origine:\'exemple\'', /\.\.\.s,\s+origine: 'exemple',\s+createdAt/.test(page));
-verifie('l ajout a la main garde son createdAt (recent)', /name: name\.trim\(\),\s+phone: phone\.trim\(\),\s+email: email\.trim\(\),\s+createdAt: new Date\(\)\.toISOString\(\)/.test(page));
+verifie('l ajout a la main (le formulaire « Nouveau contact ») pose son createdAt : il est recent', page.indexOf("{ id: 'contact_' + Date.now(), createdAt: new Date().toISOString() }") > -1 && page.indexOf('function tcContactDepuisFormulaire(') > -1);
 verifie('« Ajouter a mes contacts » (carte du demandeur) garde son createdAt', /referenceCompte: msg\.reference \|\| '',\s+isTimeCool: true,\s+createdAt: new Date\(\)\.toISOString\(\)/.test(page));
 verifie('« ajouter aux contacts » depuis un lieu garde son createdAt', /name: p\.nom,\s+phone: p\.telephone \|\| '',\s+email: '',\s+createdAt: new Date\(\)\.toISOString\(\)/.test(page));
 verifie('la fiche creee par le serveur a la proposition d un creneau porte createdAt (pas besoin de marque cote serveur)', /'createdAt'\s+=> date\('c'\)/.test(api.slice(api.indexOf('function creerFicheContact('), api.indexOf('function creerFicheContact(') + 900)));

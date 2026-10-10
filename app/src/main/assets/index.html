@@ -6698,7 +6698,7 @@ function tcProposerClasserContact(contactId) {
   }).join('');
   o.innerHTML = '<div style="background:#fff;width:100%;max-width:420px;border-radius:20px;padding:22px 20px 18px;max-height:90vh;max-height:90dvh;overflow-y:auto;box-sizing:border-box;">'
     + '<div style="font-size:19px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">Classer ' + prenom + ' ?</div>'
-    + '<div style="font-size:13.5px;color:#5f6368;line-height:1.5;margin-bottom:14px;">Facultatif. Une personne classée pourra réserver seule dans les plages de sa catégorie. Sans catégorie, elle passe toujours par ta messagerie.</div>'
+    + '<div style="font-size:13.5px;color:#5f6368;line-height:1.5;margin-bottom:14px;">Facultatif. Une personne classée peut prendre rendez-vous directement, dans les plages de sa catégorie. Sans catégorie, elle passe toujours par ta messagerie.</div>'
     + boutons
     + '<button onclick="tcFermerClasserContact()" style="width:100%;padding:13px;background:#f1f3f4;color:#5f6368;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">Plus tard</button>'
     + '</div>';
@@ -18392,7 +18392,7 @@ function renderContacts() {
 
   c.innerHTML = `
     <div style="font-size:13px;color:#5f6368;margin-bottom:14px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">
-      \u{1F4A1} Rien à régler : tes contacts peuvent déjà te demander un rendez-vous, tu valides dans ta messagerie. Pour laisser ta famille, tes amis ou tes collègues réserver seuls, coche-les en une fois depuis <a href="#" onclick="navigate('dispo'); return false;" style="color:var(--g-blue); font-weight:600;">Mes disponibilités</a>.
+      \u{1F4A1} Rien à régler : tes contacts peuvent déjà te demander un rendez-vous, tu valides dans ta messagerie. Pour que ta famille, tes amis ou tes collègues puissent prendre rendez-vous directement, classe-les en une fois depuis <a href="#" onclick="navigate('dispo'); return false;" style="color:var(--g-blue); font-weight:600;">Mes disponibilités</a>.
     </div>
 
     ${tcContactsEnTeteHTML()}
@@ -18468,6 +18468,7 @@ function renderContactsListHTML(contacts) {
             </div>
             <button onclick="toggleContactMenu(event, '${c.id}')" title="Options" style="padding:6px 8px; background:transparent; border:none; cursor:pointer; color:var(--text-sec); font-size:20px; line-height:1;">\u22EE</button>
             <div class="msg-menu" id="ctMenu_${c.id}" style="right:0; top:36px;">
+              <div class="msg-menu-item" onclick="_closeAllContactMenus();tcFormulaireContact('${c.id}')"><span class="mi-ic">✏️</span>Modifier le contact</div>
               <div class="msg-menu-item" onclick="_closeAllContactMenus();openPrevenirFromContact('${c.id}')"><span class="mi-ic">\u23F1\uFE0F</span>Pr\u00e9venir d'un retard, annulation, d\u00e9calage</div>
               <div class="msg-menu-item" onclick="_closeAllContactMenus();toggleContactBlock('${c.id}')"><span class="mi-ic">\u{1F6AB}</span>${c.blocked ? 'D\u00e9bloquer l\'acc\u00e8s' : 'Bloquer l\'acc\u00e8s \u00e0 mon agenda'}</div>
               <div class="msg-menu-sep"></div>
@@ -18475,19 +18476,21 @@ function renderContactsListHTML(contacts) {
             </div>
           </div>
 
-          <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:2px;">Il peut réserver seul dans les plages de :</div>
-          <div style="font-size:10.5px; color:#9aa0a6; margin-bottom:3px; font-style:italic;">(sans choix : il passe par ma messagerie)</div>
-          <div style="font-size:10.5px; color:#9aa0a6; margin:-3px 0 7px; font-style:italic;">☀️ « Même en temps libre » : il peut me déranger pendant les heures que je protège.</div>
-          ${legendeAPoser ? `<div style="font-size:11px; color:#9aa0a6; margin-bottom:6px;"><span style="color:var(--g-blue); font-weight:600;">\u25cf Color\u00e9</span> = heures retenues &nbsp;\u00b7&nbsp; <span style="font-weight:600;">\u25cf Gris</span> = non retenues</div>` : ''}
+          <div style="font-size:11.5px; color:var(--text-sec); margin-bottom:6px;">Ce contact fait partie de :</div>
           <div style="display:flex; flex-wrap:wrap; gap:6px; ${c.blocked ? 'opacity:0.4; pointer-events:none;' : ''}">
-            ${CATS.map(cat => {
+            ${CATS.filter(cat => cat.id !== 'personnel').map(cat => {
               const active = cats.indexOf(cat.id) > -1;
               return `<button onclick="toggleContactCat('${c.id}','${cat.id}')" style="padding:6px 10px; background:${active ? cat.bg : '#f8f9fa'}; color:${active ? (cat.texte || cat.color) : '#9aa0a6'}; border:1.5px solid ${active ? cat.color : '#e8eaed'}; border-radius:20px; font-size:11px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">${cat.icon} ${cat.short}</button>`;
             }).join('')}
           </div>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12.5px; color:var(--text); cursor:pointer; ${c.blocked ? 'opacity:0.4; pointer-events:none;' : ''}">
+            <input type="checkbox" ${cats.indexOf('personnel') > -1 ? 'checked' : ''} onchange="toggleContactCat('${c.id}','personnel')" style="width:18px; height:18px; flex-shrink:0;">
+            Peut me joindre même pendant mon temps libre
+          </label>
+          <div style="font-size:11px; color:#9aa0a6; margin-top:6px;">Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie.</div>
           ${c.blocked
-            ? `<div class="ct-blocked">\u{1F6AB}<div><b>Acc\u00e8s bloqu\u00e9 volontairement.</b> Ce contact ne pourra plus prendre de RDV automatiquement. Ses nouvelles demandes de RDV arriveront dans ta messagerie s\u00e9curis\u00e9e et attendront ta validation \u2014 Ce contact ne sait pas qu'il est bloqu\u00e9. Clique sur <b>D\u00e9bloquer l'acc\u00e8s</b> pour le d\u00e9bloquer.</div></div>`
-            : (cats.length === 0 ? `<div style="font-size:11px; color:#9aa0a6; margin-top:8px; font-style:italic;">${escapeHTMLSafe(prenom)} passe par ma messagerie : je valide chaque demande</div>` : '')}
+            ? `<div class="ct-blocked">\u{1F6AB}<div><b>Acc\u00e8s bloqu\u00e9 volontairement.</b> Ce contact ne pourra plus prendre rendez-vous directement. Ses nouvelles demandes de RDV arriveront dans ta messagerie s\u00e9curis\u00e9e et attendront ta validation \u2014 Ce contact ne sait pas qu'il est bloqu\u00e9. Clique sur <b>D\u00e9bloquer l'acc\u00e8s</b> pour le d\u00e9bloquer.</div></div>`
+            : ''}
 
           <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
             <span style="font-size:11.5px; color:var(--text-sec);">Je lui dis :</span>
@@ -22136,21 +22139,156 @@ function importDemoContactSamples() {
     showToast('✅ 8 contacts d\'exemple importés');
 }
 
-async function addContactManually() {
-  const name = await tcPrompt('Nom complet du contact :');
-  if (!name || !name.trim()) return;
-  const phone = await tcPrompt('Téléphone (facultatif, ex: +33 6 12 34 56 78) :') || '';
-  const email = await tcPrompt('Email (facultatif) :') || '';
-  contactsList.push({
-    id: 'contact_' + Date.now(),
-    name: name.trim(),
-    phone: phone.trim(),
-    email: email.trim(),
-    createdAt: new Date().toISOString()
+/** « + Ajouter » : le formulaire d'un nouveau contact. */
+function addContactManually() {
+  tcFormulaireContact();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LE FORMULAIRE D'UN CONTACT (nouveau, ou modifier une fiche)
+   Prenom et nom, mobile avec indicatif, e-mail, adresse (avec les
+   propositions d'adresses), « Ce contact fait partie de », « Peut me
+   joindre meme pendant mon temps libre ». Seul un prenom ou un nom est
+   obligatoire.
+   ══════════════════════════════════════════════════════════════ */
+
+var _tcContactForm = null;
+
+/** « Jean Marc Dupont » → prenom « Jean », nom « Marc Dupont ». */
+function tcContactDecouperNom(nom) {
+  const mots = String(nom || '').trim().split(/\s+/).filter(Boolean);
+  return { prenom: mots[0] || '', nom: mots.slice(1).join(' ') };
+}
+
+/** « +33612345678 » → { dial: '+33', national: '0612345678' } ; un numero sans indicatif reste tel quel (France). */
+function tcContactDecouperTelephone(phone) {
+  const brut = String(phone || '').trim();
+  if (!brut) return { dial: '+33', national: '' };
+  const t = brut.replace(/[^0-9+]/g, '');
+  if (!t.startsWith('+')) return { dial: '+33', national: brut };
+  let meilleur = null;
+  TC_PHONE_COUNTRIES.forEach(function (p) {
+    if (t.startsWith(p.dial) && (!meilleur || p.dial.length > meilleur.dial.length)) meilleur = p;
   });
+  if (!meilleur) return { dial: '+33', national: brut };
+  const reste = t.slice(meilleur.dial.length);
+  return { dial: meilleur.dial, national: meilleur.dial === '+33' ? '0' + reste : reste };
+}
+
+/**
+ * La fiche telle que le formulaire la decrit. Une fiche existante garde ses autres champs
+ * (langue, blocage, compte TimeCool...) ; si le mobile ou l'e-mail change, le lien avec un
+ * compte TimeCool est refait (tcRafraichirBadgesContacts).
+ */
+function tcContactDepuisFormulaire(v, existant) {
+  const c = existant ? Object.assign({}, existant) : { id: 'contact_' + Date.now(), createdAt: new Date().toISOString() };
+  const phone = String(v.mobile || '').trim() ? tcNormaliserTelephone(v.mobile, v.indicatif || '+33') : '';
+  const email = String(v.email || '').trim();
+  const changeJoignable = !!existant && ((existant.phone || '') !== phone || (existant.email || '') !== email);
+  c.name = (String(v.prenom || '').trim() + ' ' + String(v.nom || '').trim()).trim();
+  c.phone = phone;
+  c.email = email;
+  c.address = String(v.adresse || '').trim();
+  const cats = (v.cats || []).filter(function (x) { return ['travail', 'sante', 'famille', 'amis', 'sport'].indexOf(x) > -1; });
+  if (v.perso) cats.push('personnel');
+  if (cats.length || existant) c.categories = cats;
+  if (changeJoignable) { delete c.referenceCompte; delete c.isTimeCool; }
+  return c;
+}
+
+/** Ouvre le formulaire : vide pour un nouveau contact, pre-rempli pour une fiche existante. */
+function tcFormulaireContact(contactId) {
+  const existant = contactId ? contactsList.find(function (x) { return x.id === contactId; }) : null;
+  if (contactId && !existant) return;
+  tcFormulaireContactFermer();
+  const nom = existant ? tcContactDecouperNom(existant.name) : { prenom: '', nom: '' };
+  const tel = existant ? tcContactDecouperTelephone(existant.phone) : { dial: '+33', national: '' };
+  const cats = existant && Array.isArray(existant.categories) ? existant.categories : [];
+  _tcContactForm = { id: contactId || null, cats: cats.filter(function (x) { return x !== 'personnel'; }), perso: cats.indexOf('personnel') > -1 };
+  const champ = 'width:100%; box-sizing:border-box; padding:11px 12px; border:1.5px solid #e8eaed; border-radius:12px; font-size:15px; font-family:inherit; background:#fff;';
+  const lib = 'font-size:12px; color:#5f6368; margin:12px 0 5px; display:block; font-weight:600;';
+  const o = document.createElement('div');
+  o.id = 'tcContactOverlay';
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overscroll-behavior:contain;';
+  o.onclick = function (e) { if (e.target === o) tcFormulaireContactFermer(); };
+  const options = TC_PHONE_COUNTRIES.map(function (p) {
+    return '<option value="' + p.dial + '"' + (p.dial === tel.dial ? ' selected' : '') + '>' + p.flag + ' ' + p.dial + '</option>';
+  }).join('');
+  o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px;max-height:90vh;max-height:90dvh;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;">'
+    + '<div style="padding:18px 20px 4px;font-size:18px;font-weight:700;color:#1a1a2e;">' + (existant ? '✏️ Modifier le contact' : '➕ Nouveau contact') + '</div>'
+    + '<div id="tcContactCorps" style="flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 20px 8px;">'
+    + '<div style="display:flex;gap:10px;"><div style="flex:1;min-width:0;"><label for="cfPrenom" style="' + lib + '">Prénom</label>'
+    + '<input id="cfPrenom" type="text" autocomplete="off" value="' + escapeHTMLSafe(nom.prenom) + '" style="' + champ + '"></div>'
+    + '<div style="flex:1;min-width:0;"><label for="cfNom" style="' + lib + '">Nom</label>'
+    + '<input id="cfNom" type="text" autocomplete="off" value="' + escapeHTMLSafe(nom.nom) + '" style="' + champ + '"></div></div>'
+    + '<label for="cfMobile" style="' + lib + '">Mobile</label>'
+    + '<div style="display:flex;gap:8px;"><select id="cfIndicatif" aria-label="Indicatif du pays" style="' + champ + 'width:auto;flex-shrink:0;padding-right:6px;">' + options + '</select>'
+    + '<input id="cfMobile" type="tel" inputmode="tel" autocomplete="off" placeholder="06 12 34 56 78" value="' + escapeHTMLSafe(tel.national) + '" style="' + champ + 'min-width:0;"></div>'
+    + '<label for="cfEmail" style="' + lib + '">E-mail</label>'
+    + '<input id="cfEmail" type="email" autocomplete="off" value="' + escapeHTMLSafe(existant ? existant.email || '' : '') + '" style="' + champ + '">'
+    + '<label for="cfAdresse" style="' + lib + '">Adresse postale</label>'
+    + '<div id="cfAdresseZone"><input id="cfAdresse" type="text" autocomplete="off" placeholder="Numéro, rue, ville" value="' + escapeHTMLSafe(existant ? existant.address || '' : '') + '" style="' + champ + '"></div>'
+    + '<div style="font-size:12px;color:#5f6368;margin:16px 0 8px;font-weight:600;">Ce contact fait partie de :</div>'
+    + '<div id="cfPastilles" style="display:flex;flex-wrap:wrap;gap:6px;"></div>'
+    + '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:#1a1a2e;cursor:pointer;">'
+    + '<input id="cfPerso" type="checkbox"' + (_tcContactForm.perso ? ' checked' : '') + ' style="width:18px;height:18px;flex-shrink:0;"> Peut me joindre même pendant mon temps libre</label>'
+    + '<div style="font-size:11.5px;color:#9aa0a6;margin:6px 0 4px;">Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie.</div>'
+    + '<div id="cfErreur" role="alert" style="font-size:12.5px;color:#c5221f;min-height:18px;margin-top:6px;"></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:10px;padding:10px 20px 16px;border-top:1px solid #e8eaed;">'
+    + '<button onclick="tcFormulaireContactFermer()" style="flex:1;padding:14px;background:#f1f3f4;color:#5f6368;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">Annuler</button>'
+    + '<button onclick="tcFormulaireContactEnregistrer()" style="flex:2;padding:14px;background:var(--g-blue);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">Enregistrer</button>'
+    + '</div></div>';
+  document.body.appendChild(o);
+  document.getElementById('cfPerso').onchange = function () { _tcContactForm.perso = this.checked; };
+  tcFormulaireContactPastilles();
+  const adresse = document.getElementById('cfAdresse');
+  if (adresse && typeof tcAutocompleterLieu === 'function') tcAutocompleterLieu(adresse);
+}
+
+/** Les cinq pastilles « Ce contact fait partie de » (travail, sante, famille, amis, sport). */
+function tcFormulaireContactPastilles() {
+  const zone = document.getElementById('cfPastilles');
+  if (!zone || !_tcContactForm) return;
+  zone.innerHTML = DISPO_CATEGORIES.filter(function (cat) { return cat.id !== 'personnel'; }).map(function (cat) {
+    const actif = _tcContactForm.cats.indexOf(cat.id) > -1;
+    return '<button type="button" aria-pressed="' + actif + '" onclick="tcFormulaireContactCat(\'' + cat.id + '\')" style="padding:8px 12px;background:' + (actif ? cat.bg : '#f8f9fa')
+      + ';color:' + (actif ? (cat.texte || cat.color) : '#9aa0a6') + ';border:1.5px solid ' + (actif ? cat.color : '#e8eaed') + ';border-radius:20px;font-size:12.5px;font-weight:' + (actif ? '700' : '500')
+      + ';cursor:pointer;white-space:nowrap;">' + cat.icon + ' ' + cat.label + '</button>';
+  }).join('');
+}
+
+function tcFormulaireContactCat(catId) {
+  if (!_tcContactForm) return;
+  const i = _tcContactForm.cats.indexOf(catId);
+  if (i > -1) _tcContactForm.cats.splice(i, 1); else _tcContactForm.cats.push(catId);
+  tcFormulaireContactPastilles();
+}
+
+function tcFormulaireContactFermer() {
+  const o = document.getElementById('tcContactOverlay');
+  if (o) o.remove();
+  _tcContactForm = null;
+}
+
+/** Enregistre : cree la fiche (elle compte comme « recente »), ou met a jour celle qu'on modifie. */
+function tcFormulaireContactEnregistrer() {
+  const s = _tcContactForm; if (!s) return;
+  const val = function (id) { const e = document.getElementById(id); return e ? e.value : ''; };
+  const v = { prenom: val('cfPrenom'), nom: val('cfNom'), indicatif: val('cfIndicatif'), mobile: val('cfMobile'), email: val('cfEmail'), adresse: val('cfAdresse'), cats: s.cats.slice(), perso: !!(document.getElementById('cfPerso') || {}).checked };
+  if (!v.prenom.trim() && !v.nom.trim()) {
+    const e = document.getElementById('cfErreur');
+    if (e) e.textContent = 'Indique au moins un prénom ou un nom.';
+    const p = document.getElementById('cfPrenom'); if (p) p.focus();
+    return;
+  }
+  const existant = s.id ? contactsList.find(function (x) { return x.id === s.id; }) : null;
+  const c = tcContactDepuisFormulaire(v, existant);
+  if (existant) contactsList[contactsList.indexOf(existant)] = c; else contactsList.push(c);
   saveContacts();
+  tcFormulaireContactFermer();
   renderContacts();
-  showToast('✅ Contact ajouté');
+  showToast(existant ? '✅ Contact modifié' : '✅ Contact ajouté');
   // Sans cela, un contact qui vient de s'inscrire n'apparait comme
   // utilisateur TimeCool qu'apres avoir quitte la page et y etre revenu.
   if (typeof tcRafraichirBadgesContacts === 'function') tcRafraichirBadgesContacts();
@@ -23160,7 +23298,7 @@ function tcFenetreOuvertureDouce(plagesCreees) {
     : '<p style="' + ligne + '">Tes plages horaires sont déjà réglées. Tes contacts peuvent maintenant te proposer un rendez-vous, <b>mais seulement dans ces plages-là</b>, visibles juste en dessous. Le reste de ton agenda reste fermé.</p>'
       + '<p style="' + ligne + '">Pour une catégorie vide, j’ouvre moi-même deux petits créneaux, <b>les mardis et les jeudis</b> :</p>' + heures
       + '<p style="' + ligne + '">Tu peux changer ces plages horaires comme tu préfères, juste en dessous.</p>';
-  corps += '<p style="' + ligne + '">Pour que quelqu’un réserve seul, coche-le avec <b>👥 Choisir qui</b>, sous la catégorie qui lui va.</p>';
+  corps += '<p style="' + ligne + '">Pour que quelqu’un puisse prendre rendez-vous directement, coche-le avec <b>👥 Choisir qui</b>, sous la catégorie qui lui va.</p>';
   tcFenetreCentree('🎉 C’est ouvert, en douceur', corps);
 }
 
@@ -23168,7 +23306,7 @@ function tcFenetreOuvertureDouce(plagesCreees) {
 function tcFenetreProtection() {
   var ligne = 'font-size:15px;color:#1a1a2e;line-height:1.55;margin:0 0 12px;';
   tcFenetreCentree('🔒 Tu es protégé',
-    '<p style="' + ligne + '">Plus personne ne peut prendre un rendez-vous dans ton agenda sans ton accord.</p>'
+    '<p style="' + ligne + '">Chaque demande de rendez-vous passe par toi.</p>'
     + '<p style="' + ligne + '">Chaque demande arrive dans ta messagerie : c’est toi qui choisis le créneau, ou qui refuses.</p>'
     + '<p style="' + ligne + '">Tes plages horaires restent enregistrées, en gris, pour la prochaine fois.</p>');
 }
@@ -23198,7 +23336,7 @@ function tcCadreValidationRdv(exigee) {
   h += '<div style="font-size:12.5px;color:#1a3d6e;line-height:1.5;margin-top:8px;">'
     + (exigee
       ? 'Tes contacts te demandent un rendez-vous, tu valides dans ta messagerie.'
-      : 'Décoché : tes contacts enregistrés réservent seuls, dans tes plages ouvertes.')
+      : 'Décoché : tes contacts classés peuvent prendre rendez-vous directement, dans les plages de leur catégorie.')
     + '</div></div>';
   return h;
 }
@@ -23256,19 +23394,19 @@ function formatHeure(h) {
 
 /* ══════════════════════════════════════════════════════════════
    CHOISIR QUI
-   Un contact reserve seul uniquement s'il est classe dans une categorie
+   Un contact ne prend rendez-vous directement que s'il est classe dans une categorie
    (travail, sante, famille, amis, sport), et seulement dans les plages de
    cette categorie. Cette liste classe tout le carnet d'un coup : une case
    par contact, c'est la meme donnee que la pastille de la fiche
    (contact.categories), enregistree et synchronisee comme elle.
    ══════════════════════════════════════════════════════════════ */
 
-/** « 3 contacts peuvent réserver seuls dans ces heures », juste. */
+/** « 3 contacts peuvent prendre rendez-vous directement dans ces heures », juste. */
 function tcPhraseContactsAutorises(catId) {
   const n = tcContactsAutorises(catId);
-  if (n === 0) return 'Aucun contact ne peut encore réserver seul dans ces heures';
-  if (n === 1) return '1 contact peut réserver seul dans ces heures';
-  return n + ' contacts peuvent réserver seuls dans ces heures';
+  if (n === 0) return 'Aucun contact ne peut encore prendre rendez-vous directement dans ces heures';
+  if (n === 1) return '1 contact peut prendre rendez-vous directement dans ces heures';
+  return n + ' contacts peuvent prendre rendez-vous directement dans ces heures';
 }
 
 /** Combien de contacts non bloques portent cette categorie sur leur fiche (un bloque ne reserve jamais : il n est pas compte). */
@@ -23313,9 +23451,9 @@ function tcChoisirQui(catId) {
   o.innerHTML = '<div style="background:#fff;width:100%;max-width:480px;border-radius:20px;max-height:90vh;max-height:90dvh;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;">'
     + '<div style="padding:18px 20px 8px;">'
     + '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:26px;">' + cat.icon + '</span>'
-    + '<div style="flex:1;font-size:17px;font-weight:700;color:#1a1a2e;line-height:1.3;">' + (perso ? 'Qui peut me déranger même en temps libre' : 'Qui peut réserver seul : ' + cat.label) + '</div></div>'
+    + '<div style="flex:1;font-size:17px;font-weight:700;color:#1a1a2e;line-height:1.3;">' + (perso ? 'Qui peut me déranger même en temps libre' : 'Qui peut prendre rendez-vous directement : ' + cat.label) + '</div></div>'
     + '<div id="tcQuiCompteur" style="font-size:13px;font-weight:600;color:' + cat.texte + ';margin-top:6px;"></div>'
-    + (perso ? '<div style="font-size:12px;color:#5f6368;margin-top:4px;line-height:1.45;">Il faut aussi qu’il soit classé dans une autre catégorie pour réserver seul.</div>' : '')
+    + (perso ? '<div style="font-size:12px;color:#5f6368;margin-top:4px;line-height:1.45;">Il faut aussi qu’il soit classé dans une autre catégorie pour prendre rendez-vous directement.</div>' : '')
     + '<input id="tcQuiRecherche" type="search" placeholder="Chercher un contact…" autocomplete="off" style="width:100%;box-sizing:border-box;margin-top:10px;padding:11px 14px;border:1.5px solid #e8eaed;border-radius:12px;font-size:15px;">'
     + '</div>'
     + '<div id="tcQuiListe" style="flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px;"></div>'
@@ -23424,10 +23562,10 @@ function renderDispo() {
   html += '\ud83d\udd12 <b>Cet espace reste confidentiel, et tu restes ma\u00eetre de ton agenda.</b><br>';
   var exigee = tcValidationRdvExigee();
   if (exigee) {
-    html += 'Pour l’instant, personne ne réserve tout seul : chaque demande de rendez-vous arrive dans ta messagerie, et tu choisis le créneau. ';
+    html += 'Pour l’instant, chaque demande de rendez-vous arrive dans ta messagerie, et tu choisis le créneau. ';
     html += 'Personne ne voit jamais ton agenda.';
   } else {
-    html += 'Seuls les contacts que tu as classés (avec 👥 Choisir qui, sous chaque catégorie) réservent tout seuls, et seulement dans les plages de leur catégorie. ';
+    html += 'Tes contacts classés (avec 👥 Choisir qui, sous chaque catégorie) peuvent prendre rendez-vous directement, dans les plages de leur catégorie. ';
     html += 'Eux ne voient jamais ton agenda — uniquement ces créneaux. ';
     html += 'Un contact non classé, quelqu’un qui n’est pas dans tes contacts, ou un contact bloqué, passe toujours par ta messagerie.';
   }
@@ -23448,7 +23586,7 @@ function renderDispo() {
     html += '<div style="font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:3px;">' + cat.label + '</div>';
     // À l'envers des cinq autres : ses plages sont du temps PROTÉGÉ.
     if (cat.id === 'personnel') {
-      html += '<div style="font-size:12.5px;color:#5f6368;line-height:1.5;margin-bottom:6px;">Pendant ces heures, personne ne peut me prendre un rendez-vous, sauf les contacts que j’autorise (ex. ma famille).</div>';
+      html += '<div style="font-size:12.5px;color:#5f6368;line-height:1.5;margin-bottom:6px;">Pendant ces heures, aucun rendez-vous ne peut m’être proposé, sauf par les contacts que j’autorise (ex. ma famille).</div>';
     }
     if (plages.length === 0) {
       html += cat.id === 'personnel'
@@ -23527,7 +23665,7 @@ function openDispoForm(catId, existing) {
   html += '</div>';
 
   if (catId === 'personnel') {
-    html += '<div style="font-size:12.5px;color:#5f6368;line-height:1.5;margin-bottom:12px;">Pendant ces heures, personne ne peut te prendre un rendez-vous, sauf les contacts que tu autorises.</div>';
+    html += '<div style="font-size:12.5px;color:#5f6368;line-height:1.5;margin-bottom:12px;">Pendant ces heures, aucun rendez-vous ne peut t’être proposé, sauf par les contacts que tu autorises.</div>';
     html += '<div id="tcQuiPeutDerangerForm" onclick="tcAutoriserDepuisPlage()" role="button" tabindex="0" style="display:flex;align-items:center;gap:10px;padding:12px 14px;margin-bottom:18px;border:1.5px solid #b3e5fc;background:#e1f5fe;border-radius:12px;cursor:pointer;color:#01579b;font-size:13.5px;font-weight:600;">'
       + '<span style="font-size:18px;">👥</span><span style="flex:1;">Choisir qui peut me déranger quand même</span><span style="font-size:20px;line-height:1;">›</span></div>';
   }

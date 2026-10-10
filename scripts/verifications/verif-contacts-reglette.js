@@ -145,8 +145,8 @@ verifie('le bandeau ne fait plus un tiers d ecran',
   page.indexOf('Choisis pour chaque personne dans quel domaine') === -1);
 
 console.log('\n-- La legende est descendue sur la premiere fiche --');
-verifie('elle est posee sur la fiche', page.indexOf('legendeAPoser ?') > -1);
-verifie('et une seule fois', page.indexOf('legendeAPoser = false;') > -1,
+verifie('la legende « heures retenues » n existe plus (les pastilles disent a quoi le contact appartient)', page.indexOf('legendeAPoser ?') === -1);
+verifie('et il n en reste aucune trace', page.indexOf('= heures retenues') === -1,
   'sinon elle se repeterait sous chacune des 3 313 fiches');
 
 console.log('\n-- La reglette forme une grille reguliere --');

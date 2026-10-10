@@ -123,7 +123,7 @@ ctx.localStorage.getItem = () => '0';
 vm.runInContext('openDispoForm("personnel")', ctx);
 let f = corps[corps.length - 1].kids[0].innerHTML;
 verifie('fenetre d une plage de « Mon temps libre » : horaires par defaut 13h-20h (temps protege)', /id="dispoDebut" value="13:00"/.test(f) && /id="dispoFin" value="20:00"/.test(f));
-verifie('elle explique le sens et porte la meme ligne, branchee', /Pendant ces heures, personne ne peut te prendre un rendez-vous, sauf les contacts que tu autorises\./.test(f) && /onclick="tcAutoriserDepuisPlage\(\)"/.test(f) && /Choisir qui peut me déranger quand même/.test(f));
+verifie('elle explique le sens et porte la meme ligne, branchee', /Pendant ces heures, aucun rendez-vous ne peut t’être proposé, sauf par les contacts que tu autorises\./.test(f) && /onclick="tcAutoriserDepuisPlage\(\)"/.test(f) && /Choisir qui peut me déranger quand même/.test(f));
 vm.runInContext('openDispoForm("personnel", { jours: [5], debut: "15:30", fin: "19:00" })', ctx);
 f = corps[corps.length - 1].kids[0].innerHTML;
 verifie('modifier une plage existante : ses heures sont gardees, la ligne est la aussi', /id="dispoDebut" value="15:30"/.test(f) && /id="dispoFin" value="19:00"/.test(f) && /tcAutoriserDepuisPlage/.test(f));

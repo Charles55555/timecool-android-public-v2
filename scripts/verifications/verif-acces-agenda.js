@@ -113,9 +113,9 @@ echo json_encode($res);
 
 titre('2. Les textes de l ecran disent la nouvelle regle');
 verifie('l alerte rouge « aucun contact autorise — personne ne peut reserver » a disparu', !/Aucun contact autoris/.test(page));
-verifie('« Mes disponibilites » : « N contacts peuvent réserver seuls dans ces heures » (le compte des contacts classés)', /contacts peuvent r.server seuls dans ces heures/.test(page) && /contact peut r.server seul dans ces heures/.test(page) && /Aucun contact ne peut encore r.server seul dans ces heures/.test(page));
-verifie('fiche contact : « Il peut réserver seul dans les plages de : (sans choix : il passe par ma messagerie) »', /Il peut réserver seul dans les plages de :/.test(page) && /\(sans choix : il passe par ma messagerie\)/.test(page) && !/Il peut me prendre un RDV\. Pour limiter/.test(page));
-verifie('fiche contact : la legende ne parle plus d « autorise / non autorise »', !/= autoris\\u00e9 &nbsp;/.test(page) && /= heures retenues/.test(page));
+verifie('« Mes disponibilites » : « N contacts peuvent prendre rendez-vous directement dans ces heures » (le compte des contacts classés)', /contacts peuvent prendre rendez-vous directement dans ces heures/.test(page) && /contact peut prendre rendez-vous directement dans ces heures/.test(page) && /Aucun contact ne peut encore prendre rendez-vous directement dans ces heures/.test(page));
+verifie('fiche contact : « Ce contact fait partie de : » (5 pastilles), « Peut me joindre même pendant mon temps libre », « Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie. »', /Ce contact fait partie de :/.test(page) && /Peut me joindre même pendant mon temps libre/.test(page) && /Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie\./.test(page) && !/Il peut me prendre un RDV\. Pour limiter/.test(page));
+verifie('fiche contact : plus de legende « heures retenues » (les pastilles disent a quoi le contact appartient)', !/= heures retenues/.test(page) && !/= autoris/.test(page));
 
 titre('3. L APK est aussi publie avec son numero de version');
 verifie('le fichier permanent timecool.apk est inchange', /cp "\$SRC" dist\/timecool\.apk/.test(wf) && /releases\/latest\/download\/timecool\.apk/.test(wf));
