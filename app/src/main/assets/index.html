@@ -15253,16 +15253,10 @@ async function tcRafraichirTout() {
   // nouvelle version, on ne lui passe pas devant.
   const maj = document.getElementById('tcBandeauMaj');
   if (!maj || maj.hidden) {
-    // Rien de neuf, mais le geste etait volontaire : on repond par le
-    // meme bandeau, avec le meme bouton. Tirer pour obtenir la
-    // derniere version et n'avoir rien a toucher serait deroutant.
-    //
-    // La signature est un horodatage : celle d'un bandeau ferme est
-    // retenue pour ne plus le remontrer, ce qui vaut pour une version
-    // annoncee toute seule mais pas pour une reponse a un geste.
-    if (typeof tcAfficherBandeauMaj === 'function') {
-      tcAfficherBandeauMaj('tirage-' + Date.now(), 'Tout est \u00e0 jour', 'Recharger');
-    }
+    // Rien de neuf : un message fugace, sans bouton. Le bandeau avec
+    // « Recharger » a chaque tirage ne servait a rien (Charles, 10/10) ;
+    // il ne s'affiche que pour une vraie nouvelle version.
+    if (typeof showToast === 'function') showToast('\u2705 Tout est \u00e0 jour');
   }
   _tirerEnCours = false;
 }
