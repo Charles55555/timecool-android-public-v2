@@ -11260,14 +11260,24 @@ function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
   // Deux demandes (« dentiste demain 10h et coach jeudi 14h ») : le conflit peut porter sur la seconde, on ne touche a rien.
   if (tcJoursCites(texte, now).length > 1 || tcPlusieursDatesOuRelatif(t)) return null;
   const demande = tcDateDemandee(texte, now);
-  const heure = tcHeureDansTexte(t);
-  if (!demande || demande.invalide || !heure) return null;
+  if (!demande || demande.invalide) return null;
   const dateStr = tcISO(demande.date);
-  const debut = heure.h * 60 + (heure.m || 0), fin = debut + 60;
   const evMode = mode === 'pro' ? 'pro' : 'user';
-  const occupe = (Array.isArray(events) ? events : []).some(function (e) {
-    return e && e.mode === evMode && tcEvenementCouvre(e, dateStr) && !e.allDay
-      && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
+  const duJour = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && tcEvenementCouvre(e, dateStr); }).sort(tcComparerEvenements);
+  const heure = tcHeureDansTexte(t);
+  if (!heure) {
+    // Pas d'heure dans la demande : rien a verifier, mais rien a inventer non plus. La page dit ce que
+    // l'agenda contient ce jour-la, et demande l'heure (« mets le rdv de Paul vendredi » → « tu as deja
+    // un rendez-vous avec Paul mardi a 10h », inexistant : campagne 6, 11/10).
+    const quand = tcDateEnLettres(demande.date);
+    const etat = duJour.length
+      ? quand + ', tu as : ' + duJour.map(function (e) { return e.title + ' ' + tcFormaterHeure(e); }).join(', ') + '.'
+      : quand + ' est libre dans ton agenda.';
+    return 'Je ne vois pas ce rendez-vous dans ton agenda. ' + etat.charAt(0).toUpperCase() + etat.slice(1) + ' À quelle heure ?';
+  }
+  const debut = heure.h * 60 + (heure.m || 0), fin = debut + 60;
+  const occupe = duJour.some(function (e) {
+    return !e.allDay && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
   });
   if (occupe) return null;
   const bloc = tcBlocAgendaDepuisAnnonce(texte, '', now, 1);
@@ -11309,6 +11319,15 @@ function tcDeplacementHorsJour(liste, texte, now, eventsAll, evMode) {
   if (!jours.length) return null;
   const hors = (liste || []).filter(function (x) { return x && x.ev && !jours.some(function (j) { return tcEvenementCouvre(x.ev, j); }); });
   if (!hors.length) return null;
+  return tcQuestionRdvDuJour(jours, eventsAll, evMode);
+}
+
+/**
+ * Les rendez-vous reellement presents ces jours-la, en une question : « Tu as 2 rendez-vous mardi 13
+ * octobre : « Rdv banque » 10h, « Formation » 15h — lequel ? ». C'est la page qui construit la liste,
+ * jamais le modele (il en oubliait, ou en inventait : campagnes 5 et 6).
+ */
+function tcQuestionRdvDuJour(jours, eventsAll, evMode) {
   const presents = (Array.isArray(eventsAll) ? eventsAll : []).filter(function (e) { return e && e.mode === evMode && jours.some(function (j) { return tcEvenementCouvre(e, j); }); })
     .sort(function (a, b) { return (a.date + String(a.startH).padStart(2, '0') + String(a.startM).padStart(2, '0')) < (b.date + String(b.startH).padStart(2, '0') + String(b.startM).padStart(2, '0')) ? -1 : 1; });
   const minuscule = function (x) { x = String(x || ''); return x.charAt(0).toLowerCase() + x.slice(1); };
@@ -11317,6 +11336,69 @@ function tcDeplacementHorsJour(liste, texte, now, eventsAll, evMode) {
   if (!presents.length) return 'Je ne trouve aucun rendez-vous ' + quand + ' dans ton agenda. Lequel veux-tu déplacer ?';
   if (presents.length === 1) return 'Tu as un seul rendez-vous ' + quand + ' : « ' + presents[0].title + ' » ' + heure(presents[0]) + '. C’est celui-là ?';
   return 'Tu as ' + presents.length + ' rendez-vous ' + quand + ' : ' + presents.map(function (e) { return '« ' + e.title + ' » ' + heure(e); }).join(', ') + ' — lequel ?';
+}
+
+/**
+ * Charly repond a un deplacement sans bloc, en citant les rendez-vous du jour (« tu as deux rendez-vous
+ * mardi : Zorglub et banque, lequel ? ») : il en oublie ou en invente. La liste vient de l'agenda local.
+ * null si ce n'est pas un deplacement, si la reponse porte un bloc, si aucun jour de depart n'est cite,
+ * ou si la reponse ne parle pas de rendez-vous.
+ */
+function tcListeDuJourPourDeplacement(reply, texte, now, events, mode) {
+  const r = String(reply || '');
+  if (/\[AGENDA\]/.test(r) || !tcEstDeplacement(texte)) return null;
+  const jours = tcJoursCites(texte, now, true);
+  if (!jours.length) return null;
+  if (!/(lequel|laquelle|lesquels|rendez-vous|rdv)/i.test(r)) return null;
+  return tcQuestionRdvDuJour(jours, events, mode === 'pro' ? 'pro' : 'user');
+}
+
+/**
+ * « Reporte mon dentiste a jeudi » sans aucun dentiste dans l'agenda : le modele en inventait un. Avant
+ * de l'appeler, la page cherche le rendez-vous nomme dans les 14 prochains jours ; introuvable → on le
+ * dit, rien n'est fait. null si la phrase ne nomme rien (« mon rdv de mardi » : le jour suffit).
+ */
+function tcRdvNommeIntrouvable(texte, now, events, mode) {
+  if (!tcEstDeplacement(texte)) return null;
+  const CREUX = /^(reporte[rsz]?|repousse[rsz]?|avance[rsz]?|bouge[rsz]?|decale[rsz]?|deplace[rsz]?|remets?|mets?|change[rsz]?|modifie[rsz]?|plutot|meme|place|creneau|horaire|jour|jours|heure|heures|apres|avant|vers|pour|jusqu|prochain|prochaine|semaine|rendez|vous|demain|matin|soir|midi)$/;
+  const mots = tcMotsDeRdv(texte).filter(function (w) { return !CREUX.test(w); });
+  if (!mots.length) return null;
+  const ref = now ? new Date(now) : new Date();
+  const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const fin = new Date(jour0); fin.setDate(fin.getDate() + 14);
+  const debutStr = tcISO(jour0), finStr = tcISO(fin);
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  const trouve = (Array.isArray(events) ? events : []).some(function (e) {
+    return e && e.mode === evMode && e.title && tcEvenementFin(e) >= debutStr && e.date <= finStr && tcTitreContient(e.title, mots);
+  });
+  if (trouve) return null;
+  return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda des 14 prochains jours. Rien n’a été changé.';
+}
+
+/**
+ * La date en toutes lettres dans la prose de Charly est celle du bloc propose : « le mardi 15 octobre,
+ * c'est note » avec un bloc du 13 devient « le mardi 13 octobre » (campagne 6, 11/10). Seule une mention
+ * du MEME jour de la semaine est corrigee ; un bloc de plusieurs lignes est laisse tel quel.
+ */
+function tcAccorderProseAuBloc(reply) {
+  const r = String(reply || '');
+  const bloc = r.match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
+  if (!bloc) return reply;
+  const lignes = bloc[1].split('\n').filter(function (l) { return l.trim(); });
+  if (lignes.length !== 1) return reply;
+  const m = lignes[0].match(/^\s*(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return reply;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const jour = TC_JOURS_FR[d.getDay()], num = d.getDate(), mois = TC_MOIS_FR[d.getMonth()];
+  const re = /\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+(\d{1,2})(?:er)?(?![\dh:]|\s?h(?:eures?)?(?![a-zà-ÿ]))(?:\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre))?(\s+\d{4})?/gi;
+  const prose = r.replace(bloc[0], '\u0000').replace(re, function (tout, j, n, mo, an) {
+    if (j.toLowerCase() !== jour) return tout;
+    const moisOk = !mo || tcSansAccents(mo) === tcSansAccents(mois);
+    if (Number(n) === num && moisOk) return tout;
+    const cap = j.charAt(0) === j.charAt(0).toUpperCase() ? jour.charAt(0).toUpperCase() + jour.slice(1) : jour;
+    return cap + ' ' + num + ' ' + mois + (an ? ' ' + d.getFullYear() : '');
+  });
+  return prose.replace('\u0000', bloc[0]);
 }
 /** La phrase cite-t-elle plusieurs jours, ou un jour relatif a un autre (« la veille », « un rappel avant ») ? */
 function tcPlusieursDatesOuRelatif(texteSansAccents) {
@@ -12542,7 +12624,7 @@ function detecterSuppressionRdv(text) {
   // l'autre, la phrase partait au modèle, qui répondait « c'est fait »
   // sans rien pouvoir supprimer.
   if (!/\b(rdv|rendez-vous|rendez vous|agenda|journée|journee|semaine)\b/.test(t)
-      && !tcHeureDansTexte(t) && !tcPeriodeAgenda(t) && !tcMotDeLAgenda(t)) return null;
+      && !tcHeureDansTexte(t) && !tcPeriodeAgenda(t) && !tcPeriodeJourNomme(t) && !tcMotDeLAgenda(t)) return null;
   return true;
 }
 
@@ -12741,7 +12823,7 @@ async function tcGererSuppressionRdv(text) {
   } else if (/\bmatin\b/.test(t)) {
     candidats = candidats.filter(e => Number(e.startH) < 12);
   } else if (/apr[eè]s-?midi|aprem/.test(t)) {
-    candidats = candidats.filter(e => Number(e.startH) >= 12 && Number(e.startH) < 18);
+    candidats = candidats.filter(e => Number(e.startH) >= 12 && Number(e.startH) < 19);   // l apres-midi va jusqu a 19h (Charles, 11/10)
   } else if (/\bsoir\b|\bsoirée\b|\bsoiree\b/.test(t)) {
     candidats = candidats.filter(e => Number(e.startH) >= 18);
   }
@@ -12930,6 +13012,21 @@ function tcSupprimerRdvs(cible) {
   renderCharlyChat();
   if (currentPage === 'calendar') render();
   showToast('✅ Rendez-vous annulé' + (n>1?'s':''));
+}
+
+/** Plus de deux mots : une nouvelle demande, pas une reponse a la question qui attend. */
+function tcEstUneNouvelleDemande(text) {
+  return tcSansAccents(text).trim().split(/\s+/).length >= 3;
+}
+
+/**
+ * Une question attendait (annuler ? deplacer ? ajouter quand meme ?) et l'utilisateur demande autre
+ * chose : on abandonne la question, et Charly le dit en une ligne. Sans cela, le modele repondait
+ * aux deux a la fois, et un « non » plus tard tombait sur l'ancienne question (campagne 6, 11/10).
+ */
+function tcAbandonnerAttente(quoi) {
+  const libelle = { annulation: 'l’annulation', deplacement: 'le déplacement', 'déplacement': 'le déplacement', ajout: 'l’ajout', proposition: 'la proposition' }[quoi] || 'la question';
+  charlyIA.history.push({ role: 'assistant', content: 'D’accord, je laisse tomber ' + libelle + ' qui attendait. Je passe à ta nouvelle demande.' });
 }
 
 function tcAnnulerSuppressionRdv() {
@@ -13509,7 +13606,8 @@ async function charlySendMessage() {
   if (_tcDeplacementEnAttente) {
     if (await tcRepondreDeplacement(text)) return;
     // Ni « préviens-les » ni « déjà vu » : rien n'est déplacé, et le
-    // message suit son chemin habituel.
+    // message suit son chemin habituel, et on le dit (campagne 6, 11/10).
+    tcAbandonnerAttente('déplacement');
   }
   if (_tcSuppressionChoix) {
     const choisi = tcRdvDesigne(_tcSuppressionChoix, text);
@@ -13520,7 +13618,8 @@ async function charlySendMessage() {
       return;
     }
     // La réponse ne désigne aucun d'eux : la question tombe, rien n'est
-    // supprimé, le message suit son chemin habituel.
+    // supprimé, le message suit son chemin habituel, et on le dit (campagne 6, 11/10).
+    tcAbandonnerAttente('annulation');
   }
   if (_tcSuppressionEnAttente) {
     const reponse = tcReponseOuiNon(text);
@@ -13531,8 +13630,9 @@ async function charlySendMessage() {
       return;
     }
     // Autre chose qu'un oui ou un non : la question tombe, rien n'est
-    // supprimé, et le message suit son chemin habituel.
+    // supprimé, et le message suit son chemin habituel, et on le dit (campagne 6, 11/10).
     _tcSuppressionEnAttente = null;
+    tcAbandonnerAttente('annulation');
   }
 
   const activeKey = charlyIA.config.provider === 'anthropic'
@@ -13573,6 +13673,12 @@ async function charlySendMessage() {
           renderCharlyChat();
         }
         return;
+      }
+      // Autre chose qu'un oui ou un non : une nouvelle demande. Ce qui attendait est abandonne, et on
+      // le dit, sinon un « non » plus tard repondait a l'ancienne question (campagne 6, 11/10).
+      if (reponse === null && tcEstUneNouvelleDemande(text)) {
+        if (conflit) conflit._resolu = true; else proposition._validated = true;
+        tcAbandonnerAttente(conflit ? 'ajout' : 'proposition');
       }
     }
   }
@@ -13640,6 +13746,17 @@ async function charlySendMessage() {
   if (_consultation) {
     await tcGererConsultationAgenda(text, _consultation);
     return;
+  }
+
+  // === DÉPLACER UN RENDEZ-VOUS QUI N'EXISTE PAS : jamais laissé au modèle, qui l'inventait (campagne 6, 11/10) ===
+  {
+    const introuvable = tcRdvNommeIntrouvable(text, new Date(), events, mode);
+    if (introuvable) {
+      tcPousserMessageUtilisateur(text);
+      charlyIA.history.push({ role: 'assistant', content: introuvable });
+      renderCharlyChat();
+      return;
+    }
   }
 
   // === INTERCEPTION DEMANDE DE CRÉNEAU — proposés à partir des plages
@@ -13825,6 +13942,10 @@ async function charlySendMessage() {
     // un jour absent de la demande se demande, Charly ne le choisit pas.
     reply = tcIgnorerFauxConflit(reply, text, new Date(), events, mode) || reply;
     reply = tcQuestionJourManquant(reply, text, charlyIA.history.filter(m => m.role === 'user').slice(-3, -1).map(m => m.content), new Date()) || reply;
+    // Quand Charly liste les rendez-vous d'un jour pour un deplacement, la liste vient de l'agenda local ;
+    // et la date ecrite en toutes lettres est celle du bloc propose (campagne 6, 11/10).
+    reply = tcListeDuJourPourDeplacement(reply, text, new Date(), events, mode) || reply;
+    reply = tcAccorderProseAuBloc(reply);
 
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId});

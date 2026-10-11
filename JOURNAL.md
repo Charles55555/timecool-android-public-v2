@@ -1035,3 +1035,31 @@ mobile vers le nouvel appareil.
   (avant : son titre s'affichait, vide).
 - Suite `verif-menu-agendas` (renderMenu exécutée : ordre complet, rendu, sans agenda), dans verifier.sh ; rouge sur la page
   d'avant.
+
+## 11/10/2026 (session Codeur) — Charly parle faux quand il cite des rendez-vous
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Constats (campagnes 4 et 6) : « reporte mon dentiste à jeudi » → un dentiste inventé ; « supprime tout mardi après-midi »
+  partait au modèle (un jour de semaine seul n'était pas reconnu comme objet de la suppression), qui oubliait Formation ;
+  « mets le rdv de Paul vendredi » → « tu as déjà un rendez-vous avec Paul mardi à 10h » (inexistant) ; prose « mardi 15
+  octobre » avec un bloc du 13 ; « décale mon rdv de mardi » citait 2 rendez-vous sur 5 ; une nouvelle demande pendant
+  qu'une confirmation attendait mélangeait les deux, et « non » répondait à l'ancienne question.
+- `tcRdvNommeIntrouvable` (avant l'appel au modèle) : un déplacement qui nomme un rendez-vous absent des 14 prochains jours
+  → « Je ne trouve pas de rendez-vous « dentiste » dans ton agenda des 14 prochains jours. Rien n’a été changé. »
+- `tcQuestionRdvDuJour` (sorti de `tcDeplacementHorsJour`) : la liste « Tu as N rendez-vous mardi 13 octobre : … — lequel ? »
+  construite par la page ; `tcListeDuJourPourDeplacement` remplace la liste du modèle quand il répond sans bloc à un
+  déplacement avec jour de départ.
+- `tcAccorderProseAuBloc` : la date en toutes lettres (même jour de semaine) devient celle du bloc proposé (une ligne).
+- `tcIgnorerFauxConflit` sans heure dans la demande : la page dit l'agenda du jour demandé (« Vendredi 16 octobre 2026, tu as
+  : Revue budget 14h à 16h. » ou « … est libre ») et demande l'heure ; rien d'inventé.
+- `detecterSuppressionRdv` : un jour de semaine seul (`tcPeriodeJourNomme`) désigne l'objet ; après-midi = 12h-19h. La
+  confirmation existante (« Tu veux annuler ces 4 rendez-vous ? … Réponds « oui » ou « non » ») liste tout ; « non » →
+  « Annulation abandonnée, rien n'a été touché ».
+- `tcAbandonnerAttente` + `tcEstUneNouvelleDemande` : une demande (≥ 3 mots) pendant qu'une annulation, un déplacement, un
+  conflit ou une proposition attend → l'attente est close et Charly le dit (« D’accord, je laisse tomber l’annulation qui
+  attendait. Je passe à ta nouvelle demande. ») ; le modèle n'a plus deux questions ouvertes.
+- Suite `verif-charly-citations` (dimanche 11/10/2026 14h20, agenda de la campagne 6 ; `tcGererSuppressionRdv` exécutée avec
+  horloge fixe), dans verifier.sh ; 6 KO sur la page d'avant. `verif-charly-conflits` charge `tcQuestionRdvDuJour`.
+- Limites : la prose d'un vrai conflit mal nommé par le modèle n'est pas réécrite ; une question de suivi de 3 mots ou plus
+  (« et le lieu ? ») abandonne la proposition en attente (règle de Charles : la nouvelle demande prime).
