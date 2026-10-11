@@ -20500,8 +20500,11 @@ function tcConversationDuContact(contact) {
   }
   const nom = String(contact.name || '').trim().toLowerCase();
   if (!nom) return null;
+  // Le nom ne sert qu'a defaut de reference : un homonyme d'un AUTRE compte n'est pas cette personne,
+  // et le message partirait chez lui. Une conversation sans reference (locale) peut etre reprise.
   return toutes.find(function (c) {
-    return !c.isGroup && String(c.with || '').trim().toLowerCase() === nom;
+    if (c.isGroup || String(c.with || '').trim().toLowerCase() !== nom) return false;
+    return !ref || !c.reference || c.reference === ref;
   }) || null;
 }
 
@@ -20529,6 +20532,8 @@ function messageContact(contactId) {
     if (contact.referenceCompte) { conv.reference = contact.referenceCompte; conv.serveur = true; }
     messages[mode].push(conv);
   }
+  // Une ancienne conversation locale reprise pour un compte TimeCool : les messages suivants partent par le serveur.
+  if (contact.referenceCompte && !conv.reference) { conv.reference = contact.referenceCompte; conv.serveur = true; }
   if (conv.archived && !conv.serveur) conv.archived = false;
   saveMessagesToStorage();
 

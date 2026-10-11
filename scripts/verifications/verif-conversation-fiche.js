@@ -85,6 +85,16 @@ const avec = vm.runInContext('tcConversationsAffichables()', ctx).find((c) => /B
 verifie('un texte deja present dans la locale n est pas perdu', avec.thread.length === 3 && avec.thread[0].text === 'avant', avec.thread.length);
 verifie('une conversation sans lien avec le serveur n est pas touchee', (() => { stock = [serveurBasile()]; ctx.messages.user = [{ id: 9, with: 'Autre Personne', thread: [] }]; return vm.runInContext('tcConversationsAffichables()', ctx).length === 2; })());
 
+titre('1d bis. Un homonyme d un AUTRE compte n est pas cette personne');
+stock = [serveurBasile()]; ctx.messages.user = []; ctx.ouvertes = [];
+ctx.contactsList = [{ id: 'h1', name: 'Basile Cortot', referenceCompte: 'ref-B' }];
+ctx.messageContact('h1');
+verifie('fiche ref-B, le serveur ne connait que ref-A : on n ouvre PAS srv_ref-basile', ctx.ouvertes[0] !== 'srv_ref-basile', ctx.ouvertes[0]);
+verifie('une locale ref-B est creee (le message partira chez ref-B)', ctx.messages.user.length === 1 && ctx.messages.user[0].reference === 'ref-B' && ctx.messages.user[0].serveur === true);
+stock = []; ctx.messages.user = [{ id: 7, with: 'Basile Cortot', thread: [{ from: 'me', text: 'ancien', time: '08:00' }] }]; ctx.ouvertes = [];
+ctx.messageContact('h1');
+verifie('ancienne locale sans reference reprise : elle recoit la reference et passe par le serveur', ctx.ouvertes[0] === 7 && ctx.messages.user.length === 1 && ctx.messages.user[0].reference === 'ref-B' && ctx.messages.user[0].serveur === true && ctx.messages.user[0].thread.length === 1);
+
 titre('1e. Dans le code : l envoi rouvre la conversation du serveur, la fiche sait chercher');
 const envoi = fonction(page, 'sendConvMessage');
 verifie('apres envoi par le serveur, on rouvre srv_<reference> quand elle existe', /tcConversationParId\('srv_' \+ conv\.reference\)/.test(envoi));

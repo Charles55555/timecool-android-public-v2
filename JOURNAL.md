@@ -880,3 +880,4 @@ mobile vers le nouvel appareil.
   le nom, pas les coordonnées de l'autre. La référence de la fiche (cas normal d'un compte TimeCool) et le nom suffisent.
 - Piège vu en passant, non traité (hors mission) : `showAppAfterAuth()` est appelée (connexion Google « démo »,
   ~ligne 14836) mais n'est définie nulle part.
+- Correctif apres examen (homonyme) : le nom ne sert de repli que si la fiche n a pas de reference, ou si la conversation trouvee n en a pas ; une ancienne conversation locale reprise recoit la reference du compte et passe par le serveur. Reserve notee : une locale serveur:true vide ne s archive pas tant qu aucun message n est parti.
