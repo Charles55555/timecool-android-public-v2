@@ -11110,13 +11110,20 @@ function tcDateDemandee(texte, now) {
 function tcTitreDepuisDemande(texte) {
   const VIDES = /^(rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
   // Les apostrophes separent les mots : « aujourd'hui », « m'ajouter », « s'il te plait » (apostrophe droite ou typographique).
-  const mots = String(texte || '').replace(/[’']/g, ' ').split(/\s+/);
-  const gardes = mots.map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); }).filter(function (w) {
+  const mots = String(texte || '').replace(/[’']/g, ' ').split(/\s+/).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); });
+  const utile = mots.map(function (w) {
     const brut = tcSansAccents(w);
     if (!brut) return false;
+    if (/^\d/.test(brut)) return false;   // 15h, 10h30, 19, 2
     // Un mot compose (« mets-moi », « pourriez-vous ») est du remplissage si chacune de ses parties l est ;
     // « Jean-Pierre » ou « check-up » gardent leur trait d union.
     return !brut.split('-').every(function (p) { return !p || /^\d/.test(p) || VIDES.test(p); });
+  });
+  const gardes = [];
+  mots.forEach(function (w, i) {
+    if (utile[i]) gardes.push(w);
+    // « à » entre deux mots gardes, devant un nom propre : « déplacement à Lyon » (campagne 7, 11/10).
+    else if (/^[àa]$/i.test(w) && utile[i - 1] && utile[i + 1] && /^[A-ZÀ-Ý]/.test(mots[i + 1])) gardes.push('à');
   });
   if (!gardes.length) return '';
   const titre = gardes.join(' ').slice(0, 60);
@@ -11384,6 +11391,29 @@ function tcRdvNommeIntrouvable(texte, now, events, mode) {
   });
   if (trouve) return null;
   return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda à venir. Rien n’a été changé.';
+}
+
+/**
+ * Charly demande « c'est pour quoi ? » alors que la demande dit l'objet, le jour et l'heure (« ajoute un
+ * déplacement à Lyon jeudi 9h » : « déplacement » n'est pas un verbe). La page propose elle-meme, avec le
+ * titre de la demande. null si la question n'est pas celle-la, ou s'il manque l'objet, le jour ou l'heure.
+ */
+function tcRepondreObjetDonne(reply, texte, now) {
+  const r = String(reply || '');
+  if (/\[AGENDA\]/.test(r)) return null;
+  const rs = tcSansAccents(r).replace(/[’']/g, ' ');
+  if (!/(c est pour quoi|pour quoi faire|quel est l objet|quel titre|c est quoi comme rendez-vous|quel motif|pour quel motif)/.test(rs)) return null;
+  const t = tcSansAccents(texte);
+  // Le VERBE seulement : « un deplacement a Lyon » est l'objet, pas une action sur un rendez-vous.
+  if (/\b(deplac(e|er|es|ez|ons)|decal(e|er|es|ez)|repouss(e|er|es|ez)|report(e|er|es|ez)|avanc(e|er|es|ez)|annul(e|er|es|ez)|supprim(e|er|es|ez)|efface[rsz]?)\b/.test(t)) return null;
+  const titre = tcTitreDepuisDemande(texte);
+  const heure = tcHeureDansTexte(t);
+  const demande = tcDateDemandee(texte, now);
+  if (!titre || !heure || !demande || demande.invalide) return null;
+  const bloc = tcBlocAgendaDepuisAnnonce(texte, '', now, 1);
+  if (!bloc) return null;
+  const heureTxt = heure.h + 'h' + (heure.m ? String(heure.m).padStart(2, '0') : '');
+  return tcCorrigerPropositionsCharly(titre + ', ' + tcDateEnLettres(demande.date) + ' à ' + heureTxt + ' : je te propose ceci.' + bloc, texte, now);
 }
 
 /**
@@ -12506,7 +12536,8 @@ async function tcGererDemandeCreneau(text, intent) {
  * tcAgendaSnapshotPourIA).
  */
 function detecterConsultationAgenda(text) {
-  const t = text.toLowerCase().replace(/[\u2019\u2018\u00b4]/g, "'").trim();
+  // « est-ce que j ai quelque chose vendredi ? » : l'apostrophe manquante (clavier du telephone) rend « j'ai » (campagne 7, 11/10).
+  const t = text.toLowerCase().replace(/[\u2019\u2018\u00b4]/g, "'").replace(/\b(j|qu|d|l|n|s|c|m) (?=[aeiouyhéèêàâ])/g, "$1'").trim();
   // Une création/modification/suppression peut mentionner les mêmes mots de
   // période ("demain", "cette semaine") : jamais une consultation dans ce cas.
   if (/\b(ajoute|crée|cree|planifie|prends?[- ]?(un|moi)|réserve|reserve|annule|annuler|supprime|supprimer|efface|effacer|enlève|enleve|déplace|deplace|décale|decale|repousse|avance|reprogramme|note|noter|change|changer|modifie|modifier|remplace|reporte|bouge|mets|préviens|previens|prévenir|prevenir)\b/.test(t)) return null;
@@ -12533,7 +12564,7 @@ function detecterConsultationAgenda(text) {
   // création de RDV ("demain à 15h, dentiste", l'exemple donné à
   // l'utilisateur lui-même) : dans ce cas on laisse filer vers le LLM,
   // désormais ancré sur le vrai agenda (tcAgendaSnapshotPourIA).
-  if (periode && text.includes('?') && text.trim().split(/\s+/).length <= 6) {
+  if (periode && text.includes('?') && text.trim().split(/\s+/).length <= 8) {
     return { type: 'periode', periode };
   }
   return null;
@@ -12965,8 +12996,11 @@ async function tcMarcheArriere(text) {
   _tcMarcheArriere = null;
   const remis = [];
   if (m.type === 'suppression') {
-    m.rdvs.forEach(function (copie) {
+    m.rdvs.forEach(function (copie, i) {
       if (events.some(function (e) { return e.id === copie.id; })) return;
+      // Un identifiant NEUF : l'ancien est parti au serveur comme supprime, et la synchro effacait a
+      // nouveau le rendez-vous remis (campagne 7, 11/10 : « 3 rendez-vous remis », agenda vide).
+      copie.id = 'charly_ai_' + Date.now() + '_r' + i;
       events.push(copie);
       remis.push(copie);
     });
@@ -13955,6 +13989,7 @@ async function charlySendMessage() {
     reply = tcQuestionJourManquant(reply, text, charlyIA.history.filter(m => m.role === 'user').slice(-3, -1).map(m => m.content), new Date()) || reply;
     // Quand Charly liste les rendez-vous d'un jour pour un deplacement, la liste vient de l'agenda local ;
     // et la date ecrite en toutes lettres est celle du bloc propose (campagne 6, 11/10).
+    reply = tcRepondreObjetDonne(reply, text, new Date()) || reply;
     reply = tcListeDuJourPourDeplacement(reply, text, new Date(), events, mode) || reply;
     reply = tcAccorderProseAuBloc(reply);
 
@@ -16919,20 +16954,30 @@ function detectConflicts(newProposals) {
 }
 
 // Override validateAgendaProposalFromMsg pour ajouter la détection de conflits
+/**
+ * La proposition corrige-t-elle une proposition precedente (« non, pas a 10h », « decale-la ») ?
+ * On ne regarde que le message de l'utilisateur qui a provoque CETTE proposition, pas les trois
+ * derniers : « change mon mot de passe » deux messages plus tot faisait sauter la detection de
+ * conflit, et « rdv dentiste mardi 15h » se posait sur la formation (campagne 7, 11/10).
+ */
+function tcEstUneCorrection(msg) {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  let i = h.indexOf(msg);
+  if (i < 0) i = h.length;
+  let demande = null;
+  for (let k = i - 1; k >= 0; k--) { if (h[k] && h[k].role === 'user') { demande = h[k]; break; } }
+  if (!demande) return false;
+  const t = tcSansAccents(demande.content).replace(/[’']/g, ' ');
+  return /\b(deplace[rsz]?|decale[rsz]?|modifie[rsz]?|change[rsz]?|repousse[rsz]?|avance[rsz]?|trompee?|corrige[rsz]?|erreur)\b|\bpas a\b/.test(t);
+}
+
 const _origValidateAgendaProposalFromMsg = validateAgendaProposalFromMsg;
 validateAgendaProposalFromMsg = function(msg) {
   const proposals = extractAgendaProposals(msg.content);
   if (!proposals || !proposals.length) { showToast('Aucune proposition à valider'); return; }
 
-  // Détecter si c'est une modification (déplacer, changer, corriger...)
-  const lastUserMsgs = charlyIA.history.filter(m => m.role === 'user').slice(-3).map(m => m.content.toLowerCase());
-  const isModif = lastUserMsgs.some(t =>
-    t.includes('déplace') || t.includes('deplace') || t.includes('modifie') ||
-    t.includes('change') || t.includes('décale') || t.includes('decale') ||
-    t.includes('repousse') || t.includes('avance') || t.includes('trompé') ||
-    t.includes('trompe') || t.includes('corrige') || t.includes('pas à') ||
-    t.includes('pas a ') || t.includes('erreur')
-  );
+  // Une correction (« non, pas à 10h ») ou pas : seule la demande qui a provoqué CETTE proposition compte (campagne 7, 11/10).
+  const isModif = tcEstUneCorrection(msg);
 
   // Si modification : la fonction d'origine sait déjà supprimer, sur les
   // dates concernées, les événements créés par Charly IA (id préfixé

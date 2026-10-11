@@ -73,7 +73,7 @@ const D = (t) => ctx.tcDetecterMarcheArriere(t);
   verifie('le golf est supprime, et le message dit comment revenir en arriere', ctx.events.length === 2 && /est supprimé\. Pour revenir en arrière, dis-moi « remets-le »/.test(dernier().content), dernier().content);
   verifie('la suppression est en memoire', memoire() && memoire().type === 'suppression' && memoire().rdvs.length === 1 && memoire().rdvs[0].title === 'Partie de golf');
   await ctx.tcMarcheArriere('remets-le');
-  verifie('le golf est remis, tel qu il etait', ctx.events.length === 3 && ctx.events.some((e) => e.id === 'golf' && e.date === '2026-10-09' && e.startH === 14));
+  verifie('le golf est remis, tel qu il etait (avec un identifiant neuf : l ancien est supprime sur le serveur)', ctx.events.length === 3 && ctx.events.some((e) => e.title === 'Partie de golf' && e.id !== 'golf' && e.date === '2026-10-09' && e.startH === 14));
   verifie('Charly le dit', /C'est fait : « Partie de golf » est remis/.test(dernier().content) && /2026-10-09 14h à 16h/.test(dernier().content), dernier().content);
   verifie('enregistre, trace, memoire videe', trace.saves === 2 && trace.demarches.length === 2 && memoire() === null);
   await ctx.tcMarcheArriere('remets-le');

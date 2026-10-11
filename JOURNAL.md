@@ -1074,3 +1074,25 @@ mobile vers le nouvel appareil.
   décaler, repousses, reporte, avancez, reprogramme…) : « un déplacement à Lyon », « un reportage photo » sont des noms
   d'événements et passent ; une question (« quels sont mes déplacements ? ») ne déclenche rien. `tcEstDeplacement` est
   inchangée (elle sert ailleurs).
+
+## 12/10/2026 (session Codeur) — Charly, campagne 7 : conflit sauté, consultation fausse, objet donné, « remets-les »
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Conflit (régression apparente, cause ancienne) : à la validation d'une proposition, la détection de conflit était sautée dès
+  que l'un des TROIS derniers messages contenait « change », « avance », « pas à »… ; « change mon mot de passe » deux
+  messages avant « rdv dentiste mardi 15h » posait le dentiste sur la formation sans alerte. `tcEstUneCorrection(msg)` :
+  seul le message qui a provoqué CETTE proposition compte, avec fins de mots. Rien de changé entre 787c0e4 et 75e0d8e sur
+  ce chemin : c'est l'enchaînement des messages des Testeurs qui l'a révélé.
+- Consultation : « est-ce que j ai quelque chose vendredi ? » (apostrophe manquante) n'était pas reconnue et partait au
+  modèle, qui répondait « libre ». `detecterConsultationAgenda` rétablit l'apostrophe (« j ai » → « j'ai »…) et accepte une
+  question de 8 mots ; la réponse (liste exacte) était déjà construite par la page (`tcGererConsultationAgenda`).
+- Objet donné : « ajoute un déplacement à Lyon jeudi 9h » → le modèle demandait « c'est pour quoi ? ». `tcRepondreObjetDonne`
+  : si la demande a l'objet, le jour et l'heure, la page propose elle-même (« Déplacement à Lyon, jeudi 15 octobre 2026 à
+  9h : je te propose ceci. » + bloc). `tcTitreDepuisDemande` garde « à » devant un nom propre.
+- « Remets-les » : les rendez-vous remis reprenaient leur ancien identifiant, déjà envoyé au serveur comme supprimé : la
+  synchro les effaçait à nouveau (« 3 rendez-vous remis », agenda vide). Ils reçoivent un identifiant neuf
+  (`charly_ai_<horodatage>_rN`), mêmes dates, heures, titres.
+- Suite `verif-charly-campagne7` (dimanche 11/10/2026 14h20, agenda campagne 7 ; `detectConflicts`, `tcGererConsultationAgenda`
+  et `tcMarcheArriere` exécutées), dans verifier.sh ; rouge sur la page d'avant. verif-charly-dates / conflits / citations
+  restent vertes.
