@@ -1017,3 +1017,9 @@ mobile vers le nouvel appareil.
   supprimé apparaît désormais comme « journée libre » (assertion adaptée : plus de 11h-13h ce jour-là).
 - Non fait : créneaux libres dans l'agenda transmis (ils ne l'étaient pas avant) ; la prose du modèle n'est pas réécrite quand
   le conflit est réel mais mal nommé (« Zorglub » pour la formation) : l'agenda jour par jour doit l'en empêcher.
+- Correctif après examen : `tcJoursCites(texte, now, departSeulement)` ignore un jour qui suit « à / vers / pour / sur / au /
+  en / jusqu'à » (une destination) ; `tcDeplacementHorsJour` ne vérifie que les jours de départ (« décale Zorglub à mardi »
+  passe, le titre fait foi). Les événements sur plusieurs jours (`dateFin`, `tcEvenementCouvre`) comptent chaque jour qu'ils
+  couvrent : agenda jour par jour (« Séminaire (du … au …) »), conflit local, déplacement. Deux demandes dans un message
+  (plus d'un jour cité) : `tcIgnorerFauxConflit` ne réécrit rien. Réserve notée : `tcAnnonceUnConflit` est large (« pas de
+  conflit » compris), sans effet car l'agenda local est vérifié ensuite.

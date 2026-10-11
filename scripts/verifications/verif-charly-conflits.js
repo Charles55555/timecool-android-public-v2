@@ -38,7 +38,7 @@ const AGENDA = [
 const ctx = { console, Number, String, Date, RegExp, Array, Object, Math, events: AGENDA.map((e) => Object.assign({}, e)), mode: 'user' };
 vm.createContext(ctx);
 ['const TC_JOURS_FR = [^;]*;', 'const TC_MOIS_FR = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
-['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcHeureDansTexte', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcBlocAgendaDepuisAnnonce',
+['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHeureDansTexte', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcBlocAgendaDepuisAnnonce',
   'tcPlusieursDatesOuRelatif', 'tcCorrigerPropositionsCharly', 'tcAgendaSnapshotPourIA', 'tcJoursCites', 'tcAnnonceUnConflit', 'tcIgnorerFauxConflit',
   'tcQuestionJourManquant', 'tcDeplacementHorsJour', 'tcFormaterDateHumaine', 'tcFormaterHeure']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
@@ -64,6 +64,30 @@ verifie('« Décale mon rdv de mardi à 16h » → mardi 13', J('Décale mon rdv
 verifie('« déplacer … pour demain pour après-demain » → lundi 12 ET mardi 13', J('les déplacer en fait pour demain pour après-demain à la même heure') === '2026-10-12,2026-10-13', J('les déplacer en fait pour demain pour après-demain à la même heure'));
 verifie('« lundi 19 à 11h » → le 19 ; « le 20 … le 19 » → 20 et 19 ; « 25 décembre » ; « 19/10 »', J('notaire lundi 19 à 11h') === '2026-10-19' && J("le 20 j'ai une réunion, bloque le 19 à 9h") === '2026-10-20,2026-10-19' && J('rdv le 25 décembre à 20h') === '2026-12-25' && J('le 19/10 à 11h') === '2026-10-19');
 verifie('« mardi 15 heures » : un seul jour, mardi 13 ; « appel avec Paul 14h » : aucun', J('mardi 15 heures') === '2026-10-13' && J('appel téléphonique avec Paul 14h') === '');
+const JD = (x) => ctx.tcJoursCites(x, NOW, true).join(',');
+verifie('jours de DEPART seulement : « décale Zorglub à mardi 16h » → aucun (mardi est la destination)', JD('décale Zorglub à mardi 16h') === '', JD('décale Zorglub à mardi 16h'));
+verifie('« repousse mon rdv de jeudi à vendredi » → jeudi seulement', JD('repousse mon rdv de jeudi à vendredi') === '2026-10-15', JD('repousse mon rdv de jeudi à vendredi'));
+verifie('« reporte mon dentiste à jeudi », « déplace-le pour lundi », « vers mardi », « jusqu’à vendredi » → aucun', JD('reporte mon dentiste à jeudi') === '' && JD('déplace-le pour lundi') === '' && JD('mets-le vers mardi') === '' && JD('décale jusqu’à vendredi') === '');
+verifie('« décale mon rdv de lundi à mardi » → lundi (départ), pas mardi', JD('décale mon rdv de lundi à mardi') === '2026-10-12', JD('décale mon rdv de lundi à mardi'));
+
+titre('2b. Un evenement sur plusieurs jours (dateFin) compte chaque jour');
+{
+  const avec = AGENDA.map((e) => Object.assign({}, e));
+  avec.push(Object.assign(ev('s1', '2026-10-12', 9, 0, 17, 0, 'Séminaire'), { dateFin: '2026-10-14' }));
+  avec.push(Object.assign(ev('s2', '2026-10-09', 8, 0, 18, 0, 'Salon'), { dateFin: '2026-10-11' }));
+  ctx.events = avec;
+  const ag2 = ctx.tcAgendaSnapshotPourIA(NOW);
+  const l2 = ag2.split('\n').filter((l) => /^• /.test(l));
+  verifie('le seminaire du 12 au 14 est ecrit lundi, mardi ET mercredi (plus de « journee libre » a tort)', /Séminaire \(du 2026-10-12 au 2026-10-14\)/.test(l2[1]) && /Séminaire/.test(l2[2]) && /Séminaire/.test(l2[3]) && !/journée libre/.test(l2[2]), l2[2]);
+  verifie('un salon commence avant la fenetre et finit aujourd hui : ecrit aujourd hui, pas dans « hors de ces jours »', /Salon \(du 2026-10-09 au 2026-10-11\)/.test(l2[0]) && !/HORS DE CES JOURS[^\n]*\n[^\n]*Salon/.test(ag2), l2[0]);
+  const fs1 = ctx.tcIgnorerFauxConflit('Tu as déjà le séminaire mardi à 10h.', 'rdv Dr. Martin mardi 10h', NOW, ctx.events, 'user');
+  verifie('conflit local : le seminaire couvre mardi 10h → vrai conflit, la reponse reste', fs1 === null, fs1);
+  const sem = ctx.events.find((e) => e.id === 's1');
+  verifie('deplacement : « mon rdv de mardi » peut viser le seminaire (il couvre mardi) → null', ctx.tcDeplacementHorsJour([{ ev: sem, p: {} }], 'décale mon rdv de mardi à 16h', NOW, ctx.events, 'user') === null);
+  const q4 = ctx.tcDeplacementHorsJour([{ ev: ctx.events.find((e) => e.id === 'a6'), p: {} }], 'décale mon rdv de mercredi à 16h', NOW, ctx.events, 'user');
+  verifie('« mon rdv de mercredi » mais Charly vise le notaire : la question liste le seminaire (present mercredi)', !!q4 && /Séminaire/.test(q4), q4);
+  ctx.events = AGENDA.map((e) => Object.assign({}, e));
+}
 
 titre('3. Un conflit annonce qui n existe pas est ignore (on propose le creneau)');
 const FC = (r, u) => ctx.tcIgnorerFauxConflit(r, u, NOW, ctx.events, 'user');
@@ -82,6 +106,7 @@ verifie('une reponse sans annonce de conflit : rien', FC('Quel jour exactement ?
 verifie('une reponse avec un bloc : rien (le filet de la mission 4 s en occupe)', FC('Déjà pris, mais voici :\n[AGENDA]\n2026-10-13 | 16:00-17:00 | Dentiste | sante\n[/AGENDA]', 'rdv dentiste mardi 15h') === null);
 verifie('sans jour ou sans heure dans la demande : rien', FC('Tu as déjà un rendez-vous.', 'rdv dentiste 15h') === null && FC('Tu as déjà un rendez-vous.', 'rdv dentiste mardi') === null);
 verifie('un deplacement ou une annulation : rien', FC('Mardi 16h est déjà pris.', 'Décale mon rdv de mardi à 16h') === null);
+verifie('deux demandes (« dentiste demain 10h et coach jeudi 14h ») : le conflit de jeudi est vrai, on ne reecrit rien', FC('Jeudi à 14h, tu as déjà un rendez-vous avec Estelle.', 'ajoute dentiste demain à 10h et coach jeudi à 14h') === null);
 verifie('creneau libre mais passe (aujourd hui 10h) : refus calme du filet, proposition demain', /déjà passé/.test(FC('Aujourd’hui à 10h tu as déjà un rendez-vous.', 'rdv aujourd hui 10h avec le plombier') || ''));
 verifie('charlySendMessage applique ce garde-fou apres le filet', /reply = tcIgnorerFauxConflit\(reply, text, new Date\(\), events, mode\) \|\| reply;/.test(fonction(page, 'charlySendMessage') || ''));
 
@@ -97,6 +122,8 @@ const banque = ctx.events.find((e) => e.id === 'a4');
 verifie('le rendez-vous vise est bien mardi → null (le deplacement se fait)', D([{ ev: banque, p: { date: '2026-10-13', startH: 16, startM: 0, endH: 17, endM: 0 } }], 'Décale mon rdv de mardi à 16h') === null);
 verifie('« demain → après-demain » avec des rdv de lundi → null (les deux jours sont cites)', D([{ ev: zorglub, p: {} }], 'déplace mes rendez-vous de demain à après-demain') === null);
 verifie('aucun jour dans la demande (« décale Zorglub à 16h ») → null (on fait confiance au titre)', D([{ ev: zorglub, p: {} }], 'décale le rdv Zorglub à 16h') === null);
+verifie('« décale Zorglub à mardi 16h » : mardi est la DESTINATION, le titre fait foi → null (examinateur)', D([{ ev: zorglub, p: { date: '2026-10-13', startH: 16, startM: 0, endH: 17, endM: 0 } }], 'décale Zorglub à mardi 16h') === null);
+verifie('« reporte mon dentiste à jeudi » (dentiste aujourd hui) → null', D([{ ev: ev('d1', '2026-10-11', 16, 0, 17, 0, 'Dentiste'), p: {} }], 'reporte mon dentiste à jeudi') === null);
 const q3 = D([{ ev: zorglub, p: {} }], 'repousse mon rdv de lundi 19 à 14h');
 verifie('« lundi 19 » (un seul rdv ce jour-la : le notaire) → « un seul rendez-vous … c est celui-la ? »', !!q3 && /Tu as un seul rendez-vous lundi 19 octobre : « Notaire » 11h\. C’est celui-là \?/.test(q3), q3);
 const td = fonction(page, 'tcTraiterDeplacement') || '';

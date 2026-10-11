@@ -11197,8 +11197,10 @@ function tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, now, nbJours) {
  * Tous les jours que cite une phrase, dans l'ordre du texte, en ISO, resolus a partir de `now` :
  * « demain », « après-demain », « dans 2 jours », « mardi », « mardi prochain », « lundi 19 », « le 19 »,
  * « 25 décembre », « 19/10 ». Sert aux garde-fous : « mon rdv de mardi » doit viser un rendez-vous de mardi.
+ * `departSeulement` : ignore un jour qui suit « à / vers / pour / sur / au / en / jusqu'à » — c'est une destination
+ * (« décale Zorglub à mardi »), pas le jour du rendez-vous.
  */
-function tcJoursCites(texte, now) {
+function tcJoursCites(texte, now, departSeulement) {
   const t = ' ' + tcSansAccents(texte).replace(/[’']/g, ' ').replace(/\s+/g, ' ') + ' ';
   const ref = now ? new Date(now) : new Date();
   const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
@@ -11218,6 +11220,7 @@ function tcJoursCites(texte, now) {
   let m;
   while ((m = re.exec(t))) {
     const a = m[1];
+    if (departSeulement && /(?:^| )(a|vers|pour|sur|au|en|jusqu a) $/.test(t.slice(0, m.index + 1))) continue;
     if (/^(aujourd|ce soir|ce matin|cet apres)/.test(a)) ajoute(jour0);
     else if (/^apres/.test(a)) ajoute(plus(2));
     else if (a === 'demain') ajoute(plus(1));
@@ -11251,6 +11254,8 @@ function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
   if (/\[AGENDA\]/.test(r) || !tcAnnonceUnConflit(r)) return null;
   const t = tcSansAccents(texte);
   if (/\b(deplac|decal|repouss|report|avanc|boug|chang|modif|remplac|annul|supprim|efface)/.test(t)) return null;
+  // Deux demandes (« dentiste demain 10h et coach jeudi 14h ») : le conflit peut porter sur la seconde, on ne touche a rien.
+  if (tcJoursCites(texte, now).length > 1 || tcPlusieursDatesOuRelatif(t)) return null;
   const demande = tcDateDemandee(texte, now);
   const heure = tcHeureDansTexte(t);
   if (!demande || demande.invalide || !heure) return null;
@@ -11258,7 +11263,7 @@ function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
   const debut = heure.h * 60 + (heure.m || 0), fin = debut + 60;
   const evMode = mode === 'pro' ? 'pro' : 'user';
   const occupe = (Array.isArray(events) ? events : []).some(function (e) {
-    return e && e.date === dateStr && e.mode === evMode && !e.allDay
+    return e && e.mode === evMode && tcEvenementCouvre(e, dateStr) && !e.allDay
       && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
   });
   if (occupe) return null;
@@ -11296,11 +11301,12 @@ function tcQuestionJourManquant(reply, texte, precedents, now) {
  * la demande ne nomme aucun jour.
  */
 function tcDeplacementHorsJour(liste, texte, now, eventsAll, evMode) {
-  const jours = tcJoursCites(texte, now);
+  // Les jours de depart seulement : « decale Zorglub a mardi » cite une destination, le titre fait foi.
+  const jours = tcJoursCites(texte, now, true);
   if (!jours.length) return null;
-  const hors = (liste || []).filter(function (x) { return x && x.ev && jours.indexOf(x.ev.date) < 0; });
+  const hors = (liste || []).filter(function (x) { return x && x.ev && !jours.some(function (j) { return tcEvenementCouvre(x.ev, j); }); });
   if (!hors.length) return null;
-  const presents = (Array.isArray(eventsAll) ? eventsAll : []).filter(function (e) { return e && e.mode === evMode && jours.indexOf(e.date) > -1; })
+  const presents = (Array.isArray(eventsAll) ? eventsAll : []).filter(function (e) { return e && e.mode === evMode && jours.some(function (j) { return tcEvenementCouvre(e, j); }); })
     .sort(function (a, b) { return (a.date + String(a.startH).padStart(2, '0') + String(a.startM).padStart(2, '0')) < (b.date + String(b.startH).padStart(2, '0') + String(b.startM).padStart(2, '0')) ? -1 : 1; });
   const minuscule = function (x) { x = String(x || ''); return x.charAt(0).toLowerCase() + x.slice(1); };
   const heure = function (e) { return Number(e.startH) + 'h' + (Number(e.startM) ? String(e.startM).padStart(2, '0') : ''); };
@@ -13144,17 +13150,17 @@ function tcAgendaSnapshotPourIA(now) {
     return e.allDay ? '(journée entière)' : `${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')}-${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}`;
   };
 
-  const evs = events.filter(e => e.mode === mode && e.date >= hierStr && e.date <= finStr).sort(tcComparerEvenements);
-  const parJour = {};
-  evs.forEach(e => { (parJour[e.date] = parJour[e.date] || []).push(e); });
+  // Un evenement sur plusieurs jours (dateFin) compte chaque jour qu il couvre.
+  const evs = events.filter(e => e.mode === mode && e.date <= finStr && tcEvenementFin(e) >= hierStr).sort(tcComparerEvenements);
   const lignesJours = [];
   for (let i = 0; i <= 14; i++) {
     const d = plus(i), k = tcISO(d);
-    const contenu = (parJour[k] || []).map(e => horaire(e) + ' ' + e.title).join(' ; ');
+    const contenu = evs.filter(e => tcEvenementCouvre(e, k))
+      .map(e => horaire(e) + ' ' + e.title + (tcEvenementFin(e) !== e.date ? ' (du ' + e.date + ' au ' + tcEvenementFin(e) + ')' : '')).join(' ; ');
     lignesJours.push('• ' + jours[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0')
       + ' (' + k + (i === 0 ? ', aujourd’hui' : (i === 1 ? ', demain' : '')) + ') : ' + (contenu || 'rien, journée libre'));
   }
-  const autres = evs.filter(e => e.date < tcISO(jour0) || e.date > finFenetre);
+  const autres = evs.filter(e => tcEvenementFin(e) < tcISO(jour0) || e.date > finFenetre);
   const MAX = 200;
   const tronque = autres.length > MAX;
   const listeAutres = autres.slice(0, MAX).map(e => {

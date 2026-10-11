@@ -46,7 +46,7 @@ const ctx = {
   charlyIA: { history: [] }
 };
 vm.createContext(ctx);
-['tcISO', 'tcComparerEvenements', 'tcHistoriquePourIA', 'tcAgendaSnapshotPourIA'].forEach((n) => {
+['tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHistoriquePourIA', 'tcAgendaSnapshotPourIA'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
