@@ -950,3 +950,34 @@ mobile vers le nouvel appareil.
   `elementFromPoint` au centre du toast = toast (visible et disparu), rechargement → accueil `block` ; nouvelle page = le
   bouton dessous, et après une VRAIE inscription (compte jetable e2erdv.sonde…, origine `null` autorisée) le rechargement
   ouvre l'agenda (accueil `none`, en-tête visible, page-calendar, avatar DS). Comptes sonde créés : 52FPTM2G6MRR, G7ZNJQVZA9M9.
+
+## 11/10/2026 (session Codeur) — Charly : dates relatives résolues par la page, titres gardés
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Constat (campagne 4) : Charly ne recevait qu'« aujourd'hui » et « demain » et calculait les autres dates de tête
+  (« mardi » → le 15, « lundi 19 » → « jour passé »). Pire : quand il disait « je vais ajouter » sans bloc [AGENDA], la page
+  fabriquait le rendez-vous elle-même À LA DATE DU JOUR avec le titre « Activité » (cas 25, 33, 34 : plombier à 10h passé,
+  « dans 2 jours » aujourd'hui, « mercredi prochain » dimanche).
+- `tcDateDemandee(texte, now)` : la date que dit une phrase, résolue à partir de la vraie date du jour (injectable) :
+  aujourd'hui / ce soir, demain, après-demain, dans N jours ou semaines (« ds » compris), jour de la semaine seul (le prochain,
+  aujourd'hui compris) ou « prochain » (+7 si c'est le même jour), « lundi 19 » (le prochain 19, de préférence un lundi),
+  « le 25 décembre » (l'an prochain si passé), « 19/10 », ISO, « le 19 » seul ; « 31 février » → invalide. Jamais passée.
+- `tcTitreDepuisDemande(texte)` : la demande sans ses mots de date, d'heure et de remplissage (« rdv », « mets-moi »,
+  « pourriez-vous m'ajouter », « chez le », « je vous prie »…) → « Dentiste », « Notaire », « Coach », « Plombier » ; vide
+  si rien.
+- `tcContexteDatePourIA(now)` : un seul contexte pour la conversation et l'analyse de fichier (variable `dateContext`
+  conservée, verif-cache-prompt inchangée) : date et heure exactes, calendrier des 14 prochains jours (jour → date), règles
+  (lire la table, jamais de date passée, heure passée aujourd'hui → le dire et proposer, titre = mot-clé, « Activité » seulement
+  si rien), format [AGENDA].
+- `tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, now, nbJours)` : le bloc de secours, extrait de charlySendMessage,
+  à la date et au titre de la demande (les devinettes sur la question de Charly — enfants, médicaments… — restent en repli).
+- `tcCorrigerPropositionsCharly(reply, texte, now)` : filet sur une proposition UNIQUE : la ligne [AGENDA] prend la date que
+  dit la demande (si différente), « Activité » devient le titre de la demande, et une date-heure déjà passée devient un refus
+  calme + proposition du lendemain à la même heure (bloc [AGENDA] à valider). Rien n'est touché pour un déplacement, une
+  annulation, plusieurs lignes, ou sans bloc. Le texte en prose du modèle n'est pas réécrit (le calendrier doit l'empêcher
+  de se tromper ; s'il se trompe encore, la date créée est juste, le texte peut dire autre chose).
+- Suite `verif-charly-dates` (date fixée : dimanche 11/10/2026 14h20 ; les six phrases + variantes, le titre, le contexte,
+  le bloc de secours, le filet), dans verifier.sh ; 8 KO sur la page d'avant. Pas de sonde Chrome : tout est exécuté en
+  fonctions pures ; le modèle lui-même n'est pas rejoué (clé OpenAI du compte).
+- Rien d'autre ne change à l'écran. `parseFrenchDateFromText` (trois usages ailleurs) est laissé tel quel.

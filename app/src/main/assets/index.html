@@ -11022,6 +11022,212 @@ function parseFrenchDateFromText(text) {
   return null;
 }
 
+// ═══ Dates demandées à Charly : résolues par la page sur le calendrier, jamais dans le passé (campagne 4, 11/10) ═══
+const TC_JOURS_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const TC_MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+/** « lundi 12 octobre 2026 ». */
+function tcDateEnLettres(d) {
+  return TC_JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + TC_MOIS_FR[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+/**
+ * La date que demande une phrase, resolue a partir de `now` (la vraie date du jour, injectable
+ * pour les suites) : « mardi », « mardi prochain », « demain », « dans 2 jours », « lundi 19 »,
+ * « le 25 décembre », « 19/10 ». Un jour de la semaine seul est le prochain (aujourd'hui compris) ;
+ * « prochain » un jour de la semaine identique a aujourd'hui = dans 7 jours ; un numero de jour est
+ * le prochain a venir. Jamais une date passee.
+ *
+ * @returns {{date: Date, libelle: string}|{invalide: true}|null} null si la phrase ne dit aucun jour.
+ */
+function tcDateDemandee(texte, now) {
+  const t = ' ' + tcSansAccents(texte).replace(/[’']/g, ' ').replace(/\s+/g, ' ') + ' ';
+  const ref = now ? new Date(now) : new Date();
+  const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const plus = function (n) { const d = new Date(jour0); d.setDate(d.getDate() + n); return d; };
+  const valide = function (y, m, d) { const x = new Date(y, m, d); return (x.getFullYear() === y && x.getMonth() === m && x.getDate() === d) ? x : null; };
+  const MOIS = { janvier: 0, janv: 0, fevrier: 1, fevr: 1, fev: 1, mars: 2, avril: 3, avr: 3, mai: 4, juin: 5, juillet: 6, juil: 6, aout: 7, septembre: 8, sept: 8, octobre: 9, oct: 9, novembre: 10, nov: 10, decembre: 11, dec: 11 };
+  const JOURS = { dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6 };
+  let m;
+  if (/ aujourd ?hui | ce jour | ce soir | ce matin | cet apres[- ]midi | cette apres[- ]midi /.test(t)) return { date: jour0, libelle: 'aujourd’hui' };
+  if (/ apres[- ]?demain /.test(t)) return { date: plus(2), libelle: 'après-demain' };
+  if (/ demain /.test(t)) return { date: plus(1), libelle: 'demain' };
+  if ((m = t.match(/ (?:dans|ds|d ici) (\d{1,2}) (jours?|semaines?) /))) {
+    const n = Number(m[1]);
+    return { date: plus(/sem/.test(m[2]) ? n * 7 : n), libelle: 'dans ' + n + ' ' + m[2] };
+  }
+  // « le 25 décembre », « 19 octobre 2026 », « 31 février » (n'existe pas)
+  if ((m = t.match(/ (\d{1,2})(?:er)? (janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)\.? ?(\d{4})? /))) {
+    const dd = Number(m[1]), mm = MOIS[m[2]];
+    const y = m[3] ? Number(m[3]) : ref.getFullYear();
+    let d = valide(y, mm, dd);
+    if (!d) return { invalide: true };
+    if (!m[3] && d < jour0) d = valide(y + 1, mm, dd) || d;
+    return { date: d, libelle: 'le ' + dd + ' ' + TC_MOIS_FR[mm] };
+  }
+  // « 19/10 », « 19/10/2026 »
+  if ((m = t.match(/ (\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{4}))? /))) {
+    const dd = Number(m[1]), mm = Number(m[2]) - 1;
+    const y = m[3] ? Number(m[3]) : ref.getFullYear();
+    let d = valide(y, mm, dd);
+    if (!d) return { invalide: true };
+    if (!m[3] && d < jour0) d = valide(y + 1, mm, dd) || d;
+    return { date: d, libelle: 'le ' + dd + '/' + (mm + 1) };
+  }
+  // « 2026-10-19 »
+  if ((m = t.match(/ (\d{4})-(\d{2})-(\d{2}) /))) {
+    const d = valide(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return d ? { date: d, libelle: m[0].trim() } : { invalide: true };
+  }
+  // « mardi », « mardi prochain », « ce mardi », « lundi 19 » (jamais « mardi 15h » : 15 est une heure)
+  if ((m = t.match(/ (?:ce |le )?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochaine?| qui vient)?(?: (\d{1,2})(?![\dh:]))? /))) {
+    const idx = JOURS[m[1]], prochain = !!m[2], num = m[3] ? Number(m[3]) : 0;
+    if (num >= 1 && num <= 31) {
+      // Le prochain jour du mois portant ce numero, de preference tombant ce jour-la.
+      for (let i = 0; i < 62; i++) { const d = plus(i); if (d.getDate() === num && d.getDay() === idx) return { date: d, libelle: m[1] + ' ' + num }; }
+      for (let i = 0; i < 62; i++) { const d = plus(i); if (d.getDate() === num) return { date: d, libelle: m[1] + ' ' + num }; }
+    }
+    let diff = (idx - jour0.getDay() + 7) % 7;
+    if (diff === 0 && prochain) diff = 7;
+    return { date: plus(diff), libelle: m[1] + (prochain ? ' prochain' : '') };
+  }
+  // « le 19 » seul
+  if ((m = t.match(/ le (\d{1,2})(?![\dh:\/-]) /))) {
+    const num = Number(m[1]);
+    for (let i = 0; i < 62; i++) { const d = plus(i); if (d.getDate() === num) return { date: d, libelle: 'le ' + num }; }
+  }
+  return null;
+}
+
+/**
+ * Le titre que dit une demande, une fois retires les mots de la date, de l'heure et du remplissage :
+ * « rdv dentiste mardi 15h » → « Dentiste », « mercredi prochain 10h30 coach » → « Coach »,
+ * « rdv aujourd hui 10h avec le plombier » → « Plombier ». Vide si la demande ne dit vraiment rien.
+ */
+function tcTitreDepuisDemande(texte) {
+  const VIDES = /^(rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|il|te|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
+  const mots = String(texte || '').split(/\s+/);
+  const gardes = mots.filter(function (w) {
+    const brut = tcSansAccents(w).replace(/[’]/g, "'").replace(/^[^a-z0-9']+|[^a-z0-9']+$/g, '');
+    const sansElision = brut.replace(/^(m|t|l|d|qu|n|s|j|c)'/, '');
+    if (!sansElision) return false;
+    if (/^\d/.test(sansElision)) return false;   // 15h, 10h30, 19, 2
+    return !VIDES.test(brut) && !VIDES.test(sansElision);
+  }).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, '').replace(/^(m|t|l|d|qu|n|s|j|c)[’']/i, ''); }).filter(Boolean);
+  if (!gardes.length) return '';
+  const titre = gardes.join(' ').slice(0, 60);
+  return titre.charAt(0).toUpperCase() + titre.slice(1);
+}
+
+/**
+ * Le contexte de date envoye a Charly : la date et l'heure exactes, le calendrier des 14 prochains
+ * jours (jour de la semaine → date), et les regles. Le modele ne calcule plus les dates de tete :
+ * il lit la table. Partage par la conversation et l'analyse d'un fichier.
+ */
+function tcContexteDatePourIA(now) {
+  const ref = now ? new Date(now) : new Date();
+  const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const plus = function (n) { const d = new Date(jour0); d.setDate(d.getDate() + n); return d; };
+  const demain = plus(1);
+  const hh = String(ref.getHours()).padStart(2, '0') + 'h' + String(ref.getMinutes()).padStart(2, '0');
+  const lignes = [];
+  for (let i = 1; i <= 14; i++) {
+    const d = plus(i);
+    lignes.push('- ' + tcDateEnLettres(d) + ' → ' + tcISO(d) + (i === 1 ? ' (demain)' : (i === 2 ? ' (après-demain)' : '')));
+  }
+  return '═══════════════════════════════════════\n'
+    + 'INFORMATIONS TEMPORELLES CRITIQUES (À RESPECTER ABSOLUMENT)\n'
+    + '═══════════════════════════════════════\n\n'
+    + '📅 Aujourd’hui : ' + tcDateEnLettres(jour0) + ' (' + tcISO(jour0) + ')\n'
+    + '🕐 Heure actuelle : ' + hh + '\n\n'
+    + '📆 CALENDRIER DES 14 PROCHAINS JOURS (la seule table jour → date) :\n'
+    + lignes.join('\n') + '\n\n'
+    + '⚠️ RÈGLES STRICTES :\n'
+    + '- Toute date relative se lit dans ce calendrier, JAMAIS de tête : "mardi" = le prochain mardi de la liste ; "mardi prochain" = le même ; "demain" = ' + tcISO(demain) + ' ; "dans N jours" = aujourd’hui + N ; "lundi 19" = le 19 de la liste.\n'
+    + '- Une date de ce calendrier n’est JAMAIS passée. Une date demandée est toujours à venir : si un jour du mois est déjà passé ce mois-ci, c’est le mois suivant.\n'
+    + '- Une heure déjà passée aujourd’hui (avant ' + hh + ') : dis-le calmement, ne crée rien, et propose un autre créneau (le prochain libre, ou demain à la même heure).\n'
+    + '- L’année est ' + ref.getFullYear() + '. Dans ton texte, écris la date en toutes lettres telle qu’elle est dans le calendrier (ex. "' + tcDateEnLettres(demain) + '").\n'
+    + '- Le TITRE du rendez-vous est le mot-clé de la demande ("rdv dentiste mardi 15h" → "Dentiste", "mercredi prochain 10h30 coach" → "Coach", "avec le plombier" → "Plombier"). "Activité" seulement si la demande ne dit vraiment rien.\n\n'
+    + '⚠️ FORMAT OBLIGATOIRE pour proposer un événement :\n'
+    + '[AGENDA]\n' + tcISO(demain) + ' | 15:00-16:00 | Rendez-vous banque | administratif\n[/AGENDA]\n\n'
+    + 'JAMAIS d’autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY-MM-DD.';
+}
+
+/**
+ * Quand Charly dit « je vais ajouter » sans bloc [AGENDA] : le bloc est fabrique ici, a la date
+ * et au titre de la DEMANDE (avant : toujours aujourd'hui, et « Activité »). Vide sans heure dans
+ * la demande, ou si la date demandee n'existe pas.
+ */
+function tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, now, nbJours) {
+  const heure = tcHeureDansTexte(lastUserText);
+  if (!heure) return '';
+  const demande = tcDateDemandee(lastUserText, now);
+  if (demande && demande.invalide) return '';
+  const sh = heure.h, sm = heure.m || 0, eh = sh + 1;
+  let titre = tcTitreDepuisDemande(lastUserText);
+  const lc = String(lastCharly || '').toLowerCase();
+  if (!titre) {
+    if (lc.includes('enfant') || lc.includes('école')) titre = 'Chercher les enfants à l’école';
+    else if (lc.includes('médicament') || lc.includes('médication')) titre = '💊 Médicaments';
+    else if (lc.includes('sport') || lc.includes('activité sportive')) titre = '🏋️ Sport';
+    else if (lc.includes('marche') || lc.includes('vélo')) titre = '🚴 Marche ou vélo';
+    else if (lc.includes('repas') || lc.includes('cuisine')) titre = '🍳 Préparation des repas';
+    else if (lc.includes('courses')) titre = '🛒 Courses';
+    else titre = 'Activité';
+  }
+  const ref = now ? new Date(now) : new Date();
+  const base = demande ? demande.date : new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const creneau = String(sh).padStart(2, '0') + ':' + String(sm).padStart(2, '0') + '-' + String(eh).padStart(2, '0') + ':' + String(sm).padStart(2, '0');
+  const lignes = [];
+  for (let i = 0; i < (nbJours || 1); i++) {
+    const d = new Date(base); d.setDate(d.getDate() + i);
+    lignes.push(tcISO(d) + ' | ' + creneau + ' | ' + titre + ' | rdv');
+  }
+  return '\n[AGENDA]\n' + lignes.join('\n') + '\n[/AGENDA]';
+}
+
+/**
+ * Filet sur une proposition unique de Charly : si la demande nomme un jour, la ligne [AGENDA] porte
+ * CETTE date ; si la demande nomme une chose et que la ligne dit « Activité », c'est le titre de la
+ * demande ; et une date-heure deja passee devient un refus calme avec une proposition (le lendemain
+ * a la meme heure). Rien n'est touche pour un deplacement/annulation, ni pour plusieurs lignes.
+ */
+function tcCorrigerPropositionsCharly(reply, texte, now) {
+  const r = String(reply || '');
+  const bloc = r.match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
+  if (!bloc) return reply;
+  const t = tcSansAccents(texte);
+  if (/\b(deplace|decale|repousse|avance|change|modifie|annule|supprime|efface|remets?)\b/.test(t)) return reply;
+  const lignes = bloc[1].split('\n').filter(function (l) { return l.trim(); });
+  if (lignes.length !== 1) return reply;
+  const m = lignes[0].match(/^\s*(\d{4}-\d{2}-\d{2})(\s*>\s*\d{4}-\d{2}-\d{2})?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]*?)\s*((?:\|[^|]*)*)$/);
+  if (!m) return reply;
+  const ref = now ? new Date(now) : new Date();
+  const demande = tcDateDemandee(texte, ref);
+  if (demande && demande.invalide) return reply;
+  let date = m[1];
+  let titre = m[7].trim();
+  const reste = m[8] ? ' ' + m[8].trim() : '';
+  if (demande && !m[2] && tcISO(demande.date) !== date) date = tcISO(demande.date);
+  const titreDemande = tcTitreDepuisDemande(texte);
+  if (titreDemande && /^(activit[ée]s?|rendez-?vous|rdv|[ée]v[ée]nement)?$/i.test(titre)) titre = titreDemande;
+  const h = Number(m[3]), mi = Number(m[4]);
+  const creneau = String(h).padStart(2, '0') + ':' + m[4] + '-' + String(Number(m[5])).padStart(2, '0') + ':' + m[6];
+  const debut = new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10)), h, mi);
+  if (debut < ref) {
+    const lendemain = new Date(debut);
+    do { lendemain.setDate(lendemain.getDate() + 1); } while (lendemain < ref);
+    const heureTxt = String(h) + 'h' + (mi ? String(mi).padStart(2, '0') : '');
+    const quand = tcISO(debut) === tcISO(ref)
+      ? 'Il est ' + ref.getHours() + 'h' + String(ref.getMinutes()).padStart(2, '0') + ' : ' + heureTxt + ' aujourd’hui, c’est déjà passé.'
+      : 'Le ' + tcDateEnLettres(debut) + ' à ' + heureTxt + ', c’est déjà passé.';
+    return quand + ' Je te propose ' + tcDateEnLettres(lendemain) + ' à ' + heureTxt + ' — ça te va ?\n[AGENDA]\n'
+      + tcISO(lendemain) + ' | ' + creneau + ' | ' + titre + reste + '\n[/AGENDA]';
+  }
+  const nouvelle = date + (m[2] ? m[2].replace(/\s+/g, '') : '') + ' | ' + creneau + ' | ' + titre + reste;
+  if (nouvelle === lignes[0].trim()) return reply;
+  return r.replace(bloc[0], '[AGENDA]\n' + nouvelle + '\n[/AGENDA]');
+}
 function validateAgendaProposal(tempId) {
   // Find the assistant message
   const msg = charlyIA.history.find(m => m.role === 'assistant' && m.tempId === tempId);
@@ -13420,39 +13626,8 @@ async function charlySendMessage() {
       // Mode démo : réponse simulée intelligente
       reply = await simulateDemoReply(text);
     } else {
-      // Vrai appel API — on injecte la date du jour de manière TRÈS explicite
-      const now = new Date();
-      const joursSemaine = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-      const moisFr = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-      const todayY = now.getFullYear();
-      const todayM = String(now.getMonth()+1).padStart(2,'0');
-      const todayD = String(now.getDate()).padStart(2,'0');
-      const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
-      const tY = tomorrow.getFullYear();
-      const tM = String(tomorrow.getMonth()+1).padStart(2,'0');
-      const tD = String(tomorrow.getDate()).padStart(2,'0');
-
-      const dateContext = `═══════════════════════════════════════
-INFORMATIONS TEMPORELLES CRITIQUES (À RESPECTER ABSOLUMENT)
-═══════════════════════════════════════
-
-📅 Date d'aujourd'hui : ${joursSemaine[now.getDay()]} ${now.getDate()} ${moisFr[now.getMonth()]} ${todayY}
-📅 Date au format ISO : ${todayY}-${todayM}-${todayD}
-📅 Date de demain : ${joursSemaine[tomorrow.getDay()]} ${tomorrow.getDate()} ${moisFr[tomorrow.getMonth()]} ${tY} (${tY}-${tM}-${tD})
-🕐 Heure actuelle : ${String(now.getHours()).padStart(2,'0')}h${String(now.getMinutes()).padStart(2,'0')}
-
-⚠️ RÈGLES STRICTES :
-- L'année actuelle est ${todayY}. NE JAMAIS écrire 2023, 2024 ou 2025 dans tes propositions.
-- Quand l'utilisateur dit "demain", c'est ${tY}-${tM}-${tD} (${tomorrow.getDate()} ${moisFr[tomorrow.getMonth()]} ${tY}).
-- Quand l'utilisateur dit "aujourd'hui", c'est ${todayY}-${todayM}-${todayD}.
-- Toujours utiliser l'année ${todayY} sauf si l'utilisateur précise explicitement une autre année.
-
-⚠️ FORMAT OBLIGATOIRE pour proposer un événement :
-[AGENDA]
-${tY}-${tM}-${tD} | 15:00-16:00 | Rendez-vous banque | administratif
-[/AGENDA]
-
-JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY-MM-DD.`;
+      // Vrai appel API : la date, l'heure et le calendrier des 14 prochains jours (campagne 4, 11/10).
+      const dateContext = tcContexteDatePourIA(new Date());
 
       const messages = [
         // Deux morceaux : les regles, qui ne bougent jamais et se mettent
@@ -13474,34 +13649,12 @@ JAMAIS d'autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY
     const isAllDaysUser = lastUserText.toLowerCase().includes('tous les jours') || lastUserText.toLowerCase().includes('chaque jour') || lastUserText.toLowerCase().includes('tous les jours de la semaine');
     
     if (!hasAgendaBlock && charlyAnnounces && lastUserText) {
-      // Extraire l'heure du message utilisateur
-      const heureMatch = lastUserText.match(/(\d{1,2})h(\d{0,2})/);
-      if (heureMatch) {
-        const sh = parseInt(heureMatch[1]);
-        const sm = parseInt(heureMatch[2] || '0');
-        const eh = sh + 1;
-        // Extraire le titre depuis la dernière question de Charly
-        const lastCharly = charlyIA.history.filter(m => m.role === 'assistant').slice(-1)[0]?.content || '';
-        let titre = 'Activité';
-        if (lastCharly.toLowerCase().includes('enfant') || lastCharly.toLowerCase().includes('école')) titre = 'Chercher les enfants à l’école';
-        else if (lastCharly.toLowerCase().includes('médicament') || lastCharly.toLowerCase().includes('médication')) titre = '💊 Médicaments';
-        else if (lastCharly.toLowerCase().includes('sport') || lastCharly.toLowerCase().includes('activité sportive')) titre = '🏋️ Sport';
-        else if (lastCharly.toLowerCase().includes('marche') || lastCharly.toLowerCase().includes('vélo')) titre = '🚴 Marche ou vélo';
-        else if (lastCharly.toLowerCase().includes('repas') || lastCharly.toLowerCase().includes('cuisine')) titre = '🍳 Préparation des repas';
-        else if (lastCharly.toLowerCase().includes('courses')) titre = '🛒 Courses';
-        
-        const now = new Date();
-        const daysToGenerate = isAllDaysUser ? 7 : 1;
-        let agendaLines = [];
-        for (let i = 0; i < daysToGenerate; i++) {
-          const d = new Date(now);
-          d.setDate(d.getDate() + i);
-          const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-          agendaLines.push(`${ds} | ${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}-${String(eh).padStart(2,'0')}:${String(sm).padStart(2,'0')} | ${titre} | rdv`);
-        }
-        reply = reply + '\n[AGENDA]\n' + agendaLines.join('\n') + '\n[/AGENDA]';
-      }
+      // La date vient de la demande (plus jamais « aujourd'hui » par defaut), le titre aussi (campagne 4, 11/10).
+      const lastCharly = charlyIA.history.filter(m => m.role === 'assistant').slice(-1)[0]?.content || '';
+      reply = reply + tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, new Date(), isAllDaysUser ? 7 : 1);
     }
+    // Filet : la date d'une proposition suit la demande, et jamais dans le passe (campagne 4, 11/10).
+    reply = tcCorrigerPropositionsCharly(reply, text, new Date());
 
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId});
@@ -16411,22 +16564,7 @@ async function charlyProcessMessage() {
     if (charlyIA.config.demoMode) {
       reply = await simulateDemoReply('analyse fichier');
     } else {
-      const now = new Date();
-      const joursSemaine = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-      const moisFr = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-      const todayY = now.getFullYear();
-      const todayM = String(now.getMonth()+1).padStart(2,'0');
-      const todayD = String(now.getDate()).padStart(2,'0');
-      const dateContext = `═══ INFORMATIONS TEMPORELLES CRITIQUES ═══
-📅 Date d'aujourd'hui : ${joursSemaine[now.getDay()]} ${now.getDate()} ${moisFr[now.getMonth()]} ${todayY}
-📅 Date au format ISO : ${todayY}-${todayM}-${todayD}
-
-⚠️ L'année actuelle est ${todayY}. NE JAMAIS écrire 2023, 2024 ou 2025.
-
-⚠️ FORMAT OBLIGATOIRE pour proposer un événement :
-[AGENDA]
-${todayY}-${todayM}-${todayD} | 15:00-16:00 | Titre du RDV | CATEGORIE_DE_LA_LISTE
-[/AGENDA]`;
+      const dateContext = tcContexteDatePourIA(new Date());
 
       const messages = [
         // Deux morceaux : les regles, qui ne bougent jamais et se mettent
