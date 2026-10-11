@@ -11266,6 +11266,11 @@ function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
   const duJour = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && tcEvenementCouvre(e, dateStr); }).sort(tcComparerEvenements);
   const heure = tcHeureDansTexte(t);
   if (!heure) {
+    // Une question (« est-ce que j'ai quelque chose vendredi ? ») n'est pas une demande de creation : le modele
+    // consulte, on ne reecrit pas. Et s'il cite un rendez-vous reellement present ce jour-la, il dit vrai.
+    if (/\?|\b(est[- ]ce que|quel|quelle|quels|quelles|qu ai|qu est|j ai quoi|je fais quoi|suis[- ]je|je suis libre|combien)\b/.test(t.replace(/[’']/g, ' '))) return null;
+    const motsReponse = tcMotsDeRdv(r);
+    if (motsReponse.length && duJour.some(function (e) { return tcTitreContient(e.title, motsReponse); })) return null;
     // Pas d'heure dans la demande : rien a verifier, mais rien a inventer non plus. La page dit ce que
     // l'agenda contient ce jour-la, et demande l'heure (« mets le rdv de Paul vendredi » → « tu as deja
     // un rendez-vous avec Paul mardi a 10h », inexistant : campagne 6, 11/10).
@@ -11359,20 +11364,23 @@ function tcListeDuJourPourDeplacement(reply, texte, now, events, mode) {
  * dit, rien n'est fait. null si la phrase ne nomme rien (« mon rdv de mardi » : le jour suffit).
  */
 function tcRdvNommeIntrouvable(texte, now, events, mode) {
-  if (!tcEstDeplacement(texte)) return null;
+  const t = tcSansAccents(texte);
+  // Un vrai deplacement de rendez-vous : verbe strict, ou verbe large (« change », « modifie ») avec le mot
+  // rendez-vous. « Change la couleur de mon agenda », « modifie mon profil » ne passent pas ici.
+  const strict = /\b(deplac|decal|repouss|report|avanc|reprogramm)/.test(t);
+  if (!strict && !(tcEstDeplacement(texte) && /\b(rdv|rendez-?vous|reunion|seance|consultation)\b/.test(t))) return null;
   const CREUX = /^(reporte[rsz]?|repousse[rsz]?|avance[rsz]?|bouge[rsz]?|decale[rsz]?|deplace[rsz]?|remets?|mets?|change[rsz]?|modifie[rsz]?|plutot|meme|place|creneau|horaire|jour|jours|heure|heures|apres|avant|vers|pour|jusqu|prochain|prochaine|semaine|rendez|vous|demain|matin|soir|midi)$/;
   const mots = tcMotsDeRdv(texte).filter(function (w) { return !CREUX.test(w); });
   if (!mots.length) return null;
   const ref = now ? new Date(now) : new Date();
-  const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
-  const fin = new Date(jour0); fin.setDate(fin.getDate() + 14);
-  const debutStr = tcISO(jour0), finStr = tcISO(fin);
+  const debutStr = tcISO(new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()));
   const evMode = mode === 'pro' ? 'pro' : 'user';
+  // Dans TOUT l'agenda a venir : « mon coiffeur du 3 decembre » existe, meme au-dela de 14 jours.
   const trouve = (Array.isArray(events) ? events : []).some(function (e) {
-    return e && e.mode === evMode && e.title && tcEvenementFin(e) >= debutStr && e.date <= finStr && tcTitreContient(e.title, mots);
+    return e && e.mode === evMode && e.title && tcEvenementFin(e) >= debutStr && tcTitreContient(e.title, mots);
   });
   if (trouve) return null;
-  return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda des 14 prochains jours. Rien n’a été changé.';
+  return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda à venir. Rien n’a été changé.';
 }
 
 /**

@@ -37,8 +37,8 @@ const AGENDA = [
 ];
 const ctx = { console, Number, String, Date, RegExp, Array, Object, Math, events: AGENDA.map((e) => Object.assign({}, e)), mode: 'user' };
 vm.createContext(ctx);
-['const TC_JOURS_FR = [^;]*;', 'const TC_MOIS_FR = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
-['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHeureDansTexte', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcBlocAgendaDepuisAnnonce',
+['const TC_JOURS_FR = [^;]*;', 'const TC_MOIS_FR = [^;]*;', "const TC_MOTS_CREUX = new Set\\([\\s\\S]*?\\.split\\(' '\\)\\);"].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
+['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHeureDansTexte', 'tcMotsDeRdv', 'tcTitreContient', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcBlocAgendaDepuisAnnonce',
   'tcPlusieursDatesOuRelatif', 'tcCorrigerPropositionsCharly', 'tcAgendaSnapshotPourIA', 'tcJoursCites', 'tcAnnonceUnConflit', 'tcIgnorerFauxConflit',
   'tcQuestionJourManquant', 'tcQuestionRdvDuJour', 'tcDeplacementHorsJour', 'tcFormaterDateHumaine', 'tcFormaterHeure']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
@@ -104,6 +104,7 @@ verifie('« rdv dentiste lundi 15h » : Zorglub est bien lundi 15h → vrai conf
 verifie('une journee entiere ne compte pas comme conflit d heure (mercredi 14 10h)', /2026-10-14 \| 10:00-11:00/.test(FC('Mercredi tu as déjà quelque chose.', 'rdv coach mercredi 10h') || ''));
 verifie('une reponse sans annonce de conflit : rien', FC('Quel jour exactement ?', 'rdv dentiste 15h') === null);
 verifie('une reponse avec un bloc : rien (le filet de la mission 4 s en occupe)', FC('Déjà pris, mais voici :\n[AGENDA]\n2026-10-13 | 16:00-17:00 | Dentiste | sante\n[/AGENDA]', 'rdv dentiste mardi 15h') === null);
+verifie('une consultation (« est-ce que j ai quelque chose vendredi ? ») avec une reponse juste n est pas reecrite (mission 7)', FC('Oui, tu as déjà Revue budget vendredi à 14h.', "est-ce que j'ai quelque chose vendredi ?") === null);
 verifie('sans jour dans la demande : rien ; avec un jour mais sans heure : l agenda du jour dit par la page et « À quelle heure ? » (mission 7)', FC('Tu as déjà un rendez-vous.', 'rdv dentiste 15h') === null && /Je ne vois pas ce rendez-vous dans ton agenda\. Mardi 13 octobre 2026, tu as : .*À quelle heure \?$/.test(FC('Tu as déjà un rendez-vous.', 'rdv dentiste mardi') || ''));
 verifie('un deplacement ou une annulation : rien', FC('Mardi 16h est déjà pris.', 'Décale mon rdv de mardi à 16h') === null);
 verifie('deux demandes (« dentiste demain 10h et coach jeudi 14h ») : le conflit de jeudi est vrai, on ne reecrit rien', FC('Jeudi à 14h, tu as déjà un rendez-vous avec Estelle.', 'ajoute dentiste demain à 10h et coach jeudi à 14h') === null);

@@ -28,6 +28,7 @@ const AGENDA = () => [
   ev('a1', '2026-10-12', 9, 0, 11, 0, 'Atelier d’équipe'), ev('a2', '2026-10-12', 11, 0, 12, 0, 'Rendez-vous avec Estelle'), ev('a3', '2026-10-12', 14, 0, 14, 30, 'Point rapide'),
   ev('b1', '2026-10-13', 9, 0, 10, 0, 'Rendez-vous Dr. Martin'), ev('b2', '2026-10-13', 15, 0, 17, 0, 'Formation'), ev('b3', '2026-10-13', 16, 0, 17, 0, 'Rdv banque'), ev('b4', '2026-10-13', 16, 0, 17, 0, 'Rendez-vous avec Zorglub'),
   ev('b5', '2026-10-13', 18, 30, 19, 0, 'Coiffeur'), ev('c1', '2026-10-16', 14, 0, 16, 0, 'Revue budget'),
+  ev('d1', '2026-12-03', 10, 0, 11, 0, 'Ostéopathe'),
 ];
 
 function contexte() {
@@ -58,7 +59,10 @@ if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
 titre('1. Un rendez-vous nomme qui n existe pas : on le dit, rien n est fait (avant l appel au modele)');
 const I = (x) => ctx.tcRdvNommeIntrouvable(x, NOW, ctx.events, 'user');
-verifie('« reporte mon dentiste à jeudi » (aucun dentiste) → « Je ne trouve pas de rendez-vous « dentiste » … »', I('reporte mon dentiste à jeudi') === 'Je ne trouve pas de rendez-vous « dentiste » dans ton agenda des 14 prochains jours. Rien n’a été changé.', I('reporte mon dentiste à jeudi'));
+verifie('« reporte mon dentiste à jeudi » (aucun dentiste) → « Je ne trouve pas de rendez-vous « dentiste » … »', I('reporte mon dentiste à jeudi') === 'Je ne trouve pas de rendez-vous « dentiste » dans ton agenda à venir. Rien n’a été changé.', I('reporte mon dentiste à jeudi'));
+verifie('« décale mon ostéopathe du 3 décembre à jeudi » (existe, au-delà de 14 jours) → null (examinateur)', I('décale mon ostéopathe du 3 décembre à jeudi') === null, I('décale mon ostéopathe du 3 décembre à jeudi'));
+verifie('« change la couleur de mon agenda », « change mon mot de passe », « modifie mon profil » → null (pas un rendez-vous)', I('change la couleur de mon agenda') === null && I('change mon mot de passe') === null && I('modifie mon profil') === null);
+verifie('« change mon rdv dentiste à jeudi » (verbe large + rdv, aucun dentiste) → refus', /dentiste/.test(I('change mon rdv dentiste à jeudi') || ''));
 verifie('« déplace mon coiffeur à lundi » (coiffeur mardi : existe) → null (le modele travaille)', I('déplace mon coiffeur à lundi') === null);
 verifie('« décale Zorglub à mardi 16h » → null ; « repousse la formation d une heure » → null', I('décale Zorglub à mardi 16h') === null && I("repousse la formation d'une heure") === null);
 verifie('« Décale mon rdv de mardi à 16h » (rien de nomme) → null', I('Décale mon rdv de mardi à 16h') === null);
@@ -89,6 +93,8 @@ const f1 = FC('Tu as déjà un rendez-vous avec Paul mardi à 10h.', 'mets le rd
 verifie('« mets le rdv de Paul vendredi » + conflit invente → l agenda de vendredi (Revue budget) et « À quelle heure ? »', f1 === 'Je ne vois pas ce rendez-vous dans ton agenda. Vendredi 16 octobre 2026, tu as : Revue budget 14h à 16h. À quelle heure ?', f1);
 const f2 = FC('Tu as déjà un rendez-vous avec Paul mardi à 10h.', 'mets le rdv de Paul jeudi');
 verifie('jeudi (rien) → « Jeudi 15 octobre 2026 est libre dans ton agenda. À quelle heure ? »', f2 === 'Je ne vois pas ce rendez-vous dans ton agenda. Jeudi 15 octobre 2026 est libre dans ton agenda. À quelle heure ?', f2);
+verifie('une question (« est-ce que j ai quelque chose vendredi ? ») avec une reponse juste → rien (examinateur)', FC('Oui, tu as déjà Revue budget vendredi à 14h.', "est-ce que j'ai quelque chose vendredi ?") === null && FC('Tu as déjà Revue budget.', "j'ai quoi vendredi") === null);
+verifie('une creation sans heure, mais la reponse cite un rendez-vous vraiment present ce jour-la → rien (elle dit vrai)', FC('Vendredi tu as déjà la revue budget à 14h, à quelle heure veux-tu Paul ?', 'mets le rdv de Paul vendredi') === null);
 verifie('avec une heure, la regle de la mission 5 reste : mardi 10h libre → proposition ; mardi 16h pris → rien', /Je te propose/.test(FC('Tu as déjà un rendez-vous mardi à 10h.', 'rdv Paul mardi 10h') || '') && FC('Mardi 16h est pris.', 'rdv Paul mardi 16h') === null);
 
 titre('5. « supprime tout mardi après-midi » : TOUS les rendez-vous de la plage, et une confirmation claire');
@@ -99,11 +105,11 @@ verifie('« supprime tout jeudi » aussi ; « comment supprimer un rdv ? » touj
   await c.tcGererSuppressionRdv('supprime tout mardi après-midi');
   const dit = c.charlyIA.history.map((m) => m.content).join(' | ');
   const att = c.attente();
-  verifie('rien n est supprime : une question attend', c.events.length === 9 && Array.isArray(att), att && att.length);
+  verifie('rien n est supprime : une question attend', c.events.length === 10 && Array.isArray(att), att && att.length);
   verifie('les 4 rendez-vous de mardi apres-midi (12h-19h) : Formation 15h, banque 16h, Zorglub 16h, Coiffeur 18h30 — pas Dr Martin 9h', att && att.map((e) => e.title).join(',') === 'Formation,Rdv banque,Rendez-vous avec Zorglub,Coiffeur', att && att.map((e) => e.title).join(','));
   verifie('la question : « Tu veux annuler ces 4 rendez-vous ? … Réponds « oui » ou « non » »', /Tu veux annuler ces 4 rendez-vous \?/.test(dit) && /Formation/.test(dit) && /Réponds « oui » ou « non »/.test(dit), dit.slice(0, 200));
   c.tcAnnulerSuppressionRdv();
-  verifie('« non » → « Annulation abandonnée, rien n a été touché » (pas « Ajout annulé »)', /Annulation abandonnée, rien n'a été touché/.test(c.charlyIA.history[c.charlyIA.history.length - 1].content) && c.events.length === 9);
+  verifie('« non » → « Annulation abandonnée, rien n a été touché » (pas « Ajout annulé »)', /Annulation abandonnée, rien n'a été touché/.test(c.charlyIA.history[c.charlyIA.history.length - 1].content) && c.events.length === 10);
 
   titre('6. Une nouvelle demande pendant qu une confirmation attend : abandonnee, et dit');
   const c2 = contexte();

@@ -1063,3 +1063,10 @@ mobile vers le nouvel appareil.
   horloge fixe), dans verifier.sh ; 6 KO sur la page d'avant. `verif-charly-conflits` charge `tcQuestionRdvDuJour`.
 - Limites : la prose d'un vrai conflit mal nommé par le modèle n'est pas réécrite ; une question de suivi de 3 mots ou plus
   (« et le lieu ? ») abandonne la proposition en attente (règle de Charles : la nouvelle demande prime).
+- Correctif après examen : `tcRdvNommeIntrouvable` ne se déclenche que pour un vrai déplacement (verbe strict déplacer /
+  décaler / repousser / reporter / avancer / reprogrammer, ou un verbe large comme « change » avec le mot rdv / rendez-vous /
+  réunion / séance), et cherche dans tout l'agenda à venir (« mon ostéopathe du 3 décembre » existe) ; « change la couleur de
+  mon agenda », « modifie mon profil » ne sont plus interceptés. `tcIgnorerFauxConflit` sans heure : une question
+  (« est-ce que j'ai quelque chose vendredi ? ») ou une réponse qui cite un rendez-vous réellement présent ce jour-là ne sont
+  pas réécrites. Réserves notées : `tcAccorderProseAuBloc` remplace aussi une mention volontaire d'un autre mardi ; « et le
+  lieu ? » (3 mots) abandonne la proposition en attente (règle de Charles).
