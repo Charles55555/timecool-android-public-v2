@@ -930,3 +930,23 @@ mobile vers le nouvel appareil.
   `verif-suppression-e2e` (compte admin) et `e2e-rdv-groupe` (règle du 09/10, périmée : 4 KO aussi contre la production)
   ne sont pas dans verifier.sh et restent rouges, comme avant.
 - `verif-blocage-silence-e2e` enregistrée dans verifier.sh. Commentaire de `demandeurBloque` remis à sa place.
+
+## 11/10/2026 (session Codeur) — Campagne 3 : toast invisible qui avale les appuis, accueil après inscription
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Toast (`showToast`) : `opacity:0` une fois disparu, mais il restait dans la page et captait les appuis sur les boutons du
+  bas (« Enregistrer », « Demander un rendez-vous », « Choisir qui »…). `.toast { pointer-events:none }` : il n'a jamais rien à
+  cliquer (texte seul), les appuis passent au travers, visible ou non. Position inchangée (bottom 80 px) : visible, il peut
+  encore recouvrir un bouton 2,5 s, mais l'appui atteint le bouton. Autres flottants vérifiés, déjà sains : tirer-pour-
+  rafraîchir et étiquette du déplacement (`pointer-events:none`), barre « Déplacé vers … » (`display:none`), bandeau de mise à
+  jour (`hidden`), voile du menu, fenêtres `tc-mod-ov` (retirées du DOM).
+- Accueil : le drapeau `tc_onboarding_done` n'était posé que par les boutons de l'écran d'accueil. Après une inscription
+  (ou Google, appairage, biométrie), un rechargement rouvrait l'accueil. Désormais : chaque ouverture de session pose le
+  drapeau (5 endroits : `saveUserAccount` = inscription, connexion, Google, appairage, biométrie), et `checkOnboarding`
+  considère qu'une session ouverte vaut accueil terminé (les comptes déjà inscrits sont couverts).
+- Suite `verif-toast-et-accueil` (CSS, `showToast` et `checkOnboarding`/`saveUserAccount` exécutées, les 5 ouvertures de
+  session), dans verifier.sh ; 5 KO sur la page d'avant. Sonde Chrome 390x844, deux passages même profil : ancienne page,
+  `elementFromPoint` au centre du toast = toast (visible et disparu), rechargement → accueil `block` ; nouvelle page = le
+  bouton dessous, et après une VRAIE inscription (compte jetable e2erdv.sonde…, origine `null` autorisée) le rechargement
+  ouvre l'agenda (accueil `none`, en-tête visible, page-calendar, avatar DS). Comptes sonde créés : 52FPTM2G6MRR, G7ZNJQVZA9M9.

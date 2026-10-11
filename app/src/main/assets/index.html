@@ -346,7 +346,7 @@ body.maj-visible .tc-deplace-barre { bottom:152px; }
 .maj-bandeau .maj-bouton { flex:0 0 auto; padding:9px 16px; background:var(--g-yellow); color:#202124; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; }
 .maj-bandeau .maj-fermer { flex:0 0 auto; padding:6px 8px; background:transparent; color:#aab4c6; border:none; font-size:15px; line-height:1; cursor:pointer; }
 body.maj-visible .toast { bottom:152px; }
-.toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 20px; border-radius:24px; font-size:13px; opacity:0; transition:opacity 0.3s; z-index:10200; text-align:center; max-width:90%; }
+.toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:12px 20px; border-radius:24px; font-size:13px; opacity:0; pointer-events:none; transition:opacity 0.3s; z-index:10200; text-align:center; max-width:90%; }
 /* ═══ Modales TimeCool — remplacent confirm/alert/prompt natifs ═══
    Les boites natives affichaient le chemin technique de la page
    (file:///android_asset/...) dans leur en-tete, et un habillage
@@ -8053,6 +8053,7 @@ async function tcBiometrieDeverrouille(jeton) {
     try {
       localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
       localStorage.setItem('timecool_session_active', 'true');
+      localStorage.setItem('tc_onboarding_done', '1');   // accueil termine : un rechargement ouvre l agenda (11/10)
     } catch (e) {}
     showWelcomeSplash(userAccount.firstname);
   } catch (e) {
@@ -14401,6 +14402,7 @@ function saveUserAccount(account) {
     userAccount = account;
     localStorage.setItem('timecool_user_account', JSON.stringify(account));
     localStorage.setItem('timecool_session_active', 'true');
+    localStorage.setItem('tc_onboarding_done', '1');   // accueil termine : un rechargement ouvre l agenda (11/10)
   } catch(e) {}
 }
 
@@ -14671,6 +14673,7 @@ async function tcGoogleJeton(idToken) {
       try {
         localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
         localStorage.setItem('timecool_session_active', 'true');
+        localStorage.setItem('tc_onboarding_done', '1');   // accueil termine : un rechargement ouvre l agenda (11/10)
       } catch(e) {}
       showWelcomeSplash(userAccount.firstname);
       return;
@@ -15386,6 +15389,7 @@ async function submitLogin() {
   try {
     localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
     localStorage.setItem('timecool_session_active', 'true');
+    localStorage.setItem('tc_onboarding_done', '1');   // accueil termine : un rechargement ouvre l agenda (11/10)
   } catch(e) {}
 
   // Uniquement après une connexion email/mot de passe réelle — jamais
@@ -22394,6 +22398,7 @@ function tcOuvrirSessionAppairee(compte) {
   try {
     localStorage.setItem('timecool_user_account', JSON.stringify(userAccount));
     localStorage.setItem('timecool_session_active', 'true');
+    localStorage.setItem('tc_onboarding_done', '1');   // accueil termine : un rechargement ouvre l agenda (11/10)
   } catch (e) {}
 
   const ov = document.getElementById('devicePairingOv');
@@ -23217,6 +23222,12 @@ updateProfileSelector();
 const TC_ONBOARDING_KEY = 'tc_onboarding_done';
 
 function checkOnboarding() {
+  // Une session ouverte vaut accueil termine (campagne 3, 11/10) : apres une inscription, un rechargement
+  // ouvrait l accueil au lieu de l agenda. Le drapeau est aussi pose a chaque ouverture de session.
+  if (localStorage.getItem('timecool_session_active') === 'true') {
+    try { localStorage.setItem(TC_ONBOARDING_KEY, '1'); } catch (e) {}
+    return;
+  }
   if (!localStorage.getItem(TC_ONBOARDING_KEY)) {
     document.getElementById('onboardingScreen').style.display = 'block';
   }
