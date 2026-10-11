@@ -80,8 +80,12 @@ const empreinte = async (jeton) => {
   const nAvant = chezClemAvant ? chezClemAvant.contenu.thread.length : 0;
   const nApres = chezClemApres ? chezClemApres.contenu.thread.length : 0;
   dire(nApres === nAvant + 1 && chezClemApres.contenu.thread[nApres - 1].from === 'me', 'dans SA messagerie, Clémence retrouve sa demande, comme d habitude', nAvant + ' -> ' + nApres);
+  dire(typeof chezClemApres.contenu.thread[nApres - 1].rdv === 'number' && chezClemApres.contenu.thread[nApres - 1].genre === 'demande_rdv', 'son écho porte un identifiant et le genre, comme d habitude');
   const d3 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);
-  dire(d3.d.message === d1.d.message && (await empreinte(armelle.jeton)) === avant, 'un troisième clic : même réponse, toujours rien chez Armelle');
+  dire(d3.d.mode === 'messagerie' && d3.d.message !== d1.d.message && /pas encore configuré/.test(d3.d.message), 'un troisième clic : la réponse de « reprise », comme une demande ordinaire en attente', (d3.d.message || '').slice(0, 40));
+  dire((await empreinte(armelle.jeton)) === avant, 'toujours rien chez Armelle');
+  const chezClem3 = await conversation(clemence.jeton, armelle.ref);
+  dire(chezClem3.contenu.thread.length === nApres, 'et un seul écho chez Clémence (pas un par clic)', chezClem3.contenu.thread.length);
   const prop = await appel('POST', '/rdv/proposer-creneau', { rdv: d1.d.rdv, date: jourOuvre(3), debut: '10:00', duree: 60 }, armelle.jeton);
   dire(prop.code === 404, 'la demande refusée reste close (rien de nouveau n a été ouvert)', 'HTTP ' + prop.code);
 
@@ -93,7 +97,7 @@ const empreinte = async (jeton) => {
   ]);
   const avant2 = await empreinte(armelle.jeton);
   const d4 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);
-  dire(d4.code === 200 && d4.d.mode === 'messagerie' && d4.d.message === d1.d.message, 'toujours la réponse neutre (pas de créneaux)', d4.d && d4.d.mode);
+  dire(d4.code === 200 && d4.d.mode === 'messagerie' && d4.d.message === d3.d.message, 'toujours la réponse neutre de reprise (pas de créneaux)', d4.d && d4.d.mode);
   dire((await empreinte(armelle.jeton)) === avant2, 'et toujours rien chez Armelle');
   const g = await appel('POST', '/rdv/groupe/proposer', { references: [armelle.ref], duree: 1 }, clemence.jeton);
   dire(g.code === 200 && g.d.invites.length === 0 && g.d.sans_acces.length === 1, 'rendez-vous à plusieurs : Armelle est « sans accès » pour elle', JSON.stringify(g.d && g.d.sans_acces));

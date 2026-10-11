@@ -49,7 +49,7 @@ dit(/Chaque demande de rendez-vous passe par toi\./, 'fenêtre « Tu es protég�
 dit(/Pour que quelqu’un puisse prendre rendez-vous directement, coche-le avec/, 'fenêtre « C\'est ouvert, en douceur » : « puisse prendre rendez-vous directement »');
 dit(/Qui peut prendre rendez-vous directement : /, 'liste « Choisir qui » : « Qui peut prendre rendez-vous directement »');
 dit(/Pour que ta famille, tes amis ou tes collègues puissent prendre rendez-vous directement, classe-les en une fois depuis/, 'page Contacts : « puissent prendre rendez-vous directement, classe-les en une fois »');
-dit(/Acc\\u00e8s bloqu\\u00e9\.<\/b> Ses demandes de rendez-vous ne t\\u2019arrivent plus, et il ne le sait pas\./, 'contact bloqué : « ses demandes de rendez-vous ne t’arrivent plus, et il ne le sait pas » (11/10)');
+dit(/Acc\\u00e8s bloqu\\u00e9\.<\/b> Ses demandes de rendez-vous ne t\\u2019arrivent plus, et cette personne ne le sait pas\./, 'contact bloqué : « ses demandes de rendez-vous ne t’arrivent plus, et cette personne ne le sait pas » (11/10)');
 dit(/Aucun rendez-vous ne peut m’être proposé, sauf par les contacts que j’autorise|aucun rendez-vous ne peut m’être proposé, sauf par les contacts que j’autorise/, '« Mon temps libre » : « aucun rendez-vous ne peut m’être proposé, sauf par les contacts que j’autorise »');
 dit(/aucun rendez-vous ne peut t’être proposé, sauf par les contacts que tu autorises\./, 'fenêtre d\'une plage de temps libre : « aucun rendez-vous ne peut t’être proposé… »');
 dit(/Toujours attendre ma validation pour une demande de rendez-vous/, 'la case « Toujours attendre ma validation pour une demande de rendez-vous » ne change pas');

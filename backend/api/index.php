@@ -477,6 +477,31 @@ function fichesDe(int $titulaireId, array $personne): array
  * fiches, bloquee partout. Sa demande de rendez-vous ne laisse alors
  * aucune trace chez lui (Charles, 11/10), et elle ne l apprend jamais.
  */
+/**
+ * La demandeuse a-t-elle deja, dans sa messagerie, l echo recent de cette meme
+ * demande vers cette personne ? Pour un compte bloque : au deuxieme clic il doit
+ * se passer exactement ce qui se passe pour une demande ordinaire deja en
+ * attente (rien de reecrit, reponse de reprise), sinon il devinerait le blocage.
+ */
+function echoDemandeRecent(array $moi, array $cible, string $texte, int $jours): bool
+{
+    $l = Db::un(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+        [$moi['id'], $cible['reference']]
+    );
+    $conv = $l ? json_decode((string) $l['contenu'], true) : null;
+    if (!is_array($conv) || !is_array($conv['thread'] ?? null) || $conv['thread'] === []) {
+        return false;
+    }
+    $dernier = $conv['thread'][count($conv['thread']) - 1];
+    if (!is_array($dernier) || ($dernier['from'] ?? '') !== 'me' || ($dernier['texte'] ?? '') !== $texte) {
+        return false;
+    }
+    $le = strtotime((string) ($dernier['le'] ?? ''));
+    return $le !== false && $le >= time() - $jours * 86400;
+}
+
 function demandeurBloque(int $titulaireId, array $demandeur): bool
 {
     foreach (fichesDe($titulaireId, $demandeur) as $c) {
@@ -2579,8 +2604,20 @@ switch ($route) {
          * la page l y envoie chercher.
          */
         if (demandeurBloque((int) $cible['id'], $moi)) {
-            messagePoser($moi, $cible, messageDemandeRdv($moi, $cible, $typeRdv), null, null, null, null, $typeRdv, true);
-            Rep::ok(reponseDemandeEnMessagerie($cible, 0, false));
+            $texte = messageDemandeRdv($moi, $cible, $typeRdv);
+            // Le meme identifiant que verrait un compte ordinaire : sa derniere demande vers cette personne.
+            $dernier = Db::un(
+                'SELECT id FROM rdv WHERE organisateur_id = ? AND invite_compte_id = ? ORDER BY id DESC LIMIT 1',
+                [$moi['id'], $cible['id']]
+            );
+            $rdvId = $dernier === null ? 0 : (int) $dernier['id'];
+            // Deuxieme clic : comme une demande ordinaire deja en attente, rien n est
+            // reecrit et la reponse est celle de la reprise.
+            $reprise = echoDemandeRecent($moi, $cible, $texte, (int) Conf::get('rdv_demande_jours', 7));
+            if (!$reprise) {
+                messagePoser($moi, $cible, $texte, $rdvId > 0 ? $rdvId : null, null, 'demande_rdv', null, $typeRdv, true);
+            }
+            Rep::ok(reponseDemandeEnMessagerie($cible, $rdvId, $reprise));
         }
 
         $categoriesRdv = categoriesPourRdvAutomatique((int) $cible['id'], $moi);

@@ -912,3 +912,8 @@ mobile vers le nouvel appareil.
   écran validé le 10/10) est devenue fausse ; `/messages/envoyer` d'une personne bloquée arrive toujours (hors mission).
 - Limite : un deuxième clic d'une personne bloquée rend la réponse de première demande (pas celle de « reprise »), faute
   de demande en attente à reprendre.
+- Correctif après examen : au deuxième clic d'une personne bloquée, même chose qu'une demande ordinaire déjà en attente
+  (`echoDemandeRecent` : son dernier message vers cette personne est déjà l'écho de la demande, de moins de
+  `rdv_demande_jours` jours → rien de réécrit, réponse de « reprise ») ; l'écho et la réponse portent l'identifiant de
+  sa dernière demande vers cette personne (celle refusée) et le genre, comme l'ordinaire ; fiche : « et cette personne ne
+  le sait pas » (formule neutre). La limite « deuxième clic » notée plus haut n'existe plus.
