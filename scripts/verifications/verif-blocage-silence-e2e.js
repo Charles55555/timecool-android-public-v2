@@ -6,7 +6,7 @@
 //   bloquée sur une fiche parmi deux (l'autre classée, validation décochée) -> pareil ;
 //   débloquée -> redevient ordinaire (créneaux si classée + décochée, messagerie sinon) ;
 //   rendez-vous à plusieurs : « sans accès », rien chez elle.
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 
 let ko = 0;
 const dire = (ok, libelle, detail) => {
@@ -70,7 +70,9 @@ const empreinte = async (jeton) => {
   const chezClemAvant = await conversation(clemence.jeton, armelle.ref);
   const d2 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);
   dire(d2.code === 200 && d2.d.mode === 'messagerie', 'HTTP 200, mode messagerie', d2.code + ' ' + (d2.d && d2.d.mode));
-  dire(d2.d.message === d1.d.message, 'mot pour mot la réponse de sa première demande', (d2.d.message || '').slice(0, 50));
+  // Une seule regle : son dernier message vers Armelle est deja l echo (recent) de cette demande -> comme un
+  // deuxieme clic ordinaire sur une demande en attente : rien de reecrit, reponse de « reprise ».
+  dire(d2.d.message !== d1.d.message && /consulter ta messagerie/.test(d2.d.message), 'la réponse d un deuxième clic ordinaire (reprise : son écho est récent)', (d2.d.message || '').slice(0, 50));
   dire(typeof d2.d.rdv === 'number', 'le champ rdv est là (un nombre), comme d habitude', d2.d.rdv);
   const apres = await empreinte(armelle.jeton);
   dire(avant === apres, 'chez Armelle : aucun message, aucune demande, aucun rendez-vous en plus', apres);
@@ -79,10 +81,9 @@ const empreinte = async (jeton) => {
   const chezClemApres = await conversation(clemence.jeton, armelle.ref);
   const nAvant = chezClemAvant ? chezClemAvant.contenu.thread.length : 0;
   const nApres = chezClemApres ? chezClemApres.contenu.thread.length : 0;
-  dire(nApres === nAvant + 1 && chezClemApres.contenu.thread[nApres - 1].from === 'me', 'dans SA messagerie, Clémence retrouve sa demande, comme d habitude', nAvant + ' -> ' + nApres);
-  dire(typeof chezClemApres.contenu.thread[nApres - 1].rdv === 'number' && chezClemApres.contenu.thread[nApres - 1].genre === 'demande_rdv', 'son écho porte un identifiant et le genre, comme d habitude');
+  dire(nApres === nAvant && nApres === 1 && chezClemApres.contenu.thread[0].from === 'me', 'dans SA messagerie, Clémence garde son seul écho (rien de réécrit)', nAvant + ' -> ' + nApres);
   const d3 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);
-  dire(d3.d.mode === 'messagerie' && d3.d.message !== d1.d.message && /pas encore configuré/.test(d3.d.message), 'un troisième clic : la réponse de « reprise », comme une demande ordinaire en attente', (d3.d.message || '').slice(0, 40));
+  dire(d3.d.mode === 'messagerie' && d3.d.message === d2.d.message, 'un troisième clic : même réponse de « reprise »', (d3.d.message || '').slice(0, 40));
   dire((await empreinte(armelle.jeton)) === avant, 'toujours rien chez Armelle');
   const chezClem3 = await conversation(clemence.jeton, armelle.ref);
   dire(chezClem3.contenu.thread.length === nApres, 'et un seul écho chez Clémence (pas un par clic)', chezClem3.contenu.thread.length);
@@ -104,14 +105,15 @@ const empreinte = async (jeton) => {
   dire((await empreinte(armelle.jeton)) === avant2, 'rien chez Armelle non plus');
 
   console.log('\nDébloquée : elle redevient une contact ordinaire :');
-  await poser(armelle.jeton, [{ type: 'contact', uid: fiche.uid, contenu: Object.assign({}, fiche.contenu, { blocked: false }) }]);
-  const d5 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);
-  dire(d5.code === 200 && d5.d.mode === 'creneaux' && d5.d.creneaux.length === 3, 'classée travail + validation décochée : des créneaux, tout de suite', d5.d && d5.d.mode);
-  await poser(armelle.jeton, [reglage('tc_rdv_validation', '1')]);
+  await poser(armelle.jeton, [{ type: 'contact', uid: fiche.uid, contenu: Object.assign({}, fiche.contenu, { blocked: false }) }, reglage('tc_rdv_validation', '1')]);
   const d6 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);
-  dire(d6.code === 200 && d6.d.mode === 'messagerie', 'validation cochée : messagerie', d6.d && d6.d.mode);
+  dire(d6.code === 200 && d6.d.mode === 'messagerie' && d6.d.message === d1.d.message, 'validation cochée : messagerie, réponse de première demande (nouvelle demande)', d6.d && d6.d.mode);
   const convA2 = await conversation(armelle.jeton, clemence.ref);
   dire(convA2 && convA2.contenu.thread.some((m) => m.genre === 'demande_rdv' && !m.traite && m.rdv === d6.d.rdv), 'et cette fois la demande ARRIVE chez Armelle (carte à traiter)');
+  // Validation decochee : la demande en attente est reprise, des creneaux (comportement ordinaire).
+  await poser(armelle.jeton, [reglage('tc_rdv_validation', '0')]);
+  const d5 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);
+  dire(d5.code === 200 && d5.d.mode === 'creneaux' && d5.d.creneaux.length === 3, 'classée travail + validation décochée : des créneaux', d5.d && d5.d.mode);
 
   console.log('\nÀ supprimer : ' + [armelle, clemence].map((c) => c.ref).join(', '));
   console.log(`\n${ko} anomalie(s).`);

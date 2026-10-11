@@ -1,6 +1,6 @@
 // Le TYPE d'un rendez-vous contre l'API reelle (comptes sonde jetables).
 // À lancer APRÈS la migration 010 et la mise en ligne de l'API.
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 
 let ko = 0;
 const dire = (ok, libelle, detail) => {

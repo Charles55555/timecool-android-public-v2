@@ -1,7 +1,7 @@
 // Test de bout en bout du transfert d'agenda, contre l'API réelle.
 // Simule les deux appareils : le navigateur qui demande un code, le
 // téléphone qui l'approuve et envoie son agenda chiffré.
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 const marque = 'e2e' + Date.now();
 
 let ko = 0;

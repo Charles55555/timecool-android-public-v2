@@ -917,3 +917,16 @@ mobile vers le nouvel appareil.
   `rdv_demande_jours` jours → rien de réécrit, réponse de « reprise ») ; l'écho et la réponse portent l'identifiant de
   sa dernière demande vers cette personne (celle refusée) et le genre, comme l'ordinaire ; fiche : « et cette personne ne
   le sait pas » (formule neutre). La limite « deuxième clic » notée plus haut n'existe plus.
+- Déploiement du 11/10 retiré par le chef de projet (deux e2e rouges) : pas une régression, mais les e2e qui attendaient
+  l'ANCIENNE règle. `verif-rdv-e2e` (scène « Julian a bloqué Charles ») attendait la conversation chez le bloqueur ;
+  `verif-validation-rdv-e2e` (« si elle redemande ») attendait le texte de première demande à chaque clic ; ma e2e enchaînait
+  « créneaux » (ouvre une demande en attente) puis « messagerie » (reprise sans message : comportement ordinaire, pas un bug).
+  Une seule règle, partout : rien chez le bloqueur ; pour le demandeur, exactement comme une demande ordinaire déjà en
+  attente (son écho est récent → réponse de reprise, rien de réécrit). Les trois suites sont alignées dessus.
+- `scripts/verifications/api-locale.sh` : sert l'API du dépôt sur `127.0.0.1:8099` (php -S, configuration propre à
+  `claudecode` dans `~/api-locale/private`, jamais commitée ; `backend/private` est un lien, ajouté à .gitignore).
+  Toutes les e2e lisent `TC_API` (sinon l'API en ligne). Valables en local : les e2e à comptes jetables ; avec un autre
+  poivre, `contacts-classes-e2e` et `appairage-e2e` (comptes fixes) ne le sont pas : contre la production seulement.
+  `verif-suppression-e2e` (compte admin) et `e2e-rdv-groupe` (règle du 09/10, périmée : 4 KO aussi contre la production)
+  ne sont pas dans verifier.sh et restent rouges, comme avant.
+- `verif-blocage-silence-e2e` enregistrée dans verifier.sh. Commentaire de `demandeurBloque` remis à sa place.

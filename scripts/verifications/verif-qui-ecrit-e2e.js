@@ -1,6 +1,6 @@
 // « Savoir qui m'écrit » contre l'API réelle (comptes sonde jetables).
 // À lancer APRÈS la mise en ligne de l'API : elle vérifie le serveur en production.
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 
 let ko = 0;
 const dire = (ok, libelle, detail) => {

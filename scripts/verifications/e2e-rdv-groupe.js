@@ -1,6 +1,6 @@
 /* Bout en bout, VRAI serveur, comptes de test neufs : rendez-vous a plusieurs.
  *   node e2e-rdv-groupe.js     (comptes sonde.groupe.*@exemple-timecool.fr) */
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 const stamp = String(Date.now());
 let ko = 0;
 function verifie(l, c, d) { if (!c) ko++; console.log('  ' + (c ? 'OK ' : 'KO ') + l + (d ? '  - ' + String(d).slice(0, 260) : '')); }

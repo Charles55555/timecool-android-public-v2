@@ -6,7 +6,7 @@
 //   contact enregistré + case décochée   -> créneaux automatiques ;
 //   boutons de la messagerie             -> « proposer un créneau » (deux agendas),
 //                                           « refuser et bloquer » (en silence).
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 
 let ko = 0;
 const dire = (ok, libelle, detail) => {
@@ -141,7 +141,11 @@ const conversation = async (jeton, ref) => (await elements(jeton)).find((e) => e
   const rejeuEve = await appel('POST', '/rdv/refuser', { rdv: dEve.d.rdv }, titulaire.jeton);
   dire(rejeuEve.code === 404, 'on ne refuse pas deux fois', 'HTTP ' + rejeuEve.code);
   const reEve = await appel('POST', '/rdv/demander', { reference: titulaire.ref }, eve.jeton);
-  dire(reEve.d.mode === 'messagerie' && reEve.d.message === dEve.d.message, 'si elle redemande : même réponse qu\'avant, sans rien deviner', reEve.d.mode);
+  // Regle du 11/10 : bloquee, sa redemande se passe comme un deuxieme clic ordinaire (son echo est recent :
+  // reponse de « reprise »), et rien n arrive chez Tania.
+  dire(reEve.d.mode === 'messagerie' && reEve.d.message !== dEve.d.message && /consulter ta messagerie/.test(reEve.d.message), 'si elle redemande : la réponse d\'un deuxième clic ordinaire, sans rien deviner', reEve.d.mode);
+  const convTe2 = await conversation(titulaire.jeton, eve.ref);
+  dire(convTe2.contenu.thread.length === convTe.contenu.thread.length, 'et rien de nouveau chez Tania (règle du 11/10)', convTe2.contenu.thread.length);
 
   console.log('\nRefuser quelqu\'un déjà dans le carnet : sa fiche passe à « bloqué » :');
   await poser(titulaire.jeton, [reglage('tc_rdv_validation', '1')]);

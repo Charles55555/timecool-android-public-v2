@@ -473,11 +473,6 @@ function fichesDe(int $titulaireId, array $personne): array
 }
 
 /**
- * Le titulaire a-t-il bloque cette personne ? Bloquee sur l une de ses
- * fiches, bloquee partout. Sa demande de rendez-vous ne laisse alors
- * aucune trace chez lui (Charles, 11/10), et elle ne l apprend jamais.
- */
-/**
  * La demandeuse a-t-elle deja, dans sa messagerie, l echo recent de cette meme
  * demande vers cette personne ? Pour un compte bloque : au deuxieme clic il doit
  * se passer exactement ce qui se passe pour une demande ordinaire deja en
@@ -502,6 +497,11 @@ function echoDemandeRecent(array $moi, array $cible, string $texte, int $jours):
     return $le !== false && $le >= time() - $jours * 86400;
 }
 
+/**
+ * Le titulaire a-t-il bloque cette personne ? Bloquee sur l une de ses
+ * fiches, bloquee partout. Sa demande de rendez-vous ne laisse alors
+ * aucune trace chez lui (Charles, 11/10), et elle ne l apprend jamais.
+ */
 function demandeurBloque(int $titulaireId, array $demandeur): bool
 {
     foreach (fichesDe($titulaireId, $demandeur) as $c) {

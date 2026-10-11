@@ -1,7 +1,7 @@
 // Suppression d'un compte et désignation d'un administrateur, contre
 // l'API réelle. Le point qui compte : la suppression libère bien l'email
 // et le téléphone, ce que le blocage ne fait pas.
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 const ADMIN_REF = process.argv[2];
 const ADMIN_JETON = process.argv[3];
 

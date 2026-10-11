@@ -1,7 +1,7 @@
 // Prise de rendez-vous entre deux comptes, contre l'API réelle.
 // Charles demande, Julian reçoit — dans son agenda ou dans sa messagerie
 // selon ce qu'il a configuré, sans jamais pouvoir distinguer un refus.
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 
 let ko = 0;
 const dire = (ok, libelle, detail) => {
@@ -63,17 +63,17 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   dire(/[éèàù]/.test(d1.d.message || ''), 'et il porte ses accents',
     'ce texte est lu par l utilisateur');
 
+  // Regle du 11/10 (Charles, « silence ») : bloque, Charles ne laisse AUCUNE trace chez Julian ;
+  // lui garde l echo de sa demande dans sa propre messagerie, comme d habitude.
   const chezJulian = await elements(julian.jeton);
   const chezCharles = await elements(charles.jeton);
   const convJ = chezJulian.find((e) => e.type === 'conversation');
-  const convC = chezCharles.find((e) => e.type === 'conversation');
-  dire(!!convJ && !!convC, 'la conversation existe des DEUX côtés');
-  dire(convJ && convJ.contenu.thread[0].from === 'them',
-    'chez Julian, le message vient de l autre', convJ && convJ.contenu.thread[0].from);
-  dire(convC && convC.contenu.thread[0].from === 'me',
-    'chez Charles, il vient de lui-même', convC && convC.contenu.thread[0].from);
-  dire(convJ && convJ.contenu.with === 'Charles Verif', 'rangée sous le nom de l autre',
-    convJ && convJ.contenu.with);
+  const convC = chezCharles.find((e) => e.type === 'conversation' && e.uid === julian.ref);
+  dire(!convJ, 'chez Julian : aucune conversation, aucune trace (regle du 11/10)', convJ && JSON.stringify(convJ.contenu.thread.length));
+  dire(!!convC && convC.contenu.thread[0].from === 'me',
+    'chez Charles, l echo de sa demande vient de lui-même', convC && convC.contenu.thread[0].from);
+  dire(convC && convC.contenu.with === 'Julian Verif', 'rangée sous le nom de l autre',
+    convC && convC.contenu.with);
   dire(!chezJulian.some((e) => e.type === 'rdv'),
     'aucun rendez-vous posé dans son agenda', 'rien ne s impose à lui');
 
@@ -81,9 +81,10 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   const d1b = await appel('POST', '/rdv/demander', { reference: julian.ref }, charles.jeton);
   dire(d1b.d.rdv === d1.d.rdv, 'la demande en attente est reprise',
     'demande ' + d1b.d.rdv);
-  const convJ2 = (await elements(julian.jeton)).find((e) => e.type === 'conversation');
-  dire(convJ2.contenu.thread.length === 1, 'un seul message chez Julian',
+  const convJ2 = (await elements(charles.jeton)).find((e) => e.type === 'conversation' && e.uid === julian.ref);
+  dire(convJ2.contenu.thread.length === 1, 'un seul echo chez Charles, toujours rien chez Julian',
     convJ2.contenu.thread.length + ' message(s) après deux demandes');
+  dire(!(await elements(julian.jeton)).some((e) => e.type === 'conversation'), 'toujours rien chez Julian');
   dire(d1b.d.message !== d1.d.message, 'le demandeur lit autre chose que la première fois',
     'plutôt qu un envoi annoncé qui n a pas eu lieu');
   dire(/consulter ta messagerie/.test(d1b.d.message),
@@ -94,8 +95,8 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   // datait de dix jours. Sans expiration, elle interdirait à jamais
   // toute nouvelle demande vers cette personne.
   await appel('POST', '/rdv/demander', { reference: julian.ref }, charles.jeton);
-  const avantVieillissement = (await elements(julian.jeton))
-    .find((e) => e.type === 'conversation').contenu.thread.length;
+  const avantVieillissement = (await elements(charles.jeton))
+    .find((e) => e.type === 'conversation' && e.uid === julian.ref).contenu.thread.length;
   dire(avantVieillissement === 1, 'toujours un seul message', avantVieillissement);
 
   console.log('\nLe message envoyé est écrit à la première personne :');
@@ -175,6 +176,9 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   dire(d4.d.mode === 'messagerie', 'la demande repart en messagerie', d4.d.mode);
   dire(d4.d.message === d1.d.message, 'mot pour mot le même message qu au début',
     'impossible de deviner le blocage');
+  const finJ2 = await elements(julian.jeton);
+  dire(!finJ2.some((e) => e.type === 'conversation' && e.contenu.thread.some((m) => m.genre === 'demande_rdv' && !m.traite)),
+    'et rien de nouveau chez Julian (aucune demande a traiter)');
 
   console.log('\nRefus attendus :');
   const soi = await appel('POST', '/rdv/demander', { reference: charles.ref }, charles.jeton);

@@ -1,6 +1,6 @@
 // Synchronisation par différences, contre l'API réelle. Deux appareils
 // simulés : ce que l'un écrit, l'autre doit le voir, et rien d'autre.
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 
 let ko = 0;
 const dire = (ok, libelle, detail) => {

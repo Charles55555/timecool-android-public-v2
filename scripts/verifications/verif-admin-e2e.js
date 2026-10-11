@@ -1,6 +1,6 @@
 // Espace administrateur, contre l'API réelle : qui voit la liste, qui
 // ne la voit pas, et ce que fait vraiment le bouton « Bloquer ».
-const API = 'https://api.timecool.fr';
+const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)
 const ADMIN_REF = process.argv[2];
 const ADMIN_JETON = process.argv[3];
 
