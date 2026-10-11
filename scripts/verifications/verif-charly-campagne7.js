@@ -85,6 +85,8 @@ titre('2. Consultation d un jour : la liste exacte, construite par la page');
   if (i2) { await c2.tcGererConsultationAgenda('est-ce que j ai quelque chose jeudi ?', i2); }
   verifie('jeudi (rien) : « Tu es libre ce jeudi ! »', i2 && /Tu es libre/.test(c2.charlyIA.history[c2.charlyIA.history.length - 1].content));
   verifie('« rdv dentiste mardi 15h » n est pas une consultation', ctx.detecterConsultationAgenda('rdv dentiste mardi 15h') === null);
+  const polies = ['Tu peux ajouter un rdv demain ?', 'Peux-tu me réserver un créneau demain ?', 'Tu peux me mettre un dentiste demain ?', 'Peux-tu me mettre un rdv dentiste demain ?', 'Un dentiste demain à 10h, ça passe ?'];
+  verifie('cinq creations polies terminees par « ? » ne sont PAS des consultations (examinateur)', polies.every((p) => ctx.detecterConsultationAgenda(p) === null), polies.map((p) => String(ctx.detecterConsultationAgenda(p) && ctx.detecterConsultationAgenda(p).type)).join(','));
 
   titre('3. L objet est donne : la page propose elle-meme');
   const R = (r, u) => ctx.tcRepondreObjetDonne(r, u, NOW);
@@ -93,6 +95,8 @@ titre('2. Consultation d un jour : la liste exacte, construite par la page');
   verifie('le titre : « Déplacement à Lyon » (le « à » devant un nom propre est garde), « Jean-Pierre » intact', ctx.tcTitreDepuisDemande('ajoute un déplacement à Lyon jeudi 9h') === 'Déplacement à Lyon' && ctx.tcTitreDepuisDemande('rdv avec Jean-Pierre vendredi 11h') === 'Jean-Pierre' && ctx.tcTitreDepuisDemande('rdv dentiste mardi 15h') === 'Dentiste');
   verifie('sans objet (« rdv jeudi 9h ») → null (Charly a raison de demander) ; sans heure → null ; autre question → null ; avec bloc → null', R('C’est pour quoi, à 9h ?', 'rdv jeudi 9h') === null && R('C’est pour quoi ?', 'déplacement à Lyon jeudi') === null && R('À quelle heure ?', 'déplacement à Lyon jeudi 9h') === null && R('C’est pour quoi ?\n[AGENDA]\n2026-10-15 | 09:00-10:00 | X | rdv\n[/AGENDA]', 'déplacement à Lyon jeudi 9h') === null);
   verifie('un deplacement de rendez-vous n est pas concerne', R('C’est pour quoi ?', 'décale mon coiffeur jeudi 9h') === null);
+  verifie('une modification non plus : « modifie le titre de mon rdv jeudi 9h », « change le motif de mon rdv jeudi 9h » → null (examinateur)', R('Quel titre veux-tu ?', 'modifie le titre de mon rdv jeudi 9h') === null && R('Quel motif ?', 'change le motif de mon rdv jeudi 9h') === null);
+  verifie('« modifie » et « change » ne sont plus des titres', ctx.tcTitreDepuisDemande('modifie le titre jeudi 9h') === 'Titre' && ctx.tcTitreDepuisDemande('change le motif jeudi 9h') === 'Motif');
   verifie('charlySendMessage l applique apres « Pour quel jour ? »', /reply = tcQuestionJourManquant\([^\n]*\n(\s*\/\/[^\n]*\n)*\s+reply = tcRepondreObjetDonne\(reply, text, new Date\(\)\) \|\| reply;/.test(fonction(page, 'charlySendMessage') || ''));
 
   titre('4. « Remets-les » apres une suppression confirmee');

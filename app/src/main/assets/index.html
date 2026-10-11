@@ -11108,7 +11108,7 @@ function tcDateDemandee(texte, now) {
  * « rdv aujourd hui 10h avec le plombier » → « Plombier ». Vide si la demande ne dit vraiment rien.
  */
 function tcTitreDepuisDemande(texte) {
-  const VIDES = /^(rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
+  const VIDES = /^(rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|change[sz]?|changer|modifie[sz]?|modifier|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
   // Les apostrophes separent les mots : « aujourd'hui », « m'ajouter », « s'il te plait » (apostrophe droite ou typographique).
   const mots = String(texte || '').replace(/[’']/g, ' ').split(/\s+/).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); });
   const utile = mots.map(function (w) {
@@ -11405,7 +11405,7 @@ function tcRepondreObjetDonne(reply, texte, now) {
   if (!/(c est pour quoi|pour quoi faire|quel est l objet|quel titre|c est quoi comme rendez-vous|quel motif|pour quel motif)/.test(rs)) return null;
   const t = tcSansAccents(texte);
   // Le VERBE seulement : « un deplacement a Lyon » est l'objet, pas une action sur un rendez-vous.
-  if (/\b(deplac(e|er|es|ez|ons)|decal(e|er|es|ez)|repouss(e|er|es|ez)|report(e|er|es|ez)|avanc(e|er|es|ez)|annul(e|er|es|ez)|supprim(e|er|es|ez)|efface[rsz]?)\b/.test(t)) return null;
+  if (/\b(deplac(e|er|es|ez|ons)|decal(e|er|es|ez)|repouss(e|er|es|ez)|report(e|er|es|ez)|avanc(e|er|es|ez)|boug(e|er|es|ez)|chang(e|er|es|ez)|modifi(e|er|es|ez)|remplac(e|er|es|ez)|annul(e|er|es|ez)|supprim(e|er|es|ez)|efface[rsz]?)\b/.test(t)) return null;
   const titre = tcTitreDepuisDemande(texte);
   const heure = tcHeureDansTexte(t);
   const demande = tcDateDemandee(texte, now);
@@ -12564,7 +12564,7 @@ function detecterConsultationAgenda(text) {
   // création de RDV ("demain à 15h, dentiste", l'exemple donné à
   // l'utilisateur lui-même) : dans ce cas on laisse filer vers le LLM,
   // désormais ancré sur le vrai agenda (tcAgendaSnapshotPourIA).
-  if (periode && text.includes('?') && text.trim().split(/\s+/).length <= 8) {
+  if (periode && text.includes('?') && text.trim().split(/\s+/).length <= 6) {
     return { type: 'periode', periode };
   }
   return null;

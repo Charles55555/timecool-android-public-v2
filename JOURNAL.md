@@ -1096,3 +1096,6 @@ mobile vers le nouvel appareil.
 - Suite `verif-charly-campagne7` (dimanche 11/10/2026 14h20, agenda campagne 7 ; `detectConflicts`, `tcGererConsultationAgenda`
   et `tcMarcheArriere` exécutées), dans verifier.sh ; rouge sur la page d'avant. verif-charly-dates / conflits / citations
   restent vertes.
+- Correctif après examen : le seuil de la question explicite revient à 6 mots (à 8, « Tu peux me mettre un dentiste demain ? »
+  devenait une consultation) ; `tcRepondreObjetDonne` exclut aussi bouge/change/modifie/remplace (fins de mots) ; « change »,
+  « modifie » rejoignent les mots de remplissage de `tcTitreDepuisDemande`.
