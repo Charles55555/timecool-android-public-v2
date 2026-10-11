@@ -820,3 +820,23 @@ mobile vers le nouvel appareil.
 - Pas de nouveau réglage. Journées entières, périodes et rendez-vous de démonstration ne se déplacent pas.
 - Suite `verif-deplacer-au-doigt`. Piège rencontré : `tcAppliquerDeplacement` existait déjà (déplacement par Charly) ;
   la fonction du geste s'appelle `tcEcrireDeplacementDoigt` et la suite vérifie qu'aucun nom n'est pris deux fois.
+
+## 11/10/2026 (session adjointe) — Toutes les flèches retour ramènent d'où l'on vient
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Une pile courte des écrans (`_tcPileEcrans`) : à chaque `navigate()` l'écran quitté est retenu (dix au plus, jamais
+  deux fois le même de suite, un redessin du même écran n'empile rien). Une seule fonction, `tcRetour()` : elle remonte
+  d'un écran, n'empile pas l'écran que l'on quitte (pas d'allers-retours), et retombe sur l'agenda si la pile est vide
+  ou si l'écran n'existe plus. Le menu latéral n'est pas un écran : il n'entre pas dans la pile.
+- Passent maintenant par `tcRetour()` : le parcours guidé de Charly (avant : toujours l'assistant), l'assistant (avant :
+  toujours l'agenda), le bouton « Annuler » du parcours guidé, les pages légales hors authentification (avant :
+  l'agenda ou les paramètres, écrits en dur), Google Agenda, et la dernière étape de l'import (qui l'utilisaient déjà).
+- La conversation garde `tcRetourDepuisConversation` (la fiche contact reste l'origine) ; la pile ne retient pas
+  « conv » : de la fiche, la flèche suivante va à l'agenda et non à la liste des messages.
+- Le parcours guidé et l'agenda isolé contournent `navigate()` : ils retiennent eux aussi l'écran quitté.
+- Exceptions gardées, à point de départ fixe : les 6 écrans d'authentification (`navigateAuth`, parcours linéaire avant la
+  connexion, hors de `navigate()`), et les pages légales ouvertes depuis l'authentification.
+- Non traité (natif, pas la page) : la touche retour matérielle d'Android appelle `webView.goBack()` ; l'application
+  ne pousse rien dans l'historique du navigateur, elle quitte donc l'application.
+- Suite `verif-retour-partout`.

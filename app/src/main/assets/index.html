@@ -1784,7 +1784,7 @@ if (window.pdfjsLib) {
 <!-- CHARLY IA - PAGE D'ACCUEIL (PRÉSENTATION DIRECTE) -->
 <div class="page" id="page-assistant">
   <div class="conv-header">
-    <button class="back-btn" onclick="navigate('calendar')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <button class="back-btn" onclick="tcRetour()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
     <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">🔒 Assistant intelligent</div></div>
     <button onclick="resetCharlyChat()" title="Nouvelle conversation" style="background:transparent; border:none; cursor:pointer; padding:8px; color:var(--text-sec);">
@@ -1849,7 +1849,7 @@ if (window.pdfjsLib) {
 <!-- CHARLY IA - PARCOURS GUIDÉ (conservé pour compatibilité v7.3) -->
 <div class="page" id="page-charly-quiz">
   <div class="conv-header">
-    <button class="back-btn" onclick="navigate('assistant')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <button class="back-btn" onclick="tcRetour()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
     <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub">🔒 Parcours guidé</div></div>
   </div>
@@ -2758,7 +2758,8 @@ function closeLegalPage() {
     // Reset
     legalReturnIsAuth = false;
   } else {
-    navigate(legalReturnTo);
+    // Hors authentification : l'ecran d'ou l'on est venu (le menu, les parametres, l'agenda...).
+    tcRetour();
   }
 }
 
@@ -8353,6 +8354,7 @@ const DAYS_LIST = [
 
 function startAssistant() {
   charlyState = { situation:null, steps:[], currentStepIdx:0, pendingDays:[], pendingPerDayHours:{}, pendingDayCursor:0, pendingStart:null, pendingEnd:null, generatedEvents:[], schoolZone:null, includeVacations:false };
+  tcNoterDepart('charly-quiz');
   currentPage = 'charly-quiz';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-charly-quiz').classList.add('active');
@@ -8429,7 +8431,7 @@ function renderSituationQuestion() {
       <button onclick="validateAgendaChecklist()" style="width:100%; padding:15px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-top:8px; box-shadow:0 4px 14px rgba(26,115,232,0.3);">
         ✅ Créer mon agenda personnalisé
       </button>
-      <button onclick="navigate('assistant')" style="width:100%; padding:10px; background:transparent; color:var(--text-sec); border:none; font-size:13px; cursor:pointer; margin-top:6px;">
+      <button onclick="tcRetour()" style="width:100%; padding:10px; background:transparent; color:var(--text-sec); border:none; font-size:13px; cursor:pointer; margin-top:6px;">
         Annuler
       </button>
     </div>
@@ -9422,11 +9424,53 @@ function renderPros() {
    Ajouter ici, pas là-bas. */
 /* D'ou l'on venait, pour que la fleche de retour existe. Le calendrier
    par defaut : c'est l'ecran d'accueil de l'application. */
-let _tcPagePrecedente = 'calendar';
+let _tcPagePrecedente = 'calendar';   // le sommet de la pile : la derniere page quittee
 
-/** Revient a l'ecran precedent. */
+/* LA PILE DES ECRANS — chaque fleche retour ramene d'ou l'on vient, jamais
+   a un ecran fixe (Charles, 11/10).
+
+   A chaque navigate(), l'ecran quitte est retenu : dix au plus, jamais deux
+   fois de suite le meme, et un redessin du meme ecran n'empile rien. Le menu
+   lateral n'est pas un ecran : il n'y entre pas. La conversation non plus :
+   sa fleche sait deja d'ou elle vient (tcRetourDepuisConversation, qui
+   ramene a la fiche contact quand c'est de la que l'on vient).
+
+   Seules les pages d'authentification gardent un point de depart fixe
+   (navigateAuth) : c'est un parcours lineaire avant la connexion, hors de
+   navigate() et de cette pile. */
+const TC_PILE_MAX = 10;
+let _tcPileEcrans = [];
+let _tcRetourEnCours = false;
+
+/** Retient l'ecran que l'on quitte pour aller vers `vers`. */
+function tcNoterDepart(vers) {
+  if (_tcRetourEnCours) return;
+  const quittee = (typeof currentPage === 'string') ? currentPage : '';
+  if (!quittee || quittee === vers || quittee === 'conv') return;
+  if (typeof document !== 'undefined' && !document.getElementById('page-' + quittee)) return;
+  if (_tcPileEcrans[_tcPileEcrans.length - 1] !== quittee) {
+    _tcPileEcrans.push(quittee);
+    if (_tcPileEcrans.length > TC_PILE_MAX) _tcPileEcrans.shift();
+  }
+  _tcPagePrecedente = quittee;
+}
+
+/**
+ * Revient a l'ecran d'ou l'on vient. Pile vide, ou ecran disparu :
+ * l'agenda, l'ecran sur lequel on retombe toujours.
+ */
 function tcRetour() {
-  navigate(_tcPagePrecedente || 'calendar');
+  let cible = 'calendar';
+  while (_tcPileEcrans.length) {
+    const p = _tcPileEcrans.pop();
+    if (p === currentPage) continue;   // on y est deja : on remonte d'un cran de plus
+    cible = (typeof document === 'undefined' || document.getElementById('page-' + p)) ? p : 'calendar';
+    break;
+  }
+  _tcPagePrecedente = _tcPileEcrans.length ? _tcPileEcrans[_tcPileEcrans.length - 1] : 'calendar';
+  // Revenir en arriere n'empile pas l'ecran que l'on quitte : sinon la fleche ferait des allers-retours.
+  _tcRetourEnCours = true;
+  try { navigate(cible); } finally { _tcRetourEnCours = false; }
 }
 
 /**
@@ -9449,9 +9493,7 @@ function tcRetourImport() {
 navigate = function(page) {
   // Une page ne se ramene pas a elle-meme : sans cela, revenir depuis
   // « importagenda » vers « importagenda » ne ferait rien.
-  if (typeof currentPage === 'string' && currentPage && currentPage !== page) {
-    _tcPagePrecedente = currentPage;
-  }
+  tcNoterDepart(page);
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-' + page);
@@ -18419,6 +18461,7 @@ function isolateCalendarView(calendarId) {
   toggleMenu();
   // Contourne navigate() volontairement : la remise à zéro des agendas
   // visibles n'a lieu que sur une navigation normale, pas ici.
+  tcNoterDepart('calendar');
   currentPage = 'calendar';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-calendar').classList.add('active');
