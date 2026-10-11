@@ -800,3 +800,23 @@ mobile vers le nouvel appareil.
   (sous le titre : celui du lundi de la semaine affichée), Charly (« cette semaine » reste du lundi au dimanche).
 - Suite `verif-premier-jour-semaine` (lundi/dimanche/samedi : ordre des en-têtes, première date de 70 semaines,
   changement de mois et d'année, 1er janvier, 29 février, aucun jour sauté ni doublé, « aujourd'hui » dans la bonne colonne).
+
+## 11/10/2026 (session adjointe) — Déplacer un rendez-vous au doigt
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Appui long (500 ms) sur un rendez-vous de la vue Jour ou Semaine : il se soulève (ombre, léger agrandissement).
+  On le glisse : il s'aimante sur des pas de 15 minutes, et de jour en jour dans la vue Semaine (limité à la
+  semaine affichée, à 0h00–23h59). Une étiquette dit le jour et l'heure visés. Même geste à la souris.
+- On relâche : déplacé, même durée, message « Déplacé vers vendredi 9 octobre, 12h15 — Annuler » pendant 6 s.
+  « Annuler » remet l'ancien horaire (retrouve le rendez-vous par son identifiant si la synchro a remplacé l'objet).
+  Un simple toucher ouvre le rendez-vous comme avant ; glisser puis revenir au même créneau ne fait rien.
+- Écriture : la même sauvegarde que la fiche (`saveEventsToStorage`) : la synchro et Google suivent, pas de nouveau chemin.
+- Rendez-vous pris avec un autre compte (`tc_rdv_…`, `tc_grp_…`) : il ne bouge PAS. Le geste ouvre « Je décale » :
+  le message de prévenance propose le créneau visé (« … Voici ce que je peux te proposer : jeudi 8 octobre à 16h15. »),
+  puis la modification s'ouvre déjà placée sur ce créneau. Le rendez-vous ne change qu'à l'enregistrement.
+- Pendant le geste : glissement de semaine et tirer-pour-rafraîchir coupés ; défilement bloqué sur ce bloc seulement ;
+  aucun écouteur sur le document hors geste ; un seul style (transform) écrit quand le créneau visé change.
+- Pas de nouveau réglage. Journées entières, périodes et rendez-vous de démonstration ne se déplacent pas.
+- Suite `verif-deplacer-au-doigt`. Piège rencontré : `tcAppliquerDeplacement` existait déjà (déplacement par Charly) ;
+  la fonction du geste s'appelle `tcEcrireDeplacementDoigt` et la suite vérifie qu'aucun nom n'est pris deux fois.

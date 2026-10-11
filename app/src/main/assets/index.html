@@ -161,6 +161,14 @@ body { display:flex; flex-direction:column; }
 .day-event { margin:2px 12px 2px 0; padding:8px 10px; border-radius:6px; color:white; font-size:13px; cursor:pointer; position:absolute; left:56px; right:12px; }
 .day-event-title { font-weight:600; margin-bottom:2px; }
 .day-event-time { font-size:11px; opacity:0.9; }
+.week-event, .day-event { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.tc-deplace { z-index:60 !important; box-shadow:0 10px 24px rgba(0,0,0,0.30) !important; opacity:0.97; transition:none !important; cursor:grabbing; will-change:transform; }
+body.tc-deplacement { -webkit-user-select:none; user-select:none; cursor:grabbing; }
+.tc-deplace-etiquette { position:fixed; z-index:10201; background:#202124; color:#fff; font-size:12px; font-weight:600; padding:5px 10px; border-radius:12px; pointer-events:none; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+.tc-deplace-barre { position:fixed; bottom:80px; left:0; right:0; margin:0 auto; width:fit-content; max-width:calc(100% - 24px); display:none; align-items:center; gap:14px; background:#333; color:#fff; padding:8px 8px 8px 18px; border-radius:24px; font-size:13px; z-index:10200; max-width:92%; }
+.tc-deplace-barre.show { display:flex; }
+.tc-deplace-barre button { background:none; border:none; color:#8ab4f8; font-size:13px; font-weight:600; padding:6px 10px; cursor:pointer; }
+body.maj-visible .tc-deplace-barre { bottom:152px; }
 
 .fab { position:fixed; bottom:20px; right:16px; width:54px; height:54px; border-radius:16px; border:none; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:20; }
 .fab svg { width:24px; height:24px; }
@@ -4665,6 +4673,7 @@ function renderWeek() {
         evt.style.width = `${colWidth - 2}px`;
         evt.innerHTML = `<div class="week-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         evt.onclick = () => openEventModal(e);
+        tcRendreDeplacable(evt, e, { vue: 'week', pxParMin: 44/60, colWidth: colWidth, di: di });
         body.appendChild(evt);
       });
     });
@@ -4765,9 +4774,305 @@ function renderDay() {
     evt.style.height = `${Math.max(dm*(48/60)-6, 42)}px`;
     evt.innerHTML = `<div class="day-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}</div>`;
     evt.onclick = () => openEventModal(e);
+    tcRendreDeplacable(evt, e, { vue: 'day', pxParMin: 48/60, colWidth: 0, di: 0 });
     body.appendChild(evt);
   });
 }
+
+/* ══════════════════════════════════════════════════════════════
+   DÉPLACER UN RENDEZ-VOUS AU DOIGT — comme dans Google Agenda
+
+   Appui long (environ une demi-seconde) sur un rendez-vous de la vue
+   Jour ou Semaine : il se soulève. On le glisse, il s'aimante sur des
+   pas de 15 minutes (et de jour en jour dans la vue Semaine), une
+   étiquette dit où il atterrira. On relâche : il est déplacé, avec un
+   message « Annuler » quelques secondes. Un simple toucher, lui, ouvre
+   le rendez-vous comme avant.
+
+   Un rendez-vous pris avec un autre compte TimeCool ne bouge pas en
+   douce : le geste ouvre « Je décale » (le message de prévenance, puis
+   la modification), avec le créneau visé déjà proposé et pré-rempli.
+
+   Fluidité : pendant le glissement, une seule écriture de style
+   (transform) et seulement quand le créneau visé change. Aucun
+   rendu de la semaine avant le relâchement. Même geste à la souris.
+   ══════════════════════════════════════════════════════════════ */
+const TC_DEPLACER_PAS = 15;            // minutes
+const TC_DEPLACER_APPUI_MS = 500;      // appui long
+const TC_DEPLACER_TOLERANCE_PX = 8;    // au-delà avant l'appui long : c'est un défilement
+let _tcDrag = null;
+let _tcDernierDeplacement = null;
+let _tcCliqueIgnoreJusqua = 0;
+
+/** Un rendez-vous venu du serveur : pris avec un autre compte TimeCool. */
+function tcRdvAvecAutreCompte(e) {
+  return !!e && typeof e.id === 'string' && (e.id.indexOf('tc_rdv_') === 0 || e.id.indexOf('tc_grp_') === 0);
+}
+
+/** Seuls les rendez-vous à heure du vrai agenda se déplacent : ni journées entières, ni périodes, ni démonstration. */
+function tcRdvDeplacable(e) {
+  if (!e || tcEstBandeau(e)) return false;
+  return e.mode === 'user' || (typeof e.id === 'string' && e.id.indexOf('charly_ai_') === 0);
+}
+
+/**
+ * Où atterrit le rendez-vous quand le doigt a glissé de (dx, dy) pixels.
+ *
+ * geo : { vue: 'day' | 'week', pxParMin, colWidth, di } — pixels par minute,
+ * largeur d'une colonne et colonne d'origine (vue Semaine seulement).
+ * La durée est gardée, le pas est de 15 minutes, et le rendez-vous reste
+ * dans sa journée (0h00 – 23h59) et dans la semaine affichée.
+ */
+function tcCibleDeplacement(e, dxPx, dyPx, geo) {
+  const debut0 = e.startH * 60 + e.startM;
+  const duree = Math.max(0, (e.endH * 60 + e.endM) - debut0);
+  let nouveau = debut0 + Math.round((dyPx / geo.pxParMin) / TC_DEPLACER_PAS) * TC_DEPLACER_PAS;
+  nouveau = Math.max(0, Math.min(1439 - duree, nouveau));
+  let jours = 0;
+  if (geo.vue === 'week' && geo.colWidth > 0) {
+    jours = Math.round(dxPx / geo.colWidth);
+    jours = Math.max(-geo.di, Math.min(6 - geo.di, jours));
+  }
+  const fin = nouveau + (e.endH * 60 + e.endM) - debut0;
+  const d = new Date(e.date + 'T12:00:00');
+  d.setDate(d.getDate() + jours);
+  return {
+    date: fmt(d),
+    startH: Math.floor(nouveau / 60), startM: nouveau % 60,
+    endH: Math.floor(fin / 60), endM: fin % 60,
+    jours: jours, minutes: nouveau - debut0
+  };
+}
+
+function tcMemeCreneau(a, b) {
+  return !!a && !!b && a.date === b.date && a.startH === b.startH && a.startM === b.startM
+    && a.endH === b.endH && a.endM === b.endM;
+}
+
+/** « vendredi 9 octobre, 12h15 » (barre Annuler) ou « vendredi 9 octobre à 12h15 » (message). */
+function tcLibelleCreneau(c, liaison) {
+  const d = new Date(c.date + 'T12:00:00');
+  const jour = isNaN(d) ? c.date : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return jour + (liaison || ', ') + String(c.startH).padStart(2, '0') + 'h' + String(c.startM).padStart(2, '0');
+}
+
+/** Écrit le nouveau créneau, sauvegarde (la synchro, Google compris, suit) et rend l'ancien. */
+function tcEcrireDeplacementDoigt(e, c) {
+  const ancien = { date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM };
+  e.date = c.date;
+  e.startH = c.startH; e.startM = c.startM;
+  e.endH = c.endH; e.endM = c.endM;
+  saveEventsToStorage();
+  if (typeof currentPage !== 'undefined' && currentPage === 'calendar') render();
+  return ancien;
+}
+
+/** Le message « Déplacé vers … — Annuler », quelques secondes. */
+function tcMontrerDeplacement(e, ancien, c) {
+  if (_tcDernierDeplacement && _tcDernierDeplacement.minuteur) clearTimeout(_tcDernierDeplacement.minuteur);
+  let b = document.getElementById('tcDeplaceBarre');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'tcDeplaceBarre';
+    b.className = 'tc-deplace-barre';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = '<span>Déplacé vers ' + tcLibelleCreneau(c) + '</span>'
+    + '<button type="button" onclick="tcAnnulerDeplacement()">Annuler</button>';
+  b.classList.add('show');
+  _tcDernierDeplacement = {
+    e: e, ancien: ancien,
+    minuteur: setTimeout(tcCacherBarreDeplacement, 6000)
+  };
+}
+
+function tcCacherBarreDeplacement() {
+  const b = document.getElementById('tcDeplaceBarre');
+  if (b) b.classList.remove('show');
+  if (_tcDernierDeplacement) _tcDernierDeplacement.minuteur = null;
+}
+
+/** « Annuler » : le rendez-vous retrouve son ancien horaire. */
+function tcAnnulerDeplacement() {
+  const dernier = _tcDernierDeplacement;
+  if (dernier && dernier.minuteur) clearTimeout(dernier.minuteur);
+  _tcDernierDeplacement = null;
+  tcCacherBarreDeplacement();
+  if (!dernier) return false;
+  // Une synchro a pu remplacer l'objet entre-temps : on le retrouve par son identifiant.
+  let e = events.indexOf(dernier.e) >= 0 ? dernier.e : null;
+  if (!e && dernier.e && dernier.e.id) e = events.find(function (x) { return x.id === dernier.e.id; }) || null;
+  if (!e) return false;
+  e.date = dernier.ancien.date;
+  e.startH = dernier.ancien.startH; e.startM = dernier.ancien.startM;
+  e.endH = dernier.ancien.endH; e.endM = dernier.ancien.endM;
+  saveEventsToStorage();
+  if (typeof currentPage !== 'undefined' && currentPage === 'calendar') render();
+  showToast('↩️ Rendez-vous remis à sa place');
+  return true;
+}
+
+/**
+ * Le geste est fini. 'rien' : même créneau. 'decale' : rendez-vous avec
+ * un autre compte, on ouvre « Je décale » au lieu de bouger. 'deplace' :
+ * déplacé, avec « Annuler ».
+ */
+function tcTerminerDeplacement(e, c) {
+  if (!e || !c || tcMemeCreneau(e, c)) return 'rien';
+  if (tcRdvAvecAutreCompte(e)) { tcDecalerVers(e, c); return 'decale'; }
+  const ancien = tcEcrireDeplacementDoigt(e, c);
+  tcMontrerDeplacement(e, ancien, c);
+  return 'deplace';
+}
+
+/** « Je décale » avec le créneau visé : le message le propose, la modification s'ouvre sur lui. */
+function tcDecalerVers(e, c) {
+  const contact = tcContactDuRdv(e);
+  _prevenirContact = contact || null;
+  _prevenirName = contact ? contact.name : String(e.title || '');
+  _prevenirEventRef = e;
+  _prevenirCible = c;
+  return prevenirDecaler();
+}
+
+/** Ouvre la modification déjà placée sur le créneau visé. */
+function tcPreRemplirCreneau(c) {
+  const d = document.getElementById('editDate');
+  const h1 = document.getElementById('editStartH');
+  const h2 = document.getElementById('editEndH');
+  const hh = function (h, m) { return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
+  if (d) d.value = c.date;
+  if (h1) h1.value = hh(c.startH, c.startM);
+  if (h2) h2.value = hh(c.endH, c.endM);
+}
+
+/** Branche le geste sur un rendez-vous dessiné dans la vue Jour ou Semaine. */
+function tcRendreDeplacable(el, e, geo) {
+  if (!tcRdvDeplacable(e)) return;
+  el.addEventListener('pointerdown', function (p) { tcDeplacerDebut(p, el, e, geo); });
+  // Une fois soulevé, le doigt ne fait plus défiler la page (écouteur non passif, sur ce bloc seulement).
+  el.addEventListener('touchmove', function (t) {
+    if (_tcDrag && _tcDrag.actif && t.cancelable) t.preventDefault();
+  }, { passive: false });
+  // L'appui long ne doit pas ouvrir le menu du navigateur.
+  el.addEventListener('contextmenu', function (c) { if (_tcDrag) c.preventDefault(); });
+}
+
+function tcDeplacerDebut(p, el, e, geo) {
+  if (_tcDrag) return;
+  if (p.pointerType === 'mouse' && p.button !== 0) return;
+  if (p.isPrimary === false) return;
+  _tcDrag = { el: el, e: e, geo: geo, id: p.pointerId, x0: p.clientX, y0: p.clientY, actif: false, aBouge: false, cible: null, timer: null };
+  _tcDrag.timer = setTimeout(tcDeplacerSoulever, TC_DEPLACER_APPUI_MS);
+  document.addEventListener('pointermove', tcDeplacerBouge);
+  document.addEventListener('pointerup', tcDeplacerLacher);
+  document.addEventListener('pointercancel', tcDeplacerAbandon);
+}
+
+function tcDeplacerNettoyer() {
+  const d = _tcDrag;
+  document.removeEventListener('pointermove', tcDeplacerBouge);
+  document.removeEventListener('pointerup', tcDeplacerLacher);
+  document.removeEventListener('pointercancel', tcDeplacerAbandon);
+  if (d && d.timer) clearTimeout(d.timer);
+  if (d && d.el) {
+    d.el.classList.remove('tc-deplace');
+    d.el.style.transform = '';
+  }
+  if (document.body) document.body.classList.remove('tc-deplacement');
+  const b = document.getElementById('tcDeplaceEtiquette');
+  if (b && b.parentNode) b.parentNode.removeChild(b);
+  _tcDrag = null;
+}
+
+/** L'appui est assez long : le bloc se soulève, les autres gestes se taisent. */
+function tcDeplacerSoulever() {
+  const d = _tcDrag;
+  if (!d || d.actif) return;
+  d.timer = null;
+  if (!d.el.isConnected) { tcDeplacerNettoyer(); return; }
+  d.actif = true;
+  d.cible = tcCibleDeplacement(d.e, 0, 0, d.geo);
+  d.el.classList.add('tc-deplace');
+  d.el.style.transform = 'translate3d(0,0,0) scale(1.03)';
+  document.body.classList.add('tc-deplacement');
+  try { d.el.setPointerCapture(d.id); } catch (x) {}
+  // Glissement d'une semaine à l'autre et tirer-pour-rafraîchir : coupés jusqu'au relâchement.
+  if (typeof _swipeActive !== 'undefined') _swipeActive = false;
+  if (typeof _tirerDepart !== 'undefined') _tirerDepart = null;
+  if (typeof tcTirerCacher === 'function') tcTirerCacher();
+  try { if (navigator.vibrate) navigator.vibrate(12); } catch (x) {}
+  tcDeplacerEtiquette(d);
+}
+
+function tcDeplacerBouge(p) {
+  const d = _tcDrag;
+  if (!d || p.pointerId !== d.id) return;
+  const dx = p.clientX - d.x0, dy = p.clientY - d.y0;
+  const loin = Math.abs(dx) > TC_DEPLACER_TOLERANCE_PX || Math.abs(dy) > TC_DEPLACER_TOLERANCE_PX;
+  if (!d.actif) {
+    // Le doigt bouge avant l'appui long : c'est un défilement, pas un déplacement.
+    if (loin) tcDeplacerNettoyer();
+    return;
+  }
+  // La semaine a été redessinée pendant le geste (synchro) : on laisse tomber.
+  if (!d.el.isConnected) { tcDeplacerNettoyer(); return; }
+  if (loin) d.aBouge = true;
+  const c = tcCibleDeplacement(d.e, dx, dy, d.geo);
+  if (tcMemeCreneau(c, d.cible)) return;
+  d.cible = c;
+  const px = Math.round(c.jours * (d.geo.colWidth || 0) * 100) / 100, py = Math.round(c.minutes * d.geo.pxParMin * 100) / 100;
+  d.el.style.transform = 'translate3d(' + px + 'px,' + py + 'px,0) scale(1.03)';
+  tcDeplacerEtiquette(d);
+}
+
+function tcDeplacerLacher(p) {
+  const d = _tcDrag;
+  if (!d || p.pointerId !== d.id) return;
+  if (!d.actif) { tcDeplacerNettoyer(); return; }   // simple toucher : le clic ouvre le rendez-vous
+  const e = d.e;
+  const c = tcCibleDeplacement(e, p.clientX - d.x0, p.clientY - d.y0, d.geo);
+  const bouge = d.aBouge;
+  tcDeplacerNettoyer();
+  // Le clic qui suit un vrai glissement ne doit pas ouvrir la fiche.
+  if (bouge) _tcCliqueIgnoreJusqua = Date.now() + 500;
+  tcTerminerDeplacement(e, c);
+}
+
+function tcDeplacerAbandon(p) {
+  const d = _tcDrag;
+  if (!d || p.pointerId !== d.id) return;
+  tcDeplacerNettoyer();
+}
+
+/** La petite étiquette : jour et heure visés, en direct. */
+function tcDeplacerEtiquette(d) {
+  let b = document.getElementById('tcDeplaceEtiquette');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'tcDeplaceEtiquette';
+    b.className = 'tc-deplace-etiquette';
+    document.body.appendChild(b);
+  }
+  const c = d.cible;
+  const jour = new Date(c.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+  const hh = function (h, m) { return String(h).padStart(2, '0') + 'h' + String(m).padStart(2, '0'); };
+  b.textContent = jour + ' · ' + hh(c.startH, c.startM) + ' – ' + hh(c.endH, c.endM);
+  const r = d.el.getBoundingClientRect();
+  const w = b.offsetWidth;
+  b.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2)) + 'px';
+  b.style.top = Math.max(6, r.top - 34) + 'px';
+}
+
+/** Le clic que le navigateur envoie juste après un vrai glissement n'ouvre pas la fiche. « Annuler », lui, reste cliquable aussitôt. */
+function tcAvalerCliqueApresDeplacement(ev) {
+  if (Date.now() >= _tcCliqueIgnoreJusqua) return;
+  if (ev.target && ev.target.closest && ev.target.closest('#tcDeplaceBarre')) return;
+  _tcCliqueIgnoreJusqua = 0;
+  ev.stopPropagation();
+  ev.preventDefault();
+}
+document.addEventListener('click', tcAvalerCliqueApresDeplacement, true);
 
 // ═══ EVENT MODAL ═══
 let currentEvent = null;
@@ -20398,6 +20703,7 @@ function tcDefinirVouvoiement(contactId, vouvoie) {
 let _prevenirName = '';
 let _prevenirContact = null;
 let _prevenirEventRef = null;
+let _prevenirCible = null;   // creneau vise par un deplacement au doigt
 
 /**
  * Le prochain rendez-vous avec ce contact.
@@ -20448,6 +20754,7 @@ function openPrevenirSheet(contact, eventRef) {
   const name = _prevenirContact ? _prevenirContact.name : String(contact || '');
   _prevenirName = name;
   _prevenirEventRef = eventRef || null;
+  _prevenirCible = null;
 
   const ov = document.createElement('div');
   ov.className = 'msg-sheet-ov';
@@ -20545,9 +20852,13 @@ async function prevenirDecaler() {
   if (!_prevenirEventRef) return;
   const ev = _prevenirEventRef;
   const name = _prevenirName;
-  const texte = tcRemplirModele(
+  const cible = _prevenirCible;
+  _prevenirCible = null;
+  let texte = tcRemplirModele(
     tcModeleMessage('decale', tcVouvoiement(_prevenirContact)),
     tcValeursDuRdv(name, ev));
+  // Venu d'un deplacement au doigt : le creneau vise EST la proposition.
+  if (cible) texte += ' ' + tcLibelleCreneau(cible, ' à ') + '.';
 
   _closeAllSheets();
   if (!await tcConfirm('Prévenir ' + name + ' que tu décales ?\n\n« ' + texte + ' »')) return;
@@ -20557,6 +20868,12 @@ async function prevenirDecaler() {
   // Le rendez-vous reste : c'est son horaire qu'on vient changer.
   currentEvent = ev;
   openEditEventModal();
+  if (cible) {
+    // Venu d'un glissement : la fiche du rendez-vous n'est pas ouverte derriere, on ouvre la fenetre.
+    const fenetre = document.getElementById('eventModal');
+    if (fenetre) fenetre.classList.add('open');
+    tcPreRemplirCreneau(cible);
+  }
 }
 
 function prevenirRetard() {
