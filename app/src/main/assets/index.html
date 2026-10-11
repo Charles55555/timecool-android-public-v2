@@ -19057,7 +19057,7 @@ function renderContactsListHTML(contacts) {
           </label>
           <div style="font-size:11px; color:#9aa0a6; margin-top:6px;">Sans choix, ses demandes de rendez-vous arrivent dans ta messagerie.</div>
           ${c.blocked
-            ? `<div class="ct-blocked">\u{1F6AB}<div><b>Acc\u00e8s bloqu\u00e9 volontairement.</b> Ce contact ne pourra plus prendre rendez-vous directement. Ses nouvelles demandes de RDV arriveront dans ta messagerie s\u00e9curis\u00e9e et attendront ta validation \u2014 Ce contact ne sait pas qu'il est bloqu\u00e9. Clique sur <b>D\u00e9bloquer l'acc\u00e8s</b> pour le d\u00e9bloquer.</div></div>`
+            ? `<div class="ct-blocked">\u{1F6AB}<div><b>Acc\u00e8s bloqu\u00e9.</b> Ses demandes de rendez-vous ne t\u2019arrivent plus, et il ne le sait pas. Clique sur <b>D\u00e9bloquer l'acc\u00e8s</b> pour le d\u00e9bloquer.</div></div>`
             : ''}
 
           <div style="display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap;">
@@ -20479,7 +20479,7 @@ function toggleContactBlock(contactId) {
   try { localStorage.setItem('timecool_contacts', JSON.stringify(contactsList)); } catch(e) {}
   renderContactsList();
   showToast(contact.blocked
-    ? '\u{1F6AB} Acc\u00e8s bloqu\u00e9 \u2014 ses demandes passeront par ta messagerie'
+    ? '\u{1F6AB} Acc\u00e8s bloqu\u00e9 \u2014 ses demandes de rendez-vous ne t\u2019arrivent plus'
     : '\u2705 Acc\u00e8s d\u00e9bloqu\u00e9');
 }
 

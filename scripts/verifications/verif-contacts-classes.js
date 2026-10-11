@@ -26,7 +26,7 @@ function fonction(texte, nom) {
 const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/bin/php'].find((p) => fs.existsSync(p));
 
 titre('1. Les regles, executees sous PHP');
-const noms = ['memeReference', 'validationRdvExigee', 'categoriesToutesPourRdv', 'categoriesPourPrendreRdv', 'categoriesPourRdvAutomatique',
+const noms = ['memeReference', 'fichesDe', 'validationRdvExigee', 'categoriesToutesPourRdv', 'categoriesPourPrendreRdv', 'categoriesPourRdvAutomatique',
   'autorisationPourPrendreRdv', 'rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'plagesDeCategorie', 'retirerPlages', 'dispoPlagesDuJour',
   'dispoDuCompte', 'heuresPermisesDuJour', 'creneauxLibres'];
 const src = noms.map((n) => fonction(api, n));

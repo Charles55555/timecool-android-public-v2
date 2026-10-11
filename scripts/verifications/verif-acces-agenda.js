@@ -25,7 +25,7 @@ function fonction(texte, nom) {
 const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/bin/php'].find((p) => fs.existsSync(p));
 
 titre('1. Qui peut demander un rendez-vous (execute sous PHP)');
-const noms = ['memeReference', 'validationRdvExigee', 'categoriesToutesPourRdv', 'categoriesPourPrendreRdv', 'categoriesPourRdvAutomatique', 'autorisationPourPrendreRdv'];
+const noms = ['memeReference', 'fichesDe', 'validationRdvExigee', 'categoriesToutesPourRdv', 'categoriesPourPrendreRdv', 'categoriesPourRdvAutomatique', 'autorisationPourPrendreRdv'];
 const src = noms.map((n) => fonction(api, n));
 verifie('les fonctions existent', src.every(Boolean), noms.filter((n, i) => !src[i]).join(','));
 if (PHP && src.every(Boolean)) {

@@ -28,7 +28,7 @@ function fonction(texte, nom) {
 const PHP = ['/opt/plesk/php/8.3/bin/php', '/opt/plesk/php/8.2/bin/php', '/usr/bin/php'].find((p) => fs.existsSync(p));
 
 titre('1. Les règles, exécutées sous PHP');
-const noms = ['memeReference', 'validationRdvExigee', 'categoriesToutesPourRdv', 'categoriesPourPrendreRdv', 'categoriesPourRdvAutomatique',
+const noms = ['memeReference', 'fichesDe', 'validationRdvExigee', 'categoriesToutesPourRdv', 'categoriesPourPrendreRdv', 'categoriesPourRdvAutomatique',
   'autorisationPourPrendreRdv', 'rdvLibelleJour', 'rdvPlagesParJour', 'rdvOccupation', 'creneauEstLibre', 'plagesDeCategorie', 'retirerPlages', 'dispoPlagesDuJour', 'dispoDuCompte',
   'heuresPermisesDuJour', 'creneauxLibres'];
 const src = noms.map((n) => fonction(api, n));
@@ -113,10 +113,10 @@ titre('2. Le serveur : les routes');
 const dem = api.slice(api.indexOf("case 'POST /rdv/demander':"), api.indexOf("case 'POST /rdv/choisir':"));
 verifie('/rdv/demander : creneaux automatiques seulement via categoriesPourRdvAutomatique', /categoriesPourRdvAutomatique\(\(int\) \$cible\['id'\], \$moi\)/.test(dem) && /\$categoriesRdv !== \[\] \? creneauxLibres/.test(dem));
 verifie('/rdv/demander : la demande en messagerie est marquee « demande_rdv » (de quoi y repondre)', /messagePoser\(\$moi, \$cible, messageDemandeRdv\(\$moi, \$cible, \$typeRdv\), \$rdvId, null, 'demande_rdv',\s+identiteDemandeur\(\(int\) \$cible\['id'\], \$moi\), \$typeRdv\)/.test(dem));
-verifie('/rdv/demander : une seule reponse pour inconnu, bloque ou validation exigee (aucune raison dite)', !/bloqu|inconnu|valid/i.test(dem.slice(dem.indexOf("'mode'    => 'messagerie'"), dem.indexOf("foreach ($creneaux as $rang"))));
+verifie('/rdv/demander : une seule reponse pour inconnu, bloque ou validation exigee (aucune raison dite)', /Rep::ok\(reponseDemandeEnMessagerie\(\$cible, \$rdvId, \$reprise\)\)/.test(dem) && !/bloqu|inconnu|valid/i.test(fonction(api, 'reponseDemandeEnMessagerie') || 'bloque'));
 verifie('rendez-vous a plusieurs : un invite qui exige sa validation, inconnu ou bloque = « sans acces »', /categoriesPourRdvAutomatique\(\(int\) \$c\['id'\], \$moi\);\s+if \(\$categories === \[\]\) \{\s+\$sansAcces\[\] = texteSur/.test(api));
 verifie('plus aucun horaire par defaut dans l API', !/\[9, 10, 11, 14, 15, 16, 17\]/.test(api) && !/heuresParDefaut/.test(api));
-verifie('la fiche est aussi reconnue par la reference du compte (fiche creee par un blocage)', /!\$memeTel && !\$memeMail && !memeReference\(\$c, \$demandeur\)/.test(api) && /\$memeTel \|\| \$memeMail \|\| memeReference\(\$c, \$personne\)/.test(api));
+verifie('la fiche est aussi reconnue par la reference du compte (fiche creee par un blocage)', /\$memeTel \|\| \$memeMail \|\| memeReference\(\$c, \$personne\)/.test(fonction(api, 'fichesDe') || '') && /fichesDe\(\$titulaireId, \$demandeur\)/.test(fonction(api, 'categoriesPourPrendreRdv') || '') && /\$memeTel \|\| \$memeMail \|\| memeReference\(\$c, \$personne\)/.test(fonction(api, 'bloquerContact') || ''));
 
 const prop = api.slice(api.indexOf("case 'POST /rdv/proposer-creneau':"), api.indexOf("case 'POST /rdv/refuser':"));
 const ref = api.slice(api.indexOf("case 'POST /rdv/refuser':"), api.indexOf('// SYNCHRONISATION ENTRE APPAREILS'));

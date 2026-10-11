@@ -881,3 +881,34 @@ mobile vers le nouvel appareil.
 - Piège vu en passant, non traité (hors mission) : `showAppAfterAuth()` est appelée (connexion Google « démo »,
   ~ligne 14836) mais n'est définie nulle part.
 - Correctif apres examen (homonyme) : le nom ne sert de repli que si la fiche n a pas de reference, ou si la conversation trouvee n en a pas ; une ancienne conversation locale reprise recoit la reference du compte et passe par le serveur. Reserve notee : une locale serveur:true vide ne s archive pas tant qu aucun message n est parti.
+
+## 11/10/2026 (session Codeur) — Un contact bloqué ne laisse plus aucune trace (« silence »)
+
+**Codé et commité sur main, PAS publié. API À DÉPLOYER** (`backend/api/index.php`), page aussi. Pas de SQL.
+
+- Avant : Clémence, bloquée par Armelle (« Refuser et bloquer »), redemandait un rendez-vous : `/rdv/demander` ne
+  reprenait que les demandes « attente », la précédente étant « refuse » il en créait une nouvelle et déposait un second
+  « demande_rdv » chez Armelle : la carte « Proposer un créneau / Refuser et bloquer » revenait.
+- API : `fichesDe($titulaireId, $personne)` (les fiches qui désignent une personne : téléphone, e-mail ou référence de
+  compte ; une seule détection, reprise par `categoriesPourPrendreRdv`) ; `demandeurBloque()` = bloquée sur l'une de ses
+  fiches, bloquée partout. Dans `/rdv/demander`, AVANT toute écriture : bloquée → rien n'est créé chez le destinataire
+  (ni rdv, ni message, ni notification) et la réponse est mot pour mot celle d'une première demande ordinaire
+  (`reponseDemandeEnMessagerie()`, désormais la seule source du texte, utilisée aussi par le chemin ordinaire ; `rdv: 0`).
+  La demandeuse garde l'écho de sa demande dans SA messagerie (`messagePoser(..., $chezExpediteurSeulement = true)` :
+  côté « me » seulement, sans traduction) : la page l'y envoie chercher, et une messagerie vide aurait trahi le blocage.
+  `/rdv/choisir` (409 neutre) et le rendez-vous à plusieurs (« sans accès ») passaient déjà par `categoriesPourPrendreRdv`
+  : rien n'y est écrit, inchangés. Le lien public (`/rdv/lien/*`) ne concerne pas un compte demandeur : hors sujet.
+- Page : fiche bloquée « Accès bloqué. Ses demandes de rendez-vous ne t’arrivent plus, et il ne le sait pas. Clique sur
+  Débloquer l'accès pour le débloquer. » ; message fugace du blocage « ses demandes de rendez-vous ne t’arrivent plus ».
+  Le bouton « Débloquer l'accès » existait (menu ⋮ de la fiche, `toggleContactBlock`) et marche : rien d'inventé.
+- Suites : `verif-blocage-silence` (PHP exécuté : bloquée sur une fiche parmi deux, débloquée, par e-mail, par référence ;
+  routes ; page), dans verifier.sh ; 14 KO sur l'API et la page d'avant. `verif-blocage-silence-e2e` écrite, PAS dans
+  verifier.sh (il lance les e2e contre l'API en ligne : rouge tant que l'API n'est pas déployée) : 5 KO aujourd'hui contre
+  l'API en ligne (la carte revient), à relancer après déploiement puis à enregistrer. Suites adaptées : `fichesDe` chargée
+  par verif-acces-agenda, verif-contacts-classes, verif-temps-protege, verif-validation-rdv ; deux contrôles de
+  verif-validation-rdv (texte en dur de la route → `reponseDemandeEnMessagerie`, détection → `fichesDe`) ; la phrase citée par
+  verif-vocabulaire-formulaire.
+- Non fait, à trancher : la phrase de « Mes disponibilités » (« …ou un contact bloqué, passe toujours par ta messagerie »,
+  écran validé le 10/10) est devenue fausse ; `/messages/envoyer` d'une personne bloquée arrive toujours (hors mission).
+- Limite : un deuxième clic d'une personne bloquée rend la réponse de première demande (pas celle de « reprise »), faute
+  de demande en attente à reprendre.

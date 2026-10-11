@@ -440,31 +440,58 @@ function categoriesToutesPourRdv(): array
     return ['travail', 'sante', 'famille', 'amis', 'sport'];
 }
 
-function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
+/**
+ * Les fiches du carnet du titulaire qui designent cette personne : meme
+ * telephone, meme email ou meme reference de compte. Une personne peut en
+ * avoir plusieurs (une creee a la proposition d un creneau, une importee du
+ * telephone, une creee par un blocage...).
+ */
+function fichesDe(int $titulaireId, array $personne): array
 {
-    $tel = Empreinte::normaliserTelephone((string) $demandeur['telephone']);
-    $email = Empreinte::normaliserEmail((string) $demandeur['email']);
-
-    $fiches = Db::tous(
+    $tel = Empreinte::normaliserTelephone((string) ($personne['telephone'] ?? ''));
+    $email = Empreinte::normaliserEmail((string) ($personne['email'] ?? ''));
+    $lignes = Db::tous(
         'SELECT contenu FROM elements
           WHERE compte_id = ? AND type = "contact" AND supprime = 0',
         [$titulaireId]
     );
-    $toutes = [];
-    foreach ($fiches as $f) {
-        $c = json_decode((string) $f['contenu'], true);
+    $fiches = [];
+    foreach ($lignes as $l) {
+        $c = json_decode((string) $l['contenu'], true);
         if (!is_array($c)) {
             continue;
         }
-        $memeTel = isset($c['phone']) && $c['phone'] !== ''
+        $memeTel = $tel !== '' && isset($c['phone']) && $c['phone'] !== ''
             && Empreinte::normaliserTelephone((string) $c['phone']) === $tel;
-        $memeMail = isset($c['email']) && $c['email'] !== ''
+        $memeMail = $email !== '' && isset($c['email']) && $c['email'] !== ''
             && Empreinte::normaliserEmail((string) $c['email']) === $email;
-        if (!$memeTel && !$memeMail && !memeReference($c, $demandeur)) {
-            continue;
+        if ($memeTel || $memeMail || memeReference($c, $personne)) {
+            $fiches[] = $c;
         }
-        // Une personne peut avoir plusieurs fiches (une creee a la proposition d un
-        // creneau, une importee du telephone...) : TOUTES comptent. Bloquee sur l une,
+    }
+    return $fiches;
+}
+
+/**
+ * Le titulaire a-t-il bloque cette personne ? Bloquee sur l une de ses
+ * fiches, bloquee partout. Sa demande de rendez-vous ne laisse alors
+ * aucune trace chez lui (Charles, 11/10), et elle ne l apprend jamais.
+ */
+function demandeurBloque(int $titulaireId, array $demandeur): bool
+{
+    foreach (fichesDe($titulaireId, $demandeur) as $c) {
+        if (!empty($c['blocked'])) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function categoriesPourPrendreRdv(int $titulaireId, array $demandeur): array
+{
+    $toutes = [];
+    foreach (fichesDe($titulaireId, $demandeur) as $c) {
+        // TOUTES les fiches de la personne comptent (voir fichesDe). Bloquee sur l une,
         // bloquee partout ; les categories sont la reunion de toutes.
         if (!empty($c['blocked'])) {
             return [];
@@ -1068,6 +1095,28 @@ function messageDemandeRdv(array $de, array $vers, ?string $type = null): string
         . "sur TimeCool" . ($mot !== '' ? ', ' . $mot : '') . ". Tu me proposes un créneau ? Merci !";
 }
 
+/**
+ * La reponse au demandeur quand sa demande passe par la messagerie : la
+ * meme, mot pour mot, que l agenda soit plein, pas configure, que la
+ * personne soit inconnue, non classee ou bloquee. Rien n y dit pourquoi.
+ */
+function reponseDemandeEnMessagerie(array $cible, int $rdvId, bool $reprise): array
+{
+    return [
+    'mode'    => 'messagerie',
+    'rdv'     => $rdvId,
+    // Au deuxième clic rien n'est reparti : le dire, plutôt
+    // que d'annoncer un envoi qui n'a pas eu lieu.
+    'message' => $reprise
+        ? $cible['prenom'] . " n'a pas encore configuré son agenda TimeCool. "
+            . "En attendant tu peux consulter ta messagerie pour confirmer que "
+            . "nous lui avons envoyé un message pour le tenir informé."
+        : 'Son agenda est complet ou pas encore configuré. Ta demande de '
+            . 'rendez-vous est partie dans la messagerie de ' . $cible['prenom']
+            . ', et tu peux la retrouver dans ta messagerie.',
+    ];
+}
+
 /** Le type d'un rendez-vous, ou null s'il n'est pas l'un des trois connus (téléphone, en personne, visio). */
 function typeRdvValide(mixed $v): ?string
 {
@@ -1434,7 +1483,10 @@ function messagePoser(
     ?string $langueImposee = null,
     ?string $genre = null,
     ?array $demandeur = null,
-    ?string $type = null
+    ?string $type = null,
+    // Vrai : l echo chez l expediteur seulement, rien chez le destinataire
+    // (demandeur bloque). Faux : dans les deux messageries, comme toujours.
+    bool $chezExpediteurSeulement = false
 ): void
 {
     $maintenant = date('c');
@@ -1460,12 +1512,13 @@ function messagePoser(
     if (is_string($langueImposee) && $langueImposee !== '') {
         $langueVers = $langueImposee;
     }
-    $traduit = $langueVers === $langueDe
+    $traduit = ($langueVers === $langueDe || $chezExpediteurSeulement)
         ? null
         : traduire($texte, $langueDe, $langueVers, (int) $de['id']);
 
     $ecritures = [];
-    foreach ([[$de, $vers, 'me'], [$vers, $de, 'them']] as [$proprietaire, $autre, $sens]) {
+    $cotes = $chezExpediteurSeulement ? [[$de, $vers, 'me']] : [[$de, $vers, 'me'], [$vers, $de, 'them']];
+    foreach ($cotes as [$proprietaire, $autre, $sens]) {
         $uid = $autre['reference'];
         $existant = Db::un(
             'SELECT contenu FROM elements
@@ -2517,6 +2570,19 @@ switch ($route) {
 
         $titre = Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom']);
         $typeRdv = typeRdvValide(Entree::corps()['type'] ?? null);
+
+        /*
+         * Bloque par le destinataire : rien n est cree chez lui (ni rendez-vous,
+         * ni message, ni notification), et la reponse est celle d une premiere
+         * demande ordinaire. Le demandeur ne peut pas le deviner (Charles, 11/10).
+         * Sa propre messagerie garde l echo de sa demande, comme d habitude :
+         * la page l y envoie chercher.
+         */
+        if (demandeurBloque((int) $cible['id'], $moi)) {
+            messagePoser($moi, $cible, messageDemandeRdv($moi, $cible, $typeRdv), null, null, null, null, $typeRdv, true);
+            Rep::ok(reponseDemandeEnMessagerie($cible, 0, false));
+        }
+
         $categoriesRdv = categoriesPourRdvAutomatique((int) $cible['id'], $moi);
         $creneaux = $categoriesRdv !== [] ? creneauxLibres((int) $cible['id'], 3, $categoriesRdv) : [];
 
@@ -2571,19 +2637,7 @@ switch ($route) {
                 messagePoser($moi, $cible, messageDemandeRdv($moi, $cible, $typeRdv), $rdvId, null, 'demande_rdv',
                     identiteDemandeur((int) $cible['id'], $moi), $typeRdv);
             }
-            Rep::ok([
-                'mode'    => 'messagerie',
-                'rdv'     => $rdvId,
-                // Au deuxième clic rien n'est reparti : le dire, plutôt
-                // que d'annoncer un envoi qui n'a pas eu lieu.
-                'message' => $reprise
-                    ? $cible['prenom'] . " n'a pas encore configuré son agenda TimeCool. "
-                        . "En attendant tu peux consulter ta messagerie pour confirmer que "
-                        . "nous lui avons envoyé un message pour le tenir informé."
-                    : 'Son agenda est complet ou pas encore configuré. Ta demande de '
-                        . 'rendez-vous est partie dans la messagerie de ' . $cible['prenom']
-                        . ', et tu peux la retrouver dans ta messagerie.',
-            ]);
+            Rep::ok(reponseDemandeEnMessagerie($cible, $rdvId, $reprise));
         }
 
         foreach ($creneaux as $rang => $c) {
