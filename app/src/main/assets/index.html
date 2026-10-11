@@ -1177,7 +1177,7 @@ if (window.pdfjsLib) {
 <!-- CONVERSATION -->
 <div class="page" id="page-conv">
   <div class="conv-header">
-    <button class="back-btn" onclick="navigate('messages')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <button class="back-btn" onclick="tcRetourDepuisConversation()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div class="msg-avatar" id="convAvatar" style="width:36px;height:36px;font-size:13px;"></div>
     <div class="conv-info"><div class="conv-name" id="convName"></div><div class="conv-sub">🔒 Privé</div></div>
     <button id="convConvoqBtn" onclick="openConvocationSheet()" style="display:none; margin-left:auto; background:none; border:none; font-size:20px; cursor:pointer; padding:6px;" title="Convoquer le groupe">📅</button>
@@ -6108,6 +6108,8 @@ let _msgFilter = 'all';
 let _msgNotif = true;
 let _msgPressTimer = null;
 let _currentConvId = null;
+/** Page d'ou la conversation ouverte a ete appelee : la fleche retour y ramene (Charles, 11/10). */
+let _convOrigine = 'messages';
 
 function toggleMsgMenu(e) {
   if (e) e.stopPropagation();
@@ -6578,10 +6580,23 @@ function tcBasculerOriginal(lien) {
   lien.textContent = texte.hidden ? 'Voir l\'original' : 'Masquer l\'original';
 }
 
-function openConversation(id) {
+/**
+ * La fleche retour de la conversation ramene a l'ecran d'ou elle a ete ouverte
+ * (fiche contact, agenda...), pas toujours a la liste des messages (Charles, 11/10).
+ */
+function tcRetourDepuisConversation() {
+  const page = _convOrigine && _convOrigine !== 'conv' && document.getElementById('page-' + _convOrigine)
+    ? _convOrigine : 'messages';
+  navigate(page);
+}
+
+function openConversation(id, origine) {
   const msg = tcConversationParId(id);
   if (!msg) return;
   _currentConvId = id;
+  // D'ou vient-on ? Un simple redessin (envoi, synchro) ne change pas l'origine.
+  if (origine) _convOrigine = origine;
+  else if (currentPage !== 'conv') _convOrigine = currentPage;
   msg.unread = 0;
   updateBadges();
   document.getElementById('convAvatar').style.background = msg.color;
@@ -20069,6 +20084,7 @@ function toggleContactBlock(contactId) {
 function messageContact(contactId) {
   const contact = contactsList.find(c => c.id === contactId);
   if (!contact) return;
+  const appelante = currentPage;   // la fleche retour y ramenera (Charles, 11/10)
   if (!messages[mode]) messages[mode] = [];
 
   // Retrouver la conversation existante avec ce contact, sinon la cr\u00e9er
@@ -20096,7 +20112,7 @@ function messageContact(contactId) {
 
   navigate('messages');
   renderMessages();
-  openConversation(conv.id);
+  openConversation(conv.id, appelante);
   setTimeout(function() {
     const inp = document.getElementById('convInput');
     if (inp) inp.focus();
