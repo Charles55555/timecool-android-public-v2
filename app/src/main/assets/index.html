@@ -11367,8 +11367,11 @@ function tcRdvNommeIntrouvable(texte, now, events, mode) {
   const t = tcSansAccents(texte);
   // Un vrai deplacement de rendez-vous : verbe strict, ou verbe large (« change », « modifie ») avec le mot
   // rendez-vous. « Change la couleur de mon agenda », « modifie mon profil » ne passent pas ici.
-  const strict = /\b(deplac|decal|repouss|report|avanc|reprogramm)/.test(t);
+  // Le VERBE, avec fin de mot : « un deplacement a Lyon », « un reportage photo » sont des noms d evenements.
+  const strict = /\b(deplac(e|er|es|ez|ons)|decal(e|er|es|ez)|repouss(e|er|es|ez)|report(e|er|es|ez)|avanc(e|er|es|ez)|reprogramm(e|er|es|ez))\b/.test(t);
   if (!strict && !(tcEstDeplacement(texte) && /\b(rdv|rendez-?vous|reunion|seance|consultation)\b/.test(t))) return null;
+  // Une question (« quels sont mes deplacements ? ») n est pas un deplacement.
+  if (/\?|\b(quel|quelle|quels|quelles|est[- ]ce que|combien|qu ai|qu est)\b/.test(t.replace(/[’']/g, ' '))) return null;
   const CREUX = /^(reporte[rsz]?|repousse[rsz]?|avance[rsz]?|bouge[rsz]?|decale[rsz]?|deplace[rsz]?|remets?|mets?|change[rsz]?|modifie[rsz]?|plutot|meme|place|creneau|horaire|jour|jours|heure|heures|apres|avant|vers|pour|jusqu|prochain|prochaine|semaine|rendez|vous|demain|matin|soir|midi)$/;
   const mots = tcMotsDeRdv(texte).filter(function (w) { return !CREUX.test(w); });
   if (!mots.length) return null;

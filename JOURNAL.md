@@ -1070,3 +1070,7 @@ mobile vers le nouvel appareil.
   (« est-ce que j'ai quelque chose vendredi ? ») ou une réponse qui cite un rendez-vous réellement présent ce jour-là ne sont
   pas réécrites. Réserves notées : `tcAccorderProseAuBloc` remplace aussi une mention volontaire d'un autre mardi ; « et le
   lieu ? » (3 mots) abandonne la proposition en attente (règle de Charles).
+- Correctif après examen (bis) : dans `tcRdvNommeIntrouvable`, le verbe de déplacement est reconnu avec fin de mot (déplace,
+  décaler, repousses, reporte, avancez, reprogramme…) : « un déplacement à Lyon », « un reportage photo » sont des noms
+  d'événements et passent ; une question (« quels sont mes déplacements ? ») ne déclenche rien. `tcEstDeplacement` est
+  inchangée (elle sert ailleurs).
