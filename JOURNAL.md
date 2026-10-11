@@ -987,3 +987,33 @@ mobile vers le nouvel appareil.
   la phrase ne cite qu'un seul jour et sans « veille / lendemain / avant / après / rappel » (`tcPlusieursDatesOuRelatif`) ;
   le titre et l'heure passée restent traités. Réserve notée : une heure passée remplace toute la réponse du modèle par le
   refus calme et la proposition (sa prose disparaît).
+
+## 11/10/2026 (session Codeur) — Charly : conflits d'un autre jour, déplacements à tort, jour manquant
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Constat (campagne 5) : l'agenda était transmis à Charly en liste plate sur 400 jours ; il citait un rendez-vous d'un autre
+  jour comme conflit (« mardi 15h occupé par Zorglub », Zorglub étant lundi) et déplaçait le mauvais rendez-vous (« mon rdv de
+  mardi » → Zorglub de lundi), la page suivant son bloc [AGENDA] par titre sans vérifier le jour. Sans jour dans la demande, il
+  en choisissait un.
+- `tcAgendaSnapshotPourIA(now)` (même mécanisme, même place dans les deux appels, date injectable) : jour par jour sur les 14
+  prochains jours, aujourd'hui compris (une ligne par jour, « rien, journée libre » sinon, journée entière marquée), puis à plat
+  « hors de ces jours » (hier, et au-delà de 14 jours jusqu'à 400, 200 au plus). Règle ajoutée : un conflit n'existe que le MÊME
+  JOUR, sur la même ligne ; déplacer ou annuler ne désigne qu'un rendez-vous du jour dit, sinon demander lequel.
+- Garde-fous dans la page, après le filet de la mission 4 :
+  - `tcIgnorerFauxConflit` : Charly annonce un conflit (« déjà occupé », « tu as déjà », « chevauche »…) sans bloc, la demande
+    a un jour et une heure, et l'agenda local (même mode, hors journée entière) n'a rien à cette heure-là → « Ce créneau est
+    libre dans ton agenda : … Je te propose : » + bloc à valider (titre de la demande ; heure passée → refus calme du filet).
+    Un vrai conflit (même mal nommé) laisse la réponse telle quelle ; déplacement/annulation exclus.
+  - `tcQuestionJourManquant` : heure sans jour dans la demande ni dans les deux messages précédents, ni période (« la semaine
+    prochaine »), et Charly propose quand même un créneau (ou annonce un conflit) → « Pour quel jour ? ».
+  - `tcDeplacementHorsJour` (dans `tcTraiterDeplacement`, avant tout déplacement) : la demande nomme un ou des jours
+    (`tcJoursCites` : tous les jours cités, dans l'ordre) et le rendez-vous visé est un autre jour → rien ne bouge, Charly demande
+    : « Tu as 2 rendez-vous mardi 13 octobre : « Rdv banque » 10h, « Formation » 15h — lequel ? » (ou « un seul … c'est
+    celui-là ? », ou « je ne trouve aucun rendez-vous … »). Sans jour dans la demande, le titre fait foi comme avant.
+- Suites : `verif-charly-conflits` (dimanche 11/10/2026 14h20, agenda des Testeurs rejoué ; format jour par jour, jours cités,
+  faux conflit ignoré / vrai conflit gardé, déplacement hors jour refusé, jour manquant → question), dans verifier.sh ; 5 KO
+  sur la page d'avant. `verif-charly-deplacement` charge les deux nouvelles fonctions ; `verif-memoire-agenda` : le 16
+  supprimé apparaît désormais comme « journée libre » (assertion adaptée : plus de 11h-13h ce jour-là).
+- Non fait : créneaux libres dans l'agenda transmis (ils ne l'étaient pas avant) ; la prose du modèle n'est pas réécrite quand
+  le conflit est réel mais mal nommé (« Zorglub » pour la formation) : l'agenda jour par jour doit l'en empêcher.

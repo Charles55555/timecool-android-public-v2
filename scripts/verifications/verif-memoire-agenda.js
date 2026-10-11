@@ -73,7 +73,7 @@ titre('Le scenario de Charles : cree par Charly, supprime a la main');
   verifie('l ordre est garde', envoyes[0].role === 'user' && envoyes[1].role === 'assistant' && envoyes[2].role === 'user');
 
   const agenda = ctx.tcAgendaSnapshotPourIA();
-  verifie('l agenda reel ne liste pas le 16', agenda.indexOf('2026-10-16') < 0);
+  verifie('l agenda reel ne liste plus rien le 16 (journee libre, plus de 11h-13h)', /2026-10-16\) : rien, journée libre/.test(agenda) && !/2026-10-16[^\n]*11:00-13:00/.test(agenda));
   verifie('mais liste bien le 17', agenda.indexOf('2026-10-17') > -1);
   verifie('et dit que sa memoire ne fait pas foi', /la liste ci-dessus a raison, pas ta mémoire|la liste ci-dessus a raison, pas ta memoire/.test(agenda));
 }

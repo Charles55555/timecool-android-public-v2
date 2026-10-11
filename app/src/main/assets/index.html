@@ -11193,6 +11193,122 @@ function tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, now, nbJours) {
  * demande ; et une date-heure deja passee devient un refus calme avec une proposition (le lendemain
  * a la meme heure). Rien n'est touche pour un deplacement/annulation, ni pour plusieurs lignes.
  */
+/**
+ * Tous les jours que cite une phrase, dans l'ordre du texte, en ISO, resolus a partir de `now` :
+ * « demain », « après-demain », « dans 2 jours », « mardi », « mardi prochain », « lundi 19 », « le 19 »,
+ * « 25 décembre », « 19/10 ». Sert aux garde-fous : « mon rdv de mardi » doit viser un rendez-vous de mardi.
+ */
+function tcJoursCites(texte, now) {
+  const t = ' ' + tcSansAccents(texte).replace(/[’']/g, ' ').replace(/\s+/g, ' ') + ' ';
+  const ref = now ? new Date(now) : new Date();
+  const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const iso = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const plus = function (n) { const d = new Date(jour0); d.setDate(d.getDate() + n); return d; };
+  const valide = function (y, m, d) { const x = new Date(y, m, d); return (x.getFullYear() === y && x.getMonth() === m && x.getDate() === d) ? x : null; };
+  const MOIS = { janvier: 0, janv: 0, fevrier: 1, fevr: 1, fev: 1, mars: 2, avril: 3, avr: 3, mai: 4, juin: 5, juillet: 6, juil: 6, aout: 7, septembre: 8, sept: 8, octobre: 9, oct: 9, novembre: 10, nov: 10, decembre: 11, dec: 11 };
+  const JOURS = { dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6 };
+  const prochainNumero = function (num, idx) {
+    if (idx !== null) { for (let i = 0; i < 62; i++) { const d = plus(i); if (d.getDate() === num && d.getDay() === idx) return d; } }
+    for (let i = 0; i < 62; i++) { const d = plus(i); if (d.getDate() === num) return d; }
+    return null;
+  };
+  const re = / (aujourd ?hui|ce soir|ce matin|cet apres-midi|apres-?demain|demain|(?:dans|ds|d ici) (\d{1,2}) (jours?|semaines?)|(\d{1,2})(?:er)? (janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)(?:\.? ?(\d{4}))?|(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{4}))?|(?:ce |le )?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochaine?| qui vient)?(?: (\d{1,2})(?![\dh:]| ?h(?:eures?)?(?![a-z])))?|le (\d{1,2})(?![\dh:\/-]| ?h| (?:janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)(?![a-z])))(?= )/g;
+  const out = [];
+  const ajoute = function (d) { if (d && out.indexOf(iso(d)) < 0) out.push(iso(d)); };
+  let m;
+  while ((m = re.exec(t))) {
+    const a = m[1];
+    if (/^(aujourd|ce soir|ce matin|cet apres)/.test(a)) ajoute(jour0);
+    else if (/^apres/.test(a)) ajoute(plus(2));
+    else if (a === 'demain') ajoute(plus(1));
+    else if (m[2]) ajoute(plus(/sem/.test(m[3]) ? Number(m[2]) * 7 : Number(m[2])));
+    else if (m[4]) { const y = m[6] ? Number(m[6]) : ref.getFullYear(); let d = valide(y, MOIS[m[5]], Number(m[4])); if (d && !m[6] && d < jour0) d = valide(y + 1, MOIS[m[5]], Number(m[4])) || d; ajoute(d); }
+    else if (m[7]) { const y = m[9] ? Number(m[9]) : ref.getFullYear(); let d = valide(y, Number(m[8]) - 1, Number(m[7])); if (d && !m[9] && d < jour0) d = valide(y + 1, Number(m[8]) - 1, Number(m[7])) || d; ajoute(d); }
+    else if (m[10]) {
+      const idx = JOURS[m[10]];
+      if (m[12]) ajoute(prochainNumero(Number(m[12]), idx));
+      else { let diff = (idx - jour0.getDay() + 7) % 7; if (diff === 0 && m[11]) diff = 7; ajoute(plus(diff)); }
+    }
+    else if (m[13]) ajoute(prochainNumero(Number(m[13]), null));
+  }
+  return out;
+}
+
+/** Charly dit-il qu'un creneau est pris ? (« déjà occupé », « tu as déjà », « chevauche », « conflit ») */
+function tcAnnonceUnConflit(reply) {
+  const r = tcSansAccents(reply);
+  return /(deja (occupe|pris|un |une |quelque)|tu as deja|chevauch|conflit|est (deja )?(pris|occupe)|occupe par|t es pas libre|tu n es pas libre)/.test(r);
+}
+
+/**
+ * Charly annonce un conflit sans proposer de bloc, mais l'agenda local ne montre rien a cette
+ * date et cette heure : le conflit n'existe pas (il citait un rendez-vous d'un autre jour), on
+ * propose le creneau. null sinon (vrai conflit, pas de jour ou d'heure dans la demande, ou un
+ * deplacement/annulation, qui ont leurs propres regles).
+ */
+function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
+  const r = String(reply || '');
+  if (/\[AGENDA\]/.test(r) || !tcAnnonceUnConflit(r)) return null;
+  const t = tcSansAccents(texte);
+  if (/\b(deplac|decal|repouss|report|avanc|boug|chang|modif|remplac|annul|supprim|efface)/.test(t)) return null;
+  const demande = tcDateDemandee(texte, now);
+  const heure = tcHeureDansTexte(t);
+  if (!demande || demande.invalide || !heure) return null;
+  const dateStr = tcISO(demande.date);
+  const debut = heure.h * 60 + (heure.m || 0), fin = debut + 60;
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  const occupe = (Array.isArray(events) ? events : []).some(function (e) {
+    return e && e.date === dateStr && e.mode === evMode && !e.allDay
+      && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
+  });
+  if (occupe) return null;
+  const bloc = tcBlocAgendaDepuisAnnonce(texte, '', now, 1);
+  if (!bloc) return null;
+  const heureTxt = heure.h + 'h' + (heure.m ? String(heure.m).padStart(2, '0') : '');
+  const texteProp = 'Ce créneau est libre dans ton agenda : ' + tcDateEnLettres(demande.date) + ' à ' + heureTxt + '. Je te propose :' + bloc;
+  return tcCorrigerPropositionsCharly(texteProp, texte, now);
+}
+
+/**
+ * La demande donne une heure mais aucun jour (ni dans les deux messages precedents), et Charly
+ * propose quand meme un creneau (ou annonce un conflit) : il a choisi le jour tout seul. On lui
+ * fait demander le jour. null sinon.
+ */
+function tcQuestionJourManquant(reply, texte, precedents, now) {
+  const r = String(reply || '');
+  const bloc = /\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/.exec(r);
+  if (!bloc && !tcAnnonceUnConflit(r)) return null;
+  if (bloc && bloc[1].split('\n').filter(function (l) { return l.trim(); }).length !== 1) return null;
+  const t = tcSansAccents(texte);
+  if (/\b(deplac|decal|repouss|report|avanc|boug|chang|modif|remplac|annul|supprim|efface|tous les jours|chaque jour)/.test(t)) return null;
+  if (!tcHeureDansTexte(t)) return null;
+  const aUnJour = function (x) { return !!tcDateDemandee(x, now) || tcJoursCites(x, now).length > 0; };
+  if (aUnJour(texte)) return null;
+  if (/ (semaine|week-?end|mois|vacances|prochain|prochaine|bientot|maintenant|tout de suite) /.test(' ' + t.replace(/[’']/g, ' ') + ' ')) return null;
+  if ((precedents || []).slice(-2).some(aUnJour)) return null;
+  return 'Pour quel jour ? (par exemple « demain » ou « mardi »)';
+}
+
+/**
+ * Un deplacement propose par Charly ne porte que sur un rendez-vous present le jour que dit la
+ * demande (« mon rdv de mardi »). Si le rendez-vous vise est un autre jour, rien ne bouge : la
+ * question a poser (les rendez-vous de ce jour-la, lequel ?). null si tout est coherent, ou si
+ * la demande ne nomme aucun jour.
+ */
+function tcDeplacementHorsJour(liste, texte, now, eventsAll, evMode) {
+  const jours = tcJoursCites(texte, now);
+  if (!jours.length) return null;
+  const hors = (liste || []).filter(function (x) { return x && x.ev && jours.indexOf(x.ev.date) < 0; });
+  if (!hors.length) return null;
+  const presents = (Array.isArray(eventsAll) ? eventsAll : []).filter(function (e) { return e && e.mode === evMode && jours.indexOf(e.date) > -1; })
+    .sort(function (a, b) { return (a.date + String(a.startH).padStart(2, '0') + String(a.startM).padStart(2, '0')) < (b.date + String(b.startH).padStart(2, '0') + String(b.startM).padStart(2, '0')) ? -1 : 1; });
+  const minuscule = function (x) { x = String(x || ''); return x.charAt(0).toLowerCase() + x.slice(1); };
+  const heure = function (e) { return Number(e.startH) + 'h' + (Number(e.startM) ? String(e.startM).padStart(2, '0') : ''); };
+  const quand = jours.map(function (j) { return minuscule(tcFormaterDateHumaine(j)); }).join(' et ');
+  if (!presents.length) return 'Je ne trouve aucun rendez-vous ' + quand + ' dans ton agenda. Lequel veux-tu déplacer ?';
+  if (presents.length === 1) return 'Tu as un seul rendez-vous ' + quand + ' : « ' + presents[0].title + ' » ' + heure(presents[0]) + '. C’est celui-là ?';
+  return 'Tu as ' + presents.length + ' rendez-vous ' + quand + ' : ' + presents.map(function (e) { return '« ' + e.title + ' » ' + heure(e); }).join(', ') + ' — lequel ?';
+}
 /** La phrase cite-t-elle plusieurs jours, ou un jour relatif a un autre (« la veille », « un rappel avant ») ? */
 function tcPlusieursDatesOuRelatif(texteSansAccents) {
   const t = ' ' + String(texteSansAccents || '').replace(/[’']/g, ' ').replace(/\s+/g, ' ') + ' ';
@@ -12901,6 +13017,13 @@ function tcTraiterDeplacement(msg, text) {
   if (!msg || msg.role !== 'assistant' || !tcEstDeplacement(text)) return false;
   const liste = tcDeplacementsProposes(msg);
   if (!liste) return false;
+  // Le rendez-vous vise doit exister le jour dit (« mon rdv de mardi ») : sinon Charly demande lequel (campagne 5, 11/10).
+  const question = tcDeplacementHorsJour(liste, text, new Date(), events, mode === 'pro' ? 'pro' : 'user');
+  if (question) {
+    msg._validated = true;
+    charlyIA.history.push({ role: 'assistant', content: question });
+    return true;
+  }
   // Pas de carte « Valider mon agenda » : la demande est comprise.
   msg._validated = true;
   msg._deplacement = true;
@@ -13003,34 +13126,59 @@ function tcHistoriquePourIA() {
   return liste;
 }
 
-function tcAgendaSnapshotPourIA() {
-  const now = new Date();
-  const debutStr = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
-  const finDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  finDate.setDate(finDate.getDate() + 400);
-  const finStr = tcISO(finDate);
+/**
+ * Jour par jour sur les 14 prochains jours (aujourd'hui compris), une ligne par jour, les jours
+ * libres dits libres ; puis, a plat, hier et ce qui est au-dela des 14 jours. Le modele lisait une
+ * liste plate et citait un rendez-vous d'un autre jour comme conflit (campagne 5, 11/10).
+ * `now` est injectable pour les suites ; `events` et `mode` sont ceux de la page.
+ */
+function tcAgendaSnapshotPourIA(now) {
+  const ref = now ? new Date(now) : new Date();
+  const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const plus = function (n) { const d = new Date(jour0); d.setDate(d.getDate() + n); return d; };
   const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  const hierStr = tcISO(plus(-1));
+  const finFenetre = tcISO(plus(14));
+  const finStr = tcISO(plus(400));
+  const horaire = function (e) {
+    return e.allDay ? '(journée entière)' : `${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')}-${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}`;
+  };
 
-  const evs = events.filter(e => e.mode === mode && e.date >= debutStr && e.date <= finStr).sort(tcComparerEvenements);
+  const evs = events.filter(e => e.mode === mode && e.date >= hierStr && e.date <= finStr).sort(tcComparerEvenements);
+  const parJour = {};
+  evs.forEach(e => { (parJour[e.date] = parJour[e.date] || []).push(e); });
+  const lignesJours = [];
+  for (let i = 0; i <= 14; i++) {
+    const d = plus(i), k = tcISO(d);
+    const contenu = (parJour[k] || []).map(e => horaire(e) + ' ' + e.title).join(' ; ');
+    lignesJours.push('• ' + jours[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0')
+      + ' (' + k + (i === 0 ? ', aujourd’hui' : (i === 1 ? ', demain' : '')) + ') : ' + (contenu || 'rien, journée libre'));
+  }
+  const autres = evs.filter(e => e.date < tcISO(jour0) || e.date > finFenetre);
   const MAX = 200;
-  const tronque = evs.length > MAX;
-  const liste = evs.slice(0, MAX).map(e => {
+  const tronque = autres.length > MAX;
+  const listeAutres = autres.slice(0, MAX).map(e => {
     const [y, mo, d] = e.date.split('-').map(Number);
-    const jour = jours[new Date(y, mo-1, d).getDay()];
-    const heure = e.allDay ? '(journée entière)' : `${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')}-${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}`;
-    return `${e.date} (${jour}) ${heure} — ${e.title}`;
+    return `${e.date} (${jours[new Date(y, mo-1, d).getDay()]}) ${horaire(e)} — ${e.title}`;
   }).join('\n');
 
   return `═══════════════════════════════════════
 AGENDA RÉEL DE L'UTILISATEUR (SOURCE DE VÉRITÉ UNIQUE)
 ═══════════════════════════════════════
-${evs.length === 0 ? 'Aucun rendez-vous enregistré actuellement.' : liste}
-${tronque ? `\n… et ${evs.length - MAX} de plus, non affichés ici (période trop large — invite l'utilisateur à préciser une période plus courte).` : ''}
+📆 LES 14 PROCHAINS JOURS, JOUR PAR JOUR (une ligne = un jour) :
+${lignesJours.join('\n')}
+
+📌 HORS DE CES JOURS (hier, et au-delà de 14 jours) :
+${autres.length === 0 ? 'rien.' : listeAutres}
+${tronque ? `\n… et ${autres.length - MAX} de plus, non affichés ici (période trop large — invite l'utilisateur à préciser une période plus courte).` : ''}
 
 ⚠️ RÈGLE ABSOLUE : cette liste est la SEULE source valable pour juger d'un conflit d'horaire,
 répondre à une consultation d'agenda, ou identifier quel rendez-vous modifier ou annuler.
+Un conflit n'existe que si les heures se croisent LE MÊME JOUR, sur la MÊME ligne « • » ci-dessus :
+un rendez-vous d'un autre jour n'est JAMAIS un conflit, ne le cite jamais comme tel. Pour déplacer ou
+annuler, ne désigne qu'un rendez-vous présent sur la ligne du jour dit ; s'il y en a plusieurs, demande lequel.
 Ne dis JAMAIS qu'un rendez-vous existe s'il n'apparaît pas ci-dessus, et ne dis JAMAIS qu'un
-créneau est pris si la liste ne montre rien à cette date et cette heure — dans ce cas
+créneau est pris si la ligne du jour ne montre rien à cette heure — dans ce cas
 l'utilisateur est libre, ne l'invente jamais.
 Si un de tes propres messages precedents mentionne un rendez-vous qui n'apparait pas ci-dessus,
 c'est qu'il a ete supprime depuis : la liste ci-dessus a raison, pas ta memoire.`;
@@ -13664,6 +13812,10 @@ async function charlySendMessage() {
     }
     // Filet : la date d'une proposition suit la demande, et jamais dans le passe (campagne 4, 11/10).
     reply = tcCorrigerPropositionsCharly(reply, text, new Date());
+    // Garde-fous (campagne 5, 11/10) : un conflit annonce qui n'existe pas dans l'agenda est ignore (on propose) ;
+    // un jour absent de la demande se demande, Charly ne le choisit pas.
+    reply = tcIgnorerFauxConflit(reply, text, new Date(), events, mode) || reply;
+    reply = tcQuestionJourManquant(reply, text, charlyIA.history.filter(m => m.role === 'user').slice(-3, -1).map(m => m.content), new Date()) || reply;
 
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId});
