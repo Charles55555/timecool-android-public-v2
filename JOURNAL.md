@@ -1023,3 +1023,15 @@ mobile vers le nouvel appareil.
   couvrent : agenda jour par jour (« Séminaire (du … au …) »), conflit local, déplacement. Deux demandes dans un message
   (plus d'un jour cité) : `tcIgnorerFauxConflit` ne réécrit rien. Réserve notée : `tcAnnonceUnConflit` est large (« pas de
   conflit » compris), sans effet car l'agenda local est vérifié ensuite.
+
+## 11/10/2026 (session Codeur) — Menu latéral : « Mes agendas » juste sous « Mon agenda »
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- La rubrique « Mes agendas » (agendas secondaires : pastille + nom, clic = `isolateCalendarView`) était collée tout en bas
+  du menu, sous « Créer un nouvel agenda » : invisible sans faire défiler. `renderMenu` l'insère maintenant juste après la
+  première ligne (« Mon agenda »), avant « Importer » et « Synchroniser avec mon ancien agenda » ; même rendu, même action.
+  « Se déconnecter » puis « Créer un nouvel agenda » restent en bas. Sans agenda secondaire, la rubrique n'apparaît pas
+  (avant : son titre s'affichait, vide).
+- Suite `verif-menu-agendas` (renderMenu exécutée : ordre complet, rendu, sans agenda), dans verifier.sh ; rouge sur la page
+  d'avant.

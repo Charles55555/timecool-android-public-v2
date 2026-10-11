@@ -3865,13 +3865,16 @@ function renderMenu() {
       <span>${it.label}</span>
       ${it.badge?`<span class="menu-badge" id="menuBadge" style="display:none; margin-left:auto;">0</span>`:''}
     </div>
-  `;}).join('');
+  `;});
 
-  const categoriesHTML = `
+  // Les agendas secondaires, juste sous « Mon agenda » (Charles, 11/10) : tout en bas, sous « Créer un
+  // nouvel agenda », il fallait faire défiler pour les voir. Rien sans agenda secondaire.
+  const secondaires = customCalendars.filter(cal => !cal.isDefault);
+  const categoriesHTML = !secondaires.length ? '' : `
     <div style="padding:14px 16px 6px; font-size:11px; font-weight:700; color:var(--text-sec); text-transform:uppercase; letter-spacing:0.5px; border-top:1px solid var(--border); margin-top:8px;">
       Mes agendas
     </div>
-    ${customCalendars.filter(cal => !cal.isDefault).map(cal => `
+    ${secondaires.map(cal => `
       <div onclick="isolateCalendarView('${cal.id}')" style="display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer; user-select:none;">
         <span style="display:inline-block; width:14px; height:14px; border-radius:50%; background:${cal.color}; flex-shrink:0; margin-left:2px;"></span>
         <span style="font-size:14px; color:var(--text); flex:1; font-weight:600;">${escapeHTMLSafe(cal.name)}</span>
@@ -3893,7 +3896,7 @@ function renderMenu() {
     </div>
   `;
 
-  document.getElementById('menuItems').innerHTML = navItems + logoutBtn + createCalendarBtn + categoriesHTML;
+  document.getElementById('menuItems').innerHTML = navItems.slice(0, 1).join('') + categoriesHTML + navItems.slice(1).join('') + logoutBtn + createCalendarBtn;
 }
 
 /* Code couleur officiel des categories. Miroir exact des variables CSS
