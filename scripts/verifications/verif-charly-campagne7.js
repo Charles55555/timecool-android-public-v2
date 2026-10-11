@@ -85,6 +85,8 @@ titre('2. Consultation d un jour : la liste exacte, construite par la page');
   if (i2) { await c2.tcGererConsultationAgenda('est-ce que j ai quelque chose jeudi ?', i2); }
   verifie('jeudi (rien) : « Tu es libre ce jeudi ! »', i2 && /Tu es libre/.test(c2.charlyIA.history[c2.charlyIA.history.length - 1].content));
   verifie('« rdv dentiste mardi 15h » n est pas une consultation', ctx.detecterConsultationAgenda('rdv dentiste mardi 15h') === null);
+  const formes = ['qu est ce que j ai lundi ?', "qu'est ce que j'ai lundi ?", "qu'est-ce que j'ai lundi ?", "qu'est-ce qu'il y a lundi ?", 'qu est ce qu il y a lundi ?'];
+  verifie('« qu est ce que j ai lundi ? » et ses formes (apostrophes, tirets) → consultation de lundi (examinateur)', formes.every((p) => { const i = ctx.detecterConsultationAgenda(p); return i && i.type === 'periode' && ctx.tcISO(i.periode.debut) === '2026-10-12'; }), formes.map((p) => String(ctx.detecterConsultationAgenda(p) && ctx.detecterConsultationAgenda(p).type)).join(','));
   const polies = ['Tu peux ajouter un rdv demain ?', 'Peux-tu me réserver un créneau demain ?', 'Tu peux me mettre un dentiste demain ?', 'Peux-tu me mettre un rdv dentiste demain ?', 'Un dentiste demain à 10h, ça passe ?'];
   verifie('cinq creations polies terminees par « ? » ne sont PAS des consultations (examinateur)', polies.every((p) => ctx.detecterConsultationAgenda(p) === null), polies.map((p) => String(ctx.detecterConsultationAgenda(p) && ctx.detecterConsultationAgenda(p).type)).join(','));
 

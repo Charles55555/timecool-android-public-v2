@@ -1099,3 +1099,5 @@ mobile vers le nouvel appareil.
 - Correctif après examen : le seuil de la question explicite revient à 6 mots (à 8, « Tu peux me mettre un dentiste demain ? »
   devenait une consultation) ; `tcRepondreObjetDonne` exclut aussi bouge/change/modifie/remplace (fins de mots) ; « change »,
   « modifie » rejoignent les mots de remplissage de `tcTitreDepuisDemande`.
+- Correctif après examen (bis) : les déclencheurs « qu'est-ce que j'ai » et « qu'est-ce qu'il y a » tolèrent apostrophes et
+  tirets manquants (`qu'?est[- ]?ce que j'?ai`), que l'apostrophe rétablie laissait sans correspondance.

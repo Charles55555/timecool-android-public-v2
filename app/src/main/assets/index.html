@@ -12553,7 +12553,7 @@ function detecterConsultationAgenda(text) {
     return { type: 'contact', contact: mContact[1].trim() };
   }
 
-  const declencheurPeriode = /\b(qu'est-ce que j'ai|qu'ai-je|qu est ce que j ai|mon planning|mon programme|mon emploi du temps|mes rdv|mes rendez-vous|(montre|affiche|voir|regarde|consulte|ouvre)[- ]?(moi )?mon agenda|mon agenda (de|du|pour)|liste[- ]moi|dis-moi ce que j'ai|ce que j'ai de prévu|qu'est-ce qu'il y a|qu'est ce qu'il y a|j'ai quoi|j ai quoi|je fais quoi|j'ai quelque chose|suis-je libre|je suis libre|suis-je dispo|je suis dispo|est-ce que je suis libre)\b/;
+  const declencheurPeriode = /\b(qu'?est[- ]?ce que j'?ai|qu'?ai[- ]?je|mon planning|mon programme|mon emploi du temps|mes rdv|mes rendez-vous|(montre|affiche|voir|regarde|consulte|ouvre)[- ]?(moi )?mon agenda|mon agenda (de|du|pour)|liste[- ]moi|dis-moi ce que j'ai|ce que j'ai de prévu|qu'?est[- ]?ce qu'?il y a|j'ai quoi|j ai quoi|je fais quoi|j'ai quelque chose|suis-je libre|je suis libre|suis-je dispo|je suis dispo|est-ce que je suis libre)\b/;
   const periode = tcPeriodeAgenda(t) || tcPeriodeJourNomme(t) || tcPeriodeContrainte(t);
   if (declencheurPeriode.test(t)) {
     return { type: 'periode', periode: periode || { debut: new Date(new Date().setHours(0,0,0,0)), fin: null, label: null } };
