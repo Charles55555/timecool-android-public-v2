@@ -24,7 +24,7 @@ const NOW = new Date(2026, 9, 11, 14, 20, 0);   // dimanche 11 octobre 2026, 14h
 const ctx = { console, Number, String, Date, RegExp, Array };
 vm.createContext(ctx);
 ['const TC_JOURS_FR = [^;]*;', 'const TC_MOIS_FR = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
-['tcSansAccents', 'tcISO', 'tcHeureDansTexte', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcContexteDatePourIA', 'tcBlocAgendaDepuisAnnonce', 'tcCorrigerPropositionsCharly']
+['tcSansAccents', 'tcISO', 'tcHeureDansTexte', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcContexteDatePourIA', 'tcBlocAgendaDepuisAnnonce', 'tcPlusieursDatesOuRelatif', 'tcCorrigerPropositionsCharly']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 const date = (txt) => { const r = ctx.tcDateDemandee(txt, NOW); return r ? (r.invalide ? 'invalide' : ctx.tcISO(r.date)) : null; };
@@ -50,6 +50,10 @@ verifie('« le 5 octobre » (passe ce mois-ci) → l an prochain', date('rdv le 
 verifie('« 19/10 » → le 19', date('rdv le 19/10 à 11h') === '2026-10-19');
 verifie('« le 19 » seul → le 19', date('rdv le 19 à 11h') === '2026-10-19');
 verifie('« mardi 15h » : 15 est une heure, pas un numero de jour', date('mardi 15h') === '2026-10-13');
+verifie('« mardi 15 heures dentiste » → mardi 13 (examinateur)', date('mardi 15 heures dentiste') === '2026-10-13', date('mardi 15 heures dentiste'));
+verifie('« lundi 15 h coach » → lundi 12', date('lundi 15 h coach') === '2026-10-12', date('lundi 15 h coach'));
+verifie('« jeudi 8 h » → jeudi 15', date('jeudi 8 h') === '2026-10-15', date('jeudi 8 h'));
+verifie('« lundi 19 heures » → lundi 12 a 19h (pas le 19)', date('lundi 19 heures') === '2026-10-12', date('lundi 19 heures'));
 verifie('« coiffeur mercredi 10h et comptable jeudi 14h45 » : la premiere date (mercredi)', date('mets un rdv coiffeur mercredi 10h et un rdv comptable jeudi 14h45') === '2026-10-14');
 verifie('« la semaine prochaine », « rdv », « bonjour » : aucun jour', date('mets moi un rdv la semaine prochaine') === null && date('rdv') === null && date('bonjour') === null);
 verifie('« décale » ne contient pas « dec » (decembre)', date('décale mon rdv à 16h') === null);
@@ -59,10 +63,14 @@ const T = (x) => ctx.tcTitreDepuisDemande(x);
 verifie('« rdv dentiste mardi 15h » → Dentiste', T('rdv dentiste mardi 15h') === 'Dentiste', T('rdv dentiste mardi 15h'));
 verifie('« mercredi prochain 10h30 coach » → Coach', T('mercredi prochain 10h30 coach') === 'Coach', T('mercredi prochain 10h30 coach'));
 verifie('« rdv aujourd hui 10h avec le plombier » → Plombier', T('rdv aujourd hui 10h avec le plombier') === 'Plombier', T('rdv aujourd hui 10h avec le plombier'));
+verifie("« rdv aujourd'hui 10h avec le plombier » (apostrophe droite) → Plombier", T("rdv aujourd'hui 10h avec le plombier") === 'Plombier', T("rdv aujourd'hui 10h avec le plombier"));
+verifie('« rdv aujourd’hui 10h avec le plombier » (apostrophe typographique) → Plombier', T('rdv aujourd’hui 10h avec le plombier') === 'Plombier', T('rdv aujourd’hui 10h avec le plombier'));
+verifie("« s'il te plait, mets-moi un rdv ostéo demain 9h » → Ostéo", T("s'il te plait, mets-moi un rdv ostéo demain 9h") === 'Ostéo', T("s'il te plait, mets-moi un rdv ostéo demain 9h"));
 verifie('« rendez-vous chez le notaire lundi 19 à 11h » → Notaire', T('rendez-vous chez le notaire lundi 19 à 11h') === 'Notaire', T('rendez-vous chez le notaire lundi 19 à 11h'));
 verifie('« Pourriez-vous m’ajouter un rendez-vous chez le notaire lundi 19 à 11h, je vous prie ? » → Notaire', T('Pourriez-vous m’ajouter un rendez-vous chez le notaire lundi 19 à 11h, je vous prie ?') === 'Notaire', T('Pourriez-vous m’ajouter un rendez-vous chez le notaire lundi 19 à 11h, je vous prie ?'));
 verifie('« rdv ds 2 jours a 8h » → rien (la demande ne dit pas quoi)', T('rdv ds 2 jours a 8h') === '', T('rdv ds 2 jours a 8h'));
 verifie('« AJOUTE UN RDV COIFFEUR VENDREDI 17H » → COIFFEUR (tel quel)', T('AJOUTE UN RDV COIFFEUR VENDREDI 17H') === 'COIFFEUR', T('AJOUTE UN RDV COIFFEUR VENDREDI 17H'));
+verifie('« rdv avec Jean-Pierre vendredi 11h » → Jean-Pierre (le trait d union reste)', T('rdv avec Jean-Pierre vendredi 11h') === 'Jean-Pierre', T('rdv avec Jean-Pierre vendredi 11h'));
 verifie('« appel téléphonique avec Paul 14h » → Appel téléphonique Paul (accents gardes)', T('appel téléphonique avec Paul 14h') === 'Appel téléphonique Paul', T('appel téléphonique avec Paul 14h'));
 
 titre('4. Ce que recoit Charly : date, heure, calendrier des 14 jours, regles');
@@ -107,6 +115,11 @@ const deux = '[AGENDA]\n2026-10-14 | 10:00-11:00 | Coiffeur | personnel\n2026-10
 verifie('deux lignes : rien n est touche', C(deux, 'mets un rdv coiffeur mercredi 10h et un rdv comptable jeudi 14h45') === deux);
 const depl = '[AGENDA]\n2026-10-13 | 16:00-17:00 | Rdv banque | travail\n[/AGENDA]';
 verifie('un deplacement (« décale ») : rien n est touche', C(depl, 'Décale mon rdv de mardi à 16h') === depl);
+const veille = 'Rappel posé.\n[AGENDA]\n2026-10-12 | 18:00-19:00 | Rappel dentiste | sante\n[/AGENDA]';
+verifie('« la veille » : la date de la proposition (lundi) n est PAS forcee au mardi (examinateur)', C(veille, "j'ai dentiste mardi 15h, mets un rappel la veille à 18h") === veille, C(veille, "j'ai dentiste mardi 15h, mets un rappel la veille à 18h"));
+const deuxDates = 'C’est bloqué.\n[AGENDA]\n2026-10-19 | 09:00-10:00 | Préparation réunion | travail\n[/AGENDA]';
+verifie('deux jours dans la phrase (« le 20 … le 19 ») : la date n est pas forcee', C(deuxDates, "le 20 j'ai une réunion, bloque 1h le 19 à 9h") === deuxDates, C(deuxDates, "le 20 j'ai une réunion, bloque 1h le 19 à 9h"));
+verifie('mais le titre et l heure passee restent traites dans ces cas', /déjà passé/.test(C('[AGENDA]\n2026-10-11 | 09:00-10:00 | Activité | rdv\n[/AGENDA]', "le 20 j'ai une réunion, bloque 1h le 11 à 9h")));
 verifie('sans bloc : rien n est touche', C('Quel jour exactement ?', 'prends un rendé vous mardy') === 'Quel jour exactement ?');
 verifie('la categorie et le lieu (champs suivants) sont conserves', /2026-10-13 \| 15:00-16:00 \| Dentiste \| sante \| 12 rue Pasteur/.test(C('[AGENDA]\n2026-10-15 | 15:00-16:00 | Dentiste | sante | 12 rue Pasteur\n[/AGENDA]', 'rdv dentiste mardi 15h')));
 verifie('charlySendMessage applique le filet a chaque reponse', /reply = tcCorrigerPropositionsCharly\(reply, text, new Date\(\)\);/.test(fonction(page, 'charlySendMessage') || ''));

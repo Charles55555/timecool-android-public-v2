@@ -981,3 +981,9 @@ mobile vers le nouvel appareil.
   le bloc de secours, le filet), dans verifier.sh ; 8 KO sur la page d'avant. Pas de sonde Chrome : tout est exécuté en
   fonctions pures ; le modèle lui-même n'est pas rejoué (clé OpenAI du compte).
 - Rien d'autre ne change à l'écran. `parseFrenchDateFromText` (trois usages ailleurs) est laissé tel quel.
+- Correctif après examen : « mardi 15 heures », « lundi 15 h », « jeudi 8 h » ne sont plus pris pour un numéro de jour
+  (un nombre suivi de « h »/« heures », collé ou non, est une heure) ; les apostrophes (droite ou typographique) séparent
+  les mots dans `tcTitreDepuisDemande` (« aujourd'hui », « m'ajouter », « s'il te plait ») ; le filet ne force la date que si
+  la phrase ne cite qu'un seul jour et sans « veille / lendemain / avant / après / rappel » (`tcPlusieursDatesOuRelatif`) ;
+  le titre et l'heure passée restent traités. Réserve notée : une heure passée remplace toute la réponse du modèle par le
+  refus calme et la proposition (sa prose disparaît).

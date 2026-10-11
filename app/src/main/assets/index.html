@@ -11080,7 +11080,7 @@ function tcDateDemandee(texte, now) {
     return d ? { date: d, libelle: m[0].trim() } : { invalide: true };
   }
   // « mardi », « mardi prochain », « ce mardi », « lundi 19 » (jamais « mardi 15h » : 15 est une heure)
-  if ((m = t.match(/ (?:ce |le )?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochaine?| qui vient)?(?: (\d{1,2})(?![\dh:]))? /))) {
+  if ((m = t.match(/ (?:ce |le )?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochaine?| qui vient)?(?: (\d{1,2})(?![\dh:]| ?h(?:eures?)?(?![a-z])))? /))) {
     const idx = JOURS[m[1]], prochain = !!m[2], num = m[3] ? Number(m[3]) : 0;
     if (num >= 1 && num <= 31) {
       // Le prochain jour du mois portant ce numero, de preference tombant ce jour-la.
@@ -11105,15 +11105,16 @@ function tcDateDemandee(texte, now) {
  * « rdv aujourd hui 10h avec le plombier » → « Plombier ». Vide si la demande ne dit vraiment rien.
  */
 function tcTitreDepuisDemande(texte) {
-  const VIDES = /^(rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|il|te|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
-  const mots = String(texte || '').split(/\s+/);
-  const gardes = mots.filter(function (w) {
-    const brut = tcSansAccents(w).replace(/[’]/g, "'").replace(/^[^a-z0-9']+|[^a-z0-9']+$/g, '');
-    const sansElision = brut.replace(/^(m|t|l|d|qu|n|s|j|c)'/, '');
-    if (!sansElision) return false;
-    if (/^\d/.test(sansElision)) return false;   // 15h, 10h30, 19, 2
-    return !VIDES.test(brut) && !VIDES.test(sansElision);
-  }).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, '').replace(/^(m|t|l|d|qu|n|s|j|c)[’']/i, ''); }).filter(Boolean);
+  const VIDES = /^(rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
+  // Les apostrophes separent les mots : « aujourd'hui », « m'ajouter », « s'il te plait » (apostrophe droite ou typographique).
+  const mots = String(texte || '').replace(/[’']/g, ' ').split(/\s+/);
+  const gardes = mots.map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); }).filter(function (w) {
+    const brut = tcSansAccents(w);
+    if (!brut) return false;
+    // Un mot compose (« mets-moi », « pourriez-vous ») est du remplissage si chacune de ses parties l est ;
+    // « Jean-Pierre » ou « check-up » gardent leur trait d union.
+    return !brut.split('-').every(function (p) { return !p || /^\d/.test(p) || VIDES.test(p); });
+  });
   if (!gardes.length) return '';
   const titre = gardes.join(' ').slice(0, 60);
   return titre.charAt(0).toUpperCase() + titre.slice(1);
@@ -11192,6 +11193,14 @@ function tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, now, nbJours) {
  * demande ; et une date-heure deja passee devient un refus calme avec une proposition (le lendemain
  * a la meme heure). Rien n'est touche pour un deplacement/annulation, ni pour plusieurs lignes.
  */
+/** La phrase cite-t-elle plusieurs jours, ou un jour relatif a un autre (« la veille », « un rappel avant ») ? */
+function tcPlusieursDatesOuRelatif(texteSansAccents) {
+  const t = ' ' + String(texteSansAccents || '').replace(/[’']/g, ' ').replace(/\s+/g, ' ') + ' ';
+  if (/ (veille|lendemain|avant|apres|rappel|rappelle|rappeler) /.test(t)) return true;
+  const n = (t.match(/ (aujourd ?hui|ce soir|ce matin|demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|dans \d{1,2} (?:jours?|semaines?)|\d{1,2}(?:er)? (?:janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)|\d{1,2}[\/-]\d{1,2}|le \d{1,2}(?![\dh:]| ?h))(?= )/g) || []).length;
+  return n > 1;
+}
+
 function tcCorrigerPropositionsCharly(reply, texte, now) {
   const r = String(reply || '');
   const bloc = r.match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
@@ -11208,7 +11217,7 @@ function tcCorrigerPropositionsCharly(reply, texte, now) {
   let date = m[1];
   let titre = m[7].trim();
   const reste = m[8] ? ' ' + m[8].trim() : '';
-  if (demande && !m[2] && tcISO(demande.date) !== date) date = tcISO(demande.date);
+  if (demande && !m[2] && !tcPlusieursDatesOuRelatif(t) && tcISO(demande.date) !== date) date = tcISO(demande.date);
   const titreDemande = tcTitreDepuisDemande(texte);
   if (titreDemande && /^(activit[ée]s?|rendez-?vous|rdv|[ée]v[ée]nement)?$/i.test(titre)) titre = titreDemande;
   const h = Number(m[3]), mi = Number(m[4]);
