@@ -96,7 +96,8 @@ ctx.rendus = 0; ctx._contactsLettre = 'B'; ctx.contactsSearchQuery = 'x'; ctx._c
 vm.runInContext('tcBasculerRecents()', ctx);
 verifie('toucher : les recents s affichent, et la lettre, la recherche et TimeCool sont effaces', ctx._contactsRecents === true && ctx._contactsTimeCool === false && ctx._contactsLettre === '' && ctx.contactsSearchQuery === '' && ctx._contactsCategorie === '' && ctx.rendus === 1);
 verifie('la liste est celle des recents', ctx.tcContactsAffiches().map((c) => c.name).join(',') === 'Neuf');
-verifie('le bouton propose « Tout voir »', /🆕 Tout voir/.test(ctx.tcBoutonRecentsHTML()));
+verifie('le libelle ne change pas quand le filtre est allume (Charles, 11/10)',
+  /🆕 Mes contacts récents \(/.test(ctx.tcBoutonRecentsHTML()) && ctx.tcBoutonRecentsHTML().indexOf('Tout voir') === -1);
 vm.runInContext('tcBasculerRecents()', ctx);
 verifie('second toucher : retour a la vue normale', ctx._contactsRecents === false && ctx.tcContactsAffiches().length === 3);
 vm.runInContext('tcBasculerRecents()', ctx); vm.runInContext('tcBasculerTimeCool()', ctx);

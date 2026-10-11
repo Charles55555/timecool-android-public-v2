@@ -18400,7 +18400,8 @@ function tcBasculerRecents() {
   renderContacts();
 }
 
-/** Le bouton « 🆕 Mes contacts récents (N) » : toujours la, avec « (0) » quand il n'y a personne. */
+/** Le bouton « 🆕 Mes contacts récents (N) » : toujours la, avec « (0) » quand il n'y a personne.
+ * Son libelle ne change jamais (Charles, 11/10) : allume = bleu, un second appui le ferme. */
 function tcBoutonRecentsHTML() {
   const n = tcCompterRecents();
   const actif = _contactsRecents;
@@ -18409,7 +18410,7 @@ function tcBoutonRecentsHTML() {
     + (actif
         ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
         : ' background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);')
-    + '">🆕 ' + (actif ? 'Tout voir' : 'Mes contacts récents (' + n + ')') + '</button>';
+    + '">🆕 Mes contacts récents (' + n + ')</button>';
 }
 
 /** Les deux filtres sur une ligne : les recents a gauche, TimeCool a droite (l'un sous l'autre si l'ecran est etroit). */
@@ -18454,7 +18455,7 @@ function tcBoutonTimeCoolHTML() {
     + (actif
         ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
         : ' background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);')
-    + '">\ud83d\udc65 ' + (actif ? 'Tout voir' : 'Mes contacts TimeCool (' + n + ')') + '</button>';
+    + '">\ud83d\udc65 Mes contacts TimeCool (' + n + ')</button>';
 }
 
 /** Touche une lettre : la meme lettre deux fois la referme. */

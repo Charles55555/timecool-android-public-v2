@@ -62,8 +62,8 @@ titre('Ce que le bouton affiche');
   verifie('et invite a les voir', h.indexOf('Mes contacts TimeCool') > -1);
 
   ctx._contactsTimeCool = true;
-  verifie('une fois ouvert, il propose de tout revoir',
-    ctx.tcBoutonTimeCoolHTML().indexOf('Tout voir') > -1);
+  verifie('une fois ouvert, il garde son libelle (Charles, 11/10)',
+    ctx.tcBoutonTimeCoolHTML().indexOf('Mes contacts TimeCool (2)') > -1 && ctx.tcBoutonTimeCoolHTML().indexOf('Tout voir') === -1);
   ctx._contactsTimeCool = false;
 
   ctx.contactsList = [{ name: 'Seul' }];
