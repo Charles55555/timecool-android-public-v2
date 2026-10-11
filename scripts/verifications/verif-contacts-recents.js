@@ -41,6 +41,7 @@ ctx.contactsList = [
   { name: 'Import marque hier', createdAt: il_y_a(1, 120), origine: 'telephone' },
   { name: 'Exemple marque', createdAt: il_y_a(2, 300), origine: 'exemple' },
   { name: 'Sans date' },
+  { name: 'Refuse et bloque hier', createdAt: il_y_a(1), blocked: true },
   { name: 'Date illisible', createdAt: 'demain' },
   { name: 'Dans le futur', createdAt: new Date(Date.now() + 40 * JOUR).toISOString() },
   null,
@@ -48,6 +49,7 @@ ctx.contactsList = [
 verifie('ajout recent : oui. 31 jours : non. Import marque : non. Sans date, date illisible, futur : non', noms() === 'Manuel hier,Manuel 10 jours,Limite 29 jours', noms());
 verifie('tri : du plus recent au plus ancien', ctx.tcContactsRecents().map((c) => c.name)[0] === 'Manuel hier' && ctx.tcContactsRecents().map((c) => c.name)[2] === 'Limite 29 jours');
 verifie('le compte du bouton = la liste', ctx.tcCompterRecents() === 3);
+verifie('une fiche bloquee (« Refuser et bloquer ») n est pas recente, meme creee hier', noms().indexOf('bloque') === -1, noms());
 
 // Une rafale non marquee (fiches importees avant la marque)
 // Les fiches d'une rafale partent du milieu d'une minute : elles ne passent jamais d'une minute a l'autre pendant le test.

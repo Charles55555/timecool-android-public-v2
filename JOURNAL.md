@@ -858,3 +858,25 @@ mobile vers le nouvel appareil.
   le second recouvre le bas du premier. Rien n'a été inventé pour cela.
 - Suite `verif-bloc-demi-case` ; `verif-horaires` (règle « 42 px minimum » devenue « une heure = 42 px ») et
   `verif-deplacer-au-doigt` (charge la nouvelle fonction) mises à jour.
+
+## 11/10/2026 (session Codeur) — Campagne 1 sur v2.0.317 : trois défauts de la session Testeurs
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Fiche contact → « Envoyer un message » : retrouve la conversation du serveur (référence du compte de la fiche,
+  puis le nom, casse ignorée) au lieu d'en créer une vide ; avatar « BC », les 2 messages. Nouvelle fonction
+  `tcConversationDuContact`. Sans conversation : une locale est créée ; si la fiche est un compte TimeCool, elle porte
+  sa référence (`reference`, `serveur`) : le premier message part par le serveur, et dès que la synchro rapporte la
+  conversation, `tcConversationsAffichables` les fond en une seule (ce qui avait été écrit dans la locale passe devant).
+  `tcConversationParId` retrouve la conversation du serveur depuis l'ancien identifiant local (l'écran ouvert ne se
+  vide pas) ; après un envoi, `sendConvMessage` rouvre `srv_<référence>`.
+- « Mes contacts récents (N) » : les fiches `blocked` (créées par « Refuser et bloquer ») ne comptent plus.
+- Avatar d'en-tête : `tcMajAvatarEntete()` est appelée dès `showWelcomeSplash` (chemin de toutes les connexions :
+  mot de passe, Google, biométrie, appairage) et dans `hideAuthFlow`. Plus de « JD » après connexion.
+- Suites : `verif-conversation-fiche` (nouvelle, dans verifier.sh), `verif-contacts-recents` complétée (fiche bloquée).
+  Les deux échouent sur la page d'avant. Sonde Chrome 390 sur page locale : JD → AV, conversation Basile = BC + 2 messages,
+  une seule ligne Basile, une seule ligne Clémence après synchro (avant correctif : JD, 👤 vide, deux lignes).
+- Limite : le repli par e-mail/téléphone demandé n'existe pas — la conversation du serveur ne porte que la référence et
+  le nom, pas les coordonnées de l'autre. La référence de la fiche (cas normal d'un compte TimeCool) et le nom suffisent.
+- Piège vu en passant, non traité (hors mission) : `showAppAfterAuth()` est appelée (connexion Google « démo »,
+  ~ligne 14836) mais n'est définie nulle part.

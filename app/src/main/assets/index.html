@@ -6833,7 +6833,17 @@ function tcConversationsAffichables() {
   // Le plus recent en haut. Les conversations de demonstration n'ont
   // pas de date et tombent en fin de liste, dans leur ordre d'origine
   // -- le tri de JavaScript est stable.
-  return duServeur.concat(messages[mode] || [])
+  // Une conversation ouverte depuis une fiche AVANT le premier echange porte la reference du compte :
+  // des que le serveur rapporte la sienne, les deux n'en font qu'une (ce qui avait ete ecrit ici passe devant).
+  const duServeurParReference = {};
+  duServeur.forEach(function (c) { duServeurParReference[c.reference] = c; });
+  const locales = (messages[mode] || []).filter(function (c) {
+    const srv = c && c.reference ? duServeurParReference[c.reference] : null;
+    if (!srv) return true;
+    if (Array.isArray(c.thread) && c.thread.length) srv.thread = c.thread.concat(srv.thread);
+    return false;
+  });
+  return duServeur.concat(locales)
     .sort(function (a, b) { return tcQuandConversation(b) - tcQuandConversation(a); });
 }
 
@@ -6887,9 +6897,17 @@ function renderMessages() {
  *  Comparaison souple : les identifiants locaux sont des nombres, ceux
  *  du serveur des chaînes, et le HTML ne rend que des chaînes. */
 function tcConversationParId(id) {
-  return tcConversationsAffichables().find(function (m) {
+  const toutes = tcConversationsAffichables();
+  const trouvee = toutes.find(function (m) {
     return String(m.id) === String(id);
   });
+  if (trouvee) return trouvee;
+  // Ouverte depuis une fiche, puis fondue dans la conversation du serveur : meme reference.
+  const locale = (messages[mode] || []).find(function (m) { return String(m.id) === String(id); });
+  if (locale && locale.reference) {
+    return toutes.find(function (m) { return m.reference === locale.reference; });
+  }
+  return undefined;
 }
 
 /**
@@ -14526,6 +14544,7 @@ function showAuthFlow(startPage) {
 }
 
 function hideAuthFlow() {
+  tcMajAvatarEntete();
   // Cacher toutes les pages d'auth
   document.querySelectorAll('.auth-page').forEach(p => p.classList.remove('active'));
   // Afficher l'app principale
@@ -15413,6 +15432,8 @@ function tcProposerEnregistrementIdentifiants(identifiant, motDePasse, nom) {
 
 // ═══ v5.4 — Splash de bienvenue chaleureux (corrigé en v5.5 — pas de flash) ═══
 function showWelcomeSplash(firstname) {
+  // Le compte vient d'etre pose : l'entete se redessine maintenant, pas au rechargement (jamais JD).
+  tcMajAvatarEntete();
   const splash = document.getElementById('welcomeSplash');
   const nameEl = document.getElementById('welcomeFirstname');
   if (!splash || !nameEl) {
@@ -18766,6 +18787,7 @@ function tcContactsRecents() {
   return contactsList.filter(function (c) {
     if (!c || typeof c.createdAt !== 'string') return false;
     if (c.origine === 'telephone' || c.origine === 'exemple') return false;
+    if (c.blocked) return false;   // « Refuser et bloquer » cree une fiche : ce n'est pas un contact ajoute (Charles, 11/10)
     const t = Date.parse(c.createdAt);
     if (isNaN(t) || t < limite || t > maintenant + 86400000) return false;
     return (parMinute[c.createdAt.slice(0, 16)] || 0) <= 20;
@@ -20461,14 +20483,36 @@ function toggleContactBlock(contactId) {
     : '\u2705 Acc\u00e8s d\u00e9bloqu\u00e9');
 }
 
+/**
+ * La conversation deja ouverte avec ce contact, ou rien.
+ *
+ * Celles du serveur se reconnaissent a la reference du compte, pas au nom : on cherche donc
+ * d'abord la reference de la fiche, puis le nom (repli, sans tenir compte de la casse).
+ * Une conversation de groupe n'est jamais « la » conversation d'une personne.
+ */
+function tcConversationDuContact(contact) {
+  if (!contact) return null;
+  const toutes = tcConversationsAffichables();
+  const ref = contact.referenceCompte;
+  if (ref) {
+    const parRef = toutes.find(function (c) { return c.reference === ref; });
+    if (parRef) return parRef;
+  }
+  const nom = String(contact.name || '').trim().toLowerCase();
+  if (!nom) return null;
+  return toutes.find(function (c) {
+    return !c.isGroup && String(c.with || '').trim().toLowerCase() === nom;
+  }) || null;
+}
+
 function messageContact(contactId) {
   const contact = contactsList.find(c => c.id === contactId);
   if (!contact) return;
   const appelante = currentPage;   // la fleche retour y ramenera (Charles, 11/10)
   if (!messages[mode]) messages[mode] = [];
 
-  // Retrouver la conversation existante avec ce contact, sinon la cr\u00e9er
-  let conv = messages[mode].find(m => m.with === contact.name);
+  // Retrouver la conversation existante avec ce contact (celle du serveur d'abord), sinon la cr\u00e9er
+  let conv = tcConversationDuContact(contact);
   if (!conv) {
     conv = {
       id: Date.now(),
@@ -20480,9 +20524,12 @@ function messageContact(contactId) {
       archived: false,
       thread: []
     };
+    // Un compte TimeCool : le premier message part par le serveur, et la conversation que la
+    // synchro ramenera se confondra avec celle-ci (meme reference).
+    if (contact.referenceCompte) { conv.reference = contact.referenceCompte; conv.serveur = true; }
     messages[mode].push(conv);
   }
-  if (conv.archived) conv.archived = false;
+  if (conv.archived && !conv.serveur) conv.archived = false;
   saveMessagesToStorage();
 
   // Repartir d'une liste propre (ni filtre ni recherche actifs)
@@ -20522,7 +20569,8 @@ async function sendConvMessage() {
       return;
     }
     await tcSyncTour();
-    openConversation(conv.id);
+    const apres = (conv.reference && tcConversationParId('srv_' + conv.reference)) ? 'srv_' + conv.reference : conv.id;
+    openConversation(apres);
     return;
   }
   const d = new Date();
