@@ -106,7 +106,8 @@ const noms = ['fmt', 'sameDay', 'isProClosed', 'escapeHTMLSafe', 'tcEvenementFin
   'tcEcrireDeplacementDoigt', 'tcMontrerDeplacement', 'tcCacherBarreDeplacement', 'tcAnnulerDeplacement', 'tcTerminerDeplacement',
   'tcDecalerVers', 'tcPreRemplirCreneau', 'tcRendreDeplacable', 'tcDeplacerDebut', 'tcDeplacerNettoyer', 'tcDeplacerSoulever',
   'tcDeplacerBouge', 'tcDeplacerLacher', 'tcDeplacerAbandon', 'tcDeplacerEtiquette', 'tcAvalerCliqueApresDeplacement', 'prevenirDecaler',
-  'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcDayShort', 'renderWeek', 'renderDay'];
+  'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcDayShort', 'tcHauteurBloc', 'renderWeek', 'renderDay'];
+vm.runInContext('var TC_BLOC_HAUTEUR_HEURE = 42;', ctx);
 noms.forEach((n) => {
   const src = extraire(n);
   if (!src) { ko++; console.log('  KO  fonction introuvable : ' + n); return; }

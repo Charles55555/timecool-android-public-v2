@@ -58,7 +58,8 @@ verifie('semaine : plus de debut seul', !/week-event-time">\$\{String\(e\.startH
 verifie('mois : la puce utilise tcHorairePlage', /const startStr = tcHorairePlage\(ev\);/.test(page));
 verifie('mois : plus de debut seul', !/const startStr = String\(ev\.startH\)/.test(page));
 verifie('jour : garde « debut – fin » complet (il a la place)', /day-event-time">\$\{String\(e\.startH\)[^`]*–[^`]*\$\{String\(e\.endH\)/.test(page));
-verifie('un bloc de la semaine fait au moins 42 px : deux lignes y tiennent', /Math\.max\(dm\*\(44\/60\)-2, 42\)/.test(page));
+verifie('un bloc d une heure ou plus fait au moins 42 px : deux lignes y tiennent (en dessous : demi-case, voir verif-bloc-demi-case)',
+  /Math\.max\(dureeMin \* parMin - marge, TC_BLOC_HAUTEUR_HEURE\)/.test(page) && /const TC_BLOC_HAUTEUR_HEURE = 42;/.test(page) && /tcHauteurBloc\('week', dm\)/.test(page));
 
 console.log('');
 console.log(ko + ' anomalie(s).');

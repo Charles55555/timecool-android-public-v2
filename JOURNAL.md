@@ -840,3 +840,21 @@ mobile vers le nouvel appareil.
 - Non traité (natif, pas la page) : la touche retour matérielle d'Android appelle `webView.goBack()` ; l'application
   ne pousse rien dans l'historique du navigateur, elle quitte donc l'application.
 - Suite `verif-retour-partout`.
+
+## 11/10/2026 (session adjointe) — Tout rendez-vous de moins d'une heure sur une demi-case
+
+**Codé et commité sur main, PAS publié.** Page seulement (rien côté serveur ni SQL).
+
+- Vues Semaine ET Jour : durée < 60 min → hauteur = la moitié d'un rendez-vous d'une heure (21 px sur 42), quelle que soit
+  la durée (15, 30, 45, 59 minutes : la même hauteur, pas de proportion : Charles l'a refusée). Le bloc part de
+  l'heure de début. Une heure ou plus : inchangé. Une seule fonction, `tcHauteurBloc`, qui réutilise l'ancienne hauteur
+  minimale de 42 px (c'était déjà la hauteur d'un rendez-vous d'une heure) sous le nom `TC_BLOC_HAUTEUR_HEURE`.
+- Le texte tient dans 21 px : vue Semaine, deux lignes compactes (titre 9 px, horaire 8 px) ; vue Jour, une seule ligne
+  « titre · 14:00 – 14:15 ». Titre tronqué par des points de suspension si besoin, jamais coupé en hauteur.
+- Le déplacement au doigt est inchangé : l'aimantation se calcule sur la vraie durée (heures de début et de fin),
+  l'échelle en pixels par minute n'a pas bougé.
+- Deux rendez-vous courts qui se suivent (14h00-14h15, 14h15-14h30) : il n'existe pas de règle de chevauchement dans
+  l'agenda (des rendez-vous qui se croisent se superposent, même pour deux d'une heure) : ils se superposent de 10 px,
+  le second recouvre le bas du premier. Rien n'a été inventé pour cela.
+- Suite `verif-bloc-demi-case` ; `verif-horaires` (règle « 42 px minimum » devenue « une heure = 42 px ») et
+  `verif-deplacer-au-doigt` (charge la nouvelle fonction) mises à jour.
