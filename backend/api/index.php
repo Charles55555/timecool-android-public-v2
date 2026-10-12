@@ -627,6 +627,37 @@ function demandeRdvTraitee(array $titulaire, array $demandeur, int $rdvId): void
 }
 
 /**
+ * Marque la convocation repondue dans la messagerie du membre (statut et « traite ») : ses appareils en
+ * retirent les boutons (mission 27b).
+ */
+function convocationRepondue(array $membre, string $referenceOrganisateur, int $convocationId, string $statut): void
+{
+    $l = Db::un(
+        'SELECT contenu FROM elements WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+        [$membre['id'], $referenceOrganisateur]
+    );
+    $conv = $l ? json_decode((string) $l['contenu'], true) : null;
+    if (!is_array($conv) || !is_array($conv['thread'] ?? null)) {
+        return;
+    }
+    $change = false;
+    foreach ($conv['thread'] as $i => $m) {
+        if (is_array($m) && (int) ($m['convocation'] ?? 0) === $convocationId && ($m['genre'] ?? '') === 'convocation') {
+            $conv['thread'][$i]['statut'] = $statut;
+            $conv['thread'][$i]['traite'] = true;
+            $change = true;
+        }
+    }
+    if (!$change) {
+        return;
+    }
+    elementsPoser([[
+        'compte_id' => (int) $membre['id'], 'type' => 'conversation',
+        'uid' => $referenceOrganisateur, 'contenu' => $conv,
+    ]]);
+}
+
+/**
  * Bloque cette personne dans le carnet du titulaire : sa fiche passe a
  * blocked:true, ou une fiche est creee (nom et reference de compte, rien
  * d autre). Elle ne l apprend jamais.
@@ -1632,11 +1663,16 @@ function messagePoser(
     ?string $type = null,
     // Vrai : l echo chez l expediteur seulement, rien chez le destinataire
     // (demandeur bloque). Faux : dans les deux messageries, comme toujours.
-    bool $chezExpediteurSeulement = false
+    bool $chezExpediteurSeulement = false,
+    // Champs supplementaires de la ligne (convocation : identifiant, horaire, statut) — mission 27b.
+    ?array $complement = null
 ): void
 {
     $maintenant = date('c');
     $ligne = ['texte' => $texte, 'le' => $maintenant];
+    if (is_array($complement)) {
+        $ligne += $complement;
+    }
     if ($rdvId !== null) {
         $ligne['rdv'] = $rdvId;
     }
@@ -3054,6 +3090,116 @@ switch ($route) {
         ]);
 
     /* Message libre d un compte à un autre. */
+    /*
+     * Convocation de groupe (mission 27b, 12/10) : un horaire fixe par l organisateur, envoye dans la messagerie de
+     * chaque membre qui a TimeCool (genre « convocation », boutons Present / Absent) ; chacun repond (/repondre) ;
+     * l organisateur lit les reponses (/etat). Les references sans compte sont rendues telles quelles (sans_compte) :
+     * l organisateur note ces membres a la main. Un membre qui a bloque l organisateur ne recoit rien, en silence.
+     */
+    case 'POST /convocations':
+        $moi = Auth::compte();
+        $corps = Entree::corps();
+        $titre = Entree::requis('titre', 120);
+        $groupe = Entree::texte('groupe', 120);
+        $jour = (string) ($corps['date'] ?? '');
+        $debut = (string) ($corps['debut'] ?? '');
+        $fin = (string) ($corps['fin'] ?? '');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $jour) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $debut)
+            || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $fin) || $fin <= $debut) {
+            Rep::erreur(400, 'horaire_invalide', 'Jour ou horaire invalide.');
+        }
+        $ts = strtotime($jour . ' ' . $debut . ':00');
+        if ($ts === false || date('Y-m-d', $ts) !== $jour || $ts < strtotime('today') || $ts > strtotime('+365 day')) {
+            Rep::erreur(400, 'horaire_invalide', 'Jour ou horaire invalide.');
+        }
+        $references = $corps['references'] ?? [];
+        if (!is_array($references) || count($references) > 30) {
+            Rep::erreur(400, 'participants_invalides', 'Indiquez au plus 30 personnes.');
+        }
+        $membres = [];
+        $sansCompte = [];
+        $vus = [(int) $moi['id'] => true];
+        foreach ($references as $ref) {
+            if (!is_string($ref) || $ref === '') {
+                continue;
+            }
+            $c = compteParReference($ref);
+            if ($c === null) {
+                $sansCompte[] = $ref;
+                continue;
+            }
+            if (isset($vus[(int) $c['id']])) {
+                continue;
+            }
+            $vus[(int) $c['id']] = true;
+            $membres[] = $c;
+        }
+        Db::req(
+            'INSERT INTO convocations (organisateur_id, groupe, titre, jour, debut, fin) VALUES (?, ?, ?, ?, ?, ?)',
+            [$moi['id'], $groupe, $titre, $jour, $debut . ':00', $fin . ':00']
+        );
+        $convocationId = (int) Db::pdo()->lastInsertId();
+        $quand = rdvLibelleJour($ts) . ' de ' . $debut . ' à ' . $fin;
+        $texte = '📅 Convocation « ' . $titre . ' » — ' . $quand . ($groupe !== null ? ' (' . $groupe . ')' : '') . '. Réponds Présent ou Absent.';
+        $envoyes = [];
+        foreach ($membres as $c) {
+            Db::req('INSERT INTO convocation_membres (convocation_id, compte_id) VALUES (?, ?)', [$convocationId, $c['id']]);
+            $bloque = demandeurBloque((int) $c['id'], $moi);
+            messagePoser($moi, $c, $texte, null, null, 'convocation', null, null, $bloque,
+                ['convocation' => $convocationId, 'titre' => $titre, 'jour' => $jour, 'debut' => $debut, 'fin' => $fin, 'quand' => $quand, 'statut' => 'attente']);
+            $envoyes[] = ['reference' => (string) $c['reference'], 'prenom' => texteSur((string) $c['prenom']), 'nom' => texteSur((string) $c['nom'])];
+        }
+        Rep::ok(['id' => $convocationId, 'quand' => $quand, 'envoyes' => $envoyes, 'sans_compte' => $sansCompte]);
+
+    case 'POST /convocations/repondre':
+        $moi = Auth::compte();
+        $convocationId = Entree::entier('convocation');
+        $statut = (string) (Entree::corps()['statut'] ?? '');
+        if ($convocationId === null || !in_array($statut, ['present', 'absent'], true)) {
+            Rep::erreur(400, 'reponse_invalide', 'Réponse invalide.');
+        }
+        $m = Db::un(
+            'SELECT m.id, c.organisateur_id, c.titre, c.jour, c.debut, c.fin FROM convocation_membres m
+              JOIN convocations c ON c.id = m.convocation_id WHERE m.convocation_id = ? AND m.compte_id = ?',
+            [$convocationId, $moi['id']]
+        );
+        if ($m === null) {
+            Rep::erreur(404, 'convocation_introuvable', 'Convocation introuvable.');
+        }
+        Db::req('UPDATE convocation_membres SET statut = ?, repondu_le = NOW() WHERE id = ?', [$statut, $m['id']]);
+        $organisateur = Db::un('SELECT * FROM comptes WHERE id = ?', [$m['organisateur_id']]);
+        if ($organisateur !== null) {
+            convocationRepondue($moi, (string) $organisateur['reference'], $convocationId, $statut);
+            $quand = rdvLibelleJour((int) strtotime($m['jour'] . ' ' . $m['debut']));
+            $texte = ($statut === 'present' ? '✅ ' : '❌ ') . texteSur((string) $moi['prenom'])
+                . ($statut === 'present' ? ' sera présent' : ' sera absent') . ' : « ' . $m['titre'] . ' », ' . $quand . '.';
+            messagePoser($moi, $organisateur, $texte, null, null, 'convocation_reponse', null, null, false,
+                ['convocation' => $convocationId, 'statut' => $statut]);
+        }
+        Rep::ok(['convocation' => $convocationId, 'statut' => $statut]);
+
+    case 'POST /convocations/etat':
+        $moi = Auth::compte();
+        $convocationId = Entree::entier('convocation');
+        $c = $convocationId === null ? null : Db::un('SELECT * FROM convocations WHERE id = ? AND organisateur_id = ?', [$convocationId, $moi['id']]);
+        if ($c === null) {
+            Rep::erreur(404, 'convocation_introuvable', 'Convocation introuvable.');
+        }
+        $lignes = Db::tous(
+            'SELECT m.statut, m.repondu_le, k.reference, k.prenom, k.nom FROM convocation_membres m
+              JOIN comptes k ON k.id = m.compte_id WHERE m.convocation_id = ? ORDER BY k.prenom, k.nom',
+            [$convocationId]
+        );
+        $membres = [];
+        foreach ($lignes as $l) {
+            $membres[] = ['reference' => (string) $l['reference'], 'prenom' => texteSur((string) $l['prenom']), 'nom' => texteSur((string) $l['nom']),
+                'statut' => (string) $l['statut'], 'repondu_le' => $l['repondu_le']];
+        }
+        $debut = substr((string) $c['debut'], 0, 5);
+        $fin = substr((string) $c['fin'], 0, 5);
+        Rep::ok(['id' => (int) $c['id'], 'titre' => (string) $c['titre'], 'jour' => (string) $c['jour'], 'debut' => $debut, 'fin' => $fin,
+            'quand' => rdvLibelleJour((int) strtotime($c['jour'] . ' ' . $debut)) . ' de ' . $debut . ' à ' . $fin, 'membres' => $membres]);
+
     case 'POST /messages/envoyer':
         $moi = Auth::compte();
         $cible = compteParReference(Entree::requis('reference', 26));
@@ -3075,8 +3221,12 @@ switch ($route) {
             }
         }
 
-        messagePoser($moi, $cible, Entree::requis('texte', 2000), null, $imposee);
-        envoyerAbsenceSiBesoin($cible, $moi);
+        // Bloque par le destinataire (mission 27b) : rien chez lui, en silence, comme ses demandes de rendez-vous.
+        $bloque = demandeurBloque((int) $cible['id'], $moi);
+        messagePoser($moi, $cible, Entree::requis('texte', 2000), null, $imposee, null, null, null, $bloque);
+        if (!$bloque) {
+            envoyerAbsenceSiBesoin($cible, $moi);
+        }
         Rep::ok();
 
     /*

@@ -6813,6 +6813,9 @@ function createNewGroup() {
     const c = contactsList.find(x => x.id === cid);
     return c ? c.name : '';
   }).filter(Boolean);
+  // Nom → reference de compte TimeCool (vide si la personne n a pas TimeCool) : la convocation saura a qui partir (mission 27b).
+  const membresRefs = {};
+  _tcGroupSelected.forEach(function (cid) { const c = contactsList.find(x => x.id === cid); if (c && c.name) membresRefs[c.name] = c.referenceCompte || ''; });
 
   if (!messages[mode]) messages[mode] = [];
   const conv = {
@@ -6823,6 +6826,7 @@ function createNewGroup() {
     with: name,
     isGroup: true,
     members: members,
+    membresRefs: membresRefs,
     avatar: '👥',
     color: '#7c3aed',
     icon: '👥',
@@ -6874,7 +6878,7 @@ function openContactsBloques() {
     : '<div style="padding:0 20px 18px; font-size:13px; color:var(--text-sec);">Aucun contact bloqué.</div>';
   ov.innerHTML = '<div class="msg-sheet" style="max-height:80vh; display:flex; flex-direction:column;">' +
     '<div class="msg-sheet-h">🚫 Contacts bloqués</div>' +
-    (liste.length ? '<div style="padding:0 20px 10px; font-size:12px; color:var(--text-sec); line-height:1.5;">Ses demandes de rendez-vous ne t’arrivent plus, et cette personne ne le sait pas.</div>' : '') +
+    (liste.length ? '<div style="padding:0 20px 10px; font-size:12px; color:var(--text-sec); line-height:1.5;">Cette personne ne peut plus t’écrire ni prendre rendez-vous avec toi, et elle ne le sait pas.</div>' : '') +
     '<div style="overflow-y:auto; flex:1;">' + lignes + '</div>' +
     '</div>';
   document.body.appendChild(ov);
@@ -7004,7 +7008,12 @@ function tcConversationsAffichables() {
           // Qui demande : ses coordonnees d'inscription, jointes par le serveur chez le titulaire seulement.
           demandeur: (t.demandeur && typeof t.demandeur === 'object') ? t.demandeur : null,
           // Le type demande (telephone, physique, visio), pour pre-choisir la reponse.
-          type: typeof t.type === 'string' ? t.type : ''
+          type: typeof t.type === 'string' ? t.type : '',
+          // Une convocation de groupe recue (mission 27b) : de quoi repondre Present / Absent.
+          convocation: typeof t.convocation === 'number' ? t.convocation : 0,
+          titre: typeof t.titre === 'string' ? t.titre : '',
+          quand: typeof t.quand === 'string' ? t.quand : '',
+          statut: typeof t.statut === 'string' ? t.statut : ''
         };
       })
     };
@@ -7162,6 +7171,9 @@ function openConversation(id, origine) {
   }
   const demandeRdv = tcDemandeRdvEnAttente(msg);
   if (demandeRdv) body.innerHTML += tcCadreDemandeRdv(demandeRdv, msg.with, msg.reference);
+  // Une convocation de groupe recue et sans reponse (mission 27b).
+  const convocationRecue = (typeof tcConvocationEnAttente === 'function') ? tcConvocationEnAttente(msg) : null;
+  if (convocationRecue) body.innerHTML += tcCadreConvocation(convocationRecue, msg.with);
   if (mode==='pro' && msg.isCancellation && !msg.accepted) {
     body.innerHTML += `
       <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
@@ -14766,7 +14778,7 @@ async function charlySendMessage() {
     { keys: ['qui es-tu','qui es tu','tu es qui','tu t’appelles','tu t appelles','comment tu t appelles','comment tu t’appelles','tu t\'appelles','tu es une ia','t’es une ia','t\'es une ia','t’es quoi','c’est quoi timecool','c\'est quoi timecool','c’est quoi charly',"c'est quoi charly",'c est quoi charly','qui est charly','charly c’est qui',"charly c'est qui",'charly c est qui'],
       reply: TC_CHARLY_PRESENTATION },
     { keys: ['données sécurisées','mes données','confidentialité','sécurité','tu enregistres','qui voit','privé','chiffré','rgpd'],
-      reply: 'Tes données restent sur ton appareil, jamais partagées ni vendues 🔒 Le chiffrement de bout en bout est en développement, je te préviendrai dès qu\'il sera actif 😊' },
+      reply: 'Tes messages et rendez-vous passent par les serveurs TimeCool, chiffrés en transit, et ne sont jamais vendus ni partagés 🔒' },
     { keys: ['c’est gratuit','c\'est gratuit','combien ça coûte','combien ca coute','prix','abonnement','payant','gratuit'],
       reply: 'TimeCool est gratuit 🎉 Notre philosophie : te faire gagner du temps 😊' },
     { keys: ['application android','application iphone','appli','app','télécharger','google play','app store','disponible sur'],
@@ -21600,6 +21612,19 @@ const TC_BACKEND = {
     return tcAppel('POST', '/rdv/proposer-creneau', corps);
   },
 
+  /** Une convocation de groupe part dans la messagerie de chaque membre qui a TimeCool (mission 27b). */
+  async envoyerConvocation(c) {
+    return tcAppel('POST', '/convocations', { titre: c.titre, groupe: c.groupe || undefined, date: c.date, debut: c.debut, fin: c.fin, references: c.references || [] });
+  },
+  /** Le membre repond : 'present' ou 'absent'. */
+  async repondreConvocation(id, statut) {
+    return tcAppel('POST', '/convocations/repondre', { convocation: id, statut: statut });
+  },
+  /** L organisateur lit les reponses. */
+  async etatConvocation(id) {
+    return tcAppel('POST', '/convocations/etat', { convocation: id });
+  },
+
   /** Un commentaire depuis « Aide et commentaires » : enregistre en base et transmis a l equipe (mission 33). */
   async envoyerCommentaire(texte, contexte) {
     return tcAppel('POST', '/commentaires', { texte: texte, version: (contexte && contexte.version) || '', appareil: (contexte && contexte.appareil) || '' });
@@ -21989,7 +22014,7 @@ function toggleContactBlock(contactId) {
   const contact = contactsList.find(c => c.id === contactId);
   if (!contact) return;
   contact.blocked = !contact.blocked;
-  try { localStorage.setItem('timecool_contacts', JSON.stringify(contactsList)); } catch(e) {}
+  saveContacts();   // stockage ET synchronisation tout de suite : le serveur applique le blocage (mission 27b)
   renderContactsList();
   showToast(contact.blocked
     ? '\u{1F6AB} Acc\u00e8s bloqu\u00e9 \u2014 ses demandes de rendez-vous ne t\u2019arrivent plus'
@@ -24193,6 +24218,79 @@ async function approvePairingCode() {
   await tcLierPuisEnvoyer(code);
 }
 
+/* ── Convocations qui partent vraiment (mission 27b) ───────────────────────────────────────────────────────── */
+/** « jeudi 15 octobre » pour AAAA-MM-JJ. */
+function tcJourEnClair(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+  if (!m) return String(iso || '');
+  const l = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return l.charAt(0).toLowerCase() + l.slice(1);
+}
+/** Les membres d un groupe avec leur reference de compte ('' si la personne n a pas TimeCool), par le nom. */
+function tcMembresDuGroupe(msg) {
+  const refs = (msg && msg.membresRefs && typeof msg.membresRefs === 'object') ? msg.membresRefs : {};
+  return ((msg && Array.isArray(msg.members)) ? msg.members : []).map(function (name) {
+    let ref = refs[name] || '';
+    if (!ref && Array.isArray(contactsList)) { const c = contactsList.find(function (x) { return x && x.name === name && x.referenceCompte; }); if (c) ref = c.referenceCompte; }
+    return { name: name, reference: ref };
+  });
+}
+function tcPhraseDestinatairesConvocation(msg) {
+  const membres = tcMembresDuGroupe(msg);
+  const avec = membres.filter(function (m) { return m.reference; }).length;
+  const sans = membres.length - avec;
+  const p1 = avec ? 'Envoyée dans TimeCool à ' + avec + ' membre' + (avec > 1 ? 's' : '') + ' : chacun répondra Présent ou Absent.' : 'Aucun membre n’a TimeCool : rien ne partira.';
+  const p2 = sans ? ' ' + sans + ' membre' + (sans > 1 ? 's' : '') + ' sans TimeCool : tu noteras ' + (sans > 1 ? 'leurs réponses' : 'sa réponse') + ' toi-même.' : '';
+  return p1 + p2;
+}
+// Convocations auxquelles on vient de repondre : le cadre disparait sans attendre la synchronisation.
+var _tcConvocTraitees = {};
+/** La convocation recue et encore sans reponse dans cette conversation du serveur, ou null. */
+function tcConvocationEnAttente(msg) {
+  if (!msg || !msg.serveur || !Array.isArray(msg.thread)) return null;
+  for (let i = msg.thread.length - 1; i >= 0; i--) {
+    const m = msg.thread[i];
+    if (m.from === 'them' && m.genre === 'convocation' && m.convocation && !m.traite && !_tcConvocTraitees[m.convocation]) return m;
+  }
+  return null;
+}
+function tcCadreConvocation(c, nom) {
+  const prenom = escapeHTMLSafe(String(nom || '').split(' ')[0]);
+  return '<div style="margin-top:16px; padding:14px; background:#f0f7ff; border:1px solid #c8d7ee; border-radius:14px;">'
+    + '<div style="font-size:13px; font-weight:600; color:var(--g-blue); margin-bottom:4px;">📅 Convocation : ' + escapeHTMLSafe(c.titre || '') + '</div>'
+    + '<div style="font-size:12px; color:var(--text); line-height:1.5; margin-bottom:12px;">' + prenom + ' te convoque ' + escapeHTMLSafe(c.quand || '') + '. Seras-tu là ?</div>'
+    + '<div style="display:flex; gap:8px;">'
+    + '<button style="flex:1; padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-green);" onclick="tcRepondreConvocation(' + Number(c.convocation) + ', \'present\')">✅ Présent</button>'
+    + '<button style="flex:1; padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-red);" onclick="tcRepondreConvocation(' + Number(c.convocation) + ', \'absent\')">❌ Absent</button>'
+    + '</div></div>';
+}
+async function tcRepondreConvocation(id, statut) {
+  try {
+    await TC_BACKEND.repondreConvocation(id, statut);
+  } catch (e) {
+    showToast('⚠️ Réponse non envoyée : réessaie dans un instant');
+    return;
+  }
+  _tcConvocTraitees[id] = true;
+  showToast(statut === 'present' ? '✅ Réponse envoyée : présent' : '❌ Réponse envoyée : absent');
+  try { await tcSyncTour(); } catch (e) {}
+  if (_currentConvId && currentPage === 'conv') openConversation(_currentConvId);
+}
+/** L organisateur : les reponses lues sur le serveur mises dans la convocation locale (membres avec compte). */
+async function tcRafraichirConvocation(c) {
+  if (!c || !c.serveurId || typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) return false;
+  let etat;
+  try { etat = await TC_BACKEND.etatConvocation(c.serveurId); } catch (e) { return false; }
+  let change = false;
+  (etat && Array.isArray(etat.membres) ? etat.membres : []).forEach(function (m) {
+    const r = (c.recipients || []).find(function (x) { return x.reference && x.reference === m.reference; });
+    if (r && r.status !== m.statut) { r.status = m.statut; change = true; }
+  });
+  if (etat && etat.quand && c.quand !== etat.quand) { c.quand = etat.quand; change = true; }
+  if (change) saveConvocations();
+  return change;
+}
+
 function openConvocationSheet() {
   const msg = messages[mode].find(m => m.id === _currentConvId);
   if (!msg || !msg.isGroup) return;
@@ -24204,40 +24302,59 @@ function openConvocationSheet() {
     '<div style="padding:0 20px 12px;"><input type="text" id="convocTitle" placeholder="Objet (ex : Entraînement)" style="width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; font-family:inherit; margin-bottom:8px;">' +
     '<input type="date" id="convocDate" style="width:100%; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; font-family:inherit; margin-bottom:8px;">' +
     '<div style="display:flex; gap:8px;"><input type="time" id="convocStart" value="18:00" style="flex:1; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; font-family:inherit;"><input type="time" id="convocEnd" value="19:00" style="flex:1; padding:11px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:14px; font-family:inherit;"></div></div>' +
-    '<div style="padding:0 20px 12px; font-size:11px; color:var(--text-sec);">Envoyée à ' + msg.members.length + ' membre' + (msg.members.length > 1 ? 's' : '') + ' — chacun pourra répondre Présent ou Absent.</div>' +
+    '<div style="padding:0 20px 12px; font-size:11px; color:var(--text-sec); line-height:1.5;">' + tcPhraseDestinatairesConvocation(msg) + '</div>' +
     '<div style="padding:0 20px 4px;"><button onclick="createConvocation(' + msg.id + ')" style="width:100%; padding:13px; background:var(--g-blue); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">Envoyer la convocation</button></div>' +
     '</div>';
   document.body.appendChild(ov);
 }
 
-function createConvocation(groupMsgId) {
+async function createConvocation(groupMsgId) {
   const msg = messages[mode].find(m => m.id === groupMsgId);
   const title = document.getElementById('convocTitle').value.trim();
   const date = document.getElementById('convocDate').value;
   const start = document.getElementById('convocStart').value;
   const end = document.getElementById('convocEnd').value;
   if (!title || !date) { showToast('⚠️ Renseigne au moins l\'objet et la date'); return; }
+  if (!start || !end || end <= start) { showToast('⚠️ L’heure de fin doit suivre l’heure de début'); return; }
+  if (!msg) return;
 
+  // Qui a TimeCool : la convocation part vraiment chez eux (mission 27b) ; les autres sont notes a la main.
+  const membres = tcMembresDuGroupe(msg);
+  const references = membres.map(function (m) { return m.reference; }).filter(Boolean);
+  let reponse = null;
+  if (references.length) {
+    if (typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) { showToast('⚠️ Ouvre une session TimeCool pour envoyer la convocation'); return; }
+    try {
+      reponse = await TC_BACKEND.envoyerConvocation({ titre: title, groupe: msg.with, date: date, debut: start, fin: end, references: references });
+    } catch (e) {
+      showToast(e && e.code === 'horaire_invalide' ? '⚠️ Jour ou horaire invalide' : '⚠️ Convocation non envoyée : réessaie dans un instant');
+      return;
+    }
+  }
+  const quand = (reponse && reponse.quand) ? reponse.quand : tcJourEnClair(date) + ' de ' + start + ' à ' + end;
   const convoc = {
     id: 'convoc_' + Date.now(),
+    serveurId: reponse ? reponse.id : 0,
     groupMsgId: groupMsgId,
     groupName: msg.with,
-    title, date, start, end,
-    recipients: msg.members.map(name => ({ name, status: 'attente' }))
+    title, date, start, end, quand,
+    // Avec compte : la reponse viendra du serveur. Sans : l organisateur la note lui-meme (aMain).
+    recipients: membres.map(function (m) { return { name: m.name, reference: m.reference, status: 'attente', aMain: !m.reference }; })
   };
   groupConvocations.push(convoc);
   saveConvocations();
 
-  // Message système dans le groupe, comme trace de la convocation
-  const d = new Date(date + 'T00:00:00');
-  const dateLabel = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  msg.thread.push({ from: 'system', text: '📅 Convocation "' + title + '" — ' + dateLabel + ' de ' + start + ' à ' + end, time: 'Maintenant', convocId: convoc.id });
+  // Message systeme dans le groupe, comme trace de la convocation (date en clair).
+  msg.thread.push({ from: 'system', text: '📅 Convocation "' + title + '" — ' + quand, time: 'Maintenant', convocId: convoc.id });
   saveMessagesToStorage();
 
   document.querySelectorAll('.msg-sheet-ov').forEach(el => el.remove());
   openConversation(groupMsgId);
   openConvocationDashboard(convoc.id);
-  showToast('✅ Convocation envoyée');
+  const sans = convoc.recipients.filter(function (r) { return r.aMain; }).length;
+  showToast(references.length
+    ? '✅ Convocation envoyée à ' + references.length + ' membre' + (references.length > 1 ? 's' : '') + (sans ? ' ; ' + sans + ' à prévenir toi-même' : '')
+    : '📝 Convocation notée : aucun membre n’a TimeCool, préviens-les toi-même');
 }
 
 function openConvocationDashboard(convocId) {
@@ -24246,6 +24363,7 @@ function openConvocationDashboard(convocId) {
   const present = c.recipients.filter(r => r.status === 'present').length;
   const absent = c.recipients.filter(r => r.status === 'absent').length;
   const attente = c.recipients.filter(r => r.status === 'attente').length;
+  const aMain = c.recipients.some(r => r.aMain);
 
   const ov = document.createElement('div');
   ov.className = 'msg-sheet-ov';
@@ -24255,24 +24373,30 @@ function openConvocationDashboard(convocId) {
   const rows = c.recipients.map((r, idx) => {
     const colors = { present: 'var(--g-green)', absent: 'var(--g-red)', attente: 'var(--text-sec)' };
     const labels = { present: '✅ Présent', absent: '❌ Absent', attente: '⏳ En attente' };
-    return '<div onclick="cycleRecipientStatus(\'' + c.id + '\', ' + idx + ')" style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; cursor:pointer; border-bottom:1px solid var(--border);">' +
-      '<span style="font-size:13.5px; color:var(--text);">' + escapeHTMLSafe(r.name) + '</span>' +
+    // Avec compte : la reponse vient du serveur, on ne la change pas ici. Sans : on la note a la main.
+    return '<div' + (r.aMain ? ' onclick="cycleRecipientStatus(\'' + c.id + '\', ' + idx + ')"' : '') + ' style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; ' + (r.aMain ? 'cursor:pointer; ' : '') + 'border-bottom:1px solid var(--border);">' +
+      '<span style="font-size:13.5px; color:var(--text);">' + escapeHTMLSafe(r.name) + (r.aMain ? ' <span style="font-size:10.5px; color:var(--text-sec);">(sans TimeCool, noté à la main)</span>' : '') + '</span>' +
       '<span style="font-size:12px; font-weight:600; color:' + colors[r.status] + ';">' + labels[r.status] + '</span>' +
       '</div>';
   }).join('');
 
   ov.innerHTML = '<div class="msg-sheet" style="max-height:80vh; display:flex; flex-direction:column;">' +
     '<div class="msg-sheet-h">📅 ' + escapeHTMLSafe(c.title) + '</div>' +
-    '<div style="padding:0 20px 14px; font-size:12px; color:var(--text-sec);">' + c.groupName + ' — ' + c.date + ' de ' + c.start + ' à ' + c.end + '</div>' +
+    '<div style="padding:0 20px 14px; font-size:12px; color:var(--text-sec);">' + escapeHTMLSafe(c.groupName) + ' — ' + escapeHTMLSafe(c.quand || (tcJourEnClair(c.date) + ' de ' + c.start + ' à ' + c.end)) + '</div>' +
     '<div style="padding:12px 16px; background:#f8f9fa; display:flex; justify-content:space-around; text-align:center; margin:0 0 4px;">' +
       '<div><div style="font-size:18px; font-weight:700; color:var(--g-green);">' + present + '</div><div style="font-size:10.5px; color:var(--text-sec);">Présents</div></div>' +
       '<div><div style="font-size:18px; font-weight:700; color:var(--g-red);">' + absent + '</div><div style="font-size:10.5px; color:var(--text-sec);">Absents</div></div>' +
       '<div><div style="font-size:18px; font-weight:700; color:var(--text-sec);">' + attente + '</div><div style="font-size:10.5px; color:var(--text-sec);">En attente</div></div>' +
     '</div>' +
-    '<div style="padding:8px 20px 4px; font-size:10.5px; color:#9aa0a6; font-style:italic;">Tape sur un nom pour changer son statut.</div>' +
+    (c.serveurId ? '<div style="padding:8px 20px 4px; font-size:10.5px; color:#9aa0a6; font-style:italic;">Les réponses des membres qui ont TimeCool arrivent ici.' + (aMain ? ' Pour les autres, tape sur le nom pour noter leur réponse.' : '') + '</div>'
+      : '<div style="padding:8px 20px 4px; font-size:10.5px; color:#9aa0a6; font-style:italic;">Aucun membre n’a TimeCool : tape sur un nom pour noter sa réponse.</div>') +
     '<div style="overflow-y:auto; flex:1;">' + rows + '</div>' +
     '</div>';
   document.body.appendChild(ov);
+  // Les reponses du serveur, puis un redessin si quelque chose a change.
+  tcRafraichirConvocation(c).then(function (change) {
+    if (change && document.getElementById('convocDashboardOv') === ov) { ov.remove(); openConvocationDashboard(convocId); }
+  });
 }
 
 function cycleRecipientStatus(convocId, idx) {
@@ -24280,6 +24404,7 @@ function cycleRecipientStatus(convocId, idx) {
   if (!c) return;
   const order = ['attente', 'present', 'absent'];
   const r = c.recipients[idx];
+  if (!r || !r.aMain) return;   // avec compte : la reponse vient du serveur, jamais notee a la main (mission 27b)
   r.status = order[(order.indexOf(r.status) + 1) % order.length];
   saveConvocations();
   document.getElementById('convocDashboardOv').remove();

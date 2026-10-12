@@ -129,7 +129,7 @@ verifie('plus aucun texte de reponse ecrit en dur dans la route', !/Son agenda e
 const mp = fonction(api, 'messagePoser') || '';
 verifie('messagePoser : « chez l expediteur seulement » ne garde que le cote me', /\$cotes = \$chezExpediteurSeulement \? \[\[\$de, \$vers, 'me'\]\] : \[\[\$de, \$vers, 'me'\], \[\$vers, \$de, 'them'\]\];/.test(mp) && /foreach \(\$cotes as \[\$proprietaire, \$autre, \$sens\]\)/.test(mp));
 verifie('messagePoser : pas de traduction (aucun appel, aucun cout) dans ce cas', /\(\$langueVers === \$langueDe \|\| \$chezExpediteurSeulement\)/.test(mp));
-verifie('messagePoser : le parametre est en dernier, facultatif, faux par defaut (les appels existants sont intacts)', /bool \$chezExpediteurSeulement = false\n\): void/.test(mp));
+verifie('messagePoser : le parametre est en dernier, facultatif, faux par defaut (les appels existants sont intacts)', /bool \$chezExpediteurSeulement = false(?:,\n(?:\s*\/\/[^\n]*\n)*\s*\?array \$complement = null)?\n\): void/.test(mp));
 const choisir = api.slice(api.indexOf("case 'POST /rdv/choisir':"), api.indexOf("case 'POST /rdv/groupe/proposer':"));
 verifie('/rdv/choisir : bloque entre-temps = refus neutre « creneau pris », sans rien ecrire', /categoriesPourPrendreRdv\(\(int\) \$cible\['id'\], \$moi\);\s+if \(\$catsRetenues === \[\]/.test(choisir) && choisir.indexOf("409, 'creneau_pris'") < choisir.indexOf('elementsPoser('));
 verifie('rendez-vous a plusieurs : un bloque est « sans acces », rien n est ecrit chez lui', /categoriesPourRdvAutomatique\(\(int\) \$c\['id'\], \$moi\);\s+if \(\$categories === \[\]\) \{\s+\$sansAcces\[\] = texteSur/.test(fonction(api, 'invitesRdvGroupe') || ''));
@@ -145,9 +145,10 @@ verifie('le menu de la fiche propose « Débloquer l’accès » quand le contac
 {
   const mem = {};
   const ctx = { console, JSON, contactsList: [{ id: 'c1', name: 'Clemence Ravaud', blocked: true }], rendus: 0, toasts: [],
-    localStorage: { setItem: (k, v) => { mem[k] = v; } }, renderContactsList() { ctx.rendus++; }, showToast(m) { ctx.toasts.push(m); } };
+    localStorage: { setItem: (k, v) => { mem[k] = v; } }, renderContactsList() { ctx.rendus++; }, showToast(m) { ctx.toasts.push(m); }, syncs: 0, tcSyncBientot() { ctx.syncs++; } };
   vm.createContext(ctx);
-  vm.runInContext(fonction(page, 'toggleContactBlock'), ctx);
+  // Depuis la mission 27b, toggleContactBlock passe par saveContacts (stockage + synchronisation tout de suite).
+  vm.runInContext(fonction(page, 'saveContacts') + '\n' + fonction(page, 'toggleContactBlock'), ctx);
   vm.runInContext("toggleContactBlock('c1')", ctx);
   verifie('« Débloquer » (toggleContactBlock) : la fiche passe a blocked:false, est enregistree, la liste est redessinee', ctx.contactsList[0].blocked === false && JSON.parse(mem.timecool_contacts)[0].blocked === false && ctx.rendus === 1 && /débloqué/.test(ctx.toasts[0]), ctx.toasts[0]);
   vm.runInContext("toggleContactBlock('c1')", ctx);

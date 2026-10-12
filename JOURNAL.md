@@ -1813,3 +1813,34 @@ mobile vers le nouvel appareil.
   rendez-vous sont retenues en silence). Phrase vraie, celle de la fiche contact : « Ses demandes de rendez-vous ne
   t’arrivent plus, et cette personne ne le sait pas. » Décision du chef pour la 27b : le serveur retiendra aussi les
   messages d'un bloqué (200 pour lui, rien chez l'autre) ; la phrase dira alors « ne peut plus t’écrire ni prendre rendez-vous ».
+
+## 12/10/2026 (session Codeur) — Convocations de groupe réelles, messages d'un bloqué retenus (mission 27b)
+
+**Codé et commité sur main, PAS publié.** Page + API + migration 012 (ordre de mise en ligne : migration, API, page).
+
+- Demande (chef de projet) : la convocation de groupe part réellement chez chaque membre qui a TimeCool (messagerie, via
+  l'API), chacun répond Présent / Absent, l'organisateur voit les réponses ; les membres sans TimeCool restent notés par
+  l'organisateur, et la page le dit ; date en clair « jeudi 15 octobre » partout. Règle ajoutée : un contact bloqué ne peut
+  plus écrire à celui qui l'a bloqué (retenu côté serveur, en silence : 200 pour lui, rien chez l'autre), comme ses demandes.
+- API : migration `012_convocations.sql` (tables `convocations`, `convocation_membres`, rejouables) ; `POST /convocations`
+  (titre ≤ 120, groupe, date, début, fin, références ≤ 30 ; références inconnues rendues dans `sans_compte` ; une ligne de
+  messagerie de genre « convocation » chez chaque membre, avec identifiant, horaire, `quand` en clair, statut `attente` ;
+  un membre qui a bloqué l'organisateur ne reçoit rien) ; `POST /convocations/repondre` (membre seul, present | absent ;
+  la ligne du membre est marquée statut + traitée, l'organisateur reçoit « ✅ Paul sera présent : « Entraînement », jeudi
+  15 octobre. » de genre « convocation_reponse ») ; `POST /convocations/etat` (organisateur seul : membres, statuts) ;
+  `messagePoser` accepte un `$complement` de champs ; `/messages/envoyer` : bloqué → écho chez l'expéditeur seulement.
+- Page : la synchro garde `convocation`, `titre`, `quand`, `statut` sur les lignes ; `TC_BACKEND.envoyerConvocation /
+  repondreConvocation / etatConvocation` ; dans une conversation du serveur, le cadre « 📅 Convocation : … — Olivia te
+  convoque jeudi 15 octobre de 18:00 à 19:00. Seras-tu là ? » avec ✅ Présent / ❌ Absent (`tcRepondreConvocation`, puis
+  synchro) ; `createNewGroup` retient nom → référence de compte (`membresRefs`) ; `createConvocation` (asynchrone) envoie
+  vraiment aux membres avec TimeCool (sans session : toast ; échec : toast, rien de noté), garde `serveurId` et `quand`,
+  marque `aMain` les membres sans TimeCool ; la feuille d'envoi dit « Envoyée dans TimeCool à N membres … M sans
+  TimeCool : tu noteras leur réponse toi-même » ; le décompte lit les réponses sur le serveur (`tcRafraichirConvocation`),
+  n'accepte le toucher que sur les membres « (sans TimeCool, noté à la main) », date en clair.
+- Ajouts demandés par le chef : la page Contacts synchronise tout de suite après un blocage / déblocage (`saveContacts`) ;
+  la réponse de démonstration de Charly dit la phrase vraie ; la liste des bloqués dit « Cette personne ne peut plus
+  t’écrire ni prendre rendez-vous avec toi, et elle ne le sait pas. » (suite `verif-contacts-bloques` adaptée).
+- Suites : `verif-convocations` (API, SQL, page, aides simulées) dans verifier.sh ; `verif-convocations-e2e` (api-locale,
+  comptes jetables : envoi, réponses, état, refus, bloqué qui écrit) : à enregistrer dans verifier.sh après la mise en ligne.
+- Suites `verif-blocage-silence` et `verif-absence` adaptées (paramètre `$complement` de messagePoser ; saveContacts dans le bac à sable ;
+  nouvelle forme de /messages/envoyer) : mêmes vérifications.
