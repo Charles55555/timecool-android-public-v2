@@ -3862,7 +3862,7 @@ function renderMenu() {
       extraStyle = 'background:linear-gradient(90deg,#fff4e0,#fff); border-left:3px solid var(--g-yellow);';
     }
     return `
-    <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="navigate('${it.id}')">
+    <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="${it.id === 'calendar' ? 'tcOuvrirMonAgenda()' : "navigate('" + it.id + "')"}">
       <span style="font-size:20px; flex-shrink:0;">${it.icon}</span>
       <span>${it.label}</span>
       ${it.badge?`<span class="menu-badge" id="menuBadge" style="display:none; margin-left:auto;">0</span>`:''}
@@ -19070,6 +19070,19 @@ let _isolatedCalendarName = null;
    agendas DANS LE REGLAGE enregistre : toute sauvegarde faite ensuite (creer un agenda, par exemple) figeait
    Mon agenda masque, ses rendez-vous paraissaient perdus (compte 53, 12/10). */
 let _isolatedCalendarId = null;
+/**
+ * « Mon agenda » dans le menu : on sort de l isolation d un agenda secondaire (tous les agendas visibles
+ * reviennent, la ligne « 📍 nom » s efface), puis l agenda s ouvre. Avant, navigate('calendar') laissait
+ * l isolation en place : l ecran restait sur l agenda d Elodie (Charles, 12/10).
+ */
+function tcOuvrirMonAgenda() {
+  _isolatedCalendarId = null;
+  _isolatedCalendarName = null;
+  navigate('calendar');
+  if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
+  if (currentPage === 'calendar' && typeof render === 'function') render();
+}
+
 function isolateCalendarView(calendarId) {
   const cal = getCalendarById(calendarId);
   _isolatedCalendarId = cal ? cal.id : null;

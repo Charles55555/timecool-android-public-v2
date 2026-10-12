@@ -1185,3 +1185,20 @@ mobile vers le nouvel appareil.
 - Choix de Charles (12/10) : `ABSENCE_RELAIS_AUX_INCONNUS = false` : un inconnu (aucune fiche chez l'absent) reçoit le message
   d'absence sans la phrase d'urgence ; le nom et le téléphone du relais ne vont qu'aux contacts. e2e : Eve (inconnue) → message
   sans relais ; Carl (fiche) → avec.
+
+## 12/10/2026 (session Codeur) — « Mon agenda » dans le menu revient toujours à l'agenda principal
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Agenda d'Élodie ouvert (isolation) → « Mon agenda » dans le menu : `navigate('calendar')` laissait l'isolation en place
+  (depuis la page agenda, rien ne la levait), l'écran restait sur Élodie. L'entrée « Mon agenda » du menu appelle
+  `tcOuvrirMonAgenda()` : l'isolation est levée (identifiant et nom), tous les agendas visibles reviennent (un agenda masqué
+  à la main par la pastille le reste), la ligne « 📍 nom » s'efface, l'agenda s'ouvre et se redessine. Les autres entrées
+  du menu et les agendas secondaires ne changent pas.
+- Suite `verif-mon-agenda` (menu rendu, isolation puis « Mon agenda » exécutés), dans verifier.sh ; rouge sur la page
+  d'avant.
+- Mission 12 publiée (v2.0.330, API déployée) : `verif-absence-e2e` ajoutée à verifier.sh. Comptes sonde e2erdv.absence… à
+  supprimer au nettoyage d'avant lancement : 7HM7TW8AAQPQ, X99KXG3CGDZZ, 1TG2AR3S3HGP, WVV7R9RGBP6Y, 13REWGAJTZSH,
+  N7AH26DJ84Q7, ZWEWTKRGZB9M, WX66REN9V4D0, 2FBV4EZD7R72, TPDKFGN8KS7M, 897FQ1FBYPGC, YSV8AXTR961H, FW215G33RGVB,
+  WR9JJH1BX3TD, MJ6K2RV3QZZ9, YFH00AE95AJH, V79HG7TZ3H1W, QSBF6BHHNA3F, 5S3Z2MX35707, 6SSRGBCMK13J, MPEE7AQ7RHCD,
+  5WR20JJ1KPY3, WJD51A65Q4XC.
