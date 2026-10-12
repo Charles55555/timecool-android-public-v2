@@ -66,7 +66,8 @@ titre('Le scenario de Charles : cree par Charly, supprime a la main');
   const texte = envoyes.map((m) => m.content).join('\n');
   verifie('le 16 octobre ne part plus dans l historique', texte.indexOf('2026-10-16') < 0,
     'avant : la carte entiere partait, et le modele la croyait');
-  verifie('la carte est remplacee par une mention', /proposition d'agenda faite/.test(texte));
+  // Mission 34 : la carte est remplacee par RIEN (le modele recopiait la mention a l ecran).
+  verifie('la carte est remplacee par rien, sans mention entre crochets', !/\[AGENDA\]/.test(texte) && !/proposition d'agenda/.test(texte));
   verifie('la prose de Charly est conservee', /Parfait/.test(texte) && /Autre chose/.test(texte));
   verifie('les messages de l utilisateur partent intacts', envoyes[0].content === ctx.charlyIA.history[0].content);
   verifie('system_info ne part pas', envoyes.length === 3);
@@ -89,7 +90,7 @@ titre('Une carte pas encore validee reste lisible');
     { role: 'user', content: 'décale-la à 16h' }
   ];
   const texte = ctx.tcHistoriquePourIA().map((m) => m.content).join('\n');
-  verifie('la carte non validee ne part plus non plus : une proposition non ajoutee n existe pas (mission 13, 12/10)', texte.indexOf('2026-10-16 | 11:00-13:00') < 0 && /NON ajoutee/.test(texte),
+  verifie('la carte non validee ne part plus non plus : une proposition non ajoutee n existe pas (mission 13, 12/10)', texte.indexOf('2026-10-16 | 11:00-13:00') < 0 && !/NON ajoutee|proposition d'agenda/.test(texte),   // mission 34 : plus de mention
     'sinon le modele ne sait plus quoi decaler');
   verifie('et une carte validee est bien effacee, elle', (() => {
     ctx.charlyIA.history[1]._validated = true;

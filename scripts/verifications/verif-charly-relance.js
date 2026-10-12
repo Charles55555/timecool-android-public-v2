@@ -72,7 +72,8 @@ verifie('charlySendMessage passe la proposition abandonnee a tcAbandonnerAttente
 
 titre('3. Le modele est prevenu, et le filtre est applique a chaque reponse');
 verifie('le contexte envoye au modele porte la regle (ne relance jamais, seul l utilisateur reprend)', /tu ne relances JAMAIS un sujet précédent de toi-même/.test(ctx.tcContexteDatePourIA(NOW)) && /Seul l’utilisateur reprend/.test(ctx.tcContexteDatePourIA(NOW)));
-verifie('charlySendMessage applique tcSansRelance en dernier', /reply = tcSansFormulesFaites\(reply\);\n(\s*\/\/[^\n]*\n)*\s+reply = tcSansRelance\(reply, text, charlyIA\.history\);/.test(csm));
+// Mission 34 : tcSansNotesInternes s intercale entre les formules et la relance.
+verifie('charlySendMessage applique tcSansRelance en dernier (apres tcSansFormulesFaites et tcSansNotesInternes)', /reply = tcSansFormulesFaites\(reply\);\n\s+reply = tcSansNotesInternes\(reply\);\n(\s*\/\/[^\n]*\n)*\s+reply = tcSansRelance\(reply, text, charlyIA\.history\);/.test(csm));
 verifie('un bloc [AGENDA] dans la reponse est conserve tel quel', /\[AGENDA\]\n2026-10-13 \| 11:00-12:00 \| X \| rdv\n\[\/AGENDA\]/.test(ctx.tcSansRelance('Voici.\n[AGENDA]\n2026-10-13 | 11:00-12:00 | X | rdv\n[/AGENDA]', 'rdv X mardi 11h', h)));
 verifie('« Désolé », « erreur de ma part », « oups », « pardon » sont hors sujet ; « le lundi » non', ctx.tcEstHorsSujet('Désolé c’est une erreur de ma part') && ctx.tcEstHorsSujet('oups') && ctx.tcEstHorsSujet('pardon, mauvais message') && ctx.tcEstHorsSujet('désolé pour ça') && !ctx.tcEstHorsSujet('le lundi et le jeudi'));
 // Defaut 3 de l examen : une excuse suivie d une vraie demande n est pas hors sujet.

@@ -11652,6 +11652,34 @@ function tcReponseConflitLocale(reply, texte, now, events, mode) {
  * Tant qu'un bloc n'est pas valide, rien n'est fait : « C'est fait ! », « C'est noté », « C'est parti », « je l'ai
  * ajouté », « rendez-vous ajouté » sont retires de la prose (campagne 9, 12/10). Sans bloc, la reponse est laissee.
  */
+/**
+ * Une reponse du modele, sans ses notes internes (mission 34) : toute ligne entre crochets qui parle d une proposition
+ * d agenda ou de l agenda reel (« [proposition d'agenda faite a ce moment-la - l'agenda reel ci-dessus fait foi] »),
+ * toute ligne « ✅ C'est noté : N créneaux ajoutés… » (c est la page qui le dit, pas lui), et aucune ligne identique
+ * repetee dans la meme bulle. Le bloc [AGENDA] est conserve tel quel.
+ */
+function tcSansNotesInternes(reply) {
+  let r = String(reply || '');
+  const bloc = r.match(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/);
+  let prose = bloc ? r.replace(bloc[0], '\u0000') : r;
+  const NOTE = /\[[^\]\n]*(?:proposition d.agenda|agenda r[ée]el|fait foi)[^\]\n]*\]/gi;
+  const vues = {};
+  prose = prose.split('\n').filter(function (ligne) {
+    // Une ligne qui n etait qu une note interne disparait avec elle ; une note au milieu d une ligne est retiree.
+    const t = ligne.trim();
+    if (!t) return true;
+    if (NOTE.test(t) && !t.replace(NOTE, '').trim()) { NOTE.lastIndex = 0; return false; }
+    NOTE.lastIndex = 0;
+    if (/^✅\s*C[’']est not[ée]\s*:/.test(t) && /ajout[ée]/.test(t)) return false;
+    const cle = t.toLowerCase();
+    if (vues[cle]) return false;
+    vues[cle] = true;
+    return true;
+  }).map(function (ligne) { return ligne.replace(NOTE, '').replace(/  +/g, ' '); }).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  r = bloc ? prose.replace('\u0000', bloc[0]) : prose;
+  return r || reply;
+}
+
 function tcSansFormulesFaites(reply) {
   const r = String(reply || '');
   if (!/\[AGENDA\]/.test(r)) return reply;
@@ -12119,13 +12147,14 @@ function validateAgendaProposalFromMsg(msg) {
     categorie:'rdv',
     detail:`Charly IA a créé ${added} créneaux dans ton agenda — ${datesList}.`
   });
-  charlyIA.history.push({role:'assistant', content:`✅ C'est noté : ${added > 1 ? added + ' créneaux ajoutés' : 'rendez-vous ajouté'} à ton agenda. Tu peux aller vérifier.${doublons ? ' (' + doublons + ' déjà présent' + (doublons > 1 ? 's' : '') + ', non dupliqué' + (doublons > 1 ? 's' : '') + ')' : ''}`});
+  charlyIA.history.push({_app: true, role:'assistant', content:`✅ C'est noté : ${added > 1 ? added + ' créneaux ajoutés' : 'rendez-vous ajouté'} à ton agenda. Tu peux aller vérifier.${doublons ? ' (' + doublons + ' déjà présent' + (doublons > 1 ? 's' : '') + ', non dupliqué' + (doublons > 1 ? 's' : '') + ')' : ''}`});
   // Injecter le follow-up si Charly avait posé une question après le bloc [AGENDA]
   const followUpMsg = charlyIA.history.slice().reverse().find(m => m._followUp);
   if (followUpMsg && followUpMsg._followUp && tcSuiteSurNotification(followUpMsg._followUp)) followUpMsg._followUp = null;
   if (followUpMsg && followUpMsg._followUp) {
     setTimeout(() => {
-      charlyIA.history.push({role:'assistant', content: followUpMsg._followUp});
+      // Question de suite remise par la page : une bulle d application, pas une nouvelle parole du modele (mission 34).
+      charlyIA.history.push({_app: true, role:'assistant', content: followUpMsg._followUp});
       followUpMsg._followUp = null; // consommer le follow-up
       renderCharlyChat();
     }, 400);
@@ -13715,7 +13744,9 @@ async function tcRepondreDeplacement(text) {
  */
 function tcHistoriquePourIA() {
   const liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
-    .filter(m => m && (m.role === 'user' || m.role === 'assistant'))
+    // Les bulles d application (accueil, « C'est noté », question de suite remise par la page) ne partent pas :
+    // le modele les prenait pour ses propres mots et les recopiait (mission 34).
+    .filter(m => m && (m.role === 'user' || m.role === 'assistant') && !m.appText && !m._app)
     .map(m => ({
       role: m.role,
       // Seules les cartes VALIDEES sont effacees : leurs rendez-vous sont
@@ -13724,10 +13755,10 @@ function tcHistoriquePourIA() {
       // doit encore pouvoir la lire.
       // Aucune carte ne part, validee ou non : une proposition non ajoutee n'existe pas pour la suite (campagne 9,
       // 12/10 : « decale mon rdv de mardi » s'appuyait sur un dentiste jamais ajoute). Seul l'agenda reel fait foi.
+      // La carte est remplacee par RIEN (plus de note entre crochets : le modele la recopiait a l ecran, mission 34) ;
+      // l agenda reel, envoye a part, fait foi.
       content: m.role === 'assistant'
-        ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, m._validated
-            ? "[proposition d'agenda faite a ce moment-la - l'agenda reel ci-dessus fait foi]"
-            : "[proposition d'agenda NON ajoutee - elle n'existe pas, l'agenda reel ci-dessus fait foi]")
+        ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, '').replace(/\n{3,}/g, '\n\n').trim()
         : String(m.content || '')
     }));
   // Charly peut parler le premier : l'API veut un message utilisateur en tete.
@@ -14503,6 +14534,7 @@ async function charlySendMessage() {
     // libres), le bloc reste pour « Ajouter quand meme » ; et jamais « C'est fait » tant que rien n'est ajoute (campagne 9).
     reply = tcReponseConflitLocale(reply, text, new Date(), events, mode) || reply;
     reply = tcSansFormulesFaites(reply);
+    reply = tcSansNotesInternes(reply);
     // Charly ne relance jamais un sujet de lui-meme ; il rappelle seulement ce qui reste a voir (mission 17).
     reply = tcSansRelance(reply, text, charlyIA.history);
 

@@ -1598,3 +1598,26 @@ mobile vers le nouvel appareil.
   retrouvés ; sans la règle d'options). Dans verifier.sh.
 - Non reproduit en simulation : le thème non appliqué à +3 s/+30 s chez D (la simulation l'applique déjà avec l'ancien
   code) — le correctif (1) rend l'application indépendante de l'état affiché ; à revérifier par les Testeurs en vrai.
+
+## 12/10/2026 (session Codeur) — Charly : notes internes jamais affichées ni imitées (mission 34)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constat (capture de Charles) : dans une bulle de Charly, « [proposition d'agenda faite a ce moment-la - l'agenda reel
+  ci-dessus fait foi] », « ✅ C'est noté : 17 créneaux ajoutés… » et « On continue : pour les courses… » deux fois.
+  Cause commune : le modèle recopie ce qu'il lit dans l'historique qu'on lui envoie (`tcHistoriquePourIA`) — la note de
+  remplacement mise à la place des cartes, les bulles d'application (« C'est noté » du parcours guidé, question de suite
+  `_followUp` remise par la page après validation) qu'il prenait pour ses propres mots.
+- Correctif à la source : les bulles d'application (`appText`, nouveau marqueur `_app`) ne partent plus au modèle ; la
+  carte `[AGENDA]` est remplacée par rien (l'agenda réel, envoyé à part, fait foi). Marquées `_app` : « ✅ C'est noté… »
+  et la question de suite remise par la page.
+- Filtre d'affichage `tcSansNotesInternes` (après `tcSansFormulesFaites`) : toute ligne ou mention entre crochets qui
+  parle d'une proposition d'agenda / de l'agenda réel est retirée ; toute ligne « ✅ C'est noté : … ajouté(s) » d'une
+  réponse du modèle aussi (c'est la page qui le dit) ; aucune ligne identique répétée dans une bulle ; bloc [AGENDA]
+  conservé.
+- Suite `verif-charly-notes-internes` (historique envoyé sans bulles d'application ni note ; la bulle de la capture
+  devient « Parfait, je note ça ! 📞 / On continue : pour les courses… » une fois ; bloc conservé ; points d'entrée),
+  dans verifier.sh ; rouge sur la page d'avant.
+- Limite : une question de suite reposée par le modèle dans une AUTRE bulle n'est pas dédoublonnée ici (c'est le rôle
+  de `tcSansRelance`, mission 17).
+- Suites verif-memoire-agenda, verif-charly-campagne9 (la carte est remplacee par rien, plus de mention) et verif-charly-relance (filtre tcSansNotesInternes entre les formules et la relance) adaptees ; une ligne qui n etait qu une note interne disparait avec elle.
