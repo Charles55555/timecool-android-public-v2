@@ -1296,3 +1296,8 @@ mobile vers le nouvel appareil.
   d'avant.
 - Non vérifié ici : le parcours réel F → D sur un même navigateur (Testeurs, campagne suivante).
 - Suites re-ancrees : verif-charly-suppression et verif-imprevu (verification de cle devenue « let activeKey = tcCleActiveCharly() »), verif-historique-charly (deux remises a zero : « Recommencer » et le menage du compte). Le menage garde l idiome typeof … pour verif-sync.
+- Correctif après examen : après l'effacement du stockage, `loadCustomCalendars()` remet « Mon agenda » en mémoire (un
+  `customCalendars = []` laissait le prochain agenda créé s'enregistrer seul et « Mon agenda » disparaissait pour de
+  bon) ; `tc_onboarding_done` (accueil terminé) est un réglage de l'appareil, le ménage l'épargne : après une
+  déconnexion, l'appareil montre l'écran de connexion, pas « Rejoins TimeCool ». Autres réglages d'appareil candidats
+  (langue `timecool_language`, thème `tc_theme`) : toujours balayés comme avant, à trancher par le chef de projet.

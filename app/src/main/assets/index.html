@@ -22464,7 +22464,9 @@ function tcViderDonneesDuCompte() {
   const aEffacer = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (tcCleTransferable(k)) aEffacer.push(k);
+    // L accueil termine est un reglage de l appareil, pas du compte : apres une deconnexion, l appareil doit
+    // montrer l ecran de connexion, pas « Rejoins TimeCool » (examen de la mission 20, 12/10).
+    if (tcCleTransferable(k) && k !== 'tc_onboarding_done') aEffacer.push(k);
   }
   // Ces quatre-là ne sont pas « transférables » — elles voyagent par
   // leur propre champ dans le paquet d'appairage — mais elles
@@ -22497,7 +22499,7 @@ function tcViderDonneesDuCompte() {
   if (typeof _tcDeplacementEnAttente !== 'undefined') _tcDeplacementEnAttente = null;
   if (typeof _tcImprevuEnAttente !== 'undefined') _tcImprevuEnAttente = 0;
   if (typeof _isolatedCalendarId !== 'undefined') _isolatedCalendarId = null;
-  if (typeof customCalendars !== 'undefined') customCalendars = [];
+  if (typeof loadCustomCalendars === 'function') loadCustomCalendars(); // stockage vide : « Mon agenda » seul
   if (typeof renderCharlyChat === 'function') { try { renderCharlyChat(); } catch (e) {} }
   if (typeof tcRecupererClesDuServeur === 'function' && TC_BACKEND.estConnecte()) tcRecupererClesDuServeur();
 }

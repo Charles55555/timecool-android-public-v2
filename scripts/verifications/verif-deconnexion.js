@@ -37,9 +37,9 @@ const ctx = {
   _tcSuppressionEnAttente: { x: 1 }, _tcDeplacementEnAttente: { x: 1 }, _tcImprevuEnAttente: 2, _isolatedCalendarId: 'cal1', customCalendars: [{ id: 'cal1' }]
 };
 vm.createContext(ctx);
-['const TC_JAMAIS_TRANSFERE = \\[[^\\]]*\\];', 'const TC_EVENTS_KEY = [^;]*;', 'const TC_TASKS_KEY = [^;]*;', 'const TC_SYNC_VERSION_KEY = [^;]*;', 'const TC_SYNC_EMPREINTES_KEY = [^;]*;', 'const TC_COMPTE_LOCAL_KEY = [^;]*;']
+['const TC_JAMAIS_TRANSFERE = \\[[^\\]]*\\];', 'const TC_EVENTS_KEY = [^;]*;', 'const TC_TASKS_KEY = [^;]*;', 'const TC_SYNC_VERSION_KEY = [^;]*;', 'const TC_SYNC_EMPREINTES_KEY = [^;]*;', 'const TC_COMPTE_LOCAL_KEY = [^;]*;', 'const TC_CALENDARS_KEY = [^;]*;']
   .forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
-['tcCleTransferable', 'tcViderDonneesDuCompte', 'tcCleActiveCharly']
+['tcCleTransferable', 'tcViderDonneesDuCompte', 'tcCleActiveCharly', 'loadCustomCalendars', 'saveCustomCalendars']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
@@ -51,10 +51,19 @@ Object.assign(stock, {
 });
 ctx.tcViderDonneesDuCompte();
 const restantes = Object.keys(stock).sort();
-// L accueil termine (tc_onboarding_done) part avec le compte, comme avant : le prochain utilisateur de l appareil voit l accueil.
-verifie('le stockage ne garde que ce qui est propre a l appareil (cle, identifiant, jeton, marqueurs)', JSON.stringify(restantes) === JSON.stringify(['tc_compte_local', 'tc_device_crypto_key', 'tc_device_user_id', 'tc_nettoyage', 'tc_session_jeton']), restantes.join(' '));
+verifie('le stockage ne garde que ce qui est propre a l appareil (cle, identifiant, jeton, marqueurs, accueil termine)', JSON.stringify(restantes) === JSON.stringify(['tc_compte_local', 'tc_device_crypto_key', 'tc_device_user_id', 'tc_nettoyage', 'tc_onboarding_done', 'tc_session_jeton']), restantes.join(' '));
+// Examen (12/10) : l accueil termine est un reglage de l appareil ; sans lui, l appareil remontrait « Rejoins TimeCool ».
+verifie('le drapeau « accueil termine » est reste a 1 : apres deconnexion, l appareil montre l ecran de connexion', stock.tc_onboarding_done === '1');
+// Examen (12/10) : « Mon agenda » doit etre de retour en memoire, sinon le prochain agenda cree s enregistre seul.
+verifie('« Mon agenda » (cal_default) est de retour en memoire apres le menage', ctx.customCalendars.length === 1 && ctx.customCalendars[0].id === 'cal_default' && ctx.customCalendars[0].visible === true);
+ctx.customCalendars.push({ id: 'cal_sport', name: 'Sport', color: '#34A853', visible: true });
+ctx.saveCustomCalendars();
+ctx.customCalendars = [];
+ctx.loadCustomCalendars();
+verifie('creer un agenda « Sport » puis recharger : « Mon agenda » et « Sport » sont tous les deux la', JSON.stringify(ctx.customCalendars.map((c) => c.id)) === JSON.stringify(['cal_default', 'cal_sport']), JSON.stringify(ctx.customCalendars.map((c) => c.id)));
+delete stock.timecool_custom_calendars;
 verifie('la conversation Charly est vide en memoire et sera rechargee (vide) a la prochaine ouverture', ctx.charlyIA.history.length === 0 && ctx.charlyIA._historiqueCharge === false);
-verifie('les attentes de Charly et l agenda isole sont remis a zero', ctx._tcSuppressionEnAttente === null && ctx._tcDeplacementEnAttente === null && ctx._tcImprevuEnAttente === 0 && ctx._isolatedCalendarId === null && ctx.customCalendars.length === 0);
+verifie('les attentes de Charly et l agenda isole sont remis a zero', ctx._tcSuppressionEnAttente === null && ctx._tcDeplacementEnAttente === null && ctx._tcImprevuEnAttente === 0 && ctx._isolatedCalendarId === null);
 verifie('les cles IA du compte ne restent pas en memoire', ctx.charlyIA.config.apiKey === '' && ctx.charlyIA.config.anthropicKey === '');
 verifie('rendez-vous, taches, anniversaires, contacts, messages : vides (la demo reste)', ctx.events.length === 1 && ctx.events[0].id === 'demo1' && ctx.tasksList.length === 0 && ctx.birthdays.length === 0 && ctx.contactsList.length === 0 && ctx.messages.user.length === 0);
 verifie('sans session, aucune cle n est demandee au serveur', clesDemandees === 0);
