@@ -1431,3 +1431,26 @@ mobile vers le nouvel appareil.
   « Personnel » à chaque ouverture (le select gardait le dernier choix). La suite rejoue la fenêtre : « loisir »
   modifié par le titre reste « loisir », choisi « Sport » devient « sport », sans type rien n'est écrit.
   Suite verif-categories-titre adaptee (« Rendez-vous Marc » sans indice → Personnel).
+
+## 12/10/2026 (session Codeur) — Synchro : « ce que j'ai changé ici gagne »
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constat (Testeurs, campagne 11 ; adjointe) : le thème changé dans les 10 s revenait seul à l'ancienne valeur ~15,7 s
+  après le chargement (6/12) ; sur un compte dont le serveur n'avait pas encore `tc_rdv_validation`, décocher « Toujours
+  attendre ma validation » était annulé ~1,5 s plus tard, plages douces comprises. Cause : le premier tour de synchro
+  tire avant de pousser, et `tcSyncAppliquer` écrivait la liste du serveur (valeurs et « disparitions ») sans regarder
+  ce qui avait changé localement depuis le dernier tour ; l'empreinte posée faisait ensuite croire qu'il n'y avait rien
+  à pousser.
+- Règle : `tcSyncModifieIci(type, local, empreinte, neuf)` — un objet local dont l'empreinte diffère de la dernière
+  connue (ou sans empreinte connue alors que l'état n'est pas neuf) n'est ni écrasé ni supprimé par la réception ; son
+  empreinte n'est pas touchée, il part au tour de poussée suivant. À l'état neuf (premier tour d'un compte sur cet
+  appareil), le serveur fait foi. Les objets en lecture seule ne sont pas concernés. Rien n'est ré-appliqué à l'écran
+  par-dessus un changement local.
+- Complément demandé : un rendez-vous sans type est coloré « Personnel » dans l'agenda, comme dans « Modifier »
+  (`tcCatNormalisee('')` = perso, avant travail).
+- Suite `verif-sync-local-gagne` (vrai type « reglage » de TC_SYNC_TYPES rejoué sur un stockage factice : thème changé à
+  3 s puis tour simulé → tient et est poussé ; clé absente du serveur → tient et part ; témoin inchangé → le serveur
+  s'applique ; état neuf → le serveur fait foi), dans verifier.sh ; rouge sur la page d'avant.
+- Limite : la règle s'applique à tous les types poussables (réglages, rendez-vous, tâches…) : un objet modifié des deux
+  côtés entre deux tours garde la version locale, qui repart ensuite.

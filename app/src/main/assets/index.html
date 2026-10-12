@@ -3949,7 +3949,7 @@ const TC_AGENDA_ALIAS = {
 
 /** Ramene un identifiant de categorie, ancien ou nouveau, a sa forme actuelle. */
 function tcCatNormalisee(cat) {
-  if (!cat) return 'travail';
+  if (!cat) return 'perso';   // sans type : « Personnel », comme dans « Modifier » (chef, 12/10)
   return TC_AGENDA_ALIAS[cat] || cat;
 }
 
@@ -22480,6 +22480,20 @@ function tcAssainirRecu(type, contenu) {
   return copie || contenu;
 }
 
+/**
+ * « Ce que j'ai changé ici gagne » (mission 23, 12/10). Vrai si l objet local a change depuis sa derniere empreinte
+ * connue : la reception ne doit ni l ecraser ni le supprimer, il partira au tour de poussee suivant. Sans empreinte
+ * connue (une cle que le serveur n a jamais vue, comme « Toujours attendre ma validation » decochee avant le premier
+ * tour), c est aussi un changement d ici — sauf quand l etat de synchro est neuf (premier tour d un compte sur cet
+ * appareil) : la, le serveur fait foi. Les objets en lecture seule ne se modifient pas ici.
+ * Avant : le theme change dans les 10 s revenait seul a l ancienne valeur ~15 s apres le chargement (6/12, campagne 11).
+ */
+function tcSyncModifieIci(t, local, empreinte, neuf) {
+  if (!t || t.lectureSeule || local === undefined || local === null) return false;
+  if (empreinte === undefined) return !neuf;
+  return tcSyncEmpreinte(local) !== empreinte;
+}
+
 async function tcSyncAppliquer(elements) {
   const parType = {};
   elements.forEach(function (e) {
@@ -22488,6 +22502,7 @@ async function tcSyncAppliquer(elements) {
   });
 
   const empreintes = tcSyncEmpreintes();
+  const etatNeuf = tcSyncEtat().neuf;
   let recus = 0;
 
   const types = Object.keys(parType);
@@ -22502,6 +22517,8 @@ async function tcSyncAppliquer(elements) {
     parType[type].forEach(function (e) {
       const cle = type + ':' + e.uid;
       const i = rang[e.uid];
+      // Modifie ici depuis le dernier tour : on garde la valeur locale et son ancienne empreinte, elle sera poussee.
+      if (tcSyncModifieIci(t, i === undefined ? undefined : liste[i], empreintes[cle], etatNeuf)) { recus++; return; }
       if (e.supprime) {
         if (i !== undefined) { liste[i] = null; touche = true; }
         delete empreintes[cle];

@@ -52,7 +52,7 @@ const ANCIENS = { blue: 'perso', red: 'sante', green: 'travail', yellow: 'famill
 verifie('les 7 anciens types du formulaire (blue, red, green, yellow, purple, teal, orange) ont chacun un type actuel', Object.keys(ANCIENS).every((k) => ids.indexOf(ctx.tcCatNormalisee(k)) > -1), Object.keys(ANCIENS).map((k) => k + '→' + ctx.tcCatNormalisee(k)).join(' '));
 verifie('la correspondance voulue : Personnel → Personnel, Service → Mon temps libre (inchange, protege), Transport → Voyages & Trajets, Sport / Loisir → Amis & Loisirs', Object.keys(ANCIENS).every((k) => ctx.tcCatNormalisee(k) === ANCIENS[k]), Object.keys(ANCIENS).map((k) => k + '→' + ctx.tcCatNormalisee(k)).join(' '));
 verifie('seul « orange » (deja temps libre) mene a « Mon temps libre » : aucun autre ancien type n est protege par accident', Object.keys(ALIAS).filter((k) => ALIAS[k] === 'personnel').join() === 'orange');
-verifie('un type inconnu ou vide garde le repli « travail » ; un type actuel est inchange', ctx.tcCatNormalisee('') === 'travail' && ids.every((id) => ctx.tcCatNormalisee(id) === id));
+verifie('un type vide devient « Personnel » (chef, 12/10, mission 23 ; avant : travail) ; un type actuel est inchange', ctx.tcCatNormalisee('') === 'perso' && ids.every((id) => ctx.tcCatNormalisee(id) === id));
 
 titre('4. Charly et la fiche « Modifier »');
 const catMap = page.match(/const catMap = \{[\s\S]*?\};/);
