@@ -37,6 +37,8 @@ verifie('le theme sombre definit --bg, --text, --text-sec, --border', !!dark && 
 const light = page.match(/const LIGHT_VARS = \{[\s\S]*?\};/);
 verifie('l entree active du menu suit le theme (--menu-active : bleu clair en clair, bleu nuit en sombre)', !!dark && !!light && /'--menu-active':'#2b3a55'/.test(dark[0]) && /'--menu-active':'#e8f0fe'/.test(light[0]) && /background:var\(--menu-active, #e8f0fe\)/.test(regle('.menu-item.active')));
 verifie('titre et sous-titre de page : couleurs fixes, la page restant claire', /color:#202124/.test(regle('.page-title')) && /color:#5f6368/.test(regle('.page-subtitle')));
+// 3e capture : la mise en avant « Charly IA » du menu (degrade clair code) suit le theme.
+verifie('la mise en avant « Charly IA » du menu suit le theme (--menu-charly : creme en clair, ambre sombre en sombre)', !!dark && !!light && /'--menu-charly':'#3a3222'/.test(dark[0]) && /'--menu-charly':'#fff4e0'/.test(light[0]) && /linear-gradient\(90deg,var\(--menu-charly, #fff4e0\),var\(--bg, #fff\)\)/.test(fonction(page, 'renderMenu') || '') && !/linear-gradient\(90deg,#fff4e0,#fff\)/.test(fonction(page, 'renderMenu') || ''));
 
 titre('(a) La langue et le theme du compte s appliquent des la connexion');
 const poser = (page.match(/  reglage: \{[\s\S]*?\n  \}\n\};/) || [''])[0];

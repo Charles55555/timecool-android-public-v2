@@ -3874,7 +3874,8 @@ function renderMenu() {
   const navItems = items.map(it => {
     let extraStyle = '';
     if (it.id === 'assistant') {
-      extraStyle = 'background:linear-gradient(90deg,#fff4e0,#fff); border-left:3px solid var(--g-yellow);';
+      // Le degrade suit le theme : creme → fond en clair, ambre sombre → fond en sombre (mission 25).
+      extraStyle = 'background:linear-gradient(90deg,var(--menu-charly, #fff4e0),var(--bg, #fff)); border-left:3px solid var(--g-yellow);';
     }
     return `
     <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="${it.id === 'calendar' ? 'tcOuvrirMonAgenda()' : "navigate('" + it.id + "')"}">
@@ -16963,12 +16964,14 @@ function savePreference(key, value) {
 const DARK_VARS = {
   '--text':'#e8eaed','--text-sec':'#9aa0a6','--border':'#3c4043',
   '--bg':'#202124','--bg-soft':'#292a2d','--bg-hover':'#35363a',
-  '--menu-active':'#2b3a55'   // entree active du menu : bleu nuit (mission 25)
+  '--menu-active':'#2b3a55',  // entree active du menu : bleu nuit (mission 25)
+  '--menu-charly':'#3a3222'   // mise en avant « Charly IA » : ambre sombre
 };
 const LIGHT_VARS = {
   '--text':'#202124','--text-sec':'#5f6368','--border':'#dadce0',
   '--bg':'#fff','--bg-soft':'#f8f9fa','--bg-hover':'#f1f3f4',
-  '--menu-active':'#e8f0fe'
+  '--menu-active':'#e8f0fe',
+  '--menu-charly':'#fff4e0'
 };
 
 function applyTheme(theme) {

@@ -1527,3 +1527,4 @@ mobile vers le nouvel appareil.
   (`renderSettingsInterne`, `var(--bg)`) suivent le thème : plus de texte clair sur carte blanche. Un thème sombre
   complet (tous les fonds et textes codés) est un chantier à part.
 - 2e capture : entree active du menu (variable --menu-active : bleu clair en clair, bleu nuit en sombre) et titre / sous-titre de page (couleurs fixes, page claire) lisibles en sombre.
+- 3e capture : la mise en avant « Charly IA » du menu (degrade) suit le theme (--menu-charly).
