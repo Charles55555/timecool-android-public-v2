@@ -55,6 +55,7 @@ verifie('un identifiant inconnu : rien ne se passe', sauves === 2);
 ctx.openMsgPrivacy();
 verifie('feuille Confidentialité sans bloque : « Contacts bloqués » sans compteur', /Contacts bloqués<\/div>/.test(feuilles[feuilles.length - 1].innerHTML));
 verifie('la page Contacts garde son propre geste (toggleContactBlock) inchange', /function toggleContactBlock\(contactId\) \{\s+const contact = contactsList\.find\(c => c\.id === contactId\);/.test(page));
+verifie('la carte rouge de la fiche dit la meme phrase que la liste (mission 30, ajout du chef)', /Acc\\u00e8s bloqu\\u00e9\.<\/b> Cette personne ne peut plus t\\u2019\\u00e9crire ni prendre rendez-vous avec toi, et elle ne le sait pas\./.test(page) && page.indexOf('Ses demandes de rendez-vous ne t\\u2019arrivent plus, et cette personne') < 0);
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
 console.log('');

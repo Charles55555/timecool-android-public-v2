@@ -1880,3 +1880,6 @@ mobile vers le nouvel appareil.
   verifier.sh ; rouge sur la page d'avant. `lancer verif-convocations-e2e` ajouté après verif-commentaires-e2e (27b en ligne).
 - Suites `verif-google-agenda-depart` et `verif-import` adaptées (lecteur commun, `showImportSuccess(count, passes, doublons)`) :
   mêmes vérifications.
+- Ajout du chef (adjointe, v2.0.356) : la carte rouge de la fiche d'un contact bloqué dit la phrase de la liste : « Cette
+  personne ne peut plus t’écrire ni prendre rendez-vous avec toi, et elle ne le sait pas. » (le message fugace du blocage
+  ne change pas). Suites `verif-blocage-silence`, `verif-vocabulaire-formulaire` et `verif-contacts-bloques` alignées.
