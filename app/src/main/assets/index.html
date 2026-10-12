@@ -11496,8 +11496,11 @@ function tcReponseConflitLocale(reply, texte, now, events, mode) {
 function tcSansFormulesFaites(reply) {
   const r = String(reply || '');
   if (!/\[AGENDA\]/.test(r)) return reply;
-  const re = /(?:^|(?<=\s))(?:c[’']est (?:fait|not[ée]|parti|bon|dans (?:ton|l[’'])agenda)|je (?:l[’']|les )?ai (?:ajout[ée]s?|not[ée]s?)|rendez-vous (?:ajout[ée]|cr[ée][ée]))[^.!\n]*[.!]*\s*(?:😊|👍|✅|🎉)?\s*/gi;
-  const sans = r.replace(re, ' ').replace(/[ \t]{2,}/g, ' ').replace(/^ +| +$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  // La formule exacte, sa ponctuation et son emoji, rien de plus ; rien si un « ? » suit dans la meme phrase
+  // (« C'est bon pour mardi ? » est une question). Pas d'assertion arriere : Safari ancien (iPhone) ne la lit pas.
+  const re = /(^|\s)(c[’']est (?:fait|not[ée]|parti)|je (?:l[’']|les )?ai (?:ajout[ée]s?|not[ée]s?)|rendez-vous (?:ajout[ée]|cr[ée][ée]))(?![^.!?\n]*\?)(\s*[!.,]+)?(\s*(?:😊|👍|✅|🎉))?/gi;
+  const sans = r.replace(re, '$1').replace(/[ \t]{2,}/g, ' ').replace(/^ +| +$/gm, '').replace(/^[,;:]\s*/gm, '')
+    .replace(/(^|\n)([a-zà-ÿ])/g, function (t, d, c) { return d + c.toUpperCase(); }).replace(/\n{3,}/g, '\n\n').trim();
   return sans || reply;
 }
 
@@ -17564,7 +17567,7 @@ function tcChoixPeriode(text) {
   // Trois mots au plus, et seulement des mots du choix (« je les déplace », « annule-les », « rien ») :
   // « annule le dentiste » porte un objet, c'est une nouvelle demande.
   const mots = t.split(' ');
-  const MOTS_DU_CHOIX = /^(je|les|le|la|annule[rsz]?|deplace[rsz]?|decale[rsz]?|rien|garde[rsz]?|laisse[rsz]?|touche[rsz]?|ne|a|tout|ok|d|accord|1|2|3)$/;
+  const MOTS_DU_CHOIX = /^(je|les|le|la|annule[rsz]?|deplace[rsz]?|decale[rsz]?|rien|garde[rsz]?|laisse[rsz]?|touche[rsz]?|ne|a|tout|ok|d|accord|1|2|3|oui|non|on|moi|plutot|prefere|stp|svp|ca|merci|tomber|finalement|alors|bien|tous|toutes|ces|ceux)$/;
   if (!t || mots.length > 3 || !mots.every(function (w) { return MOTS_DU_CHOIX.test(w); })) return null;
   // L'ordre affiché diffère : contrainte (annuler, déplacer, rien) ; voyage (rien, annuler, déplacer).
   const ordre = ctx.contrainte ? ['annuler', 'deplacer', 'rien'] : ['rien', 'annuler', 'deplacer'];

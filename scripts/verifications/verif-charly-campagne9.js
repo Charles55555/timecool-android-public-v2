@@ -58,6 +58,7 @@ verifie('…puis la nouvelle demande continue son chemin (pas de return apres l 
 ctx.periodeCtx = { contrainte: false };
 verifie('carte de periode en attente : « annule le dentiste » n est PAS le choix « annuler » (nouvelle demande)', ctx.tcChoixPeriode('annule le dentiste') === null && ctx.tcChoixPeriode('rdv coach vendredi 15h') === null);
 verifie('mais « annule », « annule-les », « 2 », « rien », « déplace-les » restent des choix', ctx.tcChoixPeriode('annule') === 'annuler' && ctx.tcChoixPeriode('annule-les') === 'annuler' && ctx.tcChoixPeriode('2') === 'annuler' && ctx.tcChoixPeriode('rien') === 'rien' && ctx.tcChoixPeriode('déplace-les') === 'deplacer');
+verifie('reponses courtes naturelles (examinateur) : oui annule, oui déplace, non rien, plutôt annuler, je préfère annuler, on annule, annule stp, laisse tomber', ctx.tcChoixPeriode('oui annule') === 'annuler' && ctx.tcChoixPeriode('oui déplace') === 'deplacer' && ctx.tcChoixPeriode('non rien') === 'rien' && ctx.tcChoixPeriode('plutôt annuler') === 'annuler' && ctx.tcChoixPeriode('je préfère annuler') === 'annuler' && ctx.tcChoixPeriode('on annule') === 'annuler' && ctx.tcChoixPeriode('annule stp') === 'annuler' && ctx.tcChoixPeriode('laisse tomber') === 'rien', [ctx.tcChoixPeriode('oui annule'), ctx.tcChoixPeriode('je préfère annuler'), ctx.tcChoixPeriode('laisse tomber')].join(','));
 ctx.periodeCtx = null;
 
 titre('2. « décale mon rdv de mardi à 16h » : jamais une creation');
@@ -79,6 +80,10 @@ verifie('creneau libre, deplacement, deux lignes ou periode → rien', C('[AGEND
 const F = (r) => ctx.tcSansFormulesFaites(r);
 verifie('« C’est fait ! », « C’est noté », « C’est parti ! », « je l’ai ajouté » sont retires quand un bloc attend', F('Je l’ajoute pour toi.\n[AGENDA]\n2026-10-13 | 11:00-12:00 | X | rdv\n[/AGENDA]\nC’est fait ! 😊') === 'Je l’ajoute pour toi.\n[AGENDA]\n2026-10-13 | 11:00-12:00 | X | rdv\n[/AGENDA]' && !/noté|parti|ajouté/.test(F('C’est noté. C’est parti ! Je l’ai ajouté.\n[AGENDA]\n2026-10-13 | 11:00-12:00 | X | rdv\n[/AGENDA]')), F('Je l’ajoute pour toi.\n[AGENDA]\n2026-10-13 | 11:00-12:00 | X | rdv\n[/AGENDA]\nC’est fait ! 😊'));
 verifie('sans bloc, la reponse est laissee telle quelle (« C’est fait » d un vrai compte rendu de la page n est pas touche)', F('C’est fait, rendez-vous déplacé.') === 'C’est fait, rendez-vous déplacé.');
+const B = '\n[AGENDA]\n2026-10-13 | 16:00-17:00 | X | rdv\n[/AGENDA]';
+verifie('seule la formule est retiree, pas le reste de la phrase (examinateur)', F('Ton agenda est chargé mais c’est bon, je te propose 16h, ça te va ?' + B) === 'Ton agenda est chargé mais c’est bon, je te propose 16h, ça te va ?' + B && F('C’est bon pour mardi 16h ? Dis-moi si tu veux que je l’ajoute.' + B) === 'C’est bon pour mardi 16h ? Dis-moi si tu veux que je l’ajoute.' + B && F('C’est noté, je te propose ceci :' + B) === 'Je te propose ceci :' + B, F('C’est noté, je te propose ceci :' + B));
+verifie('une formule suivie d un « ? » dans la phrase n est pas touchee', F('C’est fait pour toi ?' + B) === 'C’est fait pour toi ?' + B);
+verifie('aucune assertion arriere (?<= ou (?<! dans la page : Safari ancien (iPhone) ne la lit pas', !/\(\?<[=!]/.test(page));
 verifie('charlySendMessage applique les deux apres l accord de la prose', /reply = tcAccorderProseAuBloc\(reply\);\n(\s*\/\/[^\n]*\n)*\s+reply = tcReponseConflitLocale\(reply, text, new Date\(\), events, mode\) \|\| reply;\s+reply = tcSansFormulesFaites\(reply\);/.test(csm));
 
 console.log('');

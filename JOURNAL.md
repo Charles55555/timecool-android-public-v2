@@ -1238,3 +1238,8 @@ mobile vers le nouvel appareil.
   `verif-charly-citations` (mots de l'abandon) alignées.
 - À noter : « décale-la à 16h » sur une proposition pas encore validée ne marche plus (elle n'existe pas pour la suite,
   règle de Charles) ; il faut valider puis décaler.
+- Correctif après examen : plus aucune assertion arrière `(?<=…)` dans la page (Safari ancien sur iPhone la refuse et
+  toute l'application ne démarrerait plus ; contrôle ajouté à la suite) ; `tcSansFormulesFaites` ne retire que la formule
+  exacte (« C'est fait », « C'est noté », « C'est parti », « je l'ai ajouté », « rendez-vous ajouté ») avec sa ponctuation
+  et son emoji, jamais si un « ? » suit dans la phrase, « c'est bon » retiré de la liste ; `tcChoixPeriode` accepte les mots
+  de politesse et d'opinion (« oui annule », « je préfère annuler », « laisse tomber »…), jamais un nom d'objet.
