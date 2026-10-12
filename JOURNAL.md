@@ -1264,3 +1264,10 @@ mobile vers le nouvel appareil.
   la page d'avant.
 - Limites : un « hors sujet » se reconnaît aux excuses et aux fichiers ; une vraie nouvelle demande après une question de
   Charly n'est pas comptée comme sujet ouvert (on ne sait pas si elle y répond) ; « et pour le sport ? » va au modèle.
+- Correctif après examen : si l'utilisateur reprend lui-même un sujet avec ses mots (« je fais du sport 3 fois par
+  semaine », « et pour le sport ? »), la réponse du modèle est gardée entière et le sujet est clos ; « Reste à voir » une
+  seule fois par question laissée en suspens (marque `_rappele`), jamais pour une proposition abandonnée ; libellé « ton
+  sport régulier » (possessif) sinon la question entière ; « désolé / pardon / oups » n'ouvrent un sujet que seuls (6 mots
+  au plus, sans mot de rendez-vous, jour ni heure), « erreur de ma part / mauvais message / ignore ce message » toujours ;
+  « continue » et « reprends » seuls ne sont plus une reprise (seulement « on reprend », « on continue », « reprenons »,
+  « continuons », « revenons à/sur »).

@@ -11511,16 +11511,32 @@ function tcTitreDuBloc(contenu) {
   return m ? m[1].trim() : '';
 }
 
-/** « désolé », « erreur de ma part », « oups », « pardon » : un message qui ne repond pas a la question posee. */
-function tcEstHorsSujet(text) {
-  const t = ' ' + tcSansAccents(text).replace(/[’']/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
-  return /( desole | pardon | oups | erreur de ma part | mauvais message | pas pour toi | je me suis trompe de | ignore ce message | laisse tomber ce message )/.test(t);
+/** Les mots qui identifient un sujet : 4 lettres au moins, sans les mots-outils. */
+function tcMotsDuSujet(texte) {
+  const OUTILS = /^(fais|fait|faire|faites|veux|veut|peux|peut|pour|avec|dans|quel|quels|quelle|quelles|cette|quand|comment|combien|vous|nous|elle|elles|mais|donc|bien|aussi|encore|plus|tout|tous|toute|toutes|sont|etre|avoir|aime|aimes|jour|jours|heure|heures|souvent|pratique|pratiques|proposition|precedente)$/;
+  return tcSansAccents(texte).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4 && !OUTILS.test(w); });
 }
 
-/** « on reprend », « on continue », « reprenons », « revenons à … », « on revient » : l utilisateur reprend. */
+/**
+ * Un message qui ne repond pas a la question posee : « erreur de ma part », « mauvais message », « ignore ce message »
+ * sans autre condition ; « désolé », « pardon », « oups » seulement si le message est court (6 mots au plus), sans mot de
+ * rendez-vous, de jour ni d heure, et sans autre chose que l excuse (« pardon, tu peux ajouter un rdv demain ? » est une demande).
+ */
+function tcEstHorsSujet(text) {
+  const t = ' ' + tcSansAccents(text).replace(/[’']/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  if (/( erreur de ma part | mauvais message | pas pour toi | je me suis trompe | ignore ce message | laisse tomber ce message )/.test(t)) return true;
+  if (!/( desole | pardon | oups )/.test(t)) return false;
+  const mots = t.trim().split(' ');
+  if (mots.length > 6) return false;
+  if (/( rdv | rendez | ajoute[rsz]? | cree[rsz]? | supprime[rsz]? | deplace[rsz]? | decale[rsz]? | annule[rsz]? | lundi | mardi | mercredi | jeudi | vendredi | samedi | dimanche | demain | aujourd | semaine | mois | matin | midi | soir | agenda | creneau | reunion | heure | \d+ ?h ?\d* | \d+ ?: ?\d+ )/.test(t)) return false;
+  const reste = mots.filter(function (w) { return !/^(desole|desolee|pardon|oups|ok|oui|non|c|est|ca|ce|bon|ah|euh|merci|du|de|la|le|pour|vraiment|excuse|excusez|moi)$/.test(w); });
+  return reste.length <= 2;
+}
+
+/** « on reprend », « on continue », « reprenons », « continuons », « revenons à … », « on revient » : l utilisateur reprend. */
 function tcEstUneReprise(text) {
   const t = tcSansAccents(text).replace(/[’']/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return /^(on reprend|on continue|reprenons|continuons|on revient|revenons a|revenons sur|reprends|continue)( |$)/.test(t) && t.split(' ').length <= 6;
+  return /^(on reprend|on continue|reprenons|continuons|on revient|revenons a|revenons sur)( |$)/.test(t) && t.split(' ').length <= 6;
 }
 
 /** La derniere phrase interrogative d un message (sans bloc), ou ''. */
@@ -11532,61 +11548,69 @@ function tcDerniereQuestion(contenu) {
   return '';
 }
 
-/** Un libelle court pour un sujet : « ton sport régulier », « le rdv du dentiste »… tire de la question de Charly. */
+/** Le libelle d un sujet : « ton sport régulier » (un possessif dans la question), sinon la question entiere. */
 function tcLibelleSujet(question) {
   const q = String(question || '').replace(/\s+/g, ' ').trim();
-  const m = q.match(/\b(ton|ta|tes|votre|vos|le|la|les|l[’']|du|de la|des)\s+([^?.,;:()]{3,40}?)\s*\?$/i);
-  if (m) return (m[1].toLowerCase().replace(/^l[’']$/, 'l’') + (/^l’$/.test(m[1].toLowerCase().replace(/^l[’']$/, 'l’')) ? '' : ' ') + m[2].trim()).replace(/\s+/g, ' ');
-  const court = q.replace(/\?$/, '').trim();
-  return court.length > 45 ? court.slice(0, 42).trim() + '…' : court;
+  const m = q.match(/\b(ton|ta|tes|votre|vos)\s+([^?.,;:()]{3,40}?)\s*\?$/i);
+  return m ? m[1].toLowerCase() + ' ' + m[2].trim() : q;
 }
 
 /**
  * Les sujets laisses en suspens dans la conversation : une question de Charly suivie d un message hors sujet
- * (« désolé, erreur de ma part ») ou d un fichier, et les propositions abandonnees. Un sujet repris (« on reprend »)
- * ou dont la question a ete validee n y est plus. Dans l ordre de la conversation.
+ * (« désolé, erreur de ma part ») ou d un fichier, et les propositions abandonnees. Un sujet repris (« on reprend »,
+ * ou l utilisateur qui en reparle avec ses mots) ou dont la question a ete validee n y est plus. Dans l ordre de la conversation.
  */
 function tcSujetsOuverts(history) {
   const h = Array.isArray(history) ? history : [];
   const sujets = [];
   h.forEach(function (m, i) {
     if (!m || m.role !== 'assistant' || m._repris) return;
-    if (m._sujetOuvert) { sujets.push({ libelle: m._sujetOuvert, question: '', msg: m }); return; }
+    if (m._sujetOuvert) { sujets.push({ libelle: m._sujetOuvert, question: '', msg: m, proposition: true }); return; }
     const question = tcDerniereQuestion(m.content);
     if (!question || m._validated) return;
     let suivant = null;
     for (let k = i + 1; k < h.length; k++) { if (h[k] && h[k].role === 'user') { suivant = h[k]; break; } }
     if (!suivant) return;
-    if (suivant.hidden || tcEstHorsSujet(suivant.content)) sujets.push({ libelle: tcLibelleSujet(question), question: question, msg: m });
+    if (suivant.hidden || tcEstHorsSujet(suivant.content)) sujets.push({ libelle: tcLibelleSujet(question), question: question, msg: m, proposition: false });
   });
   return sujets;
 }
 
 /**
- * La reponse du modele, sans relance d un sujet ouvert : une phrase interrogative qui reprend les mots d un
- * sujet ouvert (ou « on reprend … ») est retiree ; puis, s il reste des sujets ouverts et que l utilisateur ne
- * reprend pas lui-meme, une ligne courte : « Reste à voir : ton sport, la proposition « Dentiste ». »
+ * La reponse du modele, sans relance d un sujet ouvert. Si l utilisateur reprend lui-meme un sujet (« on reprend »,
+ * ou un mot du sujet dans son message : « je fais du sport 3 fois par semaine »), rien n est retire et le sujet est clos.
+ * Sinon, une phrase interrogative qui reprend les mots d un sujet ouvert (ou « on reprend … ») est retiree ; et, une
+ * seule fois par question laissee en suspens (jamais pour une proposition abandonnee), une ligne courte :
+ * « Reste à voir : ton sport régulier. »
  */
 function tcSansRelance(reply, texte, history) {
   const sujets = tcSujetsOuverts(history);
   if (!sujets.length) return reply;
+  const motsUtilisateur = tcMotsDuSujet(texte);
+  const cles = sujets.map(function (s) { return tcMotsDuSujet(s.libelle + ' ' + s.question); });
+  let reprisParLui = tcEstUneReprise(texte);
+  sujets.forEach(function (s, i) {
+    if (cles[i].some(function (w) { return motsUtilisateur.indexOf(w) > -1; })) { if (s.msg) s.msg._repris = true; reprisParLui = true; }
+  });
+  if (reprisParLui) return reply;
   let r = String(reply || '');
   const bloc = r.match(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/);
   let prose = bloc ? r.replace(bloc[0], '\u0000') : r;
-  const mots = function (x) { return tcSansAccents(x).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4; }); };
-  const cles = sujets.map(function (s) { return mots(s.libelle + ' ' + s.question); });
   const relance = function (phrase) {
     const p = tcSansAccents(phrase);
     if (/\bon reprend\b|\bon continue\b|\breprenons\b|\brevenons\b/.test(p)) return true;
     if (!/\?\s*$/.test(phrase.trim())) return false;
-    const mp = mots(phrase);
+    const mp = tcMotsDuSujet(phrase);
     return cles.some(function (c) { return c.filter(function (w) { return mp.indexOf(w) > -1; }).length >= 2; });
   };
   prose = prose.split(/\n/).map(function (ligne) {
     return ligne.replace(/([.!?])\s+/g, '$1\u0001').split('\u0001').filter(function (ph) { return ph.trim() && !relance(ph); }).join(' ');
   }).filter(function (l, i, arr) { return l.trim() || (i > 0 && arr[i - 1].trim()); }).join('\n').trim();
-  if (!tcEstUneReprise(texte) && !/Reste à voir/.test(prose)) {
-    prose = (prose ? prose + '\n' : '') + 'Reste à voir : ' + sujets.map(function (s) { return s.libelle; }).join(', ') + '.';
+  const aRappeler = sujets.filter(function (s) { return !s.proposition && s.msg && !s.msg._rappele; });
+  if (aRappeler.length && !/Reste à voir/.test(prose)) {
+    aRappeler.forEach(function (s) { s.msg._rappele = true; });
+    const libelles = aRappeler.map(function (s) { return s.libelle; }).join(', ');
+    prose = (prose ? prose + '\n' : '') + 'Reste à voir : ' + libelles + (/\?$/.test(libelles) ? '' : '.');
   }
   r = bloc ? prose.replace('\u0000', bloc[0]) : prose;
   return r || reply;
