@@ -100,10 +100,15 @@ const jourPlus = (k) => { const d = new Date(Date.now() + k * 86400000); return 
   dire(avant === apres, 'chez Rita : rien, aucun nouveau message', apres.slice(-120));
   const chezZoe = await conversation(pasMembre.jeton, rita.ref);
   dire(!!chezZoe && chezZoe.contenu.thread.some((m) => m.from === 'me' && m.texte === 'Coucou, tu es là ?'), 'chez Zoé : son message apparaît comme envoyé (elle ne sait rien)');
-  // Un bloqué convoqué : rien chez lui, et il ne peut pas répondre faute de ligne... mais la ligne « membre » existe : il répond quand même ? Non : on verifie qu il n a rien recu.
+  // Un membre qui a BLOQUÉ l'organisateur ne reçoit pas sa convocation (rien chez lui, en silence) : Zoé bloque Rita, puis Rita la convoque.
+  const dem2 = await appel('POST', '/rdv/demander', { reference: pasMembre.ref }, rita.jeton);
+  const refus2 = await appel('POST', '/rdv/refuser', { rdv: dem2.d && dem2.d.rdv }, pasMembre.jeton);
+  dire(dem2.code === 200 && refus2.code === 200, 'Zoé bloque Rita (refuse et bloque sa demande)', 'HTTP ' + dem2.code + ' / ' + refus2.code);
   const c2 = await appel('POST', '/convocations', { titre: 'Réunion', date: jour, debut: '09:00', fin: '10:00', references: [pasMembre.ref] }, rita.jeton);
   const chezZoe2 = await conversation(pasMembre.jeton, rita.ref);
-  dire(c2.code === 200 && !(chezZoe2 && chezZoe2.contenu.thread.some((m) => m.genre === 'convocation')), 'Rita convoque Zoé qu’elle a bloquée : 200, rien chez Zoé');
+  dire(c2.code === 200 && c2.d.envoyes.length === 1 && !(chezZoe2 && chezZoe2.contenu.thread.some((m) => m.genre === 'convocation')), 'Rita convoque Zoé, qui l’a bloquée : 200 pour Rita, rien chez Zoé', JSON.stringify(c2.d).slice(0, 120));
+  const chezRita2 = await conversation(rita.jeton, pasMembre.ref);
+  dire(!!chezRita2 && chezRita2.contenu.thread.some((m) => m.from === 'me' && m.genre === 'convocation'), 'chez Rita : la convocation apparaît comme envoyée (elle ne sait rien)');
   const ouvert = await appel('POST', '/messages/envoyer', { reference: paul.ref, texte: 'Salut Paul' }, orga.jeton);
   const chezPaul = await conversation(paul.jeton, orga.ref);
   dire(ouvert.code === 200 && chezPaul.contenu.thread.some((m) => m.from === 'them' && m.texte === 'Salut Paul'), 'sans blocage, un message arrive toujours chez l’autre');
