@@ -1888,3 +1888,26 @@ mobile vers le nouvel appareil.
   faisaient perdre un jour au changement d'heure de printemps) ; (3) STATUS:CANCELLED → ignoré, compté à part (`annules`) ;
   (4) une date impossible (20261340, 20260230, 25h) est refusée dans `tcDateIcs` (la date relue doit être celle écrite).
   Cas ajoutés à `verif-import-ics`. Réserves notées, sans correction : RRULE / EXDATE (une seule occurrence), TZID gardé.
+
+## 12/10/2026 (session Codeur) — Groupes de la messagerie synchronisés, décomptes relus (mission 27c)
+
+**Codé et commité sur main, PAS publié.** Page seulement (aucun changement d'API : /sync accepte déjà tout type d'élément).
+
+- Constat (Testeurs, campagne 18, v2.0.356) : le groupe disparaissait de la messagerie après déconnexion / reconnexion, et
+  le décompte restait « en attente » tant qu'on ne le rouvrait pas. Cause : le bloc `timecool_messages` voyageait comme
+  réglage mais n'était jamais rechargé en mémoire ; après reconnexion, la mémoire vide (`messages = {user:[],pro:[]}`)
+  l'écrasait au premier enregistrement.
+- Famille « groupe » de `TC_SYNC_TYPES` (un objet par groupe, comme un contact) : `tcGroupesPourSync` (id `grp_<clé>`,
+  mode, nom, membres par identifiant + référence relus sur les fiches, trace = lignes système ≤ 50, convocations
+  rattachées) ; `tcPoserGroupes` (recrée ce qui manque avec la même clé, met à jour nom / membres / trace sans doublon /
+  convocations et leurs statuts, supprime un groupe disparu ailleurs, enregistre, redessine la messagerie, relit les
+  décomptes). `timecool_messages` et `timecool_convocations` sont retirés des réglages (TC_SYNC_DEJA_SYNCHRONISE) : les
+  conversations locales simples restent à l'appareil, celles du serveur ont leur famille.
+- `tcRafraichirToutesConvocations(force)` : relit sur le serveur les réponses de toutes les convocations envoyées (au plus
+  une fois par minute sans force) ; appelée au chargement de la messagerie (`renderMessages`), à l'ouverture d'un groupe
+  (`openConversation`) et à la réception des groupes ; le décompte ouvert (`ov._tcConvocId`) est rouvert à jour.
+- « ✕ Absent » : la page affiche déjà « ❌ Absent » (ligne reçue et décompte) ; le « ✕ » vu par les Testeurs vient du rendu
+  de l'emoji sur leur appareil ; rien à changer.
+- Suite `verif-groupes-sync` (famille, clés, rafraîchissements, simulation : départ → appareil vide → retour avec membres,
+  trace et décompte ; mise à jour ; suppression ; cadence) dans verifier.sh ; rouge sur la page d'avant. Rejeu réel en Chrome
+  contre la production (compte sonde : groupe + convocation poussés, déconnexion, reconnexion, retour) : voir le rapport.

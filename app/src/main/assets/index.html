@@ -7037,6 +7037,8 @@ function tcConversationsAffichables() {
 }
 
 function renderMessages() {
+  // Les reponses aux convocations, relues au chargement de la messagerie (au plus une fois par minute) — mission 27c.
+  if (typeof tcRafraichirToutesConvocations === 'function') tcRafraichirToutesConvocations(false);
   const all = tcConversationsAffichables();
   const list = document.getElementById('messagesList');
   const bar = document.getElementById('msgFilterBar');
@@ -7149,6 +7151,8 @@ function openConversation(id, origine) {
   document.getElementById('convName').textContent = msg.with;
   const convoqBtn = document.getElementById('convConvoqBtn');
   if (convoqBtn) convoqBtn.style.display = msg.isGroup ? 'block' : 'none';
+  // A l ouverture d un groupe, ses decomptes sont relus sur le serveur (mission 27c).
+  if (msg.isGroup && typeof tcRafraichirToutesConvocations === 'function') tcRafraichirToutesConvocations(true);
   const body = document.getElementById('convBody');
   body.innerHTML = msg.thread.length
     ? msg.thread.map(t => t.from === 'system'
@@ -22819,6 +22823,16 @@ const TC_SYNC_TYPES = {
     poser: function (liste) { contactsList = liste; saveContacts(); }
   },
   /*
+   * Les groupes de la messagerie (nom, membres par identifiant, trace, convocations locales) : un objet par groupe,
+   * comme un contact ; ils reviennent sur tout appareil (mission 27c). Les conversations locales simples restent a
+   * l appareil ; celles du serveur ont leur propre famille.
+   */
+  groupe: {
+    lire: function () { return typeof tcGroupesPourSync === 'function' ? tcGroupesPourSync() : []; },
+    id: function (o) { return o.id; },
+    poser: function (liste) { if (typeof tcPoserGroupes === 'function') tcPoserGroupes(liste); }
+  },
+  /*
    * Les conversations, écrites par le serveur seulement.
    *
    * `lectureSeule` : elles descendent, elles ne remontent jamais. Sans
@@ -22938,6 +22952,9 @@ const TC_SYNC_REGLAGE_MAX = 100000;
    écrit en dernier. Un test le vérifie désormais. */
 const TC_SYNC_DEJA_SYNCHRONISE = [
   'tc_user_events', 'tc_user_tasks', 'timecool_birthdays', 'timecool_contacts',
+  // Les groupes de la messagerie et leurs convocations voyagent un par un (famille « groupe », mission 27c) : en bloc,
+  // ils n etaient jamais recharges en memoire et la memoire vide d apres deconnexion les ecrasait.
+  'timecool_messages', 'timecool_convocations',
   // Écrite par le serveur, jamais par l'appareil. Laissée ici, la
   // famille « réglage » la remontait comme un bloc et écrasait les
   // conversations reçues : la messagerie restait vide.
@@ -24301,6 +24318,74 @@ async function tcRafraichirConvocation(c) {
   return change;
 }
 
+/* ── Groupes synchronises (mission 27c) ───────────────────────────────────────────────────────────────── */
+/** Un groupe de la messagerie tel qu il voyage : nom, membres par identifiant, trace (lignes systeme), convocations. */
+function tcGroupesPourSync() {
+  const l = [];
+  ['user', 'pro'].forEach(function (md) {
+    ((typeof messages !== 'undefined' && messages && messages[md]) || []).forEach(function (m) {
+      if (!m || !m.isGroup) return;
+      l.push({
+        id: 'grp_' + String(m.id), cle: m.id, mode: md, nom: m.with || 'Groupe', archived: !!m.archived,
+        membres: tcMembresDuGroupe(m).map(function (x) { return { id: x.id || '', name: x.name || '', reference: x.reference || '' }; }),
+        thread: (m.thread || []).filter(function (t) { return t && t.from === 'system'; }).slice(-50),
+        convocations: ((typeof groupConvocations !== 'undefined' && groupConvocations) || []).filter(function (c) { return c && String(c.groupMsgId) === String(m.id); }).map(function (c) { return Object.assign({}, c); })
+      });
+    });
+  });
+  return l;
+}
+/** Les groupes recus du serveur : ceux qui manquent sont recrees, les autres mis a jour ; les groupes supprimes ailleurs disparaissent ; leurs convocations aussi. */
+function tcPoserGroupes(liste) {
+  const vus = {};
+  if (typeof messages === 'undefined' || !messages) messages = { user: [], pro: [] };
+  (Array.isArray(liste) ? liste : []).forEach(function (g) {
+    if (!g || !g.id) return;
+    const md = g.mode === 'pro' ? 'pro' : 'user';
+    if (!messages[md]) messages[md] = [];
+    vus[g.id] = true;
+    const membres = (Array.isArray(g.membres) ? g.membres : []).map(function (x) { return { id: (x && x.id) || '', name: (x && x.name) || '', reference: (x && x.reference) || '' }; });
+    let m = messages[md].find(function (x) { return x && x.isGroup && 'grp_' + String(x.id) === g.id; });
+    if (!m) {
+      m = { id: g.cle || Date.now(), with: g.nom || 'Groupe', isGroup: true, members: membres.map(function (x) { return x.name; }), membres: membres,
+        avatar: '👥', color: '#7c3aed', icon: '👥', unread: 0, archived: !!g.archived, thread: (Array.isArray(g.thread) ? g.thread : []).slice() };
+      messages[md].push(m);
+    } else {
+      m.with = g.nom || m.with; m.membres = membres; m.members = membres.map(function (x) { return x.name; }); m.archived = !!g.archived;
+      if (!Array.isArray(m.thread)) m.thread = [];
+      (Array.isArray(g.thread) ? g.thread : []).forEach(function (t) { if (t && !m.thread.some(function (x) { return x && x.from === 'system' && x.text === t.text; })) m.thread.push(t); });
+    }
+    (Array.isArray(g.convocations) ? g.convocations : []).forEach(function (c) {
+      if (!c || !c.id) return;
+      const copie = Object.assign({}, c, { groupMsgId: m.id });
+      const i = groupConvocations.findIndex(function (x) { return x && x.id === c.id; });
+      if (i < 0) groupConvocations.push(copie); else groupConvocations[i] = Object.assign(groupConvocations[i], copie);
+    });
+  });
+  ['user', 'pro'].forEach(function (md) {
+    if (!messages[md]) return;
+    messages[md] = messages[md].filter(function (x) { return !(x && x.isGroup) || vus['grp_' + String(x.id)]; });
+  });
+  saveMessagesToStorage();
+  saveConvocations();
+  if (typeof currentPage !== 'undefined' && currentPage === 'messages' && typeof renderMessages === 'function') renderMessages();
+  tcRafraichirToutesConvocations(true);
+}
+let _tcConvocDernierRafraichi = 0;
+/** Les reponses de toutes les convocations envoyees, relues sur le serveur (au plus une fois par minute, sauf force). */
+async function tcRafraichirToutesConvocations(force) {
+  if (!force && Date.now() - _tcConvocDernierRafraichi < 60000) return false;
+  _tcConvocDernierRafraichi = Date.now();
+  let change = false;
+  const liste = ((typeof groupConvocations !== 'undefined' && groupConvocations) || []).filter(function (c) { return c && c.serveurId; });
+  for (const c of liste) { try { if (await tcRafraichirConvocation(c)) change = true; } catch (e) {} }
+  if (change) {
+    const ov = document.getElementById('convocDashboardOv');
+    if (ov && ov._tcConvocId) { ov.remove(); openConvocationDashboard(ov._tcConvocId); }
+  }
+  return change;
+}
+
 function openConvocationSheet() {
   const msg = messages[mode].find(m => m.id === _currentConvId);
   if (!msg || !msg.isGroup) return;
@@ -24378,6 +24463,7 @@ function openConvocationDashboard(convocId) {
   const ov = document.createElement('div');
   ov.className = 'msg-sheet-ov';
   ov.id = 'convocDashboardOv';
+  ov._tcConvocId = c.id;
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
 
   const rows = c.recipients.map((r, idx) => {
