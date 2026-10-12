@@ -12230,7 +12230,8 @@ function charlyQuickAction(action) {
   // 2e ligne (mission 22) : chaque bouton lance le parcours existant.
   if (action === 'groupe') { tcDemarrerRdvAPlusieurs(); return; }
   // Malade : la contrainte du jour (liste des rendez-vous, puis annuler / deplacer et s excuser), rien ne part sans validation.
-  if (action === 'malade') { tcGererContrainte('Je suis malade, décale tout aujourd’hui'); return; }
+  // Apostrophe droite : tcPeriodeAgenda reconnait « aujourd'hui » tel quel, pas « aujourd’hui ».
+  if (action === 'malade') { tcGererContrainte("Je suis malade, décale tout aujourd'hui"); return; }
   // Photo : le meme chemin que le trombone.
   if (action === 'photo') { charlyAttachAction('photo'); return; }
   // Retard : le message au contact est prepare ici, jamais laisse au modele.

@@ -53,7 +53,8 @@ if (!ko) {
   ctx.charlyQuickAction('groupe');
   verifie('« Rendez-vous à plusieurs » : Charly demande « Avec qui ? » et attend les prénoms (2 essais)', ctx.charlyIA.history.length === 1 && /^Avec qui \?/.test(ctx.charlyIA.history[0].content) && vm.runInContext('_tcGroupeEnAttente', ctx) === 2 && appels.indexOf('render') > -1, ctx.charlyIA.history[0] && ctx.charlyIA.history[0].content);
   ctx.charlyQuickAction('malade');
-  verifie('« Je suis malade, décale tout » : la contrainte du jour (liste des rendez-vous, puis annuler / déplacer et s’excuser), et l attente « Avec qui ? » tombe', appels.indexOf('contrainte:Je suis malade, décale tout aujourd’hui') > -1 && vm.runInContext('_tcGroupeEnAttente', ctx) === 0);
+  // Apostrophe droite obligatoire : tcPeriodeAgenda lit /aujourd'?hui/ sur le texte brut.
+  verifie('« Je suis malade, décale tout » : la contrainte du jour (liste des rendez-vous, puis annuler / déplacer et s’excuser), avec « aujourd\'hui » reconnu, et l attente « Avec qui ? » tombe', appels.indexOf("contrainte:Je suis malade, décale tout aujourd'hui") > -1 && /aujourd'?hui/.test(appels.find((a) => a.indexOf('contrainte:') === 0) || '') && vm.runInContext('_tcGroupeEnAttente', ctx) === 0, appels.find((a) => a.indexOf('contrainte:') === 0));
   ctx.charlyQuickAction('libre');
   verifie('« Quand suis-je libre ? » : la question est pré-remplie et envoyée', appels.indexOf('envoi:Quand suis-je libre cette semaine ?') > -1, appels.join(' ; '));
   ctx.charlyQuickAction('photo');

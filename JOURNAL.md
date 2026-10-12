@@ -1342,3 +1342,6 @@ mobile vers le nouvel appareil.
   demande « Vers quand ? » (parcours existant). Proposer automatiquement un créneau par rendez-vous = une mission à part.
 - Suite `verif-boutons-charly` (ligne, textes, style, actions rejouées, réponse à « Avec qui ? »), dans verifier.sh ;
   rouge sur la page d'avant. Capture 390×844 : `TimeCool-Codeur/captures/mission22-boutons-charly.png`.
+- Correctif avant examen : le bouton « Je suis malade, décale tout » envoyait « aujourd’hui » avec l'apostrophe
+  typographique, que `tcPeriodeAgenda` (`/aujourd'?hui/` sur le texte brut) ne reconnaît pas : apostrophe droite, et la
+  suite le vérifie.
