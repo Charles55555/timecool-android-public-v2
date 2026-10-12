@@ -1757,3 +1757,10 @@ mobile vers le nouvel appareil.
   statuts (préparée, envoyée, confirmée…), mois en cours ou trois derniers mois, archivage (mission 29).
 - Suites : `verif-commentaires` (page, API, SQL) dans verifier.sh ; `verif-commentaires-e2e` (compte sonde jetable, 200/400/401,
   tronquage) : à enregistrer dans verifier.sh APRÈS la migration et la mise en ligne de l'API (verifier.sh vise la production).
+- Corrections après examen (12/10) : (1) API : plafond par compte avant l'INSERT, 5 par heure et 20 par jour → 429
+  `trop_de_demandes` (chaque envoi coûte un e-mail SMTP synchrone ; même mécanique que `verifications`) ; (2) page : le champ
+  se vide et le bouton se fige AVANT l'attente, un second toucher ne fait rien (jamais deux envois du même texte) ;
+  (3) page : en cas d'échec (hors ligne, 500, plafond), le texte revient dans le champ et le toast dit « Pas envoyé :
+  réessaie dans un instant » (« Trop de commentaires d’un coup » sur 429) ; « envoyé à l’équipe » seulement quand la ligne
+  existe ; hors session : copie locale et toast d'avant, inchangés. Suite : simulation (succès, échec, 429, envoi en cours)
+  et assertions API ; e2e : 5e passe, 6e → 429. Ordre de mise en ligne à tenir : migration, API, page.

@@ -19299,22 +19299,43 @@ function tcContexteCommentaire() {
   return { version: version.slice(0, 40), appareil: appareil };
 }
 async function sendFeedback() {
-  const text = document.getElementById('feedbackTextarea').value.trim();
+  const champ = document.getElementById('feedbackTextarea');
+  const bouton = document.querySelector('button[onclick="sendFeedback()"]');
+  if (!champ || (bouton && bouton.disabled)) return;   // un envoi est deja en cours
+  const text = champ.value.trim();
   if (!text) { showToast('⚠️ Écris un commentaire d\'abord'); return; }
   if (text.length > 2000) { showToast('⚠️ 2000 caractères au plus'); return; }
-  // Copie locale, comme avant : rien ne se perd, meme hors ligne.
-  try {
-    const feedbacks = JSON.parse(localStorage.getItem('timecool_feedbacks') || '[]');
-    feedbacks.push({ text, date: new Date().toISOString(), user: userAccount?.email || 'anonyme' });
-    localStorage.setItem('timecool_feedbacks', JSON.stringify(feedbacks));
-  } catch(e) {}
-  // Et l envoi reel (mission 33) : enregistre en base et transmis par e-mail a l equipe.
-  let envoye = false;
-  if (typeof TC_BACKEND !== 'undefined' && TC_BACKEND.estConnecte && TC_BACKEND.estConnecte()) {
-    try { await TC_BACKEND.envoyerCommentaire(text, tcContexteCommentaire()); envoye = true; } catch (e) { console.warn('Commentaire non transmis :', e && e.message ? e.message : e); }
+  const copieLocale = function () {
+    try {
+      const feedbacks = JSON.parse(localStorage.getItem('timecool_feedbacks') || '[]');
+      feedbacks.push({ text, date: new Date().toISOString(), user: userAccount?.email || 'anonyme' });
+      localStorage.setItem('timecool_feedbacks', JSON.stringify(feedbacks));
+    } catch(e) {}
+  };
+  const connecte = typeof TC_BACKEND !== 'undefined' && TC_BACKEND.estConnecte && TC_BACKEND.estConnecte();
+  if (!connecte) {
+    // Hors session : la copie locale, comme avant.
+    copieLocale();
+    champ.value = '';
+    showToast('✅ Merci ! Ton commentaire a été enregistré');
+    return;
   }
-  document.getElementById('feedbackTextarea').value = '';
-  showToast(envoye ? '✅ Merci ! Ton commentaire a été envoyé à l’équipe' : '✅ Merci ! Ton commentaire a été enregistré');
+  // Envoi reel (mission 33) : le champ se vide et le bouton se fige AVANT l attente (jamais deux envois du meme texte) ;
+  // en cas d echec, le texte revient dans le champ et rien ne pretend etre enregistre.
+  champ.value = '';
+  if (bouton) bouton.disabled = true;
+  try {
+    await TC_BACKEND.envoyerCommentaire(text, tcContexteCommentaire());
+    copieLocale();
+    showToast('✅ Merci ! Ton commentaire a été envoyé à l’équipe');
+  } catch (e) {
+    champ.value = text;
+    const trop = !!(e && (e.code === 'trop_de_demandes' || e.status === 429));
+    showToast(trop ? '⚠️ Trop de commentaires d’un coup : réessaie plus tard' : '⚠️ Pas envoyé : réessaie dans un instant');
+    console.warn('Commentaire non transmis :', e && e.message ? e.message : e);
+  } finally {
+    if (bouton) bouton.disabled = false;
+  }
 }
 
 // ═══ Override navigate pour les nouvelles pages v4.0 ═══

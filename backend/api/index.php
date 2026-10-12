@@ -4041,6 +4041,12 @@ switch ($route) {
         if (mb_strlen($texte) > 2000) {
             Rep::erreur(400, 'texte_trop_long', '2000 caractères au plus.');
         }
+        // Plafond par compte (examen de la mission 33) : 5 par heure, 20 par jour ; chaque envoi coute un e-mail.
+        $parHeure = Db::un('SELECT COUNT(*) AS n FROM commentaires WHERE compte_id = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 HOUR)', [$compte['id']]);
+        $parJour = Db::un('SELECT COUNT(*) AS n FROM commentaires WHERE compte_id = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 DAY)', [$compte['id']]);
+        if ((int) ($parHeure['n'] ?? 0) >= 5 || (int) ($parJour['n'] ?? 0) >= 20) {
+            Rep::erreur(429, 'trop_de_demandes', 'Trop de commentaires envoyés. Réessaie plus tard.');
+        }
         $version = mb_substr(trim((string) ($entree['version'] ?? '')), 0, 40);
         $appareil = mb_substr(trim((string) ($entree['appareil'] ?? '')), 0, 120);
         Db::req(

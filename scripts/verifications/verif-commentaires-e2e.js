@@ -56,6 +56,12 @@ async function inscrire(prenom) {
   const tronque = await appel('POST', '/commentaires', { texte: 'ok', version: 'v'.repeat(80), appareil: 'a'.repeat(300) }, sonde.jeton);
   dire(tronque.code === 200, 'version et appareil trop longs : tronqués, pas refusés', 'HTTP ' + tronque.code);
 
+  console.log('\nLe plafond (5 par heure) :');
+  const cinq = await appel('POST', '/commentaires', { texte: 'cinquième ' + texte }, sonde.jeton);
+  dire(cinq.code === 200, 'le 5e commentaire de l’heure passe', 'HTTP ' + cinq.code);
+  const six = await appel('POST', '/commentaires', { texte: 'sixième ' + texte }, sonde.jeton);
+  dire(six.code === 429 && six.d && six.d.erreur === 'trop_de_demandes', 'le 6e → 429 trop_de_demandes (rafale impossible)', 'HTTP ' + six.code + ' ' + (six.d && six.d.erreur));
+
   console.log('');
   console.log(ko + ' anomalie(s).');
   process.exit(ko ? 1 : 0);
