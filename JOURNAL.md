@@ -1301,3 +1301,18 @@ mobile vers le nouvel appareil.
   bon) ; `tc_onboarding_done` (accueil terminé) est un réglage de l'appareil, le ménage l'épargne : après une
   déconnexion, l'appareil montre l'écran de connexion, pas « Rejoins TimeCool ». Autres réglages d'appareil candidats
   (langue `timecool_language`, thème `tc_theme`) : toujours balayés comme avant, à trancher par le chef de projet.
+
+## 12/10/2026 (session Codeur) — Accents des écrans d'accueil, phrase d'appairage
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Écrans d'accueil (`#ob2`, `#ob3`) : « Crée ton compte gratuitement et commence à gagner du temps », « Créer mon
+  compte », « J’ai déjà un compte », « Charly IA est prêt à t’aider à organiser ton temps », « parler à Charly »,
+  « Ou crée ton premier RDV », « Découvrir TimeCool ». « Compte créé ! » (écran de confirmation) avait déjà son accent.
+- Appairage d'un ordinateur : « Sur votre téléphone : menu → Lier un nouvel appareil » devient « Sur ton téléphone :
+  touche tes initiales en haut à droite → Lier un nouvel appareil » (tutoiement comme le reste de l'application).
+- Décision du chef de projet (12/10, après la mission 20) : la langue (`timecool_language`) et le thème (`tc_theme`) sont
+  des réglages de l'appareil, comme l'accueil terminé : le ménage du compte (`tcViderDonneesDuCompte`) ne les efface
+  plus ; `verif-deconnexion` le vérifie.
+- Suite `verif-accents-accueil` (chaînes attendues présentes, anciennes absentes), dans verifier.sh ; rouge sur la page
+  d'avant. Aucune clé de traduction ni suite existante ne citait ces textes.

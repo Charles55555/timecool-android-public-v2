@@ -47,11 +47,14 @@ titre('1. Deconnexion : rien du compte precedent, ni en stockage ni en memoire')
 Object.assign(stock, {
   timecool_charly_historique: '[{"role":"assistant","content":"Bonjour Fanny !"}]', tc_user_events: '[…]', tc_user_tasks: '[…]', timecool_birthdays: '[…]',
   timecool_contacts: '[…]', tc_conversations: '[…]', timecool_api_keys: '{"openai":"sk-fanny"}', tc_calendars: '[…]', tc_absence: 'x', tc_compte_local: 'fanny',
-  tc_device_crypto_key: 'K', tc_device_user_id: 'D', tc_session_jeton: 'J', tc_onboarding_done: '1', tc_nettoyage: 'v1-donnees-melangees'
+  tc_device_crypto_key: 'K', tc_device_user_id: 'D', tc_session_jeton: 'J', tc_onboarding_done: '1', tc_nettoyage: 'v1-donnees-melangees',
+  timecool_language: 'en', tc_theme: 'dark'
 });
 ctx.tcViderDonneesDuCompte();
 const restantes = Object.keys(stock).sort();
-verifie('le stockage ne garde que ce qui est propre a l appareil (cle, identifiant, jeton, marqueurs, accueil termine)', JSON.stringify(restantes) === JSON.stringify(['tc_compte_local', 'tc_device_crypto_key', 'tc_device_user_id', 'tc_nettoyage', 'tc_onboarding_done', 'tc_session_jeton']), restantes.join(' '));
+verifie('le stockage ne garde que ce qui est propre a l appareil (cle, identifiant, jeton, marqueurs, accueil termine, langue, theme)', JSON.stringify(restantes) === JSON.stringify(['tc_compte_local', 'tc_device_crypto_key', 'tc_device_user_id', 'tc_nettoyage', 'tc_onboarding_done', 'tc_session_jeton', 'tc_theme', 'timecool_language']), restantes.join(' '));
+// Decision du chef de projet (12/10, mission 16) : langue et theme sont des reglages de l appareil.
+verifie('la langue et le theme de l appareil restent apres le menage', stock.timecool_language === 'en' && stock.tc_theme === 'dark');
 // Examen (12/10) : l accueil termine est un reglage de l appareil ; sans lui, l appareil remontrait « Rejoins TimeCool ».
 verifie('le drapeau « accueil termine » est reste a 1 : apres deconnexion, l appareil montre l ecran de connexion', stock.tc_onboarding_done === '1');
 // Examen (12/10) : « Mon agenda » doit etre de retour en memoire, sinon le prochain agenda cree s enregistre seul.
