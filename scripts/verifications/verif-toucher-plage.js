@@ -36,8 +36,9 @@ const ctx = {
   tcTypeBlocHTML: () => '', tcMajJourneeEntiere() {}, escapeHTMLSafe: (x) => String(x), agendaStartH: 8
 };
 vm.createContext(ctx);
+ctx.window = { addEventListener(t, f, capture) { ctx.window._ecouteurs = ctx.window._ecouteurs || {}; ctx.window._ecouteurs[t] = { f: f, capture: capture }; } };
 vm.runInContext('let _tcDrag = null;', ctx);
-['const TC_TOUCHER_SEUIL_PX = [^;]*;', 'const TC_TOUCHER_DUREE_MS = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
+['const TC_TOUCHER_SEUIL_PX = [^;]*;', 'const TC_TOUCHER_DUREE_MS = [^;]*;', 'const TC_TOUCHER_APRES_DEFILEMENT_MS = [^;]*;', 'let _tcDernierDefilement = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
 ['tcHeureDeLaPosition', 'tcEstUnToucherDePlage', 'tcInstallerToucherDePlage', 'openCreateModal'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
@@ -52,6 +53,7 @@ verifie('toucher court et immobile → oui', ctx.tcEstUnToucherDePlage(d0, { x: 
 verifie('appui long (600 ms) → non', ctx.tcEstUnToucherDePlage(d0, { x: 100, y: 200, t: 1700 }, null, false) === false);
 verifie('defilement (30 px) → non', ctx.tcEstUnToucherDePlage(d0, { x: 100, y: 230, t: 1100 }, null, false) === false);
 verifie('glisser-deposer en cours → non', ctx.tcEstUnToucherDePlage(d0, { x: 100, y: 200, t: 1100 }, null, true) === false);
+verifie('toucher 100 ms apres un defilement (on arrete l elan) → non ; 400 ms apres → oui', ctx.tcEstUnToucherDePlage(d0, { x: 100, y: 200, t: 1100 }, null, false, 900) === false && ctx.tcEstUnToucherDePlage(d0, { x: 100, y: 200, t: 1100 }, null, false, 600) === true);
 const corpsX = element('main', null); const rowX = element('hour-row', corpsX); const cellX = element('hour-cell', rowX); const blocX = element('week-event', cellX);
 verifie('sur un bloc de rendez-vous (.week-event) → non (sa fiche garde son geste)', ctx.tcEstUnToucherDePlage(d0, { x: 100, y: 200, t: 1100 }, blocX, false) === false && ctx.tcEstUnToucherDePlage(d0, { x: 100, y: 200, t: 1100 }, cellX, false) === true);
 
@@ -70,6 +72,7 @@ titre('3. Vue Semaine simulee : la case touchee donne le jour et l heure, et « 
     "if (col < 0 || ligne < 0 || !weekDates[col]) return null; const rect = row.getBoundingClientRect(); const hm = tcHeureDeLaPosition(agendaStartH + ligne, y - rect.top, rect.height);" +
     "return { date: fmt(weekDates[col]), heure: hm.heure, minute: hm.minute }; });", ctx);
   verifie('le geste est pose une seule fois sur le corps (pointerdown / pointerup / pointercancel)', !!body._ecouteurs.pointerdown && !!body._ecouteurs.pointerup && !!body._ecouteurs.pointercancel && body._tcToucherPose === true);
+  verifie('le defilement est ecoute une fois sur window, en capture (tout conteneur)', !!(ctx.window._ecouteurs && ctx.window._ecouteurs.scroll && ctx.window._ecouteurs.scroll.capture === true) && ctx.window._tcDefilementEcoute === true);
   // Toucher la case du mercredi (colonne 3) dans la ligne de 14h, a 60 % de sa haueur → mercredi 14 octobre, 14:30-15:30.
   const cible = rows[6].children[3];   // ligne 14h (8 + 6), colonne mercredi (index 2 des cases = enfant 3)
   const _now = Date.now;
@@ -84,6 +87,17 @@ titre('3. Vue Semaine simulee : la case touchee donne le jour et l heure, et « 
   body._ecouteurs.pointerup({ pointerType: 'touch', clientX: 152, clientY: 6 * 44 + 27, target: cible });
   verifie('apres un rendu de la semaine suivante, la meme case donne mercredi 21 octobre (jamais les jours du premier rendu)', ouverts.length === 1 && champs.newEvtDate.value === '2026-10-21', champs.newEvtDate.value);
   body._tcWeekDates = weekDates;
+  // Un defilement vient de finir : le toucher qui l arrete n ouvre rien ; 300 ms plus tard, il ouvre.
+  ouverts.length = 0;
+  ctx.window._ecouteurs.scroll.f();
+  body._ecouteurs.pointerdown({ pointerType: 'touch', clientX: 150, clientY: 6 * 44 + 26, target: cible });
+  body._ecouteurs.pointerup({ pointerType: 'touch', clientX: 150, clientY: 6 * 44 + 26, target: cible });
+  verifie('un toucher juste apres un defilement n ouvre rien', ouverts.length === 0);
+  vm.runInContext('_tcDernierDefilement = Date.now() - 300;', ctx);
+  body._ecouteurs.pointerdown({ pointerType: 'touch', clientX: 150, clientY: 6 * 44 + 26, target: cible });
+  body._ecouteurs.pointerup({ pointerType: 'touch', clientX: 150, clientY: 6 * 44 + 26, target: cible });
+  verifie('300 ms apres le defilement, le toucher ouvre « Nouveau »', ouverts.length === 1);
+  vm.runInContext('_tcDernierDefilement = 0;', ctx);
   ouverts.length = 0;
   body._ecouteurs.pointerdown({ pointerType: 'touch', clientX: 150, clientY: 300, target: cible });
   body._ecouteurs.pointerup({ pointerType: 'touch', clientX: 150, clientY: 340, target: cible });

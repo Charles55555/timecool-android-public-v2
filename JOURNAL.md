@@ -1675,3 +1675,8 @@ mobile vers le nouvel appareil.
   `captures/mission36-toucher-plage.png` (formulaire ouvert après un toucher simulé).
 - Suite `verif-types-rdv` adaptée (signature `openCreateModal(prerempli)`) ; garde-fou `typeof tcInstallerToucherDePlage` dans renderWeek /
   renderDay pour les suites qui extraient ces fonctions seules.
+- Complément (réserve de l'examinateur, validé par le chef de projet) : un toucher qui ARRÊTE un défilement lancé (élan du
+  doigt) donne pointerdown / pointerup sans mouvement ; il n'ouvre plus « Nouveau ». Tout défilement (écouté en capture sur
+  window, donc quel que soit le conteneur) note l'instant (`_tcDernierDefilement`) ; un toucher commencé moins de
+  250 ms après (`TC_TOUCHER_APRES_DEFILEMENT_MS`) est ignoré. Suite complétée (100 ms → rien, 300-400 ms → ouvre). À faire
+  valider sur téléphone (Charles).
