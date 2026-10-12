@@ -103,12 +103,23 @@ const N = agenda().length;
   const dit1 = c1.charlyIA.history.map((m) => m.content).join(' | ');
   verifie('rien de supprimé, rien en attente, « Je ne trouve pas de rendez-vous « dentiste » »', c1.events.length === N && !c1.attente() && !c1.choix() && /Je ne trouve pas de rendez-vous « dentiste »/.test(dit1), dit1);
   // Examen : un mot de moment ou de choix n est jamais un titre introuvable.
-  for (const [texte, attendu] of [['annule mon rdv de ce matin', 'Marché'], ['annule mon prochain rdv', 'Ciné'], ['annule mon dernier rdv', 'Marché'], ['annule le rdv de ce soir', 'Ciné']]) {
+  // Des rendez-vous le matin sur plusieurs jours (Marché dim. 9h, Rdv banque mar. 10h, Appel fournisseur jeu. 9h) : « ce matin » = aujourd hui seulement.
+  for (const [texte, attendus] of [['annule mon rdv de ce matin', ['Marché']], ['annule mon prochain rdv', ['Ciné']], ['annule mon dernier rdv', ['Marché']], ['annule le rdv de ce soir', ['Ciné']],
+    // 2e examen : avec un jour ou « tous », « prochain » n est qu un mot du jour.
+    ['annule tous mes rdv de mardi prochain', ['Rdv banque', 'Formation', 'Rendez-vous Dr. Martin']], ['annule le rdv de mardi prochain', ['Rdv banque', 'Formation', 'Rendez-vous Dr. Martin']]]) {
     const cx = contexte(); cx.events = agenda();
     await cx.tcGererSuppressionRdv(texte);
     const ditx = cx.charlyIA.history.map((m) => m.content).join(' | ');
-    const vises = (cx.attente() || cx.choix() || []).map((e) => e.title);
-    verifie('« ' + texte + ' » : jamais « je ne trouve pas », rien de supprimé, « ' + attendu + ' » parmi les rendez-vous visés', !/Je ne trouve pas/.test(ditx) && cx.events.length === N && vises.indexOf(attendu) > -1, ditx + ' / vises : ' + vises.join(', '));
+    const vises = (cx.attente() || cx.choix() || []).map((e) => e.title).sort();
+    verifie('« ' + texte + ' » : jamais « je ne trouve pas », rien de supprimé, visés = ' + attendus.join(' + '), !/Je ne trouve pas/.test(ditx) && cx.events.length === N && JSON.stringify(vises) === JSON.stringify(attendus.slice().sort()), ditx + ' / vises : ' + vises.join(', '));
+  }
+  {
+    const cy = contexte(); cy.events = agenda();
+    await cy.tcGererSuppressionRdv('annule le rdv de mardi prochain');
+    verifie('« le rdv de mardi prochain » (trois ce jour-là) → « lequel ? », rien en attente de oui/non', !!cy.choix() && !cy.attente() && /Lequel veux-tu supprimer/.test(cy.charlyIA.history.map((m) => m.content).join(' | ')));
+    const cz = contexte(); cz.events = agenda();
+    await cz.tcGererSuppressionRdv('annule tous mes rdv de mardi prochain');
+    verifie('« tous mes rdv de mardi prochain » → les trois en attente de oui/non', (cz.attente() || []).length === 3 && !cz.choix());
   }
 
   titre('(b) Toute suppression demande « oui / non » avec la liste');

@@ -1390,3 +1390,9 @@ mobile vers le nouvel appareil.
   (plus jamais « je ne trouve pas « matin » ») ; matin / après-midi / soir comptent comme un filtre ; « mon prochain
   rdv » vise le prochain à venir, « mon dernier rdv » le dernier passé. Les quatre phrases de l'examen et les cas de
   création sont dans `verif-charly-campagne10`.
+- 2e examen : « prochain / dernier » ne choisit le premier ou le dernier rendez-vous que sans autre filtre (date, jour,
+  heure, moment) et sans « tous » — « mardi prochain » n'est qu'un mot du jour (« tous mes rdv de mardi prochain » →
+  les trois, « le rdv de mardi prochain » → « lequel ? ») ; « ce matin », « cet après-midi », « ce soir », « ce midi »
+  visent d'abord aujourd'hui, puis le moment (la branche matin filtrait l'heure sur tous les jours). Réserve notée :
+  « mon dernier rdv » sans rendez-vous passé vise le dernier de la liste (le plus éloigné), sens discutable.
+  « annule le rdv de mardi prochain » (singulier, plusieurs ce jour-la) demande « lequel ? » ; « mes rdv de mardi » ou « tous » visent le jour entier.

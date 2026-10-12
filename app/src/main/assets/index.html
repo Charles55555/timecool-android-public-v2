@@ -13113,7 +13113,11 @@ async function tcGererSuppressionRdv(text) {
   }
 
   // Filtre par date/période mentionnée dans le texte.
-  const periode = tcPeriodeAgenda(t) || tcBorneDeFin(t) || tcPeriodeJourNomme(text);
+  // « ce matin », « cet après-midi », « ce soir », « ce midi » : aujourd'hui d'abord, puis le moment de la journee
+  // (examen de la mission 19 : la branche matin filtrait l'heure sur tous les jours).
+  const ceJour = /\b(ce|cet) (matin|matinee|apres-midi|aprem|soir|soiree|midi)\b/.test(tcSansAccents(t).replace(/[’']/g, ' '));
+  const periode = tcPeriodeAgenda(t) || tcBorneDeFin(t) || tcPeriodeJourNomme(text)
+    || (ceJour ? (function () { const n = new Date(); const j = new Date(n.getFullYear(), n.getMonth(), n.getDate()); return { debut: j, fin: j, label: 'aujourd’hui' }; })() : null);
   if (periode && !tcPeriodeCoherente(text, periode)) {
     charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('De quel jour parles-tu exactement ? (par exemple « lundi 5 octobre »)') });
     tcDefinirStatutCharly('🔒 Assistant intelligent', false);
@@ -13162,10 +13166,11 @@ async function tcGererSuppressionRdv(text) {
     candidats = candidats.filter(e => Number(e.startH) >= 18);
     filtreApplique = true;
   }
-  // « mon prochain rdv », « mon dernier rdv » : un choix, pas un titre (examen de la mission 19).
+  // « mon prochain rdv », « mon dernier rdv » : un choix, pas un titre — seulement sans autre filtre (date, jour, heure,
+  // moment) et sans « tous » : « mardi prochain » n'est qu'un mot du jour (examen de la mission 19).
   {
     const sansT = tcSansAccents(t);
-    if (/\bprochains?\b|\bprochaine\b|\bderniers?\b|\bderniere\b/.test(sansT)) {
+    if (!filtreApplique && !/\b(tous|toutes|tout|toute)\b/.test(sansT) && /\bprochains?\b|\bprochaine\b|\bderniers?\b|\bderniere\b/.test(sansT)) {
       const maintenant = new Date();
       const debutDe = function (e) { return new Date(e.date + 'T' + String(e.startH).padStart(2, '0') + ':' + String(e.startM || 0).padStart(2, '0') + ':00'); };
       const tries = candidats.slice().sort(tcComparerEvenements);
@@ -13230,7 +13235,9 @@ async function tcGererSuppressionRdv(text) {
     // Aucune précision de date/contact et plusieurs RDV existent : jamais deviner, on demande la période.
     reply = "Tu as plusieurs rendez-vous dans ton agenda. Peux-tu préciser lequel (date, heure ou nom) ou quelle période annuler ?";
     charlyIA.history.push({role: 'assistant', content: reply});
-  } else if (candidats.length > 1 && !jours && !tcBorneDeFin(t) && !/\b(tous|toutes|tout|toute|journée|journee|semaine|mois)\b/.test(t)) {
+  } else if (candidats.length > 1 && !tcBorneDeFin(t) && !/\b(tous|toutes|tout|toute|journée|journee|semaine|mois)\b/.test(t)
+      // Un jour nomme vise le jour entier (« mes rdv de mardi »), sauf au singulier : « le rdv de mardi prochain » → lequel ? (examen de la mission 19)
+      && (!jours || /\b(le|mon|ce|un|l) (rdv|rendez-?vous)\b/.test(tcSansAccents(t)))) {
     // Plusieurs rendez-vous possibles pour une demande qui en vise un
     // seul : jamais deviner. On les liste et on demande lequel ; la
     // réponse (« celui de 16h », « le dermatologue ») est reconnue.
