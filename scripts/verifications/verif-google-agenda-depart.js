@@ -115,7 +115,8 @@ verifie('la migration 009 ajoute la colonne « depuis » (NULL = anciennes liais
 verifie('l\'API ne dit plus « relié » (messages et page de retour de Google)', !/relié à TimeCool|Rien n’a été relié|n’est pas relié|Google Agenda est relié|La liaison n’a pas abouti/.test(api));
 
 titre('Les deux imports marquent leurs rendez-vous');
-verifie('les deux chemins d\'import (rapide et assistant) ajoutent « importe: true »', (page.match(/importe: true,\n\s+id: 'ics_'/g) || []).length === 2);
+// Depuis la mission 30, un seul lecteur (tcLireIcs) pose « importe: true » ; les deux chemins passent par tcPreparerImportIcs.
+verifie('les deux chemins d\'import (rapide et assistant) ajoutent « importe: true » (par le lecteur commun)', (page.match(/const r = tcPreparerImportIcs\(/g) || []).length === 1 && (page.match(/var lecture = tcPreparerImportIcs\(/g) || []).length === 1 && /cat: 'perso', importe: true \}/.test(page));
 
 titre('« Relier » devient « Synchroniser » (la page)');
 const debutZone = page.indexOf('async function tcGoogleAgendaAfficher()');

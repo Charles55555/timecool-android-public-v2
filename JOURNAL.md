@@ -1856,3 +1856,27 @@ mobile vers le nouvel appareil.
   groupes (noms seuls) sont résolus par le nom, une fiche ne servant pas deux fois ; (3) API : « hier » toléré pour le jour
   (le jour du serveur peut être en avance sur celui de l'organisateur). e2e complété : deux homonymes, 20e passe / 21e →
   429, hier toléré / avant-hier refusé. Notées pour plus tard : réponse modifiable sans fin (un message à chaque fois).
+
+## 12/10/2026 (session Codeur) — Import .ics : vraie durée, journée entière, lieu, invités, doublons, web sans fausse recherche (mission 30)
+
+**Codé et commité sur main, PAS publié.** Page seulement (+ e2e convocations enregistré dans verifier.sh).
+
+- Demande (chef de projet) : lire DTEND / DURATION (vraie durée), LOCATION, ATTENDEE (invités en note), événements sans
+  heure → journée entière (pas 9h) ; doublons évités (même UID, ou même titre + même début) ; sur le web, pas de fausse
+  recherche « 2 fichiers » : droit au choix du fichier.
+- Un seul lecteur pur, `tcLireIcs` (+ `tcProprietesIcs`, `tcTexteIcs`, `tcDateIcs`, `tcDureeIcs`) pour les deux imports
+  (Paramètres `importIcsData`, et « Importer mon ancien agenda » `processIcsImport`) : lignes repliées recollées, DTSTART /
+  DTEND avec TZID (heure gardée) ou en UTC (Z, ramenée à l'heure locale), VALUE=DATE → journée entière (`allDay`, 0:00-23:59,
+  DTEND exclusif → `dateFin` pour une période), DURATION, sans fin → +1 h, fin un autre jour → 23:59, LOCATION → `lieu`,
+  DESCRIPTION et ATTENDEE (CN ou adresse) → `notes` (« Invités : … »), UID gardé, « \, » « \; » « \n » décodés, type Personnel.
+- `tcEstDoublonIcs` / `tcPreparerImportIcs` : un événement déjà dans l'agenda (même UID, ou même titre à la casse près +
+  même jour + même heure) ou en double dans le fichier n'entre pas ; le nombre d'ignorés est dit (toast des Paramètres,
+  écran « C'est terminé ! »). Les passés sont comptés sur la date de fin.
+- Web : `startIcsAutoScan` et `finishIcsAutoScan` vont droit à `renderIcsChoixFichier` (« Choisis ton fichier .ics ») quand
+  `TimeCoolNative.findLatestIcs` n'existe pas ; plus de faux « 1 fichier / 2 fichiers » ni de faux « mon-agenda.ics ». La
+  recherche réelle reste à l'application Android.
+- Suite `verif-import-ics` (export façon Google : repli, TZID, journée entière, période, DURATION, UTC, lieu, invités,
+  virgules, UID double, sans date, sans titre ; doublons avec l'agenda et rejeu du fichier ; les deux imports ; le web) dans
+  verifier.sh ; rouge sur la page d'avant. `lancer verif-convocations-e2e` ajouté après verif-commentaires-e2e (27b en ligne).
+- Suites `verif-google-agenda-depart` et `verif-import` adaptées (lecteur commun, `showImportSuccess(count, passes, doublons)`) :
+  mêmes vérifications.

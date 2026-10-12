@@ -25453,43 +25453,120 @@ async function tcDesignerAdmin(reference, donner) {
 }
 
 // === IMPORT ICS (iCalendar) ===
+/* ── Lecture d un fichier .ics (mission 30) ────────────────────────────────────────────────────────────────
+   Un seul lecteur pour les deux imports. Lignes repliees recollees ; DTSTART / DTEND avec TZID ou VALUE=DATE ;
+   DURATION ; sans heure → journee entiere ; LOCATION → lieu ; DESCRIPTION et ATTENDEE → note ; UID garde pour
+   les doublons. Pur : ne touche ni a la page ni a l agenda. */
+/** Les proprietes d un bloc VEVENT : { NOM: [{ params: {…}, valeur }] }, lignes repliees deja recollees. */
+function tcProprietesIcs(bloc) {
+  const props = {};
+  String(bloc || '').split('\n').forEach(function (ligne) {
+    const m = /^([A-Za-z0-9-]+)((?:;[^:]*)?):(.*)$/.exec(ligne);
+    if (!m) return;
+    const nom = m[1].toUpperCase();
+    const params = {};
+    m[2].split(';').filter(Boolean).forEach(function (p) { const i = p.indexOf('='); if (i > 0) params[p.slice(0, i).toUpperCase()] = p.slice(i + 1).replace(/^"|"$/g, ''); });
+    (props[nom] = props[nom] || []).push({ params: params, valeur: m[3] });
+  });
+  return props;
+}
+/** « \\, » → « , », « \\n » → saut de ligne (ou espace), etc. */
+function tcTexteIcs(v, sautEnEspace) {
+  return String(v || '').replace(/\\n/gi, sautEnEspace ? ' ' : '\n').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\').trim();
+}
+/** Une date .ics → { date: 'AAAA-MM-JJ', h, m, sansHeure } ; en UTC (Z) l heure est ramenee a l heure locale ; TZID : heure gardee telle quelle. */
+function tcDateIcs(prop) {
+  if (!prop) return null;
+  const v = String(prop.valeur || '').trim();
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(v);
+  if (!m) return null;
+  const sansHeure = !m[4] || (prop.params && prop.params.VALUE === 'DATE');
+  let d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), sansHeure ? 0 : Number(m[4]), sansHeure ? 0 : Number(m[5] || 0), 0, 0);
+  if (!sansHeure && m[7] === 'Z') d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5] || 0), 0));
+  if (isNaN(d.getTime())) return null;
+  return { date: tcISO(d), h: d.getHours(), m: d.getMinutes(), sansHeure: sansHeure, t: d.getTime() };
+}
+/** « P1DT2H30M » → millisecondes, ou null. */
+function tcDureeIcs(v) {
+  const m = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(String(v || '').trim());
+  if (!m) return null;
+  const ms = ((Number(m[2] || 0) * 7 + Number(m[3] || 0)) * 86400 + Number(m[4] || 0) * 3600 + Number(m[5] || 0) * 60 + Number(m[6] || 0)) * 1000;
+  return m[1] === '-' ? -ms : ms;
+}
+/**
+ * Les evenements d un fichier .ics, prets pour l agenda (sans id ni mode). Un VEVENT sans DTSTART ou sans SUMMARY
+ * est ignore. Les UID en double dans le fichier ne comptent qu une fois.
+ */
+function tcLireIcs(texte) {
+  const plat = String(texte || '').replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '');   // lignes repliees recollees
+  const blocs = plat.split('BEGIN:VEVENT').slice(1).map(function (b) { return b.split('END:VEVENT')[0]; });
+  const vus = {};
+  const resultat = [];
+  blocs.forEach(function (bloc) {
+    const p = tcProprietesIcs(bloc);
+    const debut = tcDateIcs(p.DTSTART && p.DTSTART[0]);
+    const titre = p.SUMMARY ? tcTexteIcs(p.SUMMARY[0].valeur, true).slice(0, 80) : '';
+    if (!debut || !titre) return;
+    const uid = p.UID ? String(p.UID[0].valeur).trim() : '';
+    if (uid) { if (vus[uid]) return; vus[uid] = true; }
+    let fin = tcDateIcs(p.DTEND && p.DTEND[0]);
+    const duree = p.DURATION ? tcDureeIcs(p.DURATION[0].valeur) : null;
+    if (!fin && duree !== null && duree > 0) { const d = new Date(debut.t + duree); fin = { date: tcISO(d), h: d.getHours(), m: d.getMinutes(), sansHeure: debut.sansHeure, t: d.getTime() }; }
+    const ev = { date: debut.date, title: titre, cat: 'perso', importe: true };
+    if (uid) ev.uid = uid;
+    if (debut.sansHeure) {
+      // Sans heure : journee entiere (la fin .ics est exclusive : DTEND = lendemain pour un seul jour).
+      ev.allDay = true; ev.startH = 0; ev.startM = 0; ev.endH = 23; ev.endM = 59;
+      if (fin) { const dernier = new Date(fin.t - 86400000); const dernierISO = tcISO(dernier); if (dernierISO > debut.date) ev.dateFin = dernierISO; }
+    } else {
+      ev.startH = debut.h; ev.startM = debut.m;
+      if (fin && fin.t > debut.t) {
+        if (fin.date === debut.date) { ev.endH = fin.h; ev.endM = fin.m; }
+        else { ev.endH = 23; ev.endM = 59; }   // finit un autre jour : jusqu au soir
+      } else { const d = new Date(debut.t + 3600000); ev.endH = (d.getDate() === new Date(debut.t).getDate()) ? d.getHours() : 23; ev.endM = (d.getDate() === new Date(debut.t).getDate()) ? d.getMinutes() : 59; }
+    }
+    if (p.LOCATION && tcTexteIcs(p.LOCATION[0].valeur, true)) ev.lieu = tcTexteIcs(p.LOCATION[0].valeur, true).slice(0, 200);
+    const notes = [];
+    if (p.DESCRIPTION && tcTexteIcs(p.DESCRIPTION[0].valeur)) notes.push(tcTexteIcs(p.DESCRIPTION[0].valeur).slice(0, 500));
+    const invites = (p.ATTENDEE || []).map(function (a) { return (a.params && a.params.CN) ? String(a.params.CN).trim() : String(a.valeur || '').replace(/^mailto:/i, '').trim(); }).filter(Boolean);
+    if (invites.length) notes.push('Invités : ' + invites.join(', '));
+    if (notes.length) ev.notes = notes.join('\n');
+    resultat.push(ev);
+  });
+  return resultat;
+}
+/** Deja dans l agenda : meme UID, ou meme titre et meme debut (jour et heure). */
+function tcEstDoublonIcs(ev, existants) {
+  const titre = String(ev.title || '').trim().toLowerCase();
+  return (Array.isArray(existants) ? existants : []).some(function (e) {
+    if (!e) return false;
+    if (ev.uid && e.uid && e.uid === ev.uid) return true;
+    return String(e.title || '').trim().toLowerCase() === titre && e.date === ev.date && (e.startH || 0) === (ev.startH || 0) && (e.startM || 0) === (ev.startM || 0);
+  });
+}
+/** Les evenements a ajouter (sans doublon), prets avec id et mode, et le compte des doublons ignores. */
+function tcPreparerImportIcs(texte, existants, modeActuel) {
+  const lus = tcLireIcs(texte);
+  const nouveaux = [];
+  let doublons = 0;
+  lus.forEach(function (ev, i) {
+    if (tcEstDoublonIcs(ev, existants) || tcEstDoublonIcs(ev, nouveaux)) { doublons++; return; }
+    nouveaux.push(Object.assign({ id: 'ics_' + Date.now() + '_' + i, mode: modeActuel || 'user' }, ev));
+  });
+  return { lus: lus.length, nouveaux: nouveaux, doublons: doublons };
+}
+
 function importIcsData(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
     try {
-      const ics = e.target.result;
-      const vevents = ics.split('BEGIN:VEVENT').slice(1);
-      let imported = 0;
-      vevents.forEach(block => {
-        const get = (key) => {
-          const m = block.match(new RegExp(key + '[^:]*:([^\r\n]+)'));
-          return m ? m[1].trim() : null;
-        };
-        const dtstart = get('DTSTART');
-        const summary = get('SUMMARY');
-        if (!dtstart || !summary) return;
-        const year = dtstart.substring(0,4);
-        const month = dtstart.substring(4,6);
-        const day = dtstart.substring(6,8);
-        const hour = dtstart.length >= 13 ? parseInt(dtstart.substring(9,11)) : 0;
-        const min = dtstart.length >= 15 ? parseInt(dtstart.substring(11,13)) : 0;
-        const dateStr = year + '-' + month + '-' + day;
-        events.push({
-          date: dateStr,
-          startH: hour, startM: min,
-          endH: hour + 1, endM: min,
-          title: summary.replace(/\\n/g,' ').replace(/\\,/g,','),
-          cat: 'blue', mode: 'user',
-          importe: true,
-          id: 'ics_' + Date.now() + '_' + imported
-        });
-        imported++;
-      });
+      const r = tcPreparerImportIcs(e.target.result, events, mode);
+      r.nouveaux.forEach(function (ev) { events.push(ev); });
       saveEventsToStorage();
       if (currentPage === 'calendar') render();
-      showToast('✅ ' + imported + ' événements importés !');
+      showToast('✅ ' + r.nouveaux.length + ' événement' + (r.nouveaux.length > 1 ? 's' : '') + ' importé' + (r.nouveaux.length > 1 ? 's' : '') + (r.doublons ? ' (' + r.doublons + ' déjà présent' + (r.doublons > 1 ? 's' : '') + ')' : ''));
     } catch(err) {
       showToast('❌ Erreur lors de la lecture du fichier .ics');
     }
@@ -26412,18 +26489,21 @@ var TC_SCAN_PATHS = [
 function startIcsAutoScan() {
   var c = document.getElementById('importAgendaContent');
   if (!c) return;
+  // Sur le web, le stockage n est pas accessible : aucune recherche a mimer, on choisit le fichier (mission 30).
+  var natif = !!(window.TimeCoolNative && typeof window.TimeCoolNative.findLatestIcs === 'function');
+  if (!natif) { renderIcsChoixFichier(); return; }
 
   var html = '<div style="padding:26px 4px;text-align:center;">';
   html += '<div class="tc-scanring"></div>';
   html += '<div style="font-size:16px;font-weight:700;color:#1a1a2e;margin-bottom:4px;">Recherche en cours\u2026</div>';
   html += '<div style="font-size:12.5px;color:#9aa0a6;margin-bottom:6px;">Je cherche ton fichier .ics le plus r\u00e9cent.</div>';
   html += '<div class="tc-scanbar"><i id="tcScanBar"></i></div>';
-  html += '<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#5f6368;margin-bottom:14px;"><span id="tcScanPct">0\u00a0%</span><span id="tcScanFound">0 fichier</span></div>';
+  html += '<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#5f6368;margin-bottom:14px;"><span id="tcScanPct">0\u00a0%</span><span id="tcScanFound"></span></div>';
   html += '<div class="tc-scanfeed" id="tcScanFeed"></div>';
   html += '</div>';
   c.innerHTML = html;
 
-  var i = 0, found = 0;
+  var i = 0;
   var step = setInterval(function() {
     i++;
     var pct = Math.min(100, i * 8);
@@ -26431,7 +26511,6 @@ function startIcsAutoScan() {
     if (!bar) { clearInterval(step); return; }
     bar.style.width = pct + '%';
     document.getElementById('tcScanPct').textContent = pct + '\u00a0%';
-
     if (i <= TC_SCAN_PATHS.length) {
       var feed = document.getElementById('tcScanFeed');
       var line = document.createElement('div');
@@ -26439,14 +26518,22 @@ function startIcsAutoScan() {
       line.textContent = '\u2022 ' + TC_SCAN_PATHS[i - 1];
       feed.appendChild(line);
       feed.scrollTop = feed.scrollHeight;
-      if (i === 1 || i === 4) {
-        found++;
-        document.getElementById('tcScanFound').textContent = found + ' fichier' + (found > 1 ? 's' : '');
-      }
     }
-
     if (pct >= 100) { clearInterval(step); setTimeout(finishIcsAutoScan, 450); }
   }, 190);
+}
+/** Web : le choix du fichier, sans detour (mission 30). */
+function renderIcsChoixFichier() {
+  var c = document.getElementById('importAgendaContent');
+  if (!c) return;
+  var html = '<div style="text-align:center;padding:22px 6px;">';
+  html += '<div style="font-size:40px;margin-bottom:10px;">\ud83d\udcc5</div>';
+  html += '<div style="font-size:16px;font-weight:700;color:#1a1a2e;margin-bottom:6px;">Choisis ton fichier .ics</div>';
+  html += '<div style="font-size:12.5px;color:#9aa0a6;line-height:1.6;margin-bottom:18px;">Celui que tu as export\u00e9 depuis ton ancien agenda. Rien d\u2019autre n\u2019est lu.</div>';
+  html += '<button onclick="document.getElementById(\'importAgendaFile\').click()" style="width:100%;padding:15px;background:var(--g-blue);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">Importer mon fichier .ics</button>';
+  html += '</div>';
+  html += '<input type="file" id="importAgendaFile" accept=".ics" style="display:none" onchange="startImportProcess(event)">';
+  c.innerHTML = html;
 }
 
 function finishIcsAutoScan() {
@@ -26460,8 +26547,8 @@ function finishIcsAutoScan() {
       return;
     } catch (e) {}
   }
-  /* Fallback navigateur : le stockage n'est pas accessible, on passe la main \u00e0 l'utilisateur */
-  renderIcsScanResult('mon-agenda.ics', null, null, false);
+  /* Navigateur : le stockage n'est pas accessible, on passe la main a l'utilisateur, sans faux fichier (mission 30) */
+  renderIcsChoixFichier();
 }
 
 function renderIcsScanResult(name, size, date, isNative) {
@@ -26540,45 +26627,16 @@ function renderImportStep4(c) {
 }
 
 function processIcsImport(icsText, fileName, fileSize) {
-  var vevents = icsText.split('BEGIN:VEVENT').slice(1);
-  var total = vevents.length;
-  var imported = 0;
-  var newEvents = [];
+  // Un seul lecteur (mission 30) : vraie duree, journee entiere sans heure, lieu, invites en note, doublons ignores.
+  var lecture = tcPreparerImportIcs(icsText, events, mode);
+  var newEvents = lecture.nouveaux;
+  var imported = newEvents.length;
+  var doublons = lecture.doublons;
 
   // Aucune limite de date : tout l'agenda entre. On compte simplement
   // ce qui est deja passe, pour le dire a la fin.
-  var now = new Date();
-  var passes = 0;
-
-  vevents.forEach(function(block) {
-    var get = function(key) {
-      var m = block.match(new RegExp(key + '[^:]*:([^\r\n]+)'));
-      return m ? m[1].trim() : null;
-    };
-    var dtstart = get('DTSTART');
-    var summary = get('SUMMARY');
-    if (!dtstart || !summary) return;
-
-    var year = dtstart.substring(0,4);
-    var month = dtstart.substring(4,6);
-    var day = dtstart.substring(6,8);
-    var evDate = new Date(year + '-' + month + '-' + day);
-    if (evDate < now) passes++;
-
-    var hour = dtstart.length >= 13 ? parseInt(dtstart.substring(9,11)) : 9;
-    var min = dtstart.length >= 15 ? parseInt(dtstart.substring(11,13)) : 0;
-
-    newEvents.push({
-      date: year + '-' + month + '-' + day,
-      startH: hour, startM: min,
-      endH: hour + 1, endM: min,
-      title: summary.replace(/\\n/g,' ').replace(/\\,/g,',').substring(0,80),
-      cat: 'blue', mode: 'user',
-      importe: true,
-          id: 'ics_' + Date.now() + '_' + imported
-    });
-    imported++;
-  });
+  var aujourdhui = tcISO(new Date());
+  var passes = newEvents.filter(function (ev) { return (ev.dateFin || ev.date) < aujourdhui; }).length;
 
   // Animation de progression
   var progress = 0;
@@ -26598,12 +26656,12 @@ function processIcsImport(icsText, fileName, fileSize) {
       // Ajouter les événements
       newEvents.forEach(function(ev) { events.push(ev); });
       saveEventsToStorage();
-      setTimeout(function() { showImportSuccess(imported, passes); }, 400);
+      setTimeout(function() { showImportSuccess(imported, passes, doublons); }, 400);
     }
   }, 45);
 }
 
-function showImportSuccess(count, passes) {
+function showImportSuccess(count, passes, doublons) {
   var c = document.getElementById('importAgendaContent');
   if (!c) return;
   var html = '<div style="text-align:center;padding:40px 20px;">';
@@ -26619,6 +26677,10 @@ function showImportSuccess(count, passes) {
     html += '<br><br><span style="color:#9aa0a6;">Dont ' + passes + ' d\u00e9j\u00e0 pass\u00e9'
          + (passes > 1 ? 's' : '') + ', gard\u00e9' + (passes > 1 ? 's' : '')
          + ' comme historique.</span>';
+  }
+  // Ce qui etait deja la n est pas entre deux fois (mission 30).
+  if (doublons > 0) {
+    html += '<br><br><span style="color:#9aa0a6;">' + doublons + ' rendez-vous d\u00e9j\u00e0 pr\u00e9sent' + (doublons > 1 ? 's' : '') + ' dans TimeCool, ignor\u00e9' + (doublons > 1 ? 's' : '') + '.</span>';
   }
   html += '</div>';
   // L'etape suivante du parcours d'un nouvel utilisateur : synchroniser, pour que ce qu'il
