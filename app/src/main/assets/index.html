@@ -2745,6 +2745,7 @@ window.addEventListener('load', function() {
 let mode = 'user';
 const TC_CALENDARS_KEY = 'timecool_custom_calendars';   // declaree tot : loadCustomCalendars() est appelee au chargement du script (mission 28)
 let customCalendars = []; // agendas personnalisés — déclaré tôt pour éviter tout accès avant initialisation
+const TC_CONVOCATIONS_KEY = 'timecool_convocations';   // declaree tot : loadConvocations() est appelee au chargement du script (mission 28)
 let groupConvocations = []; // convocations de groupe — même raison
 
 // ═══ v5.2 — Pages légales (CGU / Politique) avec retour intelligent ═══
@@ -22290,7 +22291,8 @@ function restoreButton(btn) {
    Absent/En attente) en tapant dessus — clairement présenté comme
    une simulation locale, pas une vraie réponse reçue.
    ══════════════════════════════════════════════════════════════ */
-const TC_CONVOCATIONS_KEY = 'timecool_convocations';
+// TC_CONVOCATIONS_KEY est declaree tot, a cote de groupConvocations (mission 28) : loadConvocations() est appelee au
+// chargement du script, avant cette ligne.
 
 function loadConvocations() {
   try { groupConvocations = JSON.parse(localStorage.getItem(TC_CONVOCATIONS_KEY) || '[]'); } catch(e) { groupConvocations = []; }

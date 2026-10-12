@@ -1571,3 +1571,4 @@ mobile vers le nouvel appareil.
 - Côté comptes : les listes déjà écrasées sur le serveur ne reviennent pas d'elles-mêmes (les agendas perdus sont à
   recréer) ; les rendez-vous rangés dedans sont intacts et restent VISIBLES (`isCalendarVisible` rend vrai pour un
   agenda inconnu), ils gardent leur `calendarId`.
+- Examen : meme zone morte pour loadConvocations() / TC_CONVOCATIONS_KEY (convocations de groupe vides a chaque demarrage) : constante declaree tot aussi ; la suite controle desormais TOUS les appels de demarrage (aucune constante lue declaree apres l appel) et rejoue les convocations.
