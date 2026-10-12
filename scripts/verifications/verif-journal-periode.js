@@ -61,6 +61,9 @@ ctx.tcArchiverDemarches();
 verifie('rien a archiver : rien ne change, un mot le dit', ctx._sauve === 2 && /Rien à archiver/.test(toasts.join(' ')));
 ctx.tcBasculerArchivesDemarches();
 verifie('le bouton « Archives » bascule la vue et redessine', vm.runInContext('_demarchesArchives', ctx) === true && ctx._rendu >= 3);
+ctx.tcDesarchiverDemarche('f');
+verifie('desarchiver la DERNIERE archivee (f) ramene au journal (sinon un ecran « Archives » vide, sans bouton de retour)', vm.runInContext('_demarchesArchives', ctx) === false && !ctx.demarches.some((d) => d.archive === true));
+ctx.tcBasculerArchivesDemarches(); ctx.tcBasculerArchivesDemarches();
 ctx.setDemarchesPeriode('trois');
 verifie('setDemarchesPeriode accepte mois / trois seulement', vm.runInContext('_demarchesPeriode', ctx) === 'trois' && (ctx.setDemarchesPeriode('autre'), vm.runInContext('_demarchesPeriode', ctx) === 'mois'));
 

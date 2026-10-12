@@ -1698,3 +1698,5 @@ mobile vers le nouvel appareil.
   dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission29-journal.png`.
 - Les entrées existantes sans champ `archive` restent dans le journal ; `archive` est synchronisé avec l'entrée
   (`timecool_demarches`, réglage transférable), rien ne change côté serveur.
+- Correction avant verdict : désarchiver la DERNIÈRE archivée ramène au journal (sinon écran « Archives » vide, sans bouton de
+  retour, puisque « Journal » n existe que s il reste des archivées). Assertion ajoutée à la suite.

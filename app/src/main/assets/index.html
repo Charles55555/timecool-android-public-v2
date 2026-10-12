@@ -10603,6 +10603,7 @@ function tcDesarchiverDemarche(id) {
   if (!d) return;
   delete d.archive;
   saveDemarches();
+  if (!demarches.some(function (x) { return x.archive === true; })) _demarchesArchives = false;   // plus rien d archive : retour au journal
   showToast('↩️ Entrée remise dans le journal');
   renderDemarches();
 }
