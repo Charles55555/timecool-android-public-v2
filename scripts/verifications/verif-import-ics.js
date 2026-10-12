@@ -39,13 +39,22 @@ const ICS = [
   'BEGIN:VEVENT', 'DTSTART:20261019T100000', 'UID:a1@google.com', 'SUMMARY:Doublon dans le fichier', 'END:VEVENT',
   'BEGIN:VEVENT', 'UID:h8@google.com', 'SUMMARY:Sans date', 'END:VEVENT',
   'BEGIN:VEVENT', 'DTSTART:20261021T080000', 'UID:i9@google.com', 'END:VEVENT',
+  // Examen : un rappel (VALARM) avec sa propre DESCRIPTION ; un annule ; une date impossible ; une periode qui finit au changement d heure.
+  'BEGIN:VEVENT', 'DTSTART:20261022T100000', 'DTEND:20261022T110000', 'UID:j10@google.com', 'SUMMARY:Avec rappel', 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Reminder', 'TRIGGER:-PT10M', 'END:VALARM', 'END:VEVENT',
+  'BEGIN:VEVENT', 'DTSTART:20261023T100000', 'DTEND:20261023T110000', 'UID:k11@google.com', 'SUMMARY:Annulé', 'STATUS:CANCELLED', 'END:VEVENT',
+  'BEGIN:VEVENT', 'DTSTART:20261340T090000', 'UID:l12@google.com', 'SUMMARY:Date impossible', 'END:VEVENT',
+  'BEGIN:VEVENT', 'DTSTART;VALUE=DATE:20270327', 'DTEND;VALUE=DATE:20270329', 'UID:m13@google.com', 'SUMMARY:Week-end du changement d’heure', 'END:VEVENT',
   'END:VCALENDAR'
 ].join('\r\n');
 
 titre('1. Le lecteur : duree, journee entiere, periode, lieu, invites, UTC, lignes repliees, doublons dans le fichier');
 const lus = ctx.tcLireIcs(ICS);
 const par = {}; lus.forEach((e) => { par[String(e.uid).split('@')[0]] = e; });
-verifie('7 evenements lus (UID double, sans date, sans titre ignores)', lus.length === 7, lus.map((e) => e.uid).join(' '));
+verifie('9 evenements lus (UID double, sans date, sans titre, annule, date impossible ignores)', lus.length === 9, lus.map((e) => e.uid).join(' '));
+verifie('un rappel (VALARM, DESCRIPTION « Reminder ») ne devient pas la note du rendez-vous', par.j10 && par.j10.notes === undefined && par.j10.endH === 11, JSON.stringify(par.j10));
+verifie('STATUS:CANCELLED : ignore, compte a part (annules = 1)', !par.k11 && lus.annules === 1, 'annules = ' + lus.annules);
+verifie('DTSTART:20261340T090000 (date impossible) : ignore', !par.l12 && ctx.tcDateIcs({ valeur: '20261340T090000', params: {} }) === null && ctx.tcDateIcs({ valeur: '20260230', params: { VALUE: 'DATE' } }) === null && ctx.tcDateIcs({ valeur: '20261015T250000', params: {} }) === null);
+verifie('periode du 27 au 28 mars 2027 (changement d heure) : dateFin 2027-03-28, en jours de calendrier', par.m13 && par.m13.date === '2027-03-27' && par.m13.dateFin === '2027-03-28', JSON.stringify(par.m13));
 verifie('Reunion : 14:00 → 16:30 (DTEND lu, pas +1 h), virgule echappee, cat perso, importe', par.a1 && par.a1.date === '2026-10-15' && par.a1.startH === 14 && par.a1.startM === 0 && par.a1.endH === 16 && par.a1.endM === 30 && par.a1.title === 'Réunion d, équipe' && par.a1.cat === 'perso' && par.a1.importe === true, JSON.stringify(par.a1));
 verifie('Reunion : LOCATION → lieu, DESCRIPTION et ATTENDEE → note (« Invités : Paul Martin, rita@exemple.fr »)', par.a1 && par.a1.lieu === '12 rue des Lilas, Lyon' && par.a1.notes === 'Ordre du jour\nBudget\nInvités : Paul Martin, rita@exemple.fr', par.a1 && par.a1.notes);
 verifie('Anniversaire (VALUE=DATE, ligne repliee) : journee entiere, 0:00-23:59, un seul jour (DTEND exclusif), titre recolle', par.b2 && par.b2.allDay === true && par.b2.startH === 0 && par.b2.endH === 23 && par.b2.endM === 59 && !par.b2.dateFin && par.b2.title === 'Anniversaire de Maman', JSON.stringify(par.b2));
@@ -61,10 +70,10 @@ verifie('tcTexteIcs : « \\, » → « , », « \\; » → « ; », « \\n » �
 titre('2. Les doublons avec l agenda, et ce qui entre');
 const existants = [{ id: 'x', title: 'Dentiste', date: '2026-10-16', startH: 9, startM: 0, endH: 10, endM: 0, mode: 'user' }, { id: 'y', title: 'Autre', date: '2026-01-01', startH: 8, startM: 0, uid: 'f6@google.com', mode: 'user' }];
 const r = ctx.tcPreparerImportIcs(ICS, existants, 'user');
-verifie('tcPreparerImportIcs : 5 nouveaux, 2 doublons (Dentiste : meme titre + meme debut ; Appel UTC : meme UID), id et mode poses', r.lus === 7 && r.nouveaux.length === 5 && r.doublons === 2 && r.nouveaux.every((e) => /^ics_\d+_\d+$/.test(e.id) && e.mode === 'user') && !r.nouveaux.some((e) => e.uid === 'd4@google.com' || e.uid === 'f6@google.com'), JSON.stringify({ lus: r.lus, n: r.nouveaux.length, d: r.doublons }));
+verifie('tcPreparerImportIcs : 7 nouveaux, 2 doublons (Dentiste : meme titre + meme debut ; Appel UTC : meme UID), 1 annule, id et mode poses', r.lus === 9 && r.nouveaux.length === 7 && r.doublons === 2 && r.annules === 1 && r.nouveaux.every((e) => /^ics_\d+_\d+$/.test(e.id) && e.mode === 'user') && !r.nouveaux.some((e) => e.uid === 'd4@google.com' || e.uid === 'f6@google.com'), JSON.stringify({ lus: r.lus, n: r.nouveaux.length, d: r.doublons }));
 verifie('tcEstDoublonIcs : meme titre a la casse pres + meme jour + meme heure → oui ; meme titre un autre jour → non', ctx.tcEstDoublonIcs({ title: 'dentiste', date: '2026-10-16', startH: 9, startM: 0 }, existants) === true && ctx.tcEstDoublonIcs({ title: 'Dentiste', date: '2026-10-17', startH: 9, startM: 0 }, existants) === false);
 const r2 = ctx.tcPreparerImportIcs(ICS, existants.concat(r.nouveaux), 'user');
-verifie('rejouer le meme fichier : 0 nouveau, 7 doublons', r2.nouveaux.length === 0 && r2.doublons === 7);
+verifie('rejouer le meme fichier : 0 nouveau, 9 doublons', r2.nouveaux.length === 0 && r2.doublons === 9);
 
 titre('3. Les deux imports passent par le lecteur ; le web va droit au choix du fichier');
 const imp = fonction(page, 'importIcsData') || '';

@@ -25484,6 +25484,10 @@ function tcDateIcs(prop) {
   let d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), sansHeure ? 0 : Number(m[4]), sansHeure ? 0 : Number(m[5] || 0), 0, 0);
   if (!sansHeure && m[7] === 'Z') d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5] || 0), 0));
   if (isNaN(d.getTime())) return null;
+  // Une date impossible (20261340, 20260230) serait decalee par Date : refusee (examen de la mission 30).
+  const relu = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (relu.getFullYear() !== Number(m[1]) || relu.getMonth() !== Number(m[2]) - 1 || relu.getDate() !== Number(m[3])) return null;
+  if (!sansHeure && (Number(m[4]) > 23 || Number(m[5] || 0) > 59)) return null;
   return { date: tcISO(d), h: d.getHours(), m: d.getMinutes(), sansHeure: sansHeure, t: d.getTime() };
 }
 /** « P1DT2H30M » → millisecondes, ou null. */
@@ -25502,8 +25506,12 @@ function tcLireIcs(texte) {
   const blocs = plat.split('BEGIN:VEVENT').slice(1).map(function (b) { return b.split('END:VEVENT')[0]; });
   const vus = {};
   const resultat = [];
+  resultat.annules = 0;
   blocs.forEach(function (bloc) {
-    const p = tcProprietesIcs(bloc);
+    // Les rappels (VALARM) ont leur propre DESCRIPTION (« Reminder ») : jamais la note du rendez-vous.
+    const p = tcProprietesIcs(bloc.replace(/BEGIN:VALARM[\s\S]*?END:VALARM\n?/g, ''));
+    // Un evenement annule dans l ancien agenda n est pas un rendez-vous.
+    if (p.STATUS && /^CANCELLED$/i.test(String(p.STATUS[0].valeur).trim())) { resultat.annules++; return; }
     const debut = tcDateIcs(p.DTSTART && p.DTSTART[0]);
     const titre = p.SUMMARY ? tcTexteIcs(p.SUMMARY[0].valeur, true).slice(0, 80) : '';
     if (!debut || !titre) return;
@@ -25517,7 +25525,12 @@ function tcLireIcs(texte) {
     if (debut.sansHeure) {
       // Sans heure : journee entiere (la fin .ics est exclusive : DTEND = lendemain pour un seul jour).
       ev.allDay = true; ev.startH = 0; ev.startM = 0; ev.endH = 23; ev.endM = 59;
-      if (fin) { const dernier = new Date(fin.t - 86400000); const dernierISO = tcISO(dernier); if (dernierISO > debut.date) ev.dateFin = dernierISO; }
+      if (fin) {
+        // DTEND exclusif : le dernier jour est la veille, en jours de calendrier (24 h feraient perdre un jour au changement d heure).
+        const fm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fin.date);
+        const dernierISO = fm ? tcISO(new Date(Number(fm[1]), Number(fm[2]) - 1, Number(fm[3]) - 1)) : '';
+        if (dernierISO > debut.date) ev.dateFin = dernierISO;
+      }
     } else {
       ev.startH = debut.h; ev.startM = debut.m;
       if (fin && fin.t > debut.t) {
@@ -25553,7 +25566,7 @@ function tcPreparerImportIcs(texte, existants, modeActuel) {
     if (tcEstDoublonIcs(ev, existants) || tcEstDoublonIcs(ev, nouveaux)) { doublons++; return; }
     nouveaux.push(Object.assign({ id: 'ics_' + Date.now() + '_' + i, mode: modeActuel || 'user' }, ev));
   });
-  return { lus: lus.length, nouveaux: nouveaux, doublons: doublons };
+  return { lus: lus.length, nouveaux: nouveaux, doublons: doublons, annules: lus.annules || 0 };
 }
 
 function importIcsData(event) {

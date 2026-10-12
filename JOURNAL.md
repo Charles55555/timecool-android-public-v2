@@ -1883,3 +1883,8 @@ mobile vers le nouvel appareil.
 - Ajout du chef (adjointe, v2.0.356) : la carte rouge de la fiche d'un contact bloqué dit la phrase de la liste : « Cette
   personne ne peut plus t’écrire ni prendre rendez-vous avec toi, et elle ne le sait pas. » (le message fugace du blocage
   ne change pas). Suites `verif-blocage-silence`, `verif-vocabulaire-formulaire` et `verif-contacts-bloques` alignées.
+- Corrections après examen (12/10) : (1) les blocs VALARM (leur DESCRIPTION « Reminder ») sont retirés du VEVENT avant
+  lecture : jamais la note du rendez-vous ; (2) la fin d'une période journée entière recule d'un jour de CALENDRIER (24 h
+  faisaient perdre un jour au changement d'heure de printemps) ; (3) STATUS:CANCELLED → ignoré, compté à part (`annules`) ;
+  (4) une date impossible (20261340, 20260230, 25h) est refusée dans `tcDateIcs` (la date relue doit être celle écrite).
+  Cas ajoutés à `verif-import-ics`. Réserves notées, sans correction : RRULE / EXDATE (une seule occurrence), TZID gardé.
