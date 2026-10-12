@@ -1680,3 +1680,21 @@ mobile vers le nouvel appareil.
   window, donc quel que soit le conteneur) note l'instant (`_tcDernierDefilement`) ; un toucher commencé moins de
   250 ms après (`TC_TOUCHER_APRES_DEFILEMENT_MS`) est ignoré. Suite complétée (100 ms → rien, 300-400 ms → ouvre). À faire
   valider sur téléphone (Charles).
+
+## 12/10/2026 (session Codeur) — Journal d'activité : période et archives (mission 29)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Demande (Charles) : sous Tout / Rendez-vous / Recherches Charly IA / Actions sur mon compte, une 2e ligne de pilules :
+  « Du mois en cours » (défaut) / « Des 3 derniers mois » (période combinée avec le filtre du dessus) / « Archiver »
+  (les entrées affichées passent dans « Archives », rien n'est supprimé) ; un bouton « Archives » à droite pour les
+  consulter et les désarchiver. Même style de pilules.
+- `tcDemarchesVisibles(liste, filtre, periode, archives, now)` (pure) : les plus récentes d'abord, catégorie + période
+  (`tcDebutPeriodeDemarches` : 1er du mois en cours, ou 1er du mois d'il y a deux mois), non archivées ; dans les
+  Archives, les archivées de la catégorie sans période. `tcArchiverDemarches` marque `archive: true` sur les entrées
+  affichées (« Rien à archiver » sinon) ; `tcDesarchiverDemarche` l'enlève ; `tcBasculerArchivesDemarches` bascule la
+  vue (le bouton devient « ↩️ Journal »). Le bouton « 🗂️ Archives » n'apparaît que s'il existe des archivées.
+- Suite `verif-journal-periode` (périodes, combinaisons avec les catégories, archives, archiver / désarchiver, rendu),
+  dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission29-journal.png`.
+- Les entrées existantes sans champ `archive` restent dans le journal ; `archive` est synchronisé avec l'entrée
+  (`timecool_demarches`, réglage transférable), rien ne change côté serveur.
