@@ -1321,3 +1321,24 @@ mobile vers le nouvel appareil.
   gardées sont notées dans `tc_reglages_gardes` (clé d'appareil, dans `TC_JAMAIS_TRANSFERE` : jamais synchronisée ni
   transférée) ; `reglage.lire()` ne pousse pas une clé tant qu'elle vaut encore cette valeur, et la libère dès que
   l'utilisateur la change. `verif-deconnexion` rejoue `reglage.lire` sur un stockage après ménage.
+
+## 12/10/2026 (session Codeur) — Écran Charly : 2e ligne de 4 boutons (vitrine)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Sous la ligne « Créer mon agenda / Créer un nouveau rdv / Gérer un imprévu / Prévenir d'un retard », une 2e ligne
+  `#charlyQuickActions2`, mêmes pilules (seules les couleurs changent), textes exacts : « 👥 Rendez-vous à plusieurs »,
+  « 🤒 Je suis malade, décale tout », « 🕐 Quand suis-je libre ? », « 📸 Photo → rendez-vous ». Le trait du bas passe de
+  la 1re ligne à la 2e (un seul bloc blanc).
+- Chaque bouton lance le parcours existant (`charlyQuickAction`) : « Rendez-vous à plusieurs » → Charly demande « Avec
+  qui ? », la réponse (deux prénoms de contacts, sans mot de rendez-vous) démarre `tcGererRdvGroupe` (créneaux où tout
+  le monde est libre, via le serveur) ; 2 essais (`_tcGroupeEnAttente`), ensuite le message suit son chemin. « Je suis
+  malade, décale tout » → `tcGererContrainte('Je suis malade, décale tout aujourd’hui')` : liste des rendez-vous du
+  jour, puis « Je les annule / Je les déplace et je m'excuse / je ne touche à rien » ; le déplacement demande « Vers
+  quand ? » et chaque message de décalage est relu et validé avant de partir (`tcPrevenirDecalages`). « Quand suis-je
+  libre ? » → question « Quand suis-je libre cette semaine ? » pré-remplie et envoyée. « Photo → rendez-vous » →
+  `charlyAttachAction('photo')` (Photos, comme le trombone).
+- Écart avec la demande pour « malade » : Charly ne propose pas de lui-même le prochain créneau libre de chacun, il
+  demande « Vers quand ? » (parcours existant). Proposer automatiquement un créneau par rendez-vous = une mission à part.
+- Suite `verif-boutons-charly` (ligne, textes, style, actions rejouées, réponse à « Avec qui ? »), dans verifier.sh ;
+  rouge sur la page d'avant. Capture 390×844 : `TimeCool-Codeur/captures/mission22-boutons-charly.png`.

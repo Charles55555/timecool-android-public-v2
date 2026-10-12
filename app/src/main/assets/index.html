@@ -1804,11 +1804,18 @@ if (window.pdfjsLib) {
   </div>
   <!-- Quick action buttons -->
   <div id="charlyQuickIntro" style="padding:8px 14px 0; background:#fff; font-size:11.5px; color:var(--text-sec);">Touche l'option qui correspond à ton besoin : Charly te guide.</div>
-  <div id="charlyQuickActions" style="display:flex; gap:6px; padding:10px 12px; background:#fff; border-bottom:1px solid var(--border); overflow-x:auto; -webkit-overflow-scrolling:touch;">
+  <div id="charlyQuickActions" style="display:flex; gap:6px; padding:10px 12px 0; background:#fff; overflow-x:auto; -webkit-overflow-scrolling:touch;">
     <button onclick="charlyQuickAction('agenda')" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">📅 Créer mon agenda</button>
     <button onclick="charlyQuickAction('rdv')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">➕ Créer un nouveau rdv</button>
     <button onclick="charlyQuickAction('impprevu')" style="flex-shrink:0; padding:8px 12px; background:#fce8e6; color:var(--g-red); border:1px solid #f5b8b3; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⚡ Gérer un imprévu</button>
     <button onclick="charlyQuickAction('retard')" style="flex-shrink:0; padding:8px 12px; background:#fff4e0; color:#8a6500; border:1px solid #fbd784; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⏰ Prévenir d'un retard</button>
+  </div>
+  <!-- 2e ligne (mission 22, vitrine) : chaque bouton lance un parcours existant -->
+  <div id="charlyQuickActions2" style="display:flex; gap:6px; padding:8px 12px 10px; background:#fff; border-bottom:1px solid var(--border); overflow-x:auto; -webkit-overflow-scrolling:touch;">
+    <button onclick="charlyQuickAction('groupe')" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">👥 Rendez-vous à plusieurs</button>
+    <button onclick="charlyQuickAction('malade')" style="flex-shrink:0; padding:8px 12px; background:#fce8e6; color:var(--g-red); border:1px solid #f5b8b3; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🤒 Je suis malade, décale tout</button>
+    <button onclick="charlyQuickAction('libre')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🕐 Quand suis-je libre ?</button>
+    <button onclick="charlyQuickAction('photo')" style="flex-shrink:0; padding:8px 12px; background:#fff4e0; color:#8a6500; border:1px solid #fbd784; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">📸 Photo → rendez-vous</button>
   </div>
   <!-- Chat body -->
   <div class="main" id="charlyChatBody" style="background:#f7f9fc; padding:14px 12px 90px;"></div>
@@ -12149,6 +12156,13 @@ const TC_QUESTION_IMPREVU = 'Tu veux réorganiser ton agenda !\nQuel jour, et qu
 
 /** Reste-t-il une réponse à attendre ? Nombre d'essais restants (2 au départ). */
 let _tcImprevuEnAttente = 0;
+/* « Rendez-vous a plusieurs » (bouton) : Charly a demande « Avec qui ? », la reponse donne les prenoms (2 essais). */
+let _tcGroupeEnAttente = 0;
+function tcDemarrerRdvAPlusieurs() {
+  _tcGroupeEnAttente = 2;
+  charlyIA.history.push({ role: 'assistant', content: 'Avec qui ? Donne-moi les prénoms de tes contacts (ex : avec Paul et Marie), et je cherche un créneau où tout le monde est libre.' });
+  renderCharlyChat();
+}
 
 /** Charly ouvre la conversation avec sa question ; la réponse est lue par tcRepondreImprevu. */
 function tcDemarrerImprevu() {
@@ -12212,6 +12226,13 @@ async function tcRepondreImprevu(text) {
 
 function charlyQuickAction(action) {
   _tcImprevuEnAttente = 0;
+  _tcGroupeEnAttente = 0;
+  // 2e ligne (mission 22) : chaque bouton lance le parcours existant.
+  if (action === 'groupe') { tcDemarrerRdvAPlusieurs(); return; }
+  // Malade : la contrainte du jour (liste des rendez-vous, puis annuler / deplacer et s excuser), rien ne part sans validation.
+  if (action === 'malade') { tcGererContrainte('Je suis malade, décale tout aujourd’hui'); return; }
+  // Photo : le meme chemin que le trombone.
+  if (action === 'photo') { charlyAttachAction('photo'); return; }
   // Retard : le message au contact est prepare ici, jamais laisse au modele.
   if (action === 'retard') { tcPrevenirRetard(); return; }
   // Nouveau rdv : une seule question, posee par Charly, qui demande tout.
@@ -12238,6 +12259,7 @@ function charlyQuickAction(action) {
     return;
   }
   const prompts = {
+    libre: 'Quand suis-je libre cette semaine ?',
     trajet: "J'aimerais calculer un trajet. Demande-moi les adresses de départ et d'arrivée et l'heure du rendez-vous.",
     reserver: "J'aimerais faire une réservation (restaurant ou hôtel). Pose-moi les questions nécessaires."
   };
@@ -14012,6 +14034,18 @@ async function charlySendMessage() {
 
   // === RENDEZ-VOUS À PLUSIEURS : « trouve-nous un créneau avec William Ayache et Stéphane Lévy » ===
   // Le serveur cherche chez tout le monde ; jamais laissé au modèle, qui n'a pas accès aux autres agendas.
+  // Le bouton « Rendez-vous à plusieurs » a demandé « Avec qui ? » : la réponse n'a que des prénoms (mission 22).
+  if (_tcGroupeEnAttente > 0) {
+    const cites = tcComptesCitesDansTexte(text);
+    if (cites.length >= 2) { _tcGroupeEnAttente = 0; await tcGererRdvGroupe(text, { contacts: cites, duree: 1 }); return; }
+    _tcGroupeEnAttente -= 1;
+    if (_tcGroupeEnAttente > 0) {
+      tcPousserMessageUtilisateur(text);
+      charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('Avec qui ? Donne-moi au moins deux prénoms de tes contacts (ex : avec Paul et Marie).') });
+      renderCharlyChat();
+      return;
+    }
+  }
   const _groupe = tcDetecterRdvGroupe(text);
   if (_groupe) {
     await tcGererRdvGroupe(text, _groupe);
