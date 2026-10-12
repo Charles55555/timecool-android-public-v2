@@ -1182,3 +1182,6 @@ mobile vers le nouvel appareil.
   comportement actuel ; false = le message part sans la phrase d'urgence, réservée aux contacts — recommandation du chef,
   réponse de Charles en attente) ; `texteAbsence(..., $avecRelais)`. Ligne fusionnée de `messagePoser` remise. Réserve notée :
   un point dans un texte personnalisé (« M. Dupont ») peut mal couper la phrase d'urgence quand le relais est vide.
+- Choix de Charles (12/10) : `ABSENCE_RELAIS_AUX_INCONNUS = false` : un inconnu (aucune fiche chez l'absent) reçoit le message
+  d'absence sans la phrase d'urgence ; le nom et le téléphone du relais ne vont qu'aux contacts. e2e : Eve (inconnue) → message
+  sans relais ; Carl (fiche) → avec.

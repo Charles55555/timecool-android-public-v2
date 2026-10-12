@@ -112,7 +112,7 @@ t('sans relais : la phrase urgence omise', texteAbsence(['actif' => true, 'debut
 t('texte personnalise (vous) utilise', texteAbsence($a + ['vous' => 'Absent(e) jusqu’au [date fin], [Prénom].'], true, 'Camille') === 'Absent(e) jusqu’au dimanche 25 octobre, Camille.');
 t('un relais avec une balise est neutralise', !str_contains(texteAbsence($a + ['relaisNom' => '<b>Marie</b>'], false, 'Camille'), '<b>'));
 t('sans relais pour un inconnu (avecRelais=false) : la phrase urgence est omise, le reste part', texteAbsence($a, false, 'Camille', false) === 'Bonjour Camille, je suis absent(e) du mardi 20 octobre au dimanche 25 octobre. Je te recontacte à mon retour.');
-t('la constante ABSENCE_RELAIS_AUX_INCONNUS existe (bascule en une ligne)', defined('ABSENCE_RELAIS_AUX_INCONNUS'));
+t('la constante ABSENCE_RELAIS_AUX_INCONNUS existe et vaut false : le relais est reserve aux contacts (Charles, 12/10)', defined('ABSENCE_RELAIS_AUX_INCONNUS') && ABSENCE_RELAIS_AUX_INCONNUS === false);
 echo json_encode($res);
 `;
   const f = path.join(os.tmpdir(), 'verif-absence-' + process.pid + '.php');

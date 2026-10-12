@@ -1509,7 +1509,7 @@ function rappelEnvoyerUn(array $compte, array $rdv, DateTime $debut, int $delai)
  * true : comme tout le monde (comportement du 12/10). false : le message part sans la phrase d urgence,
  * reservee aux contacts (recommandation du chef de projet, en attente de Charles). Une seule ligne a changer.
  */
-const ABSENCE_RELAIS_AUX_INCONNUS = true;
+const ABSENCE_RELAIS_AUX_INCONNUS = false;   // Charles, 12/10 : le relais est reserve aux contacts
 
 function absenceDe(int $compteId): ?array
 {

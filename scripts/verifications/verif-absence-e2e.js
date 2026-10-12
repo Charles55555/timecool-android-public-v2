@@ -75,6 +75,10 @@ const jour = (n) => iso(new Date(Date.now() + n * 86400000));
   const rc = await absencesRecues(carl.jeton, alice.ref);
   dire(rc.length === 1 && /contactez Marie Dupont au 06 12 34 56 78\. Je vous recontacte/.test(rc[0].texte), 'Carl (Dr) reçoit la version vouvoyée, avec le relais', rc[0] && rc[0].texte);
   dire((await absencesRecues(bob.jeton, alice.ref)).length === 1, 'Bob n en reçoit pas un second (même période)');
+  const eve = await inscrire('Eve');
+  await appel('POST', '/messages/envoyer', { reference: alice.ref, texte: 'Bonjour, je suis Eve' }, eve.jeton);
+  const re = await absencesRecues(eve.jeton, alice.ref);
+  dire(re.length === 1 && !/urgence|Marie Dupont|06 12 34 56 78/.test(re[0].texte) && /Je te recontacte à mon retour\.$/.test(re[0].texte), 'Eve (inconnue, aucune fiche chez Alice) reçoit le message SANS la phrase d urgence ni le relais (Charles, 12/10)', re[0] && re[0].texte);
 
   console.log('\nUne personne bloquée par Alice écrit pendant l absence :');
   const dave = await inscrire('Dave');
@@ -93,7 +97,7 @@ const jour = (n) => iso(new Date(Date.now() + n * 86400000));
   const agendaAlice = (await elements(alice.jeton)).filter((e) => e.type === 'rdv');
   dire(agendaAlice.length === 0, 'aucun bloc dans l agenda d Alice : seulement le message');
 
-  console.log('\nÀ supprimer : ' + [alice, bob, carl, dave].map((c) => c.ref).join(', '));
+  console.log('\nÀ supprimer : ' + [alice, bob, carl, dave, eve].map((c) => c.ref).join(', '));
   console.log(`\n${ko} anomalie(s).`);
   process.exit(ko ? 1 : 0);
 })().catch((e) => { console.log('  KO  ' + e.message); process.exit(1); });
