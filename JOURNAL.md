@@ -1551,3 +1551,4 @@ mobile vers le nouvel appareil.
 - Chiffrage d'un vrai thème sombre complet (mission à part) : 182 fonds `#fff` et une centaine de couleurs de texte
   codées en ligne à remplacer par des variables, plus les cartes, pastilles et boutons colorés à décliner — environ deux
   jours de travail, avec le balayage de contraste comme garde-fou.
+- Dernier reste (examen) : le menu deroulant « Sauvegarde automatique » (#autoBackupFreq) suit le theme ; le balayage mesure aussi les select avec leur propre fond (rouge avant pour cet element).

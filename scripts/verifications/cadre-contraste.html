@@ -69,6 +69,20 @@
         faibles.push({ texte: texte.slice(0, 40), ratio: Math.round(r * 10) / 10, couleur: cs.color, fond: 'rgb(' + bg.rgb.map(Math.round).join(',') + ')', chemin: chemin.join(' < ') });
       }
     });
+    // Les menus deroulants : leur texte visible est l option choisie, mesuree avec le fond PROPRE du select.
+    d.querySelectorAll('select').forEach(function (sel) {
+      if (!visible(sel, w)) return;
+      const opt = sel.options && sel.options[sel.selectedIndex];
+      const texte = (opt ? opt.textContent : '').replace(/\s+/g, ' ').trim();
+      if (!texte || !/[A-Za-z0-9À-ɏ]/.test(texte)) return;
+      const cs = w.getComputedStyle(sel);
+      const col = parse(cs.color); if (!col) return;
+      const propre = parse(cs.backgroundColor);
+      const bg = propre && propre.a >= 0.99 ? propre : fond(sel, w);
+      const r = ratio(col.a < 1 ? melange(col, bg) : col, bg);
+      total++;
+      if (r < 3) faibles.push({ texte: '[select] ' + texte.slice(0, 32), ratio: Math.round(r * 10) / 10, couleur: cs.color, fond: 'rgb(' + bg.rgb.map(Math.round).join(',') + ')', chemin: 'select' + (sel.id ? '#' + sel.id : '') });
+    });
     return { ecran: nom, total: total, faibles: faibles };
   }
   const f = document.getElementById('f');
