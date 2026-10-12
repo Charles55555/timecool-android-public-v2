@@ -1101,3 +1101,15 @@ mobile vers le nouvel appareil.
   « modifie » rejoignent les mots de remplissage de `tcTitreDepuisDemande`.
 - Correctif après examen (bis) : les déclencheurs « qu'est-ce que j'ai » et « qu'est-ce qu'il y a » tolèrent apostrophes et
   tirets manquants (`qu'?est[- ]?ce que j'?ai`), que l'apostrophe rétablie laissait sans correspondance.
+
+## 12/10/2026 (session Codeur) — Le nom de l'agenda secondaire sur la ligne du mois
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Le nom de l'agenda secondaire ouvert (« 📍 Agenda scolaire de Elodie ») était dans la barre du haut, entre le logo et les
+  icônes : trop serré sur téléphone. Il descend sur la ligne du mois, dans l'espace entre le sélecteur « Octobre 2026 ‹ › » et
+  « Auj. » / loupe (`#subHeaderAgendaLabel`, qui remplace l'ancien espaceur vide : flex:1, min-width:0, centré, pastille + bleu,
+  nowrap + ellipsis : il ne pousse jamais « Auj. »). Vide pour l'agenda principal (rien d'affiché, comme avant).
+  L'emplacement de la barre du haut (`#headerAgendaLabel`) est retiré ; `updateHeaderAgendaLabel` écrit sur la ligne du mois.
+- Suite `verif-titre-agenda` (HTML : ordre et style ; `updateHeaderAgendaLabel` exécutée : secondaire / principal / autre
+  page), dans verifier.sh ; rouge sur la page d'avant. Capture Chrome 390x844 : `TimeCool-Codeur/captures/mission9-agenda-secondaire.png`.
