@@ -42,7 +42,7 @@ body { display:flex; flex-direction:column; }
 .profile-tab { padding:7px 10px; border:1px solid var(--border); background:#fff; border-radius:14px; font-size:12px; font-weight:500; color:var(--text-sec); cursor:pointer; white-space:nowrap; text-align:center; }
 .profile-tab.active { background:#e8f0fe; color:var(--g-blue); border-color:var(--g-blue); font-weight:600; }
 
-.header { display:flex; align-items:center; padding:10px 12px; border-bottom:1px solid var(--border); background:#fff; z-index:10; gap:8px; position:relative; }
+.header { display:flex; align-items:center; padding:10px 12px; border-bottom:1px solid var(--border); background:var(--bg); z-index:10; gap:8px; position:relative; }
 .menu-btn, .icon-btn { width:40px; height:40px; border:none; background:transparent; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; }
 .menu-btn:hover, .icon-btn:hover { background:var(--bg-hover); }
 .menu-btn svg { width:22px; height:22px; fill:var(--text-sec); }
@@ -91,7 +91,7 @@ body { display:flex; flex-direction:column; }
 .tab.active { color:var(--g-blue); }
 .tab.active::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; background:var(--g-blue); border-radius:3px 3px 0 0; }
 
-.main { flex:1; overflow-y:auto; background:#fff; position:relative;
+.main { flex:1; overflow-y:auto; background:var(--bg); position:relative;
   /* Sans cela, Chrome declenche son propre « tirer pour recharger »
      et recharge toute la page au lieu de laisser faire le notre. */
   overscroll-behavior-y: contain; }
@@ -187,7 +187,7 @@ body.maj-visible .tc-deplace-barre { bottom:152px; }
 /* top:0 + bottom:0 plutot que height:100vh : sur mobile, 100vh compte
    la zone masquee par la barre d adresse, et les derniers elements du
    menu passaient sous l ecran sans pouvoir etre atteints. */
-.side-menu { position:fixed; top:0; bottom:0; left:-300px; width:280px; background:#fff; box-shadow:2px 0 8px rgba(0,0,0,0.1); transition:left 0.25s; z-index:100; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:env(safe-area-inset-bottom, 0px); }
+.side-menu { position:fixed; top:0; bottom:0; left:-300px; width:280px; background:var(--bg); box-shadow:2px 0 8px rgba(0,0,0,0.1); transition:left 0.25s; z-index:100; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:env(safe-area-inset-bottom, 0px); }
 .side-menu.open { left:0; }
 .menu-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); opacity:0; pointer-events:none; transition:opacity 0.25s; z-index:99; }
 .menu-overlay.open { opacity:1; pointer-events:auto; }
@@ -319,7 +319,7 @@ body.maj-visible .tc-deplace-barre { bottom:152px; }
 .modal-overlay.open { display:flex; }
 /* Tout panneau s'ouvre au centre, bords arrondis, marge de 16 px ; plus haut que l'ecran, il defile
    A L'INTERIEUR (jamais la page derriere). Aucun panneau ne monte plus du bas : un fondu simple. */
-.modal { background:#fff; width:100%; max-width:480px; border-radius:20px; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; animation:tcFondu 0.2s ease; }
+.modal { background:var(--bg); width:100%; max-width:480px; border-radius:20px; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; animation:tcFondu 0.2s ease; }
 @keyframes tcFondu { from{opacity:0;} to{opacity:1;} }
 .modal-handle { display:none; }
 .modal-header { display:flex; align-items:center; padding:8px 16px 14px; gap:16px; border-bottom:1px solid var(--border); }
@@ -355,12 +355,12 @@ body.maj-visible .toast { bottom:152px; }
    systeme etranger a la charte. */
 .tc-mod-ov { position:fixed; inset:0; background:rgba(26,26,46,.55); backdrop-filter:blur(2px); display:flex; align-items:center; justify-content:center; padding:24px; z-index:10100; opacity:0; transition:opacity .18s; }
 .tc-mod-ov.on { opacity:1; }
-.tc-mod { background:#fff; border-radius:20px; box-shadow:0 8px 40px rgba(0,0,0,.22); width:100%; max-width:380px; padding:24px 22px 18px; transform:translateY(10px) scale(.98); transition:transform .18s; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; }
+.tc-mod { background:var(--bg); border-radius:20px; box-shadow:0 8px 40px rgba(0,0,0,.22); width:100%; max-width:380px; padding:24px 22px 18px; transform:translateY(10px) scale(.98); transition:transform .18s; max-height:90vh; max-height:90dvh; overflow-y:auto; overscroll-behavior:contain; }
 .tc-mod-ov.on .tc-mod { transform:none; }
 .tc-mod-ic { font-size:34px; text-align:center; margin-bottom:10px; }
 .tc-mod-tt { font-size:16px; font-weight:700; color:var(--text); text-align:center; margin-bottom:8px; }
 .tc-mod-tx { font-size:14px; color:var(--text-sec); line-height:1.55; text-align:center; white-space:pre-line; margin-bottom:18px; }
-.tc-mod-in { width:100%; padding:13px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box; margin-bottom:16px; outline:none; }
+.tc-mod-in { width:100%; padding:13px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box; margin-bottom:16px; outline:none; background:var(--bg); color:var(--text); }
 .tc-mod-in:focus { border-color:var(--g-blue); }
 .tc-mod-bt { display:flex; gap:10px; }
 .tc-mod-bt button { flex:1; padding:14px 10px; border:none; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -15421,6 +15421,7 @@ async function logoutUser() {
   // l appareil ne doit rien voir du precedent (campagne 10, 12/10). Le marqueur de compte part aussi.
   tcViderDonneesDuCompte();
   try { localStorage.removeItem(TC_COMPTE_LOCAL_KEY); } catch (e) {}
+  tcViderChampsConnexion();   // le prochain utilisateur ne doit pas voir l e-mail du precedent (mission 25)
   showAuthFlow('auth-welcome');
   showToast('👋 À bientôt !');
 }
@@ -15519,9 +15520,20 @@ async function tcOubliChanger() {
   }
 }
 
+/** Vide l e-mail et le mot de passe du formulaire de connexion, maintenant et apres l autocompletion du navigateur (mission 25). */
+function tcViderChampsConnexion() {
+  const vider = function () {
+    ['loginEmail', 'loginPassword'].forEach(function (id) { const c = document.getElementById(id); if (c) c.value = ''; });
+  };
+  vider();
+  setTimeout(vider, 300);
+  setTimeout(vider, 1200);
+}
+
 function navigateAuth(pageId) {
   document.querySelectorAll('.auth-page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + pageId).classList.add('active');
+  if (pageId === 'auth-login') tcViderChampsConnexion();
   if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
   if (pageId === 'auth-login') { tcAfficherBoutonBiometrie(); tcAfficherLienAppairage(); }
 
@@ -16438,6 +16450,8 @@ function showWelcomeSplash(firstname) {
   tcMajAvatarEntete();
   // Les cles IA du compte arrivent pendant l ecran de bienvenue : Charly est pret au premier message (campagne 10).
   tcRecupererClesDuServeur();
+  // La langue et le theme du compte aussi, sans attendre le tour periodique (mission 25).
+  if (typeof tcSyncTour === 'function') setTimeout(function () { try { tcSyncTour(); } catch (e) {} }, 400);
   const splash = document.getElementById('welcomeSplash');
   const nameEl = document.getElementById('welcomeFirstname');
   if (!splash || !nameEl) {
@@ -17244,6 +17258,20 @@ function openLanguageSelector() {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
   setTimeout(updateFormJoursUI, 50);
+}
+
+/**
+ * La langue recue du compte (synchro) : appliquee a l ecran et retenue sur l appareil, sans la repousser au serveur
+ * (c est la sienne). Le francais est restaure par translatePageWithGoogle('fr'). Mission 25.
+ */
+function tcAppliquerLangueRecue(code) {
+  const lang = (typeof SUPPORTED_LANGUAGES !== 'undefined' ? SUPPORTED_LANGUAGES : []).find(l => l.code === code);
+  if (!lang || !lang.active) return;
+  currentLanguage = code;
+  try { localStorage.setItem('timecool_language', code); } catch (e) {}
+  const el = document.getElementById('settings_lang_label');
+  if (el) el.textContent = `${lang.flag} ${tcNomDeLangue(lang.code, lang.label)}`;
+  if (typeof translatePageWithGoogle === 'function') setTimeout(function () { translatePageWithGoogle(code, true); }, 120);
 }
 
 function selectLanguageFromSettings(code) {
@@ -22396,6 +22424,10 @@ const TC_SYNC_TYPES = {
       if (typeof applyTheme === 'function' && voulus.tc_theme
           && voulus.tc_theme !== currentTheme) {
         try { applyTheme(voulus.tc_theme); } catch (e) {}
+      }
+      // La langue du compte s applique aussi tout de suite (mission 25) : avant, elle ne prenait effet qu au rechargement.
+      if (typeof tcAppliquerLangueRecue === 'function' && voulus.timecool_language && voulus.timecool_language !== currentLanguage) {
+        try { tcAppliquerLangueRecue(voulus.timecool_language); } catch (e) {}
       }
     }
   }

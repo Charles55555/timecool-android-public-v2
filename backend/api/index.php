@@ -3231,6 +3231,7 @@ switch ($route) {
         if (!is_bool($bloquer)) {
             Rep::erreur(400, 'champ_invalide', 'Champ bloquer : true ou false.');
         }
+        $prevenir = false;
 
         $pdo = Db::pdo();
         $pdo->beginTransaction();
@@ -3243,8 +3244,9 @@ switch ($route) {
             if ($bloquer) {
                 bloquerContact($moi, $demandeur);
             } else {
-                // Refus simple : pas de blocage, la personne peut redemander, et elle est prevenue calmement.
-                messagePoser($moi, $demandeur, $moi['prenom'] . ' ne peut pas donner suite à ta demande pour le moment.', $rdvId);
+                // Refus simple : pas de blocage, la personne peut redemander, et elle est prevenue calmement
+                // (apres la transaction : la traduction du message est un appel externe, jamais sous transaction).
+                $prevenir = true;
             }
             demandeRdvTraitee($moi, $demandeur, $rdvId);
             $pdo->commit();
@@ -3253,6 +3255,9 @@ switch ($route) {
                 $pdo->rollBack();
             }
             throw $e;
+        }
+        if ($prevenir) {
+            messagePoser($moi, $demandeur, texteSur($moi['prenom']) . ' ne peut pas donner suite à ta demande pour le moment.', $rdvId);
         }
         Rep::ok();
 

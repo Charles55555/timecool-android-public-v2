@@ -1496,3 +1496,27 @@ mobile vers le nouvel appareil.
   silencieux comme avant). Comptes sonde à supprimer au lancement (préfixe `e2erdv.refus`). Capture 390×844 :
   `captures/mission24-refuser.png`.
 - verif-refus-simple-e2e NON enregistree dans verifier.sh tant que l API n est pas deployee (les e2e y tournent contre la production) : jouee a la main contre api-locale (TC_API=http://127.0.0.1:8099), 0 anomalie ; comptes sonde crees : XAGB04ZYJEBW, G88HPCJERNCV. Suites verif-validation-rdv et verif-blocage-silence adaptees (muet seulement quand on bloque).
+
+## 12/10/2026 (session Codeur) — Langue et thème par compte ; connexion ; thème sombre
+
+**Codé et commité sur main, PAS publié.** Page + API (deux réserves de la mission 24, à déployer par le chef de projet).
+
+- (a) Langue et thème suivent le COMPTE : `reglage.poser` appliquait déjà le thème reçu ; la langue reçue est désormais
+  appliquée à l'écran aussi (`tcAppliquerLangueRecue` : langue courante, mémoire de l'appareil, libellé, traduction de
+  la page — `translatePageWithGoogle('fr')` restaure le français ; jamais repoussée au serveur, c'est la sienne). Dès la
+  connexion (`showWelcomeSplash`), un tour de synchro part tout de suite : les réglages du compte arrivent sans attendre
+  le tour périodique. Avant connexion : ceux de l'appareil (gardés au ménage) ; un compte sans réglage les adopte et
+  ils partent au premier changement (`tc_reglages_gardes`, 16 bis) — c'est la règle demandée, verif-deconnexion inchangée.
+- (b) À la déconnexion (`logoutUser`) et à chaque arrivée sur l'écran de connexion (`navigateAuth('auth-login')`),
+  `tcViderChampsConnexion` vide e-mail et mot de passe, maintenant puis après l'autocomplétion du navigateur (300 ms,
+  1200 ms).
+- (c) Thème sombre cohérent : les grands fonds `.header`, `.main`, `.side-menu`, `.modal`, `.tc-mod` (fenêtre « Nom du
+  nouvel agenda ») et la saisie `.tc-mod-in` suivent `var(--bg)` / `var(--text)` au lieu de `#fff` ; Paramètres (dans
+  `.main`) et le menu latéral deviennent sombres, texte clair. Les fonds `#fff` posés en ligne sur des cartes restent
+  clairs avec texte sombre : lisibles. Captures en sombre : `captures/mission25-sombre-menu.png`,
+  `captures/mission25-sombre-agenda.png`, `captures/mission25-sombre-parametres.png`.
+- Réserves de la mission 24 (API) : le message de refus simple part APRÈS la transaction (sa traduction est un appel
+  externe) ; prénom passé par `texteSur`. `verif-refus-simple-e2e` enregistrée dans verifier.sh (API déployée) ;
+  comptes sonde de la prod : 8BFGEY4KGQ87, GZMZC986AG1Y.
+- Suite `verif-compte-langue-theme` (CSS, poser, tcAppliquerLangueRecue rejouée, showWelcomeSplash, champs vidés
+  rejoués, logoutUser, navigateAuth), dans verifier.sh ; rouge sur la page d'avant.
