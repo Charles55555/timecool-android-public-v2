@@ -1500,8 +1500,115 @@ function rappelEnvoyerUn(array $compte, array $rdv, DateTime $debut, int $delai)
 }
 
 
-function messagePoser(
-    array $de,
+/**
+ * Le message d'absence du titulaire, s'il est en cours aujourd'hui : le reglage tc_absence (synchronise
+ * par l'application comme les autres), interrupteur allume, debut <= aujourd'hui <= fin. null sinon.
+ */
+function absenceDe(int $compteId): ?array
+{
+    $l = Db::un(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "reglage" AND uid = "tc_absence" AND supprime = 0',
+        [$compteId]
+    );
+    if (!$l) {
+        return null;
+    }
+    $c = json_decode((string) $l['contenu'], true);
+    $v = is_array($c) ? ($c['v'] ?? null) : null;
+    $a = is_string($v) ? json_decode($v, true) : (is_array($v) ? $v : null);
+    if (!is_array($a) || empty($a['actif']) || !isset($a['debut'], $a['fin'])) {
+        return null;
+    }
+    $debut = (string) $a['debut'];
+    $fin = (string) $a['fin'];
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $debut) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin)) {
+        return null;
+    }
+    $jour = date('Y-m-d');
+    return ($debut <= $jour && $jour <= $fin) ? $a : null;
+}
+
+/**
+ * Faut-il vouvoyer cette personne ? Meme regle que l'application (tcVouvoiement) : le choix explicite
+ * de la fiche, sinon un titre (Dr, Me, M., Mme…), sinon une categorie travail ou sante. Dans le doute, tu.
+ */
+function vouvoiePour(int $titulaireId, array $personne): bool
+{
+    foreach (fichesDe($titulaireId, $personne) as $c) {
+        if (isset($c['vouvoie']) && is_bool($c['vouvoie'])) {
+            return $c['vouvoie'];
+        }
+        if (preg_match('/^(dr|dr\.|docteur|me|me\.|ma[iî]tre|pr|pr\.|professeur|m\.|mr|monsieur|mme|madame|mlle)\s/iu', trim((string) ($c['name'] ?? '')))) {
+            return true;
+        }
+        $cats = is_array($c['categories'] ?? null) ? $c['categories'] : (is_array($c['cats'] ?? null) ? $c['cats'] : []);
+        if (array_intersect($cats, ['travail', 'sante']) !== []) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Le message d'absence tel qu'il part a cette personne : le texte personnalise dans sa forme (tu / vous),
+ * sinon celui par defaut ; sans relais (nom ou telephone vide), la phrase « En cas d'urgence… » est omise ;
+ * les pastilles sont remplacees. Meme regle que l'apercu de l'application (tcTexteAbsence).
+ */
+function texteAbsence(array $a, bool $vouvoie, string $prenom): string
+{
+    $defauts = [
+        'tu'   => "Bonjour [Prénom], je suis absent(e) du [date début] au [date fin]. En cas d'urgence, contacte [nom du relais] au [téléphone du relais]. Je te recontacte à mon retour.",
+        'vous' => "Bonjour [Prénom], je suis absent(e) du [date début] au [date fin]. En cas d'urgence, contactez [nom du relais] au [téléphone du relais]. Je vous recontacte à mon retour.",
+    ];
+    $forme = $vouvoie ? 'vous' : 'tu';
+    $t = (isset($a[$forme]) && is_string($a[$forme]) && trim($a[$forme]) !== '') ? $a[$forme] : $defauts[$forme];
+    $nom = trim((string) ($a['relaisNom'] ?? ''));
+    $tel = trim((string) ($a['relaisTel'] ?? ''));
+    if ($nom === '' || $tel === '') {
+        $t = preg_replace("/\s*En cas d[’']urgence[^.]*\.\s*/u", ' ', $t);
+        $t = trim((string) preg_replace('/\s{2,}/u', ' ', (string) $t));
+    }
+    $prenomSeul = explode(' ', trim($prenom))[0] ?? $prenom;
+    return strtr($t, [
+        '[Prénom]'              => $prenomSeul,
+        '[date début]'          => rdvLibelleJour((int) strtotime($a['debut'])),
+        '[date fin]'            => rdvLibelleJour((int) strtotime($a['fin'])),
+        '[nom du relais]'       => texteSur($nom),
+        '[téléphone du relais]' => texteSur($tel),
+    ]);
+}
+
+/**
+ * Quelqu'un ecrit a l'absent ou lui demande un rendez-vous : le message d'absence part, dans la
+ * conversation, une seule fois par expediteur et par periode (la conversation de l'absent garde la
+ * trace : une ligne « me » de genre absence datee d'apres le debut). Rien n'est bloque par ailleurs.
+ */
+function envoyerAbsenceSiBesoin(array $absent, array $expediteur): void
+{
+    $a = absenceDe((int) $absent['id']);
+    if ($a === null) {
+        return;
+    }
+    $l = Db::un(
+        'SELECT contenu FROM elements
+          WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+        [$absent['id'], $expediteur['reference']]
+    );
+    $conv = $l ? json_decode((string) $l['contenu'], true) : null;
+    if (is_array($conv) && is_array($conv['thread'] ?? null)) {
+        foreach ($conv['thread'] as $m) {
+            if (is_array($m) && ($m['genre'] ?? '') === 'absence' && ($m['from'] ?? '') === 'me'
+                && substr((string) ($m['le'] ?? ''), 0, 10) >= (string) $a['debut']) {
+                return;
+            }
+        }
+    }
+    $texte = texteAbsence($a, vouvoiePour((int) $absent['id'], $expediteur), texteSur((string) $expediteur['prenom']));
+    messagePoser($absent, $expediteur, $texte, null, null, 'absence');
+}
+
+function messagePoser(    array $de,
     array $vers,
     string $texte,
     ?int $rdvId = null,
@@ -2674,6 +2781,7 @@ switch ($route) {
                 messagePoser($moi, $cible, messageDemandeRdv($moi, $cible, $typeRdv), $rdvId, null, 'demande_rdv',
                     identiteDemandeur((int) $cible['id'], $moi), $typeRdv);
             }
+            envoyerAbsenceSiBesoin($cible, $moi);
             Rep::ok(reponseDemandeEnMessagerie($cible, $rdvId, $reprise));
         }
 
@@ -2685,6 +2793,7 @@ switch ($route) {
                 [$rdvId, $rang + 1, $debut, $debut, $c['libelle']]
             );
         }
+        envoyerAbsenceSiBesoin($cible, $moi);
         Rep::ok(['mode' => 'creneaux', 'rdv' => $rdvId, 'creneaux' => $creneaux]);
 
     /*
@@ -2953,6 +3062,7 @@ switch ($route) {
         }
 
         messagePoser($moi, $cible, Entree::requis('texte', 2000), null, $imposee);
+        envoyerAbsenceSiBesoin($cible, $moi);
         Rep::ok();
 
     /*

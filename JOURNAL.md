@@ -1153,3 +1153,26 @@ mobile vers le nouvel appareil.
 - Suite `verif-charly-campagne8` (dimanche 11/10/2026 14h20, agenda campagne 8), dans verifier.sh ; rouge sur la page
   d'avant. `verif-charly-conflits` et `verif-charly-citations` : les assertions « vrai conflit → la réponse du modèle reste »
   deviennent « → la phrase de la page ».
+
+## 12/10/2026 (session Codeur) — Message d'absence
+
+**Codé et commité sur main, PAS publié. API À DÉPLOYER** (`backend/api/index.php`), page aussi. Pas de SQL.
+
+- Réglage unique `tc_absence` (JSON : actif, debut, fin, relaisNom, relaisTel, tu, vous), aucun réglage voisin n'existait ;
+  il voyage comme les autres (famille « réglage ») : c'est le SERVEUR qui envoie la réponse, même application fermée.
+- Paramètres, rubrique « 🏖️ Message d'absence » sous « Messages d'annulation & retards » (même carte) : interrupteur « Je suis
+  absent(e) », dates du/au (fin ≥ début : l'autre date suit), texte dans la forme « Je tutoie / Je vouvoie » déjà choisie,
+  pastilles « Tu peux utiliser : [Prénom] [date début] [date fin] [nom du relais] [téléphone du relais] », nom et téléphone
+  du relais (facultatifs), aperçu, état (désactivé / à venir / en cours / terminé). Texte par défaut : « Bonjour [Prénom], je
+  suis absent(e) du [date début] au [date fin]. En cas d'urgence, contacte/contactez [nom du relais] au [téléphone du relais].
+  Je te/vous recontacte à mon retour. » Sans relais (nom OU téléphone vide), la phrase « En cas d'urgence… » est omise.
+- API : `absenceDe` (réglage lu dans `elements`, en cours si actif et début ≤ aujourd'hui ≤ fin), `vouvoiePour` (même règle
+  que l'application : choix de la fiche, sinon titre Dr/Me/M./Mme…, sinon catégorie travail ou santé), `texteAbsence`
+  (pastilles, omission du relais, balises neutralisées), `envoyerAbsenceSiBesoin` : une seule fois par expéditeur et par
+  période (la conversation de l'absent garde une ligne « me » de genre `absence` datée d'après le début). Appelée dans
+  `/messages/envoyer` (après le message) et `/rdv/demander` (dans les deux issues, messagerie et créneaux ; jamais pour un
+  demandeur bloqué : le silence de la mission 2 prime). Rien n'est bloqué, aucun bloc dans l'agenda de l'absent.
+- Suites : `verif-absence` (page : réglage, texte, période, rendu ; API : fonctions exécutées sous PHP, routes), dans
+  verifier.sh ; rouge sur la page/API d'avant. `verif-absence-e2e` (TC_API, comptes jetables e2erdv.absence…) : écrite, PAS dans
+  verifier.sh tant que l'API n'est pas déployée (verte via api-locale.sh). Capture 390x844 :
+  `TimeCool-Codeur/captures/mission12-message-absence.png`.

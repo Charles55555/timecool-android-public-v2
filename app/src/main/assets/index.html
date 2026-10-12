@@ -9208,6 +9208,11 @@ function renderSettingsInterne() {
     </div>
 
     <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🏖️ Message d'absence</div>
+      <div id="tcAbsenceZone"></div>
+    </div>
+
+    <div style="background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🌍 Langue & Région</div>
       <div onclick="openLanguageSelector()" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
         <div>
@@ -21252,6 +21257,7 @@ function tcChoisirFormeMessages(vouvoie) {
   if (tu) tu.style.cssText = base + (vouvoie ? inactif : actif);
   if (vous) vous.style.cssText = base + (vouvoie ? actif : inactif);
   tcRendreModelesMessages();
+  tcRendreAbsence();
 }
 
 /** Les trois champs, dans la forme choisie. */
@@ -21280,6 +21286,123 @@ function tcRendreModelesMessages() {
           }).join(' ')
       + '</div></div>';
   }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MESSAGE D'ABSENCE (Charles, 12/10)
+
+   Un reglage unique, tc_absence, qui voyage comme les autres (famille
+   « reglage ») : c'est le SERVEUR qui envoie la reponse automatique a
+   qui ecrit a l'absent ou lui demande un rendez-vous, une fois par
+   expediteur et par periode, meme si l'application est fermee. Ici :
+   l'ecran des Parametres, et le texte tel qu'il partira.
+   ══════════════════════════════════════════════════════════════ */
+const TC_ABSENCE_KEY = 'tc_absence';
+const TC_ABSENCE_MODELE = {
+  variables: ['[Prénom]', '[date début]', '[date fin]', '[nom du relais]', '[téléphone du relais]'],
+  tu: "Bonjour [Prénom], je suis absent(e) du [date début] au [date fin]. En cas d'urgence, contacte [nom du relais] au [téléphone du relais]. Je te recontacte à mon retour.",
+  vous: "Bonjour [Prénom], je suis absent(e) du [date début] au [date fin]. En cas d'urgence, contactez [nom du relais] au [téléphone du relais]. Je vous recontacte à mon retour."
+};
+
+/** Le reglage tel qu'il est enregistre ({} si rien). */
+function tcLireAbsence() {
+  try {
+    const a = JSON.parse(localStorage.getItem(TC_ABSENCE_KEY) || 'null');
+    return (a && typeof a === 'object' && !Array.isArray(a)) ? a : {};
+  } catch (e) { return {}; }
+}
+
+/** Enregistre un champ (actif, debut, fin, relaisNom, relaisTel, tu, vous) ; la fin ne precede jamais le debut. */
+function tcEnregistrerAbsence(champ, valeur) {
+  const a = tcLireAbsence();
+  a[champ] = (champ === 'actif') ? !!valeur : String(valeur == null ? '' : valeur);
+  if (a.debut && a.fin && a.fin < a.debut) {
+    if (champ === 'fin') a.debut = a.fin; else a.fin = a.debut;
+  }
+  try { localStorage.setItem(TC_ABSENCE_KEY, JSON.stringify(a)); } catch (e) {}
+  if (typeof tcSyncTour === 'function') tcSyncTour();
+  if (champ === 'tu' || champ === 'vous' || champ === 'relaisNom' || champ === 'relaisTel') showToast('✅ Message d’absence enregistré');
+  tcRendreAbsence();
+  return a;
+}
+
+/** Le modele, dans la forme choisie : le texte personnalise s'il existe, sinon celui par defaut. */
+function tcModeleAbsence(a, vouvoie) {
+  const forme = vouvoie ? 'vous' : 'tu';
+  const perso = a ? a[forme] : null;
+  return (typeof perso === 'string' && perso.trim()) ? perso : TC_ABSENCE_MODELE[forme];
+}
+
+/** L'absence est-elle en cours ce jour-la (interrupteur allume, debut <= jour <= fin) ? */
+function tcAbsenceActive(a, jour) {
+  if (!a || !a.actif || !a.debut || !a.fin) return false;
+  const j = jour || tcISO(new Date());
+  return a.debut <= j && j <= a.fin;
+}
+
+/** « lundi 12 octobre ». */
+function tcDateAbsenceEnLettres(iso) {
+  const d = new Date(String(iso || '') + 'T00:00:00');
+  return isNaN(d) ? String(iso || '') : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+/**
+ * Le message tel qu'il partira a ce prenom : pastilles remplacees ; sans relais (nom ou telephone vide),
+ * la phrase « En cas d'urgence… » est omise. Meme regle que le serveur, qui l'envoie.
+ */
+function tcTexteAbsence(a, vouvoie, prenom) {
+  let t = tcModeleAbsence(a, vouvoie);
+  const nom = String((a && a.relaisNom) || '').trim(), tel = String((a && a.relaisTel) || '').trim();
+  if (!nom || !tel) t = t.replace(/\s*En cas d[’']urgence[^.]*\.\s*/, ' ').replace(/\s{2,}/g, ' ').trim();
+  return tcRemplirModele(t, {
+    '[Prénom]': String(prenom || '').split(' ')[0],
+    '[date début]': tcDateAbsenceEnLettres(a && a.debut),
+    '[date fin]': tcDateAbsenceEnLettres(a && a.fin),
+    '[nom du relais]': nom,
+    '[téléphone du relais]': tel
+  });
+}
+
+/** La rubrique des Parametres : interrupteur, dates, texte dans la forme choisie, relais. */
+function tcRendreAbsence() {
+  const zone = document.getElementById('tcAbsenceZone');
+  if (!zone) return;
+  const a = tcLireAbsence();
+  const forme = _tcFormeAffichee ? 'vous' : 'tu';
+  const actif = !!a.actif;
+  const aujourdhui = tcISO(new Date());
+  const etat = !actif ? 'Désactivé : rien ne part.'
+    : (!a.debut || !a.fin) ? 'Indique la date de début et la date de fin.'
+    : tcAbsenceActive(a, aujourdhui) ? 'En cours : qui t’écrit ou te demande un rendez-vous reçoit ce message, une fois.'
+    : (a.fin < aujourdhui ? 'Période terminée : plus rien ne part (coupe l’interrupteur ou change les dates).' : 'À venir : partira du ' + tcDateAbsenceEnLettres(a.debut) + ' au ' + tcDateAbsenceEnLettres(a.fin) + '.');
+  const champ = 'width:100%; padding:10px; border:1.5px solid var(--border); border-radius:10px; font-size:12.5px; font-family:inherit; box-sizing:border-box;';
+  zone.innerHTML =
+    '<div style="padding:14px 16px; font-size:11px; color:var(--text-sec); line-height:1.5;">Pendant ton absence, les personnes qui t’écrivent ou te demandent un rendez-vous reçoivent ce message dans la conversation, une seule fois. Rien n’est bloqué : les demandes continuent d’arriver.</div>'
+    + '<div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">'
+    +   '<div style="flex:1;"><div style="font-size:14px; font-weight:500;">Je suis absent(e)</div>'
+    +   '<div style="font-size:11px; color:var(--text-sec); margin-top:2px;">' + escapeHTMLSafe(etat) + '</div></div>'
+    +   '<label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">'
+    +     '<input type="checkbox" id="tcAbsenceActif" ' + (actif ? 'checked' : '') + ' onchange="tcMajVisuelInterrupteur(this); tcEnregistrerAbsence(\'actif\', this.checked)" style="opacity:0; width:0; height:0;">'
+    +     '<span style="position:absolute; inset:0; background:' + (actif ? 'var(--g-blue)' : '#ccc') + '; border-radius:24px; transition:.2s;"></span>'
+    +     '<span style="position:absolute; height:18px; width:18px; left:' + (actif ? '23px' : '3px') + '; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>'
+    +   '</label></div>'
+    + '<div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:8px;">'
+    +   '<label style="flex:1; font-size:11px; color:var(--text-sec);">Du<input type="date" id="tcAbsenceDebut" value="' + escapeHTMLSafe(a.debut || '') + '" onchange="tcEnregistrerAbsence(\'debut\', this.value)" style="' + champ + ' margin-top:4px;"></label>'
+    +   '<label style="flex:1; font-size:11px; color:var(--text-sec);">Au<input type="date" id="tcAbsenceFin" value="' + escapeHTMLSafe(a.fin || '') + '" min="' + escapeHTMLSafe(a.debut || '') + '" onchange="tcEnregistrerAbsence(\'fin\', this.value)" style="' + champ + ' margin-top:4px;"></label>'
+    + '</div>'
+    + '<div style="padding:0 16px 16px; border-top:1px solid var(--border); padding-top:14px;">'
+    +   '<div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">🏖️ Le message</div>'
+    +   '<div style="font-size:10.5px; color:var(--text-sec); margin-bottom:6px;">Part une fois par personne pendant la période. Sans relais, la phrase « En cas d’urgence… » est omise.</div>'
+    +   '<textarea id="tcAbsenceTexte" onchange="tcEnregistrerAbsence(\'' + forme + '\', this.value)" style="' + champ + ' min-height:90px; resize:vertical;">' + escapeHTMLSafe(tcModeleAbsence(a, _tcFormeAffichee)) + '</textarea>'
+    +   '<div style="font-size:10.5px; color:var(--text-sec); margin-top:4px;">Tu peux utiliser : '
+    +     TC_ABSENCE_MODELE.variables.map(function (v) { return '<code style="background:var(--bg-soft); padding:1px 4px; border-radius:4px;">' + escapeHTMLSafe(v) + '</code>'; }).join(' ')
+    +   '</div>'
+    +   '<div style="display:flex; gap:8px; margin-top:10px;">'
+    +     '<input type="text" id="tcAbsenceRelaisNom" placeholder="Nom du relais (facultatif)" value="' + escapeHTMLSafe(a.relaisNom || '') + '" onchange="tcEnregistrerAbsence(\'relaisNom\', this.value)" style="' + champ + ' flex:1;">'
+    +     '<input type="tel" id="tcAbsenceRelaisTel" placeholder="Téléphone du relais" value="' + escapeHTMLSafe(a.relaisTel || '') + '" onchange="tcEnregistrerAbsence(\'relaisTel\', this.value)" style="' + champ + ' flex:1;">'
+    +   '</div>'
+    +   '<div style="font-size:10.5px; color:var(--text-sec); margin-top:8px;">Aperçu : ' + escapeHTMLSafe(tcTexteAbsence(a, _tcFormeAffichee, 'Camille')) + '</div>'
+    + '</div>';
 }
 
 /** La cle de rangement d'un modele : tc_msg_annule_vous, par exemple. */
