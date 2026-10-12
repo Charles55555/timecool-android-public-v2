@@ -1345,3 +1345,13 @@ mobile vers le nouvel appareil.
 - Correctif avant examen : le bouton « Je suis malade, décale tout » envoyait « aujourd’hui » avec l'apostrophe
   typographique, que `tcPeriodeAgenda` (`/aujourd'?hui/` sur le texte brut) ne reconnaît pas : apostrophe droite, et la
   suite le vérifie.
+- Correctif après examen : l'apostrophe typographique « ’ » (clavier iPhone) vaut « ' » dans `tcPeriodeAgenda` et
+  `tcPeriodeContrainte` (« aujourd’hui » tapé était ignoré : bulle sans réponse) ; `tcGererContrainte` répond quand
+  aucun jour n'est reconnu (« Je n’ai pas compris quel jour… »). L'attente « Avec qui ? » n'avale plus une vraie demande
+  (`tcRessembleAUneDemande` : plus de 6 mots, ou jour / heure / rendez-vous / verbe d'action → elle tombe, le message
+  suit son chemin ; sinon une relance, une seule), expire après 10 min, et tombe au ménage du compte. La suite rejoue
+  le bouton « malade » jusqu'à la liste du jour avec les deux apostrophes.
+- Piège évité de justesse : la page avait déjà `tcRessembleAUneDemande` (règle de « qui est-ce ? », ≥ 5 mots ou verbe
+  d'ordre en tête) ; une seconde déclaration du même nom l'aurait remplacée en silence. La règle existante est
+  réutilisée, complétée par `tcDemandeHorsPrenoms` (jour, heure, mot de rendez-vous) ; la suite vérifie qu'il n'y a
+  qu'une déclaration.

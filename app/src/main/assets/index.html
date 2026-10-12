@@ -12158,8 +12158,20 @@ const TC_QUESTION_IMPREVU = 'Tu veux réorganiser ton agenda !\nQuel jour, et qu
 let _tcImprevuEnAttente = 0;
 /* « Rendez-vous a plusieurs » (bouton) : Charly a demande « Avec qui ? », la reponse donne les prenoms (2 essais). */
 let _tcGroupeEnAttente = 0;
+let _tcGroupeEnAttenteDepuis = 0;
+/**
+ * Une vraie demande plutot que des prenoms (reponse a « Avec qui ? ») : la regle de « qui est-ce ? »
+ * (tcRessembleAUneDemande : cinq mots ou plus, ou un verbe d ordre en tete), plus un jour, une heure ou un mot de rendez-vous.
+ */
+function tcDemandeHorsPrenoms(text) {
+  if (tcRessembleAUneDemande(text)) return true;
+  const t = ' ' + tcSansAccents(text).replace(/[’'´]/g, ' ').replace(/[^a-z0-9: ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  if (/ (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|semaine|matin|midi|soir|rdv|rendez|reunion|creneau|agenda) /.test(t)) return true;
+  return / \d{1,2} ?h ?\d{0,2} | \d{1,2}:\d{2} /.test(t);
+}
 function tcDemarrerRdvAPlusieurs() {
   _tcGroupeEnAttente = 2;
+  _tcGroupeEnAttenteDepuis = Date.now();
   charlyIA.history.push({ role: 'assistant', content: 'Avec qui ? Donne-moi les prénoms de tes contacts (ex : avec Paul et Marie), et je cherche un créneau où tout le monde est libre.' });
   renderCharlyChat();
 }
@@ -12519,7 +12531,8 @@ function tcFormaterHeure(e) {
  * date arbitraire. `fin` vaut null pour une période d'un seul jour.
  */
 function tcPeriodeAgenda(text) {
-  const t = text.toLowerCase();
+  // L apostrophe typographique « ’ » (clavier iPhone) vaut l apostrophe droite : « aujourd’hui » est aujourd'hui.
+  const t = String(text || '').toLowerCase().replace(/[’‘´]/g, "'");
   const now = new Date();
   const debutJour = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const ajouterJours = (d, n) => { const r = new Date(d); r.setDate(r.getDate()+n); return r; };
@@ -14039,7 +14052,10 @@ async function charlySendMessage() {
   if (_tcGroupeEnAttente > 0) {
     const cites = tcComptesCitesDansTexte(text);
     if (cites.length >= 2) { _tcGroupeEnAttente = 0; await tcGererRdvGroupe(text, { contacts: cites, duree: 1 }); return; }
-    _tcGroupeEnAttente -= 1;
+    // Une vraie demande (« ajoute un rdv dentiste demain 10h »), ou une attente trop vieille (10 min) : elle tombe,
+    // le message suit son chemin. Sinon, une relance, une seule.
+    if (tcDemandeHorsPrenoms(text) || Date.now() - _tcGroupeEnAttenteDepuis > 10 * 60 * 1000) _tcGroupeEnAttente = 0;
+    else _tcGroupeEnAttente -= 1;
     if (_tcGroupeEnAttente > 0) {
       tcPousserMessageUtilisateur(text);
       charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('Avec qui ? Donne-moi au moins deux prénoms de tes contacts (ex : avec Paul et Marie).') });
@@ -17438,7 +17454,7 @@ function tcPeriodeJourNomme(text) {
  * prochaine », « toute la semaine », « jusqu'a vendredi ». Null sinon.
  */
 function tcPeriodeContrainte(text) {
-  const t = String(text || '').toLowerCase();
+  const t = String(text || '').toLowerCase().replace(/[’‘´]/g, "'");   // « ’ » vaut « ' » (clavier iPhone)
   const sans = tcSansAccents(t);
   const maintenant = new Date();
   const jour0 = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate());
@@ -17554,7 +17570,12 @@ function showContrainte(touches, label) {
 async function tcGererContrainte(text) {
   tcPousserMessageUtilisateur(text);
   const periode = tcPeriodeContrainte(text);
-  if (!periode) return;
+  if (!periode) {
+    // Jamais de silence : une bulle de l utilisateur sans reponse ressemble a une panne (examen de la mission 22).
+    charlyIA.history.push({ role: 'assistant', content: 'Je n’ai pas compris quel jour : dis-moi « aujourd’hui », « demain » ou un jour de la semaine.' });
+    renderCharlyChat();
+    return;
+  }
   // « demain matin », « a partir de 15h » : seule cette partie du jour.
   const plage = tcPlageImprevu(text);
   const label = (periode.label + ' ' + plage.label).trim();
@@ -22551,6 +22572,7 @@ function tcViderDonneesDuCompte() {
   if (typeof _tcSuppressionEnAttente !== 'undefined') _tcSuppressionEnAttente = null;
   if (typeof _tcDeplacementEnAttente !== 'undefined') _tcDeplacementEnAttente = null;
   if (typeof _tcImprevuEnAttente !== 'undefined') _tcImprevuEnAttente = 0;
+  if (typeof _tcGroupeEnAttente !== 'undefined') _tcGroupeEnAttente = 0;
   if (typeof _isolatedCalendarId !== 'undefined') _isolatedCalendarId = null;
   if (typeof loadCustomCalendars === 'function') loadCustomCalendars(); // stockage vide : « Mon agenda » seul
   if (typeof renderCharlyChat === 'function') { try { renderCharlyChat(); } catch (e) {} }

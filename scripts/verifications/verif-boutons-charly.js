@@ -47,8 +47,10 @@ const ctx = {
   document: { getElementById: () => ctx._champ }, _champ: { value: '' }
 };
 vm.createContext(ctx);
-['let _tcImprevuEnAttente = 0;', 'let _tcGroupeEnAttente = 0;'].forEach((d) => vm.runInContext(d, ctx));
-['tcDemarrerRdvAPlusieurs', 'charlyQuickAction'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+['let _tcImprevuEnAttente = 0;', 'let _tcGroupeEnAttente = 0;', 'let _tcGroupeEnAttenteDepuis = 0;'].forEach((d) => vm.runInContext(d, ctx));
+{ const m = page.match(/const TC_VERBES_DE_DEMANDE = \[[^\]]*\];/); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  TC_VERBES_DE_DEMANDE introuvable'); } }
+['tcSansAccents', 'tcRessembleAUneDemande', 'tcDemandeHorsPrenoms', 'tcDemarrerRdvAPlusieurs', 'charlyQuickAction'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+verifie('tcRessembleAUneDemande (règle de « qui est-ce ? ») n est déclarée qu une fois dans la page : réutilisée, pas doublée', page.split('function tcRessembleAUneDemande(').length - 1 === 1);
 if (!ko) {
   ctx.charlyQuickAction('groupe');
   verifie('« Rendez-vous à plusieurs » : Charly demande « Avec qui ? » et attend les prénoms (2 essais)', ctx.charlyIA.history.length === 1 && /^Avec qui \?/.test(ctx.charlyIA.history[0].content) && vm.runInContext('_tcGroupeEnAttente', ctx) === 2 && appels.indexOf('render') > -1, ctx.charlyIA.history[0] && ctx.charlyIA.history[0].content);
@@ -67,6 +69,58 @@ verifie('avec deux contacts cités, le parcours « à plusieurs » démarre sans
 verifie('sans deux prénoms, Charly redemande une fois puis laisse le message suivre son chemin', /_tcGroupeEnAttente -= 1;\s+if \(_tcGroupeEnAttente > 0\) \{[\s\S]*?tcPhraseNonCompris\('Avec qui \?/.test(csm));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
-console.log('');
-console.log(ko + ' anomalie(s).');
-process.exit(ko ? 1 : 0);
+titre('4. « Je suis malade, décale tout » va jusqu à la liste du jour, avec l apostrophe droite ET typographique');
+// Horloge fixee : dimanche 11 octobre 2026, 14h20 ; deux rendez-vous ce jour-la, un demain.
+const FIXE = new Date(2026, 9, 11, 14, 20, 0);
+class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); } static now() { return FIXE.getTime(); } }
+const trace = { montres: [] };
+const c4 = {
+  console, String, Number, Array, Object, RegExp, Promise, parseInt, Date: DateFixe,
+  mode: 'user', charlyIA: { history: [] }, contacts: {}, tcContactDuRdv: () => null, renderCharlyChat: () => {},
+  tcMinutesDeHeure: () => 0, tcSansTempsProtege: (x) => x,
+  events: [
+    { id: 'a', mode: 'user', date: '2026-10-11', startH: 15, startM: 0, endH: 16, endM: 0, title: 'Dentiste' },
+    { id: 'b', mode: 'user', date: '2026-10-11', startH: 17, startM: 30, endH: 18, endM: 0, title: 'Coach' },
+    { id: 'c', mode: 'user', date: '2026-10-12', startH: 9, startM: 0, endH: 10, endM: 0, title: 'Demain' }
+  ],
+  tcPousserMessageUtilisateur: (t) => { c4.charlyIA.history.push({ role: 'user', content: t }); },
+  tcComparerEvenements: (a, b) => (a.date + String(a.startH).padStart(2, '0')) < (b.date + String(b.startH).padStart(2, '0')) ? -1 : 1,
+  showContrainte: (touches, label) => { trace.montres.push({ titres: touches.map((e) => e.title), label: label }); }
+};
+vm.createContext(c4);
+let ko4 = 0;
+['const TC_VERBES_DE_DEMANDE = [^;]*;', 'const TC_JOURS_FR = [^;]*;', 'const TC_MOIS_FR = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], c4); else { ko4++; console.log('  KO  introuvable : ' + re); } });
+['tcSansAccents', 'tcISO', 'tcPeriodeAgenda', 'tcPeriodeContrainte', 'tcRdvDeLaPeriode', 'tcPlageImprevu', 'tcGererContrainte', 'tcViderDonneesDuCompte']
+  .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, c4); else { ko4++; console.log('  KO  ' + n + ' introuvable'); } });
+ko += ko4;
+if (!ko4) {
+  const bouton = (fonction(page, 'charlyQuickAction') || '').match(/tcGererContrainte\(("|')((?:[^"\\]|\\.)*?)\1\)/);
+  verifie('le texte du bouton « malade » est passé à tcGererContrainte', !!bouton, bouton && bouton[2]);
+  const essais = [bouton ? bouton[2] : '', "Je suis malade, décale tout aujourd'hui", 'Je suis malade, décale tout aujourd’hui'];
+  (async () => {
+    for (const texte of essais) {
+      trace.montres.length = 0; c4.charlyIA.history.length = 0;
+      await c4.tcGererContrainte(texte);
+      verifie('« ' + texte + ' » → la liste des rendez-vous du jour (Dentiste, Coach), label « aujourd’hui »', trace.montres.length === 1 && JSON.stringify(trace.montres[0].titres) === JSON.stringify(['Dentiste', 'Coach']) && /aujourd/.test(trace.montres[0].label), JSON.stringify(trace.montres) + ' / ' + JSON.stringify(c4.charlyIA.history));
+    }
+    trace.montres.length = 0; c4.charlyIA.history.length = 0;
+    await c4.tcGererContrainte('Je suis malade, décale tout');
+    verifie('sans jour reconnu, Charly le dit (jamais de bulle sans réponse)', trace.montres.length === 0 && c4.charlyIA.history.length === 2 && /pas compris quel jour/.test(c4.charlyIA.history[1].content), JSON.stringify(c4.charlyIA.history));
+    verifie('tcPeriodeContrainte lit « aujourd’hui » et « demain » avec l apostrophe typographique ou droite', !!c4.tcPeriodeContrainte('aujourd’hui') && !!c4.tcPeriodeContrainte("aujourd'hui") && !!c4.tcPeriodeContrainte('demain'));
+
+    titre('5. L attente « Avec qui ? » n avale pas une vraie demande, expire, et tombe au ménage');
+    verifie('« ajoute un rdv dentiste demain 10h », « annule le coach », « quand suis-je libre vendredi ? », « montre ma semaine », « rdv à 15h30 » sont des demandes', ['ajoute un rdv dentiste demain 10h', 'annule le coach', 'quand suis-je libre vendredi ?', 'montre ma semaine', 'rdv à 15h30'].every((t) => ctx.tcDemandeHorsPrenoms(t)), ['ajoute un rdv dentiste demain 10h', 'annule le coach', 'quand suis-je libre vendredi ?', 'montre ma semaine', 'rdv à 15h30'].map((t) => t + '=' + ctx.tcDemandeHorsPrenoms(t)).join(' '));
+    verifie('« avec Paul », « Paul », « euh », « je sais pas » n en sont pas (une relance, une seule)', ['avec Paul', 'Paul', 'euh', 'je sais pas', 'ma femme et moi'].every((t) => !ctx.tcDemandeHorsPrenoms(t)), ['avec Paul', 'Paul', 'euh', 'je sais pas', 'ma femme et moi'].map((t) => t + '=' + ctx.tcDemandeHorsPrenoms(t)).join(' '));
+    verifie('charlySendMessage : une vraie demande ou une attente de plus de 10 min fait tomber l attente ; sinon une relance', /if \(tcDemandeHorsPrenoms\(text\) \|\| Date\.now\(\) - _tcGroupeEnAttenteDepuis > 10 \* 60 \* 1000\) _tcGroupeEnAttente = 0;\s+else _tcGroupeEnAttente -= 1;\s+if \(_tcGroupeEnAttente > 0\) \{/.test(csm));
+    verifie('tcDemarrerRdvAPlusieurs horodate l attente', /_tcGroupeEnAttenteDepuis = Date\.now\(\);/.test(fonction(page, 'tcDemarrerRdvAPlusieurs') || ''));
+    verifie('le ménage du compte remet l attente « Avec qui ? » à zéro', /_tcGroupeEnAttente = 0;/.test(fonction(page, 'tcViderDonneesDuCompte') || ''));
+
+    console.log('');
+    console.log(ko + ' anomalie(s).');
+    process.exit(ko ? 1 : 0);
+  })();
+} else {
+  console.log('');
+  console.log(ko + ' anomalie(s).');
+  process.exit(1);
+}
