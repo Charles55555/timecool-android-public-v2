@@ -1789,3 +1789,22 @@ mobile vers le nouvel appareil.
 - Correction après examen (12/10) : « Quand tu peux, ajoute un rdv dentiste mardi 15h » commençait par « quand » et perdait sa
   carte sans un mot ; désormais un verbe de création accompagné d'un jour ou d'une heure l'emporte sur « quand / comment /
   quel… » (`tcEstQuestionDeConsultation`) ; « Quand suis-je libre vendredi ? » reste une consultation. Cas ajoutés à la suite.
+
+## 12/10/2026 (session Codeur) — Messagerie : contacts bloqués réels, phrase vraie sur les données (mission 27a)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Demande (chef de projet, mission 27 scindée) : (a) « Contacts bloqués » (feuille Confidentialité & sécurité de la messagerie)
+  listait… un toast « Aucun contact bloqué ». Désormais `openContactsBloques` liste les vraies fiches bloquées
+  (`contactsList`, `blocked === true`, même état que la page Contacts et « Refuser et bloquer »), triées par nom, chacune
+  avec « ✅ Débloquer » (`tcDebloquerContact` : `blocked = false`, `saveContacts` → synchronisation, page Contacts
+  redessinée, toast) ; « Aucun contact bloqué. » sinon ; la feuille Confidentialité affiche « Contacts bloqués (N) ».
+- (c) La phrase vraie, unique (`TC_PHRASE_CONFIDENTIALITE`) : « Tes messages et rendez-vous passent par les serveurs
+  TimeCool, chiffrés en transit, et ne sont jamais vendus ni partagés. », dans la feuille de la messagerie (à la place de
+  « Tes messages restent sur ton appareil… chiffrement de bout en bout en développement ») et dans Paramètres →
+  Confidentialité & Sécurité (à la place de « Stockage local sur votre appareil »). Les lignes « Confirmations de lecture »
+  et « Appareils connectés » (un simple toast, rien derrière) sont retirées.
+- Suite `verif-contacts-bloques` (textes ; feuille simulée : liste, Débloquer, vide, compteur), dans verifier.sh ; rouge sur
+  la page d'avant. Capture 390×844 : `captures/mission27a-contacts-bloques.png`.
+- Hors périmètre, noté : `toggleContactBlock` (page Contacts) écrit le stockage sans `saveContacts` (la synchro part au tour
+  suivant, pas tout de suite). 27b (convocations réelles, API) suit.

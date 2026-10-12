@@ -6840,18 +6840,56 @@ function createNewGroup() {
   showToast('✅ Groupe "' + name + '" créé');
 }
 
+/** La phrase vraie sur les donnees, la meme partout (mission 27a). */
+const TC_PHRASE_CONFIDENTIALITE = 'Tes messages et rendez-vous passent par les serveurs TimeCool, chiffrés en transit, et ne sont jamais vendus ni partagés.';
+/** Les fiches contact bloquees (meme etat que la page Contacts et « Refuser et bloquer »), par nom. */
+function tcContactsBloques() {
+  return (Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c && c.blocked === true; })
+    .slice().sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'fr'); });
+}
 function openMsgPrivacy() {
   const ov = document.createElement('div');
   ov.className = 'msg-sheet-ov';
   ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  const nb = tcContactsBloques().length;
   ov.innerHTML = '<div class="msg-sheet">' +
     '<div class="msg-sheet-h">🔒 Confidentialité &amp; sécurité</div>' +
-    '<div style="padding:0 20px 14px; font-size:13px; color:var(--text-sec); line-height:1.6;">Tes messages restent sur ton appareil, jamais partagés ni vendus. Le chiffrement de bout en bout est en développement.</div>' +
-    '<div class="msg-sheet-i" onclick="showToast(\'Aucun contact bloqué\')"><span>🚫</span>Contacts bloqués</div>' +
-    '<div class="msg-sheet-i" onclick="showToast(\'Confirmations de lecture activées\')"><span>✔️</span>Confirmations de lecture</div>' +
-    '<div class="msg-sheet-i" onclick="showToast(\'Aucun appareil tiers connecté\')"><span>📱</span>Appareils connectés</div>' +
+    '<div style="padding:0 20px 14px; font-size:13px; color:var(--text-sec); line-height:1.6;">' + TC_PHRASE_CONFIDENTIALITE + '</div>' +
+    '<div class="msg-sheet-i" onclick="_closeSheet(this);openContactsBloques()"><span>🚫</span>Contacts bloqués' + (nb ? ' (' + nb + ')' : '') + '</div>' +
     '</div>';
   document.body.appendChild(ov);
+}
+/** La liste des contacts bloques, chacun avec « Débloquer » (mission 27a). */
+function openContactsBloques() {
+  const liste = tcContactsBloques();
+  const ov = document.createElement('div');
+  ov.className = 'msg-sheet-ov';
+  ov.id = 'contactsBloquesOv';
+  ov.onclick = function(e) { if (e.target === ov) ov.remove(); };
+  const lignes = liste.length
+    ? liste.map(function (c) {
+        return '<div class="msg-sheet-i" style="cursor:default; justify-content:space-between;"><span style="display:flex; align-items:center; gap:14px; min-width:0;"><span>🚫</span><span data-notranslate style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHTMLSafe(c.name || '?') + '</span></span>'
+          + '<button onclick="tcDebloquerContact(\'' + escapeHTMLSafe(c.id) + '\')" style="flex-shrink:0; padding:7px 12px; background:#e8f5e9; color:#2e7d32; border:1px solid #a8d5b0; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;">✅ Débloquer</button></div>';
+      }).join('')
+    : '<div style="padding:0 20px 18px; font-size:13px; color:var(--text-sec);">Aucun contact bloqué.</div>';
+  ov.innerHTML = '<div class="msg-sheet" style="max-height:80vh; display:flex; flex-direction:column;">' +
+    '<div class="msg-sheet-h">🚫 Contacts bloqués</div>' +
+    (liste.length ? '<div style="padding:0 20px 10px; font-size:12px; color:var(--text-sec); line-height:1.5;">Un contact bloqué ne peut plus te demander de rendez-vous ni t’écrire.</div>' : '') +
+    '<div style="overflow-y:auto; flex:1;">' + lignes + '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+}
+/** « Débloquer » : meme etat que la page Contacts (blocked = false), sauve et synchronise. */
+function tcDebloquerContact(id) {
+  const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && String(x.id) === String(id); });
+  if (!c) return;
+  c.blocked = false;
+  saveContacts();
+  if (typeof renderContactsList === 'function') { try { renderContactsList(); } catch (e) {} }
+  showToast('✅ ' + (c.name || 'Contact') + ' débloqué');
+  const ov = document.getElementById('contactsBloquesOv');
+  if (ov) ov.remove();
+  openContactsBloques();
 }
 
 function msgLongPress(id) {
@@ -9500,8 +9538,8 @@ function renderSettingsInterne() {
     <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔒 Confidentialité & Sécurité</div>
       <div style="padding:12px 16px; border-top:1px solid var(--border);">
-        <div style="font-size:13px; color:var(--g-blue); font-weight:500;">🔒 Stockage local sur votre appareil</div>
-        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">Votre agenda et vos données ne sont ni partagés ni vendus</div>
+        <div style="font-size:13px; color:var(--g-blue); font-weight:500;">🔒 Tes données</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px; line-height:1.5;">${TC_PHRASE_CONFIDENTIALITE}</div>
       </div>
     </div>
 
