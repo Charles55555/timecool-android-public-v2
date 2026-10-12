@@ -1621,3 +1621,4 @@ mobile vers le nouvel appareil.
 - Limite : une question de suite reposée par le modèle dans une AUTRE bulle n'est pas dédoublonnée ici (c'est le rôle
   de `tcSansRelance`, mission 17).
 - Suites verif-memoire-agenda, verif-charly-campagne9 (la carte est remplacee par rien, plus de mention) et verif-charly-relance (filtre tcSansNotesInternes entre les formules et la relance) adaptees ; une ligne qui n etait qu une note interne disparait avec elle.
+- Examen : un message d assistant devenu vide (carte seule) n est plus envoye au modele, deux messages de meme role qui se suivent sont fusionnes ; le dedoublonnage ne retire qu une ligne identique a la precedente ou une phrase longue deja vue (jamais un fait d une liste).
