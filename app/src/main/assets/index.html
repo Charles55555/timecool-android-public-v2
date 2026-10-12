@@ -11288,12 +11288,56 @@ function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
   const occupe = duJour.some(function (e) {
     return !e.allDay && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
   });
-  if (occupe) return null;
+  const heureTxt = heure.h + 'h' + (heure.m ? String(heure.m).padStart(2, '0') : '');
+  if (occupe) return tcPhraseConflitLocale(demande.date, heureTxt, duJour, debut, fin);
   const bloc = tcBlocAgendaDepuisAnnonce(texte, '', now, 1);
   if (!bloc) return null;
-  const heureTxt = heure.h + 'h' + (heure.m ? String(heure.m).padStart(2, '0') : '');
   const texteProp = 'Ce créneau est libre dans ton agenda : ' + tcDateEnLettres(demande.date) + ' à ' + heureTxt + '. Je te propose :' + bloc;
   return tcCorrigerPropositionsCharly(texteProp, texte, now);
+}
+
+/** « 9h », « 10h30 ». */
+function tcHeureCourte(minutes) {
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return h + 'h' + (m ? String(m).padStart(2, '0') : '');
+}
+
+/**
+ * Les plages libres d'un jour, de 8h a 19h, d'apres l'agenda local (journees entieres ignorees) :
+ * [{ debut, fin }] en minutes, plages contigues fusionnees. Calcule par la page, jamais par le modele.
+ */
+function tcPlagesLibresDuJour(duJour) {
+  const OUV = 8 * 60, FERM = 19 * 60;
+  const pris = (duJour || []).filter(function (e) { return e && !e.allDay; })
+    .map(function (e) { return { d: Number(e.startH) * 60 + Number(e.startM || 0), f: Number(e.endH) * 60 + Number(e.endM || 0) }; })
+    .filter(function (p) { return p.f > p.d; })
+    .sort(function (a, b) { return a.d - b.d; });
+  const libres = [];
+  let curseur = OUV;
+  pris.forEach(function (p) {
+    if (p.d > curseur) libres.push({ debut: curseur, fin: Math.min(p.d, FERM) });
+    if (p.f > curseur) curseur = p.f;
+  });
+  if (curseur < FERM) libres.push({ debut: curseur, fin: FERM });
+  return libres.filter(function (l) { return l.fin - l.debut >= 30 && l.debut < FERM; });
+}
+
+/**
+ * La phrase d'un vrai conflit, ecrite par la page : la date exacte en toutes lettres, le ou les rendez-vous
+ * reellement en conflit (nom et horaire de l'agenda local), les plages libres du jour. Le modele ecrivait
+ * « mardi 15 octobre … le dentiste … libres 10:00-11:00 » : date fausse, conflit oublie, creneaux deja pris (campagne 8).
+ */
+function tcPhraseConflitLocale(date, heureTxt, duJour, debut, fin) {
+  const enConflit = (duJour || []).filter(function (e) {
+    return e && !e.allDay && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
+  });
+  const quand = tcDateEnLettres(date);
+  const noms = enConflit.map(function (e) {
+    return '« ' + e.title + ' » (' + tcHeureCourte(Number(e.startH) * 60 + Number(e.startM || 0)) + '-' + tcHeureCourte(Number(e.endH) * 60 + Number(e.endM || 0)) + ')';
+  });
+  const libres = tcPlagesLibresDuJour(duJour).map(function (l) { return tcHeureCourte(l.debut) + '-' + tcHeureCourte(l.fin); });
+  return quand.charAt(0).toUpperCase() + quand.slice(1) + ' à ' + heureTxt + ', tu as déjà ' + (noms.length > 1 ? noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1] : noms[0]) + '. '
+    + (libres.length ? 'Ce jour-là, il reste : ' + libres.join(', ') + '. Dis-moi quel créneau te va.' : 'Ce jour-là, tout est pris de 8h à 19h. Un autre jour ?');
 }
 
 /**
@@ -11372,7 +11416,7 @@ function tcRdvNommeIntrouvable(texte, now, events, mode) {
   // Un vrai deplacement de rendez-vous : verbe strict, ou verbe large (« change », « modifie ») avec le mot
   // rendez-vous. « Change la couleur de mon agenda », « modifie mon profil » ne passent pas ici.
   // Le VERBE, avec fin de mot : « un deplacement a Lyon », « un reportage photo » sont des noms d evenements.
-  const strict = /\b(deplac(e|er|es|ez|ons)|decal(e|er|es|ez)|repouss(e|er|es|ez)|report(e|er|es|ez)|avanc(e|er|es|ez)|reprogramm(e|er|es|ez))\b/.test(t);
+  const strict = tcVerbeConjugue('deplacement').test(t);
   if (!strict && !(tcEstDeplacement(texte) && /\b(rdv|rendez-?vous|reunion|seance|consultation)\b/.test(t))) return null;
   // Une question (« quels sont mes deplacements ? ») n est pas un deplacement.
   if (/\?|\b(quel|quelle|quels|quelles|est[- ]ce que|combien|qu ai|qu est)\b/.test(t.replace(/[’']/g, ' '))) return null;
@@ -13090,8 +13134,23 @@ function tcAnnulerSuppressionRdv() {
 let _tcDeplacementEnAttente = null;
 
 /** « déplace », « décale », « repousse », « reporte », « avance », « bouge ». */
+/**
+ * La seule table des verbes de deplacement (« deplacement ») et de modification (« modification », qui
+ * contient la premiere), sous leur forme conjuguee : decale, deplacer, reportez, deplacons… Jamais un nom.
+ */
+function tcVerbeConjugue(quoi) {
+  const DEPLACEMENT = 'deplac|decal|repouss|report|avanc|reprogramm';
+  const racines = quoi === 'deplacement' ? DEPLACEMENT : DEPLACEMENT + '|boug|chang|modifi|remplac';
+  return new RegExp('\\b(?:' + racines + ')(?:e|er|es|ez|ons)\\b');
+}
+
+/**
+ * « deplace », « decale », « repousse », « reporte », « avance », « bouge », « change », « modifie », « remplace »,
+ * « reprogramme » : le VERBE, conjugue. Un nom (« un deplacement a Lyon », « un reportage photo », « une avancee »)
+ * n est jamais un ordre (campagne 8, 12/10). Partage par tous les chemins « deplacer / lequel ? ».
+ */
 function tcEstDeplacement(text) {
-  return /\b(deplac|decal|repouss|report|avanc|boug|chang|modif|remplac)/.test(tcSansAccents(text));
+  return tcVerbeConjugue('modification').test(tcSansAccents(text));
 }
 
 /**

@@ -40,7 +40,7 @@ vm.createContext(ctx);
 ['const TC_JOURS_FR = [^;]*;', 'const TC_MOIS_FR = [^;]*;', "const TC_MOTS_CREUX = new Set\\([\\s\\S]*?\\.split\\(' '\\)\\);"].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
 ['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHeureDansTexte', 'tcMotsDeRdv', 'tcTitreContient', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcBlocAgendaDepuisAnnonce',
   'tcPlusieursDatesOuRelatif', 'tcCorrigerPropositionsCharly', 'tcAgendaSnapshotPourIA', 'tcJoursCites', 'tcAnnonceUnConflit', 'tcIgnorerFauxConflit',
-  'tcQuestionJourManquant', 'tcQuestionRdvDuJour', 'tcDeplacementHorsJour', 'tcFormaterDateHumaine', 'tcFormaterHeure']
+  'tcQuestionJourManquant', 'tcQuestionRdvDuJour', 'tcDeplacementHorsJour', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'tcHeureCourte', 'tcPlagesLibresDuJour', 'tcPhraseConflitLocale', 'tcVerbeConjugue', 'tcEstDeplacement']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
@@ -81,7 +81,7 @@ titre('2b. Un evenement sur plusieurs jours (dateFin) compte chaque jour');
   verifie('le seminaire du 12 au 14 est ecrit lundi, mardi ET mercredi (plus de « journee libre » a tort)', /Séminaire \(du 2026-10-12 au 2026-10-14\)/.test(l2[1]) && /Séminaire/.test(l2[2]) && /Séminaire/.test(l2[3]) && !/journée libre/.test(l2[2]), l2[2]);
   verifie('un salon commence avant la fenetre et finit aujourd hui : ecrit aujourd hui, pas dans « hors de ces jours »', /Salon \(du 2026-10-09 au 2026-10-11\)/.test(l2[0]) && !/HORS DE CES JOURS[^\n]*\n[^\n]*Salon/.test(ag2), l2[0]);
   const fs1 = ctx.tcIgnorerFauxConflit('Tu as déjà le séminaire mardi à 10h.', 'rdv Dr. Martin mardi 10h', NOW, ctx.events, 'user');
-  verifie('conflit local : le seminaire couvre mardi 10h → vrai conflit, la reponse reste', fs1 === null, fs1);
+  verifie('conflit local : le seminaire couvre mardi 10h → vrai conflit, la page cite le seminaire (mission 11)', /tu as déjà « Séminaire »/.test(fs1 || ''), fs1);
   const sem = ctx.events.find((e) => e.id === 's1');
   verifie('deplacement : « mon rdv de mardi » peut viser le seminaire (il couvre mardi) → null', ctx.tcDeplacementHorsJour([{ ev: sem, p: {} }], 'décale mon rdv de mardi à 16h', NOW, ctx.events, 'user') === null);
   const q4 = ctx.tcDeplacementHorsJour([{ ev: ctx.events.find((e) => e.id === 'a6'), p: {} }], 'décale mon rdv de mercredi à 16h', NOW, ctx.events, 'user');
@@ -94,13 +94,13 @@ const FC = (r, u) => ctx.tcIgnorerFauxConflit(r, u, NOW, ctx.events, 'user');
 const f1 = FC('Mardi à 9h, tu as déjà un atelier d’équipe. Tu veux un autre créneau ?', 'rdv Dr. Martin mardi 9h');
 verifie('« rdv Dr. Martin mardi 9h » : mardi 9h est libre (l atelier est lundi) → on propose mardi 13 a 9h', !!f1 && /Ce créneau est libre dans ton agenda : mardi 13 octobre 2026 à 9h/.test(f1) && /\[AGENDA\]\n2026-10-13 \| 09:00-10:00 \| Dr Martin \| rdv\n\[\/AGENDA\]/.test(f1), f1);
 const f2 = FC('Demain à 15h, tu as déjà un rendez-vous avec la banque.', 'rdv avec Zorglub demain 15h');
-verifie('« demain 15h » : Zorglub y est deja (lundi 15h-16h) → vrai conflit, la reponse reste', f2 === null);
+verifie('« demain 15h » : Zorglub y est deja (lundi 15h-16h) → vrai conflit, la phrase de la page (mission 11)', /^Lundi 12 octobre 2026 à 15h, tu as déjà « Rendez-vous avec Zorglub » \(15h-16h\)\./.test(f2 || ''), f2);
 ctx.events = ctx.events.filter((e) => e.id !== 'a3');
 const f2b = FC('Demain à 15h, tu as déjà un rendez-vous avec la banque.', 'rdv avec Paul demain 15h');
 verifie('sans Zorglub, lundi 15h est libre (la banque est mardi) → on propose lundi 12 a 15h, titre Paul', !!f2b && /lundi 12 octobre 2026 à 15h/.test(f2b) && /2026-10-12 \| 15:00-16:00 \| Paul \| rdv/.test(f2b), f2b);
 ctx.events = AGENDA.map((e) => Object.assign({}, e));
-verifie('« rdv dentiste mardi 15h » : la formation est bien mardi 15h-17h → vrai conflit, meme si Charly nomme Zorglub', FC('Mardi 15h est déjà occupé par un rendez-vous avec Zorglub.', 'rdv dentiste mardi 15h') === null);
-verifie('« rdv dentiste lundi 15h » : Zorglub est bien lundi 15h → vrai conflit, meme si Charly dit « notaire »', FC('Lundi 15h est déjà occupé par un rendez-vous chez le notaire.', 'rdv dentiste lundi 15h') === null);
+verifie('« rdv dentiste mardi 15h » : la formation est bien mardi 15h-17h → vrai conflit : la page cite la Formation, pas Zorglub', /tu as déjà « Formation » \(15h-17h\)/.test(FC('Mardi 15h est déjà occupé par un rendez-vous avec Zorglub.', 'rdv dentiste mardi 15h') || ''));
+verifie('« rdv dentiste lundi 15h » : Zorglub est bien lundi 15h → la page cite Zorglub, pas le notaire', /tu as déjà « Rendez-vous avec Zorglub »/.test(FC('Lundi 15h est déjà occupé par un rendez-vous chez le notaire.', 'rdv dentiste lundi 15h') || ''));
 verifie('une journee entiere ne compte pas comme conflit d heure (mercredi 14 10h)', /2026-10-14 \| 10:00-11:00/.test(FC('Mercredi tu as déjà quelque chose.', 'rdv coach mercredi 10h') || ''));
 verifie('une reponse sans annonce de conflit : rien', FC('Quel jour exactement ?', 'rdv dentiste 15h') === null);
 verifie('une reponse avec un bloc : rien (le filet de la mission 4 s en occupe)', FC('Déjà pris, mais voici :\n[AGENDA]\n2026-10-13 | 16:00-17:00 | Dentiste | sante\n[/AGENDA]', 'rdv dentiste mardi 15h') === null);

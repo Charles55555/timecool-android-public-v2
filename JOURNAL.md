@@ -1136,3 +1136,20 @@ mobile vers le nouvel appareil.
   exécutées), dans verifier.sh ; rouge sur la page d'avant.
 - À noter : un réglage déjà figé avec le secondaire visible et « Mon agenda » masqué (l'état actuel du compte 53) n'est pas
   couvert par le garde-fou tel que demandé : un appui sur la pastille de « Mon agenda » le remet.
+
+## 12/10/2026 (session Codeur) — Charly, campagne 8 : phrase de conflit par la page, « déplacement » n'est pas un ordre
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Vrai conflit : le modèle écrivait « mardi 15 octobre … le dentiste … libres 10:00-11:00 » (date fausse, Formation oubliée,
+  créneaux déjà pris). Quand la page constate le conflit sur l'agenda local, c'est elle qui écrit : « Mardi 13 octobre
+  2026 à 15h, tu as déjà « Rendez-vous dentiste » (15h-16h) et « Formation » (15h-17h). Ce jour-là, il reste : 8h-10h,
+  11h-15h, 17h-19h. Dis-moi quel créneau te va. » (`tcPhraseConflitLocale`, `tcPlagesLibresDuJour` de 8h à 19h, journées
+  entières ignorées). La prose du modèle n'est plus affichée pour cette partie.
+- Verbe de déplacement : un seul détecteur partagé (`tcEstDeplacement`, `TC_VERBES_DEPLACEMENT` /
+  `TC_VERBES_MODIFICATION`, forme conjuguée e/er/es/ez/ons) ; « un déplacement à Lyon », « un reportage », « une avancée »
+  ne sont plus des ordres : « ajoute un déplacement à Lyon jeudi 9h » crée (plus de « lequel ? »). `tcRdvNommeIntrouvable`
+  utilise la même table.
+- Suite `verif-charly-campagne8` (dimanche 11/10/2026 14h20, agenda campagne 8), dans verifier.sh ; rouge sur la page
+  d'avant. `verif-charly-conflits` et `verif-charly-citations` : les assertions « vrai conflit → la réponse du modèle reste »
+  deviennent « → la phrase de la page ».

@@ -45,7 +45,7 @@ function contexte() {
     .forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
   ['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHeureDansTexte', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande',
     'tcBlocAgendaDepuisAnnonce', 'tcPlusieursDatesOuRelatif', 'tcCorrigerPropositionsCharly', 'tcJoursCites', 'tcAnnonceUnConflit', 'tcIgnorerFauxConflit',
-    'tcQuestionRdvDuJour', 'tcDeplacementHorsJour', 'tcListeDuJourPourDeplacement', 'tcRdvNommeIntrouvable', 'tcAccorderProseAuBloc', 'tcEstDeplacement',
+    'tcQuestionRdvDuJour', 'tcDeplacementHorsJour', 'tcListeDuJourPourDeplacement', 'tcRdvNommeIntrouvable', 'tcAccorderProseAuBloc', 'tcEstDeplacement', 'tcVerbeConjugue', 'tcHeureCourte', 'tcPlagesLibresDuJour', 'tcPhraseConflitLocale',
     'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'escapeHTMLSafe',
     'detecterSuppressionRdv', 'tcMemoriserSuppression', 'tcReponseOuiNon', 'tcJoursDansTexte', 'tcBorneDeFin', 'tcJoursNommes', 'tcPhraseNonCompris',
     'tcPeriodeContrainte', 'tcPeriodeCoherente', 'tcPeriodeJourNomme', 'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcSupprimerRdvs',
@@ -97,7 +97,7 @@ const f2 = FC('Tu as déjà un rendez-vous avec Paul mardi à 10h.', 'mets le rd
 verifie('jeudi (rien) → « Jeudi 15 octobre 2026 est libre dans ton agenda. À quelle heure ? »', f2 === 'Je ne vois pas ce rendez-vous dans ton agenda. Jeudi 15 octobre 2026 est libre dans ton agenda. À quelle heure ?', f2);
 verifie('une question (« est-ce que j ai quelque chose vendredi ? ») avec une reponse juste → rien (examinateur)', FC('Oui, tu as déjà Revue budget vendredi à 14h.', "est-ce que j'ai quelque chose vendredi ?") === null && FC('Tu as déjà Revue budget.', "j'ai quoi vendredi") === null);
 verifie('une creation sans heure, mais la reponse cite un rendez-vous vraiment present ce jour-la → rien (elle dit vrai)', FC('Vendredi tu as déjà la revue budget à 14h, à quelle heure veux-tu Paul ?', 'mets le rdv de Paul vendredi') === null);
-verifie('avec une heure, la regle de la mission 5 reste : mardi 10h libre → proposition ; mardi 16h pris → rien', /Je te propose/.test(FC('Tu as déjà un rendez-vous mardi à 10h.', 'rdv Paul mardi 10h') || '') && FC('Mardi 16h est pris.', 'rdv Paul mardi 16h') === null);
+verifie('avec une heure : mardi 10h libre → proposition ; mardi 16h pris → la phrase de conflit de la page (mission 11)', /Je te propose/.test(FC('Tu as déjà un rendez-vous mardi à 10h.', 'rdv Paul mardi 10h') || '') && /tu as déjà «/.test(FC('Mardi 16h est pris.', 'rdv Paul mardi 16h') || ''));
 
 titre('5. « supprime tout mardi après-midi » : TOUS les rendez-vous de la plage, et une confirmation claire');
 verifie('la phrase est reconnue comme une suppression (un jour de semaine seul suffit)', !!ctx.detecterSuppressionRdv('supprime tout mardi après-midi'));

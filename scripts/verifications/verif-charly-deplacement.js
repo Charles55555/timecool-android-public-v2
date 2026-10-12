@@ -17,7 +17,7 @@ function source(nom) {
   }
   throw new Error('fonction non fermée : ' + nom);
 }
-const noms = ['tcEstDeplacement', 'tcDeplacementsProposes', '_tcLigneRdv', 'tcAppliquerDeplacement',
+const noms = ['tcEstDeplacement', 'tcVerbeConjugue', 'tcDeplacementsProposes', '_tcLigneRdv', 'tcAppliquerDeplacement',
   'tcTraiterDeplacement', 'tcDeplacementHorsJour', 'tcJoursCites', 'tcEvenementFin', 'tcEvenementCouvre', 'tcReponsePrevenir', 'tcRepondreDeplacement', 'tcRdvRemplace', 'tcSansAccents',
   'extractAgendaProposals', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'escapeHTMLSafe',
   'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv'];

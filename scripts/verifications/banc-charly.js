@@ -103,7 +103,7 @@ if (modeles) vm.runInContext(modeles, ctx); else { ko++; console.log('  KO  TC_M
  'tcProchainRdv', 'tcRdvVise', 'tcDetecterPrevenance', 'tcGererPrevenance', 'tcPrevenirDepuisChat', 'tcPrevenirRetard',
  'detecterConsultationAgenda', 'detecterDemandeCreneau',
  'extraireLieuDuTexte', 'detecterRechercheProfessionnel', 'extraireAdresseDuTexte', 'detecterDemandeTrajet', 'detecterRechercheWeb',
- 'tcEstDeplacement', 'tcDetecterMarcheArriere'
+ 'tcEstDeplacement', 'tcVerbeConjugue', 'tcDetecterMarcheArriere'
 ].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
