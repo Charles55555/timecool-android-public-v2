@@ -366,6 +366,7 @@ body.maj-visible .toast { bottom:152px; }
    variables claires : texte sombre sur fond clair, quel que soit le theme. */
 .header, .sub-header, .page:not(#page-settings), .auth-page, .modal, .tc-mod, .msg-sheet { --text:#202124; --text-sec:#5f6368; --border:#dadce0; --bg:#fff; --bg-soft:#f8f9fa; --bg-hover:#f1f3f4; --menu-active:#e8f0fe; --menu-charly:#fff4e0; --violet:#8430ce; color:var(--text); background:var(--bg); }
 .modal select, .modal input, .modal textarea, .tc-mod select, .tc-mod input, .tc-mod textarea { color:var(--text); background:var(--bg); }
+select option { background:#fff; color:#202124; }   /* fenetre native des listes : toujours claire, lisible en sombre (mission 25 bis) */
 .tc-mod-in:focus { border-color:var(--g-blue); }
 .tc-mod-bt { display:flex; gap:10px; }
 .tc-mod-bt button { flex:1; padding:14px 10px; border:none; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -15415,6 +15416,10 @@ async function logoutUser() {
   const overlay = document.getElementById('menuOverlay');
   if (menu) menu.classList.remove('open');
   if (overlay) overlay.classList.remove('open');
+  // Les derniers choix (theme, langue, reglages) partent au compte AVANT la fin de session (mission 25 bis) : sans
+  // cela, un reglage fait juste avant « Se déconnecter » n etait jamais enregistre, puis efface par le menage.
+  if (_tcSyncBientot) { clearTimeout(_tcSyncBientot); _tcSyncBientot = null; }
+  try { if (typeof tcSyncPousser === 'function') await tcSyncPousser(); } catch (e) {}
   // Révoque la session côté serveur. Sans cela le jeton restait
   // valable après une déconnexion, seul un drapeau local changeait.
   // deconnecter() efface le jeton même si l'appel réseau échoue.
@@ -16986,6 +16991,9 @@ const LIGHT_VARS = {
 function applyTheme(theme) {
   currentTheme = theme;
   savePreference('tc_theme', theme);
+  // Le choix part au compte tout de suite (mission 25 bis) : avant, seul le tour periodique le poussait, et une
+  // deconnexion rapide le perdait.
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
   const root = document.documentElement;
   let vars = LIGHT_VARS;
   if (theme === 'dark') vars = DARK_VARS;
@@ -17298,6 +17306,7 @@ function selectLanguageFromSettings(code) {
   currentLanguage = code;
   try { localStorage.setItem('timecool_language', code); } catch(e){}
   tcPousserLangue(code);
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();   // le reglage part au compte tout de suite (mission 25 bis)
 
   // Fermer la fenêtre ouverte, quel que soit le chemin utilisé
   const ov = document.getElementById('langModalOverlay');
@@ -22414,6 +22423,8 @@ const TC_SYNC_TYPES = {
     poser: function (liste) {
       const voulus = {};
       liste.forEach(function (o) { voulus[o.id] = o.v; });
+      let themeAvant = null;
+      try { themeAvant = localStorage.getItem('tc_theme'); } catch (e) {}
 
       // Un réglage effacé ailleurs doit l'être ici : la liste reçue dit
       // ce qui existe, pas seulement ce qui a changé.
@@ -22437,8 +22448,10 @@ const TC_SYNC_TYPES = {
        * qui se voit immédiatement, et le reste prend effet au prochain
        * affichage de l'écran concerné.
        */
+      // Le theme du compte s applique a l ecran des la reception (mission 25 bis) : il est compare a ce qui est
+      // affiche ET a ce que l appareil avait en memoire (un theme garde du compte precedent n est pas « le sien »).
       if (typeof applyTheme === 'function' && voulus.tc_theme
-          && voulus.tc_theme !== currentTheme) {
+          && (voulus.tc_theme !== currentTheme || voulus.tc_theme !== themeAvant)) {
         try { applyTheme(voulus.tc_theme); } catch (e) {}
       }
       // La langue du compte s applique aussi tout de suite (mission 25) : avant, elle ne prenait effet qu au rechargement.

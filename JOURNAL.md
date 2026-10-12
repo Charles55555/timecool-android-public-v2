@@ -1572,3 +1572,29 @@ mobile vers le nouvel appareil.
   recréer) ; les rendez-vous rangés dedans sont intacts et restent VISIBLES (`isCalendarVisible` rend vrai pour un
   agenda inconnu), ils gardent leur `calendarId`.
 - Examen : meme zone morte pour loadConvocations() / TC_CONVOCATIONS_KEY (convocations de groupe vides a chaque demarrage) : constante declaree tot aussi ; la suite controle desormais TOUS les appels de demarrage (aucune constante lue declaree apres l appel) et rejoue les convocations.
+
+## 12/10/2026 (session Codeur) — Réglages du compte : enregistrés toujours, appliqués dès la connexion (mission 25 bis)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constat (Testeurs, campagne 15, un navigateur, F English+Sombre → D fr+clair → F) : (1) à la connexion de D, le
+  français arrive mais le thème reste sombre jusqu'au rechargement ; (2) F ne retrouve pas English + Sombre ; (3) les
+  options de la liste « Sauvegarde automatique » sont illisibles en sombre.
+- Cause de (2), reproduite en simulation : `applyTheme` et `selectLanguageFromSettings` n'appelaient pas
+  `tcSyncBientot` — seul le tour périodique poussait les réglages — et `logoutUser` révoquait la session sans poussée
+  finale : un choix fait juste avant « Se déconnecter » n'était jamais enregistré, puis le ménage l'effaçait. Règle de
+  Charles appliquée : un choix fait dans Paramètres est TOUJOURS enregistré dans le compte — il part tout de suite
+  (`tcSyncBientot` après chaque choix) et `logoutUser` fait une dernière poussée (`tcSyncPousser`) avant
+  `deconnecter()`.
+- (1) `reglage.poser` applique le thème reçu dès qu'il diffère de ce qui est affiché OU de ce que l'appareil avait en
+  mémoire (`themeAvant`) : un thème gardé du compte précédent n'est pas « le sien ».
+- (3) `select option { background:#fff; color:#202124; }` : la fenêtre native des listes reste claire dans les deux
+  thèmes.
+- Suite `verif-reglages-compte-simule` : rejeu F → D → F → compte neuf N avec les VRAIES fonctions (tour de synchro,
+  ménage, thème, langue, déconnexion) et un faux serveur par compte : C1 chaque choix demande une poussée, le compte de
+  F reçoit en + sombre avant la fin de session ; C2 D voit clair et fr dès le tour de connexion, aucun compte ne reçoit
+  les réglages de l'autre ; C3 F retrouve en + sombre ; C4 un compte neuf adopte les réglages de l'appareil sans les
+  pousser, puis les enregistre au premier changement. Rouge sur la page d'avant (choix de F jamais poussés, non
+  retrouvés ; sans la règle d'options). Dans verifier.sh.
+- Non reproduit en simulation : le thème non appliqué à +3 s/+30 s chez D (la simulation l'applique déjà avec l'ancien
+  code) — le correctif (1) rend l'application indépendante de l'état affiché ; à revérifier par les Testeurs en vrai.
