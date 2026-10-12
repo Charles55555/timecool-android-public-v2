@@ -1202,3 +1202,15 @@ mobile vers le nouvel appareil.
   N7AH26DJ84Q7, ZWEWTKRGZB9M, WX66REN9V4D0, 2FBV4EZD7R72, TPDKFGN8KS7M, 897FQ1FBYPGC, YSV8AXTR961H, FW215G33RGVB,
   WR9JJH1BX3TD, MJ6K2RV3QZZ9, YFH00AE95AJH, V79HG7TZ3H1W, QSBF6BHHNA3F, 5S3Z2MX35707, 6SSRGBCMK13J, MPEE7AQ7RHCD,
   5WR20JJ1KPY3, WJD51A65Q4XC.
+
+## 12/10/2026 (session Codeur) — La présentation de Charly
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- « Tu es qui ? », « c’est quoi Charly ? », « que sais-tu faire ? » : la réponse venait déjà de la page (liste `_faq` de
+  `charlySendMessage`, deux entrées avec deux textes différents), jamais du modèle. Les deux entrées rendent maintenant le
+  même texte, `TC_CHARLY_PRESENTATION` (texte exact de Charles, apostrophes typographiques, tutoiement : Charly tutoie
+  toujours, le réglage « Je vouvoie » ne vaut que pour les messages aux contacts) ; mots-clés « c’est quoi Charly »,
+  « qui est Charly », « Charly c’est qui » ajoutés.
+- Suite `verif-presentation-charly` (texte exact, les deux entrées, reconnaissance rejouée avec `tcContientMot` sur
+  « Tu es qui ? », « c’est quoi Charly ? », « que sais-tu faire ? » et variantes), dans verifier.sh ; rouge sur la page d'avant.

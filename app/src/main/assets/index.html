@@ -13637,6 +13637,18 @@ async function tcGererRechercheWeb(text, requete) {
   renderCharlyChat();
 }
 
+/**
+ * La presentation de Charly (Charles, 12/10) : une seule reponse, stable, jamais reecrite par le modele.
+ * Tutoiement : Charly tutoie toujours (le reglage « Je vouvoie » ne vaut que pour les messages aux contacts).
+ */
+const TC_CHARLY_PRESENTATION = 'Je suis Charly, ton assistant personnel créé par TimeCool pour t’aider à optimiser ton temps, parce que ton temps est la seule ressource que tu ne pourras jamais fabriquer.\n'
+  + 'Dis-moi, et je fais :\n'
+  + '• créer tes rendez-vous, à 2 comme à 10 personnes ;\n'
+  + '• prévenir d’un retard, annuler ou décaler un rendez-vous en m’excusant pour toi ;\n'
+  + '• te dire ce que tu as, quand tu es libre, et le temps de trajet pour y aller ;\n'
+  + '• changer la langue et tes réglages (bientôt).\n'
+  + 'Parle-moi, j’exécute en un temps record. Et bien plus encore…';
+
 async function charlySendMessage() {
   const inp = document.getElementById('charlyInput');
   const text = inp.value.trim();
@@ -13954,9 +13966,9 @@ async function charlySendMessage() {
     { keys: ['différence avec google','différence google agenda','différence google calendar','comparaison google','vs google','better than google','mieux que google'],
       reply: 'Google Agenda stocke tes RDV. Moi, je les crée, je les optimise et je t’aide à ne jamais perdre de temps 😊' },
     { keys: ['qu’est-ce que tu sais faire','qu\'est-ce que tu sais faire','que sais-tu faire','que sais tu faire','tu sais faire quoi','tu fais quoi','tu peux faire quoi','tes fonctionnalités','tes fonctions','tu es capable de','tu sers à quoi','tu sers a quoi','à quoi tu sers','a quoi tu sers','tu es utile','tu es fait pour','tu fais quoi comme truc'],
-      reply: 'Je suis Charly, ton assistant agenda 😊 Je crée tes RDV, gère tes rappels, organise ta semaine, gère tes tâches et bien plus encore... Essaie : « Demain à 15h, dentiste » !' },
-    { keys: ['qui es-tu','qui es tu','tu es qui','tu t’appelles','tu t appelles','comment tu t appelles','comment tu t’appelles','tu t\'appelles','tu es une ia','t’es une ia','t\'es une ia','t’es quoi','c’est quoi timecool','c\'est quoi timecool'],
-      reply: 'Je suis Charly, un assistant intelligent créé par TIMECOOL pour t’aider à mieux gérer ton temps 😊 Ton temps est la seule ressource que tu ne pourras jamais fabriquer !' },
+      reply: TC_CHARLY_PRESENTATION },
+    { keys: ['qui es-tu','qui es tu','tu es qui','tu t’appelles','tu t appelles','comment tu t appelles','comment tu t’appelles','tu t\'appelles','tu es une ia','t’es une ia','t\'es une ia','t’es quoi','c’est quoi timecool','c\'est quoi timecool','c’est quoi charly',"c'est quoi charly",'c est quoi charly','qui est charly','charly c’est qui',"charly c'est qui",'charly c est qui'],
+      reply: TC_CHARLY_PRESENTATION },
     { keys: ['données sécurisées','mes données','confidentialité','sécurité','tu enregistres','qui voit','privé','chiffré','rgpd'],
       reply: 'Tes données restent sur ton appareil, jamais partagées ni vendues 🔒 Le chiffrement de bout en bout est en développement, je te préviendrai dès qu\'il sera actif 😊' },
     { keys: ['c’est gratuit','c\'est gratuit','combien ça coûte','combien ca coute','prix','abonnement','payant','gratuit'],

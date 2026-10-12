@@ -90,6 +90,11 @@ vm.runInContext('let _tcMarcheArriere = { type: "suppression", rdvs: [] };', ctx
 });
 const modeles = extraireConst('TC_MSG_MODELES', '\\n\\};\\n');
 if (modeles) vm.runInContext(modeles, ctx); else { ko++; console.log('  KO  TC_MSG_MODELES introuvable'); }
+{
+  // La presentation de Charly (mission 15) : la liste _faq y fait reference.
+  const pres = page.match(/const TC_CHARLY_PRESENTATION = '[\s\S]*?encore…';/);
+  if (pres) vm.runInContext(pres[0], ctx); else { ko++; console.log('  KO  TC_CHARLY_PRESENTATION introuvable'); }
+}
 ['_unavailable', '_faq'].forEach((nom) => {
   const m = page.match(new RegExp('const ' + nom + ' = \\[[\\s\\S]*?\\n  \\];'));
   if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  liste introuvable : ' + nom); }
