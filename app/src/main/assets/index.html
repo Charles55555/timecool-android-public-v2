@@ -23281,6 +23281,8 @@ function tcViderDonneesDuCompte() {
   birthdays = [];
   if (typeof contactsList !== 'undefined') contactsList = [];
   messages = { user: [], pro: [] };
+  // Les convocations des groupes appartiennent aussi au compte (mission 27c) : la synchro du compte suivant rapporte les siennes.
+  if (typeof groupConvocations !== 'undefined') groupConvocations = [];
   // Ce que Charly garde en memoire appartient aussi au compte : la conversation (et avec elle les propositions
   // en attente), les questions en suspens, l agenda isole. Sans cela, le compte suivant voyait « Bonjour Fanny ! »
   // jusqu au rechargement (campagne 10, 12/10).

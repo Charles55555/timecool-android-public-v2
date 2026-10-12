@@ -29,6 +29,7 @@ verifie('timecool_messages et timecool_convocations ne voyagent plus comme regla
 verifie('renderMessages relit les decomptes (au plus une fois par minute) ; openConversation d un groupe les relit tout de suite', /tcRafraichirToutesConvocations\(false\);\s+const all = tcConversationsAffichables\(\);/.test(fonction(page, 'renderMessages') || '') && /if \(msg\.isGroup && typeof tcRafraichirToutesConvocations === 'function'\) tcRafraichirToutesConvocations\(true\);/.test(fonction(page, 'openConversation') || ''));
 verifie('le decompte garde son identifiant (ov._tcConvocId) pour etre rouvert a jour', /ov\._tcConvocId = c\.id;/.test(fonction(page, 'openConvocationDashboard') || '') && /if \(ov && ov\._tcConvocId\) \{ ov\.remove\(\); openConvocationDashboard\(ov\._tcConvocId\); \}/.test(fonction(page, 'tcRafraichirToutesConvocations') || ''));
 verifie('le bouton Absent de la convocation recue est « ❌ Absent »', /❌ Absent<\/button>/.test(fonction(page, 'tcCadreConvocation') || '') && page.indexOf('✕ Absent') < 0);
+verifie('a la deconnexion, les convocations en memoire sont videes avec les messages (tcViderDonneesDuCompte)', /messages = \{ user: \[\], pro: \[\] \};\s+\/\/[^\n]*\n\s+if \(typeof groupConvocations !== 'undefined'\) groupConvocations = \[\];/.test(fonction(page, 'tcViderDonneesDuCompte') || ''));
 
 titre('2. Simulation : un groupe part, l appareil est vide (deconnexion), le groupe revient avec ses membres et son decompte');
 const appels = [];

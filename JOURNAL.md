@@ -1911,3 +1911,6 @@ mobile vers le nouvel appareil.
 - Suite `verif-groupes-sync` (famille, clés, rafraîchissements, simulation : départ → appareil vide → retour avec membres,
   trace et décompte ; mise à jour ; suppression ; cadence) dans verifier.sh ; rouge sur la page d'avant. Rejeu réel en Chrome
   contre la production (compte sonde : groupe + convocation poussés, déconnexion, reconnexion, retour) : voir le rapport.
+- Trouvé au rejeu réel : à la déconnexion, `tcViderDonneesDuCompte` effaçait le stockage mais laissait les convocations en
+  mémoire (`groupConvocations`) ; le compte suivant les voyait jusqu'au rechargement. Vidées aussi, la synchro du compte
+  suivant rapporte les siennes (assertion ajoutée à `verif-groupes-sync`).
