@@ -1954,3 +1954,8 @@ mobile vers le nouvel appareil.
   « Mon agenda » refusé, accord singulier / pluriel) dans verifier.sh ; rouge sur la page d'avant. Captures 390×844 :
   `captures/mission38-menu.png`, `captures/mission38-agendas.png`.
 - Suites `verif-menu-agendas` et `verif-mon-agenda` adaptées (elles chargent `tcPastilleAgendaHTML`) : mêmes vérifications.
+- Correction après examen (12/10) : la zone de toucher de la pastille était celle du dessin (14 / 18 px) ; au doigt, le
+  toucher tombait sur la ligne et ouvrait l'agenda seul. Une enveloppe de 36 px (marges négatives : la mise en page ne
+  bouge pas) porte le toucher (`role="switch"`, `stopPropagation`), le dessin garde sa taille. Assertion ajoutée (zone ≥ 32).
+  Réserves notées, sans correction : pas de clavier sur l'interrupteur ; un `visible:false` d'une ancienne version se voit
+  par la pastille vide.

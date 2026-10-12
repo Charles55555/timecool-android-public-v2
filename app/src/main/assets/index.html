@@ -20000,9 +20000,15 @@ function renderCalendarsPage() {
 function tcPastilleAgendaHTML(cal, taille) {
   const visible = cal.visible !== false;
   const px = taille || 14;
+  // La zone de toucher fait 36 px (le doigt), le dessin garde ses 14 / 18 px ; les marges negatives laissent la mise en
+  // page telle quelle (examen de la mission 38).
+  const zone = 36;
+  const marge = Math.round((zone - px) / 2);
   return '<span role="switch" aria-checked="' + (visible ? 'true' : 'false') + '" title="' + (visible ? 'Masquer cet agenda' : 'Afficher cet agenda') + '"'
     + ' onclick="event.stopPropagation(); toggleCalendarVisibility(\'' + escapeHTMLSafe(cal.id) + '\', ' + (visible ? 'false' : 'true') + ')"'
-    + ' style="display:inline-block; width:' + px + 'px; height:' + px + 'px; border-radius:50%; box-sizing:border-box; flex-shrink:0; cursor:pointer; border:2.5px solid ' + cal.color + '; background:' + (visible ? cal.color : 'transparent') + ';"></span>';
+    + ' style="display:inline-flex; align-items:center; justify-content:center; width:' + zone + 'px; height:' + zone + 'px; margin:-' + marge + 'px; flex-shrink:0; cursor:pointer; border-radius:50%;">'
+    + '<span style="display:inline-block; width:' + px + 'px; height:' + px + 'px; border-radius:50%; box-sizing:border-box; border:2.5px solid ' + cal.color + '; background:' + (visible ? cal.color : 'transparent') + ';"></span>'
+    + '</span>';
 }
 function toggleCalendarVisibility(id, on) {
   const cal = getCalendarById(id);

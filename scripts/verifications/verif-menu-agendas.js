@@ -43,7 +43,7 @@ const iDeco = pos(h, 'Se déconnecter'), iCreer = pos(h, 'Créer un nouvel agend
 verifie('« Mon agenda » est la premiere ligne', iMon > -1 && iMon < iRub && iMon < iImport && iMon < iSync);
 verifie('la rubrique « Mes agendas » vient JUSTE apres, avant « Importer » et « Synchroniser avec mon ancien agenda »', iRub > iMon && iRub < iImport && iRub < iSync, [iMon, iRub, iImport, iSync].join(','));
 verifie('les deux agendas sont dans la rubrique, avant « Synchroniser »', pos(h, 'Agenda scolaire de Elodie') > iRub && pos(h, 'Agenda scolaire de Elodie') < iSync && pos(h, '>Asso<') > iRub && pos(h, '>Asso<') < iSync);
-verifie('meme rendu : pastille de couleur + nom, meme action au clic (isolateCalendarView)', /background:#34a853;[^>]*><\/span>(?:<\/span>)?\s*<span[^>]*>Agenda scolaire de Elodie<\/span>/.test(h) && /onclick="isolateCalendarView\('cal_elodie'\)"/.test(h));
+verifie('meme rendu : pastille de couleur + nom, meme action au clic (isolateCalendarView)', /background:#34a853;[^>]*><\/span>(?:<\/span>)*\s*<span[^>]*>Agenda scolaire de Elodie<\/span>/.test(h) && /onclick="isolateCalendarView\('cal_elodie'\)"/.test(h));
 verifie('l agenda principal (isDefault) n y est pas', (h.match(/Mon agenda/g) || []).length === 1);
 verifie('le reste du menu suit dans le meme ordre (Charly IA apres Synchroniser)', iCharly > iSync);
 verifie('« Se déconnecter » puis « Créer un nouvel agenda » restent tout en bas', iDeco > iCharly && iCreer > iDeco && iCreer === h.lastIndexOf('Créer un nouvel agenda') && h.slice(iCreer).indexOf('menu-item') < 0);
