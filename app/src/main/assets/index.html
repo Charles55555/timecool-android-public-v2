@@ -17577,6 +17577,11 @@ function tcAppliquerLangueRecue(code) {
   if (typeof translatePageWithGoogle === 'function') setTimeout(function () { translatePageWithGoogle(code, true); }, 120);
 }
 
+/** Le nombre de langues reellement proposees (SUPPORTED_LANGUAGES actives) : l aide le cite, jamais un chiffre en dur (mission 33). */
+function tcNombreDeLangues() {
+  try { return (typeof SUPPORTED_LANGUAGES !== 'undefined' ? SUPPORTED_LANGUAGES : []).filter(function (l) { return l && l.active; }).length || 17; } catch (e) { return 17; }
+}
+
 function selectLanguageFromSettings(code) {
   const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
   if (!lang) return;
@@ -19211,19 +19216,19 @@ function renderHelp() {
   const c = document.getElementById('helpContent');
   const faq = [
     {q: '⚡ Comment Charly IA peut-il m\'aider ?', a: 'Charly IA est ton assistant intelligent. Tu peux lui parler en langage naturel pour créer des rendez-vous (ex: "demain à 15h banque"), importer un PDF d\'invitation, ou demander de réorganiser ton agenda. Il comprend les dates relatives ("dans 5 jours", "lundi prochain", etc.).'},
-    {q: '📋 Que sont les "Journal d’activité" ?', a: 'C\'est l\'historique des actions que Charly a réalisées pour toi (prises de RDV, créations d\'agenda, réservations) ainsi que le suivi automatique de tes rendez-vous. Tu peux y voir le statut de chaque démarche en temps réel.'},
+    {q: '📋 Que sont les "Journal d’activité" ?', a: 'C\'est l\'historique des actions que Charly a réalisées pour toi (prises de RDV, créations d\'agenda, réservations) ainsi que le suivi de tes rendez-vous. Tu y retrouves chaque démarche avec son statut (préparée, envoyée, confirmée…), du mois en cours ou des trois derniers mois, et tu peux archiver celles qui sont terminées.'},
     {q: '📄 Comment importer un PDF dans Charly IA ?', a: 'Va dans Charly IA, clique sur le bouton "+" à gauche du micro, choisis "Fichiers", sélectionne ton PDF (par exemple une invitation de mariage). Charly extrait automatiquement les dates et te propose de les ajouter à ton agenda.'},
     {q: '⚠️ Que se passe-t-il en cas de conflit d\'agenda ?', a: 'Si tu essaies d\'ajouter un RDV qui chevauche un autre, TimeCool t\'alerte avec 3 options : ajouter quand même, demander à Charly de réorganiser, ou annuler.'},
     {q: '🔒 Mes données sont-elles privées ?', a: 'Tes rendez-vous sont chiffrés sur ton appareil. Ils sont aussi conservés sur les serveurs de TimeCool, situés en Allemagne chez notre hébergeur européen : c\'est ce qui permet de les sauvegarder, d\'envoyer tes rappels par email et de les recopier dans Google Agenda. Nous ne les vendons pas et nous ne les exploitons pas. Quand tu écris à Charly, ta demande part chez notre fournisseur d\'intelligence artificielle le temps de te répondre.'},
-    {q: '🌍 Dans quelles langues TimeCool est-il disponible ?', a: 'TimeCool est disponible en 17 langues européennes. Change de langue à tout moment dans Paramètres → Langue. La traduction est automatique, donc certaines formulations peuvent être imparfaites.'},
+    {q: '🌍 Dans quelles langues TimeCool est-il disponible ?', a: 'TimeCool est disponible en ' + tcNombreDeLangues() + ' langues. Change de langue à tout moment dans Paramètres → Langue. La traduction est automatique, donc certaines formulations peuvent être imparfaites.'},
     {q: '🎂 Comment ajouter un anniversaire ?', a: 'Va dans Menu → Anniversaires → "+ Ajouter un anniversaire". Tu peux aussi demander à Charly IA : "Ajoute l\'anniversaire de Marie le 15 juin".'},
-    {q: '🔧 Comment activer Charly IA ?', a: 'Il est déjà actif : Charly fonctionne dès ton inscription, sans réglage et sans clé à fournir. L\'intelligence artificielle est prise en charge par TimeCool. Si tu préfères utiliser ta propre clé, c\'est possible dans Menu → Configuration IA, mais ce n\'est pas nécessaire.'},
+    {q: '🔧 Comment activer Charly IA ?', a: 'Il est déjà actif : Charly fonctionne dès ton inscription, sans réglage et sans clé à fournir. L\'intelligence artificielle est prise en charge par TimeCool.'},
     {q: '📅 TimeCool se synchronise-t-il avec Google Agenda ?', a: 'Oui. Ouvre le menu ☰ → 📅 Synchroniser avec mon ancien agenda, puis « Synchroniser mon agenda TimeCool avec mon agenda Google ». À partir de ce moment, les rendez-vous que tu crées ou modifies dans TimeCool (ou avec Charly) apparaissent aussi dans ton Google Agenda. Pour reprendre ton ancien agenda, importe-le d’abord avec « Importer mon agenda existant » : ce qui existait avant la synchronisation n’est pas renvoyé dans Google, donc pas de doublons. Outlook : bientôt, la même page montre déjà sa carte.'},
     {q: '🚗 TimeCool tient-il compte du temps de trajet ?', a: 'Oui. Quand deux rendez-vous se suivent à des adresses différentes, TimeCool estime la durée du trajet avec le trafic du moment, et te prévient si le temps manque entre les deux.'},
     {q: '🔔 Puis-je prévenir quelqu\'un d\'un retard ?', a: 'Ouvre le rendez-vous : trois boutons préparent le message à ta place — un retard, une annulation ou un décalage. Le texte s\'adapte au contact, en tutoiement ou en vouvoiement, et tu peux le modifier avant d\'envoyer.'},
     {q: '👥 Comment relier un rendez-vous à un contact ?', a: 'Dis simplement à Charly « rendez-vous avec Michel ». Il cherche dans tes contacts et, si plusieurs Michel existent, il te demande lequel. Tu peux aussi lui apprendre un surnom : dis-lui « mon ostéopathe » une fois, il s\'en souviendra.'},
     {q: '🕐 Charly peut-il me proposer des créneaux libres ?', a: 'Oui. Demande-lui « quand suis-je libre jeudi ? » : il regarde ton agenda réel et te propose des horaires, au lieu de te renvoyer un formulaire à remplir.'},
-    {q: '⏰ Comment régler mes rappels ?', a: 'Va dans Paramètres → Rappels. Tu choisis le délai : 5, 10 ou 30 minutes avant, 1 heure, 2 heures, ou la veille. Le téléphone te réveille tout seul à l\'heure dite, même sans connexion.'},
+    {q: '⏰ Comment régler mes rappels ?', a: 'Va dans Paramètres → Notifications. Tu choisis le délai : 5, 10 ou 30 minutes avant, 1 heure, 2 heures, ou la veille. Le téléphone te réveille tout seul à l\'heure dite, même sans connexion.'},
     {q: '🔄 Comment l\'application se met-elle à jour ?', a: 'Toute seule. Sur Android, TimeCool vérifie s\'il existe une version plus récente et l\'installe sans rien te demander. Sur le web, tu as toujours la dernière version en ouvrant la page.'},
     {q: '💶 Combien coûte l\'intelligence artificielle ?', a: 'Rien pour toi. L\'intelligence artificielle de Charly est prise en charge par TimeCool : elle est incluse dans l\'application, tu n\'as rien à payer en plus.'}
   ];
@@ -19284,16 +19289,32 @@ function tcFiltrerAide(terme) {
   if (aucun) { aucun.style.display = visibles === 0 ? 'block' : 'none'; }
 }
 
-function sendFeedback() {
+/** Ce qui part avec un commentaire : la version de l application et l appareil, sans donnee personnelle. */
+function tcContexteCommentaire() {
+  let version = '';
+  try { version = String((typeof tcInfosVersion === 'function' && tcInfosVersion().version) || ''); } catch (e) {}
+  if (!version) version = 'web';   // la page web n a pas de build : l application Android, si.
+  let appareil = '';
+  try { appareil = String(navigator.userAgent || '').slice(0, 120); } catch (e) {}
+  return { version: version.slice(0, 40), appareil: appareil };
+}
+async function sendFeedback() {
   const text = document.getElementById('feedbackTextarea').value.trim();
   if (!text) { showToast('⚠️ Écris un commentaire d\'abord'); return; }
+  if (text.length > 2000) { showToast('⚠️ 2000 caractères au plus'); return; }
+  // Copie locale, comme avant : rien ne se perd, meme hors ligne.
   try {
     const feedbacks = JSON.parse(localStorage.getItem('timecool_feedbacks') || '[]');
     feedbacks.push({ text, date: new Date().toISOString(), user: userAccount?.email || 'anonyme' });
     localStorage.setItem('timecool_feedbacks', JSON.stringify(feedbacks));
   } catch(e) {}
+  // Et l envoi reel (mission 33) : enregistre en base et transmis par e-mail a l equipe.
+  let envoye = false;
+  if (typeof TC_BACKEND !== 'undefined' && TC_BACKEND.estConnecte && TC_BACKEND.estConnecte()) {
+    try { await TC_BACKEND.envoyerCommentaire(text, tcContexteCommentaire()); envoye = true; } catch (e) { console.warn('Commentaire non transmis :', e && e.message ? e.message : e); }
+  }
   document.getElementById('feedbackTextarea').value = '';
-  showToast('✅ Merci ! Ton commentaire a été enregistré');
+  showToast(envoye ? '✅ Merci ! Ton commentaire a été envoyé à l’équipe' : '✅ Merci ! Ton commentaire a été enregistré');
 }
 
 // ═══ Override navigate pour les nouvelles pages v4.0 ═══
@@ -21461,6 +21482,11 @@ const TC_BACKEND = {
     const corps = { rdv: rdv, date: date, debut: debut, duree: duree };
     if (tcTypeRdvValide(type)) corps.type = type;
     return tcAppel('POST', '/rdv/proposer-creneau', corps);
+  },
+
+  /** Un commentaire depuis « Aide et commentaires » : enregistre en base et transmis a l equipe (mission 33). */
+  async envoyerCommentaire(texte, contexte) {
+    return tcAppel('POST', '/commentaires', { texte: texte, version: (contexte && contexte.version) || '', appareil: (contexte && contexte.appareil) || '' });
   },
 
   /** Le titulaire refuse. Sans « bloquer: false » : refus ET blocage, le demandeur n en est pas informe ;

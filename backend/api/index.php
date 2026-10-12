@@ -4025,6 +4025,44 @@ switch ($route) {
         }
         Rep::ok(rappelsEnvoyer());
 
+    /*
+     * Un commentaire envoye depuis « Aide et commentaires » (mission 33, 12/10). Il est garde en base
+     * (table commentaires, migration 011) puis transmis par e-mail a l equipe ; si l e-mail echoue (envoi
+     * non configure, serveur injoignable), la ligne reste et la reponse le dit : jamais une erreur pour
+     * l utilisateur a cause de l e-mail.
+     */
+    case 'POST /commentaires':
+        $compte = Auth::compte();
+        $entree = Entree::corps();
+        $texte = trim((string) ($entree['texte'] ?? ''));
+        if ($texte === '') {
+            Rep::erreur(400, 'champs_manquants', 'Champ texte requis.');
+        }
+        if (mb_strlen($texte) > 2000) {
+            Rep::erreur(400, 'texte_trop_long', '2000 caractères au plus.');
+        }
+        $version = mb_substr(trim((string) ($entree['version'] ?? '')), 0, 40);
+        $appareil = mb_substr(trim((string) ($entree['appareil'] ?? '')), 0, 120);
+        Db::req(
+            'INSERT INTO commentaires (compte_id, texte, version, appareil) VALUES (?, ?, ?, ?)',
+            [$compte['id'], $texte, $version !== '' ? $version : null, $appareil !== '' ? $appareil : null]
+        );
+        $commentaireId = (int) Db::pdo()->lastInsertId();
+        $emailEnvoye = false;
+        // Un compte de test (…@exemple-timecool.fr, sondes e2e) : garde en base, mais aucun e-mail a l equipe.
+        $compteDeTest = str_ends_with(strtolower((string) ($compte['email'] ?? '')), '@exemple-timecool.fr');
+        if (!$compteDeTest) try {
+            $qui = trim((string) ($compte['prenom'] ?? '') . ' ' . (string) ($compte['nom'] ?? ''));
+            $corps = "Commentaire TimeCool\n\n" . $texte . "\n\n— Compte : " . $qui . ' (' . (string) ($compte['reference'] ?? '') . ', ' . (string) ($compte['email'] ?? '') . ")\n"
+                . '— Version : ' . ($version !== '' ? $version : '?') . "\n" . '— Appareil : ' . ($appareil !== '' ? $appareil : '?') . "\n" . '— Le : ' . date('d/m/Y H:i') . "\n" . '— N° ' . $commentaireId;
+            envoyerEmail('social@timecool.fr', 'Commentaire TimeCool — ' . ($qui !== '' ? $qui : 'un utilisateur'), $corps);
+            $emailEnvoye = true;
+            Db::req('UPDATE commentaires SET email_envoye = 1 WHERE id = ?', [$commentaireId]);
+        } catch (Throwable $e) {
+            error_log('Commentaire ' . $commentaireId . ' : e-mail non envoyé : ' . $e->getMessage());
+        }
+        Rep::ok(['id' => $commentaireId, 'email_envoye' => $emailEnvoye, 'compte_de_test' => $compteDeTest]);
+
     case 'POST /compte/langue':
         $compte = Auth::compte();
 

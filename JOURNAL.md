@@ -1736,3 +1736,24 @@ mobile vers le nouvel appareil.
   que j'ai, suis-je libre, quels, combien, y a-t-il…) perd sa carte ; jamais « peux-tu / tu peux / je peux / pourrais-tu »,
   ni une phrase qui porte un jour ET une heure. Cas ajoutés à la suite. À signaler : un rendez-vous existant nommé
   autrement (« annule le médecin » avec « Dr. Martin » à l'agenda) donne le refus calme « Je ne trouve pas… » (sans danger).
+
+## 12/10/2026 (session Codeur) — « Envoyer mon commentaire » envoie vraiment (mission 33)
+
+**Codé et commité sur main, PAS publié.** Page + API + migration 011 (à jouer par le chef de projet AVANT l'API, l'API avant la page).
+
+- Demande (Charles) : le bouton « ✉️ Envoyer mon commentaire » de « Aide et commentaires » ne faisait qu'une copie locale et un
+  toast « Merci ». Désormais : route `POST /commentaires` (compte obligatoire, `texte` requis ≤ 2000, `version` ≤ 40,
+  `appareil` ≤ 120) qui enregistre en base (table `commentaires`, migration `011_commentaires.sql`, rejouable) PUIS envoie
+  un e-mail à social@timecool.fr (`envoyerEmail` existant, sujet « Commentaire TimeCool — Prénom Nom », corps : texte,
+  compte, version, appareil, date, numéro). L'e-mail est dans un try/catch : s'il échoue, la ligne reste (elle fait foi)
+  et la réponse dit `email_envoye:false`. Un compte de test (`…@exemple-timecool.fr`) est enregistré mais ne déclenche
+  jamais d'e-mail (les sondes e2e n'écrivent pas à l'équipe).
+- Page : `sendFeedback` devient asynchrone ; copie locale `timecool_feedbacks` gardée (hors ligne, rien ne se perd) ;
+  connecté → `TC_BACKEND.envoyerCommentaire(texte, {version, appareil})` ; `tcContexteCommentaire` : version du build
+  (`tcInfosVersion`, « web » sur le site) et navigateur, rien de personnel ; toast « envoyé à l’équipe » si l'API a répondu,
+  « enregistré » sinon. Déconnecté : comme avant.
+- Aide : nombre de langues calculé (`tcNombreDeLangues` = langues actives de `SUPPORTED_LANGUAGES`, plus de « 17 » en dur) ;
+  « Paramètres → Rappels » → « Paramètres → Notifications » ; phrase « ta propre clé / Configuration IA » retirée ; Journal :
+  statuts (préparée, envoyée, confirmée…), mois en cours ou trois derniers mois, archivage (mission 29).
+- Suites : `verif-commentaires` (page, API, SQL) dans verifier.sh ; `verif-commentaires-e2e` (compte sonde jetable, 200/400/401,
+  tronquage) : à enregistrer dans verifier.sh APRÈS la migration et la mise en ligne de l'API (verifier.sh vise la production).
