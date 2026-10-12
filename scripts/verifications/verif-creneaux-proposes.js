@@ -41,7 +41,7 @@ const ctx = {
 vm.createContext(ctx);
 ['tcISO', 'tcFormaterDateHumaine', 'tcEvenementFin', 'tcEvenementCouvre',
  'tcSansTempsProtege', 'tcMinutesDeHeure', 'tcHeureLisible', 'tcPlagesDuJour', 'tcOccupationsDuJour',
- 'tcCreneauxDisponibles', 'tcPeriodeAgenda', 'detecterDemandeCreneau',
+ 'tcCreneauxDisponibles', 'tcPeriodeAgenda', 'tcSansAccents', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'detecterDemandeCreneau',
  'tcGererDemandeCreneau'].forEach((n) => {
   const src = extraire(n);
   if (src) {

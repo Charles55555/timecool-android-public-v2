@@ -73,15 +73,18 @@ function contexte() {
   verifie('« le 10 » n est pas une heure', c0.tcHeureDansTexte('supprime le rdv du 10 octobre') === null);
   verifie('« 10h30 » en est une', JSON.stringify(c0.tcHeureDansTexte('à 10h30')) === '{"h":10,"m":30}');
 
-  // Le scénario du 30/09 : compris, donc exécuté sans « oui ou non ? »
+  // Depuis le 12/10 (mission 19) : meme un seul rendez-vous compris attend « oui / non » avec sa ligne ;
+  // « oui » le supprime et Charly dit lequel (remplace le scenario du 30/09 : execute sans question).
   const c = contexte();
   c.events = agenda();
   await c.tcGererSuppressionRdv('Tu peux me supprimer ce rendez-vous de demain matin à 10h');
-  verifie('un seul rendez-vous visé : supprimé tout de suite',
-    !c.events.some(e => e.id === 'charly_ai_1') && c.events.length === 2 && !c.attente(),
-    'restants : ' + c.events.map(e => e.title).join(', '));
-  const dit = c.charlyIA.history.map(m => m.content).join(' | ');
-  verifie('et Charly dit lequel', /C'est fait : « Essai agenda Google »/.test(dit), dit);
+  verifie('un seul rendez-vous visé : rien de supprimé, la question « oui / non » avec sa ligne',
+    c.events.length === 3 && (c.attente() || []).length === 1 && c.attente()[0].id === 'charly_ai_1'
+    && /Tu veux annuler ce rendez-vous \?/.test(c.charlyIA.history.map(m => m.content).join(' | ')),
+    'restants : ' + c.events.map(e => e.title).join(', ') + ' / ' + c.charlyIA.history.map(m => m.content).join(' | '));
+  c.tcConfirmerSuppressionRdv();
+  verifie('« oui » : supprimé, et Charly dit lequel', !c.events.some(e => e.id === 'charly_ai_1') && c.events.length === 2 && !c.attente()
+    && /C'est fait : « Essai agenda Google »/.test(c.charlyIA.history.map(m => m.content).join(' | ')), c.charlyIA.history.map(m => m.content).join(' | '));
 
   // Pas compris : il demande lequel, puis comprend la réponse
   const c3 = contexte();

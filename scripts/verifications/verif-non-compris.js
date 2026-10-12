@@ -49,7 +49,7 @@ const ctx = {
   _tcSuppressionEnAttente: null, _tcSuppressionChoix: null,
   setTimeout: (f) => { if (typeof f === 'function') f(); return 0; },
   tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); },
-  tcDefinirStatutCharly: () => {}, renderCharlyChat: () => {},
+  tcDefinirStatutCharly: () => {}, renderCharlyChat: () => {}, tcDernierMessageCharly: () => null,
   tcFormaterDateHumaine: (d) => d, tcFormaterHeure: (e) => e.startH + 'h', escapeHTMLSafe: (t) => String(t),
   parseFrenchDateFromText: () => null,
   tcSupprimerRdvs: (l) => { supprimes.push(l.map((e) => e.title)); },
@@ -59,7 +59,7 @@ vm.createContext(ctx);
 ['TC_JOURS_SEMAINE', 'TC_MOIS'].forEach((n) => { const src = extraireConst(n); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 ['tcSansAccents', 'tcISO', 'tcHeureDansTexte', 'tcPeriodeAgenda', 'tcBorneDeFin', 'tcJoursDansTexte', 'tcJoursNommes',
  'tcPhraseNonCompris', 'tcPeriodeContrainte', 'tcPeriodeCoherente', 'tcPeriodeJourNomme',
- 'detecterConsultationAgenda', 'tcGererConsultationAgenda', 'tcGererSuppressionRdv'
+ 'detecterConsultationAgenda', 'tcGererConsultationAgenda', 'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv'
 ].forEach((n) => { const src = extraire(n); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 
 const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -109,7 +109,8 @@ verifie('pas de periode : coherent (rien a verifier)', ctx.tcPeriodeCoherente('l
   ctx.events = [ev('a', 'Chercher les enfants', '2026-10-03', 17), ev('b', 'Dentiste', '2026-10-05', 15)];
   supprimes.length = 0; ctx.charlyIA.history = [];
   await ctx.tcGererSuppressionRdv('Supprime mon rdv de ce lundi');
-  verifie('« supprime ... ce lundi » vise le lundi, pas le samedi', supprimes.length === 1 && supprimes[0].join() === 'Dentiste', JSON.stringify(supprimes));
+  ctx.tcConfirmerSuppressionRdv();   // depuis le 12/10 (mission 19), toute suppression attend « oui »
+  verifie('« supprime ... ce lundi » (apres « oui ») vise le lundi, pas le samedi', supprimes.length === 1 && supprimes[0].join() === 'Dentiste', JSON.stringify(supprimes));
   supprimes.length = 0; ctx.charlyIA.history = [];
   await ctx.tcGererSuppressionRdv('Supprime mes rdv de ce lundi demain');
   const nonSup = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;

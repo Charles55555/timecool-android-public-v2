@@ -128,7 +128,7 @@ verifie('« reporte mon dentiste à jeudi » (dentiste aujourd hui) → null', D
 const q3 = D([{ ev: zorglub, p: {} }], 'repousse mon rdv de lundi 19 à 14h');
 verifie('« lundi 19 » (un seul rdv ce jour-la : le notaire) → « un seul rendez-vous … c est celui-la ? »', !!q3 && /Tu as un seul rendez-vous lundi 19 octobre : « Notaire » 11h\. C’est celui-là \?/.test(q3), q3);
 const td = fonction(page, 'tcTraiterDeplacement') || '';
-verifie('tcTraiterDeplacement pose la question et ne deplace rien dans ce cas', /const question = tcDeplacementHorsJour\(liste, text, new Date\(\), events, mode === 'pro' \? 'pro' : 'user'\);/.test(td) && td.indexOf('const question') < td.indexOf('tcAppliquerDeplacement(liste)') && /if \(question\) \{\s+msg\._validated = true;\s+charlyIA\.history\.push\(\{ role: 'assistant', content: question \}\);\s+return true;/.test(td));
+verifie('tcTraiterDeplacement pose la question et ne deplace rien dans ce cas', /const question = tcDeplacementHorsJour\(liste, text, new Date\(\), events, mode === 'pro' \? 'pro' : 'user'\);/.test(td) && td.indexOf('const question') < td.indexOf('tcAppliquerDeplacement(liste)') && /if \(question\) \{\s+msg\._validated = true;\s+if \(String\(msg\.content \|\| ''\)\.trim\(\) !== question\.trim\(\)\) charlyIA\.history\.push\(\{ role: 'assistant', content: question \}\);\s+return true;/.test(td));
 
 titre('5. Jour absent : Charly demande le jour, ne le choisit pas');
 const Q = (r, u, prec) => ctx.tcQuestionJourManquant(r, u, prec || [], NOW);

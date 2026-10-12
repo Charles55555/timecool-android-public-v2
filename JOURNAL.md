@@ -1355,3 +1355,29 @@ mobile vers le nouvel appareil.
   d'ordre en tête) ; une seconde déclaration du même nom l'aurait remplacée en silence. La règle existante est
   réutilisée, complétée par `tcDemandeHorsPrenoms` (jour, heure, mot de rendez-vous) ; la suite vérifie qu'il n'y a
   qu'une déclaration.
+
+## 12/10/2026 (session Codeur) — Charly, suite de la campagne 10
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- (a) « Quand suis-je libre vendredi ? » : `detecterDemandeCreneau` lit aussi un jour nommé (`tcPeriodeJourNomme`) ;
+  `tcGererDemandeCreneau` borne une période sans fin à son seul jour (plus jamais deux semaines pour « mardi » ou
+  « aujourd'hui »). Réponse construite par la page : aucune carte « Proposition d'agenda ».
+- (b) Toute suppression demande « oui / non » avec la liste des rendez-vous visés, même un seul (`tcGererSuppressionRdv`,
+  remplace le choix du 30/09 « compris donc exécuté ») ; la suite `verif-charly-suppression` est adaptée.
+- (c) Une création simple (objet + jour + heure + mot de rendez-vous ou verbe de création, sans question, annulation,
+  déplacement, consultation ni série) est proposée par la page (`tcCreationLocale`) avant le modèle : « rdv dentiste
+  mardi 15h », « ajoute un déplacement à Lyon jeudi 9h » (titre « Déplacement à Lyon »), « rdv coach vendredi 15h »
+  donnent la même proposition quel que soit le message d'avant ; les garde-fous existants (conflit local, plages
+  libres, formules) s'appliquent ensuite. « annule le dentiste » sans dentiste → « Je ne trouve pas de rendez-vous
+  « dentiste » dans ton agenda. Rien n’a été changé. » (plus de rapprochement avec un autre rendez-vous).
+- (d) « lequel ? » n'est plus affiché deux fois : `tcTraiterDeplacement` ne repousse pas la question du jour quand la
+  réponse déjà affichée est cette même question (remplacée par `tcListeDuJourPourDeplacement`).
+- Suite `verif-charly-campagne10` (horloge dimanche 11/10/2026 14h20, agenda de la campagne), dans verifier.sh ; rouge
+  sur la page d'avant.
+- Limites : la création locale vise une seule heure et un seul jour (une série ou un « de 14h à 16h » va au modèle) ;
+  le titre vient de `tcTitreDepuisDemande` (« Dentiste », sans préfixe « Rendez-vous »).
+- Suites adaptées à la règle du 12/10 (toute suppression attend « oui / non ») : `verif-suppression-plage`,
+  `banc-charly` (on répond « oui » puis on vérifie comme avant), `verif-non-compris` (contexte : `tcDernierMessageCharly`),
+  et `verif-charly-conflits` (forme de `tcTraiterDeplacement` avec la garde anti-doublon).
+  Idem verif-non-compris (reponse « oui ») et verif-creneaux-proposes (extraction de tcPeriodeJourNomme).

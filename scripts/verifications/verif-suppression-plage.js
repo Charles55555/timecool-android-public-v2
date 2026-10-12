@@ -174,8 +174,10 @@ const titres = (l) => (l || []).map((e) => e.title + ' ' + e.date);
   titre('Ce qui marchait avant marche encore');
   {
     await lancer('annule le dentiste');
-    verifie('un seul correspond : supprime sans redemander', supprimes && supprimes.length === 1 && supprimes[0].title === 'Dentiste',
-      'choix de Charles du 30/09');
+    // Depuis le 12/10 (mission 19) : meme un seul rendez-vous attend « oui / non » (remplace le choix du 30/09).
+    verifie('un seul correspond : rien de supprime, la question « oui / non » avec sa ligne', supprimes === null
+      && ctx._tcSuppressionEnAttente && ctx._tcSuppressionEnAttente.length === 1 && ctx._tcSuppressionEnAttente[0].title === 'Dentiste',
+      'Charles, 12/10 : jamais de suppression immediate');
   }
   {
     await lancer('annule mon rendez-vous');

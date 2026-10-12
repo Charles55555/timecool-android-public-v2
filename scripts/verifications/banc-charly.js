@@ -104,7 +104,7 @@ if (modeles) vm.runInContext(modeles, ctx); else { ko++; console.log('  KO  TC_M
  'tcPhraseNonCompris', 'parseFrenchDateFromText', 'tcContactDuRdv', 'tcRemplirModele', 'tcValeursDuRdv', 'tcModeleMessage',
  'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
  'tcDetecterContrainte', 'tcRdvDeLaPeriode', 'tcGererContrainte',
- 'detecterSuppressionRdv', 'tcGererSuppressionRdv', 'tcMemoriserSuppression', 'tcSupprimerRdvs', 'tcRdvDesigne',
+ 'detecterSuppressionRdv', 'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcMemoriserSuppression', 'tcSupprimerRdvs', 'tcRdvDesigne',
  'tcProchainRdv', 'tcRdvVise', 'tcDetecterPrevenance', 'tcGererPrevenance', 'tcPrevenirDepuisChat', 'tcPrevenirRetard',
  'detecterConsultationAgenda', 'detecterDemandeCreneau',
  'extraireLieuDuTexte', 'detecterRechercheProfessionnel', 'extraireAdresseDuTexte', 'detecterDemandeTrajet', 'detecterRechercheWeb',
@@ -363,17 +363,22 @@ const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {
   titre('Suppression par un mot du titre');
   reinit();
   await ctx.tcGererSuppressionRdv('Tu peux supprimer ma partie de golf ?');
+  // Depuis le 12/10 (mission 19) : toute suppression attend « oui / non » ; on repond oui.
+  verifie('un seul rendez-vous : rien de supprimé avant le « oui »', ctx.events.length === 10 && /Tu veux annuler ce rendez-vous \?/.test(dernier().content), dernier().content);
+  ctx.tcConfirmerSuppressionRdv();
   verifie('le golf est supprimé, lui seul', titres().indexOf('Partie de golf') === -1 && ctx.events.length === 9, titres().join(','));
   verifie('Charly le dit', /C'est fait : « Partie de golf »/.test(dernier().content), dernier().content);
   reinit();
   await ctx.tcGererSuppressionRdv('annule le dentiste');
-  verifie('« annule le dentiste » supprime le dentiste', titres().indexOf('Dentiste') === -1 && ctx.events.length === 9);
+  ctx.tcConfirmerSuppressionRdv();
+  verifie('« annule le dentiste » (apres « oui ») supprime le dentiste', titres().indexOf('Dentiste') === -1 && ctx.events.length === 9);
   reinit();
   await ctx.tcGererSuppressionRdv('annule le golf de jeudi');
   verifie('le golf n est pas jeudi : rien n est supprimé, Charly demande', ctx.events.length === 10 && /aucun rendez-vous correspondant/.test(dernier().content));
   reinit();
   await ctx.tcGererSuppressionRdv('annule Marc Dupont');
-  verifie('« annule Marc Dupont » supprime le rendez-vous avec Marc', titres().indexOf('Dentiste') === -1 && ctx.events.length === 9);
+  ctx.tcConfirmerSuppressionRdv();
+  verifie('« annule Marc Dupont » (apres « oui ») supprime le rendez-vous avec Marc', titres().indexOf('Dentiste') === -1 && ctx.events.length === 9);
 
   titre('Prévenir par écrit');
   reinit();
