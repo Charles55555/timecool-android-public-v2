@@ -1113,3 +1113,8 @@ mobile vers le nouvel appareil.
   L'emplacement de la barre du haut (`#headerAgendaLabel`) est retiré ; `updateHeaderAgendaLabel` écrit sur la ligne du mois.
 - Suite `verif-titre-agenda` (HTML : ordre et style ; `updateHeaderAgendaLabel` exécutée : secondaire / principal / autre
   page), dans verifier.sh ; rouge sur la page d'avant. Capture Chrome 390x844 : `TimeCool-Codeur/captures/mission9-agenda-secondaire.png`.
+- Mission 9 bis (Charles, 12/10) : sur la ligne du mois il ne restait que « 📍 A… » à 390 px (57 px pour 195). Le nom entier
+  va sur une ligne dédiée, centrée (`#agendaSecondaireTitre`, 13px gras bleu), juste sous la ligne du mois et au-dessus de
+  « Semaine 42 », masquée pour Mon agenda et quand le panneau du mois est ouvert (comme les badges) ; la ligne du mois
+  retrouve son espaceur vide ; plus rien dans la barre du haut. Suite `verif-titre-agenda` réécrite pour cette disposition ;
+  capture 390x844 refaite (`TimeCool-Codeur/captures/mission9-agenda-secondaire.png`).

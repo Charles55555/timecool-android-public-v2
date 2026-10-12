@@ -68,6 +68,7 @@ body { display:flex; flex-direction:column; }
 .nav-btn { width:34px; height:34px; border:none; background:transparent; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .nav-btn svg { width:18px; height:18px; fill:var(--text-sec); }
 .mois-ouvert #weekNumberBadge, .mois-ouvert #timezoneBadge { display:none !important; }
+.mois-ouvert #agendaSecondaireTitre { display:none !important; }   /* le nom de l agenda secondaire s efface aussi (12/10) */
 /* En-tête du mois : « Octobre 2026 ▾ » tient sur une ligne, les flèches gardent leur taille (le triangle prend de la place) */
 #page-calendar .sub-header { gap:4px; padding-left:10px; padding-right:10px; }
 .sub-header .nav-btn { flex-shrink:0; }
@@ -1086,8 +1087,7 @@ if (window.pdfjsLib) {
     <button class="nav-btn" onclick="prevPeriod()"><svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
     <div class="month-title" id="monthTitle" onclick="tcBasculerPanneauMois()" style="cursor:pointer;" title="Choisir un jour"></div><span onclick="tcBasculerPanneauMois()" style="cursor:pointer; font-size:14px; color:var(--text-sec); padding:0 4px;">▾</span>
     <button class="nav-btn" onclick="nextPeriod()"><svg viewBox="0 0 24 24"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
-    <!-- Le nom de l agenda secondaire ouvert (vide pour Mon agenda) : il tient entre le mois et « Auj. », coupe par des points de suspension (Charles, 12/10). -->
-    <div id="subHeaderAgendaLabel" style="flex:1; min-width:0; text-align:center; font-size:13px; font-weight:700; color:var(--g-blue); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 6px;"></div>
+    <div style="flex:1;"></div>
     <button class="today-btn" onclick="goToToday()">Auj.</button>
     <button class="today-btn" onclick="openSearchModal()" title="Rechercher" style="margin-left:6px; padding:6px 10px;">🔍</button>
     <div id="calendarViewMenuWrap" style="position:relative;">
@@ -1096,6 +1096,8 @@ if (window.pdfjsLib) {
     </div>
   </div>
   <div id="tcMoisPanneau" style="display:none; flex-shrink:0; background:#fff; border-bottom:1px solid var(--border); padding:2px 10px 8px; overflow-y:auto; max-height:46vh;"></div>
+  <!-- Le nom de l agenda secondaire ouvert, en entier (Charles, 12/10) ; rien pour Mon agenda. -->
+  <div id="agendaSecondaireTitre" style="display:none; text-align:center; font-size:13px; font-weight:700; color:var(--g-blue); padding:4px 16px 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
   <div id="weekNumberBadge" style="display:none; text-align:center; font-size:11px; color:var(--text-sec); padding:2px 0 6px;"></div>
   <div id="timezoneBadge" style="text-align:center; font-size:10.5px; color:var(--text-sec); padding:0 0 6px;"></div>
   <div class="view-tabs">
@@ -19020,12 +19022,14 @@ function updateHeaderAgendaLabel() {
      et un seul passait par navigate(). */
   const surAgenda = !!(document.getElementById('page-calendar')
     && document.getElementById('page-calendar').classList.contains('active'));
-  // Le nom descend sur la ligne du mois (Charles, 12/10) : dans la barre du haut, il etait trop serre entre le
-  // logo et les icones sur telephone. L element reste la, vide, pour tenir l espace devant « Auj. ».
-  const el = document.getElementById('subHeaderAgendaLabel');
+  // Le nom a sa ligne, sous la ligne du mois (Charles, 12/10) : dans la barre du haut il etait trop serre, et
+  // sur la ligne du mois il ne restait que « A… » sur 390 px.
+  const el = document.getElementById('agendaSecondaireTitre');
   if (el) {
-    el.textContent = (_isolatedCalendarName && surAgenda) ? '📍 ' + _isolatedCalendarName : '';
-    el.title = (_isolatedCalendarName && surAgenda) ? _isolatedCalendarName : '';
+    const montre = !!(_isolatedCalendarName && surAgenda);
+    el.textContent = montre ? '📍 ' + _isolatedCalendarName : '';
+    el.title = montre ? _isolatedCalendarName : '';
+    el.style.display = montre ? 'block' : 'none';
   }
   // Types d'événements : n'a de sens que pour Mon agenda, jamais pour un agenda créé à part
   const menuWrap = document.getElementById('calendarViewMenuWrap');
