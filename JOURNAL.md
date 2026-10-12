@@ -1381,3 +1381,12 @@ mobile vers le nouvel appareil.
   `banc-charly` (on répond « oui » puis on vérifie comme avant), `verif-non-compris` (contexte : `tcDernierMessageCharly`),
   et `verif-charly-conflits` (forme de `tcTraiterDeplacement` avec la garde anti-doublon).
   Idem verif-non-compris (reponse « oui ») et verif-creneaux-proposes (extraction de tcPeriodeJourNomme).
+- Correctif après examen (cinq régressions mesurées) : `tcCreationLocale` se retire (le modèle décide) devant une plage
+  ou une durée (« de 14h à 16h », « 14h-16h », « jusqu'à 17h », « pendant 2 heures »), deux demandes (plus d'un jour
+  ou d'une heure, « puis »), une phrase longue (titre de plus de 3 mots ou plus de 10 mots), un rendez-vous à venir qui
+  porte déjà un mot du titre (« mets le dentiste à jeudi 10h » = déplacement, pas doublon), et les réservations
+  (« réserve » retiré des verbes ; restaurant, hôtel, table, billet, train, vol exclus). Suppression : les mots de moment
+  et de choix (matin, soir, midi, après-midi, aujourd'hui, demain, prochain, dernier, ce/cette…) sont dans `motsVides`
+  (plus jamais « je ne trouve pas « matin » ») ; matin / après-midi / soir comptent comme un filtre ; « mon prochain
+  rdv » vise le prochain à venir, « mon dernier rdv » le dernier passé. Les quatre phrases de l'examen et les cas de
+  création sont dans `verif-charly-campagne10`.

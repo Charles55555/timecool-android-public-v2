@@ -11194,18 +11194,35 @@ function tcCreationLocale(texte, now) {
   const brut = String(texte || '');
   if (/\?/.test(brut)) return '';
   const t = tcSansAccents(brut).replace(/[’']/g, ' ');
-  if (!/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|reserve[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?)\b/.test(t)) return '';
+  // « réserve » : une reservation de restaurant ou d hotel n est pas une creation locale (examen de la mission 19).
+  if (!/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?)\b/.test(t)) return '';
+  if (/\b(restaurant|resto|hotel|table|billets?|train|vol|avion)\b/.test(t)) return '';
   if (/\b(annule[rsz]?|annulation|supprime[rsz]?|efface[rsz]?|enleve[rsz]?|retire[rsz]?)\b/.test(t)) return '';
   if (tcEstDeplacement(brut)) return '';
   if (/\b(tous les|toutes les|chaque|hebdo|tous les jours)\b/.test(t)) return '';
   if (typeof detecterConsultationAgenda === 'function' && detecterConsultationAgenda(brut)) return '';
   if (typeof detecterDemandeCreneau === 'function' && detecterDemandeCreneau(brut)) return '';
+  // Une plage ou une duree (« de 14h à 16h », « 14h-16h », « jusqu'à 17h », « pendant 2 heures ») : le modele la lit, pas ici.
+  if (/\bde \d{1,2} ?h ?\d{0,2} (?:a|au) \d{1,2} ?h|\d{1,2} ?h ?\d{0,2} ?- ?\d{1,2} ?h|\bjusqu ?(?:a|au) \d{1,2} ?h|\b(?:pendant|durant|duree|dure) |\b\d+ ?heures?\b/.test(t)) return '';
+  // Deux demandes (« dentiste demain à 10h et coach jeudi à 14h ») : plus d un jour ou plus d une heure.
+  if ((t.match(/\b\d{1,2} ?h(?:\d{2})?\b|\b\d{1,2}:\d{2}\b/g) || []).length > 1) return '';
+  if (tcJoursCites(brut, now).length > 1 || /\b(puis|ensuite)\b/.test(t)) return '';
   const heure = tcHeureDansTexte(brut.toLowerCase());
   if (!heure) return '';
   const demande = tcDateDemandee(brut, now);
   if (!demande || demande.invalide || !demande.date) return '';
   const titre = tcTitreDepuisDemande(brut);
   if (!titre) return '';
+  // Une phrase longue (« …c'est pour mes dents de sagesse et il faut apporter la radio ») : le modele fait le tri.
+  if (titre.split(/\s+/).length > 3 || t.split(/\s+/).filter(Boolean).length > 10) return '';
+  // Un rendez-vous a venir porte deja un mot du titre (« mets le dentiste à jeudi 10h ») : c est un deplacement, pas une creation.
+  if (typeof events !== 'undefined' && Array.isArray(events)) {
+    const motsT = tcSansAccents(titre).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4; });
+    const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+    const ref = now ? new Date(now) : new Date();
+    const debutStr = tcISO(new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()));
+    if (motsT.length && events.some(function (e) { return e && e.mode === evMode && e.title && e.date >= debutStr && tcTitreContient(e.title, motsT); })) return '';
+  }
   const sh = heure.h, sm = heure.m || 0;
   const hh = function (h) { return String(h).padStart(2, '0'); };
   const creneau = hh(sh) + ':' + hh(sm) + '-' + hh(Math.min(sh + 1, 23)) + ':' + hh(sm);
@@ -13137,10 +13154,25 @@ async function tcGererSuppressionRdv(text) {
     filtreApplique = true;
   } else if (/\bmatin\b/.test(t)) {
     candidats = candidats.filter(e => Number(e.startH) < 12);
+    filtreApplique = true;
   } else if (/apr[eè]s-?midi|aprem/.test(t)) {
     candidats = candidats.filter(e => Number(e.startH) >= 12 && Number(e.startH) < 19);   // l apres-midi va jusqu a 19h (Charles, 11/10)
+    filtreApplique = true;
   } else if (/\bsoir\b|\bsoirée\b|\bsoiree\b/.test(t)) {
     candidats = candidats.filter(e => Number(e.startH) >= 18);
+    filtreApplique = true;
+  }
+  // « mon prochain rdv », « mon dernier rdv » : un choix, pas un titre (examen de la mission 19).
+  {
+    const sansT = tcSansAccents(t);
+    if (/\bprochains?\b|\bprochaine\b|\bderniers?\b|\bderniere\b/.test(sansT)) {
+      const maintenant = new Date();
+      const debutDe = function (e) { return new Date(e.date + 'T' + String(e.startH).padStart(2, '0') + ':' + String(e.startM || 0).padStart(2, '0') + ':00'); };
+      const tries = candidats.slice().sort(tcComparerEvenements);
+      if (/\bprochains?\b|\bprochaine\b/.test(sansT)) { const avenir = tries.filter(e => debutDe(e) >= maintenant); candidats = avenir.length ? [avenir[0]] : []; }
+      else { const passes = tries.filter(e => debutDe(e) < maintenant); candidats = passes.length ? [passes[passes.length - 1]] : (tries.length ? [tries[tries.length - 1]] : []); }
+      filtreApplique = true;
+    }
   }
 
   // Filtre par mot du titre (ex : "mon rdv chez le dentiste" -> "dentiste").
@@ -13153,6 +13185,11 @@ async function tcGererSuppressionRdv(text) {
     const motsVides = new Set(['annule','annuler','supprime','supprimer','efface','effacer',
       'enleve','enlève','enlever','retire','retirer','celui','celle','mon','ma','mes','les','des','une','avec','pour','chez',
       'tous','toutes','tout','toute','chaque','rdv','rendez','vous','rendez-vous','svp','stp',
+      // Mots de moment et de choix (examen de la mission 19) : jamais un titre « introuvable ».
+      'prochain','prochaine','prochains','dernier','derniere','dernière','premier','premiere','première',
+      'matin','matinee','matinée','soir','soiree','soirée','midi','apres','après','aprem','apres-midi','après-midi',
+      'aujourd','aujourd\'hui','aujourd’hui','hui','demain','apres-demain','après-demain','hier',
+      'ce','cet','cette','ces','celui','celle','ceux','celles','moi','mien','mienne','vers','heure','heures',
       'jusqu','jusqua','jusquau','fin','partir','semaine','week-end','weekend','mois',
       'lundi','lundis','mardi','mardis','mercredi','mercredis','jeudi','jeudis','vendredi','vendredis','samedi','samedis','dimanche','dimanches',
       'janvier','fevrier','février','mars','avril','mai','juin','juillet','aout','août','septembre','octobre','novembre','decembre','décembre']);

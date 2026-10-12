@@ -40,6 +40,7 @@ function contexte() {
   ['tcSansAccents', 'tcISO', 'tcDateEnLettres', 'tcHeureDansTexte', 'tcReponseOuiNon', 'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda',
    'tcJoursDansTexte', 'tcBorneDeFin', 'tcJoursNommes', 'tcPhraseNonCompris', 'tcPeriodeAgenda', 'tcPeriodeContrainte', 'tcPeriodeCoherente', 'tcPeriodeJourNomme',
    'parseFrenchDateFromText', 'tcComparerEvenements', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcVerbeConjugue', 'tcEstDeplacement',
+   'tcJoursCites', 'tcTitreContient', 'tcEvenementCouvre', 'tcEvenementFin',
    'detecterConsultationAgenda', 'detecterDemandeCreneau', 'tcCreationLocale',
    'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcSupprimerRdvs', 'tcAnnulerSuppressionRdv', 'tcMemoriserSuppression', 'tcRdvDesigne', 'tcRdvRemplace']
     .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
@@ -55,8 +56,12 @@ const agenda = () => [
   { id: 'f', mode: 'user', date: '2026-10-13', startH: 15, startM: 0, endH: 17, endM: 0, title: 'Formation' },
   { id: 'm', mode: 'user', date: '2026-10-13', startH: 16, startM: 0, endH: 17, endM: 0, title: 'Rendez-vous Dr. Martin' },
   { id: 'a', mode: 'user', date: '2026-10-15', startH: 9, startM: 0, endH: 9, endM: 30, title: 'Appel fournisseur' },
-  { id: 'r', mode: 'user', date: '2026-10-16', startH: 14, startM: 0, endH: 16, endM: 0, title: 'Revue budget' }
+  { id: 'r', mode: 'user', date: '2026-10-16', startH: 14, startM: 0, endH: 16, endM: 0, title: 'Revue budget' },
+  // Aujourd hui (dimanche 11, il est 14h20) : un rendez-vous ce matin, un ce soir (examen de la mission 19).
+  { id: 'mt', mode: 'user', date: '2026-10-11', startH: 9, startM: 0, endH: 10, endM: 0, title: 'Marché' },
+  { id: 'ci', mode: 'user', date: '2026-10-11', startH: 20, startM: 0, endH: 22, endM: 0, title: 'Ciné' }
 ];
+const N = agenda().length;
 
 (async () => {
   titre('(a) « Quand suis-je libre vendredi ? » : le jour demandé, rien d autre');
@@ -78,8 +83,17 @@ const agenda = () => [
     const r = ctx.tcCreationLocale(texte, NOW);
     verifie('« ' + texte + ' » → bloc « ' + ligne + ' » et prose « je te propose ceci »', r.indexOf('[AGENDA]\n' + ligne + '\n[/AGENDA]') > -1 && /je te propose ceci\./.test(r), r);
   });
-  ['annule le dentiste', 'décale mon rdv de mardi à 16h', 'quand suis-je libre vendredi ?', 'qu est-ce que j ai mardi ?', 'rdv dentiste mardi', 'je suis malade', 'supprime tout mardi après-midi', 'rdv dentiste tous les mardis 15h', 'rdv dentiste mardi 15h ?']
+  ['annule le dentiste', 'décale mon rdv de mardi à 16h', 'quand suis-je libre vendredi ?', 'qu est-ce que j ai mardi ?', 'rdv dentiste mardi', 'je suis malade', 'supprime tout mardi après-midi', 'rdv dentiste tous les mardis 15h', 'rdv dentiste mardi 15h ?',
+   // Examen : plage ou duree, deux demandes, phrase longue, reservation → le modele.
+   'réunion mardi de 14h à 16h', 'rdv dentiste mardi de 15h à 17h', 'rdv mardi 14h-16h', 'rdv dentiste mardi 15h jusqu’à 17h', 'rdv mardi 15h pendant 2 heures',
+   'ajoute dentiste demain à 10h et coach jeudi à 14h', 'rdv mardi 10h puis jeudi 14h',
+   'Ajoute un rdv chez le dentiste mardi à 15h, c’est pour mes dents de sagesse et il faut apporter la radio',
+   'réserve un restaurant vendredi à 20h', 'réserve une table mardi 20h']
     .forEach((texte) => verifie('« ' + texte + ' » n est pas une création simple (suit son chemin)', ctx.tcCreationLocale(texte, NOW) === '', ctx.tcCreationLocale(texte, NOW)));
+  // Examen : un rendez-vous a venir porte deja le mot → deplacement, pas creation (doublon evite).
+  ctx.events = agenda().concat([{ id: 'd', mode: 'user', date: '2026-10-16', startH: 11, startM: 0, endH: 12, endM: 0, title: 'Dentiste' }]);
+  ['mets le dentiste à jeudi 10h', 'mets mon dentiste jeudi à 10h', 'rdv dentiste jeudi 10h'].forEach((texte) => verifie('« ' + texte + ' » avec un « Dentiste » déjà dans l agenda → rien en local', ctx.tcCreationLocale(texte, NOW) === '', ctx.tcCreationLocale(texte, NOW)));
+  verifie('sans « Dentiste » dans l agenda, « rdv dentiste jeudi 10h » est bien créé en local', (ctx.events = agenda(), ctx.tcCreationLocale('rdv dentiste jeudi 10h', NOW).indexOf('2026-10-15 | 10:00-11:00 | Dentiste | rdv') > -1));
   const csm = fonction(page, 'charlySendMessage') || '';
   verifie('charlySendMessage : la création locale passe avant le modèle, puis les mêmes garde-fous (conflit local, formules)', /const _creationLocale = tcCreationLocale\(text, new Date\(\)\);\s+if \(_creationLocale\) \{\s+reply = _creationLocale;\s+\} else if \(charlyIA\.config\.demoMode\) \{/.test(csm) && csm.indexOf('reply = _creationLocale;') < csm.indexOf('reply = tcReponseConflitLocale(reply, text'));
 
@@ -87,20 +101,28 @@ const agenda = () => [
   const c1 = contexte(); c1.events = agenda();
   await c1.tcGererSuppressionRdv('annule le dentiste');
   const dit1 = c1.charlyIA.history.map((m) => m.content).join(' | ');
-  verifie('rien de supprimé, rien en attente, « Je ne trouve pas de rendez-vous « dentiste » »', c1.events.length === 5 && !c1.attente() && !c1.choix() && /Je ne trouve pas de rendez-vous « dentiste »/.test(dit1), dit1);
+  verifie('rien de supprimé, rien en attente, « Je ne trouve pas de rendez-vous « dentiste » »', c1.events.length === N && !c1.attente() && !c1.choix() && /Je ne trouve pas de rendez-vous « dentiste »/.test(dit1), dit1);
+  // Examen : un mot de moment ou de choix n est jamais un titre introuvable.
+  for (const [texte, attendu] of [['annule mon rdv de ce matin', 'Marché'], ['annule mon prochain rdv', 'Ciné'], ['annule mon dernier rdv', 'Marché'], ['annule le rdv de ce soir', 'Ciné']]) {
+    const cx = contexte(); cx.events = agenda();
+    await cx.tcGererSuppressionRdv(texte);
+    const ditx = cx.charlyIA.history.map((m) => m.content).join(' | ');
+    const vises = (cx.attente() || cx.choix() || []).map((e) => e.title);
+    verifie('« ' + texte + ' » : jamais « je ne trouve pas », rien de supprimé, « ' + attendu + ' » parmi les rendez-vous visés', !/Je ne trouve pas/.test(ditx) && cx.events.length === N && vises.indexOf(attendu) > -1, ditx + ' / vises : ' + vises.join(', '));
+  }
 
   titre('(b) Toute suppression demande « oui / non » avec la liste');
   const c2 = contexte(); c2.events = agenda();
   await c2.tcGererSuppressionRdv('annule le rendez-vous Dr. Martin');
   const dit2 = c2.charlyIA.history.map((m) => m.content).join(' | ');
-  verifie('un seul rendez-vous visé : la ligne et « Tu veux annuler ce rendez-vous ? », rien de supprimé', c2.events.length === 5 && (c2.attente() || []).length === 1 && c2.attente()[0].id === 'm' && /Tu veux annuler ce rendez-vous \?/.test(dit2) && /Dr\. Martin/.test(dit2), dit2);
+  verifie('un seul rendez-vous visé : la ligne et « Tu veux annuler ce rendez-vous ? », rien de supprimé', c2.events.length === N && (c2.attente() || []).length === 1 && c2.attente()[0].id === 'm' && /Tu veux annuler ce rendez-vous \?/.test(dit2) && /Dr\. Martin/.test(dit2), dit2);
   c2.tcConfirmerSuppressionRdv();
-  verifie('« oui » → supprimé', c2.events.length === 4 && !c2.events.some((e) => e.id === 'm'));
+  verifie('« oui » → supprimé', c2.events.length === N - 1 && !c2.events.some((e) => e.id === 'm'));
   const c3 = contexte(); c3.events = agenda();
   await c3.tcGererSuppressionRdv('supprime tout mardi après-midi');
-  verifie('plusieurs d un coup : la liste (Formation, Dr. Martin) et « oui / non »', (c3.attente() || []).length === 2 && c3.events.length === 5, JSON.stringify((c3.attente() || []).map((e) => e.title)));
+  verifie('plusieurs d un coup : la liste (Formation, Dr. Martin) et « oui / non »', (c3.attente() || []).length === 2 && c3.events.length === N, JSON.stringify((c3.attente() || []).map((e) => e.title)));
   c3.tcAnnulerSuppressionRdv();
-  verifie('« non » → rien n a été touché', c3.events.length === 5 && !c3.attente());
+  verifie('« non » → rien n a été touché', c3.events.length === N && !c3.attente());
   verifie('plus aucune suppression immédiate dans tcGererSuppressionRdv', !/candidats\.length === 1\)\s*\{[\s\S]*?tcSupprimerRdvs\(candidats\)/.test(fonction(page, 'tcGererSuppressionRdv') || ''));
 
   titre('(d) Pas de phrase en double : « lequel ? » une seule fois');
