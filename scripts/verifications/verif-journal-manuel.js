@@ -27,7 +27,7 @@ verifie('le statut « modifiée » a son etiquette (✏️ Modifiée) et sa coul
 
 titre('2. Simulation : les entrees du Journal');
 const ctx = { console, String, Number, Array, Date, JSON, Math, Object, isNaN, demarches: [], currentPage: 'calendar',
-  escapeHTMLSafe: (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'), saveDemarches() { ctx._sauves = (ctx._sauves || 0) + 1; }, renderDemarches() {} };
+  escapeHTMLSafe: (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'), saveDemarches() { ctx._sauves = (ctx._sauves || 0) + 1; }, renderDemarches() {} };
 vm.createContext(ctx);
 ['tcFormaterDateHumaine', 'tcFormaterHeure', 'tcLigneRdvPourJournal', 'tcJournaliserRdvManuel', 'tcJournaliserAbsencesEnvoyees', 'addDemarche'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
@@ -54,6 +54,10 @@ verifie('absence envoyee : une entree « 🏖️ Message d’absence envoyé à 
 const n2 = ctx.tcJournaliserAbsencesEnvoyees(conv);
 verifie('recue une seconde fois (synchro suivante) : pas de doublon', n2 === 0 && ctx.demarches.length === 4);
 verifie('les messages ordinaires et ceux des autres ne font pas d entree', !ctx.demarches.some((x) => /Un message ordinaire|Salut/.test(x.summary || '')));
+ctx.tcJournaliserAbsencesEnvoyees([{ reference: 'REFLONG', with: 'Long', thread: [{ from: 'me', genre: 'absence', texte: 'a'.repeat(197) + '"""', le: '2026-10-12T10:00:00+02:00' }] }]);
+const long = ctx.demarches[0];
+verifie('un long texte avec des guillemets : coupe a 200 caracteres bruts PUIS echappe (jamais une entite tranchee)', long.summary === 'a'.repeat(197) + '&quot;&quot;&quot;', long.summary.slice(-30));
+verifie('le resume ne contient aucune entite tranchee (« &qu » en fin)', !/&[a-z]{0,4}$/.test(long.summary));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
 console.log('');

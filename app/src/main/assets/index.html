@@ -10828,7 +10828,7 @@ function tcJournaliserAbsencesEnvoyees(conversations) {
       const cle = 'absence:' + String(c.reference || '') + ':' + String(t.le || '');
       if ((demarches || []).some(function (d) { return d && d.cle === cle; })) return;
       const quand = t.le ? new Date(t.le) : null;
-      addDemarche({ cle: cle, icon: '🏖️', title: 'Message d’absence envoyé à ' + String(c.with || c.reference || ''), summary: escapeHTMLSafe(String(t.texte || '')).slice(0, 200),
+      addDemarche({ cle: cle, icon: '🏖️', title: 'Message d’absence envoyé à ' + String(c.with || c.reference || ''), summary: escapeHTMLSafe(String(t.texte || '').slice(0, 200)),   // couper le texte brut, puis echapper (jamais une entite tranchee)
         status: 'envoyee', categorie: 'compte', detail: 'Ta réponse d’absence est partie automatiquement à ' + String(c.with || '') + ' : « ' + String(t.texte || '') + ' »', timestamp: (quand && !isNaN(quand.getTime())) ? quand.getTime() : undefined });
       n++;
     });

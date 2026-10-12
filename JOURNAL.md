@@ -1976,3 +1976,5 @@ mobile vers le nouvel appareil.
 - Le statut « modifiée » a enfin son étiquette (✏️ Modifiée) et sa couleur (il s'affichait brut).
 - Suite `verif-journal-manuel` (points d'ancrage ; simulation des entrées, dates lisibles, échappement, absence sans
   doublon) dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission39-journal.png`.
+- Correction après examen (12/10) : le résumé du message d absence était coupé APRÈS l échappement (entité « &quot; » tranchée) ;
+  le texte brut est coupé à 200 puis échappé. Cas ajouté à la suite. Réserve notée : le déplacement au doigt n est pas journalisé.
