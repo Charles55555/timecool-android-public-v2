@@ -6265,6 +6265,7 @@ function saveEventEdit() {
   if (champType && tcTypeRdvValide(champType.value)) e.type = champType.value;
   closeEventModal();
   saveEventsToStorage();
+  tcJournaliserRdvManuel('modifie', e);
   scheduleAllReminders();
   if (currentPage === 'calendar') render();
   showToast('✅ Rendez-vous modifié !');
@@ -6277,6 +6278,7 @@ async function deleteCurrentEvent() {
   events = events.filter(ev => ev !== e);
   closeEventModal();
   saveEventsToStorage();
+  tcJournaliserRdvManuel('supprime', e);
   if (currentPage === 'calendar') render();
   showToast('🗑️ Rendez-vous supprimé');
 }
@@ -8573,6 +8575,8 @@ function saveNewEvent() {
   }, allDay ? { allDay: true } : {}, periode,
   tcTypeRdvValide((document.getElementById('newEvtTypeRdv') || {}).value) ? { type: document.getElementById('newEvtTypeRdv').value } : {}));
   saveEventsToStorage();
+  // Le Journal d activite garde aussi ce que l on fait a la main (mission 39).
+  tcJournaliserRdvManuel('cree', events[events.length - 1]);
   closeCreateModal();
   showToast('✅ Événement créé');
   if (currentPage==='calendar') render();
@@ -10730,6 +10734,7 @@ function renderDemarches() {
     'envoyee': '#1a73e8',
     'confirmee': '#34a853',
     'annulee': '#ea4335',
+    'modifiee': '#f29900',
     'ajoutee': '#9333ea',
     'recherche': '#1a73e8',
     'calcul': '#fbbc04',
@@ -10742,6 +10747,7 @@ function renderDemarches() {
     'envoyee': '📨 Envoyée',
     'confirmee': '✅ Confirmée',
     'annulee': '❌ Annulée',
+    'modifiee': '✏️ Modifiée',
     'ajoutee': '📅 Ajoutée à l\'agenda',
     'recherche': '🔍 Recherche',
     'calcul': '🧮 Calcul',
@@ -10788,6 +10794,47 @@ async function cancelDemarche(id) {
   if (d) { d.status = 'annulee'; saveDemarches(); renderDemarches(); showToast('Démarche annulée'); }
 }
 
+/** « mardi 13 octobre, 15h-16h » ou « mardi 13 octobre, toute la journée » (periode : « du … au … »). */
+function tcLigneRdvPourJournal(e) {
+  if (!e) return '';
+  const jour = tcFormaterDateHumaine(e.date);
+  const quand = e.dateFin && e.dateFin !== e.date ? 'du ' + jour.charAt(0).toLowerCase() + jour.slice(1) + ' au ' + tcFormaterDateHumaine(e.dateFin).toLowerCase() : jour;
+  return quand + (e.allDay ? ', toute la journée' : ', ' + tcFormaterHeure(e));
+}
+/**
+ * Un rendez-vous cree, modifie ou supprime a la main (bouton +, fiche) entre dans le Journal d activite, au meme format
+ * que les actions de Charly (mission 39). geste : 'cree' | 'modifie' | 'supprime'.
+ */
+function tcJournaliserRdvManuel(geste, e) {
+  if (!e || typeof addDemarche !== 'function') return;
+  const titre = String(e.title || 'Rendez-vous');
+  const ligne = tcLigneRdvPourJournal(e);
+  const quoi = geste === 'cree' ? { icon: '📅', titre: 'Rendez-vous créé — ' + titre, status: 'ajoutee', detail: 'Tu as créé ce rendez-vous toi-même : ' + ligne + '.' }
+    : geste === 'supprime' ? { icon: '🗑️', titre: 'Rendez-vous supprimé — ' + titre, status: 'annulee', detail: 'Tu as supprimé ce rendez-vous toi-même : ' + ligne + '.' }
+    : { icon: '✏️', titre: 'Rendez-vous modifié — ' + titre, status: 'modifiee', detail: 'Tu as modifié ce rendez-vous toi-même : ' + ligne + '.' };
+  addDemarche({ icon: quoi.icon, title: quoi.titre, summary: escapeHTMLSafe(ligne), status: quoi.status, categorie: 'rdv', detail: quoi.detail, manuel: true });
+}
+/**
+ * Un message d absence parti automatiquement (ligne « absence » de moi dans une conversation du serveur) entre dans le
+ * Journal une seule fois (cle = reference + instant), a la reception des conversations (mission 39).
+ */
+function tcJournaliserAbsencesEnvoyees(conversations) {
+  if (typeof addDemarche !== 'function' || !Array.isArray(conversations)) return 0;
+  let n = 0;
+  conversations.forEach(function (c) {
+    if (!c || !Array.isArray(c.thread)) return;
+    c.thread.forEach(function (t) {
+      if (!t || t.from !== 'me' || t.genre !== 'absence') return;
+      const cle = 'absence:' + String(c.reference || '') + ':' + String(t.le || '');
+      if ((demarches || []).some(function (d) { return d && d.cle === cle; })) return;
+      const quand = t.le ? new Date(t.le) : null;
+      addDemarche({ cle: cle, icon: '🏖️', title: 'Message d’absence envoyé à ' + String(c.with || c.reference || ''), summary: escapeHTMLSafe(String(t.texte || '')).slice(0, 200),
+        status: 'envoyee', categorie: 'compte', detail: 'Ta réponse d’absence est partie automatiquement à ' + String(c.with || '') + ' : « ' + String(t.texte || '') + ' »', timestamp: (quand && !isNaN(quand.getTime())) ? quand.getTime() : undefined });
+      n++;
+    });
+  });
+  return n;
+}
 function addDemarche(d) {
   d.id = d.id || ('dem_' + Date.now() + '_' + Math.floor(Math.random()*1000));
   d.timestamp = d.timestamp || Date.now();
@@ -22857,7 +22904,7 @@ const TC_SYNC_TYPES = {
     lectureSeule: true,
     lire: function () { return tcConversations(); },
     id: function (o) { return o.reference; },
-    poser: function (liste) { tcPoserConversations(liste); }
+    poser: function (liste) { if (typeof tcJournaliserAbsencesEnvoyees === 'function') { try { tcJournaliserAbsencesEnvoyees(liste); } catch (e) {} } tcPoserConversations(liste); }
   },
   /*
    * Les réglages, une clé à la fois.

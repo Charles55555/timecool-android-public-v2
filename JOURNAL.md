@@ -1959,3 +1959,20 @@ mobile vers le nouvel appareil.
   bouge pas) porte le toucher (`role="switch"`, `stopPropagation`), le dessin garde sa taille. Assertion ajoutée (zone ≥ 32).
   Réserves notées, sans correction : pas de clavier sur l'interrupteur ; un `visible:false` d'une ancienne version se voit
   par la pastille vide.
+
+## 12/10/2026 (session Codeur) — Journal d'activité : les gestes faits à la main et les messages d'absence (mission 39)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Demande (chef de projet) : enregistrer aussi les rendez-vous créés / modifiés / supprimés à la main (bouton + et fiche)
+  et l'envoi d'un message d'absence, au même format d'entrée que les actions de Charly.
+- `tcJournaliserRdvManuel(geste, e)` (créé → « 📅 Rendez-vous créé — titre », statut ajoutée ; modifié → ✏️, statut
+  modifiée ; supprimé → 🗑️, statut annulée ; catégorie Rendez-vous ; résumé = `tcLigneRdvPourJournal` « mardi 13 octobre,
+  15h-16h » / « toute la journée » / « du … au … » ; détail « Tu as créé / modifié / supprimé ce rendez-vous toi-même : … » ;
+  champ `manuel`), appelée dans `saveNewEvent`, `saveEventEdit`, `deleteCurrentEvent` après l'enregistrement.
+- `tcJournaliserAbsencesEnvoyees(conversations)` : à la réception des conversations du serveur, chaque ligne « absence »
+  de moi (réponse d'absence partie automatiquement) fait une entrée « 🏖️ Message d’absence envoyé à … » (statut envoyée,
+  catégorie Actions sur mon compte, datée du message), une seule fois (clé référence + instant).
+- Le statut « modifiée » a enfin son étiquette (✏️ Modifiée) et sa couleur (il s'affichait brut).
+- Suite `verif-journal-manuel` (points d'ancrage ; simulation des entrées, dates lisibles, échappement, absence sans
+  doublon) dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission39-journal.png`.
