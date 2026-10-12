@@ -3257,7 +3257,11 @@ switch ($route) {
             throw $e;
         }
         if ($prevenir) {
-            messagePoser($moi, $demandeur, texteSur($moi['prenom']) . ' ne peut pas donner suite à ta demande pour le moment.', $rdvId);
+            try {
+                messagePoser($moi, $demandeur, texteSur($moi['prenom']) . ' ne peut pas donner suite à ta demande pour le moment.', $rdvId);
+            } catch (Throwable $e) {
+                // Le refus est enregistre ; un message non pose (traduction en panne) ne doit pas le faire passer pour un echec.
+            }
         }
         Rep::ok();
 

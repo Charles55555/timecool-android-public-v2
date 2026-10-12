@@ -1528,3 +1528,26 @@ mobile vers le nouvel appareil.
   complet (tous les fonds et textes codés) est un chantier à part.
 - 2e capture : entree active du menu (variable --menu-active : bleu clair en clair, bleu nuit en sombre) et titre / sous-titre de page (couleurs fixes, page claire) lisibles en sombre.
 - 3e capture : la mise en avant « Charly IA » du menu (degrade) suit le theme (--menu-charly).
+- (c) Décision du chef de projet (12/10) après le balayage de contraste de l'examinateur (ratio < 3 sur 8 écrans en
+  sombre : Paramètres 66, agenda 25, menu 30… ; titre du mois à 1,2:1) : pas de thème sombre à moitié. Le thème
+  « Sombre » garde seulement ce qui est déjà bien fait (menu latéral, cartes de Paramètres) ; TOUT le reste reste
+  lisible comme en clair. Mécanique : les zones restées claires (`.header`, `.sub-header`, `.page` sauf Paramètres,
+  `.auth-page`, `.modal`, `.tc-mod`, `.msg-sheet`) redéfinissent LOCALEMENT les variables claires (`--text`,
+  `--text-sec`, `--border`, `--bg` clair, `--bg-soft`, `--bg-hover`, menu, violet) et posent `color:var(--text)` /
+  `background:var(--bg)` — un élément sans `color` propre héritait de la couleur déjà calculée du `body` (claire), d'où
+  les noms de la messagerie et du profil clairs sur blanc ; les badges « Semaine 42 » transparents prenaient le fond
+  sombre du `body`. La fenêtre « Nouveau » revient à son état d'avant (fond clair, champs lisibles). Paramètres (zone
+  sombre) : « Importer » en `var(--violet)` (#8430ce / #c58af9), « Je vouvoie » sur `var(--bg)` (y compris au restylage
+  de `tcChoisirFormeMessages`), citation en gris fixe.
+- Balayage de contraste `verif-contraste-sombre` (vrai Chrome sans tête, `cadre-contraste.html` : 8 écrans — agenda,
+  contacts, messagerie, disponibilités, profil, Paramètres, menu, fenêtre « Nouveau » — en sombre et en clair témoin ;
+  pour chaque élément portant du texte visible, rapport texte / fond effectif ≥ 3, émojis seuls ignorés ; tolérés car
+  préexistants en clair : logo « COOL » jaune, sous-titre gris de l'en-tête, tirets des champs vides, « Aucune
+  plage… »). Enregistrée dans verifier.sh : sur le serveur (sans Chrome) elle dit « non joué » et passe ; elle se
+  rejoue sur un poste avec Chrome (`TC_CHROME`), ce que fait le Codeur avant chaque commit et l'examinateur.
+  `verif-compte-langue-theme` calcule en plus le contraste des paires de variables des deux thèmes.
+- API (réserve de l'examen) : `messagePoser` du refus simple sous `try/catch` après le commit : un refus enregistré ne
+  devient jamais un 500 si la traduction échoue.
+- Chiffrage d'un vrai thème sombre complet (mission à part) : 182 fonds `#fff` et une centaine de couleurs de texte
+  codées en ligne à remplacer par des variables, plus les cartes, pastilles et boutons colorés à décliner — environ deux
+  jours de travail, avec le balayage de contraste comme garde-fou.

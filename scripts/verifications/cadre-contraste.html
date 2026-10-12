@@ -1,0 +1,104 @@
+<!doctype html>
+<!-- Balayage de contraste (mission 25) : la page dans un iframe, theme Sombre, 8 ecrans ; pour chaque element de texte
+     visible, le rapport de contraste texte / fond effectif (WCAG). Resultat JSON dans <pre id="res"> (lu par --dump-dom).
+     ?theme=light pour le temoin. -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}iframe{width:390px;height:844px;border:0;display:block}</style></head>
+<body><iframe id="f"></iframe><pre id="res"></pre>
+<script>
+  const theme = new URLSearchParams(location.search).get('theme') || 'dark';
+  try {
+    localStorage.setItem('tc_onboarding_done', '1');
+    localStorage.setItem('tc_permissions_shown', '1');
+    localStorage.setItem('tc_theme', theme);
+    localStorage.setItem('timecool_session_active', 'true');
+    localStorage.setItem('timecool_user_account', JSON.stringify({ firstname: 'Fanny', lastname: 'R.', email: 'capture@exemple-timecool.fr', verified: true }));
+  } catch (e) {}
+  function lum(rgb) {
+    const c = rgb.map(function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function parse(s) {
+    const m = String(s || '').match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    const p = m[1].split(',').map(function (x) { return parseFloat(x); });
+    return { rgb: [p[0], p[1], p[2]], a: p.length > 3 ? p[3] : 1 };
+  }
+  function melange(sur, sous) { const a = sur.a; return { rgb: [0, 1, 2].map(function (i) { return sur.rgb[i] * a + sous.rgb[i] * (1 - a); }), a: 1 }; }
+  // Le fond effectif d un element : on remonte jusqu a un fond opaque, en melangeant les fonds translucides.
+  function fond(el, w) {
+    let acc = null;
+    for (let n = el; n; n = n.parentElement) {
+      const cs = w.getComputedStyle(n);
+      let bg = parse(cs.backgroundColor);
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') {
+        const m = cs.backgroundImage.match(/rgba?\([^)]+\)/); if (m) bg = parse(m[0]);
+      }
+      if (!bg || bg.a === 0) continue;
+      acc = acc ? melange(acc, bg) : bg;
+      if (acc.a >= 0.99) return acc;
+    }
+    return acc ? melange(acc, { rgb: [255, 255, 255], a: 1 }) : { rgb: [255, 255, 255], a: 1 };
+  }
+  function ratio(a, b) { const l1 = lum(a.rgb), l2 = lum(b.rgb); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); }
+  function visible(el, w) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const cs = w.getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity) < 0.2) return false;
+    for (let n = el; n; n = n.parentElement) { const c = w.getComputedStyle(n); if (c.display === 'none' || c.visibility === 'hidden') return false; }
+    return true;
+  }
+  function balayer(w, nom) {
+    const d = w.document, faibles = [];
+    let total = 0;
+    d.querySelectorAll('body *').forEach(function (el) {
+      // Seuls les elements qui portent directement du texte.
+      let texte = '';
+      el.childNodes.forEach(function (c) { if (c.nodeType === 3) texte += c.nodeValue; });
+      texte = texte.replace(/\s+/g, ' ').trim();
+      // Un texte sans lettre ni chiffre (emoji, fleche) est rendu en couleur par le navigateur : pas un contraste.
+      if (!texte || !/[A-Za-z0-9À-ɏ]/.test(texte) || !visible(el, w)) return;
+      const cs = w.getComputedStyle(el);
+      const col = parse(cs.color); if (!col) return;
+      const bg = fond(el, w);
+      const r = ratio(col.a < 1 ? melange(col, bg) : col, bg);
+      total++;
+      if (r < 3) {
+        const chemin = [];
+        for (let n = el; n && chemin.length < 6; n = n.parentElement) chemin.push((n.tagName || '').toLowerCase() + (n.id ? '#' + n.id : '') + (n.className && typeof n.className === 'string' ? '.' + n.className.trim().split(/\s+/).join('.') : ''));
+        faibles.push({ texte: texte.slice(0, 40), ratio: Math.round(r * 10) / 10, couleur: cs.color, fond: 'rgb(' + bg.rgb.map(Math.round).join(',') + ')', chemin: chemin.join(' < ') });
+      }
+    });
+    return { ecran: nom, total: total, faibles: faibles };
+  }
+  const f = document.getElementById('f');
+  f.addEventListener('load', function () {
+    const w = this.contentWindow, d = w.document;
+    const resultats = [];
+    const etape = function (nom, action, suite) {
+      try { w.eval(action); } catch (e) { resultats.push({ ecran: nom, erreur: e.message }); }
+      setTimeout(function () { try { resultats.push(balayer(w, nom)); } catch (e) { resultats.push({ ecran: nom, erreur: e.message }); } suite(); }, 700);
+    };
+    setTimeout(function () {
+      try {
+        d.querySelectorAll('#onboardingScreen, [id^=ob], [id*=ermission], #welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
+        if (typeof w.hideAuthFlow === 'function') w.hideAuthFlow();
+        d.querySelectorAll('.auth-page').forEach(function (p) { p.classList.remove('active'); });
+        w.eval("if (typeof applyTheme === 'function') applyTheme('" + theme + "');");
+      } catch (e) {}
+      const ferme = "document.querySelectorAll('.tc-mod-ov').forEach(function (o) { o.remove(); }); var cm = document.getElementById('createModal'); if (cm) cm.style.display = 'none'; var sm = document.getElementById('sideMenu'); if (sm) sm.classList.remove('open'); var mo = document.getElementById('menuOverlay'); if (mo) mo.classList.remove('open');";
+      etape('agenda', "navigate('calendar'); if (typeof switchView === 'function') switchView('week', true);", function () {
+      etape('contacts', ferme + " navigate('contacts');", function () {
+      etape('messagerie', ferme + " navigate('messages');", function () {
+      etape('disponibilites', ferme + " navigate('dispo');", function () {
+      etape('profil', ferme + " navigate('profile');", function () {
+      etape('parametres', ferme + " navigate('settings');", function () {
+      etape('menu', ferme + " navigate('calendar'); if (typeof toggleMenu === 'function') toggleMenu(); var m = document.getElementById('sideMenu'); if (m) { m.style.transition = 'none'; m.classList.add('open'); }", function () {
+      etape('nouveau', ferme + " if (typeof openCreateModal === 'function') openCreateModal();", function () {
+        document.getElementById('res').textContent = JSON.stringify(resultats);
+        document.title = 'CONTRASTE-FINI';
+      }); }); }); }); }); }); }); });
+    }, 1500);
+  });
+  f.src = 'index-local.html';
+</script></body></html>

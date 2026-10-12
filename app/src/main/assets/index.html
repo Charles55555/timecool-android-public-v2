@@ -361,6 +361,11 @@ body.maj-visible .toast { bottom:152px; }
 .tc-mod-tt { font-size:16px; font-weight:700; color:var(--text); text-align:center; margin-bottom:8px; }
 .tc-mod-tx { font-size:14px; color:var(--text-sec); line-height:1.55; text-align:center; white-space:pre-line; margin-bottom:18px; }
 .tc-mod-in { width:100%; padding:13px 14px; border:1.5px solid var(--border); border-radius:12px; font-size:15px; box-sizing:border-box; margin-bottom:16px; outline:none; background:var(--bg); color:var(--text); }
+/* Theme « Sombre », lisible partout (mission 25, decision du 12/10) : seuls le menu lateral et les cartes de Parametres
+   suivent le theme. L en-tete, les pages (sauf Parametres), les ecrans de connexion et les fenetres gardent LEURS
+   variables claires : texte sombre sur fond clair, quel que soit le theme. */
+.header, .sub-header, .page:not(#page-settings), .auth-page, .modal, .tc-mod, .msg-sheet { --text:#202124; --text-sec:#5f6368; --border:#dadce0; --bg:#fff; --bg-soft:#f8f9fa; --bg-hover:#f1f3f4; --menu-active:#e8f0fe; --menu-charly:#fff4e0; --violet:#8430ce; color:var(--text); background:var(--bg); }
+.modal select, .modal input, .modal textarea, .tc-mod select, .tc-mod input, .tc-mod textarea { color:var(--text); background:var(--bg); }
 .tc-mod-in:focus { border-color:var(--g-blue); }
 .tc-mod-bt { display:flex; gap:10px; }
 .tc-mod-bt button { flex:1; padding:14px 10px; border:none; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -9260,7 +9265,7 @@ function renderSettingsInterne() {
           <div style="font-size:14px; font-weight:500;">Importer mon agenda existant</div>
           <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Compatible Google Calendar, Apple, Outlook, Samsung (.ics)</div>
         </div>
-        <div style="font-size:13px; color:#8430ce;">📅 Importer</div>
+        <div style="font-size:13px; color:var(--violet, #8430ce);">📅 Importer</div>
       </div>
       <div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
         <div style="flex:1;">
@@ -9306,7 +9311,7 @@ function renderSettingsInterne() {
         <button onclick="tcChoisirFormeMessages(false)" id="tcFormeTu"
           style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--g-blue); background:var(--g-blue); color:#fff;">Je tutoie</button>
         <button onclick="tcChoisirFormeMessages(true)" id="tcFormeVous"
-          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:#fff; color:var(--text);">Je vouvoie</button>
+          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:var(--bg); color:var(--text);">Je vouvoie</button>
       </div>
       <div id="tcMsgModeles"></div>
     </div>
@@ -9443,7 +9448,7 @@ function renderSettingsInterne() {
       ${tcRenderBiometrieToggle()}
     </div>
 
-    <div style="text-align:center; padding:20px; font-size:11px; color:var(--text-sec); font-style:italic;">
+    <div style="text-align:center; padding:20px; font-size:11px; color:#5f6368; font-style:italic;">
       "Ton temps est la seule ressource que tu ne pourras jamais fabriquer."
     </div>
 
@@ -16965,13 +16970,15 @@ const DARK_VARS = {
   '--text':'#e8eaed','--text-sec':'#9aa0a6','--border':'#3c4043',
   '--bg':'#202124','--bg-soft':'#292a2d','--bg-hover':'#35363a',
   '--menu-active':'#2b3a55',  // entree active du menu : bleu nuit (mission 25)
-  '--menu-charly':'#3a3222'   // mise en avant « Charly IA » : ambre sombre
+  '--menu-charly':'#3a3222',  // mise en avant « Charly IA » : ambre sombre
+  '--violet':'#c58af9'        // liens violets (Importer) lisibles sur sombre
 };
 const LIGHT_VARS = {
   '--text':'#202124','--text-sec':'#5f6368','--border':'#dadce0',
   '--bg':'#fff','--bg-soft':'#f8f9fa','--bg-hover':'#f1f3f4',
   '--menu-active':'#e8f0fe',
-  '--menu-charly':'#fff4e0'
+  '--menu-charly':'#fff4e0',
+  '--violet':'#8430ce'
 };
 
 function applyTheme(theme) {
@@ -21759,7 +21766,7 @@ function tcChoisirFormeMessages(vouvoie) {
   const tu = document.getElementById('tcFormeTu');
   const vous = document.getElementById('tcFormeVous');
   const actif = 'border:1.5px solid var(--g-blue); background:var(--g-blue); color:#fff;';
-  const inactif = 'border:1.5px solid var(--border); background:#fff; color:var(--text);';
+  const inactif = 'border:1.5px solid var(--border); background:var(--bg); color:var(--text);';   // suit le theme (mission 25)
   const base = 'flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; ';
   if (tu) tu.style.cssText = base + (vouvoie ? inactif : actif);
   if (vous) vous.style.cssText = base + (vouvoie ? actif : inactif);

@@ -25,9 +25,24 @@ titre('(c) Le theme sombre, lisible partout : menu, fenetres et cartes de Parame
   const r = regle(sel);
   verifie(sel + ' : background:var(--bg)', /background:var\(--bg\)/.test(r) && !/background:#fff/.test(r), r.slice(0, 120));
 });
-// Choix autorise par le chef (12/10) : la page et l en-tete portent des textes a couleur sombre codee en dur et 182 fonds
-// blancs en ligne : les rendre sombres donnait du sombre-sur-sombre (captures). Ils restent clairs dans les deux themes.
+// Decision du chef (12/10) : pas de theme sombre a moitie. Seuls le menu et les cartes de Parametres suivent le theme ;
+// les zones restees claires (en-tete, pages sauf Parametres, ecrans de connexion, fenetres) gardent LEURS variables
+// claires : texte sombre sur fond clair, quel que soit le theme (balayage de contraste de l examinateur : « Octobre 2026 »
+// a 1,2:1 avant).
 ['.header', '.main'].forEach((sel) => { const r = regle(sel); verifie(sel + ' reste clair (background:#fff), lisible dans les deux themes', /background:#fff/.test(r), r.slice(0, 100)); });
+const zones = page.match(/\n\.header, \.sub-header, \.page:not\(#page-settings\), \.auth-page, \.modal, \.tc-mod, \.msg-sheet \{[^\n]*/);
+verifie('les zones claires redefinissent localement --text, --text-sec, --border, --bg (clair), --bg-soft, --bg-hover', !!zones && ['--text:#202124', '--text-sec:#5f6368', '--border:#dadce0', '--bg:#fff', '--bg-soft:#f8f9fa', '--bg-hover:#f1f3f4'].every((v) => zones[0].indexOf(v) > -1), zones && zones[0].slice(0, 160));
+verifie('Parametres (#page-settings) est exclu : ses cartes restent sombres en sombre ; le menu lateral (hors de ces zones) aussi', !!zones && /\.page:not\(#page-settings\)/.test(zones[0]) && !/\.side-menu/.test(zones[0]));
+verifie('les champs des fenetres prennent le texte et le fond de leur zone (.modal, .tc-mod : clairs)', /\.modal select, \.modal input, \.modal textarea, \.tc-mod select, \.tc-mod input, \.tc-mod textarea \{ color:var\(--text\); background:var\(--bg\); \}/.test(page));
+// Contraste calcule sur les paires de variables (WCAG) ; le balayage en vrai Chrome est verif-contraste-sombre.
+const lum = (hex) => { const h = hex.replace('#', ''); const f = h.length === 3 ? h.split('').map((c) => c + c).join('') : h; const c = [0, 2, 4].map((i) => { let v = parseInt(f.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+const ratio = (a, b) => { const l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+const vars = (bloc) => { const o = {}; (bloc.match(/'(--[a-z-]+)':'(#[0-9a-fA-F]{3,6})'/g) || []).forEach((p) => { const m = p.match(/'(--[a-z-]+)':'(#[0-9a-fA-F]{3,6})'/); o[m[1]] = m[2]; }); return o; };
+const darkV = page.match(/const DARK_VARS = \{[\s\S]*?\};/), lightV = page.match(/const LIGHT_VARS = \{[\s\S]*?\};/);
+const D = darkV ? vars(darkV[0]) : {}, L = lightV ? vars(lightV[0]) : {};
+verifie('sombre : menu (texte sur fond, entree active, Charly) et cartes de Parametres ≥ 3:1', ratio(D['--text'], D['--bg']) >= 3 && ratio(D['--text'], D['--menu-active']) >= 3 && ratio(D['--text'], D['--menu-charly']) >= 3 && ratio(D['--text-sec'], D['--bg']) >= 3, [ratio(D['--text'], D['--bg']), ratio(D['--text'], D['--menu-active']), ratio(D['--text'], D['--menu-charly']), ratio(D['--text-sec'], D['--bg'])].map((x) => x.toFixed(1)).join(' '));
+verifie('zones claires : texte #202124 et secondaire #5f6368 sur #fff ≥ 3:1', ratio('#202124', '#fff') >= 3 && ratio('#5f6368', '#fff') >= 3);
+verifie('clair : texte sur fond, entree active, Charly ≥ 3:1', ratio(L['--text'], L['--bg']) >= 3 && ratio(L['--text'], L['--menu-active']) >= 3 && ratio(L['--text'], L['--menu-charly']) >= 3);
 const rsi = fonction(page, 'renderSettingsInterne') || '';
 verifie('Parametres : les cartes suivent le theme (var(--bg)), plus aucune carte blanche codee en dur', (rsi.match(/background:var\(--bg\); border:1px solid var\(--border\); border-radius:12px; overflow:hidden; margin-bottom:16px;/g) || []).length >= 3 && !/background:#fff; border:1px solid var\(--border\); border-radius:12px; overflow:hidden; margin-bottom:16px;/.test(rsi));
 verifie('.tc-mod-in (saisie de « Nom du nouvel agenda ») : fond et texte du theme', /background:var\(--bg\); color:var\(--text\)/.test(regle('.tc-mod-in')));
