@@ -12182,9 +12182,30 @@ function validateAgendaProposalFromMsg(msg) {
 
 }
 
+/* La zone d ecriture grandit avec le texte jusqu a 3 lignes, puis defile en interne ; et le bas de la conversation suit
+   la hauteur reelle de la barre, pour que le dernier message reste visible (mission 35). */
+const TC_SAISIE_LIGNES_MAX = 3;
+function tcHauteurMaxSaisie(el) {
+  const cs = (typeof getComputedStyle === 'function') ? getComputedStyle(el) : null;
+  const interligne = cs && parseFloat(cs.lineHeight) > 0 ? parseFloat(cs.lineHeight) : Math.round((cs && parseFloat(cs.fontSize) > 0 ? parseFloat(cs.fontSize) : 14) * 1.4);
+  const marges = cs ? (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0) : 23;
+  return Math.round(interligne * TC_SAISIE_LIGNES_MAX + marges);
+}
 function autoResizeCharly(el) {
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  const max = tcHauteurMaxSaisie(el);
+  el.style.height = Math.min(el.scrollHeight, max) + 'px';
+  el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
+  tcCalerBasConversation();
+}
+/** Le corps de la conversation garde, en bas, la place exacte de la barre d ecriture ; s il etait au bas, il y reste. */
+function tcCalerBasConversation() {
+  const corps = document.getElementById('charlyChatBody');
+  const barre = document.getElementById('charlyInputBar');
+  if (!corps || !barre) return;
+  const auBas = corps.scrollHeight - corps.scrollTop - corps.clientHeight < 40;
+  corps.style.paddingBottom = (barre.offsetHeight + 12) + 'px';
+  if (auBas) corps.scrollTop = corps.scrollHeight;
 }
 
 function charlyInputKeyDown(ev) {

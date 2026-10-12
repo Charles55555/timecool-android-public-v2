@@ -1622,3 +1622,17 @@ mobile vers le nouvel appareil.
   de `tcSansRelance`, mission 17).
 - Suites verif-memoire-agenda, verif-charly-campagne9 (la carte est remplacee par rien, plus de mention) et verif-charly-relance (filtre tcSansNotesInternes entre les formules et la relance) adaptees ; une ligne qui n etait qu une note interne disparait avec elle.
 - Examen : un message d assistant devenu vide (carte seule) n est plus envoye au modele, deux messages de meme role qui se suivent sont fusionnes ; le dedoublonnage ne retire qu une ligne identique a la precedente ou une phrase longue deja vue (jamais un fait d une liste).
+
+## 12/10/2026 (session Codeur) — Page Charly : zone d'écriture longue (mission 35)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Demande (Charles) : quand on écrit plusieurs lignes à Charly, la conversation doit remonter avec la barre (le bas suit
+  la hauteur réelle de la barre) et la zone d'écriture est limitée à 3 lignes, avec défilement interne au-delà.
+- `autoResizeCharly` : hauteur remise à « auto », puis bornée à `tcHauteurMaxSaisie` (= 3 lignes × interligne calculé +
+  marges et bordures ; `TC_SAISIE_LIGNES_MAX = 3`), `overflow-y:auto` au-delà ; puis `tcCalerBasConversation()` : le corps
+  de la conversation (`#charlyChatBody`) reçoit en bas la place exacte de la barre (`offsetHeight` + 12 px) et, s'il était
+  au bas, y reste (le dernier message reste visible pendant la frappe).
+- Suite `verif-saisie-charly` (textarea factice 14 px / 20 px : 1, 2, 5 lignes → 43, 63, 83 px ; défilement interne à
+  partir de la 4e ligne ; place en bas = barre + 12 ; position gardée si l'utilisateur lisait plus haut), dans
+  verifier.sh ; rouge sur la page d'avant. Capture 390×844 avec 5 lignes saisies : `captures/mission35-saisie-longue.png`.
