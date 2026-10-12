@@ -20,11 +20,16 @@ function fonction(texte, nom) {
 }
 const regle = (sel) => { const m = page.match(new RegExp('\\n' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{[^\\n]*')); return m ? m[0] : ''; };
 
-titre('(c) Le theme sombre : les grands fonds suivent var(--bg), plus #fff code en dur');
-['.header', '.main', '.side-menu', '.modal', '.tc-mod'].forEach((sel) => {
+titre('(c) Le theme sombre, lisible partout : menu, fenetres et cartes de Parametres suivent var(--bg) ; page et en-tete restent clairs');
+['.side-menu', '.modal', '.tc-mod'].forEach((sel) => {
   const r = regle(sel);
   verifie(sel + ' : background:var(--bg)', /background:var\(--bg\)/.test(r) && !/background:#fff/.test(r), r.slice(0, 120));
 });
+// Choix autorise par le chef (12/10) : la page et l en-tete portent des textes a couleur sombre codee en dur et 182 fonds
+// blancs en ligne : les rendre sombres donnait du sombre-sur-sombre (captures). Ils restent clairs dans les deux themes.
+['.header', '.main'].forEach((sel) => { const r = regle(sel); verifie(sel + ' reste clair (background:#fff), lisible dans les deux themes', /background:#fff/.test(r), r.slice(0, 100)); });
+const rsi = fonction(page, 'renderSettingsInterne') || '';
+verifie('Parametres : les cartes suivent le theme (var(--bg)), plus aucune carte blanche codee en dur', (rsi.match(/background:var\(--bg\); border:1px solid var\(--border\); border-radius:12px; overflow:hidden; margin-bottom:16px;/g) || []).length >= 3 && !/background:#fff; border:1px solid var\(--border\); border-radius:12px; overflow:hidden; margin-bottom:16px;/.test(rsi));
 verifie('.tc-mod-in (saisie de « Nom du nouvel agenda ») : fond et texte du theme', /background:var\(--bg\); color:var\(--text\)/.test(regle('.tc-mod-in')));
 const dark = page.match(/const DARK_VARS = \{[\s\S]*?\};/);
 verifie('le theme sombre definit --bg, --text, --text-sec, --border', !!dark && ['--bg', '--text', '--text-sec', '--border'].every((v) => dark[0].indexOf("'" + v + "'") > -1));

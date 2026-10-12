@@ -1520,3 +1520,9 @@ mobile vers le nouvel appareil.
   comptes sonde de la prod : 8BFGEY4KGQ87, GZMZC986AG1Y.
 - Suite `verif-compte-langue-theme` (CSS, poser, tcAppliquerLangueRecue rejouée, showWelcomeSplash, champs vidés
   rejoués, logoutUser, navigateAuth), dans verifier.sh ; rouge sur la page d'avant.
+- (c) Après captures en sombre : rendre la page `.main` et l'en-tête sombres donnait du sombre-sur-sombre (titre du mois
+  et beaucoup de textes à couleur codée en dur, 182 fonds blancs en ligne). Choix autorisé par le chef de projet : le
+  thème sombre ne touche que ce qui le suit déjà et reste lisible partout — page et en-tête restent clairs dans les
+  deux thèmes ; le menu latéral, les fenêtres (`.modal`, `.tc-mod`, saisie) et les cartes de Paramètres
+  (`renderSettingsInterne`, `var(--bg)`) suivent le thème : plus de texte clair sur carte blanche. Un thème sombre
+  complet (tous les fonds et textes codés) est un chantier à part.
