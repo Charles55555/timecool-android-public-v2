@@ -55,6 +55,8 @@ const rw = fonction(page, 'renderWeek') || '';
 verifie('renderWeek calcule la bande pour la semaine entiere avant les colonnes', /const bande = tcLignesBandeSemaine\(joursISO, function \(j\) \{ return tcEvenementsDuJour\(j, true\); \}, tcReperesDuJour\);/.test(rw) && rw.indexOf('const bande = ') < rw.indexOf('for (let i=0; i<7; i++)'));
 verifie('chaque colonne rend ses lignes dans l ordre, une ligne vide = un espace invisible de meme hauteur', /bande\[i\]\.forEach\(function \(slot\) \{\s+if \(!slot\) \{[\s\S]*?vide\.className = 'tc-chip-evt';\s+vide\.style\.visibility = 'hidden';/.test(rw));
 verifie('les fetes gardent leur rendu (nom, couleur) et l en-tete reste cliquable quand il porte un repere', /slot\.type === 'fete'/.test(rw) && /if \(fetes\.length\) \{\s+col\.style\.cursor = 'pointer';/.test(rw));
+// Examen : une fete et une pastille ont la meme hauteur (meme boite .tc-chip-evt), sinon le trait d un voyage se decale de 2 px.
+verifie('une fete a la meme boite qu une pastille (.tc-chip-evt), couleurs en ligne', /slot\.type === 'fete'\) \{[\s\S]*?chip\.className = 'tc-chip-evt';\s+chip\.style\.cssText = 'font-weight:700; text-align:center; background:' \+ r\.couleur \+ '; color:#fff;';/.test(rw));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
 console.log('');

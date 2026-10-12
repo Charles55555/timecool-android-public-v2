@@ -4713,10 +4713,10 @@ function renderWeek() {
       if (slot.type === 'fete') {
         const r = slot.r;
         const chip = document.createElement('div');
-        chip.style.cssText = 'margin:2px 2px 0; padding:1px 3px; border-radius:4px;'
-          + ' font-size:8.5px; font-weight:700; line-height:1.25; text-align:center;'
-          + ' overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'
-          + ' background:' + r.couleur + '; color:#fff;';
+        // La meme boite qu une pastille d evenement (.tc-chip-evt) : une ligne garde la meme hauteur, fete ou pastille,
+        // et le trait d un voyage reste continu (examen de la mission 32).
+        chip.className = 'tc-chip-evt';
+        chip.style.cssText = 'font-weight:700; text-align:center; background:' + r.couleur + '; color:#fff;';
         chip.title = r.nom;
         chip.textContent = r.nom;
         col.appendChild(chip);

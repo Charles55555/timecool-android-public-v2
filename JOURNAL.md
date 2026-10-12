@@ -1473,3 +1473,4 @@ mobile vers le nouvel appareil.
   rien de vide les 9 et 10 ; un 2e voyage, une fête un jour libre en haut, un espace réservé ; « +n » ; renderWeek),
   dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission32-bande-semaine.png`.
 - Suites verif-premier-jour-semaine, verif-deplacer-au-doigt et verif-bloc-demi-case : extraction de tcLignesBandeSemaine (elles rejouent renderWeek).
+- Examen : la pastille de fete prend la boite .tc-chip-evt (meme hauteur qu une pastille d evenement) : le trait d un voyage reste continu sous une fete.
