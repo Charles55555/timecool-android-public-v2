@@ -45,7 +45,7 @@ verifie('avec la consigne « jamais en loisir »', /Ne mets JAMAIS ces moments e
 
 titre('La table de correspondance');
 verifie('temps_libre → personnel', ctx.catMap.temps_libre === 'personnel');
-verifie('libre, detente, perso → personnel', ctx.catMap.libre === 'personnel' && ctx.catMap.detente === 'personnel' && ctx.catMap.perso === 'personnel');
+verifie('libre, detente → personnel ; perso → « Personnel » (type neutre, mission 21)', ctx.catMap.libre === 'personnel' && ctx.catMap.detente === 'personnel' && ctx.catMap.perso === 'perso');
 verifie('loisir reste amis', ctx.catMap.loisir === 'amis');
 
 titre('La securite sur le titre, quoi que dise le modele');

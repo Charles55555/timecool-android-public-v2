@@ -1396,3 +1396,28 @@ mobile vers le nouvel appareil.
   visent d'abord aujourd'hui, puis le moment (la branche matin filtrait l'heure sur tous les jours). Réserve notée :
   « mon dernier rdv » sans rendez-vous passé vise le dernier de la liste (le plus éloigné), sens discutable.
   « annule le rdv de mardi prochain » (singulier, plusieurs ce jour-la) demande « lequel ? » ; « mes rdv de mardi » ou « tous » visent le jour entier.
+
+## 12/10/2026 (session Codeur) — Types de rendez-vous : une seule liste partout
+
+**Codé et commité sur main, PAS publié.** Page seulement (ni API ni serveur : `cat` reste une chaîne synchronisée telle quelle).
+
+- Constat (Charles) : les 7 types du formulaire « Nouveau » (Personnel, Santé, Professionnel, Famille, Sport / Loisir,
+  Transport, Service, identifiés par des couleurs) ne correspondaient pas aux 7 du menu ⋮ : Personnel → « Voyages &
+  Trajets », Sport / Loisir → « Amis & Loisirs », Service → « Mon temps libre » (temps protégé !), Transport sans case
+  (`TC_AGENDA_ALIAS`).
+- Une seule liste (`AGENDA_CATEGORIES`, dans l'ordre voulu) : Travail, Santé, Famille, Amis & Loisirs, Sport, Voyages &
+  Trajets, Mon temps libre, Personnel. « Personnel » (`perso`, gris discret) est le type neutre, distinct de « Mon temps
+  libre » (`personnel`, temps protégé). Le formulaire « Nouveau » porte les mêmes identifiants et libellés, « Personnel »
+  par défaut ; « Prendre rdv » (pros) choisit `sante`.
+- Migration des anciens identifiants (`TC_AGENDA_ALIAS`, appliquée à la lecture par `tcCatNormalisee`, donc aussi aux
+  rendez-vous reçus du serveur) : green → travail, yellow → famille, purple → amis, red → sante (inchangés) ;
+  blue (« Personnel » du formulaire ; avant → voyages) → perso ; orange (« Service » ; avant → Mon temps libre) → perso ;
+  teal (« Transport » ; avant rien) → voyages. Décision prise seule : un rendez-vous enregistré « blue » par le menu ⋮
+  d'avant la table (où blue voulait dire Voyages) devient « Personnel » ; le formulaire « Personnel » était le sens visible.
+- Charly : `perso` (et `autre`, `divers`) → type neutre ; `temps_libre` reste « Mon temps libre » ; la consigne cite
+  `perso`. Fenêtre « Modifier » : champ TYPE (liste `AGENDA_CATEGORIES`, type actuel sélectionné), appliqué à `e.cat`.
+- Suite `verif-types-rdv` (liste, ordre, couleurs, formulaire = menu, correspondance des 7 anciens types, jamais vers
+  « Mon temps libre », Charly, fiche), dans verifier.sh ; rouge sur la page d'avant.
+- Non fait : « Mes disponibilités » garde ses 6 catégories (pas de disponibilité « pour un rendez-vous personnel » ni
+  « pour un trajet »).
+- Palette unique : la couleur CSS --cat-perso (et -bg, -texte) declaree avec la couleur JS ; suites verif-temps-libre et verif-formules-charly adaptees (perso = type neutre).

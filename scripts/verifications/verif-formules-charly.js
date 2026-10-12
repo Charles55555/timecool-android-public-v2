@@ -39,7 +39,7 @@ else vm.runInContext(mCat[0].replace('const ', 'var '), ctx);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
 const C = (t, category) => ctx.tcCategorieDeProposition({ title: t, category: category }, ctx.catMap);
-const IDS = ['travail', 'sante', 'famille', 'amis', 'sport', 'personnel', 'voyages'];
+const IDS = ['travail', 'sante', 'famille', 'amis', 'sport', 'personnel', 'voyages', 'perso'];   // « Personnel », type neutre (mission 21)
 
 titre('Toute formule de la table mene a une categorie qui existe');
 Object.keys(ctx.catMap).forEach((formule) => {

@@ -26,6 +26,7 @@
   --cat-sport:#A8DDB5;      --cat-sport-bg:#E8F5E9;  --cat-sport-texte:#1B6B2F;
   --cat-personnel:#B3E5FC;  --cat-personnel-bg:#E1F5FE;  --cat-personnel-texte:#01579B;
   --cat-voyages:#80DEEA;    --cat-voyages-bg:#E0F7FA;  --cat-voyages-texte:#005A63;
+  --cat-perso:#B0BEC5;      --cat-perso-bg:#ECEFF1;    --cat-perso-texte:#37474F;   /* « Personnel », type neutre (mission 21) */
 }
 html,body { font-family:'Google Sans',Roboto,Arial,'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif; background:var(--bg); color:var(--text); height:100%; overflow:hidden; -webkit-font-smoothing:antialiased; }
 body { display:flex; flex-direction:column; }
@@ -1650,13 +1651,15 @@ if (window.pdfjsLib) {
       <div style="padding:10px 0; border-bottom:1px solid #eee;">
         <div class="info-label">Type</div>
         <select id="newEvtType" style="width:100%; border:none; outline:none; font-size:14px; padding:6px 0; background:transparent;">
-          <option value="blue">📋 Personnel</option>
-          <option value="red">🏥 Santé</option>
-          <option value="green">💼 Professionnel</option>
-          <option value="yellow">👨‍👩‍👧 Famille</option>
-          <option value="purple">🏃 Sport / Loisir</option>
-          <option value="teal">🚆 Transport</option>
-          <option value="orange">✂️ Service</option>
+          <!-- Une seule liste de types, la meme que le menu ⋮ (AGENDA_CATEGORIES) ; « Personnel » par defaut (mission 21). -->
+          <option value="travail">💼 Travail</option>
+          <option value="sante">🏥 Santé</option>
+          <option value="famille">👨‍👩‍👧 Famille</option>
+          <option value="amis">🎉 Amis &amp; Loisirs</option>
+          <option value="sport">🏋️ Sport</option>
+          <option value="voyages">🚆 Voyages &amp; Trajets</option>
+          <option value="personnel">☀️ Mon temps libre</option>
+          <option value="perso" selected>📋 Personnel</option>
         </select>
       </div>
       <div style="padding:10px 0; border-bottom:1px solid #eee;">
@@ -3357,7 +3360,7 @@ Utilise-la dès que l'utilisateur donne un début et une fin : « du 11 au 14 »
 « toute la semaine prochaine », « mes vacances du 1er au 15 août ».
 Sans heure précisée sur une période, mets 00:00-23:59.
 NE confonds PAS avec la récurrence : « tous les mardis » reste une ligne par occurrence.
-Catégories : travail, sport, famille, sante, repas, pause, trajet, preparation, administratif, loisir, temps_libre
+Catégories : travail, sport, famille, sante, repas, pause, trajet, preparation, administratif, loisir, temps_libre, perso (rendez-vous personnel sans autre catégorie)
 temps_libre = « Mon temps libre » : temps libre, repos, détente, sieste, journée pour soi. Ne mets JAMAIS ces moments en loisir.
 sante = médecin, dentiste, kiné, hôpital, analyses. famille = maman, papa, parents, enfants, grands-parents, repas de famille.
 N'écris JAMAIS « rdv » comme catégorie : « rendez-vous » est un mot, pas une catégorie. Choisis selon la nature du rendez-vous.
@@ -3926,7 +3929,10 @@ var TC_COULEURS_CATEGORIES = {
   personnel: { color: '#B3E5FC', bg: '#E1F5FE', texte: '#01579B' },
   // Propre a l agenda : aucun equivalent dans Mes disponibilites, on ne
   // se rend pas disponible « pour un trajet ».
-  voyages:   { color: '#80DEEA', bg: '#E0F7FA', texte: '#005A63' }
+  voyages:   { color: '#80DEEA', bg: '#E0F7FA', texte: '#005A63' },
+  // « Personnel » : le type neutre d un rendez-vous qui n entre dans aucune autre case (mission 21, 12/10). Gris
+  // discret ; aucun equivalent dans Mes disponibilites, et rien a voir avec « Mon temps libre » (temps protege).
+  perso:     { color: '#B0BEC5', bg: '#ECEFF1', texte: '#37474F' }
 };
 
 /* Anciens identifiants d agenda, ou la couleur SERVAIT d identifiant
@@ -3934,8 +3940,11 @@ var TC_COULEURS_CATEGORIES = {
    enregistres : sans cette table, un agenda existant perdrait ses
    couleurs a la mise a jour. */
 const TC_AGENDA_ALIAS = {
-  green: 'travail', yellow: 'famille', purple: 'amis',
-  red: 'sante', blue: 'voyages', orange: 'personnel'
+  green: 'travail', yellow: 'famille', purple: 'amis', red: 'sante',
+  // Anciens types du formulaire « Nouveau » (mission 21, 12/10) : « Personnel » (blue) et « Service » (orange)
+  // deviennent le type neutre « Personnel » ; « Transport » (teal, sans case avant) rejoint « Voyages & Trajets ».
+  // Avant : blue → voyages, orange → « Mon temps libre » (temps protege !), teal → rien.
+  blue: 'perso', orange: 'perso', teal: 'voyages'
 };
 
 /** Ramene un identifiant de categorie, ancien ou nouveau, a sa forme actuelle. */
@@ -3972,8 +3981,9 @@ const AGENDA_CATEGORIES = [
   { id: 'famille',   label: 'Famille',            visible: true },
   { id: 'amis',      label: 'Amis & Loisirs',     visible: true },
   { id: 'sport',     label: 'Sport',              visible: true },
-  { id: 'personnel', label: 'Mon temps libre',        visible: true },
-  { id: 'voyages',   label: 'Voyages & Trajets',  visible: true }
+  { id: 'voyages',   label: 'Voyages & Trajets',  visible: true },
+  { id: 'personnel', label: 'Mon temps libre',    visible: true },
+  { id: 'perso',     label: 'Personnel',          visible: true }
 ].map(function (c) {
   c.color = TC_COULEURS_CATEGORIES[c.id].color;
   c.bg = TC_COULEURS_CATEGORIES[c.id].bg;
@@ -6021,6 +6031,11 @@ function openEditEventModal(champ) {
       <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">TITRE</div>
       <input id="editTitle" type="text" value="${e.title.replace(/"/g,'&quot;')}" 
         style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px;">
+
+      <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">TYPE</div>
+      <select id="editCat" style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px; background:#fff;">
+        ${AGENDA_CATEGORIES.map(c => `<option value="${c.id}"${tcCatNormalisee(e.cat) === c.id ? ' selected' : ''}>${c.label}</option>`).join('')}
+      </select>
       
       <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">AVEC QUI ? (facultatif)</div>
       <input id="editContact" type="hidden" value="${e.contact || ''}">
@@ -6111,6 +6126,8 @@ function saveEventEdit() {
   const lieuChamp = document.getElementById('editLieu');
   const newLieu = lieuChamp ? lieuChamp.value.trim() : '';
   e.title = newTitle;
+  const champCat = document.getElementById('editCat');
+  if (champCat && champCat.value) e.cat = champCat.value;   // le type se change depuis la fiche (mission 21)
   e.date = newDate;
   if (allDay) {
     e.allDay = true;
@@ -9415,7 +9432,7 @@ function confirmGroupSlot(slot) {
 function takeAppointment(proName) {
   const modal = document.getElementById('createModal');
   document.getElementById('newEvtTitle').value = '🦷 ' + proName;
-  document.getElementById('newEvtType').value = 'red';
+  document.getElementById('newEvtType').value = 'sante';
   showToast('🧠 L\'IA TimeCool cherche un créneau...');
   setTimeout(() => {
     const body = document.getElementById('emBody');
@@ -11893,7 +11910,8 @@ function validateAgendaProposalFromMsg(msg) {
     repas:'famille', dejeuner:'famille', diner:'famille', petit_dejeuner:'famille',
     rdv:'sante', medical:'sante', urgent:'sante', medecin:'sante', sante:'sante',
     personnel:'personnel', pause:'personnel', repos:'personnel',
-    temps_libre:'personnel', 'temps libre':'personnel', libre:'personnel', detente:'personnel', perso:'personnel',
+    temps_libre:'personnel', 'temps libre':'personnel', libre:'personnel', detente:'personnel',
+    perso:'perso', autre:'perso', divers:'perso',
     trajet:'voyages', deplacement:'voyages', voyage:'voyages'
   };
   // Détecter si c'est une modification (message contient "déplace", "modifie", "change", "annule")
