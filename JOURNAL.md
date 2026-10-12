@@ -1552,3 +1552,22 @@ mobile vers le nouvel appareil.
   codées en ligne à remplacer par des variables, plus les cartes, pastilles et boutons colorés à décliner — environ deux
   jours de travail, avec le balayage de contraste comme garde-fou.
 - Dernier reste (examen) : le menu deroulant « Sauvegarde automatique » (#autoBackupFreq) suit le theme ; le balayage mesure aussi les select avec leur propre fond (rouge avant pour cet element).
+
+## 12/10/2026 (session Codeur) — Agendas créés perdus au rechargement (mission 28, urgente)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constat (adjointe, compte fanny.roux@) : un agenda créé disparaît au rechargement ; le 2e agenda créé écrase la liste
+  sur le serveur. Cause : `loadCustomCalendars();` s'exécute au chargement du script (bloc de démarrage, avec
+  `loadCurrentLanguage()`…) AVANT la ligne `const TC_CALENDARS_KEY = …` du même bloc : lire une `const` avant sa
+  déclaration lève une erreur (zone morte), attrapée par le `try` de la fonction → repli « Mon agenda » seul, à chaque
+  démarrage ; créer un agenda enregistrait alors [Mon agenda + le nouveau] depuis cette liste tronquée, et la synchro
+  (réglage `timecool_custom_calendars`) écrasait la liste du serveur.
+- Correctif : la constante est déclarée tôt, à côté de `let customCalendars` (lui-même déclaré tôt pour la même raison) ;
+  l'ancienne ligne devient un commentaire qui renvoie à la déclaration.
+- Suite `verif-agendas-recharges` : ordre déclaration → appel dans le script ; rejeu au chargement (deux agendas relus,
+  un rendez-vous rangé dans « Sport » visible, un 3e agenda créé puis rechargé : les trois) ; témoin du défaut (appelée
+  avant la constante : repli « Mon agenda » seul). Dans verifier.sh ; rouge sur la page d'avant.
+- Côté comptes : les listes déjà écrasées sur le serveur ne reviennent pas d'elles-mêmes (les agendas perdus sont à
+  recréer) ; les rendez-vous rangés dedans sont intacts et restent VISIBLES (`isCalendarVisible` rend vrai pour un
+  agenda inconnu), ils gardent leur `calendarId`.

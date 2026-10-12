@@ -2743,6 +2743,7 @@ window.addEventListener('load', function() {
 });
 
 let mode = 'user';
+const TC_CALENDARS_KEY = 'timecool_custom_calendars';   // declaree tot : loadCustomCalendars() est appelee au chargement du script (mission 28)
 let customCalendars = []; // agendas personnalisés — déclaré tôt pour éviter tout accès avant initialisation
 let groupConvocations = []; // convocations de groupe — même raison
 
@@ -19485,7 +19486,8 @@ function goToEventDate(dateStr) {
    "Projets perso"...), les affiche ou les masque à volonté.
    100% local, aucune dépendance au serveur.
    ══════════════════════════════════════════════════════════════ */
-const TC_CALENDARS_KEY = 'timecool_custom_calendars';
+// TC_CALENDARS_KEY est declaree tot, a cote de customCalendars (mission 28) : loadCustomCalendars() est appelee au
+// chargement du script, avant cette ligne.
 const TC_CALENDAR_COLORS = ['#4285F4','#EA4335','#FBBC04','#34A853','#9C27B0','#00ACC1','#FF7043','#5C6BC0'];
 
 function loadCustomCalendars() {
