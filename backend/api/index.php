@@ -1504,6 +1504,13 @@ function rappelEnvoyerUn(array $compte, array $rdv, DateTime $debut, int $delai)
  * Le message d'absence du titulaire, s'il est en cours aujourd'hui : le reglage tc_absence (synchronise
  * par l'application comme les autres), interrupteur allume, debut <= aujourd'hui <= fin. null sinon.
  */
+/*
+ * Un INCONNU de l absent (aucune fiche) recoit-il la phrase d urgence (nom et telephone du relais) ?
+ * true : comme tout le monde (comportement du 12/10). false : le message part sans la phrase d urgence,
+ * reservee aux contacts (recommandation du chef de projet, en attente de Charles). Une seule ligne a changer.
+ */
+const ABSENCE_RELAIS_AUX_INCONNUS = true;
+
 function absenceDe(int $compteId): ?array
 {
     $l = Db::un(
@@ -1555,7 +1562,7 @@ function vouvoiePour(int $titulaireId, array $personne): bool
  * sinon celui par defaut ; sans relais (nom ou telephone vide), la phrase « En cas d'urgence… » est omise ;
  * les pastilles sont remplacees. Meme regle que l'apercu de l'application (tcTexteAbsence).
  */
-function texteAbsence(array $a, bool $vouvoie, string $prenom): string
+function texteAbsence(array $a, bool $vouvoie, string $prenom, bool $avecRelais = true): string
 {
     $defauts = [
         'tu'   => "Bonjour [Prénom], je suis absent(e) du [date début] au [date fin]. En cas d'urgence, contacte [nom du relais] au [téléphone du relais]. Je te recontacte à mon retour.",
@@ -1563,8 +1570,8 @@ function texteAbsence(array $a, bool $vouvoie, string $prenom): string
     ];
     $forme = $vouvoie ? 'vous' : 'tu';
     $t = (isset($a[$forme]) && is_string($a[$forme]) && trim($a[$forme]) !== '') ? $a[$forme] : $defauts[$forme];
-    $nom = trim((string) ($a['relaisNom'] ?? ''));
-    $tel = trim((string) ($a['relaisTel'] ?? ''));
+    $nom = $avecRelais ? trim((string) ($a['relaisNom'] ?? '')) : '';
+    $tel = $avecRelais ? trim((string) ($a['relaisTel'] ?? '')) : '';
     if ($nom === '' || $tel === '') {
         $t = preg_replace("/\s*En cas d[’']urgence[^.]*\.\s*/u", ' ', $t);
         $t = trim((string) preg_replace('/\s{2,}/u', ' ', (string) $t));
@@ -1586,6 +1593,11 @@ function texteAbsence(array $a, bool $vouvoie, string $prenom): string
  */
 function envoyerAbsenceSiBesoin(array $absent, array $expediteur): void
 {
+    // Une personne bloquee par l absent ne recoit rien : ni le message, ni le nom et le telephone du relais
+    // (le silence de la mission 2). Un seul garde pour les trois appels.
+    if (demandeurBloque((int) $absent['id'], $expediteur)) {
+        return;
+    }
     $a = absenceDe((int) $absent['id']);
     if ($a === null) {
         return;
@@ -1604,11 +1616,13 @@ function envoyerAbsenceSiBesoin(array $absent, array $expediteur): void
             }
         }
     }
-    $texte = texteAbsence($a, vouvoiePour((int) $absent['id'], $expediteur), texteSur((string) $expediteur['prenom']));
+    $connu = fichesDe((int) $absent['id'], $expediteur) !== [];
+    $texte = texteAbsence($a, vouvoiePour((int) $absent['id'], $expediteur), texteSur((string) $expediteur['prenom']), $connu || ABSENCE_RELAIS_AUX_INCONNUS);
     messagePoser($absent, $expediteur, $texte, null, null, 'absence');
 }
 
-function messagePoser(    array $de,
+function messagePoser(
+    array $de,
     array $vers,
     string $texte,
     ?int $rdvId = null,

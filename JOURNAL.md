@@ -1176,3 +1176,9 @@ mobile vers le nouvel appareil.
   verifier.sh ; rouge sur la page/API d'avant. `verif-absence-e2e` (TC_API, comptes jetables e2erdv.absence…) : écrite, PAS dans
   verifier.sh tant que l'API n'est pas déployée (verte via api-locale.sh). Capture 390x844 :
   `TimeCool-Codeur/captures/mission12-message-absence.png`.
+- Correctif après examen : `envoyerAbsenceSiBesoin` commence par `demandeurBloque` : une personne bloquée par l'absent ne
+  reçoit jamais le message (ni le nom et le téléphone du relais), quel que soit le chemin ; e2e : Dave bloqué écrit → rien.
+  Cas « inconnu » (aucune fiche chez l'absent) préparé : constante `ABSENCE_RELAIS_AUX_INCONNUS` (true = relais pour tous,
+  comportement actuel ; false = le message part sans la phrase d'urgence, réservée aux contacts — recommandation du chef,
+  réponse de Charles en attente) ; `texteAbsence(..., $avecRelais)`. Ligne fusionnée de `messagePoser` remise. Réserve notée :
+  un point dans un texte personnalisé (« M. Dupont ») peut mal couper la phrase d'urgence quand le relais est vide.

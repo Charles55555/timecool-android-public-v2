@@ -68,6 +68,9 @@ verifie('la carte est sous « Messages d annulation & retards », meme style, et
 titre('2. L API : executee sous PHP');
 const noms = ['absenceDe', 'vouvoiePour', 'texteAbsence', 'rdvLibelleJour', 'memeReference', 'fichesDe', 'texteSur'];
 const src = noms.map((n) => fonction(api, n));
+const constante = api.match(/const ABSENCE_RELAIS_AUX_INCONNUS = (true|false);/);
+verifie('la constante de bascule pour les inconnus existe', !!constante, 'absente');
+if (constante) src.unshift(constante[0]);
 verifie('les fonctions existent', src.every(Boolean), noms.filter((n, i) => !src[i]).join(','));
 if (PHP && src.every(Boolean)) {
   const hph = `<?php
@@ -108,6 +111,8 @@ t('texte (vous)', str_contains(texteAbsence($a, true, 'Camille'), 'contactez Mar
 t('sans relais : la phrase urgence omise', texteAbsence(['actif' => true, 'debut' => '2026-10-20', 'fin' => '2026-10-25'], false, 'Camille') === 'Bonjour Camille, je suis absent(e) du mardi 20 octobre au dimanche 25 octobre. Je te recontacte à mon retour.');
 t('texte personnalise (vous) utilise', texteAbsence($a + ['vous' => 'Absent(e) jusqu’au [date fin], [Prénom].'], true, 'Camille') === 'Absent(e) jusqu’au dimanche 25 octobre, Camille.');
 t('un relais avec une balise est neutralise', !str_contains(texteAbsence($a + ['relaisNom' => '<b>Marie</b>'], false, 'Camille'), '<b>'));
+t('sans relais pour un inconnu (avecRelais=false) : la phrase urgence est omise, le reste part', texteAbsence($a, false, 'Camille', false) === 'Bonjour Camille, je suis absent(e) du mardi 20 octobre au dimanche 25 octobre. Je te recontacte à mon retour.');
+t('la constante ABSENCE_RELAIS_AUX_INCONNUS existe (bascule en une ligne)', defined('ABSENCE_RELAIS_AUX_INCONNUS'));
 echo json_encode($res);
 `;
   const f = path.join(os.tmpdir(), 'verif-absence-' + process.pid + '.php');
@@ -125,6 +130,8 @@ echo json_encode($res);
 
 titre('3. L API : les routes');
 const env = fonction(api, 'envoyerAbsenceSiBesoin') || '';
+verifie('envoyerAbsenceSiBesoin : une personne bloquee par l absent ne recoit rien (garde en tete, un seul endroit)', /^function envoyerAbsenceSiBesoin\(array \$absent, array \$expediteur\): void\n\{\n(\s*\/\/[^\n]*\n)*\s*if \(demandeurBloque\(\(int\) \$absent\['id'\], \$expediteur\)\) \{\s+return;\s+\}/.test(env));
+verifie('envoyerAbsenceSiBesoin : un inconnu (aucune fiche) recoit le relais selon ABSENCE_RELAIS_AUX_INCONNUS (bascule en une ligne)', /\$connu = fichesDe\(\(int\) \$absent\['id'\], \$expediteur\) !== \[\];/.test(env) && /\$connu \|\| ABSENCE_RELAIS_AUX_INCONNUS\)/.test(env));
 verifie('envoyerAbsenceSiBesoin : une seule fois par expediteur et par periode (ligne « me » de genre absence datee d apres le debut)', /\(\$m\['genre'\] \?\? ''\) === 'absence'/.test(env) && /\(\$m\['from'\] \?\? ''\) === 'me'/.test(env) && /substr\(\(string\) \(\$m\['le'\] \?\? ''\), 0, 10\) >= \(string\) \$a\['debut'\]/.test(env) && /messagePoser\(\$absent, \$expediteur, \$texte, null, null, 'absence'\);/.test(env));
 const msg = api.slice(api.indexOf("case 'POST /messages/envoyer':"), api.indexOf("case 'POST /rdv/proposer-creneau':"));
 verifie('/messages/envoyer : le message part, puis la reponse d absence', /messagePoser\(\$moi, \$cible, Entree::requis\('texte', 2000\), null, \$imposee\);\s+envoyerAbsenceSiBesoin\(\$cible, \$moi\);\s+Rep::ok\(\);/.test(msg));

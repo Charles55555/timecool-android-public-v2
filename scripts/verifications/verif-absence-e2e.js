@@ -76,9 +76,15 @@ const jour = (n) => iso(new Date(Date.now() + n * 86400000));
   dire(rc.length === 1 && /contactez Marie Dupont au 06 12 34 56 78\. Je vous recontacte/.test(rc[0].texte), 'Carl (Dr) reçoit la version vouvoyée, avec le relais', rc[0] && rc[0].texte);
   dire((await absencesRecues(bob.jeton, alice.ref)).length === 1, 'Bob n en reçoit pas un second (même période)');
 
+  console.log('\nUne personne bloquée par Alice écrit pendant l absence :');
+  const dave = await inscrire('Dave');
+  await poser(alice.jeton, [{ type: 'contact', uid: 'ct_dave', contenu: { id: 'ct_dave', name: 'Dave Absence', phone: dave.tel, email: '', blocked: true, isTimeCool: true } }]);
+  const mb = await appel('POST', '/messages/envoyer', { reference: alice.ref, texte: 'Coucou' }, dave.jeton);
+  dire(mb.code === 200 && (await absencesRecues(dave.jeton, alice.ref)).length === 0, 'Dave (bloqué) ne reçoit aucun message d absence, donc pas le relais (examinateur)');
+  await poser(alice.jeton, [{ type: 'contact', uid: 'ct_dave', contenu: { id: 'ct_dave', name: 'Dave Absence', phone: dave.tel, email: '', blocked: false, isTimeCool: true } }]);
+
   console.log('\nLa période se termine :');
   await poser(alice.jeton, [reglage('tc_absence', JSON.stringify({ actif: true, debut: jour(-5), fin: jour(-1) }))]);
-  const dave = await inscrire('Dave');
   await appel('POST', '/messages/envoyer', { reference: alice.ref, texte: 'Hello' }, dave.jeton);
   dire((await absencesRecues(dave.jeton, alice.ref)).length === 0, 'période terminée : Dave ne reçoit rien (l interrupteur reste tel quel)');
   await poser(alice.jeton, [reglage('tc_absence', JSON.stringify({ actif: false, debut: jour(-1), fin: jour(2) }))]);
