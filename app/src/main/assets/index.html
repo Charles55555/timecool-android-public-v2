@@ -6674,6 +6674,9 @@ async function deleteGroupFromList(id, el) {
   if (!await tcConfirm('Supprimer ce groupe et ses messages ?')) return;
   messages[mode] = messages[mode].filter(m => m.id !== id);
   saveMessagesToStorage();
+  // Ses convocations partent avec lui, et la synchro est demandee tout de suite (mission 27c).
+  if (typeof tcPurgerConvocationsOrphelines === 'function') tcPurgerConvocationsOrphelines();
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
   updateBadges();
   el.closest('.msg-sheet-ov').remove();
   showToast('Groupe supprimé');
@@ -7152,7 +7155,7 @@ function openConversation(id, origine) {
   const convoqBtn = document.getElementById('convConvoqBtn');
   if (convoqBtn) convoqBtn.style.display = msg.isGroup ? 'block' : 'none';
   // A l ouverture d un groupe, ses decomptes sont relus sur le serveur (mission 27c).
-  if (msg.isGroup && typeof tcRafraichirToutesConvocations === 'function') tcRafraichirToutesConvocations(true);
+  if (msg.isGroup && typeof tcRafraichirToutesConvocations === 'function') tcRafraichirToutesConvocations(true, msg.id);
   const body = document.getElementById('convBody');
   body.innerHTML = msg.thread.length
     ? msg.thread.map(t => t.from === 'system'
@@ -24368,18 +24371,30 @@ function tcPoserGroupes(liste) {
     if (!messages[md]) return;
     messages[md] = messages[md].filter(function (x) { return !(x && x.isGroup) || vus['grp_' + String(x.id)]; });
   });
+  tcPurgerConvocationsOrphelines();
   saveMessagesToStorage();
   saveConvocations();
   if (typeof currentPage !== 'undefined' && currentPage === 'messages' && typeof renderMessages === 'function') renderMessages();
   tcRafraichirToutesConvocations(true);
 }
+/** Les convocations dont le groupe n existe plus (supprime ici ou ailleurs) sont retirees ; rend le nombre retire. */
+function tcPurgerConvocationsOrphelines() {
+  if (typeof groupConvocations === 'undefined' || !Array.isArray(groupConvocations)) return 0;
+  const groupes = {};
+  ['user', 'pro'].forEach(function (md) { ((typeof messages !== 'undefined' && messages && messages[md]) || []).forEach(function (m) { if (m && m.isGroup) groupes[String(m.id)] = true; }); });
+  const avant = groupConvocations.length;
+  groupConvocations = groupConvocations.filter(function (c) { return c && groupes[String(c.groupMsgId)]; });
+  if (groupConvocations.length !== avant) saveConvocations();
+  return avant - groupConvocations.length;
+}
 let _tcConvocDernierRafraichi = 0;
 /** Les reponses de toutes les convocations envoyees, relues sur le serveur (au plus une fois par minute, sauf force). */
-async function tcRafraichirToutesConvocations(force) {
+async function tcRafraichirToutesConvocations(force, groupMsgId) {
   if (!force && Date.now() - _tcConvocDernierRafraichi < 60000) return false;
-  _tcConvocDernierRafraichi = Date.now();
+  if (groupMsgId === undefined) _tcConvocDernierRafraichi = Date.now();
   let change = false;
-  const liste = ((typeof groupConvocations !== 'undefined' && groupConvocations) || []).filter(function (c) { return c && c.serveurId; });
+  // Un groupe donne : seules ses convocations (une requete chacune) ; sinon toutes celles qui ont ete envoyees.
+  const liste = ((typeof groupConvocations !== 'undefined' && groupConvocations) || []).filter(function (c) { return c && c.serveurId && (groupMsgId === undefined || String(c.groupMsgId) === String(groupMsgId)); });
   for (const c of liste) { try { if (await tcRafraichirConvocation(c)) change = true; } catch (e) {} }
   if (change) {
     const ov = document.getElementById('convocDashboardOv');

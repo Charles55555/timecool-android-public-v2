@@ -1914,3 +1914,8 @@ mobile vers le nouvel appareil.
 - Trouvé au rejeu réel : à la déconnexion, `tcViderDonneesDuCompte` effaçait le stockage mais laissait les convocations en
   mémoire (`groupConvocations`) ; le compte suivant les voyait jusqu'au rechargement. Vidées aussi, la synchro du compte
   suivant rapporte les siennes (assertion ajoutée à `verif-groupes-sync`).
+- Correction après examen (12/10) : les convocations d'un groupe supprimé (ici ou ailleurs) restaient orphelines dans
+  `groupConvocations` et étaient relues sur le serveur à chaque ouverture, pour toujours. `tcPurgerConvocationsOrphelines`
+  (retire celles dont le groupe n'existe plus, enregistre) appelée par `tcPoserGroupes` (groupe disparu ailleurs) et par
+  `deleteGroupFromList` (suppression ici, qui demande aussi la synchro tout de suite). À l'ouverture d'un groupe, seules
+  SES convocations sont relues (`tcRafraichirToutesConvocations(true, groupMsgId)`). Cas ajoutés à `verif-groupes-sync`.

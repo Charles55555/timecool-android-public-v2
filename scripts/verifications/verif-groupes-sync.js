@@ -26,7 +26,8 @@ const types = (page.match(/const TC_SYNC_TYPES = \{[\s\S]*?\n\};/) || [''])[0];
 verifie('TC_SYNC_TYPES a une famille groupe (lire : tcGroupesPourSync, id, poser : tcPoserGroupes)', /groupe: \{\s+lire: function \(\) \{ return typeof tcGroupesPourSync === 'function' \? tcGroupesPourSync\(\) : \[\]; \},\s+id: function \(o\) \{ return o\.id; \},\s+poser: function \(liste\) \{ if \(typeof tcPoserGroupes === 'function'\) tcPoserGroupes\(liste\); \}\s+\}/.test(types));
 const deja = (page.match(/const TC_SYNC_DEJA_SYNCHRONISE = \[[^\]]*\];/) || [''])[0];
 verifie('timecool_messages et timecool_convocations ne voyagent plus comme reglages (TC_SYNC_DEJA_SYNCHRONISE)', /'timecool_messages', 'timecool_convocations'/.test(deja) && deja.indexOf(']') === deja.length - 2);
-verifie('renderMessages relit les decomptes (au plus une fois par minute) ; openConversation d un groupe les relit tout de suite', /tcRafraichirToutesConvocations\(false\);\s+const all = tcConversationsAffichables\(\);/.test(fonction(page, 'renderMessages') || '') && /if \(msg\.isGroup && typeof tcRafraichirToutesConvocations === 'function'\) tcRafraichirToutesConvocations\(true\);/.test(fonction(page, 'openConversation') || ''));
+verifie('renderMessages relit les decomptes (au plus une fois par minute) ; openConversation d un groupe les relit tout de suite', /tcRafraichirToutesConvocations\(false\);\s+const all = tcConversationsAffichables\(\);/.test(fonction(page, 'renderMessages') || '') && /if \(msg\.isGroup && typeof tcRafraichirToutesConvocations === 'function'\) tcRafraichirToutesConvocations\(true, msg\.id\);/.test(fonction(page, 'openConversation') || ''));
+verifie('supprimer un groupe ici retire ses convocations (tcPurgerConvocationsOrphelines) et demande la synchro tout de suite', /messages\[mode\] = messages\[mode\]\.filter\(m => m\.id !== id\);\s+saveMessagesToStorage\(\);\s+\/\/[^\n]*\n\s+if \(typeof tcPurgerConvocationsOrphelines === 'function'\) tcPurgerConvocationsOrphelines\(\);\s+if \(typeof tcSyncBientot === 'function'\) tcSyncBientot\(\);/.test(fonction(page, 'deleteGroupFromList') || ''));
 verifie('le decompte garde son identifiant (ov._tcConvocId) pour etre rouvert a jour', /ov\._tcConvocId = c\.id;/.test(fonction(page, 'openConvocationDashboard') || '') && /if \(ov && ov\._tcConvocId\) \{ ov\.remove\(\); openConvocationDashboard\(ov\._tcConvocId\); \}/.test(fonction(page, 'tcRafraichirToutesConvocations') || ''));
 verifie('le bouton Absent de la convocation recue est « ❌ Absent »', /❌ Absent<\/button>/.test(fonction(page, 'tcCadreConvocation') || '') && page.indexOf('✕ Absent') < 0);
 verifie('a la deconnexion, les convocations en memoire sont videes avec les messages (tcViderDonneesDuCompte)', /messages = \{ user: \[\], pro: \[\] \};\s+\/\/[^\n]*\n\s+if \(typeof groupConvocations !== 'undefined'\) groupConvocations = \[\];/.test(fonction(page, 'tcViderDonneesDuCompte') || ''));
@@ -46,7 +47,7 @@ const ctx = { console, String, Number, Array, Date, JSON, Object, Math,
   tcRafraichirConvocation: async (c) => { appels.push('rafraichir:' + c.id); return false; } };
 vm.createContext(ctx);
 vm.runInContext("var _tcConvocDernierRafraichi = 0;", ctx);
-['tcMembresDuGroupe', 'tcGroupesPourSync', 'tcPoserGroupes', 'tcRafraichirToutesConvocations'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+['tcMembresDuGroupe', 'tcGroupesPourSync', 'tcPoserGroupes', 'tcPurgerConvocationsOrphelines', 'tcRafraichirToutesConvocations'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 const envoye = ctx.tcGroupesPourSync();
 verifie('tcGroupesPourSync : un seul objet (le groupe), id grp_<cle>, mode user, nom, membres par identifiant + reference, trace = lignes systeme seulement, sa convocation (pas celle d un autre groupe)', envoye.length === 1 && envoye[0].id === 'grp_1760000000000' && envoye[0].cle === 1760000000000 && envoye[0].mode === 'user' && envoye[0].nom === 'Équipe' && JSON.stringify(envoye[0].membres) === JSON.stringify([{ id: 'c1', name: 'Paul Convoc', reference: 'REFPAUL' }, { id: 'c2', name: 'Sans Compte', reference: '' }]) && envoye[0].thread.length === 2 && envoye[0].thread.every((t) => t.from === 'system') && envoye[0].convocations.length === 1 && envoye[0].convocations[0].id === 'convoc_1', JSON.stringify(envoye).slice(0, 300));
 const copie = JSON.parse(JSON.stringify(envoye));
@@ -67,11 +68,26 @@ await new Promise((r) => setTimeout(r, 10));
 const g2 = ctx.messages.user.find((m) => m.isGroup && m.id === 1760000000000);
 verifie('mise a jour : nom, membres, trace completee sans doublon, statut de la convocation ; le groupe supprime ailleurs disparait ici', g2.with === 'Équipe A' && g2.members.length === 3 && g2.thread.length === 3 && ctx.groupConvocations[0].recipients[0].status === 'present' && !ctx.messages.user.some((m) => m.id === 99) && ctx.messages.user.some((m) => m.id === 1), JSON.stringify(g2).slice(0, 200));
 verifie('la conversation simple (Dr. Martin) n est pas touchee', ctx.messages.user.find((m) => m.id === 1).thread[0].text === 'Bonjour');
+// Un groupe supprime ailleurs : sa convocation ne reste pas orpheline, et n est plus relue sur le serveur.
+ctx.messages.user.push({ id: 77, with: 'Groupe B', isGroup: true, members: [], membres: [], thread: [] });
+ctx.groupConvocations.push({ id: 'convoc_b', serveurId: 9, groupMsgId: 77, recipients: [] });
+appels.length = 0;
+ctx.tcPoserGroupes(maj);   // la liste recue ne contient pas le groupe B
+await new Promise((r) => setTimeout(r, 10));
+verifie('groupe supprime ailleurs : le groupe B et sa convocation (serveurId 9) disparaissent, elle n est plus relue', !ctx.messages.user.some((m) => m.id === 77) && !ctx.groupConvocations.some((c) => c.id === 'convoc_b') && appels.indexOf('rafraichir:convoc_b') < 0 && appels.indexOf('convocations') >= 0, JSON.stringify(ctx.groupConvocations.map((c) => c.id)) + ' ' + appels.join(' '));
+verifie('tcPurgerConvocationsOrphelines : rend le nombre retire, 0 quand tout est rattache', ctx.tcPurgerConvocationsOrphelines() === 0);
+// A l ouverture d un groupe : seules ses convocations sont relues.
+ctx.messages.user.push({ id: 78, with: 'Groupe C', isGroup: true, members: [], membres: [], thread: [] });
+ctx.groupConvocations.push({ id: 'convoc_c', serveurId: 10, groupMsgId: 78, recipients: [] });
+appels.length = 0;
+await ctx.tcRafraichirToutesConvocations(true, 1760000000000);
+verifie('tcRafraichirToutesConvocations(true, groupe) : seule la convocation de ce groupe est relue', appels.filter((x) => x.indexOf('rafraichir:') === 0).join() === 'rafraichir:convoc_1', appels.join(' '));
 appels.length = 0;
 vm.runInContext('_tcConvocDernierRafraichi = 0;', ctx);
 const a = await ctx.tcRafraichirToutesConvocations(false);
+const apresPremier = appels.filter((x) => x.indexOf('rafraichir:') === 0).length;
 const b = await ctx.tcRafraichirToutesConvocations(false);
-verifie('tcRafraichirToutesConvocations : relit les convocations envoyees (serveurId), au plus une fois par minute sans force', appels.filter((x) => x.indexOf('rafraichir:') === 0).length === 1 && a === false && b === false);
+verifie('tcRafraichirToutesConvocations : relit toutes les convocations envoyees (serveurId), au plus une fois par minute sans force', apresPremier === 2 && appels.filter((x) => x.indexOf('rafraichir:') === 0).length === 2 && a === false && b === false, appels.join(' '));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
 console.log('');
