@@ -1421,3 +1421,13 @@ mobile vers le nouvel appareil.
 - Non fait : « Mes disponibilités » garde ses 6 catégories (pas de disponibilité « pour un rendez-vous personnel » ni
   « pour un trajet »).
 - Palette unique : la couleur CSS --cat-perso (et -bg, -texte) declaree avec la couleur JS ; suites verif-temps-libre et verif-formules-charly adaptees (perso = type neutre).
+- Correctif après examen et décisions du chef (12/10) : (1) un rendez-vous sans indice (« rdv » dans un bloc construit par
+  la page, « Coach ») → « Personnel », jamais Santé par défaut (`catMap.rdv = 'perso'`) ; (2) les anciens « orange »
+  (Service, qui étaient « Mon temps libre ») RESTENT « Mon temps libre » : on ne déprotège jamais un rendez-vous existant
+  (`orange → personnel`) ; (3) « Modifier » affiche le type actuel tel quel — un ancien identifiant est ramené à sa
+  forme actuelle, un type inconnu (« loisir », « rdv »…) est montré en première option « (type actuel : loisir) »,
+  « Personnel » si vide — et ne réécrit `e.cat` que si l'utilisateur a changé le choix (`data-initial`) ; avant, un
+  type inconnu était réécrit « travail » en silence dès qu'on modifiait le titre. Le formulaire « Nouveau » revient à
+  « Personnel » à chaque ouverture (le select gardait le dernier choix). La suite rejoue la fenêtre : « loisir »
+  modifié par le titre reste « loisir », choisi « Sport » devient « sport », sans type rien n'est écrit.
+  Suite verif-categories-titre adaptee (« Rendez-vous Marc » sans indice → Personnel).

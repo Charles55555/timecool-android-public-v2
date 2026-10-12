@@ -61,7 +61,7 @@ verifie('« Soirée libre entre amis » donne famille → famille', C('Soirée l
 titre('Sans indice, comportement d avant');
 verifie('« Rendez-vous banque » (rdv) → travail (administratif)', C('Rendez-vous banque', 'rdv') === 'travail');
 verifie('« Rendez-vous avocat » (rdv) → travail', C('Rendez-vous avocat', 'rdv') === 'travail');
-verifie('« Rendez-vous Marc » (rdv), aucun indice : sante comme avant', C('Rendez-vous Marc', 'rdv') === 'sante');
+verifie('« Rendez-vous Marc » (rdv), aucun indice : « Personnel » (chef, 12/10, mission 21 ; avant : sante)', C('Rendez-vous Marc', 'rdv') === 'perso');
 verifie('« Truc » categorie inconnue → green', C('Truc', 'xyz') === 'green');
 
 titre('La consigne n enseigne plus « rdv »');

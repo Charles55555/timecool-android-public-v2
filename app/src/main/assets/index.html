@@ -3941,10 +3941,10 @@ var TC_COULEURS_CATEGORIES = {
    couleurs a la mise a jour. */
 const TC_AGENDA_ALIAS = {
   green: 'travail', yellow: 'famille', purple: 'amis', red: 'sante',
-  // Anciens types du formulaire « Nouveau » (mission 21, 12/10) : « Personnel » (blue) et « Service » (orange)
-  // deviennent le type neutre « Personnel » ; « Transport » (teal, sans case avant) rejoint « Voyages & Trajets ».
-  // Avant : blue → voyages, orange → « Mon temps libre » (temps protege !), teal → rien.
-  blue: 'perso', orange: 'perso', teal: 'voyages'
+  // Anciens types du formulaire « Nouveau » (mission 21, 12/10) : « Personnel » (blue) devient le type neutre
+  // « Personnel » (avant : voyages) ; « Transport » (teal, sans case avant) rejoint « Voyages & Trajets » ; « Service »
+  // (orange) RESTE « Mon temps libre » : on ne deprotege jamais un rendez-vous existant (decision du chef, 12/10).
+  blue: 'perso', orange: 'personnel', teal: 'voyages'
 };
 
 /** Ramene un identifiant de categorie, ancien ou nouveau, a sa forme actuelle. */
@@ -6026,6 +6026,10 @@ function tcMajLigneContactRdv() {
 function openEditEventModal(champ) {
   const e = currentEvent;
   if (!e) return;
+  // Le type affiche : l actuel tel quel (un ancien identifiant est ramene a sa forme actuelle, un inconnu est montre
+  // comme « type actuel : … »), « Personnel » si vide ; il n est reecrit que si l utilisateur le change (chef, 12/10).
+  const catActuelle = e.cat ? (AGENDA_CATEGORIES.some(c => c.id === tcCatNormalisee(e.cat)) ? tcCatNormalisee(e.cat) : String(e.cat)) : 'perso';
+  const catConnue = AGENDA_CATEGORIES.some(c => c.id === catActuelle);
   document.getElementById('emBody').innerHTML = `
     <div style="padding:4px 0 12px;">
       <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">TITRE</div>
@@ -6033,8 +6037,9 @@ function openEditEventModal(champ) {
         style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px;">
 
       <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">TYPE</div>
-      <select id="editCat" style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px; background:#fff;">
-        ${AGENDA_CATEGORIES.map(c => `<option value="${c.id}"${tcCatNormalisee(e.cat) === c.id ? ' selected' : ''}>${c.label}</option>`).join('')}
+      <select id="editCat" data-initial="${escapeHTMLSafe(catActuelle)}" style="width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:15px; box-sizing:border-box; margin-bottom:14px; background:#fff;">
+        ${catConnue ? '' : `<option value="${escapeHTMLSafe(catActuelle)}" selected>(type actuel : ${escapeHTMLSafe(catActuelle)})</option>`}
+        ${AGENDA_CATEGORIES.map(c => `<option value="${c.id}"${catActuelle === c.id ? ' selected' : ''}>${c.label}</option>`).join('')}
       </select>
       
       <div style="font-size:12px; color:var(--text-sec); margin-bottom:6px; font-weight:600;">AVEC QUI ? (facultatif)</div>
@@ -6127,7 +6132,8 @@ function saveEventEdit() {
   const newLieu = lieuChamp ? lieuChamp.value.trim() : '';
   e.title = newTitle;
   const champCat = document.getElementById('editCat');
-  if (champCat && champCat.value) e.cat = champCat.value;   // le type se change depuis la fiche (mission 21)
+  // Le type ne change que si l utilisateur l a change : un type ancien ou inconnu n est jamais reecrit en silence.
+  if (champCat && champCat.value && champCat.value !== champCat.getAttribute('data-initial')) e.cat = champCat.value;
   e.date = newDate;
   if (allDay) {
     e.allDay = true;
@@ -8230,6 +8236,9 @@ function updateProfileSelector() {
 function openCreateModal() {
   document.getElementById('newEvtTitle').value = '';
   document.getElementById('newEvtDesc').value = '';
+  // « Personnel » par defaut a chaque ouverture, pas seulement la premiere (examen de la mission 21).
+  const champType = document.getElementById('newEvtType');
+  if (champType) champType.value = 'perso';
   // « En personne » est pre-selectionne ; un geste suffit pour changer.
   const zoneComment = document.getElementById('newEvtComment');
   if (zoneComment) zoneComment.innerHTML = tcTypeBlocHTML('newEvtTypeRdv', 'physique');
@@ -11908,7 +11917,7 @@ function validateAgendaProposalFromMsg(msg) {
     loisir:'amis', loisirs:'amis', amis:'amis',
     famille:'famille', enfants:'famille',
     repas:'famille', dejeuner:'famille', diner:'famille', petit_dejeuner:'famille',
-    rdv:'sante', medical:'sante', urgent:'sante', medecin:'sante', sante:'sante',
+    rdv:'perso', medical:'sante', urgent:'sante', medecin:'sante', sante:'sante',   // « rdv » sans indice → Personnel (chef, 12/10)
     personnel:'personnel', pause:'personnel', repos:'personnel',
     temps_libre:'personnel', 'temps libre':'personnel', libre:'personnel', detente:'personnel',
     perso:'perso', autre:'perso', divers:'perso',
