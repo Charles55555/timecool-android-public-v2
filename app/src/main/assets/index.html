@@ -5024,6 +5024,25 @@ function tcEcrireDeplacementDoigt(e, c) {
   return ancien;
 }
 
+/** Le deplacement au doigt entre dans le Journal d activite (mission 39) : une entree par deplacement termine ; rend son identifiant. */
+function tcJournaliserDeplacementDoigt(e, ancien, c) {
+  if (!e || !ancien || !c || typeof addDemarche !== 'function') return null;
+  const de = tcLibelleCreneau(ancien, ' '), vers = tcLibelleCreneau(c, ' ');
+  const d = { icon: '↔️', title: 'Rendez-vous déplacé — ' + String(e.title || 'Rendez-vous'), summary: escapeHTMLSafe(de + ' → ' + vers), status: 'modifiee', categorie: 'rdv',
+    detail: 'Tu as déplacé ce rendez-vous au doigt : de ' + de + ' à ' + vers + '.', manuel: true };
+  addDemarche(d);
+  return d.id;
+}
+/** « Annuler » dans la bulle : l entree du deplacement est retiree du Journal (le rendez-vous est remis, rien ne s est passe). */
+function tcRetirerEntreeDeplacement(idDemarche) {
+  if (!idDemarche || typeof demarches === 'undefined' || !Array.isArray(demarches)) return false;
+  const i = demarches.findIndex(function (d) { return d && d.id === idDemarche; });
+  if (i < 0) return false;
+  demarches.splice(i, 1);
+  saveDemarches();
+  if (typeof currentPage !== 'undefined' && currentPage === 'demarches' && typeof renderDemarches === 'function') renderDemarches();
+  return true;
+}
 /** Le message « Déplacé vers … — Annuler », quelques secondes. */
 function tcMontrerDeplacement(e, ancien, c) {
   if (_tcDernierDeplacement && _tcDernierDeplacement.minuteur) clearTimeout(_tcDernierDeplacement.minuteur);
@@ -5039,6 +5058,7 @@ function tcMontrerDeplacement(e, ancien, c) {
   b.classList.add('show');
   _tcDernierDeplacement = {
     e: e, ancien: ancien,
+    demarcheId: typeof tcJournaliserDeplacementDoigt === 'function' ? tcJournaliserDeplacementDoigt(e, ancien, c) : null,
     minuteur: setTimeout(tcCacherBarreDeplacement, 6000)
   };
 }
@@ -5065,6 +5085,7 @@ function tcAnnulerDeplacement() {
   e.endH = dernier.ancien.endH; e.endM = dernier.ancien.endM;
   saveEventsToStorage();
   if (typeof currentPage !== 'undefined' && currentPage === 'calendar') render();
+  if (typeof tcRetirerEntreeDeplacement === 'function') tcRetirerEntreeDeplacement(dernier.demarcheId);
   showToast('↩️ Rendez-vous remis à sa place');
   return true;
 }

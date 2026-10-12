@@ -58,6 +58,18 @@ ctx.tcJournaliserAbsencesEnvoyees([{ reference: 'REFLONG', with: 'Long', thread:
 const long = ctx.demarches[0];
 verifie('un long texte avec des guillemets : coupe a 200 caracteres bruts PUIS echappe (jamais une entite tranchee)', long.summary === 'a'.repeat(197) + '&quot;&quot;&quot;', long.summary.slice(-30));
 verifie('le resume ne contient aucune entite tranchee (« &qu » en fin)', !/&[a-z]{0,4}$/.test(long.summary));
+titre('3. Le deplacement au doigt : une entree par geste termine, retiree par « Annuler »');
+verifie('tcMontrerDeplacement (fin du geste) journalise une fois et garde l identifiant avec la bulle ; tcAnnulerDeplacement retire l entree', /demarcheId: typeof tcJournaliserDeplacementDoigt === 'function' \? tcJournaliserDeplacementDoigt\(e, ancien, c\) : null,/.test(fonction(page, 'tcMontrerDeplacement') || '') && /if \(typeof tcRetirerEntreeDeplacement === 'function'\) tcRetirerEntreeDeplacement\(dernier\.demarcheId\);\s+showToast\('↩️ Rendez-vous remis à sa place'\);/.test(fonction(page, 'tcAnnulerDeplacement') || ''));
+verifie('rien pendant le geste : tcTerminerDeplacement n appelle la journalisation que par tcMontrerDeplacement (deplace), pas pour « rien » ni « decale »', !/tcJournaliserDeplacementDoigt/.test(fonction(page, 'tcTerminerDeplacement') || '') && !/tcJournaliserDeplacementDoigt/.test(fonction(page, 'tcEcrireDeplacementDoigt') || ''));
+let manque3 = 0;
+['tcLibelleCreneau', 'tcJournaliserDeplacementDoigt', 'tcRetirerEntreeDeplacement'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; manque3++; console.log('  KO  ' + n + ' introuvable'); } });
+if (manque3) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
+const avantN = ctx.demarches.length;
+const idDep = ctx.tcJournaliserDeplacementDoigt({ id: 'e9', title: 'Dentiste' }, { date: '2026-10-13', startH: 15, startM: 0, endH: 16, endM: 0 }, { date: '2026-10-13', startH: 16, startM: 0, endH: 17, endM: 0 });
+const dep = ctx.demarches[0];
+verifie('deplacement : « ↔️ Rendez-vous déplacé — Dentiste », « mardi 13 octobre 15h00 → mardi 13 octobre 16h00 », statut modifiee, categorie rdv, identifiant rendu', ctx.demarches.length === avantN + 1 && typeof idDep === 'string' && dep.id === idDep && dep.icon === '↔️' && dep.title === 'Rendez-vous déplacé — Dentiste' && dep.summary === 'mardi 13 octobre 15h00 → mardi 13 octobre 16h00' && dep.status === 'modifiee' && dep.categorie === 'rdv' && /Tu as déplacé ce rendez-vous au doigt : de mardi 13 octobre 15h00 à mardi 13 octobre 16h00\./.test(dep.detail), JSON.stringify(dep));
+verifie('« Annuler » : l entree est retiree, le Journal enregistre', ctx.tcRetirerEntreeDeplacement(idDep) === true && ctx.demarches.length === avantN && !ctx.demarches.some((d) => d.id === idDep));
+verifie('un identifiant inconnu ou vide : rien', ctx.tcRetirerEntreeDeplacement(idDep) === false && ctx.tcRetirerEntreeDeplacement(null) === false);
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
 console.log('');

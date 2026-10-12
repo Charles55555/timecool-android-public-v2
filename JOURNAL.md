@@ -1978,3 +1978,8 @@ mobile vers le nouvel appareil.
   doublon) dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission39-journal.png`.
 - Correction après examen (12/10) : le résumé du message d absence était coupé APRÈS l échappement (entité « &quot; » tranchée) ;
   le texte brut est coupé à 200 puis échappé. Cas ajouté à la suite. Réserve notée : le déplacement au doigt n est pas journalisé.
+- Complément (chef de projet, 12/10) : le déplacement au doigt (glisser-déposer) fait une entrée du Journal, une seule par
+  geste terminé (`tcJournaliserDeplacementDoigt`, appelée par `tcMontrerDeplacement` : « ↔️ Rendez-vous déplacé — Dentiste »,
+  « mardi 13 octobre 15h00 → mardi 13 octobre 16h00 », statut modifiée, catégorie Rendez-vous) ; « Annuler » dans la bulle
+  retire cette entrée (`tcRetirerEntreeDeplacement`, identifiant gardé avec la bulle). Rien pendant le geste, rien pour un
+  dépôt au même créneau ni pour « Je décale » (rendez-vous avec un autre compte).
