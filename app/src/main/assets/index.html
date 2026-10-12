@@ -4035,6 +4035,7 @@ function isCalendarVisible(calendarId) {
      agenda : un agenda secondaire fraichement cree heritait donc de tous
      les RDV de l'agenda principal au lieu d'etre vide. */
   const id = calendarId || 'cal_default';
+  if (_isolatedCalendarId) return id === _isolatedCalendarId;
   const cal = customCalendars.find(c => c.id === id);
   return !cal || cal.visible !== false;
 }
@@ -9573,19 +9574,13 @@ navigate = function(page) {
   if (page !== 'calendar' && typeof _isolatedCalendarName !== 'undefined'
       && _isolatedCalendarName) {
     _isolatedCalendarName = null;
+    _isolatedCalendarId = null;
   }
 
   if (page==='calendar') {
-    // Navigation normale vers l'agenda : on s'assure que rien ne reste
-    // masqué par une isolation précédente qu'on aurait oublié de lever.
-    if (typeof customCalendars !== 'undefined' && Array.isArray(customCalendars)
-        && !_isolatedCalendarName) {
-      let changed = false;
-      customCalendars.forEach(function (c) {
-        if (c.visible === false) { c.visible = true; changed = true; }
-      });
-      if (changed && typeof saveCustomCalendars === 'function') saveCustomCalendars();
-    }
+    // Navigation normale vers l'agenda : une isolation oubliee est levee. Le reglage visible n'est plus
+    // touche : un agenda masque a la main (pastille) reste masque (12/10).
+    if (!_isolatedCalendarName) _isolatedCalendarId = null;
     // Positionner sur le dernier RDV ajouté si disponible
     if (window._lastAddedEventDate) {
       viewDate = new Date(window._lastAddedEventDate + 'T00:00:00');
@@ -18932,7 +18927,17 @@ const TC_CALENDAR_COLORS = ['#4285F4','#EA4335','#FBBC04','#34A853','#9C27B0','#
 function loadCustomCalendars() {
   try {
     const saved = JSON.parse(localStorage.getItem(TC_CALENDARS_KEY) || 'null');
-    if (Array.isArray(saved) && saved.length) { customCalendars = saved; return; }
+    if (Array.isArray(saved) && saved.length) {
+      customCalendars = saved;
+      // Garde-fou (12/10) : Mon agenda masque alors qu'aucun agenda n'est visible (reglage fige par une ancienne
+      // isolation) : il redevient visible. Un agenda masque a la main a cote d'un autre visible n'est pas touche.
+      const principal = customCalendars.find(c => c && (c.id === 'cal_default' || c.isDefault));
+      if (principal && principal.visible === false && !customCalendars.some(c => c && c.visible !== false)) {
+        principal.visible = true;
+        saveCustomCalendars();
+      }
+      return;
+    }
   } catch(e) {}
   customCalendars = [{ id: 'cal_default', name: 'Mon agenda', color: '#4285F4', visible: true, isDefault: true }];
 }
@@ -18942,6 +18947,7 @@ function saveCustomCalendars() {
 }
 
 function getVisibleCalendarIds() {
+  if (_isolatedCalendarId) return customCalendars.filter(c => c.id === _isolatedCalendarId).map(c => c.id);
   return customCalendars.filter(c => c.visible !== false).map(c => c.id);
 }
 
@@ -18996,10 +19002,13 @@ function toggleCalendarVisibility(id, on) {
    puis ouvre l'agenda directement — même vide, l'utilisateur voit que
    l'agenda existe bien et fonctionne. */
 let _isolatedCalendarName = null;
+/* L agenda isole (filtre d affichage seulement). Avant, l isolation ecrivait visible:false sur tous les autres
+   agendas DANS LE REGLAGE enregistre : toute sauvegarde faite ensuite (creer un agenda, par exemple) figeait
+   Mon agenda masque, ses rendez-vous paraissaient perdus (compte 53, 12/10). */
+let _isolatedCalendarId = null;
 function isolateCalendarView(calendarId) {
   const cal = getCalendarById(calendarId);
-  customCalendars.forEach(c => { c.visible = (c.id === calendarId); });
-  saveCustomCalendars();
+  _isolatedCalendarId = cal ? cal.id : null;
   _isolatedCalendarName = cal ? cal.name : null;
   updateHeaderAgendaLabel();
   toggleMenu();

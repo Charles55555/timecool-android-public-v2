@@ -1118,3 +1118,21 @@ mobile vers le nouvel appareil.
   « Semaine 42 », masquée pour Mon agenda et quand le panneau du mois est ouvert (comme les badges) ; la ligne du mois
   retrouve son espaceur vide ; plus rien dans la barre du haut. Suite `verif-titre-agenda` réécrite pour cette disposition ;
   capture 390x844 refaite (`TimeCool-Codeur/captures/mission9-agenda-secondaire.png`).
+
+## 12/10/2026 (session Codeur) — Créer un agenda secondaire ne masque plus « Mon agenda »
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Cause (compte 53) : ouvrir un agenda depuis le menu (`isolateCalendarView`) écrivait `visible:false` sur tous les autres
+  agendas DANS le réglage enregistré (`timecool_custom_calendars`) ; toute sauvegarde faite ensuite — créer un agenda, par
+  exemple — figeait « Mon agenda » masqué : ses 87 rendez-vous paraissaient perdus. La création elle-même ne touchait pas
+  à la visibilité.
+- L'isolation est désormais un filtre d'affichage en mémoire (`_isolatedCalendarId`, lu par `isCalendarVisible` et
+  `getVisibleCalendarIds`) : le réglage n'est plus écrit. La navigation lève l'isolation mais ne remet plus `visible:true` de
+  force : la pastille (`toggleCalendarVisibility`) reste le seul réglage à la main. Garde-fou au chargement : « Mon agenda »
+  masqué alors qu'aucun agenda n'est visible → il redevient visible (enregistré) ; un agenda masqué à la main à côté d'un
+  autre visible n'est pas touché (règle du chef). Compte sans agenda secondaire : rien ne change.
+- Suite `verif-agendas-visibles` (création, isolation, création pendant l'isolation, pastille, garde-fou — fonctions
+  exécutées), dans verifier.sh ; rouge sur la page d'avant.
+- À noter : un réglage déjà figé avec le secondaire visible et « Mon agenda » masqué (l'état actuel du compte 53) n'est pas
+  couvert par le garde-fou tel que demandé : un appui sur la pastille de « Mon agenda » le remet.

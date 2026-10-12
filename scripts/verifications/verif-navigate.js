@@ -25,8 +25,8 @@ dire(/tcRafraichirBadgesContacts\(\)/.test(premiere),
 dire(/_isolatedCalendarName = null/.test(premiere),
   'la sortie du mode agenda isolé',
   'sinon la vue reste filtrée sur un seul agenda');
-dire(/c\.visible === false/.test(premiere),
-  'le rétablissement des agendas masqués');
+dire(/_isolatedCalendarId = null/.test(premiere) && !/c\.visible === false/.test(premiere),
+  'la levée de l isolation, sans toucher au réglage de visibilité (mission 10, 12/10)');
 
 console.log('\nLes trois autres surcharges rappellent bien la précédente :');
 positions.slice(1).forEach((p, i) => {
