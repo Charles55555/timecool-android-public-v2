@@ -52,9 +52,32 @@ Object.assign(stock, {
 });
 ctx.tcViderDonneesDuCompte();
 const restantes = Object.keys(stock).sort();
-verifie('le stockage ne garde que ce qui est propre a l appareil (cle, identifiant, jeton, marqueurs, accueil termine, langue, theme)', JSON.stringify(restantes) === JSON.stringify(['tc_compte_local', 'tc_device_crypto_key', 'tc_device_user_id', 'tc_nettoyage', 'tc_onboarding_done', 'tc_session_jeton', 'tc_theme', 'timecool_language']), restantes.join(' '));
+verifie('le stockage ne garde que ce qui est propre a l appareil (cle, identifiant, jeton, marqueurs, accueil termine, langue, theme, reglages gardes)', JSON.stringify(restantes) === JSON.stringify(['tc_compte_local', 'tc_device_crypto_key', 'tc_device_user_id', 'tc_nettoyage', 'tc_onboarding_done', 'tc_reglages_gardes', 'tc_session_jeton', 'tc_theme', 'timecool_language']), restantes.join(' '));
 // Decision du chef de projet (12/10, mission 16) : langue et theme sont des reglages de l appareil.
 verifie('la langue et le theme de l appareil restent apres le menage', stock.timecool_language === 'en' && stock.tc_theme === 'dark');
+// Reserve de l examen : gardes sur l appareil, ils ne doivent pas partir dans le compte qui s ouvre comme un choix a lui.
+verifie('le menage note les valeurs gardees dans tc_reglages_gardes (cle d appareil, jamais synchronisee)', stock.tc_reglages_gardes === '{"timecool_language":"en","tc_theme":"dark"}' && !ctx.tcCleTransferable('tc_reglages_gardes'), stock.tc_reglages_gardes);
+{
+  // reglage.lire, extrait tel quel de TC_SYNC_TYPES.
+  const debut = page.indexOf('  reglage: {');
+  const d = page.indexOf('lire: function () {', debut);
+  let n = 0, fin = -1;
+  for (let j = page.indexOf('{', d); j < page.length; j++) { if (page[j] === '{') n++; else if (page[j] === '}') { n--; if (n === 0) { fin = j + 1; break; } } }
+  verifie('reglage.lire est trouvee dans TC_SYNC_TYPES', debut > -1 && d > debut && fin > d);
+  const m2 = page.match(/const TC_SYNC_DEJA_SYNCHRONISE = \[[^\]]*\];/); const m3 = page.match(/const TC_SYNC_REGLAGE_MAX = [^;]*;/);
+  const f2 = fonction(page, 'tcCleReglage');
+  verifie('les constantes et tcCleReglage sont trouvees', !!(m2 && m3 && f2));
+  if (m2 && m3 && f2 && fin > d) {
+    vm.runInContext(m2[0] + '\n' + m3[0] + '\n' + f2 + '\nconst lireReglages = ' + page.slice(d, fin).replace(/^lire: /, '') + ';', ctx);
+    stock.tc_rdv_validation = '1';
+    const ids = () => vm.runInContext('lireReglages()', ctx).map((o) => o.id).sort();
+    // tc_onboarding_done (toujours « 1 ») est un reglage lui aussi : il part, sans consequence.
+    verifie('au premier tour, la langue et le theme gardes ne partent pas ; les autres reglages partent', JSON.stringify(ids()) === JSON.stringify(['tc_onboarding_done', 'tc_rdv_validation']), ids().join(' '));
+    stock.tc_theme = 'light';
+    verifie('le theme change ici depuis le menage part normalement, et sort des reglages gardes ; la langue reste gardee', JSON.stringify(ids()) === JSON.stringify(['tc_onboarding_done', 'tc_rdv_validation', 'tc_theme']) && stock.tc_reglages_gardes === '{"timecool_language":"en"}', ids().join(' ') + ' / ' + stock.tc_reglages_gardes);
+    delete stock.tc_rdv_validation; stock.tc_theme = 'dark';
+  }
+}
 // Examen (12/10) : l accueil termine est un reglage de l appareil ; sans lui, l appareil remontrait « Rejoins TimeCool ».
 verifie('le drapeau « accueil termine » est reste a 1 : apres deconnexion, l appareil montre l ecran de connexion', stock.tc_onboarding_done === '1');
 // Examen (12/10) : « Mon agenda » doit etre de retour en memoire, sinon le prochain agenda cree s enregistre seul.

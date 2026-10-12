@@ -22105,11 +22105,21 @@ const TC_SYNC_TYPES = {
   reglage: {
     lire: function () {
       const l = [];
+      // Langue et theme gardes au menage du compte (tcViderDonneesDuCompte) : ils restent sur l appareil mais ne
+      // partent pas dans le compte qui s ouvre tant qu ils n ont pas ete changes ici (examen de la mission 16).
+      let gardes = {};
+      try { gardes = JSON.parse(localStorage.getItem('tc_reglages_gardes') || '{}') || {}; } catch (e) { gardes = {}; }
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (!tcCleReglage(k)) continue;
         const v = localStorage.getItem(k);
         if (v === null) continue;
+        if (Object.prototype.hasOwnProperty.call(gardes, k)) {
+          if (gardes[k] === v) continue;
+          // Change ici depuis le menage : c est desormais un choix de ce compte, il part normalement.
+          delete gardes[k];
+          try { localStorage.setItem('tc_reglages_gardes', JSON.stringify(gardes)); } catch (e) {}
+        }
         // Au-delà de cette taille, ce n'est plus un réglage : l'historique
         // des conversations, par exemple. Le serveur refuse les éléments
         // trop gros, et un refus ferait échouer TOUT l'envoi — un thème
@@ -22469,6 +22479,13 @@ function tcViderDonneesDuCompte() {
     // meme theme (mission 20 et decision du 12/10).
     if (tcCleTransferable(k) && k !== 'tc_onboarding_done' && k !== 'timecool_language' && k !== 'tc_theme') aEffacer.push(k);
   }
+  // La langue et le theme gardes sont ceux de l appareil, pas un choix du compte qui s ouvre : notes ici, ils ne
+  // partent pas au serveur tant que l utilisateur ne les change pas (voir reglage.lire).
+  try {
+    const gardes = {};
+    ['timecool_language', 'tc_theme'].forEach(function (k) { const v = localStorage.getItem(k); if (v !== null) gardes[k] = v; });
+    localStorage.setItem('tc_reglages_gardes', JSON.stringify(gardes));
+  } catch (e) {}
   // Ces quatre-là ne sont pas « transférables » — elles voyagent par
   // leur propre champ dans le paquet d'appairage — mais elles
   // appartiennent bel et bien au compte.
@@ -22914,6 +22931,7 @@ async function tcDechiffrerPaquet(cle, base64) {
  */
 const TC_JAMAIS_TRANSFERE = [
   'tc_device_crypto_key',      // TC_DEVICE_KEY_STORAGE
+  'tc_reglages_gardes',        // langue et theme gardes au menage du compte : a l appareil, jamais au serveur
   'tc_device_user_id',         // TC_DEVICE_ID_KEY
   'tc_session_jeton',          // TC_JETON_CLE
   'tc_biometrie_active',       // TC_BIOMETRIE_ACTIVE_KEY

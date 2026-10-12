@@ -1316,3 +1316,8 @@ mobile vers le nouvel appareil.
   plus ; `verif-deconnexion` le vérifie.
 - Suite `verif-accents-accueil` (chaînes attendues présentes, anciennes absentes), dans verifier.sh ; rouge sur la page
   d'avant. Aucune clé de traduction ni suite existante ne citait ces textes.
+- Réserve de l'examen (vérifiée dans la synchro) : un compte neuf sans réglage sur le serveur aurait reçu la langue et le
+  thème gardés de l'utilisateur précédent (`tcSyncPousser` envoie toute clé sans empreinte). Au ménage, les valeurs
+  gardées sont notées dans `tc_reglages_gardes` (clé d'appareil, dans `TC_JAMAIS_TRANSFERE` : jamais synchronisée ni
+  transférée) ; `reglage.lire()` ne pousse pas une clé tant qu'elle vaut encore cette valeur, et la libère dès que
+  l'utilisateur la change. `verif-deconnexion` rejoue `reglage.lire` sur un stockage après ménage.
