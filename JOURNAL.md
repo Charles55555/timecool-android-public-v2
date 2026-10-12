@@ -1474,3 +1474,25 @@ mobile vers le nouvel appareil.
   dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission32-bande-semaine.png`.
 - Suites verif-premier-jour-semaine, verif-deplacer-au-doigt et verif-bloc-demi-case : extraction de tcLignesBandeSemaine (elles rejouent renderWeek).
 - Examen : la pastille de fete prend la boite .tc-chip-evt (meme hauteur qu une pastille d evenement) : le trait d un voyage reste continu sous une fete.
+
+## 12/10/2026 (session Codeur) — Carte d'une demande de rendez-vous : « Refuser » simple
+
+**Codé et commité sur main, PAS publié.** Page + API (`backend/api/index.php`, à déployer par le chef de projet). Pas de SQL.
+
+- Demande (Charles) : à côté de « Refuser et bloquer », un bouton « Refuser » : la demande est refusée calmement, la
+  personne est prévenue (« [Prénom] ne peut pas donner suite à ta demande pour le moment. »), elle n'est PAS bloquée et
+  peut redemander ; « Proposer un créneau » reste.
+- API `POST /rdv/refuser` : champ facultatif `bloquer` (absent = true : les anciennes applications bloquent comme
+  avant ; autre chose qu'un booléen → 400 `champ_invalide`). `bloquer: false` → statut « refusé », pas de
+  `bloquerContact`, message posé par `messagePoser($moi, $demandeur, …, $rdvId)` (dans les deux messageries, comme une
+  proposition de créneau), puis `demandeRdvTraitee` dans les deux cas.
+- Page : bouton « ✋ Refuser » (gris #9aa0a6, même forme que ses voisins) entre « Proposer un créneau » et « Refuser et
+  bloquer » ; `tcRefuserRdv` : confirmation « Refuser cette demande ? La personne sera prévenue, sans être bloquée. »,
+  appel `refuserRdv(rdv, false)`, le cadre disparaît ; `TC_BACKEND.refuserRdv(rdv, bloquer)` n'envoie `bloquer: false`
+  que pour un refus simple.
+- Suites : `verif-refus-simple` (page + texte de la route) dans verifier.sh, rouge avant ; `verif-refus-simple-e2e`
+  (api-locale, comptes sonde `e2erdv.refus…@exemple-timecool.fr` : 400 sur une mauvaise valeur, refus simple → pas de
+  fiche bloquée, message reçu, carte traitée, demande close, nouvelle demande acceptée et reçue ; sans champ → blocage
+  silencieux comme avant). Comptes sonde à supprimer au lancement (préfixe `e2erdv.refus`). Capture 390×844 :
+  `captures/mission24-refuser.png`.
+- verif-refus-simple-e2e NON enregistree dans verifier.sh tant que l API n est pas deployee (les e2e y tournent contre la production) : jouee a la main contre api-locale (TC_API=http://127.0.0.1:8099), 0 anomalie ; comptes sonde crees : XAGB04ZYJEBW, G88HPCJERNCV. Suites verif-validation-rdv et verif-blocage-silence adaptees (muet seulement quand on bloque).

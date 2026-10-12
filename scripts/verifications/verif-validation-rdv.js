@@ -130,7 +130,8 @@ verifie('proposer-creneau : message de confirmation, demande marquee traitee, pu
 verifie('proposer-creneau : les noms passent par texteSur', (prop.match(/texteSur\(/g) || []).length >= 2);
 verifie('refuser : seulement SA demande en attente, close en « refuse »', /invite_compte_id = \? AND statut = "attente"/.test(ref) && /SET statut = "refuse"/.test(ref));
 verifie('refuser : la personne est bloquee (fiche creee ou passee a blocked:true)', /bloquerContact\(\$moi, \$demandeur\)/.test(ref) && /\$c\['blocked'\] = true/.test(fonction(api, 'bloquerContact') || '') && /'blocked'\s+=> true/.test(fonction(api, 'bloquerContact') || ''));
-verifie('refuser : rien n est envoye au demandeur (aucun message, aucune notification)', !/messagePoser\(/.test(ref) && !/envoyerEmail/.test(ref));
+// Mission 24 : « Refuser et bloquer » reste muet ; le refus simple (bloquer:false) previent calmement, et lui seul.
+verifie('refuser : rien n est envoye au demandeur quand on bloque ; un seul messagePoser, dans la branche du refus simple', (ref.match(/messagePoser\(/g) || []).length === 1 && /if \(\$bloquer\) \{\s+bloquerContact\(\$moi, \$demandeur\);\s+\} else \{[\s\S]*?messagePoser\(/.test(ref) && !/envoyerEmail/.test(ref));
 verifie('la fiche creee ne porte ni telephone ni email de la personne', /'phone'\s+=> ''/.test(fonction(api, 'bloquerContact') || '') && /'email'\s+=> ''/.test(fonction(api, 'bloquerContact') || ''));
 verifie('la demande traitee est marquee dans la messagerie du titulaire (ses appareils la voient disparaitre)', /\['traite'\] = true/.test(fonction(api, 'demandeRdvTraitee') || ''));
 verifie('les boutons de messagerie sont des routes protegees (Auth::compte)', (prop.match(/Auth::compte\(\)/g) || []).length === 1 && (ref.match(/Auth::compte\(\)/g) || []).length === 1);
@@ -243,7 +244,7 @@ verifie('le cadre porte « Proposer un créneau » et « Refuser et bloquer », 
 verifie('le prénom est echappe (nom d autrui)', !/<b>Dupont/.test(cadre) && /Jean/.test(cadre));
 verifie('les messages gardent l identifiant de la demande', /rdv: typeof t\.rdv === 'number' \? t\.rdv : 0/.test(page) && /genre: typeof t\.genre === 'string'/.test(page) && /traite: t\.traite === true/.test(page));
 verifie('openConversation affiche le cadre', /const demandeRdv = tcDemandeRdvEnAttente\(msg\);\s+if \(demandeRdv\) body\.innerHTML \+= tcCadreDemandeRdv\(demandeRdv, msg\.with, msg\.reference\);/.test(page));
-verifie('les deux appels au serveur existent', /\/rdv\/proposer-creneau/.test(page) && /\/rdv\/refuser/.test(page) && /async proposerCreneauRdv\(rdv, date, debut, duree, type\)/.test(page) && /async refuserRdv\(rdv\)/.test(page));
+verifie('les deux appels au serveur existent', /\/rdv\/proposer-creneau/.test(page) && /\/rdv\/refuser/.test(page) && /async proposerCreneauRdv\(rdv, date, debut, duree, type\)/.test(page) && /async refuserRdv\(rdv, bloquer\)/.test(page));   // mission 24 : bloquer facultatif
 const env = fonction(page, 'tcEnvoyerCreneauRdv') || '';
 verifie('creneau pris (409) ou invalide : le message du serveur s affiche dans la fenetre, rien n est ferme', /erreur\(e\.message/.test(env) && env.indexOf('tcFermerCreneauRdv()') > env.indexOf('catch'));
 verifie('refuser demande confirmation avant d agir, et dit que la personne ne sera pas prevenue', /tcConfirm\('Refuser cette demande et bloquer la personne \? Elle ne sera pas pr.venue\.'\)/.test(fonction(page, 'tcRefuserBloquerRdv') || ''));

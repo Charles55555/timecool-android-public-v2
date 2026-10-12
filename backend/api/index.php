@@ -3225,6 +3225,12 @@ switch ($route) {
         if ($demandeur === null) {
             Rep::erreur(410, 'compte_absent', 'Cette personne n a plus de compte.');
         }
+        // Refus simple ou « Refuser et bloquer » (mission 24, 12/10). Absent = true : les anciennes
+        // applications bloquent, comme avant.
+        $bloquer = Entree::corps()['bloquer'] ?? true;
+        if (!is_bool($bloquer)) {
+            Rep::erreur(400, 'champ_invalide', 'Champ bloquer : true ou false.');
+        }
 
         $pdo = Db::pdo();
         $pdo->beginTransaction();
@@ -3234,7 +3240,12 @@ switch ($route) {
                   WHERE organisateur_id = ? AND invite_compte_id = ? AND statut = "attente"',
                 [$demandeur['id'], $moi['id']]
             );
-            bloquerContact($moi, $demandeur);
+            if ($bloquer) {
+                bloquerContact($moi, $demandeur);
+            } else {
+                // Refus simple : pas de blocage, la personne peut redemander, et elle est prevenue calmement.
+                messagePoser($moi, $demandeur, $moi['prenom'] . ' ne peut pas donner suite à ta demande pour le moment.', $rdvId);
+            }
             demandeRdvTraitee($moi, $demandeur, $rdvId);
             $pdo->commit();
         } catch (Throwable $e) {

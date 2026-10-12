@@ -7311,6 +7311,7 @@ function tcCadreDemandeRdv(demande, nom, reference) {
     + tcCarteDemandeurHTML(demande, reference)
     + '<div style="display:flex; flex-direction:column; gap:8px;">'
     + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-green);" onclick="tcProposerCreneauRdv(' + demande.rdv + ',\'' + tcTypeRdvValide(demande.type) + '\')">✅ Proposer un créneau</button>'
+    + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:#9aa0a6;" onclick="tcRefuserRdv(' + demande.rdv + ')">✋ Refuser</button>'
     + '<button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--text-sec);" onclick="tcRefuserBloquerRdv(' + demande.rdv + ')">🚫 Refuser et bloquer</button>'
     + '</div></div>';
 }
@@ -7376,6 +7377,19 @@ async function tcEnvoyerCreneauRdv(rdv) {
   }
   tcFermerCreneauRdv();
   showToast('✅ Rendez-vous confirmé chez vous deux');
+  tcApresReponseRdv(rdv);
+}
+
+/** Refus simple (mission 24) : la personne est prevenue calmement, elle n est pas bloquee et peut redemander. */
+async function tcRefuserRdv(rdv) {
+  if (!await tcConfirm('Refuser cette demande ? La personne sera prévenue, sans être bloquée.')) return;
+  try {
+    await TC_BACKEND.refuserRdv(rdv, false);
+  } catch (e) {
+    showToast('❌ ' + (e.message || 'Impossible pour le moment.'));
+    return;
+  }
+  showToast('✋ Demande refusée, la personne est prévenue');
   tcApresReponseRdv(rdv);
 }
 
@@ -21116,9 +21130,10 @@ const TC_BACKEND = {
     return tcAppel('POST', '/rdv/proposer-creneau', corps);
   },
 
-  /** Le titulaire refuse et bloque : le demandeur n en est pas informe. */
-  async refuserRdv(rdv) {
-    return tcAppel('POST', '/rdv/refuser', { rdv: rdv });
+  /** Le titulaire refuse. Sans « bloquer: false » : refus ET blocage, le demandeur n en est pas informe ;
+   *  avec : refus simple, la personne est prevenue et peut redemander (mission 24). */
+  async refuserRdv(rdv, bloquer) {
+    return tcAppel('POST', '/rdv/refuser', bloquer === false ? { rdv: rdv, bloquer: false } : { rdv: rdv });
   },
 
   /** Les creneaux ou tout le monde est libre, pour un rendez-vous a plusieurs. */
