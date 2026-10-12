@@ -33,6 +33,10 @@ verifie('Parametres : les cartes suivent le theme (var(--bg)), plus aucune carte
 verifie('.tc-mod-in (saisie de « Nom du nouvel agenda ») : fond et texte du theme', /background:var\(--bg\); color:var\(--text\)/.test(regle('.tc-mod-in')));
 const dark = page.match(/const DARK_VARS = \{[\s\S]*?\};/);
 verifie('le theme sombre definit --bg, --text, --text-sec, --border', !!dark && ['--bg', '--text', '--text-sec', '--border'].every((v) => dark[0].indexOf("'" + v + "'") > -1));
+// 2e capture : l entree active du menu et le titre de page restaient illisibles en sombre.
+const light = page.match(/const LIGHT_VARS = \{[\s\S]*?\};/);
+verifie('l entree active du menu suit le theme (--menu-active : bleu clair en clair, bleu nuit en sombre)', !!dark && !!light && /'--menu-active':'#2b3a55'/.test(dark[0]) && /'--menu-active':'#e8f0fe'/.test(light[0]) && /background:var\(--menu-active, #e8f0fe\)/.test(regle('.menu-item.active')));
+verifie('titre et sous-titre de page : couleurs fixes, la page restant claire', /color:#202124/.test(regle('.page-title')) && /color:#5f6368/.test(regle('.page-subtitle')));
 
 titre('(a) La langue et le theme du compte s appliquent des la connexion');
 const poser = (page.match(/  reglage: \{[\s\S]*?\n  \}\n\};/) || [''])[0];

@@ -197,7 +197,7 @@ body.maj-visible .tc-deplace-barre { bottom:152px; }
 .menu-section { padding:6px 0; border-bottom:1px solid var(--border); }
 .menu-item { display:flex; align-items:center; padding:11px 16px; cursor:pointer; gap:14px; color:var(--text); font-size:14px; }
 .menu-item:hover { background:var(--bg-hover); }
-.menu-item.active { background:#e8f0fe; color:var(--g-blue); font-weight:500; }
+.menu-item.active { background:var(--menu-active, #e8f0fe); color:var(--g-blue); font-weight:500; }
 .menu-item svg { width:20px; height:20px; fill:var(--text-sec); flex-shrink:0; }
 .menu-item.active svg { fill:var(--g-blue); }
 .menu-item .menu-badge { margin-left:auto; background:var(--g-red); color:white; font-size:11px; font-weight:bold; min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; }
@@ -218,8 +218,8 @@ body.maj-visible .tc-deplace-barre { bottom:152px; }
 .auth-page .code-digit:focus { border-color:var(--g-blue); transform:scale(1.05); }
 .page.active { display:flex; }
 .page-header { padding:16px; border-bottom:1px solid var(--border); background:#fff; position:sticky; top:0; z-index:5; }
-.page-title { font-size:22px; font-weight:500; }
-.page-subtitle { font-size:13px; color:var(--text-sec); margin-top:4px; }
+.page-title { font-size:22px; font-weight:500; color:#202124; }   /* la page reste claire : couleurs fixes (mission 25) */
+.page-subtitle { font-size:13px; color:#5f6368; margin-top:4px; }
 .page-content { padding:16px; }
 
 .profile-hero { padding:24px 16px; text-align:center; background:linear-gradient(135deg, #e8f0fe 0%, #e0f2f1 100%); }
@@ -16962,11 +16962,13 @@ function savePreference(key, value) {
 // ─── Thème ───
 const DARK_VARS = {
   '--text':'#e8eaed','--text-sec':'#9aa0a6','--border':'#3c4043',
-  '--bg':'#202124','--bg-soft':'#292a2d','--bg-hover':'#35363a'
+  '--bg':'#202124','--bg-soft':'#292a2d','--bg-hover':'#35363a',
+  '--menu-active':'#2b3a55'   // entree active du menu : bleu nuit (mission 25)
 };
 const LIGHT_VARS = {
   '--text':'#202124','--text-sec':'#5f6368','--border':'#dadce0',
-  '--bg':'#fff','--bg-soft':'#f8f9fa','--bg-hover':'#f1f3f4'
+  '--bg':'#fff','--bg-soft':'#f8f9fa','--bg-hover':'#f1f3f4',
+  '--menu-active':'#e8f0fe'
 };
 
 function applyTheme(theme) {
