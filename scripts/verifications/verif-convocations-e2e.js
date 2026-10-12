@@ -113,6 +113,25 @@ const jourPlus = (k) => { const d = new Date(Date.now() + k * 86400000); return 
   const chezPaul = await conversation(paul.jeton, orga.ref);
   dire(ouvert.code === 200 && chezPaul.contenu.thread.some((m) => m.from === 'them' && m.texte === 'Salut Paul'), 'sans blocage, un message arrive toujours chez l’autre');
 
+  console.log('\nDeux homonymes, chacun la sienne :');
+  const jean1 = await inscrire('Jean');
+  const jean2 = await inscrire('Jean');
+  const ch = await appel('POST', '/convocations', { titre: 'Homonymes', date: jour, debut: '11:00', fin: '12:00', references: [jean1.ref, jean2.ref] }, orga.jeton);
+  const l1 = await conversation(jean1.jeton, orga.ref), l2 = await conversation(jean2.jeton, orga.ref);
+  dire(ch.code === 200 && ch.d.envoyes.length === 2 && !!(l1 && l1.contenu.thread.some((m) => m.genre === 'convocation' && m.convocation === ch.d.id)) && !!(l2 && l2.contenu.thread.some((m) => m.genre === 'convocation' && m.convocation === ch.d.id)), 'deux comptes « Jean Convoc » : les deux reçoivent la convocation', 'HTTP ' + ch.code);
+
+  console.log('\nLe plafond (20 par jour) :');
+  // L organisateur en a deja envoye 2 (« Entraînement », « Homonymes ») ; les refus (400) ne comptent pas.
+  let dernier = null;
+  for (let k = 3; k <= 20; k++) dernier = await appel('POST', '/convocations', { titre: 'Série ' + k, date: jour, debut: '08:00', fin: '09:00', references: [paul.ref] }, orga.jeton);
+  dire(dernier && dernier.code === 200, 'la 20e convocation du jour passe', 'HTTP ' + (dernier && dernier.code));
+  const vingtEtUn = await appel('POST', '/convocations', { titre: 'Série 21', date: jour, debut: '08:00', fin: '09:00', references: [paul.ref] }, orga.jeton);
+  dire(vingtEtUn.code === 429 && vingtEtUn.d && vingtEtUn.d.erreur === 'trop_de_demandes', 'la 21e → 429 trop_de_demandes', 'HTTP ' + vingtEtUn.code + ' ' + (vingtEtUn.d && vingtEtUn.d.erreur));
+  const hier = await appel('POST', '/convocations', { titre: 'Hier', date: jourPlus(-1), debut: '23:00', fin: '23:30', references: [jean1.ref] }, rita.jeton);
+  dire(hier.code === 200, '« hier » est toléré (jour du serveur en avance sur celui de l’organisateur)', 'HTTP ' + hier.code);
+  const avantHier = await appel('POST', '/convocations', { titre: 'Avant-hier', date: jourPlus(-2), debut: '23:00', fin: '23:30', references: [jean1.ref] }, rita.jeton);
+  dire(avantHier.code === 400, 'avant-hier → 400', 'HTTP ' + avantHier.code);
+
   console.log('');
   console.log(ko + ' anomalie(s).');
   process.exit(ko ? 1 : 0);

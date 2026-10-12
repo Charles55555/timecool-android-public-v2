@@ -3110,7 +3110,8 @@ switch ($route) {
             Rep::erreur(400, 'horaire_invalide', 'Jour ou horaire invalide.');
         }
         $ts = strtotime($jour . ' ' . $debut . ':00');
-        if ($ts === false || date('Y-m-d', $ts) !== $jour || $ts < strtotime('today') || $ts > strtotime('+365 day')) {
+        // « hier » tolere : le jour du serveur peut etre en avance sur celui de l organisateur (fuseaux) — examen de la mission 27b.
+        if ($ts === false || date('Y-m-d', $ts) !== $jour || $ts < strtotime('yesterday') || $ts > strtotime('+365 day')) {
             Rep::erreur(400, 'horaire_invalide', 'Jour ou horaire invalide.');
         }
         $references = $corps['references'] ?? [];
@@ -3134,6 +3135,11 @@ switch ($route) {
             }
             $vus[(int) $c['id']] = true;
             $membres[] = $c;
+        }
+        // Plafond par compte (examen de la mission 27b) : 20 convocations par jour, chacune pouvant toucher 30 personnes.
+        $parJour = Db::un('SELECT COUNT(*) AS n FROM convocations WHERE organisateur_id = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 DAY)', [$moi['id']]);
+        if ((int) ($parJour['n'] ?? 0) >= 20) {
+            Rep::erreur(429, 'trop_de_demandes', 'Trop de convocations envoyées aujourd’hui. Réessaie demain.');
         }
         Db::req(
             // Le nom du groupe n a pas de colonne (groupe_id vise les groupes du serveur, inexistants ici) : il voyage dans le message.

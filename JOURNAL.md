@@ -1849,3 +1849,10 @@ mobile vers le nouvel appareil.
   reponse sans_reponse / present / absent). Décision : l'API s'appuie sur ce schéma ; `convocation_membres` (créée par la
   première version de la 012) est abandonnée, à supprimer par le chef (`DROP TABLE IF EXISTS convocation_membres`). La 012
   décrit désormais les deux tables existantes (rien à rejouer). `/convocations/etat` rend `attente` pour `sans_reponse`.
+- Ajouts avant déploiement (examen de la 27b, décision du chef, 12/10) : (1) API : plafond 20 convocations par compte et par
+  jour → 429 `trop_de_demandes` (avant l'INSERT) ; (2) page : les membres d'un groupe créé sont retenus par IDENTIFIANT de
+  fiche + référence de compte (`membres`, plus `membresRefs` par nom) : deux contacts du même nom reçoivent chacun leur
+  convocation ; la référence est relue sur la fiche (une personne qui a rejoint TimeCool depuis est reconnue) ; les anciens
+  groupes (noms seuls) sont résolus par le nom, une fiche ne servant pas deux fois ; (3) API : « hier » toléré pour le jour
+  (le jour du serveur peut être en avance sur celui de l'organisateur). e2e complété : deux homonymes, 20e passe / 21e →
+  429, hier toléré / avant-hier refusé. Notées pour plus tard : réponse modifiable sans fin (un message à chaque fois).

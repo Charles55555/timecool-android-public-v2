@@ -6813,9 +6813,9 @@ function createNewGroup() {
     const c = contactsList.find(x => x.id === cid);
     return c ? c.name : '';
   }).filter(Boolean);
-  // Nom → reference de compte TimeCool (vide si la personne n a pas TimeCool) : la convocation saura a qui partir (mission 27b).
-  const membresRefs = {};
-  _tcGroupSelected.forEach(function (cid) { const c = contactsList.find(x => x.id === cid); if (c && c.name) membresRefs[c.name] = c.referenceCompte || ''; });
+  // Chaque membre par IDENTIFIANT de fiche et reference de compte (vide sans TimeCool) : deux contacts du meme nom
+  // restent deux personnes, chacune recoit sa convocation (mission 27b, examen).
+  const membres = _tcGroupSelected.map(function (cid) { const c = contactsList.find(x => x.id === cid); return c ? { id: c.id, name: c.name || '', reference: c.referenceCompte || '' } : null; }).filter(Boolean);
 
   if (!messages[mode]) messages[mode] = [];
   const conv = {
@@ -6826,7 +6826,7 @@ function createNewGroup() {
     with: name,
     isGroup: true,
     members: members,
-    membresRefs: membresRefs,
+    membres: membres,
     avatar: '👥',
     color: '#7c3aed',
     icon: '👥',
@@ -24228,11 +24228,21 @@ function tcJourEnClair(iso) {
 }
 /** Les membres d un groupe avec leur reference de compte ('' si la personne n a pas TimeCool), par le nom. */
 function tcMembresDuGroupe(msg) {
-  const refs = (msg && msg.membresRefs && typeof msg.membresRefs === 'object') ? msg.membresRefs : {};
+  const fiches = Array.isArray(contactsList) ? contactsList : [];
+  // Groupe cree depuis la mission 27b : chaque membre par identifiant de fiche ; la reference est relue sur la fiche
+  // (une personne qui a rejoint TimeCool depuis est reconnue), sinon celle retenue a la creation.
+  if (msg && Array.isArray(msg.membres) && msg.membres.length) {
+    return msg.membres.map(function (m) {
+      const c = m && m.id ? fiches.find(function (x) { return x && x.id === m.id; }) : null;
+      return { id: (m && m.id) || '', name: (c && c.name) || (m && m.name) || '', reference: (c && c.referenceCompte) || (m && m.reference) || '' };
+    });
+  }
+  // Ancien groupe (noms seuls) : resolution par le nom, faute de mieux ; une fiche deja prise ne sert pas deux fois.
+  const prises = {};
   return ((msg && Array.isArray(msg.members)) ? msg.members : []).map(function (name) {
-    let ref = refs[name] || '';
-    if (!ref && Array.isArray(contactsList)) { const c = contactsList.find(function (x) { return x && x.name === name && x.referenceCompte; }); if (c) ref = c.referenceCompte; }
-    return { name: name, reference: ref };
+    const c = fiches.find(function (x) { return x && x.name === name && !prises[x.id]; });
+    if (c) prises[c.id] = true;
+    return { id: c ? c.id : '', name: name, reference: (c && c.referenceCompte) || '' };
   });
 }
 function tcPhraseDestinatairesConvocation(msg) {
@@ -24339,7 +24349,7 @@ async function createConvocation(groupMsgId) {
     groupName: msg.with,
     title, date, start, end, quand,
     // Avec compte : la reponse viendra du serveur. Sans : l organisateur la note lui-meme (aMain).
-    recipients: membres.map(function (m) { return { name: m.name, reference: m.reference, status: 'attente', aMain: !m.reference }; })
+    recipients: membres.map(function (m) { return { id: m.id || '', name: m.name, reference: m.reference, status: 'attente', aMain: !m.reference }; })
   };
   groupConvocations.push(convoc);
   saveConvocations();
