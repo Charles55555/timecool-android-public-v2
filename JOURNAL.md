@@ -1786,3 +1786,6 @@ mobile vers le nouvel appareil.
 - Suite `verif-charly-jamais-inventer` complétée (section 4) ; `verif-charly-citations` élargie ; `lancer verif-commentaires-e2e`
   ajouté dans verifier.sh après verif-refus-simple-e2e (migration 011 jouée et API en ligne depuis v2.0.353).
 - Rejoué en vrai Chrome contre le vrai modèle (compte de test) : voir le rapport.
+- Correction après examen (12/10) : « Quand tu peux, ajoute un rdv dentiste mardi 15h » commençait par « quand » et perdait sa
+  carte sans un mot ; désormais un verbe de création accompagné d'un jour ou d'une heure l'emporte sur « quand / comment /
+  quel… » (`tcEstQuestionDeConsultation`) ; « Quand suis-je libre vendredi ? » reste une consultation. Cas ajoutés à la suite.
