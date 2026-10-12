@@ -71,7 +71,7 @@ verifie('« Décale mon rdv de mardi à 16h » (rien de nomme) → null', I('Dé
 verifie('« déplace mes rendez-vous de demain à après-demain » → null', I('déplace mes rendez-vous de demain à après-demain') === null);
 verifie('une creation (« rdv dentiste mardi 15h ») → null', I('rdv dentiste mardi 15h') === null);
 const csm = fonction(page, 'charlySendMessage') || '';
-verifie('charlySendMessage s arrete la avant d appeler le modele', /const introuvable = tcRdvNommeIntrouvable\(text, new Date\(\), events, mode\)(?: \|\| tcRdvViseIntrouvable\(text, new Date\(\), events, mode\))?;\s+if \(introuvable\) \{\s+tcPousserMessageUtilisateur\(text\);\s+charlyIA\.history\.push\(\{ role: 'assistant', content: introuvable \}\);\s+renderCharlyChat\(\);\s+return;/.test(csm) && csm.indexOf('tcRdvNommeIntrouvable') < csm.indexOf('detecterDemandeCreneau(text)'));
+verifie('charlySendMessage s arrete la avant d appeler le modele', /const introuvable = tcRdvNommeIntrouvable\(text, new Date\(\), events, mode\)(?: \|\| tcRdv\w+\(text, new Date\(\), events, mode\))*;\s+if \(introuvable\) \{\s+tcPousserMessageUtilisateur\(text\);\s+charlyIA\.history\.push\(\{ role: 'assistant', content: introuvable \}\);\s+renderCharlyChat\(\);\s+return;/.test(csm) && csm.indexOf('tcRdvNommeIntrouvable') < csm.indexOf('detecterDemandeCreneau(text)'));
 
 titre('2. La liste des rendez-vous d un jour vient de l agenda local');
 const L = (r, u) => ctx.tcListeDuJourPourDeplacement(r, u, NOW, ctx.events, 'user');

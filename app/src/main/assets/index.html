@@ -10839,6 +10839,14 @@ function tcEstUnCadreAQuestion(m) {
   return !!(m.periode || m.conflictData || m.contrainte || /<button|Réponds « oui »|Que fait-on/.test(String(m.content || '')));
 }
 
+/** Le dernier message de l utilisateur avant cette reponse de Charly (ou le dernier de l historique). */
+function tcDemandePrecedente(m) {
+  const h = (typeof charlyIA !== 'undefined' && charlyIA && Array.isArray(charlyIA.history)) ? charlyIA.history : [];
+  const i = h.indexOf(m);
+  for (let j = (i < 0 ? h.length : i) - 1; j >= 0; j--) { if (h[j] && h[j].role === 'user' && !h[j]._app && !h[j].appText) return String(h[j].content || ''); }
+  return '';
+}
+
 function renderChatMessage(m) {
   if (m && m._groupe) return tcRendreGroupe(m);
   if (m && m._questionType) return tcRendreQuestionType(m);
@@ -10851,7 +10859,10 @@ function renderChatMessage(m) {
       </div>
     `;
   } else if (m.role === 'assistant') {
-    const proposals = extractAgendaProposals(m.content);
+    // Apres une question de consultation (« Quand suis-je libre vendredi ? »), jamais de carte, quelle que soit la reponse
+    // (liste locale ou modele) : le lecteur « Format 3 » lisait « vendredi 16 octobre de 8h30 a 12h » comme une
+    // proposition (mission 31 bis). Le filtre porte sur la demande, pas sur la reponse.
+    const proposals = tcEstQuestionDeConsultation(tcDemandePrecedente(m)) ? [] : extractAgendaProposals(m.content);
     // Split: text before [AGENDA] only — text after goes as follow-up after validation
     const agendaMatch = m.content.match(/([\s\S]*?)\[AGENDA\][\s\S]*?\[\/AGENDA\]([\s\S]*)/);
     let textBefore = agendaMatch ? agendaMatch[1].trim() : m.content;
@@ -11763,17 +11774,52 @@ function tcRdvViseIntrouvable(texte, now, events, mode) {
   if (typeof contactsList !== 'undefined' && Array.isArray(contactsList) && contactsList.some(function (c) { return c && c.name && tcTitreContient(c.name, mots); })) return null;
   return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda à venir. Rien n’a été changé.';
 }
+/**
+ * « decale mon coiffeur a 18h » avec DEUX coiffeurs a venir : jamais une action, la page demande lequel (mission 31 bis,
+ * campagne 17). null si un seul (ou aucun) rendez-vous porte ce nom, si un jour est cite, ou si la phrase dit lequel
+ * (« prochain », « premier », « dernier »).
+ */
+function tcRdvNommeAmbigu(texte, now, events, mode) {
+  const t = tcSansAccents(texte);
+  if (!tcVerbeConjugue('deplacement').test(t)) return null;
+  if (tcJoursCites(texte, now, true).length) return null;
+  if (/\b(prochain|prochaine|premier|premiere|dernier|derniere)\b/.test(t)) return null;
+  const mots = tcMotsDeRdv(texte).filter(function (w) { return !TC_MOTS_VISEE_CREUX.test(w); });
+  if (!mots.length) return null;
+  const ref = now ? new Date(now) : new Date();
+  const debutStr = tcISO(new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()));
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  const cle = function (e) { return String(e.date) + String(e.startH || 0).padStart(2, '0') + String(e.startM || 0).padStart(2, '0'); };
+  const trouves = (Array.isArray(events) ? events : []).filter(function (e) {
+    return e && e.mode === evMode && e.title && tcEvenementFin(e) >= debutStr && tcTitreContient(e.title, mots);
+  }).sort(function (a, b) { return cle(a) < cle(b) ? -1 : (cle(a) > cle(b) ? 1 : 0); });
+  if (trouves.length < 2) return null;
+  const quand = trouves.map(function (e) {
+    const d = tcFormaterDateHumaine(e.date);
+    return d.charAt(0).toLowerCase() + d.slice(1) + ' ' + (e.allDay ? 'toute la journée' : String(e.startH) + 'h' + (e.startM ? String(e.startM).padStart(2, '0') : ''));
+  });
+  return 'Tu as ' + trouves.length + ' rendez-vous « ' + mots.join(' ') + ' » : ' + quand.join(', ') + ' — lequel ?';
+}
 /** Une simple question (« quand suis-je libre lundi matin ? ») n appelle aucune carte : le bloc est retire, la prose reste (mission 31). */
-function tcSansCarteApresQuestion(reply, texte) {
-  const t = tcSansAccents(String(texte || '')).replace(/[’'-]/g, ' ').trim();   // « suis-je », « y a-t-il » : trait d union = espace
-  // Seule une question de CONSULTATION perd sa carte : une demande polie (« peux-tu me mettre un rdv mardi 15h ? »)
-  // ou une phrase qui porte un jour ET une heure est une demande, elle garde sa proposition (examen de la mission 31).
-  const consultation = /^(quand|est ce|est-ce|qu est|quel|quelle|quels|quelles|ai je|suis je|y a t il|combien|comment|pourquoi)\b/.test(t);
+/**
+ * Une question de CONSULTATION (« Quand suis-je libre vendredi ? », « Suis-je libre mardi a 15h ? », « Peux-tu me dire
+ * quand je suis libre ? ») : vrai. Une demande polie de creation (« Peux-tu me mettre un rdv mardi 15h ? »), une phrase
+ * avec un jour ET une heure, un verbe de creation : faux. Majuscules, accents, « ? » colle, trait d union : sans effet.
+ */
+function tcEstQuestionDeConsultation(texte) {
+  const t = tcSansAccents(String(texte || '')).replace(/[’'-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const consultation = /^(quand|est ce|qu est|quel|quelle|quels|quelles|ai je|suis je|y a t il|combien|comment|pourquoi)\b/.test(t)
+    || /\b(quand (je suis|suis je|je serai|je serais|je peux|je pourrais)|suis je (libre|dispo)|je suis (libre|dispo)|ai je quelque chose|est ce que j ai|qu est ce que j ai|j ai quoi)\b/.test(t);
   const polie = /\b(peux|pourrais|pourriez|pouvez|voudrais|voudriez|veux|puis)\b/.test(t);
   const jourEtHeure = /\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd hui|apres demain)\b/.test(t) && /\b\d{1,2}\s*(h|:)\s*\d{0,2}\b|\b\d{1,2}\s*heures?\b/.test(t);
   const question = consultation || (/\?\s*$/.test(String(texte || '').trim()) && !polie && !jourEtHeure);
-  if (!question) return reply;
-  if (/\b(ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|reserve[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|propose[rsz]?)\b/.test(t)) return reply;
+  if (!question) return false;
+  if (/\b(ajoute[rsz]?|cree[rsz]?|mets?|mettre|note[rsz]?|planifie[rsz]?|reserve[rsz]?|bloque[rsz]?|prends?|prendre|programme[rsz]?|cale[rsz]?|organise[rsz]?|propose[rsz]?|fixe[rsz]?|inscri[rst]\w*)\b/.test(t) && !consultation) return false;
+  return true;
+}
+/** Apres une question de consultation, le bloc [AGENDA] d une reponse du modele est retire, la prose reste (mission 31). */
+function tcSansCarteApresQuestion(reply, texte) {
+  if (!tcEstQuestionDeConsultation(texte)) return reply;
   return String(reply || '').replace(/\s*\[AGENDA\][\s\S]*?\[\/AGENDA\]\s*/g, '\n').replace(/\n{3,}/g, '\n\n').trim() || reply;
 }
 
@@ -13586,7 +13632,7 @@ async function tcGererSuppressionRdv(text) {
   let reply;
   if (!candidats.length) {
     reply = motIntrouvable
-      ? 'Je ne trouve pas de rendez-vous « ' + motIntrouvable + ' » dans ton agenda. Rien n’a été changé.'
+      ? 'Je ne trouve pas de rendez-vous « ' + motIntrouvable + ' » dans ton agenda à venir. Rien n’a été changé.'
       : filtreApplique
       ? "Je ne vois aucun rendez-vous correspondant dans ton agenda. Peux-tu préciser ?"
       : "Je ne vois aucun rendez-vous dans ton agenda. Peux-tu préciser lequel tu veux annuler ?";
@@ -13869,6 +13915,13 @@ function tcAppliquerDeplacement(liste) {
  */
 function tcTraiterDeplacement(msg, text) {
   if (!msg || msg.role !== 'assistant' || !tcEstDeplacement(text)) return false;
+  // Plusieurs rendez-vous du meme nom a venir : jamais une action, la page demande lequel (mission 31 bis).
+  const ambigu = typeof tcRdvNommeAmbigu === 'function' ? tcRdvNommeAmbigu(text, new Date(), events, mode === 'pro' ? 'pro' : 'user') : null;
+  if (ambigu) {
+    msg._validated = true;
+    if (String(msg.content || '').trim() !== ambigu.trim()) charlyIA.history.push({ role: 'assistant', content: ambigu });
+    return true;
+  }
   const liste = tcDeplacementsProposes(msg);
   if (!liste) {
     // Le modele propose un rendez-vous qui n'existe pas (une proposition jamais ajoutee, par exemple) : avec un
@@ -14569,7 +14622,7 @@ async function charlySendMessage() {
   // === DÉPLACER UN RENDEZ-VOUS QUI N'EXISTE PAS : jamais laissé au modèle, qui l'inventait (campagne 6, 11/10) ===
   {
     // Deplacement (campagne 6) ET annulation ou question (mission 31) : un rendez-vous nomme qui n existe pas.
-    const introuvable = tcRdvNommeIntrouvable(text, new Date(), events, mode) || tcRdvViseIntrouvable(text, new Date(), events, mode);
+    const introuvable = tcRdvNommeIntrouvable(text, new Date(), events, mode) || tcRdvViseIntrouvable(text, new Date(), events, mode) || tcRdvNommeAmbigu(text, new Date(), events, mode);
     if (introuvable) {
       tcPousserMessageUtilisateur(text);
       charlyIA.history.push({ role: 'assistant', content: introuvable });

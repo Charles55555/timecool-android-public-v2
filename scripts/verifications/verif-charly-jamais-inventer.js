@@ -23,7 +23,7 @@ const NOW = new Date(2026, 9, 11, 14, 20, 0);
 const ctx = { console, String, Array, Object, JSON, Date, contactsList: [{ id: 'c1', name: 'Marc Dupont' }] };
 vm.createContext(ctx);
 ['const TC_MOTS_CREUX = [^;]*;', 'const TC_MOTS_VISEE_CREUX = [^;]*;'].forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
-['tcSansAccents', 'tcISO', 'tcEvenementFin', 'tcMotsDeRdv', 'tcTitreContient', 'tcVerbeConjugue', 'tcRdvViseIntrouvable', 'tcSansCarteApresQuestion'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+['tcSansAccents', 'tcISO', 'tcEvenementFin', 'tcMotsDeRdv', 'tcTitreContient', 'tcVerbeConjugue', 'tcJoursCites', 'tcFormaterDateHumaine', 'tcRdvViseIntrouvable', 'tcRdvNommeAmbigu', 'tcEstQuestionDeConsultation', 'tcSansCarteApresQuestion', 'tcDemandePrecedente'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 // Agenda : Rdv banque mardi 13, Formation mardi 13, Rendez-vous Dr. Martin mardi 13, Coach vendredi 16. Aucun dentiste.
 const events = [
@@ -58,9 +58,31 @@ verifie('une reponse sans bloc est inchangee', Q('quand suis-je libre ?', 'Mardi
 
 titre('3. Les points d entree de charlySendMessage');
 const csm = fonction(page, 'charlySendMessage') || '';
-verifie('avant le modele : tcRdvNommeIntrouvable OU tcRdvViseIntrouvable → la page repond, rien n est fait', /const introuvable = tcRdvNommeIntrouvable\(text, new Date\(\), events, mode\) \|\| tcRdvViseIntrouvable\(text, new Date\(\), events, mode\);/.test(csm));
+verifie('avant le modele : tcRdvNommeIntrouvable OU tcRdvViseIntrouvable OU tcRdvNommeAmbigu → la page repond, rien n est fait', /const introuvable = tcRdvNommeIntrouvable\(text, new Date\(\), events, mode\) \|\| tcRdvViseIntrouvable\(text, new Date\(\), events, mode\) \|\| tcRdvNommeAmbigu\(text, new Date\(\), events, mode\);/.test(csm));
 verifie('apres le modele : tcSansCarteApresQuestion avant tcCorrigerPropositionsCharly', /reply = tcSansCarteApresQuestion\(reply, text\);\s+\/\/[^\n]*\n\s+reply = tcCorrigerPropositionsCharly\(reply, text, new Date\(\)\);/.test(csm));
 verifie('apres le modele : une confirmation d annulation / deplacement d un rendez-vous inexistant est remplacee par « Je ne trouve pas … »', /const invente = tcRdvViseIntrouvable\(text, new Date\(\), events, mode\);\s+if \(invente && \/\(annul\|supprim\|effac\|d\[ée\]plac\|d\[ée\]cal\|report\|repouss\|avanc\|reprogramm\)\/i\.test\(reply\)\) reply = invente;/.test(csm) && csm.indexOf('const invente = ') > csm.indexOf('tcSansRelance(reply, text, charlyIA.history)'));
+titre('4. Mission 31 bis : jamais de carte apres une consultation (filtre sur la demande, au rendu) ; plusieurs rendez-vous du meme nom → lequel ?');
+const C = (t) => ctx.tcEstQuestionDeConsultation(t);
+['Quand suis-je libre vendredi?', 'Quand suis-je libre vendredi ?', 'quand suis-je libre cette semaine', 'Quand suis-je libre cette semaine ?', 'Suis-je libre mardi à 15h ?', 'Peux-tu me dire quand je suis libre mardi ?', 'Est-ce que j’ai quelque chose mardi ?', 'Y a-t-il quelque chose mardi ?', 'Quels sont mes rendez-vous de mardi ?'].forEach((t) => verifie('« ' + t + ' » : consultation → vrai (majuscule, « ? » colle, trait d union, politesse)', C(t) === true));
+['Peux-tu me mettre un rdv dentiste mardi à 15h ?', 'rdv dentiste mardi 15h', 'Un dentiste mardi à 15h, ça passe ?', 'ok le premier', 'celui de vendredi', 'Peux-tu fixer un rdv mardi à 15h ?'].forEach((t) => verifie('« ' + t + ' » : pas une consultation → faux (la carte reste)', C(t) === false));
+// Au rendu : la demande qui precede la reponse, dans l historique.
+ctx.charlyIA = { history: [{ role: 'user', content: 'Quand suis-je libre vendredi?' }, { role: 'assistant', content: 'Voici ce qui est libre vendredi :\n• Vendredi 16 octobre de 8h30 à 12h' }, { role: 'user', content: 'ok le premier' }, { role: 'assistant', content: 'Je te propose :' + bloc }] };
+verifie('tcDemandePrecedente : la reponse de Charly retrouve la question qui la precede', ctx.tcDemandePrecedente(ctx.charlyIA.history[1]) === 'Quand suis-je libre vendredi?' && ctx.tcDemandePrecedente(ctx.charlyIA.history[3]) === 'ok le premier');
+verifie('la liste locale « • Vendredi 16 octobre de 8h30 à 12h » apres une consultation : aucune carte au rendu ; la reponse a « ok le premier » garde la sienne', C(ctx.tcDemandePrecedente(ctx.charlyIA.history[1])) === true && C(ctx.tcDemandePrecedente(ctx.charlyIA.history[3])) === false);
+const rcm = fonction(page, 'renderChatMessage') || '';
+verifie('renderChatMessage : proposals = [] apres une question de consultation, sinon extractAgendaProposals (le Format 3 ne fabrique plus de carte)', /const proposals = tcEstQuestionDeConsultation\(tcDemandePrecedente\(m\)\) \? \[\] : extractAgendaProposals\(m\.content\);/.test(rcm));
+// Plusieurs rendez-vous du meme nom.
+const deuxCoiffeurs = events.concat([
+  { id: 'k1', mode: 'user', date: '2026-10-14', startH: 10, startM: 0, endH: 11, endM: 0, title: 'Coiffeur' },
+  { id: 'k2', mode: 'user', date: '2026-10-16', startH: 17, startM: 0, endH: 18, endM: 0, title: 'Coiffeur' }
+]);
+const A = (t, ev) => ctx.tcRdvNommeAmbigu(t, NOW, ev || deuxCoiffeurs, 'user');
+verifie('« décale mon coiffeur à 18h » avec deux coiffeurs → « Tu as 2 rendez-vous « coiffeur » : mercredi 14 octobre 10h, vendredi 16 octobre 17h — lequel ? »', A('décale mon coiffeur à 18h') === 'Tu as 2 rendez-vous « coiffeur » : mercredi 14 octobre 10h, vendredi 16 octobre 17h — lequel ?', A('décale mon coiffeur à 18h'));
+verifie('« reporte le coiffeur » : idem ; « décale mon coiffeur de vendredi à 18h » (jour cite) → null ; « décale mon prochain coiffeur » → null', A('reporte le coiffeur') !== null && A('décale mon coiffeur de vendredi à 18h') === null && A('décale mon prochain coiffeur à 18h') === null);
+verifie('un seul coiffeur → null ; « annule le coiffeur » (pas un deplacement : l annulation a sa propre question) → null ; « décale le coach » → null', A('décale mon coiffeur à 18h', events.concat([deuxCoiffeurs[deuxCoiffeurs.length - 1]])) === null && A('annule le coiffeur') === null && A('décale le coach à 18h') === null);
+const ttd = fonction(page, 'tcTraiterDeplacement') || '';
+verifie('tcTraiterDeplacement : avant toute action, tcRdvNommeAmbigu → question, msg._validated, rien de deplace', /const ambigu = typeof tcRdvNommeAmbigu === 'function' \? tcRdvNommeAmbigu\(text, new Date\(\), events, mode === 'pro' \? 'pro' : 'user'\) : null;\s+if \(ambigu\) \{\s+msg\._validated = true;[\s\S]*?return true;\s+\}\s+const liste = tcDeplacementsProposes\(msg\);/.test(ttd));
+verifie('annuler et decaler : la meme phrase « dans ton agenda à venir »', page.indexOf('dans ton agenda. Rien n’a été changé.') < 0 && page.split('dans ton agenda à venir. Rien n’a été changé.').length >= 4);
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
 console.log('');

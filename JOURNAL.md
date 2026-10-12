@@ -1764,3 +1764,25 @@ mobile vers le nouvel appareil.
   réessaie dans un instant » (« Trop de commentaires d’un coup » sur 429) ; « envoyé à l’équipe » seulement quand la ligne
   existe ; hors session : copie locale et toast d'avant, inchangés. Suite : simulation (succès, échec, 429, envoi en cours)
   et assertions API ; e2e : 5e passe, 6e → 429. Ordre de mise en ligne à tenir : migration, API, page.
+
+## 12/10/2026 (session Codeur) — Mission 31 bis : jamais de carte après une consultation, « lequel ? » si plusieurs rendez-vous du même nom
+
+**Codé et commité sur main, PAS publié.** Page seulement (+ e2e commentaires enregistré dans verifier.sh).
+
+- Constat (adjointe, v2.0.352, navigateur neuf) : « Quand suis-je libre vendredi ? » (et le bouton « 🕐 Quand suis-je libre ? »)
+  affichait la bonne liste PUIS une carte « Proposition d'agenda — vendredi 16 octobre — 8h30-12h — Rendez-vous ». Cause : la
+  liste est produite par la page (`tcGererDemandeCreneau`, sans modèle), et au rendu `extractAgendaProposals` (« Format 3 »,
+  détection libre « 16 octobre de 8h30 à 12h ») la lisait comme une proposition. Le filtre de la mission 31 ne portait que
+  sur la réponse du modèle.
+- Règle (chef de projet) : après une question de consultation, aucune carte, quelle que soit la réponse. `tcEstQuestionDeConsultation`
+  (pure : quand…, suis-je libre, est-ce que j'ai, quels, combien, y a-t-il, y compris « Peux-tu me dire quand je suis libre » ;
+  jamais une demande polie de création ni une phrase avec jour ET heure ; majuscule, « ? » collé, trait d'union sans effet) ;
+  au rendu, `renderChatMessage` lit la demande qui précède la réponse (`tcDemandePrecedente`) et ne lit aucune proposition
+  après une consultation. `tcSansCarteApresQuestion` s'appuie sur la même fonction.
+- Complément (Testeurs, campagne 17) : « décale mon coiffeur à 18h » avec deux coiffeurs → `tcRdvNommeAmbigu` : « Tu as 2
+  rendez-vous « coiffeur » : mercredi 14 octobre 10h, vendredi 16 octobre 17h — lequel ? », avant le modèle et dans
+  `tcTraiterDeplacement` (jamais une action) ; null si un jour est cité, si « prochain / premier / dernier », si un seul.
+- Même phrase « dans ton agenda à venir » pour annuler et décaler.
+- Suite `verif-charly-jamais-inventer` complétée (section 4) ; `verif-charly-citations` élargie ; `lancer verif-commentaires-e2e`
+  ajouté dans verifier.sh après verif-refus-simple-e2e (migration 011 jouée et API en ligne depuis v2.0.353).
+- Rejoué en vrai Chrome contre le vrai modèle (compte de test) : voir le rapport.
