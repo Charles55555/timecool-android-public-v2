@@ -1243,3 +1243,24 @@ mobile vers le nouvel appareil.
   exacte (« C'est fait », « C'est noté », « C'est parti », « je l'ai ajouté », « rendez-vous ajouté ») avec sa ponctuation
   et son emoji, jamais si un « ? » suit dans la phrase, « c'est bon » retiré de la liste ; `tcChoixPeriode` accepte les mots
   de politesse et d'opinion (« oui annule », « je préfère annuler », « laisse tomber »…), jamais un nom d'objet.
+
+## 12/10/2026 (session Codeur) — Charly ne relance jamais un sujet de lui-même
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constat (compte 53) : après un document hors sujet puis « Désolé c'est une erreur de ma part », Charly relançait seul la
+  question d'avant (« On reprend… quel(s) jour(s) pratiques-tu ton sport ? »).
+- Règle de Charles : Charly ne relance jamais ; il peut seulement rappeler, en une ligne à la fin, ce qui reste à voir ;
+  seul l'utilisateur reprend (« on reprend », « on continue », « et pour le sport ? »).
+- `tcSujetsOuverts(history)` : une question de Charly suivie d'un message hors sujet (« désolé », « pardon », « oups »,
+  « erreur de ma part »…) ou d'un fichier, et les propositions abandonnées (`tcAbandonnerAttente` marque la proposition
+  « la proposition « titre » », cohérent avec la mission 13) ; un sujet repris sort de la liste. `tcSansRelance` : une
+  phrase interrogative du modèle qui reprend les mots d'un sujet ouvert (ou « on reprend… ») est retirée, puis « Reste à
+  voir : ton sport régulier, la proposition « Rendez-vous dentiste ». » est ajouté. `tcEstUneReprise` (« on reprend »,
+  « on continue », « reprenons », « revenons à… », 6 mots au plus) : la page répond « On reprend : <sujet>. <question> » sans
+  le modèle et ferme le sujet. La règle est aussi dite au modèle dans le contexte de chaque appel.
+- Suite `verif-charly-relance` (scénario de la capture : question → fichier → « désolé » → pas de relance + « Reste à
+  voir » ; « on reprend » → reprise annoncée ; proposition abandonnée citée, jamais relancée), dans verifier.sh ; rouge sur
+  la page d'avant.
+- Limites : un « hors sujet » se reconnaît aux excuses et aux fichiers ; une vraie nouvelle demande après une question de
+  Charly n'est pas comptée comme sujet ouvert (on ne sait pas si elle y répond) ; « et pour le sport ? » va au modèle.
