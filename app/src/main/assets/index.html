@@ -3636,6 +3636,11 @@ async function tcPousserClesVersServeur() {
  * Le serveur fait autorité : c'est ce qui permet de retrouver ses clés
  * après une réinstallation ou sur un nouvel appareil.
  */
+/** La cle du fournisseur choisi, ou '' : c est elle qui dit si Charly peut repondre. */
+function tcCleActiveCharly() {
+  return (charlyIA.config.provider === 'anthropic' ? charlyIA.config.anthropicKey : charlyIA.config.apiKey) || '';
+}
+
 async function tcRecupererClesDuServeur() {
   if (!TC_BACKEND.estConnecte()) return;
   let liste;
@@ -13927,12 +13932,15 @@ async function charlySendMessage() {
     tcAbandonnerAttente('annulation');
   }
 
-  const activeKey = charlyIA.config.provider === 'anthropic'
-    ? charlyIA.config.anthropicKey
-    : charlyIA.config.apiKey;
+  let activeKey = tcCleActiveCharly();
+  if (!charlyIA.config.demoMode && !activeKey && TC_BACKEND.estConnecte()) {
+    // Juste apres une connexion, les cles du compte ne sont pas encore la : on les rapporte avant le premier
+    // message, au lieu d envoyer l utilisateur dans « Configuration IA » (campagne 10, 12/10).
+    try { await tcRecupererClesDuServeur(); } catch (e) {}
+    activeKey = tcCleActiveCharly();
+  }
   if (!charlyIA.config.demoMode && !activeKey) {
-    showToast('⚠️ Aucune clé API. Configure-la dans Configuration IA.');
-    navigate('aiconfig');
+    showToast('⚠️ Charly n’est pas encore prêt sur cet appareil. Réessaie dans un instant.');
     return;
   }
   if (charlyIA.history.filter(m => m.role==='user').length >= charlyIA.config.maxMessages) {
@@ -15179,6 +15187,10 @@ async function logoutUser() {
   // Le mot de passe retenu pour l'affichage ne doit pas survivre à la
   // déconnexion : le prochain utilisateur de l'appareil le verrait.
   tcOublierMotDePasse();
+  // Tout ce qui appartient au compte quitte l appareil, en memoire et en stockage : le prochain utilisateur de
+  // l appareil ne doit rien voir du precedent (campagne 10, 12/10). Le marqueur de compte part aussi.
+  tcViderDonneesDuCompte();
+  try { localStorage.removeItem(TC_COMPTE_LOCAL_KEY); } catch (e) {}
   showAuthFlow('auth-welcome');
   showToast('👋 À bientôt !');
 }
@@ -16194,6 +16206,8 @@ function tcProposerEnregistrementIdentifiants(identifiant, motDePasse, nom) {
 function showWelcomeSplash(firstname) {
   // Le compte vient d'etre pose : l'entete se redessine maintenant, pas au rechargement (jamais JD).
   tcMajAvatarEntete();
+  // Les cles IA du compte arrivent pendant l ecran de bienvenue : Charly est pret au premier message (campagne 10).
+  tcRecupererClesDuServeur();
   const splash = document.getElementById('welcomeSplash');
   const nameEl = document.getElementById('welcomeFirstname');
   if (!splash || !nameEl) {
@@ -22468,6 +22482,24 @@ function tcViderDonneesDuCompte() {
   birthdays = [];
   if (typeof contactsList !== 'undefined') contactsList = [];
   messages = { user: [], pro: [] };
+  // Ce que Charly garde en memoire appartient aussi au compte : la conversation (et avec elle les propositions
+  // en attente), les questions en suspens, l agenda isole. Sans cela, le compte suivant voyait « Bonjour Fanny ! »
+  // jusqu au rechargement (campagne 10, 12/10).
+  if (typeof charlyIA !== 'undefined') {
+    charlyIA.history = [];
+    charlyIA._historiqueCharge = false;
+    // Les cles IA sont celles du compte : effacees avec lui, elles reviennent du serveur pour le compte qui s ouvre
+    // (a la deconnexion, plus de session : rien n est demande).
+    charlyIA.config.apiKey = '';
+    charlyIA.config.anthropicKey = '';
+  }
+  if (typeof _tcSuppressionEnAttente !== 'undefined') _tcSuppressionEnAttente = null;
+  if (typeof _tcDeplacementEnAttente !== 'undefined') _tcDeplacementEnAttente = null;
+  if (typeof _tcImprevuEnAttente !== 'undefined') _tcImprevuEnAttente = 0;
+  if (typeof _isolatedCalendarId !== 'undefined') _isolatedCalendarId = null;
+  if (typeof customCalendars !== 'undefined') customCalendars = [];
+  if (typeof renderCharlyChat === 'function') { try { renderCharlyChat(); } catch (e) {} }
+  if (typeof tcRecupererClesDuServeur === 'function' && TC_BACKEND.estConnecte()) tcRecupererClesDuServeur();
 }
 
 /**

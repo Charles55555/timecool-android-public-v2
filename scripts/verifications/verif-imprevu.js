@@ -139,7 +139,7 @@ const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
   verifie('tout autre onglet efface l attente', /^function charlyQuickAction\(action\) \{\s*_tcImprevuEnAttente = 0;/.test(act));
   verifie('l ancienne phrase « J\'ai un imprévu… Aide-moi » a disparu', page.indexOf('J\'ai un imprévu et je dois réorganiser ma journée. Aide-moi.') === -1);
   const envoi = extraire('charlySendMessage') || '';
-  verifie('la réponse est lue avant la clé API du modèle', envoi.indexOf('_tcImprevuEnAttente > 0') > -1 && envoi.indexOf('_tcImprevuEnAttente > 0') < envoi.indexOf('Aucune clé API'));
+  verifie('la réponse est lue avant la clé API du modèle', envoi.indexOf('_tcImprevuEnAttente > 0') > -1 && envoi.indexOf('_tcImprevuEnAttente > 0') < envoi.indexOf('let activeKey = tcCleActiveCharly()'));
 
   console.log('');
   console.log(ko + ' anomalie(s).');

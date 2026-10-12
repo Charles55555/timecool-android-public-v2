@@ -1271,3 +1271,28 @@ mobile vers le nouvel appareil.
   au plus, sans mot de rendez-vous, jour ni heure), « erreur de ma part / mauvais message / ignore ce message » toujours ;
   « continue » et « reprends » seuls ne sont plus une reprise (seulement « on reprend », « on continue », « reprenons »,
   « continuons », « revenons à/sur »).
+
+## 12/10/2026 (session Codeur) — Déconnexion : rien du compte ne reste ; Charly prêt dès la connexion
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constat (campagne 10, appareil partagé) : après déconnexion de F et connexion de D, D voyait l'historique Charly de F
+  (« Bonjour Fanny ! ») jusqu'au rechargement ; puis « Aucune clé API. Configure-la dans Configuration IA » et la page
+  de configuration. Cause : `tcViderDonneesDuCompte` (ménage au changement de compte) ne tournait qu'au tour de
+  synchronisation, vidait le stockage mais pas la mémoire de Charly, et effaçait le tiroir de clés `timecool_api_keys`
+  sans le re-remplir ; les clés n'étaient rapportées du serveur qu'au démarrage (`tcRevaliderSession`), jamais après
+  une connexion.
+- `logoutUser` appelle `tcViderDonneesDuCompte()` tout de suite (après `tcOublierMotDePasse`) et retire le marqueur
+  `tc_compte_local`. `tcViderDonneesDuCompte` vide aussi la mémoire : `charlyIA.history` (et avec lui les propositions
+  en attente), `_historiqueCharge`, `_tcSuppressionEnAttente`, `_tcDeplacementEnAttente`, `_tcImprevuEnAttente`,
+  `_isolatedCalendarId`, `customCalendars`, clés IA en mémoire ; si une session est ouverte (ménage au changement de
+  compte), les clés du nouveau compte sont redemandées au serveur.
+- Connexion : `showWelcomeSplash` demande les clés du compte (sans attendre) ; dans `charlySendMessage`, s'il manque
+  encore la clé avec une session ouverte, `await tcRecupererClesDuServeur()` avant de juger ; plus jamais
+  `navigate('aiconfig')` ni « Aucune clé API » : à défaut, « Charly n’est pas encore prêt sur cet appareil. Réessaie
+  dans un instant. ». `tcCleActiveCharly()` regroupe le choix de la clé selon le fournisseur.
+- Suite `verif-deconnexion` (stockage factice d'un appareil quitté par F : seules les clés de l'appareil restent ;
+  mémoire vidée ; textes de logoutUser / charlySendMessage / showWelcomeSplash), dans verifier.sh ; rouge sur la page
+  d'avant.
+- Non vérifié ici : le parcours réel F → D sur un même navigateur (Testeurs, campagne suivante).
+- Suites re-ancrees : verif-charly-suppression et verif-imprevu (verification de cle devenue « let activeKey = tcCleActiveCharly() »), verif-historique-charly (deux remises a zero : « Recommencer » et le menage du compte). Le menage garde l idiome typeof … pour verif-sync.
