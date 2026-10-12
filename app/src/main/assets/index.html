@@ -4781,6 +4781,23 @@ function renderWeek() {
     }
     body.appendChild(row);
   }
+  // Toucher une plage vide → « Nouveau » pre-rempli (mission 36). Le geste n est pose qu une fois : les jours de la
+  // semaine affichee sont relus a chaque rendu sur body._tcWeekDates (jamais ceux du premier rendu).
+  body._tcWeekDates = weekDates;
+  if (typeof tcInstallerToucherDePlage === 'function') tcInstallerToucherDePlage(body, function (cible, x, y) {
+    const weekDates = body._tcWeekDates || [];
+    const cell = cible && typeof cible.closest === 'function' ? cible.closest('.hour-cell') : null;
+    if (!cell || !cell.parentElement) return null;
+    const row = cell.parentElement;
+    const colonnes = Array.prototype.slice.call(row.children).filter(function (c) { return c.classList && c.classList.contains('hour-cell'); });
+    const col = colonnes.indexOf(cell);
+    const lignes = Array.prototype.slice.call(body.children).filter(function (r) { return r.classList && r.classList.contains('hour-row'); });
+    const ligne = lignes.indexOf(row);
+    if (col < 0 || ligne < 0 || !weekDates[col]) return null;
+    const rect = row.getBoundingClientRect();
+    const hm = tcHeureDeLaPosition(agendaStartH + ligne, y - rect.top, rect.height);
+    return { date: fmt(weekDates[col]), heure: hm.heure, minute: hm.minute };
+  });
   // Appliquer le fond alterné sur le corps de la semaine
   const jan1b = new Date(viewDate.getFullYear(), 0, 1);
   const weekNumBody = Math.ceil(((viewDate - jan1b) / 86400000 + jan1b.getDay() + 1) / 7);
@@ -4895,6 +4912,18 @@ function renderDay() {
     row.innerHTML = `<div class="day-hour-label">${h}:00</div><div></div>`;
     body.appendChild(row);
   }
+  // Toucher une plage vide → « Nouveau » pre-rempli (mission 36). Le jour affiche est relu a chaque rendu.
+  body._tcJourISO = fmt(d);
+  if (typeof tcInstallerToucherDePlage === 'function') tcInstallerToucherDePlage(body, function (cible, x, y) {
+    const row = cible && typeof cible.closest === 'function' ? cible.closest('.day-hour') : null;
+    if (!row) return null;
+    const lignes = Array.prototype.slice.call(body.children).filter(function (r) { return r.classList && r.classList.contains('day-hour'); });
+    const ligne = lignes.indexOf(row);
+    if (ligne < 0) return null;
+    const rect = row.getBoundingClientRect();
+    const hm = tcHeureDeLaPosition(agendaStartH + ligne, y - rect.top, rect.height);
+    return { date: body._tcJourISO || fmt(viewDate), heure: hm.heure, minute: hm.minute };
+  });
   tcEvenementsDuJour(fmt(d), false).forEach(e => {
     const sm = (e.startH-agendaStartH)*60 + e.startM;
     const dm = (e.endH-e.startH)*60 + (e.endM-e.startM);
@@ -8319,7 +8348,7 @@ function updateProfileSelector() {
 }
 
 // ═══ CREATE EVENT MODAL ═══
-function openCreateModal() {
+function openCreateModal(prerempli) {
   document.getElementById('newEvtTitle').value = '';
   document.getElementById('newEvtDesc').value = '';
   // « Personnel » par defaut a chaque ouverture, pas seulement la premiere (examen de la mission 21).
@@ -8369,10 +8398,62 @@ function openCreateModal() {
   const champHeureFin = document.getElementById('newEvtEnd');
   if (champDebut) champDebut.value = hhmm(depart);
   if (champHeureFin) champHeureFin.value = hhmm(arrivee);
+  // Plage touchee dans l agenda (mission 36) : le jour touche, l heure de la ligne, une heure de duree.
+  if (prerempli && prerempli.date) {
+    if (champDate) champDate.value = prerempli.date;
+    const h = Math.max(0, Math.min(23, Number(prerempli.heure) || 0)), mn = Math.max(0, Math.min(59, Number(prerempli.minute) || 0));
+    const d2 = new Date(2000, 0, 1, h, mn, 0, 0);
+    const f2 = (h === 23) ? new Date(2000, 0, 1, 23, 59, 0, 0) : new Date(d2.getTime() + 3600000);
+    if (champDebut) champDebut.value = hhmm(d2);
+    if (champHeureFin) champHeureFin.value = hhmm(f2);
+  }
 
   document.getElementById('createModal').classList.add('open');
 }
 function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
+
+/* ── Toucher une plage vide (mission 36) ──────────────────────────────────────────────────────────────
+   Un toucher court et immobile sur une case vide des vues Jour / Semaine ouvre « Nouveau » pre-rempli. Un bloc de
+   rendez-vous (.week-event, .day-event, bandeaux) garde son propre geste ; un appui long (glisser-deposer) ou un
+   deplacement du doigt (defilement) n ouvrent rien. */
+const TC_TOUCHER_SEUIL_PX = 8;
+const TC_TOUCHER_DUREE_MS = 450;
+/** L heure d une position dans une ligne d une hauteur donnee : le quart d heure COMMENCE (0, 15, 30, 45 ; tout en bas → heure suivante). */
+function tcHeureDeLaPosition(heureLigne, y, hauteurLigne) {
+  const part = hauteurLigne > 0 ? Math.max(0, Math.min(1, y / hauteurLigne)) : 0;
+  let quart = Math.floor(part * 4 + 1e-9);
+  let heure = Number(heureLigne) || 0, minute = quart * 15;
+  if (minute >= 60) { heure += 1; minute = 0; }
+  if (heure > 23) { heure = 23; minute = 45; }
+  return { heure: heure, minute: minute };
+}
+/** Le geste : vrai si c est un toucher court, immobile, hors bloc de rendez-vous, hors glisser en cours. */
+function tcEstUnToucherDePlage(debut, fin, cible, glisserEnCours) {
+  if (!debut || !fin || glisserEnCours) return false;
+  if (fin.t - debut.t > TC_TOUCHER_DUREE_MS) return false;
+  if (Math.abs(fin.x - debut.x) > TC_TOUCHER_SEUIL_PX || Math.abs(fin.y - debut.y) > TC_TOUCHER_SEUIL_PX) return false;
+  if (cible && typeof cible.closest === 'function' && cible.closest('.week-event, .day-event, .tc-bandeau-evt, .tc-chip-evt, button, a, input')) return false;
+  return true;
+}
+/** Pose le geste sur le corps d une vue ; `plage(cible, x, y)` rend { date, heure, minute } ou null. */
+function tcInstallerToucherDePlage(corps, plage) {
+  if (!corps || corps._tcToucherPose) return;
+  corps._tcToucherPose = true;
+  let debut = null;
+  corps.addEventListener('pointerdown', function (p) {
+    if (p.pointerType === 'mouse' && p.button !== 0) return;
+    debut = { x: p.clientX, y: p.clientY, t: Date.now(), cible: p.target };
+  });
+  corps.addEventListener('pointerup', function (p) {
+    const d = debut; debut = null;
+    if (!d) return;
+    const fin = { x: p.clientX, y: p.clientY, t: Date.now() };
+    if (!tcEstUnToucherDePlage(d, fin, p.target, typeof _tcDrag !== 'undefined' && !!_tcDrag)) return;
+    const r = plage(p.target, p.clientX, p.clientY);
+    if (r && r.date) openCreateModal(r);
+  });
+  corps.addEventListener('pointercancel', function () { debut = null; });
+}
 
 /**
  * Cache les heures quand l'evenement occupe la journee entiere.

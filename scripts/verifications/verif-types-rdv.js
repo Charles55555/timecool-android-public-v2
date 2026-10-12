@@ -64,7 +64,7 @@ verifie('la fenetre « Modifier » a un champ TYPE (AGENDA_CATEGORIES), le type 
 verifie('un type inconnu est montre tel quel en premiere option « (type actuel : …) »', /catConnue \? '' : `<option value="\$\{escapeHTMLSafe\(catActuelle\)\}" selected>\(type actuel : \$\{escapeHTMLSafe\(catActuelle\)\}\)<\/option>`/.test(modal));
 const save = fonction(page, 'saveEventEdit') || '';
 verifie('l enregistrement n ecrit le type que s il a change par rapport a l affiche', /const champCat = document\.getElementById\('editCat'\);[\s\S]*?if \(champCat && champCat\.value && champCat\.value !== champCat\.getAttribute\('data-initial'\)\) e\.cat = champCat\.value;/.test(save));
-verifie('le formulaire « Nouveau » revient a « Personnel » a chaque ouverture', /function openCreateModal\(\) \{[\s\S]*?getElementById\('newEvtType'\);\s+if \(champType\) champType\.value = 'perso';/.test(page));
+verifie('le formulaire « Nouveau » revient a « Personnel » a chaque ouverture', /function openCreateModal\((?:prerempli)?\) \{[\s\S]*?getElementById\('newEvtType'\);\s+if \(champType\) champType\.value = 'perso';/.test(page));
 
 titre('5. Rejeu : un rendez-vous « loisir » (type d avant) modifie par le titre garde « loisir » ; choisi « sport », il devient « sport »');
 {

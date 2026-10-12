@@ -1651,3 +1651,27 @@ mobile vers le nouvel appareil.
   dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission26-ligne-semaine.png`.
 - Suite `verif-premier-jour-semaine` adaptée : elle lisait `wnBadge.textContent = …` pour tester le numéro de semaine ; elle lit
   désormais le calcul `const semaine = …` (même valeur, mêmes 400 jours).
+
+## 12/10/2026 (session Codeur) — Toucher une plage vide ouvre « Nouveau » pré-rempli (mission 36)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Demande (Charles) : vues Jour et Semaine, toucher une plage horaire VIDE ouvre le formulaire « Nouveau » du bouton +,
+  pré-rempli : jour touché, heure de début = ligne touchée arrondie au quart d'heure, durée 1 h, type Personnel ; le
+  reste inchangé (Annuler ferme sans rien créer) ; le glisser-déposer et le toucher d'un bloc existant ne changent pas ;
+  pas de déclenchement pendant un défilement (seuil de mouvement) ; vue Mois inchangée.
+- `openCreateModal(prerempli)` : paramètre facultatif `{ date, heure, minute }` qui pose date, début et fin (+ 1 h, 23h59
+  au plus) après le comportement habituel ; sans paramètre, rien ne change (« Personnel » reste le type par défaut).
+- `tcInstallerToucherDePlage(corps, plage)` (pointerdown / pointerup / pointercancel sur le corps de la vue) ;
+  `tcEstUnToucherDePlage` : toucher court (≤ 450 ms), immobile (≤ 8 px), hors bloc (`.week-event`, `.day-event`,
+  bandeaux, pastilles, boutons), hors glisser en cours (`_tcDrag`) ; `tcHeureDeLaPosition` : quart d'heure COMMENCÉ
+  (0/15/30/45 ; tout en bas → heure suivante ; 23h45 au plus) — décision seule : on touche « vers 10h15 », pas « vers 10h30 ».
+  Vue Semaine : colonne = jour, ligne `.hour-row` = heure ; vue Jour : ligne `.day-hour` = heure, jour affiché. Le geste est
+  posé une seule fois par corps : les jours affichés sont relus à chaque rendu (`body._tcWeekDates`, `body._tcJourISO`),
+  jamais ceux du premier rendu (piège de closure trouvé à l'essai à blanc).
+- Suite `verif-toucher-plage` (arrondi ; geste court / appui long / défilement / glisser / bloc ; vue Semaine simulée :
+  mercredi 14 octobre, ligne 14h à 60 % → 14:30 → 15:30, type perso ; sans argument inchangé ; les deux vues installent
+  le geste, pas la vue Mois ; glisser-déposer intact), dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 :
+  `captures/mission36-toucher-plage.png` (formulaire ouvert après un toucher simulé).
+- Suite `verif-types-rdv` adaptée (signature `openCreateModal(prerempli)`) ; garde-fou `typeof tcInstallerToucherDePlage` dans renderWeek /
+  renderDay pour les suites qui extraient ces fonctions seules.
