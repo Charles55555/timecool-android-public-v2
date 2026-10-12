@@ -3091,7 +3091,8 @@ switch ($route) {
 
     /* Message libre d un compte à un autre. */
     /*
-     * Convocation de groupe (mission 27b, 12/10) : un horaire fixe par l organisateur, envoye dans la messagerie de
+     * Convocation de groupe (mission 27b, 12/10), sur les tables du schema initial (convocations : debut / fin DATETIME ;
+     * convocation_reponses : compte_id, reponse sans_reponse / present / absent) : un horaire fixe par l organisateur, envoye dans la messagerie de
      * chaque membre qui a TimeCool (genre « convocation », boutons Present / Absent) ; chacun repond (/repondre) ;
      * l organisateur lit les reponses (/etat). Les references sans compte sont rendues telles quelles (sans_compte) :
      * l organisateur note ces membres a la main. Un membre qui a bloque l organisateur ne recoit rien, en silence.
@@ -3135,15 +3136,16 @@ switch ($route) {
             $membres[] = $c;
         }
         Db::req(
-            'INSERT INTO convocations (organisateur_id, groupe, titre, jour, debut, fin) VALUES (?, ?, ?, ?, ?, ?)',
-            [$moi['id'], $groupe, $titre, $jour, $debut . ':00', $fin . ':00']
+            // Le nom du groupe n a pas de colonne (groupe_id vise les groupes du serveur, inexistants ici) : il voyage dans le message.
+            'INSERT INTO convocations (organisateur_id, titre, debut, fin) VALUES (?, ?, ?, ?)',
+            [$moi['id'], $titre, $jour . ' ' . $debut . ':00', $jour . ' ' . $fin . ':00']
         );
         $convocationId = (int) Db::pdo()->lastInsertId();
         $quand = rdvLibelleJour($ts) . ' de ' . $debut . ' à ' . $fin;
         $texte = '📅 Convocation « ' . $titre . ' » — ' . $quand . ($groupe !== null ? ' (' . $groupe . ')' : '') . '. Réponds Présent ou Absent.';
         $envoyes = [];
         foreach ($membres as $c) {
-            Db::req('INSERT INTO convocation_membres (convocation_id, compte_id) VALUES (?, ?)', [$convocationId, $c['id']]);
+            Db::req('INSERT INTO convocation_reponses (convocation_id, compte_id) VALUES (?, ?)', [$convocationId, $c['id']]);
             $bloque = demandeurBloque((int) $c['id'], $moi);
             messagePoser($moi, $c, $texte, null, null, 'convocation', null, null, $bloque,
                 ['convocation' => $convocationId, 'titre' => $titre, 'jour' => $jour, 'debut' => $debut, 'fin' => $fin, 'quand' => $quand, 'statut' => 'attente']);
@@ -3159,18 +3161,18 @@ switch ($route) {
             Rep::erreur(400, 'reponse_invalide', 'Réponse invalide.');
         }
         $m = Db::un(
-            'SELECT m.id, c.organisateur_id, c.titre, c.jour, c.debut, c.fin FROM convocation_membres m
+            'SELECT m.id, c.organisateur_id, c.titre, c.debut, c.fin FROM convocation_reponses m
               JOIN convocations c ON c.id = m.convocation_id WHERE m.convocation_id = ? AND m.compte_id = ?',
             [$convocationId, $moi['id']]
         );
         if ($m === null) {
             Rep::erreur(404, 'convocation_introuvable', 'Convocation introuvable.');
         }
-        Db::req('UPDATE convocation_membres SET statut = ?, repondu_le = NOW() WHERE id = ?', [$statut, $m['id']]);
+        Db::req('UPDATE convocation_reponses SET reponse = ?, repondu_le = NOW() WHERE id = ?', [$statut, $m['id']]);
         $organisateur = Db::un('SELECT * FROM comptes WHERE id = ?', [$m['organisateur_id']]);
         if ($organisateur !== null) {
             convocationRepondue($moi, (string) $organisateur['reference'], $convocationId, $statut);
-            $quand = rdvLibelleJour((int) strtotime($m['jour'] . ' ' . $m['debut']));
+            $quand = rdvLibelleJour((int) strtotime((string) $m['debut']));
             $texte = ($statut === 'present' ? '✅ ' : '❌ ') . texteSur((string) $moi['prenom'])
                 . ($statut === 'present' ? ' sera présent' : ' sera absent') . ' : « ' . $m['titre'] . ' », ' . $quand . '.';
             messagePoser($moi, $organisateur, $texte, null, null, 'convocation_reponse', null, null, false,
@@ -3186,19 +3188,20 @@ switch ($route) {
             Rep::erreur(404, 'convocation_introuvable', 'Convocation introuvable.');
         }
         $lignes = Db::tous(
-            'SELECT m.statut, m.repondu_le, k.reference, k.prenom, k.nom FROM convocation_membres m
-              JOIN comptes k ON k.id = m.compte_id WHERE m.convocation_id = ? ORDER BY k.prenom, k.nom',
+            'SELECT m.reponse, m.repondu_le, k.reference, k.prenom, k.nom FROM convocation_reponses m
+              JOIN comptes k ON k.id = m.compte_id WHERE m.convocation_id = ? AND m.compte_id IS NOT NULL ORDER BY k.prenom, k.nom',
             [$convocationId]
         );
         $membres = [];
         foreach ($lignes as $l) {
             $membres[] = ['reference' => (string) $l['reference'], 'prenom' => texteSur((string) $l['prenom']), 'nom' => texteSur((string) $l['nom']),
-                'statut' => (string) $l['statut'], 'repondu_le' => $l['repondu_le']];
+                'statut' => $l['reponse'] === 'sans_reponse' ? 'attente' : (string) $l['reponse'], 'repondu_le' => $l['repondu_le']];
         }
-        $debut = substr((string) $c['debut'], 0, 5);
-        $fin = substr((string) $c['fin'], 0, 5);
-        Rep::ok(['id' => (int) $c['id'], 'titre' => (string) $c['titre'], 'jour' => (string) $c['jour'], 'debut' => $debut, 'fin' => $fin,
-            'quand' => rdvLibelleJour((int) strtotime($c['jour'] . ' ' . $debut)) . ' de ' . $debut . ' à ' . $fin, 'membres' => $membres]);
+        $jour = substr((string) $c['debut'], 0, 10);
+        $debut = substr((string) $c['debut'], 11, 5);
+        $fin = substr((string) $c['fin'], 11, 5);
+        Rep::ok(['id' => (int) $c['id'], 'titre' => (string) $c['titre'], 'jour' => $jour, 'debut' => $debut, 'fin' => $fin,
+            'quand' => rdvLibelleJour((int) strtotime((string) $c['debut'])) . ' de ' . $debut . ' à ' . $fin, 'membres' => $membres]);
 
     case 'POST /messages/envoyer':
         $moi = Auth::compte();

@@ -1844,3 +1844,8 @@ mobile vers le nouvel appareil.
   comptes jetables : envoi, réponses, état, refus, bloqué qui écrit) : à enregistrer dans verifier.sh après la mise en ligne.
 - Suites `verif-blocage-silence` et `verif-absence` adaptées (paramètre `$complement` de messagePoser ; saveContacts dans le bac à sable ;
   nouvelle forme de /messages/envoyer) : mêmes vérifications.
+- Complément (12/10, après la migration jouée par le chef) : les tables `convocations` et `convocation_reponses` existaient
+  déjà en production (schéma initial, 0 ligne, aucune route) avec un autre dessin (debut / fin DATETIME, titre 200,
+  reponse sans_reponse / present / absent). Décision : l'API s'appuie sur ce schéma ; `convocation_membres` (créée par la
+  première version de la 012) est abandonnée, à supprimer par le chef (`DROP TABLE IF EXISTS convocation_membres`). La 012
+  décrit désormais les deux tables existantes (rien à rejouer). `/convocations/etat` rend `attente` pour `sans_reponse`.
