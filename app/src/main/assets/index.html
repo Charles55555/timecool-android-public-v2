@@ -11738,6 +11738,38 @@ function tcListeDuJourPourDeplacement(reply, texte, now, events, mode) {
  * de l'appeler, la page cherche le rendez-vous nomme dans les 14 prochains jours ; introuvable → on le
  * dit, rien n'est fait. null si la phrase ne nomme rien (« mon rdv de mardi » : le jour suffit).
  */
+/**
+ * « annule le dentiste », « peux-tu annuler mon dentiste ? », « décale le coach » : la phrase vise un rendez-vous par
+ * un mot (annulation OU deplacement, question comprise) ; s il n existe aucun rendez-vous a venir qui porte ce mot,
+ * la page le dit elle-meme et rien n est fait — le modele ne confirme jamais une suppression inventee (mission 31).
+ * null si la phrase n a pas de verbe d annulation / deplacement, ou ne nomme rien (« annule mon rdv de mardi »).
+ */
+const TC_MOTS_VISEE_CREUX = /^(annul\w*|supprim\w*|effac\w*|enlev\w*|retir\w*|deplac\w*|decal\w*|report\w*|repouss\w*|avanc\w*|reprogramm\w*|boug\w*|chang\w*|modifi\w*|peux|pourrais|pouvez|pourriez|veux|voudrais|faut|merci|plait|rendez|vous|rdv|agenda|reunion|seance|consultation|aujourd|demain|hier|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|mois|matin|midi|soir|heure|heures|prochain|prochaine|dernier|derniere|plutot|meme|tout|tous|toute|toutes|celui|celle|cette|avec|chez|pour|dans|vers|jusqu|apres|avant|moment|creneau|horaire|jour|jours)$/;
+function tcRdvViseIntrouvable(texte, now, events, mode) {
+  const t = tcSansAccents(texte);
+  if (!/\b(annul|supprim|effac|enlev|retir|deplac|decal|report|repouss|avanc|reprogramm)/.test(t)) return null;
+  const mots = tcMotsDeRdv(texte).filter(function (w) { return !TC_MOTS_VISEE_CREUX.test(w); });
+  if (!mots.length) return null;
+  const ref = now ? new Date(now) : new Date();
+  const debutStr = tcISO(new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()));
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  const trouve = (Array.isArray(events) ? events : []).some(function (e) {
+    return e && e.mode === evMode && e.title && tcEvenementFin(e) >= debutStr && tcTitreContient(e.title, mots);
+  });
+  if (trouve) return null;
+  // Un contact nomme (« annule Marc ») : la suppression par contact est traitee ailleurs, on ne tranche pas ici.
+  if (typeof contactsList !== 'undefined' && Array.isArray(contactsList) && contactsList.some(function (c) { return c && c.name && tcTitreContient(c.name, mots); })) return null;
+  return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda à venir. Rien n’a été changé.';
+}
+/** Une simple question (« quand suis-je libre lundi matin ? ») n appelle aucune carte : le bloc est retire, la prose reste (mission 31). */
+function tcSansCarteApresQuestion(reply, texte) {
+  const t = tcSansAccents(String(texte || '')).replace(/[’']/g, ' ').trim();
+  const question = /\?\s*$/.test(String(texte || '').trim()) || /^(quand|est ce|est-ce|qu est|quel|quelle|quels|quelles|ai je|suis je|puis je|y a t il|combien|comment|pourquoi)\b/.test(t);
+  if (!question) return reply;
+  if (/\b(ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|reserve[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|propose[rsz]?)\b/.test(t)) return reply;
+  return String(reply || '').replace(/\s*\[AGENDA\][\s\S]*?\[\/AGENDA\]\s*/g, '\n').replace(/\n{3,}/g, '\n\n').trim() || reply;
+}
+
 function tcRdvNommeIntrouvable(texte, now, events, mode) {
   const t = tcSansAccents(texte);
   // Un vrai deplacement de rendez-vous : verbe strict, ou verbe large (« change », « modifie ») avec le mot
@@ -14529,7 +14561,8 @@ async function charlySendMessage() {
 
   // === DÉPLACER UN RENDEZ-VOUS QUI N'EXISTE PAS : jamais laissé au modèle, qui l'inventait (campagne 6, 11/10) ===
   {
-    const introuvable = tcRdvNommeIntrouvable(text, new Date(), events, mode);
+    // Deplacement (campagne 6) ET annulation ou question (mission 31) : un rendez-vous nomme qui n existe pas.
+    const introuvable = tcRdvNommeIntrouvable(text, new Date(), events, mode) || tcRdvViseIntrouvable(text, new Date(), events, mode);
     if (introuvable) {
       tcPousserMessageUtilisateur(text);
       charlyIA.history.push({ role: 'assistant', content: introuvable });
@@ -14721,6 +14754,8 @@ async function charlySendMessage() {
       const lastCharly = charlyIA.history.filter(m => m.role === 'assistant').slice(-1)[0]?.content || '';
       reply = reply + tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, new Date(), isAllDaysUser ? 7 : 1);
     }
+    // Une simple question n appelle aucune carte (mission 31).
+    reply = tcSansCarteApresQuestion(reply, text);
     // Filet : la date d'une proposition suit la demande, et jamais dans le passe (campagne 4, 11/10).
     reply = tcCorrigerPropositionsCharly(reply, text, new Date());
     // Garde-fous (campagne 5, 11/10) : un conflit annonce qui n'existe pas dans l'agenda est ignore (on propose) ;
@@ -14739,6 +14774,11 @@ async function charlySendMessage() {
     reply = tcSansNotesInternes(reply);
     // Charly ne relance jamais un sujet de lui-meme ; il rappelle seulement ce qui reste a voir (mission 17).
     reply = tcSansRelance(reply, text, charlyIA.history);
+    // Jamais une confirmation d annulation / deplacement d un rendez-vous qui n existe pas (mission 31).
+    {
+      const invente = tcRdvViseIntrouvable(text, new Date(), events, mode);
+      if (invente && /(annul|supprim|effac|d[ée]plac|d[ée]cal|report|repouss|avanc|reprogramm)/i.test(reply)) reply = invente;
+    }
 
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId});

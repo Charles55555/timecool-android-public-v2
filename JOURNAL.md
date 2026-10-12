@@ -1707,3 +1707,24 @@ mobile vers le nouvel appareil.
   « Archives (N) » apparaît dès qu'Archives a quelque chose, et désarchiver la dernière entrée d'Archives ramène au
   journal ; (3) libellés courts « Ce mois » / « 3 derniers mois » / « Archiver », ligne en `flex-wrap` (deux lignes au
   besoin sur 390 px), jamais de défilement. Suite réécrite en conséquence (asynchrone, `tcConfirm` simulé).
+
+## 12/10/2026 (session Codeur) — Charly n'invente jamais un rendez-vous (mission 31)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constats (adjointe) : « annule le dentiste » sans dentiste, par un chemin qui atteignait le modèle (question, formulation
+  sans mot de rendez-vous), donnait « Souhaites-tu que je l'annule ? » ; une simple question (« quand suis-je libre … ? »)
+  produisait une carte « Proposition d'agenda » (lundi 8h30-12h « Rendez-vous »).
+- `tcRdvViseIntrouvable(texte, now, events, mode)` (pure) : si la phrase porte un verbe d'annulation ou de déplacement
+  (question comprise) et nomme quelque chose (mots de 4 lettres, hors verbes, jours, heures, mots creux), et qu'aucun
+  rendez-vous à venir ne porte ce mot → « Je ne trouve pas de rendez-vous « dentiste » dans ton agenda à venir. Rien
+  n’a été changé. » ; null si le rendez-vous existe, si rien n'est nommé (« annule mon rdv de mardi ») ou si c'est un
+  contact (traité ailleurs). Appliquée AVANT le modèle (avec `tcRdvNommeIntrouvable`, campagne 6) et APRÈS : une réponse
+  du modèle qui parle d'annuler / déplacer un rendez-vous inexistant est remplacée par ce même message.
+- `tcSansCarteApresQuestion(reply, texte)` : une simple question (« ? » final, ou tête « quand / est-ce que / quel /
+  ai-je / suis-je / combien / comment / pourquoi ») sans verbe de création → le bloc [AGENDA] est retiré, la prose
+  reste ; appliqué dès la réponse du modèle, avant les autres filets.
+- Suite `verif-charly-jamais-inventer` (horloge dimanche 11/10/2026 14h20, agenda sans dentiste à venir) ; dans
+  verifier.sh ; rouge sur la page d'avant.
+- Suite `verif-charly-citations` adaptée : elle attendait `tcRdvNommeIntrouvable(…)` seul avant le modèle ; la ligne porte aussi
+  `|| tcRdvViseIntrouvable(…)` (même vérification, forme élargie).
