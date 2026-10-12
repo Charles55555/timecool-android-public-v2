@@ -10566,8 +10566,8 @@ function setDemarchesPeriode(periode) {
   renderDemarches();
 }
 const TC_DEMARCHES_PERIODES = [
-  { id: 'mois', label: 'Du mois en cours' },
-  { id: 'trois', label: 'Des 3 derniers mois' }
+  { id: 'mois', label: 'Ce mois' },
+  { id: 'trois', label: '3 derniers mois' }
 ];
 /** Le premier instant de la periode : le 1er du mois en cours, ou le 1er du mois d il y a deux mois (3 mois glissants). */
 function tcDebutPeriodeDemarches(periode, now) {
@@ -10576,19 +10576,27 @@ function tcDebutPeriodeDemarches(periode, now) {
 }
 /**
  * Les entrees a montrer, les plus recentes d abord : hors Archives, celles de la periode ET de la categorie, non
- * archivees ; dans les Archives, toutes les archivees de la categorie (sans periode). Pure, pour les suites.
+ * archivees ; dans les Archives, les archivees ET les anciennes (plus de 3 mois, ou sans date) de la categorie :
+ * rien n est jamais hors d atteinte. Pures, pour les suites.
  */
+function tcDemarcheAncienne(d, now) {
+  return !!d && d.archive !== true && !((d.timestamp || 0) >= tcDebutPeriodeDemarches('trois', now));
+}
 function tcDemarchesVisibles(liste, filtre, periode, archives, now) {
   const debut = tcDebutPeriodeDemarches(periode, now);
   return (Array.isArray(liste) ? liste : []).slice()
     .sort(function (a, b) { return (b.timestamp || 0) - (a.timestamp || 0); })
     .filter(function (d) { return d && (filtre === 'tout' || (d.categorie || 'rdv') === filtre); })
-    .filter(function (d) { return archives ? d.archive === true : (d.archive !== true && (d.timestamp || 0) >= debut); });
+    .filter(function (d) { return archives ? (d.archive === true || tcDemarcheAncienne(d, now)) : (d.archive !== true && (d.timestamp || 0) >= debut); });
 }
 /** « Archiver » : les entrees affichees passent dans les Archives ; rien n est supprime. */
-function tcArchiverDemarches() {
+async function tcArchiverDemarches() {
   const visibles = tcDemarchesVisibles(demarches, _demarchesFiltre, _demarchesPeriode, false);
   if (!visibles.length) { showToast('Rien à archiver'); return; }
+  // Un seul toucher archive tout ce qui est affiche : on demande avant (examen de la mission 29).
+  const n = visibles.length;
+  const ok = await tcConfirm(n > 1 ? 'Archiver ces ' + n + ' entrées ?\nElles restent consultables dans Archives.' : 'Archiver cette entrée ?\nElle reste consultable dans Archives.', { icone: '📦', libelleValider: 'Oui', libelleAnnuler: 'Non' });
+  if (!ok) return;
   visibles.forEach(function (d) { d.archive = true; });
   saveDemarches();
   showToast('📦 ' + visibles.length + ' entrée' + (visibles.length > 1 ? 's' : '') + ' archivée' + (visibles.length > 1 ? 's' : ''));
@@ -10603,7 +10611,7 @@ function tcDesarchiverDemarche(id) {
   if (!d) return;
   delete d.archive;
   saveDemarches();
-  if (!demarches.some(function (x) { return x.archive === true; })) _demarchesArchives = false;   // plus rien d archive : retour au journal
+  if (!tcDemarchesVisibles(demarches, 'tout', _demarchesPeriode, true).length) _demarchesArchives = false;   // plus rien dans Archives : retour au journal
   showToast('↩️ Entrée remise dans le journal');
   renderDemarches();
 }
@@ -10626,12 +10634,12 @@ function renderDemarches() {
         <button onclick="setDemarchesFiltre('${cat.id}')" style="flex-shrink:0; padding:8px 14px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap; border:1.5px solid ${_demarchesFiltre===cat.id ? 'var(--g-blue)' : 'var(--border)'}; background:${_demarchesFiltre===cat.id ? 'var(--g-blue)' : '#fff'}; color:${_demarchesFiltre===cat.id ? '#fff' : 'var(--text-sec)'};">${cat.label}</button>
       `).join('')}
     </div>
-    <div style="display:flex; gap:6px; align-items:center; overflow-x:auto; padding-bottom:12px; margin-bottom:4px;">
+    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; padding-bottom:12px; margin-bottom:4px;">
       ${TC_DEMARCHES_PERIODES.map(p => `
         <button onclick="setDemarchesPeriode('${p.id}')" style="flex-shrink:0; padding:8px 14px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap; border:1.5px solid ${!_demarchesArchives && _demarchesPeriode===p.id ? 'var(--g-blue)' : 'var(--border)'}; background:${!_demarchesArchives && _demarchesPeriode===p.id ? 'var(--g-blue)' : '#fff'}; color:${!_demarchesArchives && _demarchesPeriode===p.id ? '#fff' : 'var(--text)'};">${p.label}</button>
       `).join('')}
-      <button onclick="tcArchiverDemarches()" style="flex-shrink:0; padding:8px 14px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap; border:1.5px solid var(--border); background:#fff; color:var(--text);">📦 Archiver</button>
-      ${demarches.some(d => d.archive === true) ? `<button onclick="tcBasculerArchivesDemarches()" style="flex-shrink:0; margin-left:auto; padding:8px 14px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap; border:1.5px solid ${_demarchesArchives ? 'var(--g-blue)' : 'var(--border)'}; background:${_demarchesArchives ? 'var(--g-blue)' : '#fff'}; color:${_demarchesArchives ? '#fff' : 'var(--text)'};">${_demarchesArchives ? '↩️ Journal' : '🗂️ Archives'}</button>` : ''}
+      <button onclick="tcArchiverDemarches()" style="flex-shrink:0; padding:8px 14px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap; border:1.5px solid var(--border); background:#fff; color:var(--text);">Archiver</button>
+      ${tcDemarchesVisibles(demarches, 'tout', _demarchesPeriode, true).length ? `<button onclick="tcBasculerArchivesDemarches()" style="flex-shrink:0; margin-left:auto; padding:8px 14px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap; border:1.5px solid ${_demarchesArchives ? 'var(--g-blue)' : 'var(--border)'}; background:${_demarchesArchives ? 'var(--g-blue)' : '#fff'}; color:${_demarchesArchives ? '#fff' : 'var(--text)'};">${_demarchesArchives ? '↩️ Journal' : 'Archives (' + tcDemarchesVisibles(demarches, 'tout', _demarchesPeriode, true).length + ')'}</button>` : ''}
     </div>
   `;
 
@@ -10658,7 +10666,7 @@ function renderDemarches() {
   if (!sorted.length) {
     c.innerHTML = filtresHTML + `
       <div style="text-align:center; padding:40px 20px; color:var(--text-sec); font-size:13px;">
-        ${_demarchesArchives ? 'Aucune entrée archivée dans cette catégorie.' : (_demarchesPeriode === 'trois' ? 'Aucune entrée dans cette catégorie sur les 3 derniers mois.' : 'Aucune entrée dans cette catégorie ce mois-ci.')}
+        ${_demarchesArchives ? 'Aucune entrée archivée ni ancienne dans cette catégorie.' : (_demarchesPeriode === 'trois' ? 'Aucune entrée dans cette catégorie sur les 3 derniers mois.' : 'Aucune entrée dans cette catégorie ce mois-ci.')}
       </div>
     `;
     return;
@@ -10708,7 +10716,7 @@ function renderDemarches() {
         ${d.justificatif ? `<div style="margin-top:8px; padding:8px 10px; background:#f1f3f4; border-radius:8px; font-size:11px; color:var(--text-sec);">📎 ${d.justificatif}</div>` : ''}
         <div style="margin-top:10px; display:flex; gap:6px;">
           <button onclick="viewDemarcheDetail('${d.id}')" style="padding:6px 12px; background:#e8f0fe; color:var(--g-blue); border:none; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">Voir détail</button>
-          ${d.archive === true ? `<button onclick="tcDesarchiverDemarche('${d.id}')" style="padding:6px 12px; background:#f1f3f4; color:var(--text); border:none; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">↩️ Désarchiver</button>` : ''}
+          ${d.archive === true ? `<button onclick="tcDesarchiverDemarche('${d.id}')" style="padding:6px 12px; background:#f1f3f4; color:var(--text); border:none; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">↩️ Désarchiver</button>` : (_demarchesArchives ? `<span style="font-size:11px; color:var(--text-sec); padding:6px 4px;">plus de 3 mois</span>` : '')}
           ${d.status === 'preparee' || d.status === 'en_attente' ? `<button onclick="cancelDemarche('${d.id}')" style="padding:6px 12px; background:#fce8e6; color:var(--g-red); border:none; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">Annuler</button>` : ''}
         </div>
       </div>

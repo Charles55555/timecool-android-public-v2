@@ -1700,3 +1700,10 @@ mobile vers le nouvel appareil.
   (`timecool_demarches`, réglage transférable), rien ne change côté serveur.
 - Correction avant verdict : désarchiver la DERNIÈRE archivée ramène au journal (sinon écran « Archives » vide, sans bouton de
   retour, puisque « Journal » n existe que s il reste des archivées). Assertion ajoutée à la suite.
+- Décisions du chef de projet après examen (12/10) : (1) « Archiver » demande confirmation par `tcConfirm` (« Archiver ces
+  N entrées ? Elles restent consultables dans Archives. », Oui / Non ; au singulier pour une seule) ; (2) rien ne devient
+  invisible : la vue Archives montre les archivées ET tout ce qui a plus de 3 mois ou n'a pas de date (anciennes entrées),
+  avec la mention « plus de 3 mois » (`tcDemarcheAncienne`) ; le journal et Archives se complètent exactement ;
+  « Archives (N) » apparaît dès qu'Archives a quelque chose, et désarchiver la dernière entrée d'Archives ramène au
+  journal ; (3) libellés courts « Ce mois » / « 3 derniers mois » / « Archiver », ligne en `flex-wrap` (deux lignes au
+  besoin sur 390 px), jamais de défilement. Suite réécrite en conséquence (asynchrone, `tcConfirm` simulé).
