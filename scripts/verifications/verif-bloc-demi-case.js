@@ -50,7 +50,7 @@ verifie('la hauteur d\'un rendez-vous d\'une heure est une constante nommee (42 
 try {
   vm.runInContext(constHaut.replace(/^const /, 'var '), ctx);
   ['MONTHS', 'DAYS_FULL', 'DAYS_SHORT'].forEach((c) => { const m = page.match(new RegExp('const ' + c + ' = [\\s\\S]*?;\\n')); vm.runInContext(m[0].replace(/^const /, 'var '), ctx); });
-  ['fmt', 'sameDay', 'isProClosed', 'escapeHTMLSafe', 'tcDayShort', 'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcHauteurBloc', 'renderWeek', 'renderDay']
+  ['fmt', 'sameDay', 'isProClosed', 'escapeHTMLSafe', 'tcDayShort', 'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcHauteurBloc', 'tcEvenementFin', 'tcLignesBandeSemaine', 'renderWeek', 'renderDay']
     .forEach((n) => { const s = extraire(n); if (!s) throw new Error('fonction introuvable : ' + n); vm.runInContext(s, ctx); });
 } catch (e) {
   console.log('  KO  chargement : ' + e.message);

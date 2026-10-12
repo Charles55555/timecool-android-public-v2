@@ -1454,3 +1454,22 @@ mobile vers le nouvel appareil.
   s'applique ; état neuf → le serveur fait foi), dans verifier.sh ; rouge sur la page d'avant.
 - Limite : la règle s'applique à tous les types poussables (réglages, rendez-vous, tâches…) : un objet modifié des deux
   côtés entre deux tours garde la version locale, qui repart ensuite.
+
+## 12/10/2026 (session Codeur) — Vue Semaine : la bande « toute la journée » range les voyages d'abord
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Constat (Charles, semaine 46) : le voyage « RYDER CUP » du 11 au 15 novembre était sur la ligne du haut tous les jours
+  sauf le 11, où le férié « Armistice 1918 » passait devant et le faisait descendre d'une ligne.
+- `tcLignesBandeSemaine(jours, evenementsDuJour, reperesDuJour)` (pure) : les événements sur plusieurs jours sont posés
+  d'abord, par ordre de début (puis le plus long), chacun sur la première ligne libre sur TOUS ses jours — il garde la
+  même ligne du premier au dernier jour ; les fêtes (deux au plus, puis « +n ») et les événements d'un seul jour
+  remplissent ensuite les lignes libres de leur jour, jamais au-dessus. Une ligne occupée un autre jour par un voyage
+  est rendue par un espace invisible de même hauteur (`.tc-chip-evt` caché) pour garder l'alignement. `renderWeek`
+  calcule la bande pour la semaine entière, puis rend chaque colonne ligne par ligne ; rendu des fêtes, « +n »,
+  pastilles d'événements et en-tête cliquable inchangés.
+- Vue Mois : pas de bande par lignes (pastilles dans la case du jour), rien à changer.
+- Suite `verif-bande-semaine` (semaine 46 : voyage 11→15 sur la même ligne les 5 jours, Armistice en dessous le 11,
+  rien de vide les 9 et 10 ; un 2e voyage, une fête un jour libre en haut, un espace réservé ; « +n » ; renderWeek),
+  dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission32-bande-semaine.png`.
+- Suites verif-premier-jour-semaine, verif-deplacer-au-doigt et verif-bloc-demi-case : extraction de tcLignesBandeSemaine (elles rejouent renderWeek).

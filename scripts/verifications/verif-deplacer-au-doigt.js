@@ -106,7 +106,7 @@ const noms = ['fmt', 'sameDay', 'isProClosed', 'escapeHTMLSafe', 'tcEvenementFin
   'tcEcrireDeplacementDoigt', 'tcMontrerDeplacement', 'tcCacherBarreDeplacement', 'tcAnnulerDeplacement', 'tcTerminerDeplacement',
   'tcDecalerVers', 'tcPreRemplirCreneau', 'tcRendreDeplacable', 'tcDeplacerDebut', 'tcDeplacerNettoyer', 'tcDeplacerSoulever',
   'tcDeplacerBouge', 'tcDeplacerLacher', 'tcDeplacerAbandon', 'tcDeplacerEtiquette', 'tcAvalerCliqueApresDeplacement', 'prevenirDecaler',
-  'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcDayShort', 'tcHauteurBloc', 'renderWeek', 'renderDay'];
+  'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcDayShort', 'tcHauteurBloc', 'tcLignesBandeSemaine', 'renderWeek', 'renderDay'];
 vm.runInContext('var TC_BLOC_HAUTEUR_HEURE = 42;', ctx);
 noms.forEach((n) => {
   const src = extraire(n);

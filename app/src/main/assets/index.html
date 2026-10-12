@@ -4631,6 +4631,43 @@ function tcHauteurBloc(vue, dureeMin) {
   return { px: Math.max(dureeMin * parMin - marge, TC_BLOC_HAUTEUR_HEURE), court: false };
 }
 
+/**
+ * La bande « toute la journee » d une semaine, ligne par ligne (mission 32, 12/10). Les evenements sur plusieurs
+ * jours sont poses d abord, par ordre de debut (puis le plus long), chacun sur la premiere ligne libre sur TOUS ses
+ * jours : il garde la meme ligne du premier au dernier jour. Les fetes (deux au plus, puis « +n ») et les evenements
+ * d un seul jour remplissent ensuite les lignes libres de leur jour, jamais au-dessus. Retourne, pour chaque jour,
+ * le tableau des lignes : { type: 'evt', e } | { type: 'fete', r } | { type: 'reste', n } | null (ligne vide ce jour-la).
+ */
+function tcLignesBandeSemaine(jours, evenementsDuJour, reperesDuJour) {
+  const lignes = jours.map(function () { return []; });
+  const pris = jours.map(function () { return {}; });
+  const vus = {};
+  const multi = [];
+  jours.forEach(function (j, i) {
+    (evenementsDuJour(j) || []).forEach(function (e) {
+      if (tcEvenementFin(e) === e.date) return;
+      const cle = e.id || (e.title + '|' + e.date);
+      if (vus[cle]) { vus[cle].fin = i; return; }
+      vus[cle] = { e: e, debut: i, fin: i };
+      multi.push(vus[cle]);
+    });
+  });
+  multi.sort(function (a, b) { return a.debut - b.debut || (b.fin - b.debut) - (a.fin - a.debut) || String(a.e.title).localeCompare(String(b.e.title)); });
+  multi.forEach(function (m) {
+    let r = 0;
+    for (;;) { let ok = true; for (let i = m.debut; i <= m.fin; i++) { if (pris[i][r]) { ok = false; break; } } if (ok) break; r++; }
+    for (let i = m.debut; i <= m.fin; i++) { pris[i][r] = true; lignes[i][r] = { type: 'evt', e: m.e }; }
+  });
+  jours.forEach(function (j, i) {
+    const poser = function (item) { let r = 0; while (pris[i][r]) r++; pris[i][r] = true; lignes[i][r] = item; };
+    const fetes = reperesDuJour(j) || [];
+    fetes.slice(0, 2).forEach(function (f) { poser({ type: 'fete', r: f }); });
+    if (fetes.length > 2) poser({ type: 'reste', n: fetes.length - 2 });
+    (evenementsDuJour(j) || []).forEach(function (e) { if (tcEvenementFin(e) === e.date) poser({ type: 'evt', e: e }); });
+  });
+  return lignes.map(function (l) { const out = []; for (let r = 0; r < l.length; r++) out.push(l[r] || null); return out; });
+}
+
 function renderWeek() {
   const header = document.getElementById('weekHeader');
   const body = document.getElementById('weekBody');
@@ -4640,6 +4677,10 @@ function renderWeek() {
   const wd = tcDecalageSemaine(d0);
   d0.setDate(d0.getDate()-wd);
   const weekDates = [];
+  // Bande « toute la journee » : un evenement sur plusieurs jours garde la meme ligne tous les jours (mission 32).
+  const joursISO = [];
+  for (let i = 0; i < 7; i++) { const dj = new Date(d0); dj.setDate(d0.getDate() + i); joursISO.push(fmt(dj)); }
+  const bande = tcLignesBandeSemaine(joursISO, function (j) { return tcEvenementsDuJour(j, true); }, tcReperesDuJour);
   for (let i=0; i<7; i++) {
     const d = new Date(d0);
     d.setDate(d0.getDate()+i);
@@ -4658,27 +4699,37 @@ function renderWeek() {
     // est etroite, le texte est donc petit et coupe si besoin — mais il
     // reste lisible, et la journee entiere s ouvre au toucher.
     const fetes = tcReperesDuJour(fmt(d));
-    fetes.slice(0, 2).forEach(function (r) {
-      const chip = document.createElement('div');
-      chip.style.cssText = 'margin:2px 2px 0; padding:1px 3px; border-radius:4px;'
-        + ' font-size:8.5px; font-weight:700; line-height:1.25; text-align:center;'
-        + ' overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'
-        + ' background:' + r.couleur + '; color:#fff;';
-      chip.title = r.nom;
-      chip.textContent = r.nom;
-      col.appendChild(chip);
-    });
-    if (fetes.length > 2) {
-      const reste = document.createElement('div');
-      reste.style.cssText = 'font-size:8px; color:var(--text-sec); text-align:center; margin-top:1px;';
-      reste.textContent = '+' + (fetes.length - 2);
-      col.appendChild(reste);
-    }
-
-    // Journees entieres et periodes : dans l'en-tete, au-dessus des
-    // heures, la ou les reperes s'affichent deja. La colonne est
-    // etroite, le titre est donc coupe — il reste lisible au toucher.
-    tcEvenementsDuJour(fmt(d), true).forEach(function (e) {
+    bande[i].forEach(function (slot) {
+      if (!slot) {
+        // Ligne occupee un autre jour par un evenement sur plusieurs jours : un espace de meme hauteur, pour que
+        // ce qui suit reste en dessous.
+        const vide = document.createElement('div');
+        vide.className = 'tc-chip-evt';
+        vide.style.visibility = 'hidden';
+        vide.textContent = '\u00a0';
+        col.appendChild(vide);
+        return;
+      }
+      if (slot.type === 'fete') {
+        const r = slot.r;
+        const chip = document.createElement('div');
+        chip.style.cssText = 'margin:2px 2px 0; padding:1px 3px; border-radius:4px;'
+          + ' font-size:8.5px; font-weight:700; line-height:1.25; text-align:center;'
+          + ' overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'
+          + ' background:' + r.couleur + '; color:#fff;';
+        chip.title = r.nom;
+        chip.textContent = r.nom;
+        col.appendChild(chip);
+        return;
+      }
+      if (slot.type === 'reste') {
+        const reste = document.createElement('div');
+        reste.style.cssText = 'font-size:8px; color:var(--text-sec); text-align:center; margin-top:1px;';
+        reste.textContent = '+' + slot.n;
+        col.appendChild(reste);
+        return;
+      }
+      const e = slot.e;
       const chip = document.createElement('div');
       chip.className = 'tc-chip-evt';
       tcAppliquerCouleurEvenement(chip, e.cat);

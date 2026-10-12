@@ -60,11 +60,11 @@ vm.createContext(ctx);
 const morceaux = [
   extraireConst('MONTHS'), extraireConst('DAYS_FULL'), extraireConst('DAYS_SHORT'), extraireConst('TC_PREMIERS_JOURS'), extraireConst('TC_MOIS_COURTS'),
   ['escapeHTMLSafe', 'tcDayShort', 'fmt', 'sameDay', 'isProClosed', 'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcJoursEnOrdre',
-   'tcLundiDeLaSemaine', 'tcNomPremierJour', 'getISOWeek', 'tcISO', 'tcPanneauMoisHTML', 'renderWeek', 'renderMonth',
+   'tcLundiDeLaSemaine', 'tcNomPremierJour', 'getISOWeek', 'tcISO', 'tcEvenementFin', 'tcLignesBandeSemaine', 'tcPanneauMoisHTML', 'renderWeek', 'renderMonth',
    'applyPremierJourSemaine', 'savePreference'].map(extraire).join('\n'),
 ];
 ['MONTHS', 'DAYS_FULL', 'DAYS_SHORT', 'TC_PREMIERS_JOURS', 'TC_MOIS_COURTS'].forEach((n, i) => { if (!morceaux[i]) { ko++; console.log('  KO  constante introuvable : ' + n); } });
-['escapeHTMLSafe', 'tcDayShort', 'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcJoursEnOrdre', 'tcLundiDeLaSemaine', 'tcNomPremierJour', 'tcPanneauMoisHTML', 'renderWeek', 'renderMonth', 'applyPremierJourSemaine']
+['escapeHTMLSafe', 'tcDayShort', 'tcPremierJourSemaine', 'tcDecalageSemaine', 'tcJoursEnOrdre', 'tcLundiDeLaSemaine', 'tcNomPremierJour', 'tcEvenementFin', 'tcLignesBandeSemaine', 'tcPanneauMoisHTML', 'renderWeek', 'renderMonth', 'applyPremierJourSemaine']
   .forEach((n) => { if (!extraire(n)) { ko++; console.log('  KO  fonction introuvable : ' + n); } });
 try {
   vm.runInContext(morceaux.filter(Boolean).join('\n').replace(/^const /gm, 'var '), ctx);
