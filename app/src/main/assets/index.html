@@ -11664,6 +11664,7 @@ function tcSansNotesInternes(reply) {
   let prose = bloc ? r.replace(bloc[0], '\u0000') : r;
   const NOTE = /\[[^\]\n]*(?:proposition d.agenda|agenda r[ée]el|fait foi)[^\]\n]*\]/gi;
   const vues = {};
+  let derniere = '';
   prose = prose.split('\n').filter(function (ligne) {
     // Une ligne qui n etait qu une note interne disparait avec elle ; une note au milieu d une ligne est retiree.
     const t = ligne.trim();
@@ -11671,9 +11672,15 @@ function tcSansNotesInternes(reply) {
     if (NOTE.test(t) && !t.replace(NOTE, '').trim()) { NOTE.lastIndex = 0; return false; }
     NOTE.lastIndex = 0;
     if (/^✅\s*C[’']est not[ée]\s*:/.test(t) && /ajout[ée]/.test(t)) return false;
+    // Repetition retiree seulement si la ligne est identique a la precedente (« Oui. / Oui. ») ou si c est une phrase
+    // longue deja vue (la question reposee) : jamais un fait d une liste (« Dentiste 10h » lundi ET mardi).
     const cle = t.toLowerCase();
-    if (vues[cle]) return false;
+    const fait = /^[-•*·]/.test(t) || /\b\d{1,2}\s?h(?:\d{2})?\b/.test(t) || /^[-=_]{2,}$/.test(t);   // puce, heure, separateur : jamais retire
+    const longue = t.length >= 30 && !fait;
+    if (cle === derniere && !fait) return false;
+    if (longue && vues[cle]) return false;
     vues[cle] = true;
+    derniere = cle;
     return true;
   }).map(function (ligne) { return ligne.replace(NOTE, '').replace(/  +/g, ' '); }).join('\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   r = bloc ? prose.replace('\u0000', bloc[0]) : prose;
@@ -13743,7 +13750,7 @@ async function tcRepondreDeplacement(text) {
  * rendez-vous doit etre la liste relue a chaque message.
  */
 function tcHistoriquePourIA() {
-  const liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
+  let liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
     // Les bulles d application (accueil, « C'est noté », question de suite remise par la page) ne partent pas :
     // le modele les prenait pour ses propres mots et les recopiait (mission 34).
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && !m.appText && !m._app)
@@ -13761,6 +13768,17 @@ function tcHistoriquePourIA() {
         ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, '').replace(/\n{3,}/g, '\n\n').trim()
         : String(m.content || '')
     }));
+  // Un message d assistant qui n etait qu une carte est vide : il ne part pas (les API refusent un contenu vide) ;
+  // deux messages de meme role qui se suivent (une bulle d application retiree entre eux) sont fusionnes (mission 34).
+  const fusion = [];
+  liste.forEach(function (m) {
+    const c = String(m.content || '').trim();
+    if (!c) return;
+    const prec = fusion[fusion.length - 1];
+    if (prec && prec.role === m.role) prec.content = prec.content + '\n' + c;
+    else fusion.push({ role: m.role, content: c });
+  });
+  liste = fusion;
   // Charly peut parler le premier : l'API veut un message utilisateur en tete.
   if (liste.length && liste[0].role === 'assistant') liste.unshift({ role: 'user', content: '(début de la conversation)' });
   return liste;
