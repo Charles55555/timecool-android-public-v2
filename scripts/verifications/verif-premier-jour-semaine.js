@@ -256,7 +256,8 @@ const DEPARTS = [
 
 /* ---- Le numero de semaine ISO sous le titre ne change jamais ---- */
 titre('Numero de semaine ISO (sous le titre du mois)');
-const exprBadge = (page.match(/wnBadge\.textContent = ([^;]+);/) || [])[1];
+// Depuis la mission 26, wnBadge porte « Semaine N · 🌍 fuseau » ; le numero de semaine se calcule dans « const semaine = … ».
+const exprBadge = (page.match(/const semaine = ('Semaine ' \+ getISOWeek\([^;]+);/) || [])[1];
 verifie('l\'expression du numero de semaine est trouvee', !!exprBadge);
 function badge(vd, p) { regle(p); ctx.viewDate = new Date(vd); return vm.runInContext(exprBadge, ctx); }
 verifie('lundi 5 octobre 2026 : semaine 41 avec les trois reglages (dimanche = 41, la semaine du 4 au 10)', badge(new Date(2026, 9, 5), 1) === 'Semaine 41' && badge(new Date(2026, 9, 5), 0) === 'Semaine 41' && badge(new Date(2026, 9, 5), 6) === 'Semaine 41');

@@ -1636,3 +1636,18 @@ mobile vers le nouvel appareil.
 - Suite `verif-saisie-charly` (textarea factice 14 px / 20 px : 1, 2, 5 lignes → 43, 63, 83 px ; défilement interne à
   partir de la 4e ligne ; place en bas = barre + 12 ; position gardée si l'utilisateur lisait plus haut), dans
   verifier.sh ; rouge sur la page d'avant. Capture 390×844 avec 5 lignes saisies : `captures/mission35-saisie-longue.png`.
+
+## 12/10/2026 (session Codeur) — Ligne « Semaine 42 · 🌍 GMT+02 · Europe/Paris » (mission 26)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Demande (Charles) : sous la ligne du mois, les deux lignes « Semaine 42 » et « 🌍 GMT+02 · Europe/Paris » deviennent
+  UNE ligne centrée (même police, même gris) ; sur 320 px le fuseau se raccourcit en « GMT+02 » ; la ligne « 📍 agenda
+  secondaire » reste au-dessus ; rien d'autre ne bouge.
+- `tcLigneSemaineEtFuseau(semaine, fuseau, largeur)` (pure) compose la ligne ; en vue Semaine, `#weekNumberBadge` la
+  porte et `#timezoneBadge` se cache ; hors vue Semaine, l'inverse (comme avant). `updateTimezoneBadge` reste la source
+  du texte du fuseau, et il est désormais appelé AVANT la ligne de semaine (sinon la première ligne était sans fuseau).
+- Suite `verif-ligne-semaine` (390 px, 320 px, sans fuseau, fuseau à plusieurs segments ; bloc d'affichage ; styles),
+  dans verifier.sh ; rouge sur la page d'avant. Capture 390×844 : `captures/mission26-ligne-semaine.png`.
+- Suite `verif-premier-jour-semaine` adaptée : elle lisait `wnBadge.textContent = …` pour tester le numéro de semaine ; elle lit
+  désormais le calcul `const semaine = …` (même valeur, mêmes 400 jours).

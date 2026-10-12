@@ -4218,6 +4218,13 @@ function getDeviceTimezoneInfo() {
   }
 }
 
+/** « Semaine 42 · 🌍 GMT+02 · Europe/Paris » ; sur un ecran etroit (≤ 340 px), le nom du fuseau tombe (mission 26). */
+function tcLigneSemaineEtFuseau(semaine, fuseau, largeur) {
+  let f = String(fuseau || '').trim();
+  if (f && largeur && largeur <= 340) f = f.replace(/\s*·\s*[A-Za-z_]+\/[A-Za-z_\/]+\s*$/, '');
+  return [String(semaine || '').trim(), f].filter(Boolean).join(' · ');
+}
+
 function updateTimezoneBadge() {
   const badge = document.getElementById('timezoneBadge');
   const info = getDeviceTimezoneInfo();
@@ -4409,17 +4416,22 @@ function render() {
   } catch (e) { console.warn('Panneau du mois :', e); }
 
   // Numéro de semaine — affiché uniquement en vue Semaine, sous le titre du mois
+  updateTimezoneBadge();
+
   const wnBadge = document.getElementById('weekNumberBadge');
   if (wnBadge) {
+    const tzBadge = document.getElementById('timezoneBadge');
     if (currentView === 'week') {
-      wnBadge.textContent = 'Semaine ' + getISOWeek(tcLundiDeLaSemaine(new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate() - tcDecalageSemaine(viewDate))));
+      // Une seule ligne centree, semaine et fuseau (mission 26) : le badge du fuseau se tait pendant ce temps.
+      const semaine = 'Semaine ' + getISOWeek(tcLundiDeLaSemaine(new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate() - tcDecalageSemaine(viewDate))));
+      wnBadge.textContent = tcLigneSemaineEtFuseau(semaine, tzBadge ? tzBadge.textContent : '', typeof window !== 'undefined' ? window.innerWidth : 0);
       wnBadge.style.display = 'block';
+      if (tzBadge) tzBadge.style.display = 'none';
     } else {
       wnBadge.style.display = 'none';
+      if (tzBadge) tzBadge.style.display = '';
     }
   }
-
-  updateTimezoneBadge();
 
   if (currentView==='week') renderWeek();
   else if (currentView==='month') renderMonth();
