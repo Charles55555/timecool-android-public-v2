@@ -45,7 +45,7 @@ const f1 = feuilles[feuilles.length - 1].innerHTML;
 verifie('feuille Confidentialité : la phrase, « Contacts bloqués (2) », aucune autre ligne', f1.indexOf(PHRASE) > 0 && /Contacts bloqués \(2\)/.test(f1) && (f1.match(/msg-sheet-i/g) || []).length === 1 && /openContactsBloques\(\)/.test(f1));
 ctx.openContactsBloques();
 const f2 = feuilles[feuilles.length - 1];
-verifie('liste : Bernard Petit puis Zoé Martin, un bouton « Débloquer » chacun, le mot d explication', /Bernard Petit[\s\S]*Zoé Martin/.test(f2.innerHTML) && (f2.innerHTML.match(/✅ Débloquer/g) || []).length === 2 && /tcDebloquerContact\('c1'\)/.test(f2.innerHTML) && /ne peut plus te demander de rendez-vous/.test(f2.innerHTML) && f2.id === 'contactsBloquesOv');
+verifie('liste : Bernard Petit puis Zoé Martin, un bouton « Débloquer » chacun, le mot d explication', /Bernard Petit[\s\S]*Zoé Martin/.test(f2.innerHTML) && (f2.innerHTML.match(/✅ Débloquer/g) || []).length === 2 && /tcDebloquerContact\('c1'\)/.test(f2.innerHTML) && /Ses demandes de rendez-vous ne t’arrivent plus, et cette personne ne le sait pas\./.test(f2.innerHTML) && !/t’écrire|t'écrire/.test(f2.innerHTML) && f2.id === 'contactsBloquesOv');   // un contact bloque PEUT ecrire : phrase vraie seulement
 ctx.tcDebloquerContact('c1');
 verifie('Débloquer Zoé : blocked = false, sauve (saveContacts → synchro), page Contacts redessinee, toast, liste redessinee avec Bernard seul', ctx.contactsList[0].blocked === false && sauves === 1 && rendus === 1 && /Zoé Martin débloqué/.test(toasts.join(' ')) && f2._enleve === true && /Bernard Petit/.test(feuilles[feuilles.length - 1].innerHTML) && !/Zoé/.test(feuilles[feuilles.length - 1].innerHTML));
 ctx.tcDebloquerContact('c3');

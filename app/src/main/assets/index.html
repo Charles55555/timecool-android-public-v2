@@ -6874,7 +6874,7 @@ function openContactsBloques() {
     : '<div style="padding:0 20px 18px; font-size:13px; color:var(--text-sec);">Aucun contact bloqué.</div>';
   ov.innerHTML = '<div class="msg-sheet" style="max-height:80vh; display:flex; flex-direction:column;">' +
     '<div class="msg-sheet-h">🚫 Contacts bloqués</div>' +
-    (liste.length ? '<div style="padding:0 20px 10px; font-size:12px; color:var(--text-sec); line-height:1.5;">Un contact bloqué ne peut plus te demander de rendez-vous ni t’écrire.</div>' : '') +
+    (liste.length ? '<div style="padding:0 20px 10px; font-size:12px; color:var(--text-sec); line-height:1.5;">Ses demandes de rendez-vous ne t’arrivent plus, et cette personne ne le sait pas.</div>' : '') +
     '<div style="overflow-y:auto; flex:1;">' + lignes + '</div>' +
     '</div>';
   document.body.appendChild(ov);

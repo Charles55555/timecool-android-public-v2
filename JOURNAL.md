@@ -1808,3 +1808,8 @@ mobile vers le nouvel appareil.
   la page d'avant. Capture 390×844 : `captures/mission27a-contacts-bloques.png`.
 - Hors périmètre, noté : `toggleContactBlock` (page Contacts) écrit le stockage sans `saveContacts` (la synchro part au tour
   suivant, pas tout de suite). 27b (convocations réelles, API) suit.
+- Correction après examen (12/10) : la liste disait « ne peut plus te demander de rendez-vous ni t’écrire » ; or un contact
+  bloqué peut encore écrire aujourd'hui (`POST /messages/envoyer` ne regarde pas le blocage, seules ses demandes de
+  rendez-vous sont retenues en silence). Phrase vraie, celle de la fiche contact : « Ses demandes de rendez-vous ne
+  t’arrivent plus, et cette personne ne le sait pas. » Décision du chef pour la 27b : le serveur retiendra aussi les
+  messages d'un bloqué (200 pour lui, rien chez l'autre) ; la phrase dira alors « ne peut plus t’écrire ni prendre rendez-vous ».
