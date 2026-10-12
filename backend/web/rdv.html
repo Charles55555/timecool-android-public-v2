@@ -124,16 +124,26 @@ function getRangDemande() {
   return (v >= 1 && v <= 3) ? v : null;
 }
 
+/* Le creneau selectionne par un toucher (index dans slots), ou -1. Un toucher ne confirme jamais : il met en avant,
+   le bouton « Confirmer ce créneau » envoie (mission 37). */
+let _choix = -1;
+function selectionnerCreneau(i) {
+  if (!_currentData || !_currentData.slots || !_currentData.slots[i]) return;
+  _choix = i;
+  renderSlots(_currentData);
+}
+
 function renderSlots(data, avertissement) {
   const el = document.getElementById('content');
   const rangVoulu = getRangDemande();
-  const vise = data.slots.findIndex(function (s) { return s.rang === rangVoulu; });
+  // Le creneau touche l emporte ; sinon celui que le lien designe (/rdv/<jeton>?c=2).
+  const vise = (_choix >= 0 && data.slots[_choix]) ? _choix : data.slots.findIndex(function (s) { return s.rang === rangVoulu; });
 
   let html = (avertissement ? '<div class="lead" style="color:#b3261e;">' + escapeHTML(avertissement) + '</div>' : '')
     + '<div class="lead"><b>' + escapeHTML(data.organizerName) + '</b> te propose un rendez-vous. '
     + (vise >= 0
-        ? 'Confirme le créneau que tu as choisi, ou prends-en un autre :'
-        : 'Choisis le créneau qui te convient :')
+        ? 'Confirme le créneau que tu as choisi, ou touches-en un autre :'
+        : 'Touche le créneau qui te convient, puis confirme-le :')
     + '</div>';
 
   data.slots.forEach(function(s, i) {
@@ -143,14 +153,14 @@ function renderSlots(data, avertissement) {
        ne doit pas se confirmer parce qu'un robot est passe lire la
        page. Une pression de plus, volontaire. */
     const choisi = (i === vise);
-    html += '<div class="slot' + (choisi ? ' vise' : '') + '" onclick="chooseSlot(' + i + ')">' +
+    html += '<div class="slot' + (choisi ? ' vise' : '') + '" onclick="selectionnerCreneau(' + i + ')">' +
       '<span class="ic">' + (choisi ? '✅' : '🕐') + '</span>' +
       '<div><div class="label">' + escapeHTML(s.label) + '</div><div class="hh">' + hh + '</div></div>' +
       '</div>';
   });
 
   if (vise >= 0) {
-    html += '<button class="ok-btn" onclick="chooseSlot(' + vise + ')">Confirmer ce rendez-vous</button>';
+    html += '<button class="ok-btn" onclick="chooseSlot(' + vise + ')">Confirmer ce créneau</button>';
   }
   html += '<button class="none-btn" onclick="chooseSlot(-1)">Aucun de ces créneaux ne me convient</button>';
   html += '<div class="foot">🔒 Ce lien est personnel et à usage unique.<br>Aucune inscription, aucune donnée conservée au-delà de ta réponse.</div>';
@@ -198,6 +208,7 @@ async function chooseSlot(idx) {
     if (e && e.status === 409 && idx >= 0) {
       // Ce créneau vient d'être pris : le lien n'est pas consommé, on propose les autres.
       _currentData.slots.splice(idx, 1);
+      _choix = -1;
       if (_currentData.slots.length > 0) {
         renderSlots(_currentData, 'Ce créneau vient d’être pris. Choisis-en un autre :');
       } else {

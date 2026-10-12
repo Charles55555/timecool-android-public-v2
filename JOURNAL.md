@@ -1919,3 +1919,18 @@ mobile vers le nouvel appareil.
   (retire celles dont le groupe n'existe plus, enregistre) appelée par `tcPoserGroupes` (groupe disparu ailleurs) et par
   `deleteGroupFromList` (suppression ici, qui demande aussi la synchro tout de suite). À l'ouverture d'un groupe, seules
   SES convocations sont relues (`tcRafraichirToutesConvocations(true, groupMsgId)`). Cas ajoutés à `verif-groupes-sync`.
+
+## 12/10/2026 (session Codeur) — Page du lien reçu : toucher sélectionne, un bouton confirme (mission 37)
+
+**Codé et commité sur main, PAS publié.** Page publique `backend/web/rdv.html` seulement (servie par api.timecool.fr/rdv/… :
+à mettre en ligne par le chef de projet avec l'API ; aucune route ne change).
+
+- Demande (chef de projet) : sur la page du lien reçu, toucher un créneau le sélectionne, un bouton « Confirmer ce
+  créneau » confirme. Avant : le premier toucher envoyait la réponse (sauf le créneau désigné par `?c=`, déjà mis en avant).
+- `_choix` (créneau touché) et `selectionnerCreneau(i)` : le toucher met en avant (✅, cadre bleu) et redessine ; `renderSlots`
+  prend le créneau touché, sinon celui que le lien désigne ; le bouton « Confirmer ce créneau » (ex « Confirmer ce
+  rendez-vous ») n'apparaît qu'avec un créneau mis en avant et lui seul appelle `chooseSlot` ; « Aucun de ces créneaux ne
+  me convient » reste en un geste ; textes « Touche le créneau qui te convient, puis confirme-le : » / « Confirme le
+  créneau que tu as choisi, ou touches-en un autre : » ; après un créneau pris entre-temps (409), la sélection repart de zéro.
+- Suite `verif-lien-rdv` (page + simulation : départ, toucher, autre toucher, index hors liste, lien `?c=3`, toucher qui
+  l'emporte) dans verifier.sh (`lancer verif-lien-rdv backend/web/rdv.html`) ; rouge sur la page d'avant.

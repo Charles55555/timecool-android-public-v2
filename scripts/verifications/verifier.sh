@@ -129,6 +129,7 @@ lancer verif-commentaires "$PAGE" "$API" backend/sql/011_commentaires.sql
 lancer verif-convocations "$PAGE" "$API" backend/sql/012_convocations.sql
 lancer verif-import-ics "$PAGE"
 lancer verif-groupes-sync "$PAGE"
+lancer verif-lien-rdv backend/web/rdv.html
 lancer verif-contraste-sombre "$PAGE"
 lancer verif-reglages-compte-simule "$PAGE"
 lancer verif-titre-agenda "$PAGE"
