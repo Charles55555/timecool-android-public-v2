@@ -30,7 +30,7 @@ vm.createContext(ctx);
 const items = page.match(/const menuItems = \{[\s\S]*?\n\};/);
 if (items) vm.runInContext(items[0], ctx); else { ko++; console.log('  KO  menuItems introuvable'); }
 vm.runInContext('let _isolatedCalendarName = null; let _isolatedCalendarId = null; globalThis.isole = () => _isolatedCalendarId; globalThis.nomIsole = () => _isolatedCalendarName;', ctx);
-['getCalendarById', 'isCalendarVisible', 'getVisibleCalendarIds', 'isolateCalendarView', 'updateHeaderAgendaLabel', 'tcOuvrirMonAgenda', 'renderMenu']
+['getCalendarById', 'isCalendarVisible', 'getVisibleCalendarIds', 'isolateCalendarView', 'updateHeaderAgendaLabel', 'tcOuvrirMonAgenda', 'tcPastilleAgendaHTML', 'renderMenu']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 

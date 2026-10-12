@@ -1934,3 +1934,23 @@ mobile vers le nouvel appareil.
   créneau que tu as choisi, ou touches-en un autre : » ; après un créneau pris entre-temps (409), la sélection repart de zéro.
 - Suite `verif-lien-rdv` (page + simulation : départ, toucher, autre toucher, index hors liste, lien `?c=3`, toucher qui
   l'emporte) dans verifier.sh (`lancer verif-lien-rdv backend/web/rdv.html`) ; rouge sur la page d'avant.
+
+## 12/10/2026 (session Codeur) — Agendas : l'interrupteur afficher / masquer par agenda revient (mission 38)
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Demande (chef de projet) : remettre l'interrupteur afficher / masquer par agenda (pastille dans « Mes agendas » du menu et
+  dans « Créer un nouvel agenda »), en cohérence avec le texte « l'activer ou le désactiver à tout moment » ; « Mon agenda »
+  ne peut pas être masqué ; accord « 1 rendez-vous sera transféré ».
+- Constat : `isCalendarVisible` respectait déjà `visible`, `toggleCalendarVisibility` existait sans commande, et
+  `navigate('calendar')` remettait tout visible de force (vestige de l'ancienne isolation, qui n'écrit plus `visible`).
+- `tcPastilleAgendaHTML(cal, taille)` : la pastille de couleur devient l'interrupteur (pleine = affiché, cercle vide =
+  masqué ; `role="switch"`, titre « Masquer / Afficher cet agenda » ; un toucher bascule sans ouvrir l'agenda,
+  `stopPropagation`). Dans le menu « Mes agendas » (14 px) et dans « Créer un nouvel agenda » (18 px) ; un agenda masqué
+  est grisé avec « (masqué) » ; le nom ouvre toujours l'agenda seul. `toggleCalendarVisibility` refuse « Mon agenda » (un
+  mot le dit). La remise à zéro de `navigate('calendar')` est retirée : un agenda masqué à la main le reste. Mot
+  d'explication complété sur la page ; « 1 rendez-vous sera transféré » au singulier.
+- Suite `verif-agendas-interrupteur` (page ; simulation : pastille pleine / vide, masquer → rendez-vous cachés, remontrer,
+  « Mon agenda » refusé, accord singulier / pluriel) dans verifier.sh ; rouge sur la page d'avant. Captures 390×844 :
+  `captures/mission38-menu.png`, `captures/mission38-agendas.png`.
+- Suites `verif-menu-agendas` et `verif-mon-agenda` adaptées (elles chargent `tcPastilleAgendaHTML`) : mêmes vérifications.

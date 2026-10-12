@@ -3902,8 +3902,8 @@ function renderMenu() {
     </div>
     ${secondaires.map(cal => `
       <div onclick="isolateCalendarView('${cal.id}')" style="display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer; user-select:none;">
-        <span style="display:inline-block; width:14px; height:14px; border-radius:50%; background:${cal.color}; flex-shrink:0; margin-left:2px;"></span>
-        <span style="font-size:14px; color:var(--text); flex:1; font-weight:600;">${escapeHTMLSafe(cal.name)}</span>
+        <span style="margin-left:2px; display:inline-flex;">${tcPastilleAgendaHTML(cal, 14)}</span>
+        <span style="font-size:14px; color:${cal.visible === false ? 'var(--text-sec)' : 'var(--text)'}; flex:1; font-weight:600;">${escapeHTMLSafe(cal.name)}${cal.visible === false ? ' <span style="font-size:11px; font-weight:400;">(masqué)</span>' : ''}</span>
       </div>
     `).join('')}
   `;
@@ -4100,13 +4100,8 @@ function navigate(page) {
     _isolatedCalendarName = null;
   }
   updateHeaderAgendaLabel();
-  if (page === 'calendar' && !_isolatedCalendarName) {
-    // Navigation normale (ex. clic sur "Mon agenda") : s'assurer que rien ne reste masqué
-    // par une isolation précédente qu'on aurait oublié de lever.
-    let changed = false;
-    customCalendars.forEach(c => { if (c.visible === false) { c.visible = true; changed = true; } });
-    if (changed) saveCustomCalendars();
-  }
+  // L isolation d un agenda n ecrit plus visible:false (filtre d affichage seulement) : la remise a zero d ici, qui
+  // effacait aussi un agenda masque a la main par sa pastille, n a plus lieu d etre (mission 38).
   if (page==='calendar') {
     // Positionner sur le dernier RDV ajouté si disponible
     if (window._lastAddedEventDate) {
@@ -19984,9 +19979,9 @@ function renderCalendarsPage() {
   customCalendars.filter(cal => !cal.isDefault).forEach(cal => {
     html += `
       <div style="display:flex; align-items:center; gap:12px; padding:13px 14px; background:#fff; border:1px solid var(--border); border-radius:12px; margin-bottom:8px;">
+        ${tcPastilleAgendaHTML(cal, 18)}
         <div onclick="isolateCalendarView('${cal.id}')" style="display:flex; align-items:center; gap:12px; flex:1; cursor:pointer;">
-          <div style="width:14px; height:14px; border-radius:50%; background:${cal.color}; flex-shrink:0;"></div>
-          <div style="font-size:14px; color:var(--text); font-weight:600;">${escapeHTMLSafe(cal.name)}</div>
+          <div style="font-size:14px; color:${cal.visible === false ? 'var(--text-sec)' : 'var(--text)'}; font-weight:600;">${escapeHTMLSafe(cal.name)}${cal.visible === false ? ' <span style="font-size:11px; font-weight:400;">(masqué)</span>' : ''}</div>
         </div>
         <button onclick="deleteCustomCalendar('${cal.id}')" style="background:none; border:none; color:var(--text-sec); font-size:15px; cursor:pointer; padding:6px;">🗑️</button>
       </div>
@@ -19994,16 +19989,26 @@ function renderCalendarsPage() {
   });
   html += `
     <div style="margin-top:14px; padding:12px 14px; background:#e8f0fe; border-radius:10px; font-size:11.5px; color:#1a3d6e; line-height:1.5;">
-      💡 Tape sur un agenda pour l'ouvrir seul dans ton calendrier — les autres restent en attente, rien n'est supprimé.
+      💡 Tape sur un agenda pour l'ouvrir seul dans ton calendrier — les autres restent en attente, rien n'est supprimé. Tape sur sa pastille pour l'afficher ou le masquer ; « Mon agenda » reste toujours affiché.
     </div>
     </div>
   `;
   c.innerHTML = html;
 }
 
+/** La pastille d un agenda : pleine quand il est affiche, vide (cercle) quand il est masque ; un toucher bascule (mission 38). */
+function tcPastilleAgendaHTML(cal, taille) {
+  const visible = cal.visible !== false;
+  const px = taille || 14;
+  return '<span role="switch" aria-checked="' + (visible ? 'true' : 'false') + '" title="' + (visible ? 'Masquer cet agenda' : 'Afficher cet agenda') + '"'
+    + ' onclick="event.stopPropagation(); toggleCalendarVisibility(\'' + escapeHTMLSafe(cal.id) + '\', ' + (visible ? 'false' : 'true') + ')"'
+    + ' style="display:inline-block; width:' + px + 'px; height:' + px + 'px; border-radius:50%; box-sizing:border-box; flex-shrink:0; cursor:pointer; border:2.5px solid ' + cal.color + '; background:' + (visible ? cal.color : 'transparent') + ';"></span>';
+}
 function toggleCalendarVisibility(id, on) {
   const cal = getCalendarById(id);
   if (!cal) return;
+  // « Mon agenda » ne se masque pas (mission 38).
+  if (cal.isDefault || cal.id === 'cal_default') { if (!on) showToast('« Mon agenda » reste toujours affiché'); return; }
   cal.visible = on;
   saveCustomCalendars();
   if (document.getElementById('calendarsListContent')) renderCalendarsPage();
@@ -20094,7 +20099,7 @@ async function deleteCustomCalendar(id) {
   if (!cal || cal.isDefault) return;
   const count = events.filter(e => e.calendarId === id).length;
   const msg = count > 0
-    ? 'Supprimer "' + cal.name + '" ? ' + count + ' rendez-vous seront transférés vers "Mon agenda".'
+    ? 'Supprimer "' + cal.name + '" ? ' + count + ' rendez-vous ' + (count > 1 ? 'seront transférés' : 'sera transféré') + ' vers "Mon agenda".'
     : 'Supprimer l\'agenda "' + cal.name + '" ?';
   if (!await tcConfirm(msg)) return;
   events.forEach(e => { if (e.calendarId === id) e.calendarId = 'cal_default'; });
