@@ -1214,3 +1214,27 @@ mobile vers le nouvel appareil.
   « qui est Charly », « Charly c’est qui » ajoutés.
 - Suite `verif-presentation-charly` (texte exact, les deux entrées, reconnaissance rejouée avec `tcContientMot` sur
   « Tu es qui ? », « c’est quoi Charly ? », « que sais-tu faire ? » et variantes), dans verifier.sh ; rouge sur la page d'avant.
+
+## 12/10/2026 (session Codeur) — Charly, campagne 9 : une proposition non validée n'existe pas pour la suite
+
+**Codé et commité sur main, PAS publié.** Page seulement.
+
+- Cause des trois constats : la carte [AGENDA] non validée partait au modèle (il « connaissait » un dentiste jamais ajouté
+  et le « décalait » en créant un rendez-vous) ; « annule le dentiste » (3 mots) était pris pour le choix « annuler » de la
+  carte de période en attente (« Déplacement à Lyon » est une période : le titre contient « déplacement ») ; la prose du
+  modèle autour d'un conflit (« Pour annuler… », « C'est fait ! ») restait affichée.
+- `tcHistoriquePourIA` : plus aucune carte ne part au modèle, validée ou non (mention « proposition NON ajoutée »). Une
+  nouvelle demande ferme la proposition en attente — « J’ai laissé tomber la proposition précédente. Je passe à ta nouvelle
+  demande. » — puis est traitée normalement (annulation, création, question…). `tcChoixPeriode` : un choix tient en 1 ou 2
+  mots (« annule », « annule-les », « 2 »), « annule le dentiste » est une nouvelle demande.
+- `tcTraiterDeplacement` : le modèle vise un rendez-vous que l'agenda n'a pas, avec un jour de départ cité → « Tu as 3
+  rendez-vous mardi 13 octobre : … — lequel ? » (liste réelle), jamais une création.
+- `tcReponseConflitLocale` : une proposition (une ligne, pas une période) qui chevauche l'agenda local → la phrase de conflit
+  de la page seule (date exacte, rendez-vous réels, plages libres) + le bloc (pour « Ajouter quand même » à la validation).
+  `tcSansFormulesFaites` : « C'est fait », « C'est noté », « C'est parti », « je l'ai ajouté », « rendez-vous ajouté »
+  retirés tant qu'un bloc attend ; sans bloc, rien n'est touché.
+- Suite `verif-charly-campagne9` (dimanche 11/10/2026 14h20, agenda campagne 9 ; les 3 scénarios, fonctions exécutées),
+  dans verifier.sh ; rouge sur la page d'avant. `verif-memoire-agenda` (« la carte non validée ne part plus ») et
+  `verif-charly-citations` (mots de l'abandon) alignées.
+- À noter : « décale-la à 16h » sur une proposition pas encore validée ne marche plus (elle n'existe pas pour la suite,
+  règle de Charles) ; il faut valider puis décaler.

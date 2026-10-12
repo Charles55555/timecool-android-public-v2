@@ -89,7 +89,7 @@ titre('Une carte pas encore validee reste lisible');
     { role: 'user', content: 'décale-la à 16h' }
   ];
   const texte = ctx.tcHistoriquePourIA().map((m) => m.content).join('\n');
-  verifie('la carte non validee part intacte', texte.indexOf('2026-10-16 | 11:00-13:00') > -1,
+  verifie('la carte non validee ne part plus non plus : une proposition non ajoutee n existe pas (mission 13, 12/10)', texte.indexOf('2026-10-16 | 11:00-13:00') < 0 && /NON ajoutee/.test(texte),
     'sinon le modele ne sait plus quoi decaler');
   verifie('et une carte validee est bien effacee, elle', (() => {
     ctx.charlyIA.history[1]._validated = true;

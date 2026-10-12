@@ -11463,6 +11463,45 @@ function tcRepondreObjetDonne(reply, texte, now) {
 }
 
 /**
+ * Une proposition (bloc d'une ligne) qui chevauche un rendez-vous de l'agenda local : la reponse devient la
+ * phrase de conflit de la page (date exacte, rendez-vous reels, plages libres du jour) suivie du bloc, sans la
+ * prose du modele (« Pour annuler… », « C'est fait ! »). Rien pour un deplacement (ses propres regles), une
+ * periode (voyage, journee entiere), ou un creneau libre. null sinon.
+ */
+function tcReponseConflitLocale(reply, texte, now, events, mode) {
+  const r = String(reply || '');
+  const bloc = r.match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
+  if (!bloc || tcEstDeplacement(texte)) return null;
+  const lignes = bloc[1].split('\n').filter(function (l) { return l.trim(); });
+  if (lignes.length !== 1) return null;
+  const m = lignes[0].match(/^\s*(\d{4})-(\d{2})-(\d{2})(?:\s*>\s*\d{4}-\d{2}-\d{2})?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|/);
+  if (!m) return null;
+  const debut = Number(m[4]) * 60 + Number(m[5]), fin = Number(m[6]) * 60 + Number(m[7]);
+  if (fin <= debut || fin - debut >= 20 * 60) return null;
+  const dateStr = m[1] + '-' + m[2] + '-' + m[3];
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  const duJour = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && tcEvenementCouvre(e, dateStr); }).sort(tcComparerEvenements);
+  const occupe = duJour.some(function (e) {
+    return !e.allDay && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
+  });
+  if (!occupe) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return tcPhraseConflitLocale(d, tcHeureCourte(debut), duJour, debut, fin) + '\n' + bloc[0];
+}
+
+/**
+ * Tant qu'un bloc n'est pas valide, rien n'est fait : « C'est fait ! », « C'est noté », « C'est parti », « je l'ai
+ * ajouté », « rendez-vous ajouté » sont retires de la prose (campagne 9, 12/10). Sans bloc, la reponse est laissee.
+ */
+function tcSansFormulesFaites(reply) {
+  const r = String(reply || '');
+  if (!/\[AGENDA\]/.test(r)) return reply;
+  const re = /(?:^|(?<=\s))(?:c[’']est (?:fait|not[ée]|parti|bon|dans (?:ton|l[’'])agenda)|je (?:l[’']|les )?ai (?:ajout[ée]s?|not[ée]s?)|rendez-vous (?:ajout[ée]|cr[ée][ée]))[^.!\n]*[.!]*\s*(?:😊|👍|✅|🎉)?\s*/gi;
+  const sans = r.replace(re, ' ').replace(/[ \t]{2,}/g, ' ').replace(/^ +| +$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  return sans || reply;
+}
+
+/**
  * La date en toutes lettres dans la prose de Charly est celle du bloc propose : « le mardi 15 octobre,
  * c'est note » avec un bloc du 13 devient « le mardi 13 octobre » (campagne 6, 11/10). Seule une mention
  * du MEME jour de la semaine est corrigee ; un bloc de plusieurs lignes est laisse tel quel.
@@ -13117,7 +13156,10 @@ function tcEstUneNouvelleDemande(text) {
  */
 function tcAbandonnerAttente(quoi) {
   const libelle = { annulation: 'l’annulation', deplacement: 'le déplacement', 'déplacement': 'le déplacement', ajout: 'l’ajout', proposition: 'la proposition' }[quoi] || 'la question';
-  charlyIA.history.push({ role: 'assistant', content: 'D’accord, je laisse tomber ' + libelle + ' qui attendait. Je passe à ta nouvelle demande.' });
+  const phrase = (quoi === 'ajout' || quoi === 'proposition')
+    ? 'J’ai laissé tomber la proposition précédente. Je passe à ta nouvelle demande.'
+    : 'D’accord, je laisse tomber ' + libelle + ' qui attendait. Je passe à ta nouvelle demande.';
+  charlyIA.history.push({ role: 'assistant', content: phrase });
 }
 
 function tcAnnulerSuppressionRdv() {
@@ -13228,7 +13270,15 @@ function tcAppliquerDeplacement(liste) {
 function tcTraiterDeplacement(msg, text) {
   if (!msg || msg.role !== 'assistant' || !tcEstDeplacement(text)) return false;
   const liste = tcDeplacementsProposes(msg);
-  if (!liste) return false;
+  if (!liste) {
+    // Le modele propose un rendez-vous qui n'existe pas (une proposition jamais ajoutee, par exemple) : avec un
+    // jour de depart dans la demande, la page demande lequel des rendez-vous reels ; jamais une creation (campagne 9).
+    const jours = tcJoursCites(text, new Date(), true);
+    if (!jours.length) return false;
+    msg._validated = true;
+    charlyIA.history.push({ role: 'assistant', content: tcQuestionRdvDuJour(jours, events, mode === 'pro' ? 'pro' : 'user') });
+    return true;
+  }
   // Le rendez-vous vise doit exister le jour dit (« mon rdv de mardi ») : sinon Charly demande lequel (campagne 5, 11/10).
   const question = tcDeplacementHorsJour(liste, text, new Date(), events, mode === 'pro' ? 'pro' : 'user');
   if (question) {
@@ -13329,8 +13379,12 @@ function tcHistoriquePourIA() {
       // dans l'agenda et peuvent en avoir ete retires. Une carte pas
       // encore validee est une proposition vivante -- « decale-la a 16h »
       // doit encore pouvoir la lire.
-      content: (m.role === 'assistant' && m._validated)
-        ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, "[proposition d'agenda faite a ce moment-la - l'agenda reel ci-dessus fait foi]")
+      // Aucune carte ne part, validee ou non : une proposition non ajoutee n'existe pas pour la suite (campagne 9,
+      // 12/10 : « decale mon rdv de mardi » s'appuyait sur un dentiste jamais ajoute). Seul l'agenda reel fait foi.
+      content: m.role === 'assistant'
+        ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, m._validated
+            ? "[proposition d'agenda faite a ce moment-la - l'agenda reel ci-dessus fait foi]"
+            : "[proposition d'agenda NON ajoutee - elle n'existe pas, l'agenda reel ci-dessus fait foi]")
         : String(m.content || '')
     }));
   // Charly peut parler le premier : l'API veut un message utilisateur en tete.
@@ -14065,6 +14119,10 @@ async function charlySendMessage() {
     reply = tcRepondreObjetDonne(reply, text, new Date()) || reply;
     reply = tcListeDuJourPourDeplacement(reply, text, new Date(), events, mode) || reply;
     reply = tcAccorderProseAuBloc(reply);
+    // Une proposition en conflit avec l'agenda local : la phrase de la page seule (date, rendez-vous reels, plages
+    // libres), le bloc reste pour « Ajouter quand meme » ; et jamais « C'est fait » tant que rien n'est ajoute (campagne 9).
+    reply = tcReponseConflitLocale(reply, text, new Date(), events, mode) || reply;
+    reply = tcSansFormulesFaites(reply);
 
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId});
@@ -17501,7 +17559,13 @@ function tcChoixPeriode(text) {
   const ctx = tcPeriodeContexte();
   if (!ctx) return null;
   const t = tcSansAccents(String(text || '')).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!t || t.split(' ').length > 3) return null;
+  // Un ou deux mots (« annule », « annule-les », « 2 ») : « annule le dentiste » est une NOUVELLE demande, pas le choix
+  // « annuler » de la carte (campagne 9, 12/10 : elle l'avalait, et rien ne se passait).
+  // Trois mots au plus, et seulement des mots du choix (« je les déplace », « annule-les », « rien ») :
+  // « annule le dentiste » porte un objet, c'est une nouvelle demande.
+  const mots = t.split(' ');
+  const MOTS_DU_CHOIX = /^(je|les|le|la|annule[rsz]?|deplace[rsz]?|decale[rsz]?|rien|garde[rsz]?|laisse[rsz]?|touche[rsz]?|ne|a|tout|ok|d|accord|1|2|3)$/;
+  if (!t || mots.length > 3 || !mots.every(function (w) { return MOTS_DU_CHOIX.test(w); })) return null;
   // L'ordre affiché diffère : contrainte (annuler, déplacer, rien) ; voyage (rien, annuler, déplacer).
   const ordre = ctx.contrainte ? ['annuler', 'deplacer', 'rien'] : ['rien', 'annuler', 'deplacer'];
   if (/^[123]$/.test(t)) return ordre[Number(t) - 1];
