@@ -1728,3 +1728,11 @@ mobile vers le nouvel appareil.
   verifier.sh ; rouge sur la page d'avant.
 - Suite `verif-charly-citations` adaptée : elle attendait `tcRdvNommeIntrouvable(…)` seul avant le modèle ; la ligne porte aussi
   `|| tcRdvViseIntrouvable(…)` (même vérification, forme élargie).
+- Corrections après examen (12/10) : (1) `tcRdvViseIntrouvable` se déclenchait sur un PRÉFIXE de verbe (« un déplacement à
+  Lyon », « un reportage photo », « décalage horaire », « avancement du projet ») et bloquait des créations avant le modèle ;
+  désormais le verbe CONJUGUÉ avec fin de mot (`tcVerbeConjugue('deplacement')` ou annul/supprim/effac/enlev/retir + e/er/
+  es/ez/ons), et « ajoute » / « mets » dans les mots creux. (2) `tcSansCarteApresQuestion` retirait la carte d'une demande
+  polie (« Peux-tu me mettre un rdv dentiste mardi à 15h ? ») ; désormais seule une question de CONSULTATION (quand, est-ce
+  que j'ai, suis-je libre, quels, combien, y a-t-il…) perd sa carte ; jamais « peux-tu / tu peux / je peux / pourrais-tu »,
+  ni une phrase qui porte un jour ET une heure. Cas ajoutés à la suite. À signaler : un rendez-vous existant nommé
+  autrement (« annule le médecin » avec « Dr. Martin » à l'agenda) donne le refus calme « Je ne trouve pas… » (sans danger).

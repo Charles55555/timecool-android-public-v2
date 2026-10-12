@@ -11744,10 +11744,12 @@ function tcListeDuJourPourDeplacement(reply, texte, now, events, mode) {
  * la page le dit elle-meme et rien n est fait — le modele ne confirme jamais une suppression inventee (mission 31).
  * null si la phrase n a pas de verbe d annulation / deplacement, ou ne nomme rien (« annule mon rdv de mardi »).
  */
-const TC_MOTS_VISEE_CREUX = /^(annul\w*|supprim\w*|effac\w*|enlev\w*|retir\w*|deplac\w*|decal\w*|report\w*|repouss\w*|avanc\w*|reprogramm\w*|boug\w*|chang\w*|modifi\w*|peux|pourrais|pouvez|pourriez|veux|voudrais|faut|merci|plait|rendez|vous|rdv|agenda|reunion|seance|consultation|aujourd|demain|hier|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|mois|matin|midi|soir|heure|heures|prochain|prochaine|dernier|derniere|plutot|meme|tout|tous|toute|toutes|celui|celle|cette|avec|chez|pour|dans|vers|jusqu|apres|avant|moment|creneau|horaire|jour|jours)$/;
+const TC_MOTS_VISEE_CREUX = /^(annul\w*|supprim\w*|effac\w*|enlev\w*|retir\w*|deplac\w*|decal\w*|report\w*|repouss\w*|avanc\w*|reprogramm\w*|boug\w*|chang\w*|modifi\w*|ajoute[rsz]?|mets?|mettre|peux|pourrais|pouvez|pourriez|veux|voudrais|faut|merci|plait|rendez|vous|rdv|agenda|reunion|seance|consultation|aujourd|demain|hier|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|mois|matin|midi|soir|heure|heures|prochain|prochaine|dernier|derniere|plutot|meme|tout|tous|toute|toutes|celui|celle|cette|avec|chez|pour|dans|vers|jusqu|apres|avant|moment|creneau|horaire|jour|jours)$/;
 function tcRdvViseIntrouvable(texte, now, events, mode) {
   const t = tcSansAccents(texte);
-  if (!/\b(annul|supprim|effac|enlev|retir|deplac|decal|report|repouss|avanc|reprogramm)/.test(t)) return null;
+  // Le VERBE conjugue, avec fin de mot : « un deplacement a Lyon », « un reportage photo », « decalage horaire »,
+  // « avancement du projet » sont des noms d evenements, jamais un ordre (examen de la mission 31).
+  if (!(tcVerbeConjugue('deplacement').test(t) || /\b(annul|supprim|effac|enlev|retir)(e|er|es|ez|ons)\b/.test(t))) return null;
   const mots = tcMotsDeRdv(texte).filter(function (w) { return !TC_MOTS_VISEE_CREUX.test(w); });
   if (!mots.length) return null;
   const ref = now ? new Date(now) : new Date();
@@ -11763,8 +11765,13 @@ function tcRdvViseIntrouvable(texte, now, events, mode) {
 }
 /** Une simple question (« quand suis-je libre lundi matin ? ») n appelle aucune carte : le bloc est retire, la prose reste (mission 31). */
 function tcSansCarteApresQuestion(reply, texte) {
-  const t = tcSansAccents(String(texte || '')).replace(/[’']/g, ' ').trim();
-  const question = /\?\s*$/.test(String(texte || '').trim()) || /^(quand|est ce|est-ce|qu est|quel|quelle|quels|quelles|ai je|suis je|puis je|y a t il|combien|comment|pourquoi)\b/.test(t);
+  const t = tcSansAccents(String(texte || '')).replace(/[’'-]/g, ' ').trim();   // « suis-je », « y a-t-il » : trait d union = espace
+  // Seule une question de CONSULTATION perd sa carte : une demande polie (« peux-tu me mettre un rdv mardi 15h ? »)
+  // ou une phrase qui porte un jour ET une heure est une demande, elle garde sa proposition (examen de la mission 31).
+  const consultation = /^(quand|est ce|est-ce|qu est|quel|quelle|quels|quelles|ai je|suis je|y a t il|combien|comment|pourquoi)\b/.test(t);
+  const polie = /\b(peux|pourrais|pourriez|pouvez|voudrais|voudriez|veux|puis)\b/.test(t);
+  const jourEtHeure = /\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd hui|apres demain)\b/.test(t) && /\b\d{1,2}\s*(h|:)\s*\d{0,2}\b|\b\d{1,2}\s*heures?\b/.test(t);
+  const question = consultation || (/\?\s*$/.test(String(texte || '').trim()) && !polie && !jourEtHeure);
   if (!question) return reply;
   if (/\b(ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|reserve[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|propose[rsz]?)\b/.test(t)) return reply;
   return String(reply || '').replace(/\s*\[AGENDA\][\s\S]*?\[\/AGENDA\]\s*/g, '\n').replace(/\n{3,}/g, '\n\n').trim() || reply;
