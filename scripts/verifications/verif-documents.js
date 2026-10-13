@@ -71,6 +71,36 @@ verifie('le serveur arrondit de la meme façon (documentsMoLisible : ceil au cen
 verifie('2 Mo + 200 octets sur l appareil : « Ce fichier fait 2,01 Mo : 2 Mo au plus par document. »', ctx.tcRefusDocument({ name: 'x.pdf', size: 2 * 1024 * 1024 + 200 }) === 'Ce fichier fait 2,01 Mo : 2 Mo au plus par document.');
 const ouvrir = fonction(page, 'tcOuvrirDocument') || '';
 verifie('« Ouvrir » : la fenetre s ouvre DANS le geste (window.open avant l attente), le fichier y arrive ensuite (fenetre.location) ; sinon telechargement avec un mot ; blob libere ; fenetre fermee en cas d erreur', ouvrir.indexOf("window.open('', '_blank')") > 0 && ouvrir.indexOf("window.open('', '_blank')") < ouvrir.indexOf('await TC_BACKEND.lireDocument') && /fenetre\.location = url;/.test(ouvrir) && /a\.download = d\.nom;/.test(ouvrir) && /est téléchargé/.test(ouvrir) && /URL\.revokeObjectURL\(url\)/.test(ouvrir) && /fenetre\.close\(\)/.test(ouvrir) && /\/\^https:\\\/\\\/\/\.test\(String\(d\.lienDrive\)\)/.test(ouvrir));
+// 40d : dans l application Android, « Ouvrir » passe par le telephone (pont natif), jamais par une fenetre ni un blob.
+verifie('« Ouvrir » dans l APK : le pont natif est pris avant toute fenetre (tcOuvertureNativeDisponible → tcOuvrirDocumentDansAndroid)', ouvrir.indexOf('if (tcOuvertureNativeDisponible()) return tcOuvrirDocumentDansAndroid(d);') > 0 && ouvrir.indexOf('tcOuvertureNativeDisponible()') < ouvrir.indexOf("window.open('', '_blank')"));
+const natifs = [];
+ctx.window = { TimeCoolNatif: { estNatif: () => true, ouvrirDocument: (nom, b64, mime) => { natifs.push(nom + '|' + b64 + '|' + mime); setTimeout(() => ctx.tcOuvertureDocumentResultat(ctx._telephoneOuvre ? 'true' : 'false'), 0); } } };
+ctx.Uint8Array = Uint8Array; ctx.btoa = btoa;
+ctx.TC_BACKEND.lireDocument = async (id) => { appels.push('lire:' + id); return { arrayBuffer: async () => new Uint8Array([104, 105]).buffer }; };
+vm.runInContext("documentsList = [{ id: 'doc_1', serveur: 1, rdv: 'e1', nom: 'Devis.pdf', type: 'application/pdf', taille: 10, origine: 'appareil', creeLe: '' }];", ctx);
+let manqueNatif = 0;
+['tcOuvertureNativeDisponible', 'tcOctetsVersBase64', 'tcOuvertureDocumentResultat', 'tcOuvrirDocumentDansAndroid', 'tcOuvrirDocument'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; manqueNatif++; console.log('  KO  ' + n + ' introuvable'); } });
+if (!manqueNatif) {
+  toasts.length = 0; ctx._telephoneOuvre = true;
+  await ctx.tcOuvrirDocument('doc_1');
+  verifie('APK, le telephone ouvre : le fichier (base64, nom, type) va au pont natif ; aucun « est téléchargé », aucune fenetre', natifs.length === 1 && natifs[0] === 'Devis.pdf|aGk=|application/pdf' && !toasts.some((t) => /téléchargé|Aucune application/.test(t)), toasts.join(' / '));
+  toasts.length = 0; ctx._telephoneOuvre = false;
+  await ctx.tcOuvrirDocument('doc_1');
+  verifie('APK, aucune application capable : un mot calme, jamais un message de reussite', toasts.some((t) => /Aucune application sur ce téléphone ne sait ouvrir « Devis\.pdf »/.test(t)) && !toasts.some((t) => /téléchargé/.test(t)), toasts.join(' / '));
+  toasts.length = 0; ctx._telephoneOuvre = true;
+  ctx.TC_BACKEND.lireDocument = async () => { const e = new Error('x'); e.code = 'document_introuvable'; throw e; };
+  await ctx.tcOuvrirDocument('doc_1');
+  verifie('APK, document disparu du serveur : le pont n est pas appele, le mot le dit', natifs.length === 2 && toasts.some((t) => /n’est plus sur le serveur/.test(t)), toasts.join(' / '));
+}
+const java = process.argv[5] ? fs.readFileSync(process.argv[5], 'utf8') : '';
+const xml = process.argv[6] ? fs.readFileSync(process.argv[6], 'utf8') : '';
+if (java) {
+  const pont = /@JavascriptInterface\s+public void ouvrirDocument\(final String nomFichier,[\s\S]*?\n        \}\n/.exec(java);
+  verifie('MainActivity : pont ouvrirDocument (cache documents/, FileProvider, ACTION_VIEW avec le type, lecture accordee, hors du fil principal), reponse vrai/faux a tcOuvertureDocumentResultat, jamais dans les Telechargements', !!pont && /getCacheDir\(\), "documents"/.test(pont[0]) && /FileProvider\.getUriForFile\(/.test(pont[0]) && /Intent\.ACTION_VIEW/.test(pont[0]) && /setDataAndType\(uri, /.test(pont[0]) && /FLAG_GRANT_READ_URI_PERMISSION/.test(pont[0]) && /new Thread\(/.test(pont[0]) && /appelerJs\("tcOuvertureDocumentResultat", ok \? "true" : "false"\)/.test(pont[0]) && /catch \(Exception e\)/.test(pont[0]) && !/MediaStore/.test(pont[0]), pont ? '' : 'pont introuvable');
+}
+if (xml) verifie('file_paths.xml : le sous-dossier documents/ du cache est expose (et seulement lui en plus de maj/)', /<cache-path name="documents" path="documents\/"\/>/.test(xml) && (xml.match(/<(cache|files|external)[a-z-]*path /g) || []).length === 2);
+const refusIni = /UPLOAD_ERR_INI_SIZE[\s\S]*?Rep::erreur\(413, 'fichier_trop_gros', [^\n]*\n/.exec(api);
+verifie('API, PHP refuse avant nous : « environ » la taille reçue (Content-Length) si elle depasse, sinon « trop gros » ; jamais « dépasse 2 Mo »', !!refusIni && /\$_SERVER\['CONTENT_LENGTH'\]/.test(refusIni[0]) && /'Ce fichier fait environ ' \. documentsMoLisible\(\$recu\)/.test(refusIni[0]) && /'Ce fichier est trop gros'/.test(refusIni[0]) && !/dépasse/.test(refusIni[0]), refusIni ? refusIni[0].slice(-200) : 'introuvable');
 verifie('la fiche relit ses documents a l ouverture (tcRapprocherDocumentsDuRdv dans openEventModal, redessin si changement)', /tcRapprocherDocumentsDuRdv\(e\.id\)\.then\(function \(change\) \{/.test(fonction(page, 'openEventModal') || '') && /openEventModal\(e\);/.test(fonction(page, 'openEventModal') || ''));
 // Le redessin ne doit pas effacer une saisie : le formulaire « Modifier » (#editTitle) vit dans le meme cadre.
 (function () {

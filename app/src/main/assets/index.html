@@ -10932,10 +10932,45 @@ function tcRafraichirFicheDocuments(rdvId) {
   if (modale && modale.classList.contains('open') && typeof currentEvent !== 'undefined' && currentEvent && String(currentEvent.id) === String(rdvId) && typeof openEventModal === 'function') openEventModal(currentEvent);
 }
 /** « Ouvrir » : le fichier vient du serveur, dechiffre, et s ouvre dans un nouvel onglet (ou se telecharge). */
+/** Application Android : la WebView n ouvre ni fenetre vide ni blob ; le telephone ouvre le fichier (pont natif). */
+function tcOuvertureNativeDisponible() {
+  return !!(window.TimeCoolNatif && typeof window.TimeCoolNatif.ouvrirDocument === 'function');
+}
+function tcOctetsVersBase64(tampon) {
+  const octets = new Uint8Array(tampon);
+  let binaire = '';
+  for (let i = 0; i < octets.length; i += 8192) binaire += String.fromCharCode.apply(null, octets.subarray(i, i + 8192));
+  return btoa(binaire);
+}
+/** Rappelee par MainActivity.ouvrirDocument() : true si une application a recu le fichier, false si rien ne s est passe. */
+function tcOuvertureDocumentResultat(succes) {
+  const r = window._tcOuvertureDocumentResolve;
+  window._tcOuvertureDocumentResolve = null;
+  if (r) r(succes === true || succes === 'true');
+}
+async function tcOuvrirDocumentDansAndroid(d) {
+  showToast('⏳ Ouverture de « ' + d.nom + ' »…');
+  let ok = false;
+  try {
+    const blob = await TC_BACKEND.lireDocument(d.serveur);
+    const tampon = await blob.arrayBuffer();
+    ok = await new Promise(function (resolve) {
+      window._tcOuvertureDocumentResolve = resolve;
+      try { window.TimeCoolNatif.ouvrirDocument(d.nom, tcOctetsVersBase64(tampon), d.type || 'application/octet-stream'); }
+      catch (e) { tcOuvertureDocumentResultat(false); }
+    });
+  } catch (e) {
+    showToast('⚠️ ' + ((e && e.code === 'document_introuvable') ? 'Ce document n’est plus sur le serveur' : 'Document indisponible : réessaie dans un instant'));
+    return;
+  }
+  // Aucun message de reussite : si le telephone a ouvert le fichier, ca se voit ; sinon on le dit.
+  if (!ok) showToast('⚠️ Aucune application sur ce téléphone ne sait ouvrir « ' + d.nom + ' »');
+}
 async function tcOuvrirDocument(id) {
   const d = (documentsList || []).find(function (x) { return x && x.id === id; });
   if (!d) return;
   if (d.origine === 'drive' && d.lienDrive) { if (/^https:\/\//.test(String(d.lienDrive))) window.open(d.lienDrive, '_blank', 'noopener'); return; }
+  if (tcOuvertureNativeDisponible()) return tcOuvrirDocumentDansAndroid(d);
   const visible = /^(image\/|application\/pdf|text\/)/.test(d.type || '');
   // La fenetre s ouvre DANS le geste (Safari et Chrome iOS refusent une fenetre ouverte apres une attente) ; le fichier
   // y arrive une fois telecharge. Word, Excel, PowerPoint ne s affichent pas : ils se telechargent.

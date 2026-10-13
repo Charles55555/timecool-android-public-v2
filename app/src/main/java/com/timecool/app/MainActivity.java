@@ -960,6 +960,58 @@ public class MainActivity extends Activity {
          * écriture, mais le message de succès s'affichait quand même —
          * il ne dépendait que du clic JS, jamais d'une confirmation réelle.
          */
+        /**
+         * Ouvre un document d'un rendez-vous (PDF, image, Word...) avec l'application
+         * du téléphone qui sait le lire. La WebView ne sait ni ouvrir une fenêtre
+         * vide ni afficher un blob: : la page lit le contenu puis le passe ici ;
+         * il est posé dans le cache (documents/), jamais dans les Téléchargements,
+         * et donné par le FileProvider à un Intent ACTION_VIEW.
+         *
+         * Rappelle tcOuvertureDocumentResultat(true/false). false quand rien ne
+         * s'est passé (écriture impossible, aucune application capable) : la page
+         * ne doit jamais dire qu'un document est ouvert s'il ne l'est pas.
+         */
+        @JavascriptInterface
+        public void ouvrirDocument(final String nomFichier,
+                                   final String contenuBase64,
+                                   final String mime) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    boolean ok = false;
+                    try {
+                        byte[] donnees = Base64.decode(contenuBase64, Base64.DEFAULT);
+                        File dossier = new File(getCacheDir(), "documents");
+                        if (!dossier.exists() && !dossier.mkdirs()) {
+                            throw new java.io.IOException("dossier des documents impossible a creer");
+                        }
+                        // Le nom reste lisible dans l'application qui ouvre (accents compris),
+                        // sans séparateur de chemin ni nom caché.
+                        String nomSur = nomFichier == null ? "" : nomFichier.replaceAll("[^\\p{L}\\p{N}._ -]", "_").trim();
+                        if (nomSur.isEmpty() || nomSur.startsWith(".")) {
+                            nomSur = "document" + nomSur;
+                        }
+                        File fichier = new File(dossier, nomSur);
+                        try (FileOutputStream sortie = new FileOutputStream(fichier)) {
+                            sortie.write(donnees);
+                        }
+                        Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                            MainActivity.this, getPackageName() + ".fileprovider", fichier);
+                        Intent i = new Intent(Intent.ACTION_VIEW);
+                        i.setDataAndType(uri, (mime == null || mime.isEmpty()) ? "*/*" : mime);
+                        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        // Aucune application capable : ActivityNotFoundException, donc false.
+                        startActivity(i);
+                        ok = true;
+                    } catch (Exception e) {
+                        ok = false;
+                    }
+                    appelerJs("tcOuvertureDocumentResultat", ok ? "true" : "false");
+                }
+            }).start();
+        }
+
         @JavascriptInterface
         public void ecrireFichierTelechargement(final String nomFichier,
                                                  final String contenuBase64,

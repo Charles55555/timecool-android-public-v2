@@ -132,7 +132,7 @@ lancer verif-groupes-sync "$PAGE"
 lancer verif-lien-rdv backend/web/rdv.html
 lancer verif-agendas-interrupteur "$PAGE"
 lancer verif-journal-manuel "$PAGE"
-lancer verif-documents "$PAGE" "$API" backend/sql/013_documents.sql
+lancer verif-documents "$PAGE" "$API" backend/sql/013_documents.sql app/src/main/java/com/timecool/app/MainActivity.java app/src/main/res/xml/file_paths.xml
 lancer verif-contraste-sombre "$PAGE"
 lancer verif-reglages-compte-simule "$PAGE"
 lancer verif-titre-agenda "$PAGE"

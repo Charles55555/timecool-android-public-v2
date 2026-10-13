@@ -2039,3 +2039,13 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   si quelque chose a changé. `verif-documents` complétée ; `verif-documents-e2e` enregistrée dans verifier.sh (l'API
   40a est en production). Non vérifié ici : le geste réel sur iPhone (Testeurs).
 - Correction après examen (13/10, 40c) : la fiche ne se redessine après le rapprochement que si elle est encore en lecture (pas de #editTitle) : une saisie dans « Modifier » ne disparaît plus. Deux cas ajoutés à verif-documents.
+- Mission 40d (13/10, chef de projet ; rejeu des Testeurs sur v2.0.363) : (1) application Android : la WebView n'ouvre ni
+  fenêtre vide ni blob et ne télécharge pas ; « Ouvrir » passe par un pont natif `TimeCoolNatif.ouvrirDocument(nom, base64,
+  type)` (MainActivity : fichier posé dans le cache `documents/`, jamais dans les Téléchargements, donné par le FileProvider
+  à un Intent ACTION_VIEW avec le type, hors du fil principal ; `file_paths.xml` expose `documents/` en plus de `maj/`) ;
+  réponse vrai/faux à `tcOuvertureDocumentResultat` ; la page (`tcOuvrirDocumentDansAndroid`) ne dit jamais qu'un document
+  est ouvert ou téléchargé : si aucune application ne sait l'ouvrir, un mot calme ; le web ne change pas. (2) API : quand
+  PHP refuse la taille avant nous (UPLOAD_ERR_INI_SIZE), « Ce fichier fait environ 2,01 Mo : 2 Mo au plus par document. »
+  d'après Content-Length, sinon « Ce fichier est trop gros : … » ; plus de « dépasse 2 Mo ». `verif-documents` reçoit
+  MainActivity.java et file_paths.xml en plus. Non vérifié ici : la compilation de MainActivity (pas d'android.jar ; c'est la
+  construction de l'APK) et le geste réel sur un téléphone Android (PDF, image, Word, et un type sans application).

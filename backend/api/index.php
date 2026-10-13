@@ -4320,8 +4320,11 @@ switch ($route) {
             Rep::erreur(400, 'fichier_manquant', 'Aucun fichier reçu.');
         }
         if ((int) $fichier['error'] === UPLOAD_ERR_INI_SIZE || (int) $fichier['error'] === UPLOAD_ERR_FORM_SIZE) {
-            // PHP a refuse avant nous (upload_max_filesize) : la meme phrase que notre plafond.
-            Rep::erreur(413, 'fichier_trop_gros', 'Ce fichier dépasse ' . documentsMoLisible($maxOctets) . ' : ' . documentsMoLisible($maxOctets) . ' au plus par document.');
+            // PHP a refuse avant nous (upload_max_filesize) : la taille du fichier n est pas connue, l envoi entier
+            // (Content-Length, a quelques centaines d octets pres) en donne l ordre ; jamais un chiffre qui contredise le plafond.
+            $recu = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+            $debut = $recu > $maxOctets ? 'Ce fichier fait environ ' . documentsMoLisible($recu) : 'Ce fichier est trop gros';
+            Rep::erreur(413, 'fichier_trop_gros', $debut . ' : ' . documentsMoLisible($maxOctets) . ' au plus par document.');
         }
         if ((int) $fichier['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string) $fichier['tmp_name'])) {
             Rep::erreur(400, 'fichier_invalide', 'Fichier illisible.');
