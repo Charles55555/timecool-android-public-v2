@@ -3768,7 +3768,8 @@ switch ($route) {
          * été stocké ici.
          */
         // Les documents joints (mission 40a) : la table part en cascade, les fichiers chiffres et le dossier aussi.
-        $cibleSuppression = compteParReference($ref);
+        // L id est lu SANS le filtre « cloture_le IS NULL » de compteParReference : un compte cloture se supprime aussi.
+        $cibleSuppression = Db::un('SELECT id FROM comptes WHERE reference = ?', [$ref]);
         if ($cibleSuppression !== null) {
             documentsEffacerDuCompte((int) $cibleSuppression['id']);
         }

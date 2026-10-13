@@ -2025,3 +2025,5 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   (max_compte) dès qu'une liste est lue. Cas ajoutés à `verif-documents`. Réserves notées, sans correction : l'ouverture
   d'un document après une attente (navigateurs mobiles, à rejouer par les Testeurs) ; lien Drive sans contrôle du schéma
   (40b : https seulement) ; aucun plafond du nombre d'envois par heure (la place est bornée).
+- Correction (13/10) : l identifiant du compte à supprimer est lu sans le filtre « clôturé » de compteParReference : un compte
+  clôturé se supprime aussi, et ses fichiers avec lui. Vérification statique ajoutée.
