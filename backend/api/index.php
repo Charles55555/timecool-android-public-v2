@@ -664,6 +664,22 @@ function documentsTypeAutorise(string $nom, string $cheminTemporaire): ?string
     }
     return $parExtension[$ext][0];
 }
+/** Les fichiers d un compte et son dossier, effaces (suppression du compte) ; rien n echoue si le dossier manque. */
+function documentsEffacerDuCompte(int $compteId): int
+{
+    $dossier = documentsDossier() . '/' . $compteId;
+    if ($compteId <= 0 || !is_dir($dossier)) {
+        return 0;
+    }
+    $n = 0;
+    foreach (glob($dossier . '/*.bin') ?: [] as $f) {
+        if (@unlink($f)) {
+            $n++;
+        }
+    }
+    @rmdir($dossier);
+    return $n;
+}
 /** Ce que la page voit d un document (jamais le chemin). */
 function documentsLigne(array $d): array
 {
@@ -3751,6 +3767,11 @@ switch ($route) {
          * L agenda de la personne reste sur son téléphone : il n a jamais
          * été stocké ici.
          */
+        // Les documents joints (mission 40a) : la table part en cascade, les fichiers chiffres et le dossier aussi.
+        $cibleSuppression = compteParReference($ref);
+        if ($cibleSuppression !== null) {
+            documentsEffacerDuCompte((int) $cibleSuppression['id']);
+        }
         $sup = Db::req('DELETE FROM comptes WHERE reference = ?', [$ref]);
         if ($sup->rowCount() === 0) {
             Rep::erreur(404, 'compte_introuvable', 'Compte inconnu.');

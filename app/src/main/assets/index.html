@@ -10834,6 +10834,7 @@ const TC_DOCUMENTS_KEY = 'tc_documents';
 const TC_DOCUMENT_MAX_OCTETS = 2 * 1024 * 1024;        // meme plafond que le serveur (documents_max_octets)
 const TC_DOCUMENT_TYPES = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.xlsx,.pptx,.txt';
 let documentsList = [];
+let _tcDocumentsMaxCompte = 20 * 1024 * 1024;   // remplace par max_compte du serveur des qu une liste est lue
 function loadDocuments() {
   try { const v = JSON.parse(localStorage.getItem(TC_DOCUMENTS_KEY) || '[]'); documentsList = Array.isArray(v) ? v : []; } catch (e) { documentsList = []; }
 }
@@ -10897,11 +10898,12 @@ async function tcJoindreDocument(event, rdvId) {
   const refus = tcRefusDocument(fichier);
   if (refus) { showToast('⚠️ ' + refus); return; }
   showToast('⏳ Envoi de « ' + fichier.name + ' »…');
+  tcRejouerEffacementsDocuments();   // un effacement en attente libere de la place avant
   let r;
   try {
     r = await TC_BACKEND.envoyerDocument(fichier, rdvId);
   } catch (e) {
-    showToast('⚠️ ' + ((e && e.message) || 'Document non envoyé : réessaie dans un instant'));
+    showToast('⚠️ ' + ((e && e.message) || 'Document non envoyé : réessaie dans un instant') + (e && e.code === 'espace_plein' ? ' — ouvre « Mes documents » pour en retirer.' : ''));
     return;
   }
   const d = r && r.document;
@@ -10952,15 +10954,68 @@ function tcSupprimerDocumentsDesRdv(ids) {
   if (!cibles.length) return 0;
   documentsList = documentsList.filter(function (d) { return cibles.indexOf(d) < 0; });
   saveDocuments();
-  if (typeof TC_BACKEND !== 'undefined' && TC_BACKEND.estConnecte && TC_BACKEND.estConnecte()) {
-    cibles.forEach(function (d) { TC_BACKEND.supprimerDocument(d.serveur).catch(function (e) { console.warn('Document ' + d.serveur + ' non effacé :', e && (e.code || e.message)); }); });
-  }
+  // Notes d abord, puis rejoues : hors ligne ou en erreur, l effacement attend le prochain tour (jamais perdu).
+  cibles.forEach(function (d) { tcNoterEffacementDocument(d.serveur); });
+  tcRejouerEffacementsDocuments();
   return cibles.length;
 }
+/** Les effacements en attente (identifiants serveur), a l appareil. */
+function tcEffacementsEnAttente() {
+  try { const v = JSON.parse(localStorage.getItem('tc_documents_a_effacer') || '[]'); return Array.isArray(v) ? v.filter(function (x) { return Number(x) > 0; }) : []; } catch (e) { return []; }
+}
+function tcPoserEffacementsEnAttente(liste) {
+  try { if (liste.length) localStorage.setItem('tc_documents_a_effacer', JSON.stringify(liste)); else localStorage.removeItem('tc_documents_a_effacer'); } catch (e) {}
+}
+function tcNoterEffacementDocument(serveurId) {
+  const id = Number(serveurId);
+  if (!(id > 0)) return;
+  const l = tcEffacementsEnAttente();
+  if (l.indexOf(id) < 0) { l.push(id); tcPoserEffacementsEnAttente(l); }
+}
+let _tcRejeuEffacementsEnCours = false;
+/** Rejoue les effacements en attente sur le serveur ; un succes (ou « déjà disparu ») retire l identifiant, une erreur le garde. */
+async function tcRejouerEffacementsDocuments() {
+  if (_tcRejeuEffacementsEnCours) return 0;
+  const l = tcEffacementsEnAttente();
+  if (!l.length || typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) return 0;
+  _tcRejeuEffacementsEnCours = true;
+  let faits = 0;
+  try {
+    for (const id of l) {
+      try { await TC_BACKEND.supprimerDocument(id); faits++; }
+      catch (e) { if (e && e.code === 'document_introuvable') faits++; else { continue; } }
+      tcPoserEffacementsEnAttente(tcEffacementsEnAttente().filter(function (x) { return x !== id; }));
+    }
+  } finally { _tcRejeuEffacementsEnCours = false; }
+  return faits;
+}
+/** « Mes documents » relit le serveur : ce qui manque ici (autre appareil, effacement perdu) apparait, avec Retirer. */
+async function tcRapprocherDocumentsDuServeur() {
+  if (typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) return false;
+  let r;
+  try { r = await TC_BACKEND.listerDocuments(); } catch (e) { return false; }
+  if (r && Number(r.max_compte) > 0) _tcDocumentsMaxCompte = Number(r.max_compte);
+  const attente = tcEffacementsEnAttente();
+  let change = false;
+  (r && Array.isArray(r.documents) ? r.documents : []).forEach(function (d) {
+    if (!d || !(d.id > 0) || attente.indexOf(Number(d.id)) >= 0) return;
+    if ((documentsList || []).some(function (x) { return x && Number(x.serveur) === Number(d.id); })) return;
+    documentsList.push({ id: 'doc_' + d.id, serveur: d.id, rdv: String(d.rdv || ''), nom: d.nom, type: d.type, taille: d.taille, origine: d.origine || 'appareil', lienDrive: d.lien_drive || '', creeLe: d.cree_le || '' });
+    change = true;
+  });
+  if (change) saveDocuments();
+  return change;
+}
 /** La page « Mes documents » : tous les documents, par rendez-vous (titre et date), les orphelins a part. */
-function renderDocumentsPage() {
+function renderDocumentsPage(apresRapprochement) {
   const c = document.getElementById('documentsList');
   if (!c) return;
+  if (!apresRapprochement) {
+    // D abord les effacements en attente, puis la liste du serveur : ce qui manque ici apparait (mission 40a, examen).
+    tcRejouerEffacementsDocuments().then(function () { return tcRapprocherDocumentsDuServeur(); }).then(function (change) {
+      if (change && typeof currentPage !== 'undefined' && currentPage === 'documents') renderDocumentsPage(true);
+    }).catch(function () {});
+  }
   const docs = (Array.isArray(documentsList) ? documentsList : []).slice();
   if (!docs.length) {
     c.innerHTML = '<div style="text-align:center; padding:40px 20px; color:var(--text-sec); font-size:13px; line-height:1.6;">📎 Aucun document pour l’instant.<br>Ouvre un rendez-vous et touche « Joindre un document ».</div>';
@@ -10973,7 +11028,7 @@ function renderDocumentsPage() {
     const e = (Array.isArray(events) ? events : []).find(function (x) { return x && String(x.id) === rdvId; });
     return { rdvId: rdvId, e: e, docs: groupes[rdvId].sort(function (a, b) { return String(a.creeLe || '').localeCompare(String(b.creeLe || '')); }) };
   }).sort(function (a, b) { return String((b.e && b.e.date) || '').localeCompare(String((a.e && a.e.date) || '')); });
-  c.innerHTML = '<div style="font-size:12px; color:var(--text-sec); margin-bottom:12px;">' + docs.length + ' document' + (docs.length > 1 ? 's' : '') + ' · ' + tcTailleLisible(total) + ' sur ' + tcTailleLisible(20 * 1024 * 1024) + '</div>'
+  c.innerHTML = '<div style="font-size:12px; color:var(--text-sec); margin-bottom:12px;">' + docs.length + ' document' + (docs.length > 1 ? 's' : '') + ' · ' + tcTailleLisible(total) + ' sur ' + tcTailleLisible(_tcDocumentsMaxCompte) + '</div>'
     + blocs.map(function (b) {
       const titre = b.e ? (escapeHTMLSafe(b.e.title || 'Rendez-vous') + ' <span style="font-weight:400; color:var(--text-sec);">— ' + escapeHTMLSafe(tcLigneRdvPourJournal(b.e)) + '</span>') : '<span style="color:var(--text-sec);">Rendez-vous supprimé</span>';
       return '<div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px;">'
@@ -23124,7 +23179,7 @@ const TC_SYNC_TYPES = {
    */
   /* Les documents joints (mission 40a) : la liste (nom, taille, rendez-vous, numero sur le serveur), jamais le fichier. */
   document: {
-    lire: function () { return typeof documentsList === 'undefined' ? [] : documentsList; },
+    lire: function () { if (typeof tcRejouerEffacementsDocuments === 'function') tcRejouerEffacementsDocuments(); return typeof documentsList === 'undefined' ? [] : documentsList; },
     id: function (o) { return o.id; },
     poser: function (liste) { documentsList = liste; saveDocuments(); if (typeof currentPage !== 'undefined' && currentPage === 'documents' && typeof renderDocumentsPage === 'function') renderDocumentsPage(); }
   },
@@ -23587,6 +23642,7 @@ function tcViderDonneesDuCompte() {
   // Les convocations des groupes appartiennent aussi au compte (mission 27c) : la synchro du compte suivant rapporte les siennes.
   if (typeof groupConvocations !== 'undefined') groupConvocations = [];
   if (typeof documentsList !== 'undefined') documentsList = [];
+  try { localStorage.removeItem('tc_documents_a_effacer'); } catch (e) {}
   // Ce que Charly garde en memoire appartient aussi au compte : la conversation (et avec elle les propositions
   // en attente), les questions en suspens, l agenda isole. Sans cela, le compte suivant voyait « Bonjour Fanny ! »
   // jusqu au rechargement (campagne 10, 12/10).
@@ -24018,6 +24074,7 @@ async function tcDechiffrerPaquet(cle, base64) {
 const TC_JAMAIS_TRANSFERE = [
   'tc_device_crypto_key',      // TC_DEVICE_KEY_STORAGE
   'tc_reglages_gardes',        // langue et theme gardes au menage du compte : a l appareil, jamais au serveur
+  'tc_documents_a_effacer',    // documents a effacer sur le serveur (hors ligne au moment du geste) : rejoues d ici (mission 40a)
   'tc_device_user_id',         // TC_DEVICE_ID_KEY
   'tc_session_jeton',          // TC_JETON_CLE
   'tc_biometrie_active',       // TC_BIOMETRIE_ACTIVE_KEY

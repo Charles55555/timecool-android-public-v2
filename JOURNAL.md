@@ -2016,3 +2016,12 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   jetables : texte, PNG, PDF, texte déguisé en PNG → 415, .exe → 415, 2 Mo + 1 → 413 avec message, vide, rendez-vous mal
   formé, sans session, sans fichier, lecture octet pour octet, autre compte → 404, liste, retrait, nettoyage) : à enregistrer
   dans verifier.sh après la mise en ligne de l'API.
+- Corrections après examen (13/10) : (1) API : la suppression d'un compte (POST /admin/supprimer) efface aussi ses fichiers et
+  son dossier (`documentsEffacerDuCompte`, appelée avant le DELETE ; rien n'échoue si le dossier manque) ; (2) page : un
+  effacement fait hors ligne n'est plus perdu : l'identifiant est noté (`tc_documents_a_effacer`, à l'appareil, jamais au
+  serveur, vidé à la déconnexion) et rejoué à chaque tour de synchro (famille « document »), avant un envoi et à l'ouverture
+  de « Mes documents » ; « Mes documents » relit la liste du serveur et montre ce qui manque ici (autre appareil, effacement
+  perdu) sous « Rendez-vous supprimé » avec Retirer ; « espace plein » y renvoie ; le plafond du compte vient du serveur
+  (max_compte) dès qu'une liste est lue. Cas ajoutés à `verif-documents`. Réserves notées, sans correction : l'ouverture
+  d'un document après une attente (navigateurs mobiles, à rejouer par les Testeurs) ; lien Drive sans contrôle du schéma
+  (40b : https seulement) ; aucun plafond du nombre d'envois par heure (la place est bornée).
