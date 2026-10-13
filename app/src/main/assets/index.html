@@ -1230,6 +1230,14 @@ if (window.pdfjsLib) {
 </div>
 
 <!-- MES DÉMARCHES -->
+<div class="page" id="page-documents">
+  <div class="page-header">
+    <div class="page-title">📎 Mes documents</div>
+    <div class="page-subtitle">Les documents joints à tes rendez-vous, rangés par rendez-vous</div>
+  </div>
+  <div class="main"><div id="documentsList" style="padding:14px;"></div></div>
+</div>
+
 <div class="page" id="page-demarches">
   <div class="page-header">
     <div class="page-title">📓 Journal d'activité</div>
@@ -3771,6 +3779,7 @@ const menuItems = {
     {id:'dispo', icon:'📅', label:'Mes disponibilités'},
     {id:'demarches', icon:'📋', label:'Journal d’activité'},
     {id:'dashboard', icon:'📊', label:'Analyse de mon temps'},
+    {id:'documents', icon:'📎', label:'Mes documents'},
     {id:'settings', icon:'⚙️', label:'Paramètres'},
     {id:'birthdays', icon:'🎂', label:'Anniversaires'},
     {id:'holidays', icon:'🇫🇷', label:'Jours fériés'},
@@ -3788,6 +3797,7 @@ const menuItems = {
     {id:'dispo', icon:'📅', label:'Mes disponibilités'},
     {id:'demarches', icon:'📋', label:'Journal d’activité'},
     {id:'dashboard', icon:'📊', label:'Analyse de mon temps'},
+    {id:'documents', icon:'📎', label:'Mes documents'},
     {id:'premium', icon:'💎', label:'Devenir Partenaire Premium', premium:true},
     {id:'settings', icon:'⚙️', label:'Paramètres'},
     {id:'birthdays', icon:'🎂', label:'Anniversaires'},
@@ -5392,6 +5402,7 @@ function openEventModal(e) {
 
     </div></div>` : tcLigneVideFiche('lieu')}
     ${tcContactDuRdv(e) ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Avec${tcCrayonFiche('contact')}</div><div class="event-detail-value" data-notranslate>${escapeHTML(tcContactDuRdv(e).name || '')}</div></div></div>` : tcLigneVideFiche('contact')}
+    ${typeof tcLigneDocumentsFiche === 'function' ? tcLigneDocumentsFiche(e) : ''}
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Confidentialité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Sur votre appareil</div></div></div>
   `;
   const actions = document.getElementById('emActions');
@@ -6300,6 +6311,7 @@ async function deleteCurrentEvent() {
   closeEventModal();
   saveEventsToStorage();
   tcJournaliserRdvManuel('supprime', e);
+  if (typeof tcSupprimerDocumentsDesRdv === 'function') tcSupprimerDocumentsDesRdv([e.id]);
   if (currentPage === 'calendar') render();
   showToast('🗑️ Rendez-vous supprimé');
 }
@@ -10815,6 +10827,162 @@ async function cancelDemarche(id) {
   if (d) { d.status = 'annulee'; saveDemarches(); renderDemarches(); showToast('Démarche annulée'); }
 }
 
+/* ── Documents joints a un rendez-vous (mission 40a) ──────────────────────────────────────────────────
+   Le fichier vit sur le serveur (chiffre au repos) ; ici, la liste seule : { id: 'doc_<n>', serveur: n, rdv, nom, type,
+   taille, origine, lienDrive, creeLe }, synchronisee objet par objet comme un contact. Rien n est lu au demarrage. */
+const TC_DOCUMENTS_KEY = 'tc_documents';
+const TC_DOCUMENT_MAX_OCTETS = 2 * 1024 * 1024;        // meme plafond que le serveur (documents_max_octets)
+const TC_DOCUMENT_TYPES = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.docx,.xlsx,.pptx,.txt';
+let documentsList = [];
+function loadDocuments() {
+  try { const v = JSON.parse(localStorage.getItem(TC_DOCUMENTS_KEY) || '[]'); documentsList = Array.isArray(v) ? v : []; } catch (e) { documentsList = []; }
+}
+function saveDocuments() {
+  try { localStorage.setItem(TC_DOCUMENTS_KEY, JSON.stringify(documentsList)); } catch (e) {}
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
+}
+loadDocuments();
+/** « 1,4 Mo », « 320 Ko ». */
+function tcTailleLisible(octets) {
+  const n = Number(octets) || 0;
+  if (n >= 1024 * 1024) { const mo = n / (1024 * 1024); return (Math.abs(mo - Math.round(mo)) < 0.05 ? String(Math.round(mo)) : mo.toFixed(1).replace('.', ',')) + ' Mo'; }
+  return String(Math.max(1, Math.round(n / 1024))) + ' Ko';
+}
+/** Le type est-il accepte (d apres le nom) ? */
+function tcDocumentTypeAccepte(nom) {
+  const ext = String(nom || '').toLowerCase().replace(/^.*\./, '');
+  return TC_DOCUMENT_TYPES.split(',').indexOf('.' + ext) >= 0 && /\./.test(String(nom || ''));
+}
+/** Pourquoi ce fichier ne peut pas etre joint (ou '' s il peut) : trop gros, type refuse, vide. */
+function tcRefusDocument(fichier) {
+  if (!fichier) return 'Aucun fichier choisi.';
+  if (!tcDocumentTypeAccepte(fichier.name)) return 'Ce type de fichier n’est pas accepté : PDF, image, Word, Excel, PowerPoint ou texte.';
+  if (!(fichier.size > 0)) return 'Ce fichier est vide.';
+  if (fichier.size > TC_DOCUMENT_MAX_OCTETS) return 'Ce fichier fait ' + tcTailleLisible(fichier.size) + ' : ' + tcTailleLisible(TC_DOCUMENT_MAX_OCTETS) + ' au plus par document.';
+  return '';
+}
+/** Les documents d un rendez-vous, du plus ancien au plus recent. */
+function tcDocumentsDuRdv(rdvId) {
+  return (Array.isArray(documentsList) ? documentsList : []).filter(function (d) { return d && String(d.rdv) === String(rdvId); })
+    .slice().sort(function (a, b) { return String(a.creeLe || '').localeCompare(String(b.creeLe || '')); });
+}
+function tcLigneDocumentHTML(d, depuisPage) {
+  return '<div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">'
+    + '<span style="font-size:18px; flex-shrink:0;">' + (/^image\//.test(d.type || '') ? '🖼️' : (d.type === 'application/pdf' ? '📄' : '📎')) + '</span>'
+    + '<div style="flex:1; min-width:0;"><div style="font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHTMLSafe(d.nom) + '">' + escapeHTMLSafe(d.nom) + '</div>'
+    + '<div style="font-size:11px; color:var(--text-sec);">' + tcTailleLisible(d.taille) + (d.origine === 'drive' ? ' · Google Drive' : '') + '</div></div>'
+    + '<button onclick="tcOuvrirDocument(\'' + escapeHTMLSafe(d.id) + '\')" style="padding:6px 10px; background:#e8f0fe; color:var(--g-blue); border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;">Ouvrir</button>'
+    + '<button onclick="tcRetirerDocument(\'' + escapeHTMLSafe(d.id) + '\', ' + (depuisPage ? 'true' : 'false') + ')" style="padding:6px 10px; background:#fce8e6; color:var(--g-red); border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;">Retirer</button>'
+    + '</div>';
+}
+/** La ligne « 📎 Documents (N) » de la fiche : la liste, et « Joindre un document ». */
+function tcLigneDocumentsFiche(e) {
+  if (!e || !e.id) return '';
+  const docs = tcDocumentsDuRdv(e.id);
+  const connecte = typeof TC_BACKEND !== 'undefined' && TC_BACKEND.estConnecte && TC_BACKEND.estConnecte();
+  return '<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M16.5 6v11.5a4 4 0 0 1-8 0V5a2.5 2.5 0 0 1 5 0v10.5a1 1 0 0 1-2 0V6H10v9.5a2.5 2.5 0 0 0 5 0V5a4 4 0 0 0-8 0v12.5a5.5 5.5 0 0 0 11 0V6h-1.5z"/></svg><div style="flex:1; min-width:0;">'
+    + '<div class="event-detail-label">Documents (' + docs.length + ')</div>'
+    + (docs.length ? '<div style="margin-top:4px;">' + docs.map(function (d) { return tcLigneDocumentHTML(d, false); }).join('') + '</div>' : '<div class="event-detail-value" style="color:var(--text-sec); font-size:12.5px;">Aucun document joint.</div>')
+    + (connecte
+        ? '<label style="display:inline-block; margin-top:8px; padding:8px 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue); border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">➕ Joindre un document<input type="file" accept="' + TC_DOCUMENT_TYPES + '" style="display:none;" onchange="tcJoindreDocument(event, \'' + escapeHTMLSafe(e.id) + '\')"></label>'
+          + '<div style="font-size:11px; color:var(--text-sec); margin-top:4px;">PDF, image, Word, Excel, PowerPoint ou texte · ' + tcTailleLisible(TC_DOCUMENT_MAX_OCTETS) + ' au plus par document</div>'
+        : '<div style="font-size:11px; color:var(--text-sec); margin-top:6px;">Ouvre une session TimeCool pour joindre un document.</div>')
+    + '</div></div>';
+}
+/** « Joindre un document » : verifications sur l appareil, envoi, puis la liste (synchronisee) et la fiche a jour. */
+async function tcJoindreDocument(event, rdvId) {
+  const champ = event && event.target;
+  const fichier = champ && champ.files && champ.files[0];
+  if (champ) champ.value = '';
+  const refus = tcRefusDocument(fichier);
+  if (refus) { showToast('⚠️ ' + refus); return; }
+  showToast('⏳ Envoi de « ' + fichier.name + ' »…');
+  let r;
+  try {
+    r = await TC_BACKEND.envoyerDocument(fichier, rdvId);
+  } catch (e) {
+    showToast('⚠️ ' + ((e && e.message) || 'Document non envoyé : réessaie dans un instant'));
+    return;
+  }
+  const d = r && r.document;
+  if (!d || !d.id) { showToast('⚠️ Document non envoyé : réessaie dans un instant'); return; }
+  documentsList.push({ id: 'doc_' + d.id, serveur: d.id, rdv: String(rdvId), nom: d.nom, type: d.type, taille: d.taille, origine: d.origine || 'appareil', lienDrive: d.lien_drive || '', creeLe: d.cree_le || new Date().toISOString() });
+  saveDocuments();
+  showToast('✅ « ' + d.nom + ' » joint au rendez-vous');
+  tcRafraichirFicheDocuments(rdvId);
+}
+/** La fiche ouverte (ou la page « Mes documents ») se redessine. */
+function tcRafraichirFicheDocuments(rdvId) {
+  if (typeof currentPage !== 'undefined' && currentPage === 'documents') { renderDocumentsPage(); return; }
+  const modale = document.getElementById('eventModal');
+  if (modale && modale.classList.contains('open') && typeof currentEvent !== 'undefined' && currentEvent && String(currentEvent.id) === String(rdvId) && typeof openEventModal === 'function') openEventModal(currentEvent);
+}
+/** « Ouvrir » : le fichier vient du serveur, dechiffre, et s ouvre dans un nouvel onglet (ou se telecharge). */
+async function tcOuvrirDocument(id) {
+  const d = (documentsList || []).find(function (x) { return x && x.id === id; });
+  if (!d) return;
+  if (d.origine === 'drive' && d.lienDrive) { window.open(d.lienDrive, '_blank'); return; }
+  showToast('⏳ Ouverture de « ' + d.nom + ' »…');
+  try {
+    const blob = await TC_BACKEND.lireDocument(d.serveur);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    if (!/^(image\/|application\/pdf|text\/)/.test(d.type || '')) a.download = d.nom;   // Word, Excel… : le navigateur n affiche pas, il enregistre
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  } catch (e) {
+    showToast('⚠️ ' + ((e && e.code === 'document_introuvable') ? 'Ce document n’est plus sur le serveur' : 'Document indisponible : réessaie dans un instant'));
+  }
+}
+/** « Retirer » : apres confirmation, le serveur efface le fichier, la liste suit. */
+async function tcRetirerDocument(id, depuisPage) {
+  const d = (documentsList || []).find(function (x) { return x && x.id === id; });
+  if (!d) return;
+  if (!await tcConfirm('Retirer « ' + d.nom + ' » de ce rendez-vous ?\nLe fichier sera effacé du serveur.', { icone: '📎', libelleValider: 'Retirer', danger: true })) return;
+  try { await TC_BACKEND.supprimerDocument(d.serveur); } catch (e) { if (!(e && e.code === 'document_introuvable')) { showToast('⚠️ Pas retiré : réessaie dans un instant'); return; } }
+  documentsList = documentsList.filter(function (x) { return x && x.id !== id; });
+  saveDocuments();
+  showToast('🗑️ « ' + d.nom + ' » retiré');
+  if (depuisPage) renderDocumentsPage(); else tcRafraichirFicheDocuments(d.rdv);
+}
+/** Un rendez-vous supprime emporte ses documents : le serveur efface les fichiers, la liste suit (sans bloquer). */
+function tcSupprimerDocumentsDesRdv(ids) {
+  const cibles = (documentsList || []).filter(function (d) { return d && ids.some(function (i) { return String(i) === String(d.rdv); }); });
+  if (!cibles.length) return 0;
+  documentsList = documentsList.filter(function (d) { return cibles.indexOf(d) < 0; });
+  saveDocuments();
+  if (typeof TC_BACKEND !== 'undefined' && TC_BACKEND.estConnecte && TC_BACKEND.estConnecte()) {
+    cibles.forEach(function (d) { TC_BACKEND.supprimerDocument(d.serveur).catch(function (e) { console.warn('Document ' + d.serveur + ' non effacé :', e && (e.code || e.message)); }); });
+  }
+  return cibles.length;
+}
+/** La page « Mes documents » : tous les documents, par rendez-vous (titre et date), les orphelins a part. */
+function renderDocumentsPage() {
+  const c = document.getElementById('documentsList');
+  if (!c) return;
+  const docs = (Array.isArray(documentsList) ? documentsList : []).slice();
+  if (!docs.length) {
+    c.innerHTML = '<div style="text-align:center; padding:40px 20px; color:var(--text-sec); font-size:13px; line-height:1.6;">📎 Aucun document pour l’instant.<br>Ouvre un rendez-vous et touche « Joindre un document ».</div>';
+    return;
+  }
+  const groupes = {};
+  docs.forEach(function (d) { (groupes[String(d.rdv)] = groupes[String(d.rdv)] || []).push(d); });
+  const total = docs.reduce(function (s, d) { return s + (Number(d.taille) || 0); }, 0);
+  const blocs = Object.keys(groupes).map(function (rdvId) {
+    const e = (Array.isArray(events) ? events : []).find(function (x) { return x && String(x.id) === rdvId; });
+    return { rdvId: rdvId, e: e, docs: groupes[rdvId].sort(function (a, b) { return String(a.creeLe || '').localeCompare(String(b.creeLe || '')); }) };
+  }).sort(function (a, b) { return String((b.e && b.e.date) || '').localeCompare(String((a.e && a.e.date) || '')); });
+  c.innerHTML = '<div style="font-size:12px; color:var(--text-sec); margin-bottom:12px;">' + docs.length + ' document' + (docs.length > 1 ? 's' : '') + ' · ' + tcTailleLisible(total) + ' sur ' + tcTailleLisible(20 * 1024 * 1024) + '</div>'
+    + blocs.map(function (b) {
+      const titre = b.e ? (escapeHTMLSafe(b.e.title || 'Rendez-vous') + ' <span style="font-weight:400; color:var(--text-sec);">— ' + escapeHTMLSafe(tcLigneRdvPourJournal(b.e)) + '</span>') : '<span style="color:var(--text-sec);">Rendez-vous supprimé</span>';
+      return '<div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px;">'
+        + '<div style="font-size:14px; font-weight:600; color:var(--text); margin-bottom:4px;">📅 ' + titre + '</div>'
+        + b.docs.map(function (d) { return tcLigneDocumentHTML(d, true); }).join('')
+        + '</div>';
+    }).join('');
+}
+
 /** « mardi 13 octobre, 15h-16h » ou « mardi 13 octobre, toute la journée » (periode : « du … au … »). */
 function tcLigneRdvPourJournal(e) {
   if (!e) return '';
@@ -13893,6 +14061,7 @@ function tcSupprimerRdvs(cible) {
   }
   _tcSuppressionEnAttente = null;
   saveEventsToStorage();
+  if (typeof tcSupprimerDocumentsDesRdv === 'function') tcSupprimerDocumentsDesRdv(cible.map(function (e) { return e.id; }));
   addDemarche({
     icon: '🗑️',
     title: `Annulation — ${n} rendez-vous`,
@@ -15808,6 +15977,7 @@ const _origNavigate_v74 = navigate;
 navigate = function(page) {
   _origNavigate_v74(page);
   if (page === 'demarches') renderDemarches();
+  else if (page === 'documents') renderDocumentsPage();
   else if (page === 'aiconfig') { _adminCurrentTab = 'config'; renderAIConfig(); }
   else if (page === 'assistant') {
     setTimeout(() => renderCharlyChat(), 50);
@@ -21698,6 +21868,49 @@ const TC_BACKEND = {
     return tcAppel('POST', '/rdv/proposer-creneau', corps);
   },
 
+  /** Un document joint depuis l appareil part sur le serveur (multipart ; la reponse decrit le document) — mission 40a. */
+  async envoyerDocument(fichier, rdvId) {
+    const corps = new FormData();
+    corps.append('rdv', String(rdvId));
+    corps.append('fichier', fichier, fichier.name || 'document');
+    const entetes = {};
+    const j = tcJeton();
+    if (j) entetes['Authorization'] = 'Bearer ' + j;
+    const ctrl = new AbortController();
+    const minuteur = setTimeout(function () { ctrl.abort(); }, 90000);   // un fichier de 2 Mo sur un reseau lent
+    let reponse;
+    try {
+      reponse = await fetch(TC_API + '/documents', { method: 'POST', headers: entetes, body: corps, signal: ctrl.signal });
+    } catch (e) {
+      const err = new Error(e && e.name === 'AbortError' ? 'Le serveur met trop de temps à répondre' : 'Serveur injoignable');
+      err.code = e && e.name === 'AbortError' ? 'delai_depasse' : 'reseau';
+      throw err;
+    } finally { clearTimeout(minuteur); }
+    let data = {};
+    try { data = await reponse.json(); } catch (e) {}
+    if (!reponse.ok || data.ok === false) {
+      const err = new Error(data.message || ('Erreur ' + reponse.status));
+      err.code = data.erreur || 'erreur'; err.status = reponse.status;
+      throw err;
+    }
+    return data;
+  },
+  async listerDocuments(rdvId) {
+    return tcAppel('POST', '/documents/liste', rdvId ? { rdv: String(rdvId) } : {});
+  },
+  async supprimerDocument(id) {
+    return tcAppel('POST', '/documents/supprimer', { document: id });
+  },
+  /** Le fichier lui-meme, dechiffre par le serveur, pour ce compte seulement (un Blob). */
+  async lireDocument(id) {
+    const entetes = {};
+    const j = tcJeton();
+    if (j) entetes['Authorization'] = 'Bearer ' + j;
+    const reponse = await fetch(TC_API + '/documents?id=' + encodeURIComponent(id), { headers: entetes });
+    if (!reponse.ok) { const err = new Error('Document introuvable'); err.code = 'document_introuvable'; err.status = reponse.status; throw err; }
+    return reponse.blob();
+  },
+
   /** Une convocation de groupe part dans la messagerie de chaque membre qui a TimeCool (mission 27b). */
   async envoyerConvocation(c) {
     return tcAppel('POST', '/convocations', { titre: c.titre, groupe: c.groupe || undefined, date: c.date, debut: c.debut, fin: c.fin, references: c.references || [] });
@@ -22909,6 +23122,12 @@ const TC_SYNC_TYPES = {
    * comme un contact ; ils reviennent sur tout appareil (mission 27c). Les conversations locales simples restent a
    * l appareil ; celles du serveur ont leur propre famille.
    */
+  /* Les documents joints (mission 40a) : la liste (nom, taille, rendez-vous, numero sur le serveur), jamais le fichier. */
+  document: {
+    lire: function () { return typeof documentsList === 'undefined' ? [] : documentsList; },
+    id: function (o) { return o.id; },
+    poser: function (liste) { documentsList = liste; saveDocuments(); if (typeof currentPage !== 'undefined' && currentPage === 'documents' && typeof renderDocumentsPage === 'function') renderDocumentsPage(); }
+  },
   groupe: {
     lire: function () { return typeof tcGroupesPourSync === 'function' ? tcGroupesPourSync() : []; },
     id: function (o) { return o.id; },
@@ -23034,6 +23253,8 @@ const TC_SYNC_REGLAGE_MAX = 100000;
    écrit en dernier. Un test le vérifie désormais. */
 const TC_SYNC_DEJA_SYNCHRONISE = [
   'tc_user_events', 'tc_user_tasks', 'timecool_birthdays', 'timecool_contacts',
+  // Les documents joints (famille « document », mission 40a) : la liste seule, le fichier reste sur le serveur.
+  'tc_documents',
   // Les groupes de la messagerie et leurs convocations voyagent un par un (famille « groupe », mission 27c) : en bloc,
   // ils n etaient jamais recharges en memoire et la memoire vide d apres deconnexion les ecrasait.
   'timecool_messages', 'timecool_convocations',
@@ -23365,6 +23586,7 @@ function tcViderDonneesDuCompte() {
   messages = { user: [], pro: [] };
   // Les convocations des groupes appartiennent aussi au compte (mission 27c) : la synchro du compte suivant rapporte les siennes.
   if (typeof groupConvocations !== 'undefined') groupConvocations = [];
+  if (typeof documentsList !== 'undefined') documentsList = [];
   // Ce que Charly garde en memoire appartient aussi au compte : la conversation (et avec elle les propositions
   // en attente), les questions en suspens, l agenda isole. Sans cela, le compte suivant voyait « Bonjour Fanny ! »
   // jusqu au rechargement (campagne 10, 12/10).

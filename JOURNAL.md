@@ -1983,3 +1983,36 @@ mobile vers le nouvel appareil.
   « mardi 13 octobre 15h00 → mardi 13 octobre 16h00 », statut modifiée, catégorie Rendez-vous) ; « Annuler » dans la bulle
   retire cette entrée (`tcRetirerEntreeDeplacement`, identifiant gardé avec la bulle). Rien pendant le geste, rien pour un
   dépôt au même créneau ni pour « Je décale » (rendez-vous avec un autre compte).
+
+## 13/10/2026 (session Codeur) — Documents joints à un rendez-vous (mission 40a)
+
+**Codé et commité sur main, PAS publié.** Page + API + migration 013 (jouée par le chef le 12/10 ; ordre de mise en ligne :
+API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timecool.fr/private/documents` (créé par le chef,
+700, utilisateur PHP) ; en local (api-locale) : `backend/private/documents` (hors git). Clé de config facultative
+`documents_dossier` (défaut `../private/documents` depuis l'API), `documents_max_octets` (2 Mo), `documents_max_compte` (20 Mo).
+
+- Demande (chef de projet) : dans la fiche d'un rendez-vous, un bouton « 📎 Documents » (joindre depuis l'appareil ; Google
+  Drive web = 40b après la clé API ; sur Android, le sélecteur du téléphone propose Drive parmi les sources), liste des
+  documents (ouvrir, retirer) ; entrée « 📎 Mes documents » dans le menu ☰ sous Analyse de mon temps (tous, par rendez-vous).
+  Fichiers sur le serveur, hors racine web, chiffrés au repos ; plafond 2 Mo par fichier (PHP en prod : 2M), 20 Mo par
+  compte ; types pdf, images, docx / xlsx / pptx, txt ; message clair quand ça dépasse.
+- API : `POST /documents` (multipart `fichier` + `rdv` ; erreurs PHP de taille → 413 ; vide → 400 ; nom sûr ; type par
+  extension ET contenu (finfo), sinon 415 ; plafond fichier → 413 « Ce fichier fait 3 Mo : 2 Mo au plus par document. » ;
+  compte plein → 413 espace_plein ; INSERT puis fichier `Coffre::chiffrer` dans `<dossier>/<compte>/<id>.bin`, ligne retirée
+  si l'écriture échoue) ; `GET /documents?id=` (compte seul, 404 sinon ; déchiffré ; type, inline, nosniff, no-store) ;
+  `POST /documents/liste` (par rendez-vous ou tout : documents, occupe, max_fichier, max_compte) ; `POST /documents/supprimer`
+  (supprime_le + fichier effacé). Aides : documentsDossier, documentsMaxOctets, documentsMaxCompte, documentsMoLisible,
+  documentsChemin, documentsNomSur, documentsTypeAutorise, documentsLigne (jamais le chemin).
+- Page : `documentsList` (clé `tc_documents`, famille « document » de TC_SYNC_TYPES : la liste seule, ≤ 1 Ko par document,
+  jamais le fichier ; clé dans TC_SYNC_DEJA_SYNCHRONISE ; vidée à la déconnexion) ; TC_BACKEND.envoyerDocument (multipart,
+  90 s), listerDocuments, supprimerDocument, lireDocument (Blob) ; fiche : ligne « Documents (N) » (tcLigneDocumentsFiche :
+  liste avec Ouvrir / Retirer, « ➕ Joindre un document » = champ fichier caché aux types acceptés, plafond dit ; hors
+  session, un mot) ; tcRefusDocument (type, vide, trop gros : « Ce fichier fait 3 Mo : 2 Mo au plus par document. ») avant
+  tout envoi ; tcOuvrirDocument (Blob → nouvel onglet, ou téléchargement pour Word / Excel / PowerPoint) ; tcRetirerDocument
+  (confirmation, serveur, liste) ; un rendez-vous supprimé (fiche ou Charly) emporte ses documents (tcSupprimerDocumentsDesRdv,
+  sans bloquer) ; page « Mes documents » (renderDocumentsPage : total et place sur 20 Mo, groupes par rendez-vous avec titre et
+  date, « Rendez-vous supprimé » pour les orphelins) ; menu « 📎 Mes documents » dans les deux modes. Rien n'est lu au démarrage.
+- Suites : `verif-documents` (API, SQL, page, aides simulées) dans verifier.sh ; `verif-documents-e2e` (api-locale, comptes
+  jetables : texte, PNG, PDF, texte déguisé en PNG → 415, .exe → 415, 2 Mo + 1 → 413 avec message, vide, rendez-vous mal
+  formé, sans session, sans fichier, lecture octet pour octet, autre compte → 404, liste, retrait, nettoyage) : à enregistrer
+  dans verifier.sh après la mise en ligne de l'API.

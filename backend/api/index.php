@@ -587,6 +587,92 @@ function categoriesPourRdvAutomatique(int $titulaireId, array $demandeur): array
     return categoriesPourPrendreRdv($titulaireId, $demandeur);
 }
 
+// ── Documents joints (mission 40a) ─────────────────────────────────────────────────────────────────
+/** Le dossier des fichiers, hors racine web (cle de configuration documents_dossier ; par defaut ../private/documents). */
+function documentsDossier(): string
+{
+    return rtrim((string) Conf::get('documents_dossier', __DIR__ . '/../private/documents'), '/');
+}
+function documentsMaxOctets(): int
+{
+    return max(1, (int) Conf::get('documents_max_octets', 2 * 1024 * 1024));
+}
+function documentsMaxCompte(): int
+{
+    return max(1, (int) Conf::get('documents_max_compte', 20 * 1024 * 1024));
+}
+/** « 2 Mo », « 1,5 Mo », « 340 Ko ». */
+function documentsMoLisible(int $octets): string
+{
+    if ($octets >= 1024 * 1024) {
+        $mo = $octets / (1024 * 1024);
+        return (abs($mo - round($mo)) < 0.05 ? (string) round($mo) : number_format($mo, 1, ',', '')) . ' Mo';
+    }
+    return (string) max(1, (int) round($octets / 1024)) . ' Ko';
+}
+/** Le chemin du fichier d un document ; cree le dossier du compte au besoin (null si impossible). */
+function documentsChemin(int $compteId, int $documentId, bool $creer = true): ?string
+{
+    $dossier = documentsDossier() . '/' . $compteId;
+    if (!is_dir($dossier)) {
+        if (!$creer || !@mkdir($dossier, 0700, true)) {
+            return $creer ? null : $dossier . '/' . $documentId . '.bin';
+        }
+    }
+    return $dossier . '/' . $documentId . '.bin';
+}
+/** Un nom de fichier sur : sans chemin, sans caractere de controle, 200 caracteres au plus, jamais vide. */
+function documentsNomSur(string $nom): string
+{
+    $nom = basename(str_replace('\\', '/', $nom));
+    $nom = preg_replace('/[\x00-\x1f\x7f]/', '', $nom) ?? '';
+    $nom = trim($nom);
+    if ($nom === '' || $nom === '.' || $nom === '..') {
+        $nom = 'document';
+    }
+    return mb_substr($nom, 0, 200);
+}
+/**
+ * Le type MIME d un fichier accepte, d apres son extension ET son contenu (finfo), ou null : PDF, images, Word, Excel,
+ * PowerPoint, texte. Jamais rien d executable ni d archive.
+ */
+function documentsTypeAutorise(string $nom, string $cheminTemporaire): ?string
+{
+    $parExtension = [
+        'pdf' => ['application/pdf'],
+        'jpg' => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png'], 'gif' => ['image/gif'], 'webp' => ['image/webp'], 'heic' => ['image/heic', 'image/heif'],
+        'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+        'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+        'pptx' => ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/zip'],
+        'txt' => ['text/plain'],
+    ];
+    $ext = strtolower((string) pathinfo($nom, PATHINFO_EXTENSION));
+    if (!isset($parExtension[$ext])) {
+        return null;
+    }
+    $detecte = '';
+    if (class_exists('finfo')) {
+        $f = new finfo(FILEINFO_MIME_TYPE);
+        $detecte = (string) ($f->file($cheminTemporaire) ?: '');
+    }
+    // Le texte : finfo dit text/plain, text/x-… ou application/x-empty selon le contenu ; tout texte passe.
+    if ($ext === 'txt') {
+        return ($detecte === '' || str_starts_with($detecte, 'text/') || $detecte === 'application/x-empty') ? 'text/plain' : null;
+    }
+    if ($detecte !== '' && !in_array($detecte, $parExtension[$ext], true)) {
+        return null;
+    }
+    return $parExtension[$ext][0];
+}
+/** Ce que la page voit d un document (jamais le chemin). */
+function documentsLigne(array $d): array
+{
+    return [
+        'id' => (int) ($d['id'] ?? 0), 'rdv' => (string) ($d['rdv_uid'] ?? ''), 'nom' => (string) ($d['nom'] ?? ''), 'type' => (string) ($d['type_mime'] ?? ''),
+        'taille' => (int) ($d['taille'] ?? 0), 'origine' => (string) ($d['origine'] ?? 'appareil'), 'lien_drive' => $d['lien_drive'] ?? null, 'cree_le' => (string) ($d['cree_le'] ?? ''),
+    ];
+}
+
 /** « lundi 12 octobre », pour un horodatage. */
 function rdvLibelleJour(int $ts): string
 {
@@ -4190,6 +4276,108 @@ switch ($route) {
      * non configure, serveur injoignable), la ligne reste et la reponse le dit : jamais une erreur pour
      * l utilisateur a cause de l e-mail.
      */
+    /*
+     * Documents joints a un rendez-vous (mission 40a, 12/10). Le fichier est chiffre au repos (Coffre, cle de
+     * configuration) et range hors racine web : <documents_dossier>/<compte_id>/<id>.bin ; la base garde le nom,
+     * le type, la taille, le rendez-vous (uid de synchronisation). Plafonds : documents_max_octets par fichier
+     * (2 Mo par defaut, sous upload_max_filesize de PHP), documents_max_compte par compte (20 Mo). Types : pdf, images,
+     * docx / xlsx / pptx, txt — rien d executable. Servi au compte seul, avec sa session.
+     */
+    case 'POST /documents':
+        $compte = Auth::compte();
+        $rdvUid = Entree::texte('rdv', 64) ?? trim((string) ($_POST['rdv'] ?? ''));
+        if ($rdvUid === '' || !preg_match('/^[A-Za-z0-9_.:-]{1,64}$/', $rdvUid)) {
+            Rep::erreur(400, 'rdv_invalide', 'Rendez-vous manquant.');
+        }
+        $fichier = $_FILES['fichier'] ?? null;
+        $maxOctets = documentsMaxOctets();
+        if (!is_array($fichier) || (int) ($fichier['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            Rep::erreur(400, 'fichier_manquant', 'Aucun fichier reçu.');
+        }
+        if ((int) $fichier['error'] === UPLOAD_ERR_INI_SIZE || (int) $fichier['error'] === UPLOAD_ERR_FORM_SIZE) {
+            Rep::erreur(413, 'fichier_trop_gros', 'Ce fichier dépasse ' . documentsMoLisible($maxOctets) . ' : choisis-en un plus petit.');
+        }
+        if ((int) $fichier['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string) $fichier['tmp_name'])) {
+            Rep::erreur(400, 'fichier_invalide', 'Fichier illisible.');
+        }
+        $taille = (int) ($fichier['size'] ?? 0);
+        if ($taille <= 0) {
+            Rep::erreur(400, 'fichier_vide', 'Ce fichier est vide.');
+        }
+        if ($taille > $maxOctets) {
+            Rep::erreur(413, 'fichier_trop_gros', 'Ce fichier fait ' . documentsMoLisible($taille) . ' : ' . documentsMoLisible($maxOctets) . ' au plus par document.');
+        }
+        $nom = documentsNomSur((string) ($fichier['name'] ?? ''));
+        $type = documentsTypeAutorise($nom, (string) $fichier['tmp_name']);
+        if ($type === null) {
+            Rep::erreur(415, 'type_refuse', 'Ce type de fichier n’est pas accepté : PDF, image, Word, Excel, PowerPoint ou texte.');
+        }
+        $occupe = Db::un('SELECT COALESCE(SUM(taille), 0) AS n FROM documents WHERE compte_id = ? AND supprime_le IS NULL', [$compte['id']]);
+        $maxCompte = documentsMaxCompte();
+        if ((int) ($occupe['n'] ?? 0) + $taille > $maxCompte) {
+            Rep::erreur(413, 'espace_plein', 'Tes documents occupent déjà ' . documentsMoLisible((int) $occupe['n']) . ' sur ' . documentsMoLisible($maxCompte) . ' : retire-en avant d’en joindre un autre.');
+        }
+        $contenu = file_get_contents((string) $fichier['tmp_name']);
+        if ($contenu === false) {
+            Rep::erreur(400, 'fichier_invalide', 'Fichier illisible.');
+        }
+        Db::req(
+            'INSERT INTO documents (compte_id, rdv_uid, nom, type_mime, taille, origine) VALUES (?, ?, ?, ?, ?, ?)',
+            [$compte['id'], $rdvUid, $nom, $type, $taille, 'appareil']
+        );
+        $documentId = (int) Db::pdo()->lastInsertId();
+        $chemin = documentsChemin((int) $compte['id'], $documentId);
+        if ($chemin === null || file_put_contents($chemin, Coffre::chiffrer($contenu), LOCK_EX) === false) {
+            Db::req('DELETE FROM documents WHERE id = ?', [$documentId]);
+            error_log('Documents : écriture impossible pour le compte ' . $compte['id'] . ' (' . documentsDossier() . ')');
+            Rep::erreur(500, 'stockage_indisponible', 'Impossible d’enregistrer le document pour le moment.');
+        }
+        Rep::ok(['document' => documentsLigne(Db::un('SELECT * FROM documents WHERE id = ?', [$documentId]) ?? [])]);
+
+    case 'GET /documents':
+        $compte = Auth::compte();
+        $documentId = (int) ($_GET['id'] ?? 0);
+        $d = $documentId > 0 ? Db::un('SELECT * FROM documents WHERE id = ? AND compte_id = ? AND supprime_le IS NULL', [$documentId, $compte['id']]) : null;
+        if ($d === null) {
+            Rep::erreur(404, 'document_introuvable', 'Document introuvable.');
+        }
+        $chemin = documentsChemin((int) $compte['id'], $documentId, false);
+        $brut = ($chemin !== null && is_file($chemin)) ? file_get_contents($chemin) : false;
+        $clair = $brut === false ? null : Coffre::dechiffrer($brut);
+        if ($clair === null) {
+            Rep::erreur(404, 'document_introuvable', 'Document introuvable.');
+        }
+        header('Content-Type: ' . $d['type_mime']);
+        header('Content-Length: ' . strlen($clair));
+        header('Content-Disposition: inline; filename="' . preg_replace('/[^A-Za-z0-9._-]/', '_', $d['nom']) . '"; filename*=UTF-8\'\'' . rawurlencode($d['nom']));
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: private, no-store');
+        echo $clair;
+        exit;
+
+    case 'POST /documents/liste':
+        $compte = Auth::compte();
+        $rdvUid = Entree::texte('rdv', 64);
+        $lignes = $rdvUid !== null
+            ? Db::tous('SELECT * FROM documents WHERE compte_id = ? AND rdv_uid = ? AND supprime_le IS NULL ORDER BY cree_le', [$compte['id'], $rdvUid])
+            : Db::tous('SELECT * FROM documents WHERE compte_id = ? AND supprime_le IS NULL ORDER BY cree_le', [$compte['id']]);
+        $occupe = Db::un('SELECT COALESCE(SUM(taille), 0) AS n FROM documents WHERE compte_id = ? AND supprime_le IS NULL', [$compte['id']]);
+        Rep::ok(['documents' => array_map('documentsLigne', $lignes), 'occupe' => (int) ($occupe['n'] ?? 0), 'max_fichier' => documentsMaxOctets(), 'max_compte' => documentsMaxCompte()]);
+
+    case 'POST /documents/supprimer':
+        $compte = Auth::compte();
+        $documentId = Entree::entier('document');
+        $d = $documentId === null ? null : Db::un('SELECT * FROM documents WHERE id = ? AND compte_id = ? AND supprime_le IS NULL', [$documentId, $compte['id']]);
+        if ($d === null) {
+            Rep::erreur(404, 'document_introuvable', 'Document introuvable.');
+        }
+        Db::req('UPDATE documents SET supprime_le = NOW() WHERE id = ?', [$documentId]);
+        $chemin = documentsChemin((int) $compte['id'], (int) $documentId, false);
+        if ($chemin !== null && is_file($chemin)) {
+            @unlink($chemin);
+        }
+        Rep::ok(['document' => (int) $documentId]);
+
     case 'POST /commentaires':
         $compte = Auth::compte();
         $entree = Entree::corps();
