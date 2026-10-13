@@ -72,6 +72,20 @@ verifie('2 Mo + 200 octets sur l appareil : « Ce fichier fait 2,01 Mo : 2 Mo au
 const ouvrir = fonction(page, 'tcOuvrirDocument') || '';
 verifie('« Ouvrir » : la fenetre s ouvre DANS le geste (window.open avant l attente), le fichier y arrive ensuite (fenetre.location) ; sinon telechargement avec un mot ; blob libere ; fenetre fermee en cas d erreur', ouvrir.indexOf("window.open('', '_blank')") > 0 && ouvrir.indexOf("window.open('', '_blank')") < ouvrir.indexOf('await TC_BACKEND.lireDocument') && /fenetre\.location = url;/.test(ouvrir) && /a\.download = d\.nom;/.test(ouvrir) && /est téléchargé/.test(ouvrir) && /URL\.revokeObjectURL\(url\)/.test(ouvrir) && /fenetre\.close\(\)/.test(ouvrir) && /\/\^https:\\\/\\\/\/\.test\(String\(d\.lienDrive\)\)/.test(ouvrir));
 verifie('la fiche relit ses documents a l ouverture (tcRapprocherDocumentsDuRdv dans openEventModal, redessin si changement)', /tcRapprocherDocumentsDuRdv\(e\.id\)\.then\(function \(change\) \{/.test(fonction(page, 'openEventModal') || '') && /openEventModal\(e\);/.test(fonction(page, 'openEventModal') || ''));
+// Le redessin ne doit pas effacer une saisie : le formulaire « Modifier » (#editTitle) vit dans le meme cadre.
+(function () {
+  const src = fonction(page, 'openEventModal') || '';
+  const m = /\.then\(function \(change\) \{([\s\S]*?)\n\s*\}\)\.catch/.exec(src);
+  if (!m) { verifie('redessin : rappel extrait', false); return; }
+  function joue(enEdition) {
+    let redessins = 0;
+    const c = vm.createContext({ document: { getElementById: (id) => id === 'eventModal' ? { classList: { contains: () => true } } : (id === 'editTitle' && enEdition ? {} : null) }, openEventModal: () => { redessins++; }, currentEvent: null, e: null });
+    vm.runInContext('var e = {}; currentEvent = e; var change = true;' + m[1], c);
+    return redessins;
+  }
+  verifie('fiche en lecture : elle se redessine quand un document est arrive', joue(false) === 1);
+  verifie('formulaire « Modifier » ouvert dans le meme cadre : la fiche ne se redessine pas, la saisie reste', joue(true) === 0);
+})();
 verifie('types acceptes : pdf, jpg, png, docx, xlsx, pptx, txt ; refuses : exe, zip, html, js, sans extension', ['a.pdf', 'b.JPG', 'c.png', 'd.docx', 'e.xlsx', 'f.pptx', 'g.txt'].every((n) => ctx.tcDocumentTypeAccepte(n)) && ['a.exe', 'b.zip', 'c.html', 'd.js', 'sansext', 'e.php'].every((n) => !ctx.tcDocumentTypeAccepte(n)));
 verifie('tcRefusDocument : trop gros → « Ce fichier fait 3 Mo : 2 Mo au plus par document. » ; type → mot clair ; vide ; bon → \'\'', ctx.tcRefusDocument({ name: 'x.pdf', size: 3 * 1024 * 1024 }) === 'Ce fichier fait 3 Mo : 2 Mo au plus par document.' && /PDF, image, Word, Excel, PowerPoint ou texte/.test(ctx.tcRefusDocument({ name: 'x.exe', size: 10 })) && /vide/.test(ctx.tcRefusDocument({ name: 'x.pdf', size: 0 })) && ctx.tcRefusDocument({ name: 'x.pdf', size: 2 * 1024 * 1024 }) === '' && ctx.tcRefusDocument(null) !== '');
 vm.runInContext("documentsList = [{ id: 'doc_2', serveur: 2, rdv: 'e1', nom: 'Devis <b>.pdf', type: 'application/pdf', taille: 350000, origine: 'appareil', creeLe: '2026-10-12T10:00:00' }, { id: 'doc_1', serveur: 1, rdv: 'e1', nom: 'Photo.jpg', type: 'image/jpeg', taille: 1200000, origine: 'appareil', creeLe: '2026-10-11T10:00:00' }, { id: 'doc_3', serveur: 3, rdv: 'e9', nom: 'Orphelin.txt', type: 'text/plain', taille: 1000, origine: 'appareil', creeLe: '2026-10-10T10:00:00' }];", ctx);

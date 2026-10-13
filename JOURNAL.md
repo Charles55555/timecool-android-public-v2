@@ -2038,3 +2038,4 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   apparaissent ; disparus là-bas, ils s'effacent ici ; un effacement en attente n'est pas rapporté ; la fiche se redessine
   si quelque chose a changé. `verif-documents` complétée ; `verif-documents-e2e` enregistrée dans verifier.sh (l'API
   40a est en production). Non vérifié ici : le geste réel sur iPhone (Testeurs).
+- Correction après examen (13/10, 40c) : la fiche ne se redessine après le rapprochement que si elle est encore en lecture (pas de #editTitle) : une saisie dans « Modifier » ne disparaît plus. Deux cas ajoutés à verif-documents.

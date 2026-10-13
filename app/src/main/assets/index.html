@@ -5427,7 +5427,8 @@ function openEventModal(e) {
   if (e && e.id && typeof tcRapprocherDocumentsDuRdv === 'function') {
     tcRapprocherDocumentsDuRdv(e.id).then(function (change) {
       const m = document.getElementById('eventModal');
-      if (change && m && m.classList.contains('open') && typeof currentEvent !== 'undefined' && currentEvent === e) openEventModal(e);
+      // Seulement si la fiche est encore en lecture : le formulaire « Modifier » (#editTitle) vit dans le meme cadre.
+      if (change && m && m.classList.contains('open') && typeof currentEvent !== 'undefined' && currentEvent === e && !document.getElementById('editTitle')) openEventModal(e);
     }).catch(function () {});
   }
 }
