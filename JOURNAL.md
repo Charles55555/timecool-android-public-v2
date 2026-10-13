@@ -2049,3 +2049,10 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   d'après Content-Length, sinon « Ce fichier est trop gros : … » ; plus de « dépasse 2 Mo ». `verif-documents` reçoit
   MainActivity.java et file_paths.xml en plus. Non vérifié ici : la compilation de MainActivity (pas d'android.jar ; c'est la
   construction de l'APK) et le geste réel sur un téléphone Android (PDF, image, Word, et un type sans application).
+- Mission 40e (13/10, chef de projet ; réserve de l'examinateur sur 40d, décision du chef) : les copies déchiffrées posées
+  dans `cache/documents/` par « Ouvrir » (application Android) sont effacées à la déconnexion (pont
+  `TimeCoolNatif.viderDocumentsOuverts`, appelé par `tcViderDonneesDuCompte`, garde typeof : sans effet sur le web) et au
+  démarrage de l'application (`onCreate`, avant le pont). `viderDocumentsOuvertsReellement` n'efface que les fichiers de ce
+  sous-dossier (jamais `maj/` ni le reste du cache), hors du fil principal, sans se plaindre d'un fichier encore ouvert
+  ailleurs. Rien ne change à l'écran. Trois cas ajoutés à `verif-documents`. Non vérifié ici : compilation (construction de
+  l'APK) et effacement réel sur un téléphone.

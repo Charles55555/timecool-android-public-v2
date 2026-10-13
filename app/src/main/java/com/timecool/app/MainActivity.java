@@ -182,6 +182,10 @@ public class MainActivity extends Activity {
         // navigator.geolocation, permission Android accordée ou non.
         settings.setGeolocationEnabled(true);
 
+        // Les copies déchiffrées laissées par « Ouvrir » (cache/documents/) ne
+        // survivent pas à un redémarrage de l'application.
+        viderDocumentsOuvertsReellement();
+
         // Pont natif : donne à la page l'accès au carnet d'adresses.
         webView.addJavascriptInterface(new PontNatif(), "TimeCoolNatif");
 
@@ -1012,6 +1016,17 @@ public class MainActivity extends Activity {
             }).start();
         }
 
+        /**
+         * Efface les copies déchiffrées posées dans cache/documents/ par
+         * ouvrirDocument(). Appelé par la page à la déconnexion
+         * (tcViderDonneesDuCompte) : les documents d'un compte ne restent pas
+         * lisibles sur l'appareil une fois la session fermée.
+         */
+        @JavascriptInterface
+        public void viderDocumentsOuverts() {
+            viderDocumentsOuvertsReellement();
+        }
+
         @JavascriptInterface
         public void ecrireFichierTelechargement(final String nomFichier,
                                                  final String contenuBase64,
@@ -1513,6 +1528,33 @@ public class MainActivity extends Activity {
      * permission requise. En dessous, écriture directe dans le dossier
      * public (permission déjà vérifiée par l'appelant).
      */
+    /**
+     * Supprime chaque fichier de cache/documents/ (jamais le dossier maj/ ni le
+     * reste du cache), hors du fil principal ; un fichier encore ouvert par une
+     * autre application est simplement ignoré, l'application ne s'en plaint pas.
+     */
+    private void viderDocumentsOuvertsReellement() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File dossier = new File(getCacheDir(), "documents");
+                    File[] fichiers = dossier.listFiles();
+                    if (fichiers == null) {
+                        return;
+                    }
+                    for (File f : fichiers) {
+                        if (f.isFile()) {
+                            f.delete();
+                        }
+                    }
+                } catch (Exception e) {
+                    // Rien à signaler : le cache sera de toute façon nettoyé par Android.
+                }
+            }
+        }).start();
+    }
+
     private boolean ecrireFichierReellement(String nomFichier, String contenuBase64, String mime) {
         byte[] donnees;
         try {

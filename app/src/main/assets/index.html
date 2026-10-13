@@ -23731,6 +23731,8 @@ function tcViderDonneesDuCompte() {
   if (typeof groupConvocations !== 'undefined') groupConvocations = [];
   if (typeof documentsList !== 'undefined') documentsList = [];
   try { localStorage.removeItem('tc_documents_a_effacer'); } catch (e) {}
+  // Les copies dechiffrees ouvertes par le telephone (cache de l application Android) partent avec le compte (mission 40e).
+  if (typeof window !== 'undefined' && window.TimeCoolNatif && typeof window.TimeCoolNatif.viderDocumentsOuverts === 'function') { try { window.TimeCoolNatif.viderDocumentsOuverts(); } catch (e) {} }
   // Ce que Charly garde en memoire appartient aussi au compte : la conversation (et avec elle les propositions
   // en attente), les questions en suspens, l agenda isole. Sans cela, le compte suivant voyait « Bonjour Fanny ! »
   // jusqu au rechargement (campagne 10, 12/10).
