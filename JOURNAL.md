@@ -2027,3 +2027,14 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   (40b : https seulement) ; aucun plafond du nombre d'envois par heure (la place est bornée).
 - Correction (13/10) : l identifiant du compte à supprimer est lu sans le filtre « clôturé » de compteParReference : un compte
   clôturé se supprime aussi, et ses fichiers avec lui. Vérification statique ajoutée.
+- Mission 40c (13/10, chef de projet ; défauts des Testeurs sur v2.0.362) : (1) iPhone : « Ouvrir » ouvre la fenêtre DANS le
+  geste (`window.open` avant l'attente du fichier, un mot d'attente dedans), puis y pose le fichier ; fenêtre refusée ou
+  type qui ne s'affiche pas (Word, Excel, PowerPoint) → téléchargement avec un mot calme ; erreur → la fenêtre se ferme ;
+  le blob est libéré après une minute ; lien Drive ouvert seulement s'il commence par https. (2) Taille qui ne se contredit
+  jamais : arrondie vers le HAUT au centième de Mo (« 2,01 Mo » pour 2 Mo + 200 octets, « 1024 Ko » juste sous 1 Mo), même
+  règle page (`tcTailleLisible`) et serveur (`documentsMoLisible`). (3) La fiche d'un rendez-vous relit ses documents sur
+  le serveur à l'ouverture (`tcRapprocherDocumentsDuRdv` : une petite requête `POST /documents/liste` pour ce seul
+  rendez-vous, au plus une fois par minute par rendez-vous, rien au démarrage) : joints depuis un autre appareil, ils
+  apparaissent ; disparus là-bas, ils s'effacent ici ; un effacement en attente n'est pas rapporté ; la fiche se redessine
+  si quelque chose a changé. `verif-documents` complétée ; `verif-documents-e2e` enregistrée dans verifier.sh (l'API
+  40a est en production). Non vérifié ici : le geste réel sur iPhone (Testeurs).

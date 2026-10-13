@@ -604,11 +604,14 @@ function documentsMaxCompte(): int
 /** « 2 Mo », « 1,5 Mo », « 340 Ko ». */
 function documentsMoLisible(int $octets): string
 {
+    // Arrondie vers le HAUT au centieme : « 2,01 Mo » pour 2 Mo + 200 octets, jamais « 2 Mo » qui contredirait le plafond.
     if ($octets >= 1024 * 1024) {
-        $mo = $octets / (1024 * 1024);
-        return (abs($mo - round($mo)) < 0.05 ? (string) round($mo) : number_format($mo, 1, ',', '')) . ' Mo';
+        $mo = ceil($octets / (1024 * 1024) * 100) / 100;
+        $texte = number_format($mo, 2, ',', '');
+        $texte = rtrim(rtrim($texte, '0'), ',');
+        return $texte . ' Mo';
     }
-    return (string) max(1, (int) round($octets / 1024)) . ' Ko';
+    return (string) max(1, (int) ceil($octets / 1024)) . ' Ko';
 }
 /** Le chemin du fichier d un document ; cree le dossier du compte au besoin (null si impossible). */
 function documentsChemin(int $compteId, int $documentId, bool $creer = true): ?string

@@ -5423,6 +5423,13 @@ function openEventModal(e) {
     prevenirRow.innerHTML = '';
   }
   document.getElementById('eventModal').classList.add('open');
+  // Les documents du rendez-vous, relus sur le serveur (mission 40c) : la fiche se redessine si quelque chose a change.
+  if (e && e.id && typeof tcRapprocherDocumentsDuRdv === 'function') {
+    tcRapprocherDocumentsDuRdv(e.id).then(function (change) {
+      const m = document.getElementById('eventModal');
+      if (change && m && m.classList.contains('open') && typeof currentEvent !== 'undefined' && currentEvent === e) openEventModal(e);
+    }).catch(function () {});
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -10846,8 +10853,12 @@ loadDocuments();
 /** « 1,4 Mo », « 320 Ko ». */
 function tcTailleLisible(octets) {
   const n = Number(octets) || 0;
-  if (n >= 1024 * 1024) { const mo = n / (1024 * 1024); return (Math.abs(mo - Math.round(mo)) < 0.05 ? String(Math.round(mo)) : mo.toFixed(1).replace('.', ',')) + ' Mo'; }
-  return String(Math.max(1, Math.round(n / 1024))) + ' Ko';
+  // Arrondie vers le HAUT au centieme de Mo : « 2,01 Mo » pour 2 Mo + 200 octets, jamais « 2 Mo » qui contredirait le plafond.
+  if (n >= 1024 * 1024) {
+    const mo = Math.ceil(n / (1024 * 1024) * 100) / 100;
+    return mo.toFixed(2).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',') + ' Mo';
+  }
+  return String(Math.max(1, Math.ceil(n / 1024))) + ' Ko';
 }
 /** Le type est-il accepte (d apres le nom) ? */
 function tcDocumentTypeAccepte(nom) {
@@ -10923,18 +10934,34 @@ function tcRafraichirFicheDocuments(rdvId) {
 async function tcOuvrirDocument(id) {
   const d = (documentsList || []).find(function (x) { return x && x.id === id; });
   if (!d) return;
-  if (d.origine === 'drive' && d.lienDrive) { window.open(d.lienDrive, '_blank'); return; }
+  if (d.origine === 'drive' && d.lienDrive) { if (/^https:\/\//.test(String(d.lienDrive))) window.open(d.lienDrive, '_blank', 'noopener'); return; }
+  const visible = /^(image\/|application\/pdf|text\/)/.test(d.type || '');
+  // La fenetre s ouvre DANS le geste (Safari et Chrome iOS refusent une fenetre ouverte apres une attente) ; le fichier
+  // y arrive une fois telecharge. Word, Excel, PowerPoint ne s affichent pas : ils se telechargent.
+  let fenetre = null;
+  if (visible) {
+    try { fenetre = window.open('', '_blank'); } catch (e) { fenetre = null; }
+    if (fenetre) { try { fenetre.document.write('<title>' + escapeHTMLSafe(d.nom) + '</title><p style="font-family:sans-serif;padding:24px;color:#5f6368;">Ouverture de « ' + escapeHTMLSafe(d.nom) + ' »…</p>'); } catch (e) {} }
+  }
   showToast('⏳ Ouverture de « ' + d.nom + ' »…');
+  let url = null;
   try {
     const blob = await TC_BACKEND.lireDocument(d.serveur);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.target = '_blank'; a.rel = 'noopener';
-    if (!/^(image\/|application\/pdf|text\/)/.test(d.type || '')) a.download = d.nom;   // Word, Excel… : le navigateur n affiche pas, il enregistre
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    url = URL.createObjectURL(blob);
+    if (fenetre && !fenetre.closed) {
+      fenetre.location = url;
+    } else {
+      // Pas de fenetre (refusee par le navigateur, ou un type qui ne s affiche pas) : le fichier se telecharge.
+      const a = document.createElement('a');
+      a.href = url; a.download = d.nom; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      showToast(visible ? '📥 « ' + d.nom + ' » est téléchargé : ouvre-le depuis tes téléchargements' : '📥 « ' + d.nom + ' » est téléchargé');
+    }
   } catch (e) {
+    if (fenetre && !fenetre.closed) { try { fenetre.close(); } catch (e2) {} }
     showToast('⚠️ ' + ((e && e.code === 'document_introuvable') ? 'Ce document n’est plus sur le serveur' : 'Document indisponible : réessaie dans un instant'));
+  } finally {
+    if (url) setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
 }
 /** « Retirer » : apres confirmation, le serveur efface le fichier, la liste suit. */
@@ -10988,6 +11015,31 @@ async function tcRejouerEffacementsDocuments() {
     }
   } finally { _tcRejeuEffacementsEnCours = false; }
   return faits;
+}
+/** La fiche d un rendez-vous relit ses documents sur le serveur (une petite requete, au plus une fois par minute par rendez-vous) :
+    joints depuis un autre appareil, ils apparaissent sans ouvrir « Mes documents » ; disparus la-bas, ils s effacent ici. */
+const _tcDocumentsRdvRelus = {};
+async function tcRapprocherDocumentsDuRdv(rdvId, force) {
+  if (!rdvId || typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) return false;
+  const cle = String(rdvId);
+  if (!force && _tcDocumentsRdvRelus[cle] && Date.now() - _tcDocumentsRdvRelus[cle] < 60000) return false;
+  _tcDocumentsRdvRelus[cle] = Date.now();
+  let r;
+  try { r = await TC_BACKEND.listerDocuments(cle); } catch (e) { return false; }
+  if (r && Number(r.max_compte) > 0) _tcDocumentsMaxCompte = Number(r.max_compte);
+  const attente = tcEffacementsEnAttente();
+  const serveur = (r && Array.isArray(r.documents) ? r.documents : []).filter(function (d) { return d && d.id > 0 && attente.indexOf(Number(d.id)) < 0; });
+  let change = false;
+  serveur.forEach(function (d) {
+    if ((documentsList || []).some(function (x) { return x && Number(x.serveur) === Number(d.id); })) return;
+    documentsList.push({ id: 'doc_' + d.id, serveur: d.id, rdv: cle, nom: d.nom, type: d.type, taille: d.taille, origine: d.origine || 'appareil', lienDrive: d.lien_drive || '', creeLe: d.cree_le || '' });
+    change = true;
+  });
+  const avant = documentsList.length;
+  documentsList = (documentsList || []).filter(function (x) { return !(x && String(x.rdv) === cle) || serveur.some(function (d) { return Number(d.id) === Number(x.serveur); }); });
+  if (documentsList.length !== avant) change = true;
+  if (change) saveDocuments();
+  return change;
 }
 /** « Mes documents » relit le serveur : ce qui manque ici (autre appareil, effacement perdu) apparait, avec Retirer. */
 async function tcRapprocherDocumentsDuServeur() {
