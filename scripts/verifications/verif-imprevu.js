@@ -62,7 +62,7 @@ vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null
  'tcEvenementSurPlusieursJours', 'tcEstBandeau', 'tcMinutesDeHeure', 'tcSansTempsProtege', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour',
  'tcCreneauxDisponibles', 'tcRemplirModele', 'tcValeursDuRdv', '_tcLigneRdv', 'tcAppliquerDeplacement', 'tcMemoriserSuppression',
  'tcSupprimerRdvs', 'tcPhraseNonCompris', 'tcRessembleAUneDemande', 'tcContactDuRdv', 'tcBulleCharly', 'charlyQuickAction',
- 'tcCleModele', 'tcModeleMessage', 'tcHeureDansTexte', 'tcDetecterMarcheArriere', 'tcMarcheArriere'
+ 'tcCleModele', 'tcModeleMessage', 'tcHeureDansTexte', 'tcDetecterMarcheArriere', 'tcMarcheArriere', 'tcHeureLisible', 'tcJoursFermes', 'tcGererDemandeCreneau'
 ].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 const debutBloc = page.indexOf('   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43');
 const finBloc = page.indexOf('function showConflictWarning(');
@@ -95,7 +95,7 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
 
   titre('2. En retard, le prochain rendez-vous, 15 minutes, Charly prévient : la nouvelle heure part, l agenda ne bouge pas');
   await cliquer(0);
-  verifie('« Ça touche quoi ? », trois choix exacts', carte()._questionnaire.question === 'Ça touche quoi ?' && choixTextes() === 'Le prochain rendez-vous | Le reste de la journée | Un rendez-vous précis', choixTextes());
+  verifie('« Ça touche quoi ? » : pour un retard, deux choix seulement (jamais « le reste de la journée » : le même retard pour toute la journée n a pas de sens)', carte()._questionnaire.question === 'Ça touche quoi ?' && choixTextes() === 'Le prochain rendez-vous | Un rendez-vous précis', choixTextes());
   await cliquer(0);
   verifie('le prochain rendez-vous est « Dentiste » 11h (pas le petit déjeuner passé, pas la fête, pas l agenda pro)', /Le rendez-vous touché :\n• « Dentiste », /.test(textes()) && textes().indexOf('« Dentiste », ' + quand(iso(0), { startH: 11, startM: 0, endH: 12, endM: 0 })) > -1 && !/Petit déjeuner|Fête|Client/.test(textes()), textes());
   verifie('« Combien de retard, à peu près ? », quatre choix', carte()._questionnaire.question === 'Combien de retard, à peu près ?' && choixTextes() === '10 minutes | 15 minutes | 30 minutes | Environ 1 heure', choixTextes());
@@ -118,7 +118,9 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
   titre('3. Partir plus tôt, le reste de la journée, décaler : créneaux dès demain, Marc par TimeCool, Sophie par SMS (bouton)');
   reinit();
   await ctx.tcDemarrerImprevu('j’ai un imprévu');
-  await cliquer(1); await cliquer(1);
+  await cliquer(1);
+  verifie('« Ça touche quoi ? », trois choix exacts (partir plus tôt)', carte()._questionnaire.question === 'Ça touche quoi ?' && choixTextes() === 'Le prochain rendez-vous | Le reste de la journée | Un rendez-vous précis', choixTextes());
+  await cliquer(1);
   const l3 = H().filter((m) => /Voici tes rendez-vous pour le reste de la journée/.test(m.content))[0];
   verifie('la liste : Dentiste 11h et Coach 15h (pas le passé, pas la journée entière, pas l agenda pro)', l3 && /« Dentiste »/.test(l3.content) && /« Coach »/.test(l3.content) && !/Petit déjeuner|Fête|Client|Banque/.test(l3.content), l3 && l3.content);
   verifie('« Que fait-on ? » avec les trois actions', carte()._questionnaire.question === 'Que fait-on ?' && choixTextes() === 'Je les décale (je te propose de nouveaux créneaux) | Je les supprime | Je ne touche à rien', choixTextes());
@@ -194,6 +196,27 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
   verifie('la marche arrière lit « prevenus » quand il est là, et garde tout le monde sinon', /Array\.isArray\(m\.prevenus\) && m\.prevenus\.indexOf\(c\.name\) < 0/.test(fonction(page, 'tcMarcheArriere') || '') && /tcQuestionnaireNoms\(contacts\)/.test(fonction(page, 'tcMarcheArriere') || ''));
   verifie('pas de tiret long dans le bloc, pas d assertion arrière dans la page (Safari)', bloc.indexOf('—') < 0 && page.indexOf('(?<') < 0);
   verifie('le bouton de l écran Charly est inchangé', /charlyQuickAction\('impprevu'\)[^>]*>⚡ Gérer un imprévu<\/button>/.test(page));
+
+  titre('8. Examinateur : « Quand suis-je libre samedi ? » sur un jour fermé dit la vérité, jamais « aucun créneau libre »');
+  const SAMEDI = { debut: new Date(2026, 9, 17), fin: null, label: 'samedi' };
+  const VENDREDI = { debut: new Date(2026, 9, 16), fin: null, label: 'vendredi' };
+  const reponse = async (periode) => { ctx.charlyIA.history = []; await ctx.tcGererDemandeCreneau('Quand suis-je libre ' + periode.label + ' ?', { periode: periode }); return dernier().content; };
+  reinit([]); ctx._dispoData = {};
+  let rep8 = await reponse(SAMEDI);
+  verifie('compte sans plage, agenda vide, samedi : « Sans plages ouvertes … je ne propose pas de créneau le week-end. Rien n’est noté … »', /^Sans plages ouvertes dans Mes disponibilités, je ne propose pas de créneau le week-end\. Rien n’est noté dans ton agenda samedi\. Tu veux que je regarde un autre jour \?$/.test(rep8) && !/aucun créneau libre/.test(rep8), rep8);
+  ctx._dispoData = { travail: [{ jours: [1, 2, 3, 4, 5], debut: '09:00', fin: '18:00' }] };
+  rep8 = await reponse(SAMEDI);
+  verifie('plages lundi-vendredi, samedi : « Tes disponibilités ne sont pas ouvertes samedi … Rien n’est noté … »', /^Tes disponibilités ne sont pas ouvertes samedi : je ne propose pas de créneau en dehors de tes plages\. Rien n’est noté dans ton agenda samedi\. Tu veux que je regarde un autre jour \?$/.test(rep8), rep8);
+  reinit([ev('s', 'Marché', 2, 10, 0, 11, 0)]); ctx._dispoData = { travail: [{ jours: [1, 2, 3, 4, 5], debut: '09:00', fin: '18:00' }] };
+  rep8 = await reponse(SAMEDI);
+  verifie('samedi fermé mais un rendez-vous noté : « Tu as déjà quelque chose de noté samedi »', /ne sont pas ouvertes samedi/.test(rep8) && /Tu as déjà quelque chose de noté samedi\./.test(rep8) && !/Rien n’est noté/.test(rep8), rep8);
+  reinit([ev('f', 'Formation', 1, 9, 0, 18, 0)]); ctx._dispoData = { travail: [{ jours: [1, 2, 3, 4, 5], debut: '09:00', fin: '18:00' }] };
+  rep8 = await reponse(VENDREDI);
+  verifie('vendredi ouvert mais plein : « Je ne vois aucun créneau libre vendredi. Tu veux que je regarde plus loin ? » comme avant', /^Je ne vois aucun créneau libre vendredi\. Tu veux que je regarde plus loin \?$/.test(rep8), rep8);
+  reinit([]); ctx._dispoData = {};
+  rep8 = await reponse(VENDREDI);
+  verifie('vendredi, compte sans plage : la journée de repli est proposée et dite', /Voici ce qui est libre vendredi/.test(rep8) && /Mes disponibilités/.test(rep8), rep8);
+  ctx._dispoData = {};
 
   console.log('');
   console.log(ko + ' anomalie(s).');

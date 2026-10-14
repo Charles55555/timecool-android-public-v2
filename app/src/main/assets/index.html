@@ -13792,6 +13792,26 @@ function detecterDemandeCreneau(text) {
  *
  * Instantané et gratuit : tout est déjà sur l'appareil.
  */
+/**
+ * Les jours d'une période sont-ils tous fermés dans « Mes disponibilités » ? `defaut` : parce qu'aucune plage n'est
+ * déclarée (le week-end du repli), et non par choix ; `occupe` : quelque chose y est déjà noté.
+ */
+function tcJoursFermes(periode) {
+  const now = new Date();
+  const debut = (periode && periode.debut) ? new Date(periode.debut) : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const fin = (periode && periode.fin) ? new Date(periode.fin) : new Date(debut.getFullYear(), debut.getMonth(), debut.getDate() + 13);
+  const bilan = { tous: true, defaut: false, occupe: false };
+  for (let jour = new Date(debut), n = 0; jour <= fin && n < 400; jour.setDate(jour.getDate() + 1), n++) {
+    const dateISO = tcISO(jour);
+    if (periode && periode.jours && periode.jours.indexOf(dateISO) < 0) continue;
+    const info = tcPlagesDuJour(jour);
+    if (info.plages.length) { bilan.tous = false; break; }
+    if (info.defaut) bilan.defaut = true;
+    if (tcOccupationsDuJour(dateISO).length) bilan.occupe = true;
+  }
+  return bilan;
+}
+
 async function tcGererDemandeCreneau(text, intent) {
   tcPousserMessageUtilisateur(text);
   let periode = intent && intent.periode;
@@ -13801,11 +13821,16 @@ async function tcGererDemandeCreneau(text, intent) {
   const r = tcCreneauxDisponibles(periode, 5);
 
   if (!r.creneaux.length) {
-    charlyIA.history.push({
-      role: 'assistant',
-      content: 'Je ne vois aucun créneau libre ' + quand
-        + '. Tu veux que je regarde plus loin ?'
-    });
+    // Un jour fermé dans « Mes disponibilités » (ou le week-end, sans plage déclarée) n'est pas « sans créneau libre » :
+    // on dit ce qui est vrai (examen de la mission 44, 15/10).
+    const fermes = tcJoursFermes(periode);
+    let texte;
+    if (fermes.tous && fermes.defaut) texte = 'Sans plages ouvertes dans Mes disponibilités, je ne propose pas de créneau le week-end.';
+    else if (fermes.tous) texte = 'Tes disponibilités ne sont pas ouvertes ' + quand + ' : je ne propose pas de créneau en dehors de tes plages.';
+    else texte = 'Je ne vois aucun créneau libre ' + quand + '.';
+    if (fermes.tous) texte += fermes.occupe ? ' Tu as déjà quelque chose de noté ' + quand + '.' : ' Rien n’est noté dans ton agenda ' + quand + '.';
+    texte += fermes.tous ? ' Tu veux que je regarde un autre jour ?' : ' Tu veux que je regarde plus loin ?';
+    charlyIA.history.push({ role: 'assistant', content: texte });
     renderCharlyChat();
     return;
   }
@@ -19550,7 +19575,12 @@ const TC_QUESTIONNAIRE_IMPREVU = {
     { cle: 'quoi', question: 'Qu’est-ce qui t’arrive ?',
       choix: Object.keys(TC_IMPREVU_QUOI).map(function (k) { return { cle: k, texte: TC_IMPREVU_QUOI[k].texte, mots: TC_IMPREVU_QUOI[k].mots }; }) },
     { cle: 'quand', question: 'Ça touche quoi ?',
-      choix: Object.keys(TC_IMPREVU_QUAND).map(function (k) { return { cle: k, texte: TC_IMPREVU_QUAND[k].texte, mots: TC_IMPREVU_QUAND[k].mots }; }) },
+      // Un retard ne vaut que pour le prochain rendez-vous ou un rendez-vous précis : le même retard annoncé à toute la
+      // journée n'aurait pas de sens (examen de la mission 44).
+      choix: function (r) {
+        return Object.keys(TC_IMPREVU_QUAND).filter(function (k) { return !(r.quoi === 'retard' && k === 'reste_journee'); })
+          .map(function (k) { return { cle: k, texte: TC_IMPREVU_QUAND[k].texte, mots: TC_IMPREVU_QUAND[k].mots }; });
+      } },
     { cle: 'lequel', si: function (r) { return r.quand === 'precis'; },
       avant: function (r) {
         r._avenir = tcImprevuRdvAVenir();

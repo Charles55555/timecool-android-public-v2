@@ -2188,3 +2188,12 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   11h-12h et 14h-15h seuls en repli, ce qui viderait « Quand suis-je libre ? » d’un compte neuf). L’API ne change pas.
   Suites : verif-imprevu réécrite (nouveau parcours, 43b, 50 cas), verif-questionnaire-malade (noms génériques),
   verif-creneaux-proposes (samedi fermé, repli en semaine), verif-marche-arriere (prevenus), banc-charly (aiguillage), verif-deconnexion et verif-temps-protege (ajustées).
+  Reprise après l’examinateur (15/10) : « Quand suis-je libre samedi ? » sur un jour fermé disait « aucun créneau
+  libre » à un agenda vide. tcJoursFermes regarde les jours de la période : tous fermés par le repli (week-end sans plage
+  déclarée) → « Sans plages ouvertes dans Mes disponibilités, je ne propose pas de créneau le week-end. » ; tous fermés par
+  réglage → « Tes disponibilités ne sont pas ouvertes samedi : je ne propose pas de créneau en dehors de tes plages. » ;
+  puis « Rien n’est noté dans ton agenda samedi. » ou « Tu as déjà quelque chose de noté samedi. », et « Tu veux que je
+  regarde un autre jour ? ». Un jour ouvert mais plein garde « Je ne vois aucun créneau libre … plus loin ? ». Un retard
+  ne touche que le prochain rendez-vous ou un rendez-vous précis (plus « le reste de la journée » pour ce cas). La règle
+  « jamais le week-end sans plage déclarée » reste à faire valider par le chef / Charles avant la mise en ligne.
+  verif-imprevu : cinq cas de plus (section 8).

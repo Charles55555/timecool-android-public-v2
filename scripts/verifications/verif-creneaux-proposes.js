@@ -42,7 +42,7 @@ vm.createContext(ctx);
 ['tcISO', 'tcFormaterDateHumaine', 'tcEvenementFin', 'tcEvenementCouvre',
  'tcSansTempsProtege', 'tcMinutesDeHeure', 'tcHeureLisible', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour',
  'tcCreneauxDisponibles', 'tcPeriodeAgenda', 'tcSansAccents', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'detecterDemandeCreneau',
- 'tcGererDemandeCreneau'].forEach((n) => {
+ 'tcJoursFermes', 'tcGererDemandeCreneau'].forEach((n) => {
   const src = extraire(n);
   if (src) {
     try { vm.runInContext(src, ctx); }
