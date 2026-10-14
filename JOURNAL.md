@@ -2160,3 +2160,31 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   rendu par tcRendreBilanMalade) porte un bouton « Envoyer à … » par message, tcMaladeEnvoyer l’ouvre par
   tcTransmettrePrevenance avec le texte prêt et le bouton le dit une fois touché. La messagerie TimeCool part toujours
   tout de suite. Deux cas de plus dans verif-questionnaire-malade.
+- Mission 44 (15/10, chef, validée par Charles) : « Gérer un imprévu » passe sur le moteur de questionnaire de la
+  mission 43. Le bloc est réécrit en entier : le moteur (une étape « libre » de plus, pour lire « 20 minutes » hors des
+  choix), les aides partagées sous un nom générique (tcQuestionnaireDire / Quand / Noms / Contacts / Rdv / Creneaux /
+  Recap / Message / Executer / Envoyer, tcRendreBilanQuestionnaire), deux étapes partagées (TC_ETAPE_PREVENIR,
+  TC_ETAPE_RECAP) et les trois actions (TC_QUESTIONNAIRE_ACTIONS), puis les deux parcours : « malade » (inchangé pour
+  l’utilisateur) et « imprévu » (TC_QUESTIONNAIRE_IMPREVU) : 1) « Qu’est-ce qui t’arrive ? » (Je suis en retard / Je
+  dois partir plus tôt / Un rendez-vous s’ajoute / Je ne peux pas venir) ; 2) « Ça touche quoi ? » (Le prochain
+  rendez-vous / Le reste de la journée / Un rendez-vous précis, puis « Lequel ? » parmi les rendez-vous à venir sur deux
+  semaines, sept au plus, jamais un passé ni une journée entière) ; 3) la solution du cas : retard → « Combien de
+  retard, à peu près ? » (10 / 15 / 30 / environ 1 heure, ou un nombre tapé) et le message « Je serai en retard » des
+  Paramètres complété de « Je serai là vers HHhMM » (l’agenda ne bouge pas, comme « Prévenir d’un retard ») ; partir plus
+  tôt ou je ne peux pas venir → « Que fait-on ? » (décaler avec créneaux proposés / supprimer / rien) ; rendez-vous qui
+  s’ajoute → on fait de la place (décaler, créneaux proposés dès le lendemain du rendez-vous touché) ; 4) qui prévient ;
+  5) récapitulatif « Oui, vas-y » ; 6) « C’est fait. » et le bilan (un message par rendez-vous, bouton « Envoyer à … »
+  par SMS ou email, « remets-les »). Le bouton appelle tcDemarrerImprevu('J’ai un imprévu') ; « j’ai un imprévu » tapé
+  sans jour va au même questionnaire (avec un jour, la contrainte comme avant). L’ancien parcours (TC_QUESTION_IMPREVU,
+  _tcImprevuEnAttente, tcRepondreImprevu, tcPeriodeImprevu) est retiré. La phrase tapée pré-remplit ce qu’elle dit
+  (« je suis en retard », « partir plus tôt », « aujourd’hui », « le prochain rendez-vous »).
+  43b (détails TESTEURS) : après « remets-les », seuls les contacts vraiment prévenus sont rappelés (le questionnaire
+  note `prevenus` dans la marche arrière, y compris au toucher d’un bouton « Envoyer à … » ; sans cette note, comme
+  avant) ; « et » avant le dernier nom (tcQuestionnaireNoms, aussi dans la marche arrière) ; modèles par défaut sans
+  « désolé(e) » (« Bonjour [Prénom], je dois décaler… », « Bonjour [Prénom], un imprévu m’oblige à annuler… ») ; sans
+  aucune plage déclarée, la journée de repli 9h-18h vaut du lundi au vendredi seulement (jamais un créneau le week-end),
+  et un jour sans plage quand d’autres en ont est fermé (tcDesPlagesDeclarees ; une plage invalide ne compte pas).
+  Décision prise seule : « reprendre les plages douces par défaut » lu comme « jamais le week-end » (pas mardi/jeudi
+  11h-12h et 14h-15h seuls en repli, ce qui viderait « Quand suis-je libre ? » d’un compte neuf). L’API ne change pas.
+  Suites : verif-imprevu réécrite (nouveau parcours, 43b, 50 cas), verif-questionnaire-malade (noms génériques),
+  verif-creneaux-proposes (samedi fermé, repli en semaine), verif-marche-arriere (prevenus), banc-charly (aiguillage), verif-deconnexion et verif-temps-protege (ajustées).

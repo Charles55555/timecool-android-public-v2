@@ -40,7 +40,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 ['tcISO', 'tcFormaterDateHumaine', 'tcEvenementFin', 'tcEvenementCouvre',
- 'tcSansTempsProtege', 'tcMinutesDeHeure', 'tcHeureLisible', 'tcPlagesDuJour', 'tcOccupationsDuJour',
+ 'tcSansTempsProtege', 'tcMinutesDeHeure', 'tcHeureLisible', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour',
  'tcCreneauxDisponibles', 'tcPeriodeAgenda', 'tcSansAccents', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'detecterDemandeCreneau',
  'tcGererDemandeCreneau'].forEach((n) => {
   const src = extraire(n);
@@ -82,8 +82,10 @@ titre('Les plages ouvertes du jour');
   verifie('et ce sont bien tes plages', lundi.defaut === false);
 
   const samedi = ctx.tcPlagesDuJour(jourPlus(5));
-  verifie('le samedi ne l est pas', samedi.defaut === true,
-    'aucune plage ce jour-la : on le dit au lieu de rien proposer');
+  verifie('le samedi est fermé : des plages sont déclarées, aucune ce jour-là, rien n est inventé (43b, 15/10)', samedi.plages.length === 0 && samedi.defaut === false,
+    'avant, une journée 9h-18h était inventée le week-end');
+  decor(null);
+  verifie('sans aucune plage déclarée : lundi à vendredi en repli, jamais le samedi ni le dimanche (43b)', ctx.tcPlagesDuJour(LUNDI).plages.length === 1 && ctx.tcPlagesDuJour(LUNDI).defaut === true && ctx.tcPlagesDuJour(jourPlus(5)).plages.length === 0 && ctx.tcPlagesDuJour(jourPlus(6)).plages.length === 0);
 
   decor([
     { jours: [1], debut: '09:00', fin: '12:00' },

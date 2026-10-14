@@ -37,7 +37,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null;', ctx);
-['tcSansAccents', 'tcHeureDansTexte', 'tcFormaterHeure', 'tcContactDuRdv', '_tcLigneRdv',
+['tcSansAccents', 'tcHeureDansTexte', 'tcFormaterHeure', 'tcContactDuRdv', '_tcLigneRdv', 'tcQuestionnaireNoms',
  'tcMemoriserSuppression', 'tcDetecterMarcheArriere', 'tcMarcheArriere', 'tcSupprimerRdvs', 'tcAppliquerDeplacement'
 ].forEach((n) => {
   const src = extraire(n);
@@ -86,6 +86,13 @@ const D = (t) => ctx.tcDetecterMarcheArriere(t);
   await ctx.tcMarcheArriere('je me suis trompé, remets-les');
   verifie('les trois sont remis', ctx.events.length === 3);
   verifie('Charly les liste et rappelle de prevenir Marc que c est maintenu', /3 rendez-vous remis :/.test(dernier().content) && /Dentiste/.test(dernier().content) && /Pense à prévenir Marc Dupont que c'est maintenu/.test(dernier().content), dernier().content);
+  // 43b (15/10) : quand la suppression a noté qui a vraiment été prévenu, « remets-les » ne parle qu à eux.
+  reinit(); ctx.tcSupprimerRdvs([ctx.events[1]]); vm.runInContext('_tcMarcheArriere.prevenus = []', ctx);
+  await ctx.tcMarcheArriere('remets-le');
+  verifie('43b : personne n a été prévenu (noté) : pas de « pense à prévenir »', ctx.events.length === 3 && /est remis/.test(dernier().content) && !/Pense à prévenir/.test(dernier().content), dernier().content);
+  reinit(); ctx.tcSupprimerRdvs([ctx.events[1]]); vm.runInContext("_tcMarcheArriere.prevenus = ['Marc Dupont']", ctx);
+  await ctx.tcMarcheArriere('remets-le');
+  verifie('43b : Marc a vraiment été prévenu : il est rappelé', /Pense à prévenir Marc Dupont que c'est maintenu/.test(dernier().content), dernier().content);
 
   titre('Un deplacement, puis « remets-le »');
   reinit();

@@ -205,7 +205,7 @@ titre('4. Charly ne propose jamais le temps protege');
 const c2 = {};
 vm.createContext(c2);
 vm.runInContext('var _dispoData = null; function loadDispo() {}', c2);
-['tcMinutesDeHeure', 'tcSansTempsProtege', 'tcPlagesDuJour'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, c2); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+['tcMinutesDeHeure', 'tcSansTempsProtege', 'tcDesPlagesDeclarees', 'tcPlagesDuJour'].forEach((n) => { const s = fonction(page, n); if (s) vm.runInContext(s, c2); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 const VEN = new Date(2026, 9, 16);
 const LUN = new Date(2026, 9, 12);
 c2.d = { travail: [{ jours: [1, 2, 3, 4, 5], debut: '09:00', fin: '19:00' }], personnel: [{ jours: [5], debut: '13:00', fin: '20:00' }] };

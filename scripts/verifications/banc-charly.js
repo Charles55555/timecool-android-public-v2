@@ -143,7 +143,7 @@ function route(text) {
 titre('L ordre des traitements dans l application est celui du banc');
 {
   const src = extraire('charlySendMessage') || '';
-  const ordre = ['tcDetecterMarcheArriere(text)', 'tcDetecterPrevenance(text)', 'tcDemarrerImprevu()', 'tcDetecterMalade(text)', 'tcDetecterContrainte(text)', 'detecterSuppressionRdv(text)',
+  const ordre = ['tcDetecterMarcheArriere(text)', 'tcDetecterPrevenance(text)', 'tcDemarrerImprevu(text)', 'tcDetecterMalade(text)', 'tcDetecterContrainte(text)', 'detecterSuppressionRdv(text)',
     'detecterConsultationAgenda(text)', 'detecterDemandeCreneau(text)', 'detecterRechercheProfessionnel(text)',
     'detecterDemandeTrajet(text)', 'detecterRechercheWeb(text)', 'const _faqMatch', 'const _unavailMatch'];
   const pos = ordre.map((o) => src.indexOf(o));

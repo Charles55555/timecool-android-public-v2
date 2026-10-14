@@ -1,147 +1,201 @@
-// « Gérer un imprévu » : une question posée par Charly (jour + partie de la
-// journée), puis l'agenda est regardé seul et le questionnaire à trois choix
-// s'affiche.
-//
-// Charles, 04/10 : « Tu veux réorganiser ton agenda ! Quel jour ? Que le
-// matin ? Que l'après-midi ? Quelle heure ? »
+// « Gérer un imprévu » (mission 44, chef, 15/10, validée par Charles) : le bouton passe sur le moteur de questionnaire de
+// la mission 43. Quoi (retard / partir plus tôt / rendez-vous qui s ajoute / je ne peux pas venir) → ça touche quoi
+// (prochain / reste de la journée / un rendez-vous précis) → la solution du cas (prévenir avec la nouvelle heure ;
+// décaler ou supprimer ; faire de la place) avec créneaux proposés → qui prévient → récap « Oui, vas-y » → « C’est fait. »
+// et le bilan. Avec 43b : marche arrière qui ne rappelle que les contacts vraiment prévenus, « et » avant le dernier nom,
+// formule neutre, jamais un créneau le week-end par défaut. Usage : node verif-imprevu.js <index.html>
 const fs = require('fs');
 const vm = require('vm');
-
 const page = fs.readFileSync(process.argv[2], 'utf8');
-
 let ko = 0;
-function verifie(l, c, d) {
-  if (!c) ko++;
-  console.log('  ' + (c ? 'OK ' : 'KO ') + l + (d ? '  - ' + d : ''));
-}
+function verifie(l, c, d) { if (!c) ko++; console.log('  ' + (c ? 'OK ' : 'KO ') + l + (d ? '  - ' + String(d).replace(/\s*\n\s*/g, ' ').slice(0, 300) : '')); }
 function titre(t) { console.log(''); console.log('-- ' + t + ' --'); }
-
-function extraire(nom) {
-  let debut = page.indexOf('function ' + nom + '(');
-  if (debut < 0) return null;
-  if (page.slice(debut - 6, debut) === 'async ') debut -= 6;
+function fonction(texte, nom) {
+  let d = texte.indexOf('function ' + nom + '(');
+  if (d < 0) return null;
+  if (texte.slice(d - 6, d) === 'async ') d -= 6;
   let n = 0;
-  for (let j = page.indexOf('{', debut); j < page.length; j++) {
-    if (page[j] === '{') n++;
-    else if (page[j] === '}') { n--; if (n === 0) return page.slice(debut, j + 1); }
+  for (let j = texte.indexOf('{', d); j < texte.length; j++) {
+    if (texte[j] === '{') n++;
+    else if (texte[j] === '}') { n--; if (n === 0) return texte.slice(d, j + 1); }
   }
   return null;
 }
 
-/* Horloge fixee : lundi 5 octobre 2026, 10h. */
-const FIXE = new Date(2026, 9, 5, 10, 0, 0);
-class DateFixe extends Date {
-  constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); }
-  static now() { return FIXE.getTime(); }
+/* Horloge fixée : jeudi 15 octobre 2026, 10h00. */
+const FIXE = new Date(2026, 9, 15, 10, 0, 0);
+class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); } static now() { return FIXE.getTime(); } }
+const iso = (n) => { const d = new Date(2026, 9, 15 + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const ev = (id, title, jour, h, m, hf, mf, extra) => Object.assign({ id: id, title: title, date: iso(jour), startH: h, startM: m, endH: hf, endM: mf, mode: 'user' }, extra || {});
+function agenda() {
+  return [
+    ev('a', 'Petit déjeuner', 0, 8, 0, 9, 0),                                           // passé
+    ev('v', 'Fête', 0, 0, 0, 23, 59, { allDay: true }),                                  // journée entière
+    ev('b', 'Dentiste', 0, 11, 0, 12, 0, { contact: 'c1' }),
+    ev('p', 'Client', 0, 14, 0, 15, 0, { mode: 'pro' }),                                 // autre agenda
+    ev('c', 'Coach', 0, 15, 0, 16, 0, { contact: 'c2' }),
+    ev('d', 'Banque', 1, 10, 0, 11, 0),                                                  // vendredi
+    ev('e', 'Kiné', 4, 9, 0, 10, 0)                                                      // lundi
+  ];
 }
 
-const trace = { montres: [], messages: [] };
+const trace = { saves: 0, toasts: [], envois: [], demarches: [] };
 const ctx = {
-  console, String, Number, Array, Object, RegExp, Promise, parseInt, Date: DateFixe,
-  mode: 'user', events: [], charlyIA: { history: [] },
-  contacts: {},
-  tcContactDuRdv: () => null,
-  renderCharlyChat: () => {},
+  console, String, Number, Array, Object, RegExp, Promise, JSON, Math, parseInt, Date: DateFixe,
+  mode: 'user', currentPage: 'chat', events: [], charlyIA: { history: [], config: {} },
+  contactsList: [{ id: 'c1', name: 'Marc Dupont', referenceCompte: 'REF1' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }],
+  _dispoData: {}, loadDispo() {},
+  renderCharlyChat() {}, render() {}, showToast(t) { trace.toasts.push(t); }, saveEventsToStorage() { trace.saves++; },
+  addDemarche(d) { trace.demarches.push(d.title); },
   tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); },
-  tcComparerEvenements: (a, b) => (a.date + String(a.startH).padStart(2, '0')) < (b.date + String(b.startH).padStart(2, '0')) ? -1 : 1,
-  showContrainte: (touches, label) => { trace.montres.push({ titres: touches.map((e) => e.title), label: label }); }
+  tcVouvoiement: () => false, tcDirePrevenance() {},
+  tcTransmettrePrevenance: async (c, t) => { trace.envois.push([c.name, t]); return c.referenceCompte ? 'timecool' : (c.phone ? 'sms' : (c.email ? 'email' : 'aucun')); },
+  escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+  localStorage: { getItem: () => null, setItem() {} },
+  tcDemarrerRdvAPlusieurs() {}, charlyAttachAction() {}, tcPrevenirRetard() {}, tcDemarrerNouveauRdv() {}, startAssistant() {}, tcDemarrerCalculTrajet() {}, charlySendMessage() {}, tcDemarrerMalade() {},
+  document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null
 };
 vm.createContext(ctx);
-const q = (page.match(/const TC_QUESTION_IMPREVU = '((?:[^'\\]|\\.)*)'/) || [])[1] || '';
-vm.runInContext('const TC_QUESTION_IMPREVU = \'' + q + '\'; let _tcImprevuEnAttente = 0;', ctx);
-['tcSansAccents', 'tcISO', 'tcPeriodeAgenda', 'tcPeriodeContrainte', 'tcRdvDeLaPeriode', 'tcPhraseNonCompris',
- 'tcDemarrerImprevu', 'tcPlageImprevu', 'tcPeriodeImprevu', 'tcRepondreImprevu'
-].forEach((n) => {
-  const src = extraire(n);
-  if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
-});
+vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcGroupeEnAttente = 0;', ctx);
+[/const TC_VERBES_DE_DEMANDE = \[[^\]]*\];/, /const TC_MSG_MODELES = \{[\s\S]*?\n\};/].forEach((re) => { const m = page.match(re); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  constante introuvable : ' + re); } });
+['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'tcEvenementFin', 'tcEvenementCouvre',
+ 'tcEvenementSurPlusieursJours', 'tcEstBandeau', 'tcMinutesDeHeure', 'tcSansTempsProtege', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour',
+ 'tcCreneauxDisponibles', 'tcRemplirModele', 'tcValeursDuRdv', '_tcLigneRdv', 'tcAppliquerDeplacement', 'tcMemoriserSuppression',
+ 'tcSupprimerRdvs', 'tcPhraseNonCompris', 'tcRessembleAUneDemande', 'tcContactDuRdv', 'tcBulleCharly', 'charlyQuickAction',
+ 'tcCleModele', 'tcModeleMessage', 'tcHeureDansTexte', 'tcDetecterMarcheArriere', 'tcMarcheArriere'
+].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+const debutBloc = page.indexOf('   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43');
+const finBloc = page.indexOf('function showConflictWarning(');
+const bloc = (debutBloc > -1 && finBloc > debutBloc) ? page.slice(page.lastIndexOf('/*', debutBloc), finBloc) : '';
+verifie('le bloc « questionnaire guidé » est dans la page, avec le parcours « imprévu »', bloc.length > 1000 && bloc.indexOf('const TC_QUESTIONNAIRE_IMPREVU = {') > -1, bloc.length);
+if (bloc) vm.runInContext(bloc, ctx);
+if (ko) { console.log(''); console.log(ko + ' anomalie(s).'); process.exit(1); }
 
-const iso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-const jourPlus = (n) => iso(new Date(2026, 9, 5 + n));
-const ev = (title, date, h, m, hf, mf, extra) => Object.assign({ id: title, title: title, date: date, startH: h, startM: m, endH: hf, endM: mf, mode: 'user' }, extra || {});
-const attente = () => vm.runInContext('_tcImprevuEnAttente', ctx);
-const reinit = (liste) => { ctx.events = liste; ctx.charlyIA.history = []; trace.montres = []; vm.runInContext('_tcImprevuEnAttente = 0', ctx); };
-const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+const H = () => ctx.charlyIA.history;
+const dernier = () => H()[H().length - 1];
+const dc = () => String(dernier().content).replace(/<br>/g, String.fromCharCode(10));
+const carte = () => { for (let i = H().length - 1; i >= 0; i--) if (H()[i]._questionnaire) return H()[i]; return null; };
+const textes = () => H().map((m) => String(m.content || '').replace(/<br>/g, '\n')).join('\n');
+const choixTextes = () => carte()._questionnaire.choix.map((c) => c.texte).join(' | ');
+const enCours = () => vm.runInContext('_tcQuestionnaire', ctx);
+const cliquer = async (i) => { await ctx.tcQuestionnaireRepondre(carte()._questionnaire.id, i); };
+const taper = async (t) => ctx.tcQuestionnaireRepondreTexte(t);
+const reinit = (evts) => { ctx.events = evts || agenda(); ctx.charlyIA.history = []; trace.saves = 0; trace.toasts.length = 0; trace.envois.length = 0; trace.demarches.length = 0; vm.runInContext('_tcQuestionnaire = null; _tcMarcheArriere = null;', ctx); };
+const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
+const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
 
 (async () => {
-  titre('La question');
-  verifie('elle annonce : Tu veux réorganiser ton agenda !', q.indexOf('Tu veux réorganiser ton agenda !') === 0, q);
-  verifie('elle demande le jour, le matin, l après-midi, la journée, l heure', /jour/.test(q) && /matin/.test(q) && /après-midi/.test(q) && /toute la journée/.test(q) && /quelle heure/.test(q));
-  reinit([]);
-  ctx.tcDemarrerImprevu();
-  verifie('Charly parle le premier, rien n est envoye en son nom', ctx.charlyIA.history.length === 1 && ctx.charlyIA.history[0].role === 'assistant');
-  verifie('une reponse est attendue (2 essais)', attente() === 2);
+  titre('1. Le bouton : la bulle, puis « Qu’est-ce qui t’arrive ? », quatre choix, dans l ordre');
+  reinit();
+  ctx.charlyQuickAction('impprevu');
+  await new Promise((r) => setTimeout(r, 0));
+  verifie('la bulle « J’ai un imprévu » puis la carte', H().length === 2 && H()[0].role === 'user' && H()[0].content === 'J’ai un imprévu' && carte() && carte()._questionnaire.question === 'Qu’est-ce qui t’arrive ?', textes());
+  verifie('les quatre cas, textes exacts', choixTextes() === 'Je suis en retard | Je dois partir plus tôt | Un rendez-vous s’ajoute | Je ne peux pas venir', choixTextes());
+  verifie('rien n est connu d avance', enCours() && Object.keys(enCours().reponses).length === 0);
 
-  titre('Les parties de la journée');
-  const plage = (t) => vm.runInContext('tcPlageImprevu(' + JSON.stringify(t) + ')', ctx);
-  verifie('apres-midi : 12h-18h', plage('demain après-midi').debut === 720 && plage('demain après-midi').fin === 1080);
-  verifie('matin : 0h-12h', plage('demain matin').debut === 0 && plage('demain matin').fin === 720);
-  verifie('soir : 18h-24h', plage('ce soir').debut === 1080);
-  verifie('à partir de 15h', plage('demain à partir de 15h').debut === 900 && plage('demain à partir de 15h').fin === 1440);
-  verifie('à partir de 15h30', plage('à partir de 15h30').debut === 930);
-  verifie('jusqu\'à 11h', plage('jusqu\'à 11h').fin === 660 && plage('jusqu\'à 11h').debut === 0);
-  verifie('sans precision : toute la journée', plage('demain').debut === 0 && plage('demain').fin === 1440 && plage('demain').precise === false);
-  verifie('« toute la journée » : toute la journée', plage('toute la journée demain').precise === false);
+  titre('2. En retard, le prochain rendez-vous, 15 minutes, Charly prévient : la nouvelle heure part, l agenda ne bouge pas');
+  await cliquer(0);
+  verifie('« Ça touche quoi ? », trois choix exacts', carte()._questionnaire.question === 'Ça touche quoi ?' && choixTextes() === 'Le prochain rendez-vous | Le reste de la journée | Un rendez-vous précis', choixTextes());
+  await cliquer(0);
+  verifie('le prochain rendez-vous est « Dentiste » 11h (pas le petit déjeuner passé, pas la fête, pas l agenda pro)', /Le rendez-vous touché :\n• « Dentiste », /.test(textes()) && textes().indexOf('« Dentiste », ' + quand(iso(0), { startH: 11, startM: 0, endH: 12, endM: 0 })) > -1 && !/Petit déjeuner|Fête|Client/.test(textes()), textes());
+  verifie('« Combien de retard, à peu près ? », quatre choix', carte()._questionnaire.question === 'Combien de retard, à peu près ?' && choixTextes() === '10 minutes | 15 minutes | 30 minutes | Environ 1 heure', choixTextes());
+  verifie('« 15 » tapé vaut le bouton « 15 minutes »', await taper('15') === true && enCours().reponses.minutes === '15' && carte()._questionnaire.question === 'Qui prévient Marc Dupont ?', carte()._questionnaire.question);
+  await taper('tu les préviens');
+  verifie('le récapitulatif : le retard et l heure d arrivée, « Je préviens Marc Dupont »', carte()._questionnaire.question === 'Voici ce que je vais faire :\n• « Dentiste » (' + quand(iso(0), { startH: 11, startM: 0, endH: 12, endM: 0 }) + ') : environ 15 minutes de retard, arrivée vers 11h15\n• Je préviens Marc Dupont', carte()._questionnaire.question);
+  verifie('rien n est parti avant « Oui, vas-y »', trace.envois.length === 0);
+  await taper('oui');
+  verifie('le message « Je serai en retard » des Paramètres, avec les minutes et la nouvelle heure, part par la messagerie TimeCool', trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont' && /environ 15 minutes de retard/.test(trace.envois[0][1]) && /Je serai là vers 11h15\.$/.test(trace.envois[0][1]) && !/désolé/.test(trace.envois[0][1]), JSON.stringify(trace.envois));
+  verifie('l agenda ne bouge pas (le rendez-vous reste à 11h), pas de marche arrière à proposer', ctx.events.find((e) => e.id === 'b').startH === 11 && trace.saves === 0 && memoire() === null && !/remets/.test(dc()));
+  verifie('« C’est fait. » puis le bilan : le retard annoncé, Marc prévenu', /^C’est fait\.\n• Retard d’environ 15 minutes pour « Dentiste » \(/.test(dc()) && /arrivée vers 11h15/.test(dc()) && /• Prévenu par la messagerie TimeCool : Marc Dupont/.test(dc()) && enCours() === null, dc());
+  reinit();
+  await ctx.tcDemarrerImprevu('j’ai un imprévu, je suis en retard');
+  verifie('« je suis en retard » dans la phrase : la première question est sautée', carte()._questionnaire.etape === 'quand' && enCours().reponses.quoi === 'retard');
+  await taper('le prochain');
+  verifie('« 20 minutes » tapé (hors des quatre choix) est pris tel quel', await taper('20 minutes') === true && enCours().reponses.minutes === '20' && carte()._questionnaire.etape === 'prevenir');
+  await taper('personne');
+  verifie('le récapitulatif dit « arrivée vers 11h20 » et « Je ne préviens personne »', /arrivée vers 11h20\n• Je ne préviens personne$/.test(carte()._questionnaire.question), carte()._questionnaire.question);
 
-  titre('La réponse : Charly regarde l agenda seul');
-  const lundi = jourPlus(0), demain = jourPlus(1);
-  const agenda = () => [
-    ev('Dentiste', demain, 14, 30, 15, 30), ev('Cours de tennis', demain, 9, 0, 10, 30),
-    ev('Coiffeur', demain, 17, 0, 18, 0), ev('Diner', demain, 20, 0, 22, 0), ev('Apres-demain', jourPlus(2), 14, 0, 15, 0)
-  ];
-  reinit(agenda()); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  let pris = await ctx.tcRepondreImprevu('Demain après-midi');
-  verifie('réponse prise', pris === true);
-  verifie('seulement l après-midi de demain : Dentiste et Coiffeur', trace.montres.length === 1 && trace.montres[0].titres.join(',') === 'Dentiste,Coiffeur', trace.montres[0] && trace.montres[0].titres.join(','));
-  verifie('le libellé dit demain l après-midi', trace.montres[0] && trace.montres[0].label === 'demain l\'après-midi', trace.montres[0] && trace.montres[0].label);
-  verifie('l attente est terminee', attente() === 0);
+  titre('3. Partir plus tôt, le reste de la journée, décaler : créneaux dès demain, Marc par TimeCool, Sophie par SMS (bouton)');
+  reinit();
+  await ctx.tcDemarrerImprevu('j’ai un imprévu');
+  await cliquer(1); await cliquer(1);
+  const l3 = H().filter((m) => /Voici tes rendez-vous pour le reste de la journée/.test(m.content))[0];
+  verifie('la liste : Dentiste 11h et Coach 15h (pas le passé, pas la journée entière, pas l agenda pro)', l3 && /« Dentiste »/.test(l3.content) && /« Coach »/.test(l3.content) && !/Petit déjeuner|Fête|Client|Banque/.test(l3.content), l3 && l3.content);
+  verifie('« Que fait-on ? » avec les trois actions', carte()._questionnaire.question === 'Que fait-on ?' && choixTextes() === 'Je les décale (je te propose de nouveaux créneaux) | Je les supprime | Je ne touche à rien', choixTextes());
+  await taper('je les décale');
+  verifie('les créneaux dès demain, autour de « Banque » : Dentiste 9h-10h, Coach 11h-12h', textes().indexOf('« Dentiste » : ' + quand(iso(1), { startH: 9, startM: 0, endH: 10, endM: 0 })) > -1 && textes().indexOf('« Coach » : ' + quand(iso(1), { startH: 11, startM: 0, endH: 12, endM: 0 })) > -1, textes());
+  verifie('« Qui prévient Marc Dupont et Sophie Anceau ? » (« et » avant le dernier nom)', carte()._questionnaire.question === 'Qui prévient Marc Dupont et Sophie Anceau ?');
+  await taper('tu les préviens'); await taper('vas-y');
+  const bilan3 = dernier();
+  verifie('les deux sont déplacés (même identifiant), Marc prévenu par TimeCool, un bouton « Envoyer à Sophie Anceau », « remets-les »', ctx.events.find((e) => e.id === 'b').date === iso(1) && ctx.events.find((e) => e.id === 'c').date === iso(1) && trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont' && /^C’est fait\.\n• Déplacé : « Dentiste »/.test(dc()) && /• Prévenu par la messagerie TimeCool : Marc Dupont/.test(dc()) && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && bilan3._envois && bilan3._envois.length === 1 && /remets-les/.test(dc()), dc());
+  verifie('le message à Marc : « Je décale » avec l ancienne date et la nouvelle, sans « désolé »', /je dois décaler notre rendez-vous du .*15 octobre à 11h00/.test(trace.envois[0][1]) && /16 octobre à 09h00\.$/.test(trace.envois[0][1]) && !/désolé/.test(trace.envois[0][1]), trace.envois[0][1]);
+  verifie('43b : la marche arrière sait qui a vraiment été prévenu (Marc, pas Sophie)', memoire() && memoire().type === 'deplacement' && JSON.stringify(memoire().prevenus) === '["Marc Dupont"]', JSON.stringify(memoire() && memoire().prevenus));
+  await ctx.tcQuestionnaireEnvoyer(bilan3._envoisId, 0);
+  verifie('le bouton touché : Sophie rejoint les contacts prévenus', trace.envois.length === 2 && trace.envois[1][0] === 'Sophie Anceau' && JSON.stringify(memoire().prevenus) === '["Marc Dupont","Sophie Anceau"]', JSON.stringify(memoire().prevenus));
+  await ctx.tcMarcheArriere('remets-les');
+  verifie('« remets-les » : les deux reviennent, et « Pense à prévenir Marc Dupont et Sophie Anceau que c’est maintenu »', ctx.events.find((e) => e.id === 'b').date === iso(0) && /Pense à prévenir Marc Dupont et Sophie Anceau que c'est maintenu/.test(dc()), dc());
 
-  reinit(agenda()); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  await ctx.tcRepondreImprevu('demain matin');
-  verifie('le matin : seulement le tennis', trace.montres[0] && trace.montres[0].titres.join(',') === 'Cours de tennis');
+  titre('4. Un rendez-vous s ajoute, un rendez-vous précis : « Lequel ? », la place est faite, jamais le week-end');
+  reinit();
+  await ctx.tcDemarrerImprevu('j’ai un imprévu');
+  await taper('3');
+  await taper('un rendez-vous précis');
+  verifie('« Lequel ? » : les rendez-vous à venir (Dentiste, Coach, Banque, Kiné), dans l ordre, jamais le passé ni la journée entière', carte()._questionnaire.question === 'Lequel ?' && choixTextes() === ['« Dentiste », ' + quand(iso(0), { startH: 11, startM: 0, endH: 12, endM: 0 }), '« Coach », ' + quand(iso(0), { startH: 15, startM: 0, endH: 16, endM: 0 }), '« Banque », ' + quand(iso(1), { startH: 10, startM: 0, endH: 11, endM: 0 }), '« Kiné », ' + quand(iso(4), { startH: 9, startM: 0, endH: 10, endM: 0 })].join(' | '), choixTextes());
+  verifie('« la banque » tapé désigne « Banque »', await taper('la banque') === true && enCours().reponses.lequel === 'd' && /Le rendez-vous touché :\n• « Banque »/.test(textes()));
+  verifie('un rendez-vous qui s ajoute : pas de question « que fait-on ? », on fait de la place ; le lendemain est un samedi : sans plage déclarée, jamais le week-end, donc lundi 10h-11h après « Kiné »', /Pour faire de la place, voici ce que je te propose :\n• « Banque » : /.test(textes()) && textes().indexOf('« Banque » : ' + quand(iso(4), { startH: 10, startM: 0, endH: 11, endM: 0 })) > -1, textes());
+  verifie('sans contact : une ligne d information, la question « qui prévient » est sautée, le récapitulatif vient', /Aucun de ces rendez-vous n’a de contact enregistré : personne à prévenir\./.test(textes()) && carte()._questionnaire.etape === 'recap' && /^Voici ce que je vais faire :\n• Je décale « Banque » au /.test(carte()._questionnaire.question) && !/préviens/.test(carte()._questionnaire.question), carte()._questionnaire.question);
+  await taper('ok');
+  verifie('« Banque » est déplacé à lundi, le bilan dit que la place est libre pour le rendez-vous qui s ajoute', ctx.events.find((e) => e.id === 'd').date === iso(4) && /• Déplacé : « Banque », /.test(dc()) && /• La place est libre pour le rendez-vous qui s’ajoute : ajoute-le quand tu veux\./.test(dc()) && /remets-le »/.test(dc()), dc());
 
-  reinit(agenda()); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  await ctx.tcRepondreImprevu('demain');
-  verifie('le jour seul : les quatre rendez-vous de demain, pas ceux d après-demain', trace.montres[0] && trace.montres[0].titres.length === 4 && trace.montres[0].titres.indexOf('Apres-demain') === -1);
+  titre('5. Je ne peux pas venir, le prochain, je le supprime, personne');
+  reinit();
+  await ctx.tcDemarrerImprevu('j’ai un imprévu');
+  await taper('je ne peux pas venir'); await taper('1');
+  verifie('un seul rendez-vous : « Que fait-on de ce rendez-vous ? »', carte()._questionnaire.question === 'Que fait-on de ce rendez-vous ?', carte()._questionnaire.question);
+  await taper('2'); await taper('personne'); await taper('oui');
+  verifie('« Dentiste » supprimé par la mécanique habituelle, rien d envoyé, « remets-le »', !ctx.events.find((e) => e.id === 'b') && trace.envois.length === 0 && /^C’est fait\.\n• Supprimé : « Dentiste » \(/.test(dc()) && /remets-le »/.test(dc()) && memoire().type === 'suppression' && JSON.stringify(memoire().prevenus) === '[]', dc());
+  await ctx.tcMarcheArriere('remets-le');
+  verifie('43b : « remets-le » après une suppression où personne n a été prévenu : pas de « pense à prévenir »', ctx.events.find((e) => e.title === 'Dentiste') && /est remis/.test(dc()) && !/Pense à prévenir/.test(dc()), dc());
 
-  reinit(agenda()); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  await ctx.tcRepondreImprevu('demain à partir de 17h');
-  verifie('à partir de 17h : Coiffeur et Diner', trace.montres[0] && trace.montres[0].titres.join(',') === 'Coiffeur,Diner', trace.montres[0] && trace.montres[0].titres.join(','));
+  titre('6. Je ne touche à rien ; rien à réorganiser ; « Non, j’arrête » ; une vraie demande');
+  reinit();
+  await ctx.tcDemarrerImprevu('je dois partir plus tôt aujourd’hui');
+  verifie('« partir plus tôt » et « aujourd’hui » lus dans la phrase : on va droit à « Que fait-on ? »', enCours().reponses.quoi === 'partir_tot' && enCours().reponses.quand === 'reste_journee' && carte()._questionnaire.question === 'Que fait-on ?', textes());
+  await taper('je ne touche à rien');
+  verifie('« D’accord, je ne touche à rien. », fin', dc() === 'D’accord, je ne touche à rien.' && enCours() === null && ctx.events.length === agenda().length);
+  reinit(agenda().filter((e) => e.id === 'a' || e.id === 'v'));
+  await ctx.tcDemarrerImprevu('j’ai un imprévu'); await taper('1'); await taper('1');
+  verifie('plus rien à venir : « Rien à venir dans ton agenda … rien à réorganiser. »', dc() === 'Rien à venir dans ton agenda ces deux prochaines semaines : rien à réorganiser.' && enCours() === null, dc());
+  reinit(agenda().filter((e) => e.id !== 'b' && e.id !== 'c'));
+  await ctx.tcDemarrerImprevu('j’ai un imprévu'); await taper('4'); await taper('2');
+  verifie('plus rien aujourd’hui : « Rien à réorganiser pour le reste de la journée. »', dc() === 'Rien à réorganiser pour le reste de la journée.' && enCours() === null, dc());
+  reinit();
+  await ctx.tcDemarrerImprevu('j’ai un imprévu'); await taper('4'); await taper('1'); await taper('2'); await taper('personne');
+  verifie('« non » au récapitulatif : rien n est supprimé', await taper('non') === true && dc() === 'D’accord, j’arrête là : je ne touche à rien.' && ctx.events.length === agenda().length);
+  reinit();
+  await ctx.tcDemarrerImprevu('j’ai un imprévu');
+  verifie('« annule le dentiste » (une vraie demande) fait tomber le questionnaire et suit son chemin', await taper('annule le dentiste') === false && enCours() === null && /je laisse tomber la question qui attendait/.test(dc()));
+  verifie('43b : « A, B et C »', ctx.tcQuestionnaireNoms(['A', 'B', 'C']) === 'A, B et C' && ctx.tcQuestionnaireNoms(['A']) === 'A');
 
-  reinit([ev('Reunion', lundi, 15, 0, 16, 0), ev('Matin', lundi, 8, 0, 9, 0)]); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  await ctx.tcRepondreImprevu('cet après-midi');
-  verifie('« cet après-midi » sans jour : aujourd\'hui', trace.montres[0] && trace.montres[0].titres.join(',') === 'Reunion', trace.montres[0] && JSON.stringify(trace.montres[0]));
-
-  reinit([Object.assign(ev('Journee', demain, 0, 0, 23, 59), { allDay: true })]); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  await ctx.tcRepondreImprevu('demain matin');
-  verifie('une journée entière est touchée par n importe quelle partie', trace.montres[0] && trace.montres[0].titres.join(',') === 'Journee');
-
-  titre('Rien à réorganiser');
-  reinit([ev('Plus tard', jourPlus(3), 10, 0, 11, 0)]); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  await ctx.tcRepondreImprevu('demain après-midi');
-  verifie('aucun questionnaire', trace.montres.length === 0);
-  verifie('Charly le dit', /aucun rendez-vous demain l'après-midi : rien à réorganiser/.test(dernier().content), dernier().content);
-  reinit([ev('Midi', demain, 11, 0, 12, 0)]); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  await ctx.tcRepondreImprevu('demain après-midi');
-  verifie('un rendez-vous du matin ne compte pas pour l après-midi', trace.montres.length === 0);
-
-  titre('Une réponse incomprise');
-  reinit(agenda()); vm.runInContext('_tcImprevuEnAttente = 2', ctx);
-  pris = await ctx.tcRepondreImprevu('euh je sais pas');
-  verifie('première fois : il redemande avec « Sauf erreur de ma part »', pris === true && /^Sauf erreur de ma part, je n'ai pas bien compris ta demande\. Quel jour veux-tu réorganiser \?/.test(dernier().content), dernier().content);
-  verifie('et attend encore', attente() === 1);
-  pris = await ctx.tcRepondreImprevu('toujours pas');
-  verifie('deuxième fois : il laisse le message suivre son chemin', pris === false && attente() === 0);
-
-  titre('Branché');
-  const act = extraire('charlyQuickAction') || '';
-  verifie('l onglet imprévu appelle tcDemarrerImprevu', /action === 'impprevu'\) \{ tcDemarrerImprevu\(\); return; \}/.test(act));
-  verifie('tout autre onglet efface l attente', /^function charlyQuickAction\(action\) \{\s*_tcImprevuEnAttente = 0;/.test(act));
-  verifie('l ancienne phrase « J\'ai un imprévu… Aide-moi » a disparu', page.indexOf('J\'ai un imprévu et je dois réorganiser ma journée. Aide-moi.') === -1);
-  const envoi = extraire('charlySendMessage') || '';
-  verifie('la réponse est lue avant la clé API du modèle', envoi.indexOf('_tcImprevuEnAttente > 0') > -1 && envoi.indexOf('_tcImprevuEnAttente > 0') < envoi.indexOf('let activeKey = tcCleActiveCharly()'));
+  titre('7. Dans la page : le bouton, l aiguillage, l ancien parcours parti, formule neutre, week-end, pas de tiret long ni d assertion arrière');
+  const act = fonction(page, 'charlyQuickAction') || '';
+  verifie('le bouton « Gérer un imprévu » lance le questionnaire avec la bulle « J’ai un imprévu »', /if \(action === 'impprevu'\) \{ tcDemarrerImprevu\('J’ai un imprévu'\); return; \}/.test(act));
+  const csm = fonction(page, 'charlySendMessage') || '';
+  verifie('« j’ai un imprévu » tapé (sans jour) va au même questionnaire, avant la contrainte', /if \(\/\\b\(imprevu\|reorganis\)\/\.test\(tcSansAccents\(text\)\) && !tcPeriodeContrainte\(text\)\) \{\s+await tcDemarrerImprevu\(text\);\s+return;\s+\}/.test(csm) && csm.indexOf('tcDemarrerImprevu(text)') < csm.indexOf('tcDetecterMalade(text)'));
+  verifie('l ancien parcours (question libre, deux essais) a disparu', page.indexOf('_tcImprevuEnAttente') < 0 && page.indexOf('tcRepondreImprevu') < 0 && page.indexOf('TC_QUESTION_IMPREVU') < 0 && page.indexOf('tcPeriodeImprevu') < 0);
+  verifie('43b : plus de « désolé(e) » dans les modèles par défaut, formule neutre', page.indexOf('désolé(e)') < 0 && /tu: "Bonjour \[Prénom\], je dois décaler notre rendez-vous du \[date\] à \[heure\]\./.test(page) && /vous: "Bonjour \[Prénom\], un imprévu m'oblige à annuler notre rendez-vous du \[date\] à \[heure\]\./.test(page));
+  ctx._dispoData = {};
+  verifie('43b : sans aucune plage déclarée, lundi à vendredi 9h-18h en repli, jamais le samedi ni le dimanche', ctx.tcPlagesDuJour(new Date(2026, 9, 16)).plages.length === 1 && ctx.tcPlagesDuJour(new Date(2026, 9, 17)).plages.length === 0 && ctx.tcPlagesDuJour(new Date(2026, 9, 18)).plages.length === 0 && ctx.tcPlagesDuJour(new Date(2026, 9, 17)).defaut === true);
+  ctx._dispoData = { travail: [{ jours: [1, 2, 3, 4, 5], debut: '09:00', fin: '18:00' }] };
+  verifie('43b : avec des plages déclarées, un jour sans plage est fermé (rien d inventé)', ctx.tcPlagesDuJour(new Date(2026, 9, 17)).plages.length === 0 && ctx.tcPlagesDuJour(new Date(2026, 9, 17)).defaut === false && ctx.tcPlagesDuJour(new Date(2026, 9, 16)).plages.length === 1);
+  ctx._dispoData = { travail: [{ jours: [1], debut: '18:00', fin: '09:00' }] };
+  verifie('une plage invalide ne compte pas comme déclarée', ctx.tcPlagesDuJour(new Date(2026, 9, 16)).defaut === true);
+  ctx._dispoData = {};
+  verifie('la marche arrière lit « prevenus » quand il est là, et garde tout le monde sinon', /Array\.isArray\(m\.prevenus\) && m\.prevenus\.indexOf\(c\.name\) < 0/.test(fonction(page, 'tcMarcheArriere') || '') && /tcQuestionnaireNoms\(contacts\)/.test(fonction(page, 'tcMarcheArriere') || ''));
+  verifie('pas de tiret long dans le bloc, pas d assertion arrière dans la page (Safari)', bloc.indexOf('—') < 0 && page.indexOf('(?<') < 0);
+  verifie('le bouton de l écran Charly est inchangé', /charlyQuickAction\('impprevu'\)[^>]*>⚡ Gérer un imprévu<\/button>/.test(page));
 
   console.log('');
   console.log(ko + ' anomalie(s).');
   process.exit(ko ? 1 : 0);
-})();
+})().catch((e) => { console.log('  KO  exception : ' + (e && e.stack || e)); console.log(''); console.log((ko + 1) + ' anomalie(s).'); process.exit(1); });

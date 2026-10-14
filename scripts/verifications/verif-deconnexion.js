@@ -34,7 +34,7 @@ const ctx = {
   charlyIA: { history: [{ role: 'assistant', content: 'Bonjour Fanny ! 😊' }], _historiqueCharge: true, config: { provider: 'openai', apiKey: 'sk-fanny', anthropicKey: 'ak-fanny' } },
   events: [{ id: 'e1', mode: 'user', title: 'Dentiste de Fanny' }, { id: 'demo1', mode: 'demo', title: 'Démo' }],
   tasksList: [{ id: 't1' }], birthdays: [{ id: 'b1' }], contactsList: [{ id: 'c1' }], messages: { user: [{ id: 'm1' }], pro: [] },
-  _tcSuppressionEnAttente: { x: 1 }, _tcDeplacementEnAttente: { x: 1 }, _tcImprevuEnAttente: 2, _isolatedCalendarId: 'cal1', customCalendars: [{ id: 'cal1' }]
+  _tcSuppressionEnAttente: { x: 1 }, _tcDeplacementEnAttente: { x: 1 }, _isolatedCalendarId: 'cal1', customCalendars: [{ id: 'cal1' }]
 };
 vm.createContext(ctx);
 ['const TC_JAMAIS_TRANSFERE = \\[[^\\]]*\\];', 'const TC_EVENTS_KEY = [^;]*;', 'const TC_TASKS_KEY = [^;]*;', 'const TC_SYNC_VERSION_KEY = [^;]*;', 'const TC_SYNC_EMPREINTES_KEY = [^;]*;', 'const TC_COMPTE_LOCAL_KEY = [^;]*;', 'const TC_CALENDARS_KEY = [^;]*;']
@@ -89,7 +89,7 @@ ctx.loadCustomCalendars();
 verifie('creer un agenda « Sport » puis recharger : « Mon agenda » et « Sport » sont tous les deux la', JSON.stringify(ctx.customCalendars.map((c) => c.id)) === JSON.stringify(['cal_default', 'cal_sport']), JSON.stringify(ctx.customCalendars.map((c) => c.id)));
 delete stock.timecool_custom_calendars;
 verifie('la conversation Charly est vide en memoire et sera rechargee (vide) a la prochaine ouverture', ctx.charlyIA.history.length === 0 && ctx.charlyIA._historiqueCharge === false);
-verifie('les attentes de Charly et l agenda isole sont remis a zero', ctx._tcSuppressionEnAttente === null && ctx._tcDeplacementEnAttente === null && ctx._tcImprevuEnAttente === 0 && ctx._isolatedCalendarId === null);
+verifie('les attentes de Charly et l agenda isole sont remis a zero', ctx._tcSuppressionEnAttente === null && ctx._tcDeplacementEnAttente === null && ctx._isolatedCalendarId === null);
 verifie('les cles IA du compte ne restent pas en memoire', ctx.charlyIA.config.apiKey === '' && ctx.charlyIA.config.anthropicKey === '');
 verifie('rendez-vous, taches, anniversaires, contacts, messages : vides (la demo reste)', ctx.events.length === 1 && ctx.events[0].id === 'demo1' && ctx.tasksList.length === 0 && ctx.birthdays.length === 0 && ctx.contactsList.length === 0 && ctx.messages.user.length === 0);
 verifie('sans session, aucune cle n est demandee au serveur', clesDemandees === 0);
