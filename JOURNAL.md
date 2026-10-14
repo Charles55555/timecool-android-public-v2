@@ -2154,3 +2154,9 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   fixée au 14/10 20h30), verif-boutons-charly et banc-charly mises à jour (« malade » est une route à part).
   Réserve connue (mécanique existante) : plusieurs contacts à prévenir par SMS ou email d’affilée, seul le dernier
   message s’ouvre dans l’application du téléphone ; les autres restent dans la conversation locale.
+  Reprise après l’examinateur (14/10) : deux défauts dans tcMaladeExecuter. Un contact avec plusieurs rendez-vous dans
+  la période reçoit désormais un message par rendez-vous. Par SMS ou email, plus rien ne s’ouvre dans la boucle (deux
+  liens sms: d’affilée, seul le dernier s’ouvrait, et le bilan les disait tous « prêts ») : le bilan (message `_envois`,
+  rendu par tcRendreBilanMalade) porte un bouton « Envoyer à … » par message, tcMaladeEnvoyer l’ouvre par
+  tcTransmettrePrevenance avec le texte prêt et le bouton le dit une fois touché. La messagerie TimeCool part toujours
+  tout de suite. Deux cas de plus dans verif-questionnaire-malade.

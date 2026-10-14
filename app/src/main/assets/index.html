@@ -11476,6 +11476,7 @@ function renderChatMessage(m) {
   if (m && m._groupe) return tcRendreGroupe(m);
   if (m && m._questionType) return tcRendreQuestionType(m);
   if (m && m._questionnaire) return tcRendreQuestionnaire(m);
+  if (m && m._envois) return tcRendreBilanMalade(m);
   if (m.role === 'user') {
     return `
       <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
@@ -19285,7 +19286,12 @@ function tcMaladeRecap(r) {
   return lignes.join('\n');
 }
 
-/** « Oui, vas-y » : le travail, avec la mécanique habituelle (déplacement, suppression, messages), puis le bilan. */
+/**
+ * « Oui, vas-y » : le travail, avec la mécanique habituelle (déplacement, suppression, messages), puis le bilan.
+ * Un message par rendez-vous : un contact qui en a deux dans la période les voit tous les deux. Par la messagerie
+ * TimeCool, il part tout de suite ; par SMS ou email, rien ne s'ouvre ici (deux liens sms: d'affilée, seul le
+ * dernier s'ouvrirait) : le bilan porte un bouton par message, qui l'ouvre avec le texte prêt.
+ */
 async function tcMaladeExecuter(r) {
   const presents = r._rdvs.filter(function (e) { return events.indexOf(e) > -1; });
   const anciens = presents.map(function (e) { return { id: e.id, date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM }; });
@@ -19300,23 +19306,32 @@ async function tcMaladeExecuter(r) {
   }
   const touches = r.action === 'decaler' ? deplaces.map(function (x) { return x.ev; }) : supprimes;
   const contacts = tcMaladeContacts(touches);
-  const prevenus = [], prets = [], sansMoyen = [];
+  const prevenus = [], envois = [], sansMoyen = [];
   if (r.prevenir === 'charly') {
     for (const c of contacts) {
-      const ev = touches.filter(function (e) { return e.contact === c.id; })[0];
-      const ancien = anciens.filter(function (a) { return a.id === ev.id; })[0] || ev;
-      let texte;
-      if (r.action === 'decaler') {
-        const nouveau = tcValeursDuRdv(c.name, ev);
-        texte = tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
-          + ' le ' + nouveau['[date]'] + ' à ' + nouveau['[heure]'] + '.';
-      } else {
-        texte = tcRemplirModele(tcModeleMessage('annule', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien));
+      const siens = touches.filter(function (e) { return e.contact === c.id; });
+      for (const ev of siens) {
+        const ancien = anciens.filter(function (a) { return a.id === ev.id; })[0] || ev;
+        let texte;
+        if (r.action === 'decaler') {
+          const nouveau = tcValeursDuRdv(c.name, ev);
+          texte = tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
+            + ' le ' + nouveau['[date]'] + ' à ' + nouveau['[heure]'] + '.';
+        } else {
+          texte = tcRemplirModele(tcModeleMessage('annule', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien));
+        }
+        const envoi = { nom: c.name, phone: c.phone || '', email: c.email || '', titre: siens.length > 1 ? ev.title : '', texte: texte };
+        if (c.referenceCompte) {
+          const chemin = await tcTransmettrePrevenance(c, texte);
+          if (chemin === 'timecool') { if (prevenus.indexOf(c) < 0) prevenus.push(c); }
+          else if (chemin === 'aucun') { if (sansMoyen.indexOf(c) < 0) sansMoyen.push(c); }
+          else { envoi.fait = chemin; envois.push(envoi); }   // la messagerie a échoué : le téléphone a pris le relais
+        } else if (c.phone || c.email) {
+          envois.push(envoi);
+        } else if (sansMoyen.indexOf(c) < 0) {
+          sansMoyen.push(c);
+        }
       }
-      const chemin = await tcTransmettrePrevenance(c, texte);
-      if (chemin === 'timecool') prevenus.push(c);
-      else if (chemin === 'aucun') sansMoyen.push(c);
-      else prets.push(c);
     }
   }
   const lignes = ['C’est fait. Repose-toi.'];
@@ -19324,11 +19339,40 @@ async function tcMaladeExecuter(r) {
   laisses.forEach(function (e) { lignes.push('• Laissé en place : « ' + e.title + ' », ' + tcMaladeQuand(e.date, e)); });
   supprimes.forEach(function (e) { lignes.push('• Supprimé : « ' + e.title + ' » (' + tcMaladeQuand(e.date, e) + ')'); });
   if (prevenus.length) lignes.push('• Prévenu par la messagerie TimeCool : ' + tcMaladeNoms(prevenus));
-  if (prets.length) lignes.push('• Message prêt à envoyer (SMS ou email) : ' + tcMaladeNoms(prets));
+  const aEnvoyer = [];
+  envois.forEach(function (e) { if (!e.fait && aEnvoyer.indexOf(e.nom) < 0) aEnvoyer.push(e.nom); });
+  if (aEnvoyer.length) lignes.push('• Message prêt, à envoyer toi-même d’un geste (SMS ou email) : ' + tcMaladeNoms(aEnvoyer.map(function (n) { return { name: n }; })));
   if (sansMoyen.length) lignes.push('• Sans numéro ni email dans ta fiche contact : ' + tcMaladeNoms(sansMoyen));
   if (r.prevenir === 'moi' && contacts.length) lignes.push('• À prévenir toi-même : ' + tcMaladeNoms(contacts));
   if (deplaces.length || supprimes.length) lignes.push('Pour revenir en arrière, dis-moi « remets-' + (deplaces.length + supprimes.length > 1 ? 'les' : 'le') + ' ».');
-  tcMaladeDire(lignes.join('\n'));
+  if (!envois.length) { tcMaladeDire(lignes.join('\n')); return; }
+  charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero) });
+  renderCharlyChat();
+}
+
+/** Le bilan avec ses boutons « Envoyer à … » (un par message SMS ou email) ; un bouton déjà touché le dit et s'éteint. */
+function tcRendreBilanMalade(m) {
+  const boutons = (m._envois || []).map(function (e, i) {
+    const fait = !!e.fait;
+    return '<button ' + (fait ? 'disabled ' : '') + 'onclick="tcMaladeEnvoyer(\'' + m._envoisId + '\', ' + i + ')" style="padding:11px 12px; background:'
+      + (fait ? '#e6f4ea' : '#e8f0fe') + '; color:' + (fait ? 'var(--g-green)' : '#1a56b8') + '; border:1.5px solid ' + (fait ? '#b9e1c4' : '#c8d7ee')
+      + '; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; text-align:left;">'
+      + (fait ? '✅ Message prêt pour ' : '✉️ Envoyer à ') + escapeHTMLSafe(e.nom) + (e.titre ? ' (' + escapeHTMLSafe(e.titre) + ')' : '') + '</button>';
+  }).join('');
+  return tcBulleCharly(escapeHTMLSafe(m.content).replace(/\n/g, '<br>')
+    + '<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">' + boutons + '</div>');
+}
+
+/** Un bouton « Envoyer à … » touché : le SMS ou l'email s'ouvre avec le texte prêt, par le chemin habituel. */
+async function tcMaladeEnvoyer(id, i) {
+  const m = (Array.isArray(charlyIA.history) ? charlyIA.history : []).filter(function (x) { return x && x._envoisId === id; })[0];
+  const e = m && m._envois && m._envois[i];
+  if (!e || e.fait) return;
+  const chemin = await tcTransmettrePrevenance({ name: e.nom, phone: e.phone, email: e.email }, e.texte);
+  tcDirePrevenance(chemin, e.nom);
+  if (chemin === 'aucun') return;
+  e.fait = chemin;
+  renderCharlyChat();
 }
 
 /** Le parcours, étape par étape. */

@@ -41,16 +41,16 @@ const trace = { saves: 0, toasts: [], envois: [], demarches: [], rendus: 0 };
 const ctx = {
   console, String, Number, Array, Object, RegExp, Promise, JSON, Math, parseInt, Date: DateFixe,
   mode: 'user', currentPage: 'chat', events: [], charlyIA: { history: [], config: {} },
-  contactsList: [{ id: 'c1', name: 'Marc Dupont', referenceCompte: 'REF1' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }],
+  contactsList: [{ id: 'c1', name: 'Marc Dupont', referenceCompte: 'REF1' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', email: 'paul@exemple.fr' }],
   _dispoData: {}, loadDispo() {},
   renderCharlyChat() { trace.rendus++; }, render() {}, showToast(t) { trace.toasts.push(t); }, saveEventsToStorage() { trace.saves++; },
   addDemarche(d) { trace.demarches.push(d.title); },
   tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); },
-  tcVouvoiement: () => false,
+  tcVouvoiement: () => false, tcDirePrevenance() {},
   tcModeleMessage: (action) => action === 'decale'
     ? 'Bonjour [Prénom], désolé(e), je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux te proposer :'
     : "Bonjour [Prénom], désolé(e), un imprévu m'oblige à annuler notre rendez-vous du [date] à [heure].",
-  tcTransmettrePrevenance: async (c, t) => { trace.envois.push([c.name, t]); return c.referenceCompte ? 'timecool' : (c.phone ? 'sms' : 'aucun'); },
+  tcTransmettrePrevenance: async (c, t) => { trace.envois.push([c.name, t]); return c.referenceCompte ? 'timecool' : (c.phone ? 'sms' : (c.email ? 'email' : 'aucun')); },
   escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
   // Les autres boutons de charlyQuickAction, hors sujet ici.
   tcDemarrerRdvAPlusieurs() {}, charlyAttachAction() {}, tcPrevenirRetard() {}, tcDemarrerNouveauRdv() {}, tcDemarrerImprevu() {}, startAssistant() {}, tcDemarrerCalculTrajet() {}, charlySendMessage() {},
@@ -162,7 +162,7 @@ const quand = (d, h) => ctx.tcMaladeQuand(d, h);
   await ctx.tcDemarrerMalade('je suis malade demain, décale tout');
   verifie('les créneaux s enchaînent après-demain autour de « Banque » : Réunion 9h-10h, Dentiste 11h-12h30', textes().indexOf('« Réunion » : ' + quand(iso(2), { startH: 9, startM: 0, endH: 10, endM: 0 })) > -1 && textes().indexOf('« Dentiste » : ' + quand(iso(2), { startH: 11, startM: 0, endH: 12, endM: 30 })) > -1, textes());
   await taper('tu les préviens'); await taper('vas-y');
-  verifie('« Dentiste » sans contact n empêche rien : Sophie prévenue (SMS : message prêt), les deux déplacés', trace.envois.length === 1 && trace.envois[0][0] === 'Sophie Anceau' && /Message prêt à envoyer \(SMS ou email\) : Sophie Anceau/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 2, dc());
+  verifie('« Dentiste » sans contact n empêche rien : les deux déplacés ; Sophie (SMS) : rien d ouvert dans la boucle, un bouton « Envoyer à Sophie Anceau » dans le bilan', trace.envois.length === 0 && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 2 && dernier()._envois && dernier()._envois.length === 1 && /✉️ Envoyer à Sophie Anceau</.test(ctx.tcRendreBilanMalade(dernier())), dc());
 
   titre('7. Réponses pas comprises, vraie demande, deux questionnaires');
   reinit();
@@ -189,7 +189,7 @@ const quand = (d, h) => ctx.tcMaladeQuand(d, h);
   const csm = fonction(page, 'charlySendMessage') || '';
   verifie('charlySendMessage : la réponse tapée est lue avant « Vers quand ? » (sans clé API)', /if \(_tcQuestionnaire\) \{\s+if \(await tcQuestionnaireRepondreTexte\(text\)\) return;\s+\}/.test(csm) && csm.indexOf('tcQuestionnaireRepondreTexte(text)') < csm.indexOf('_tcDeplacementPeriode') && csm.indexOf('tcQuestionnaireRepondreTexte(text)') < csm.indexOf('tcCleActiveCharly()'));
   verifie('charlySendMessage : « malade » part au questionnaire avant la contrainte, après la marche arrière et la prévenance', /if \(tcDetecterMalade\(text\)\) \{\s+await tcDemarrerMalade\(text\);\s+return;\s+\}/.test(csm) && csm.indexOf('tcDetecterMalade(text)') < csm.indexOf('tcDetecterContrainte(text)') && csm.indexOf('tcDetecterMalade(text)') > csm.indexOf('tcDetecterPrevenance(text)'));
-  verifie('renderChatMessage rend la carte (_questionnaire) comme les autres questions à boutons', /if \(m && m\._questionType\) return tcRendreQuestionType\(m\);\s+if \(m && m\._questionnaire\) return tcRendreQuestionnaire\(m\);/.test(fonction(page, 'renderChatMessage') || ''));
+  verifie('renderChatMessage rend la carte (_questionnaire) et le bilan à boutons (_envois) comme les autres questions à boutons', /if \(m && m\._questionType\) return tcRendreQuestionType\(m\);\s+if \(m && m\._questionnaire\) return tcRendreQuestionnaire\(m\);\s+if \(m && m\._envois\) return tcRendreBilanMalade\(m\);/.test(fonction(page, 'renderChatMessage') || ''));
   verifie('le ménage du compte arrête le questionnaire', /_tcQuestionnaire = null;/.test(fonction(page, 'tcViderDonneesDuCompte') || ''));
   verifie('tcAppliquerDeplacement et tcSupprimerRdvs gardent leur bilan habituel sans option (les autres parcours ne changent pas)', /if \(!o\.silencieux\) charlyIA\.history\.push/.test(fonction(page, 'tcAppliquerDeplacement') || '') && /if \(!o\.silencieux\) charlyIA\.history\.push/.test(fonction(page, 'tcSupprimerRdvs') || ''));
   reinit(); vm.runInContext('_tcMarcheArriere = null;', ctx);
@@ -197,6 +197,27 @@ const quand = (d, h) => ctx.tcMaladeQuand(d, h);
   verifie('sans option, tcAppliquerDeplacement dit « C’est fait » et montre son toast comme avant', /C\\?'est fait, rendez-vous déplacé/.test(dc()) && trace.toasts.length === 1, dc());
   verifie('pas de tiret long dans le bloc, pas d assertion arrière dans la page (Safari)', bloc.indexOf('—') < 0 && page.indexOf('(?<') < 0);
   verifie('le bouton de l écran Charly est inchangé (texte et place)', /charlyQuickAction\('malade'\)[^>]*>🤒 Je suis malade, décale tout<\/button>/.test(page));
+
+  titre('9. Examinateur : deux contacts par SMS ou email (un bouton par message, rien d ouvert en boucle) ; un contact avec deux rendez-vous');
+  reinit([ev('e', 'Réunion', 1, 9, 0, 10, 0, { contact: 'c2' }), ev('f2', 'Kiné', 1, 11, 0, 12, 0, { contact: 'c3' }), ev('g', 'Banque', 2, 10, 0, 11, 0)]);
+  await ctx.tcDemarrerMalade('je suis malade demain, décale tout');
+  await taper('tu les préviens'); await taper('oui');
+  const bilan = dernier();
+  verifie('Sophie (SMS) et Paul (email) : tcTransmettrePrevenance n est pas appelée dans la boucle, les deux sont déplacés', trace.envois.length === 0 && (dc().match(/• Déplacé : /g) || []).length === 2, dc());
+  verifie('le bilan le dit : « Message prêt, à envoyer toi-même d’un geste (SMS ou email) : Sophie Anceau et Paul Martin »', /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau et Paul Martin/.test(dc()) && !/Message prêt à envoyer/.test(dc()), dc());
+  verifie('deux boutons « Envoyer à … », un par message, avec le téléphone ou l email et le texte prêt', bilan._envois && bilan._envois.length === 2 && bilan._envois[0].nom === 'Sophie Anceau' && bilan._envois[0].phone === '06' && bilan._envois[1].nom === 'Paul Martin' && bilan._envois[1].email === 'paul@exemple.fr' && /je dois décaler notre rendez-vous du .*15 octobre à 09h00/.test(bilan._envois[0].texte) && /16 octobre à 09h00\.$/.test(bilan._envois[0].texte) && /15 octobre à 11h00/.test(bilan._envois[1].texte), JSON.stringify(bilan._envois));
+  const rendu9 = ctx.tcRendreBilanMalade(bilan);
+  verifie('le rendu : les lignes du bilan puis deux boutons actifs « ✉️ Envoyer à Sophie Anceau » / « ✉️ Envoyer à Paul Martin »', (rendu9.match(/<button onclick="tcMaladeEnvoyer\('env\d+-\d+', \d\)"/g) || []).length === 2 && /✉️ Envoyer à Sophie Anceau<\/button>/.test(rendu9) && /✉️ Envoyer à Paul Martin<\/button>/.test(rendu9) && /C’est fait\. Repose-toi\.<br>• Déplacé/.test(rendu9), rendu9.slice(-400));
+  await ctx.tcMaladeEnvoyer(bilan._envoisId, 1);
+  verifie('« Envoyer à Paul Martin » touché : le chemin habituel (tcTransmettrePrevenance) avec le nom, l email et le texte ; le bouton le dit et s éteint, l autre reste actif', trace.envois.length === 1 && trace.envois[0][0] === 'Paul Martin' && trace.envois[0][1] === bilan._envois[1].texte && bilan._envois[1].fait === 'email' && (ctx.tcRendreBilanMalade(bilan).match(/<button disabled onclick="tcMaladeEnvoyer\('env\d+-\d+', 1\)"[^>]*>✅ Message prêt pour Paul Martin<\/button>/) || []).length === 1 && /<button onclick="tcMaladeEnvoyer\('env\d+-\d+', 0\)"/.test(ctx.tcRendreBilanMalade(bilan)), JSON.stringify(trace.envois));
+  await ctx.tcMaladeEnvoyer(bilan._envoisId, 1);
+  verifie('un second toucher du même bouton ne renvoie rien', trace.envois.length === 1);
+  reinit([ev('e', 'Réunion', 1, 9, 0, 10, 0, { contact: 'c1' }), ev('e2', 'Point', 1, 14, 0, 15, 0, { contact: 'c1' }), ev('g', 'Banque', 2, 10, 0, 11, 0)]);
+  await ctx.tcDemarrerMalade('je suis malade, annule tout demain');
+  verifie('un seul contact pour deux rendez-vous : la question le cite une fois', carte()._questionnaire.question === 'Qui prévient Marc Dupont ?');
+  await taper('tu les préviens'); await taper('oui');
+  verifie('Marc Dupont (TimeCool) reçoit deux messages, un par rendez-vous supprimé (09h00 et 14h00)', trace.envois.length === 2 && trace.envois.every((x) => x[0] === 'Marc Dupont') && /15 octobre à 09h00/.test(trace.envois[0][1]) && /15 octobre à 14h00/.test(trace.envois[1][1]) && /annuler notre rendez-vous/.test(trace.envois[1][1]), JSON.stringify(trace.envois));
+  verifie('le bilan : deux « Supprimé », « Prévenu par la messagerie TimeCool : Marc Dupont » une fois, pas de bouton', (dc().match(/• Supprimé : /g) || []).length === 2 && (dc().match(/Prévenu par la messagerie TimeCool : Marc Dupont/g) || []).length === 1 && !dernier()._envois, dc());
 
   console.log('');
   console.log(ko + ' anomalie(s).');
