@@ -8084,15 +8084,29 @@ function tcOuvrirPanneauAide() {
 function tcAideElement(parent, classe, texte) { const el = document.createElement('div'); el.className = classe; el.textContent = texte; parent.appendChild(el); return el; }
 function tcAideBouton(parent, libelle, principal, action) { const b = document.createElement('button'); b.className = principal ? 'tc-mod-ok' : 'tc-mod-no'; b.textContent = libelle; b.onclick = action; parent.appendChild(b); return b; }
 
+/** La version qui compte pour un rapport : dans l application, la version installee ; sur le web, la date de mise en
+ *  ligne de la page (le meme horodatage que compare le mecanisme de mise a jour). */
+function tcVersionPourRapport() {
+  const infos = (typeof tcInfosVersion === 'function') ? tcInfosVersion() : {};
+  if (infos.version) return 'apk ' + infos.version;
+  if (typeof TC_DEPLOIEMENT === 'string' && /^[0-9]+$/.test(TC_DEPLOIEMENT)) {
+    const d = new Date(Number(TC_DEPLOIEMENT) * 1000);
+    let quand = '';
+    try { quand = d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(':', 'h'); } catch (e) { quand = d.toISOString(); }
+    return 'web du ' + quand;
+  }
+  return 'web sans horodatage';
+}
+
 /** Le rapport technique : version, navigateur, compte, dernieres requetes et erreurs. Jamais de mot de passe. */
 function tcRapportTechnique(contexte) {
   let compte = null;
   try { compte = tcSyncCompte(); } catch (e) {}
   if (!compte) { const ch = document.getElementById('loginEmail'); if (ch && ch.value) compte = String(ch.value).trim().slice(0, 120); }
-  const infos = (typeof tcInfosVersion === 'function') ? tcInfosVersion() : {};
   return {
     contexte: contexte || 'inconnu',
-    version: (infos.version ? 'apk ' + infos.version + ' / ' : '') + 'page ' + TC_APP_VERSION,
+    version: tcVersionPourRapport(),
+    deploiement: (typeof TC_DEPLOIEMENT === 'string' && /^[0-9]+$/.test(TC_DEPLOIEMENT)) ? TC_DEPLOIEMENT : null,
     navigateur: String(navigator.userAgent || '').slice(0, 255),
     compte: compte,
     en_ligne: navigator.onLine !== false,
@@ -8173,6 +8187,7 @@ function tcVerifionsEnsemble(contexte) {
   const fermer = function (mot) { _tcPanneauVerifOuvert = false; p.fermer(); if (mot) showToast(mot); };
   let etape = -1;   // -1 : accueil et test ; 0 a 5 : les gestes ; 6 : le rapport
   let constat = '';
+  let avis = '';    // apres « Ça marche » : le serveur ne repond toujours pas
   const dessiner = function () {
     p.boite.innerHTML = '';
     tcAideElement(p.boite, 'tc-mod-ic', '🔎');
@@ -8184,9 +8199,16 @@ function tcVerifionsEnsemble(contexte) {
       if (!constat) tcAideBouton(barre, 'Tester ma connexion', true, async function (ev) { if (ev && ev.target) { ev.target.disabled = true; ev.target.textContent = 'Test en cours…'; } constat = await tcTesterConnexion(); dessiner(); });
       else tcAideBouton(barre, 'Commencer les étapes', true, function () { etape = 0; dessiner(); });
     } else if (etape < TC_ETAPES_VERIFICATION.length) {
-      tcAideElement(p.boite, 'tc-mod-tx', 'Étape ' + (etape + 1) + ' sur ' + TC_ETAPES_VERIFICATION.length + '\n\n' + TC_ETAPES_VERIFICATION[etape]);
-      tcAideBouton(barre, 'Ça ne marche pas', false, function () { etape++; dessiner(); });
-      tcAideBouton(barre, 'Ça marche', true, function () { fermer('✅ Super, c’est reparti'); });
+      tcAideElement(p.boite, 'tc-mod-tx', 'Étape ' + (etape + 1) + ' sur ' + TC_ETAPES_VERIFICATION.length + '\n\n' + TC_ETAPES_VERIFICATION[etape] + (avis ? '\n\n' + avis : ''));
+      tcAideBouton(barre, 'Ça ne marche pas', false, function () { avis = ''; etape++; dessiner(); });
+      tcAideBouton(barre, 'Ça marche', true, async function (ev) {
+        // On revérifie vraiment avant de se réjouir : même test que « Tester ma connexion ».
+        if (ev && ev.target) { ev.target.disabled = true; ev.target.textContent = 'Vérification…'; }
+        await tcTesterConnexion();
+        if (_tcDernierTestConnexion && _tcDernierTestConnexion.resultat === 'serveur_ok') { fermer('✅ Super, c’est reparti'); return; }
+        avis = 'Le serveur ne répond toujours pas depuis cet appareil. Réessaie dans un instant, ou passe à l’étape suivante.';
+        dessiner();
+      });
     } else {
       tcAideElement(p.boite, 'tc-mod-tx', 'Merci d’avoir tout essayé. Envoie-nous un petit rapport technique : il nous aidera à comprendre ce qui bloque sur cet appareil.');
       tcAideBouton(barre, 'Fermer', false, function () { fermer(); });

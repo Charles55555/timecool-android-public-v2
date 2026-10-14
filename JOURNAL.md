@@ -2097,3 +2097,12 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   envoyant 12 rapports : le plafond de 10 par heure et par adresse ne s'applique pas aux appels venus du serveur
   lui-même (127.0.0.1, ::1, 82.165.253.73, même liste que GET /taches/rappels), d'où tournent les suites ; les
   utilisateurs le gardent. Le plafond est vérifié en lecture par `verif-boucle-compte`. L'API change : à redéployer.
+- Mission 41 d (14/10, chef, défauts TESTEURS sur la v2.0.366) : dans « Vérifions ensemble », « Ça marche » relance
+  vraiment le test (GET /sante, même mécanique que « Tester ma connexion ») : « Super, c’est reparti » seulement si le
+  serveur répond ; sinon le panneau reste à la même étape avec « Le serveur ne répond toujours pas depuis cet appareil.
+  Réessaie dans un instant, ou passe à l’étape suivante. ». Le rapport technique porte la vraie version
+  (`tcVersionPourRapport`) : « apk 2.0.366 » dans l’application, « web du 14/10/2026 12h41 » sur le web (l’horodatage
+  de mise en ligne que compare le mécanisme de mise à jour, en heure de Paris ; brut dans le champ `deploiement`),
+  « web sans horodatage » dans le dépôt. Plus de « page 10.5.54 » (constante TC_APP_VERSION d’un ancien mécanisme,
+  qui ne désigne rien d’utile ; laissée en place, inutilisée par le rapport). La page web ne porte pas de numéro
+  v2.0.NNN : seul l’APK le connaît. L’API ne change pas. verif-boucle-compte : 6 cas de plus (panneau simulé).

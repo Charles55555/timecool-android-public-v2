@@ -115,7 +115,36 @@ const ctxE = vm.createContext({}); vm.runInContext(etapes || 'const TC_ETAPES_VE
 const liste = vm.runInContext('TC_ETAPES_VERIFICATION', ctxE);
 verifie('six gestes, dans l ordre demande : adresse, recharger (Ctrl + F5 / fermer et rouvrir), fenetre privee, bloqueur/VPN/antivirus, autre navigateur, partage de connexion', liste.length === 6 && /timecool\.fr\/app\//.test(liste[0]) && /Ctrl \+ F5/.test(liste[1]) && /ferme l’application/.test(liste[1]) && /fenêtre privée/.test(liste[2]) && /bloqueur de publicité, le VPN ou l’antivirus/.test(liste[3]) && /autre navigateur/.test(liste[4]) && /partage de connexion/.test(liste[5]), JSON.stringify(liste).slice(0, 200));
 const verif = fonction(page, 'tcVerifionsEnsemble') || '';
-verifie('le panneau : « Tester ma connexion », puis « Commencer les étapes », chaque etape avec « Ça marche » / « Ça ne marche pas », a la fin « Envoyer le rapport »', /'Vérifions ensemble'/.test(verif) && /'Tester ma connexion'/.test(verif) && /'Commencer les étapes'/.test(verif) && /'Ça ne marche pas', false, function \(\) \{ etape\+\+; dessiner\(\); \}/.test(verif) && /'Ça marche', true/.test(verif) && /'Envoyer le rapport', true/.test(verif) && /'Étape ' \+ \(etape \+ 1\) \+ ' sur '/.test(verif));
+verifie('le panneau : « Tester ma connexion », puis « Commencer les étapes », chaque etape avec « Ça marche » / « Ça ne marche pas », a la fin « Envoyer le rapport »', /'Vérifions ensemble'/.test(verif) && /'Tester ma connexion'/.test(verif) && /'Commencer les étapes'/.test(verif) && /'Ça ne marche pas', false, function \(\) \{ avis = ''; etape\+\+; dessiner\(\); \}/.test(verif) && /'Ça marche', true/.test(verif) && /'Envoyer le rapport', true/.test(verif) && /'Étape ' \+ \(etape \+ 1\) \+ ' sur '/.test(verif));
+// Mission 41 d : « Ça marche » reverifie vraiment (meme test que « Tester ma connexion ») avant de se rejouir.
+function Panneau() {
+  const El = function (tag) { this.tag = tag; this.children = []; this.className = ''; this.textContent = ''; this.disabled = false; this.classList = { add: () => {}, remove: () => {} }; this.parentNode = null; };
+  El.prototype.appendChild = function (e) { e.parentNode = this; this.children.push(e); return e; };
+  El.prototype.removeChild = function (e) { this.children = this.children.filter((x) => x !== e); };
+  Object.defineProperty(El.prototype, 'innerHTML', { set() { this.children = []; }, get() { return ''; } });
+  const body = new El('body');
+  const c = { console, Date, String, setTimeout, clearTimeout, requestAnimationFrame: (f) => f(), AbortController: class { constructor() { this.signal = {}; } abort() {} }, TC_API: 'https://api.timecool.fr', navigator: { onLine: true }, _tcDernierTestConnexion: null, _tcPanneauVerifOuvert: false, toasts: [], document: { body, createElement: (t) => new El(t) }, sante: false, appelsSante: 0, tcEnvoyerRapportTechnique: () => {} };
+  c.showToast = (m) => c.toasts.push(m);
+  c.fetch = async () => { c.appelsSante++; if (c.sante) return { ok: true, status: 200 }; throw new Error('x'); };
+  vm.createContext(c);
+  for (const code of [constante('const TC_SANTE_DELAI_MS = [^;]*;') || 'const TC_SANTE_DELAI_MS = 8000;', etapes || 'const TC_ETAPES_VERIFICATION = [];', fonction(page, 'tcOuvrirPanneauAide'), fonction(page, 'tcAideElement'), fonction(page, 'tcAideBouton'), fonction(page, 'tcTesterConnexion'), fonction(page, 'tcVerifionsEnsemble')]) vm.runInContext(code || '', c);
+  const tous = (n, out) => { out = out || []; out.push(n); n.children.forEach((e) => tous(e, out)); return out; };
+  c.bouton = (libelle) => tous(body).find((n) => n.tag === 'button' && n.textContent === libelle) || null;
+  c.texte = () => tous(body).filter((n) => n.className === 'tc-mod-tx').map((n) => n.textContent).join('\n');
+  c.clic = async (libelle) => { const b = c.bouton(libelle); if (!b) throw new Error('bouton absent : ' + libelle); await b.onclick({ target: b }); };
+  return c;
+}
+const P = Panneau();
+P.tcVerifionsEnsemble('connexion');
+await P.clic('Tester ma connexion'); await P.clic('Commencer les étapes');
+const appelsAvant = P.appelsSante;
+await P.clic('Ça marche');
+verifie('« Ça marche » quand le serveur ne repond toujours pas : GET /sante relance, le panneau reste ouvert a la meme etape, un mot calme, pas de « Super »', P.appelsSante === appelsAvant + 1 && P._tcPanneauVerifOuvert === true && /Étape 1 sur 6/.test(P.texte()) && /Le serveur ne répond toujours pas depuis cet appareil\. Réessaie dans un instant, ou passe à l’étape suivante\./.test(P.texte()) && P.toasts.length === 0, P.texte().slice(-160) + ' | toasts ' + JSON.stringify(P.toasts));
+await P.clic('Ça ne marche pas');
+verifie('« Ça ne marche pas » : etape suivante, sans l avis precedent', /Étape 2 sur 6/.test(P.texte()) && !/ne répond toujours pas/.test(P.texte()), P.texte().slice(0, 120));
+P.sante = true;
+await P.clic('Ça marche');
+verifie('« Ça marche » quand le serveur repond : GET /sante relance, le panneau se ferme, « ✅ Super, c’est reparti »', P.appelsSante === appelsAvant + 2 && P._tcPanneauVerifOuvert === false && P.toasts.length === 1 && P.toasts[0] === '✅ Super, c’est reparti', JSON.stringify(P.toasts));
 const textesAide = [boucle, verif, fonction(page, 'tcTesterConnexion') || '', fonction(page, 'tcEnvoyerRapportTechnique') || '', etapes || ''].join('\n');
 verifie('aucun tiret long dans les textes des panneaux', textesAide.indexOf('—') < 0 && textesAide.indexOf('–') < 0);
 // Simulation du test de connexion.
@@ -136,10 +165,18 @@ verifie('trop long : le reseau est peut-etre lent ou filtre', /met trop de temps
 const t5 = await test('500', true);
 verifie('le serveur repond mal : « Réessaie dans quelques minutes »', /pas comme prévu\. Réessaie dans quelques minutes/.test(t5.constat), t5.constat);
 // Le rapport.
-const cR = { console, Date, String, JSON, navigator: { userAgent: 'Navigateur de test', onLine: true }, location: { href: 'https://timecool.fr/app/?x=1#y' }, document: { getElementById: (id) => id === 'loginEmail' ? { value: ' gary@exemple-timecool.fr ' } : null }, TC_APP_VERSION: '10.5.54', tcSyncCompte: () => null, _tcDernierTestConnexion: { resultat: 'serveur_ok' }, _tcJournalRequetes: [{ m: 'POST', c: '/connexion', s: 'reseau', ms: 20000 }], _tcJournalErreurs: [{ e: 'TypeError: x' }] };
-vm.createContext(cR); vm.runInContext(fonction(page, 'tcRapportTechnique'), cR);
+const cR = { console, Date, String, JSON, navigator: { userAgent: 'Navigateur de test', onLine: true }, location: { href: 'https://timecool.fr/app/?x=1#y' }, document: { getElementById: (id) => id === 'loginEmail' ? { value: ' gary@exemple-timecool.fr ' } : null }, TC_APP_VERSION: '10.5.54', TC_DEPLOIEMENT: '__TC_DEPLOIEMENT__', tcSyncCompte: () => null, _tcDernierTestConnexion: { resultat: 'serveur_ok' }, _tcJournalRequetes: [{ m: 'POST', c: '/connexion', s: 'reseau', ms: 20000 }], _tcJournalErreurs: [{ e: 'TypeError: x' }] };
+vm.createContext(cR); vm.runInContext(fonction(page, 'tcVersionPourRapport') + '\n' + fonction(page, 'tcRapportTechnique'), cR);
 const rapport = cR.tcRapportTechnique('connexion');
-verifie('le rapport : contexte, version, navigateur, compte (l identifiant saisi si pas de session), en ligne, adresse sans parametres, test, requetes, erreurs ; jamais de mot de passe', rapport.contexte === 'connexion' && rapport.version === 'page 10.5.54' && rapport.navigateur === 'Navigateur de test' && rapport.compte === 'gary@exemple-timecool.fr' && rapport.en_ligne === true && rapport.adresse === 'https://timecool.fr/app/' && rapport.test_connexion.resultat === 'serveur_ok' && rapport.requetes.length === 1 && rapport.erreurs.length === 1 && JSON.stringify(rapport).indexOf('password') < 0 && JSON.stringify(rapport).indexOf('loginPassword') < 0, JSON.stringify(rapport).slice(0, 250));
+// Mission 41 d : la vraie version, plus jamais « page 10.5.54 ».
+verifie('depot ou APK sans pont (marqueur non remplace) : version « web sans horodatage », deploiement null, et plus de « 10.5.54 » nulle part', rapport.version === 'web sans horodatage' && rapport.deploiement === null && JSON.stringify(rapport).indexOf('10.5.54') < 0 && (fonction(page, 'tcRapportTechnique') || '').indexOf('TC_APP_VERSION') < 0, rapport.version);
+vm.runInContext("TC_DEPLOIEMENT = '1791974460';", cR);
+const rapportWeb = cR.tcRapportTechnique('connexion');
+verifie('page web publiee : version « web du 14/10/2026 12h41 » (heure de Paris, le meme horodatage que le mecanisme de mise a jour), deploiement brut', rapportWeb.version === 'web du 14/10/2026 12h41' && rapportWeb.deploiement === '1791974460', rapportWeb.version + ' ' + rapportWeb.deploiement);
+vm.runInContext("tcInfosVersion = () => ({ version: '2.0.366', buildTime: null });", cR);
+const rapportApk = cR.tcRapportTechnique('connexion');
+verifie('dans l application : version « apk 2.0.366 » (la version installee, celle que l appli affiche)', rapportApk.version === 'apk 2.0.366', rapportApk.version);
+verifie('le rapport : contexte, version, navigateur, compte (l identifiant saisi si pas de session), en ligne, adresse sans parametres, test, requetes, erreurs ; jamais de mot de passe', rapport.contexte === 'connexion' && rapport.navigateur === 'Navigateur de test' && rapport.compte === 'gary@exemple-timecool.fr' && rapport.en_ligne === true && rapport.adresse === 'https://timecool.fr/app/' && rapport.test_connexion.resultat === 'serveur_ok' && rapport.requetes.length === 1 && rapport.erreurs.length === 1 && JSON.stringify(rapport).indexOf('password') < 0 && JSON.stringify(rapport).indexOf('loginPassword') < 0, JSON.stringify(rapport).slice(0, 250));
 verifie('tcAppel note chaque requete (chemin sans parametres, statut ou code, duree) et les erreurs de page sont notees ; rien de stocke', /tcNoterRequete\(methode, chemin, reponse\.status, Date\.now\(\) - _tcDebut\)/.test(fonction(page, 'tcAppel') || '') && /tcNoterRequete\(methode, chemin, err\.code, Date\.now\(\) - _tcDebut\)/.test(fonction(page, 'tcAppel') || '') && /split\('\?'\)\[0\]/.test(fonction(page, 'tcNoterRequete') || '') && /window\.addEventListener\('unhandledrejection'/.test(page) && !/localStorage/.test(fonction(page, 'tcNoterRequete') || ''));
 verifie('TC_BACKEND.envoyerRapportTechnique → POST /rapports-techniques ; le bouton dit « Merci, rapport envoyé » ou un mot calme en cas d echec', /tcAppel\('POST', '\/rapports-techniques', rapport\)/.test(page) && /'Merci, rapport envoyé'/.test(fonction(page, 'tcEnvoyerRapportTechnique') || '') && /Le rapport n’a pas pu partir/.test(fonction(page, 'tcEnvoyerRapportTechnique') || ''));
 
