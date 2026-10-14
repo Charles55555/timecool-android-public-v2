@@ -8052,6 +8052,149 @@ function tcModale(options) {
   });
 }
 
+/* ══════════════════════════════════════════════════════════════
+   PANNEAUX D AIDE (mission 41)
+   « Quelque chose empêche TimeCool de se charger. » (boucle arretee par le garde-fou) et « Vérifions ensemble »
+   (serveur injoignable a la connexion ou a la creation de compte). Memes classes que tcModale ; textes poses en
+   textContent ; mots simples, sans jargon, aucun tiret long.
+   ══════════════════════════════════════════════════════════════ */
+const TC_SANTE_DELAI_MS = 8000;
+const TC_ETAPES_VERIFICATION = [
+  'Vérifie l’adresse dans la barre du navigateur : elle doit être https://timecool.fr/app/',
+  'Recharge la page. Sur PC : Ctrl + F5. Sur téléphone : ferme l’application, puis rouvre-la.',
+  'Ouvre TimeCool dans une fenêtre privée (navigation privée), puis réessaie.',
+  'Coupe un moment le bloqueur de publicité, le VPN ou l’antivirus, puis réessaie.',
+  'Essaie avec un autre navigateur : Chrome, Firefox, Edge ou Safari.',
+  'Sur un réseau d’école ou d’entreprise : essaie avec le partage de connexion d’un téléphone.'
+];
+let _tcDernierTestConnexion = null;
+function tcOuvrirPanneauAide() {
+  const ov = document.createElement('div'); ov.className = 'tc-mod-ov';
+  const boite = document.createElement('div'); boite.className = 'tc-mod';
+  ov.appendChild(boite);
+  document.body.appendChild(ov);
+  requestAnimationFrame(function () { ov.classList.add('on'); });
+  return {
+    boite: boite,
+    fermer: function () { ov.classList.remove('on'); setTimeout(function () { if (ov.parentNode) ov.parentNode.removeChild(ov); }, 180); }
+  };
+}
+function tcAideElement(parent, classe, texte) { const el = document.createElement('div'); el.className = classe; el.textContent = texte; parent.appendChild(el); return el; }
+function tcAideBouton(parent, libelle, principal, action) { const b = document.createElement('button'); b.className = principal ? 'tc-mod-ok' : 'tc-mod-no'; b.textContent = libelle; b.onclick = action; parent.appendChild(b); return b; }
+
+/** Le rapport technique : version, navigateur, compte, dernieres requetes et erreurs. Jamais de mot de passe. */
+function tcRapportTechnique(contexte) {
+  let compte = null;
+  try { compte = tcSyncCompte(); } catch (e) {}
+  if (!compte) { const ch = document.getElementById('loginEmail'); if (ch && ch.value) compte = String(ch.value).trim().slice(0, 120); }
+  const infos = (typeof tcInfosVersion === 'function') ? tcInfosVersion() : {};
+  return {
+    contexte: contexte || 'inconnu',
+    version: (infos.version ? 'apk ' + infos.version + ' / ' : '') + 'page ' + TC_APP_VERSION,
+    navigateur: String(navigator.userAgent || '').slice(0, 255),
+    compte: compte,
+    en_ligne: navigator.onLine !== false,
+    adresse: String(location.href).split('?')[0].split('#')[0].slice(0, 200),
+    natif: typeof tcEstApplicationNative === 'function' && tcEstApplicationNative(),
+    test_connexion: _tcDernierTestConnexion,
+    requetes: _tcJournalRequetes.slice(-20),
+    erreurs: _tcJournalErreurs.slice(-10),
+    envoye_le: new Date().toISOString()
+  };
+}
+async function tcEnvoyerRapportTechnique(contexte, bouton) {
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Envoi…'; }
+  try {
+    await TC_BACKEND.envoyerRapportTechnique(tcRapportTechnique(contexte));
+    if (bouton) bouton.textContent = 'Merci, rapport envoyé';
+    showToast('✅ Merci, rapport envoyé');
+    return true;
+  } catch (e) {
+    if (bouton) { bouton.disabled = false; bouton.textContent = 'Envoyer le rapport'; }
+    showToast('⚠️ Le rapport n’a pas pu partir. Réessaie dans un instant.');
+    return false;
+  }
+}
+
+/** Boucle arretee par le garde-fou : « Réparer » ou « Envoyer le rapport ». */
+let _tcPanneauBoucleOuvert = false;
+function tcPanneauBoucle() {
+  if (_tcPanneauBoucleOuvert) return;
+  _tcPanneauBoucleOuvert = true;
+  const p = tcOuvrirPanneauAide();
+  const dessiner = function (etat) {
+    p.boite.innerHTML = '';
+    tcAideElement(p.boite, 'tc-mod-ic', '🧩');
+    tcAideElement(p.boite, 'tc-mod-tt', 'Quelque chose empêche TimeCool de se charger.');
+    tcAideElement(p.boite, 'tc-mod-tx', etat || 'Tes données sont en sécurité sur le serveur. Tu peux réparer l’application sur cet appareil : elle repart proprement, et tu restes connecté.');
+    const barre = document.createElement('div'); barre.className = 'tc-mod-bt'; p.boite.appendChild(barre);
+    tcAideBouton(barre, 'Envoyer le rapport', false, function (ev) { tcEnvoyerRapportTechnique('boucle', ev && ev.target); });
+    tcAideBouton(barre, 'Réparer', true, async function () {
+      dessiner('Réparation en cours…');
+      const ok = await tcReparerDonneesLocales();
+      if (ok) { _tcPanneauBoucleOuvert = false; p.fermer(); showToast('✅ C’est réparé'); }
+      else dessiner('Ça ne suffit pas. Envoie-nous le rapport : il nous aidera à comprendre ce qui bloque.');
+    });
+  };
+  dessiner();
+}
+
+/** « Tester ma connexion » : une requete legere vers api.timecool.fr, puis un constat en mots simples. */
+async function tcTesterConnexion() {
+  const ctrl = new AbortController();
+  const minuteur = setTimeout(function () { ctrl.abort(); }, TC_SANTE_DELAI_MS);
+  let resultat;
+  try {
+    const r = await fetch(TC_API + '/sante', { method: 'GET', cache: 'no-store', signal: ctrl.signal });
+    resultat = r.ok ? 'serveur_ok' : 'serveur_' + r.status;
+  } catch (e) {
+    resultat = (e && e.name === 'AbortError') ? 'delai' : 'injoignable';
+  } finally {
+    clearTimeout(minuteur);
+  }
+  let constat;
+  if (resultat === 'serveur_ok') constat = 'Le serveur TimeCool répond, mais quelque chose sur cet appareil bloque l’application : bloqueur de publicité, VPN ou antivirus.';
+  else if (navigator.onLine === false) constat = 'Pas d’accès à internet sur cet appareil. Vérifie le wifi ou les données mobiles.';
+  else if (resultat === 'delai') constat = 'Le serveur TimeCool met trop de temps à répondre depuis cet appareil. Le réseau est peut-être lent ou filtré.';
+  else if (resultat.indexOf('serveur_') === 0) constat = 'Le serveur TimeCool répond, mais pas comme prévu. Réessaie dans quelques minutes.';
+  else constat = 'Le serveur TimeCool n’est pas joignable depuis cet appareil. Souvent, c’est le réseau qui bloque : école, entreprise, VPN ou antivirus.';
+  _tcDernierTestConnexion = { resultat: resultat, le: new Date().toISOString() };
+  return constat;
+}
+
+/** « Vérifions ensemble » : le test, puis les gestes un a un, puis le rapport. */
+let _tcPanneauVerifOuvert = false;
+function tcVerifionsEnsemble(contexte) {
+  if (_tcPanneauVerifOuvert) return;
+  _tcPanneauVerifOuvert = true;
+  const p = tcOuvrirPanneauAide();
+  const fermer = function (mot) { _tcPanneauVerifOuvert = false; p.fermer(); if (mot) showToast(mot); };
+  let etape = -1;   // -1 : accueil et test ; 0 a 5 : les gestes ; 6 : le rapport
+  let constat = '';
+  const dessiner = function () {
+    p.boite.innerHTML = '';
+    tcAideElement(p.boite, 'tc-mod-ic', '🔎');
+    tcAideElement(p.boite, 'tc-mod-tt', 'Vérifions ensemble');
+    const barre = document.createElement('div'); barre.className = 'tc-mod-bt';
+    if (etape < 0) {
+      tcAideElement(p.boite, 'tc-mod-tx', 'TimeCool n’arrive pas à joindre le serveur depuis cet appareil. On va trouver pourquoi, une étape à la fois.' + (constat ? '\n\n' + constat : ''));
+      tcAideBouton(barre, 'Fermer', false, function () { fermer(); });
+      if (!constat) tcAideBouton(barre, 'Tester ma connexion', true, async function (ev) { if (ev && ev.target) { ev.target.disabled = true; ev.target.textContent = 'Test en cours…'; } constat = await tcTesterConnexion(); dessiner(); });
+      else tcAideBouton(barre, 'Commencer les étapes', true, function () { etape = 0; dessiner(); });
+    } else if (etape < TC_ETAPES_VERIFICATION.length) {
+      tcAideElement(p.boite, 'tc-mod-tx', 'Étape ' + (etape + 1) + ' sur ' + TC_ETAPES_VERIFICATION.length + '\n\n' + TC_ETAPES_VERIFICATION[etape]);
+      tcAideBouton(barre, 'Ça ne marche pas', false, function () { etape++; dessiner(); });
+      tcAideBouton(barre, 'Ça marche', true, function () { fermer('✅ Super, c’est reparti'); });
+    } else {
+      tcAideElement(p.boite, 'tc-mod-tx', 'Merci d’avoir tout essayé. Envoie-nous un petit rapport technique : il nous aidera à comprendre ce qui bloque sur cet appareil.');
+      tcAideBouton(barre, 'Fermer', false, function () { fermer(); });
+      tcAideBouton(barre, 'Envoyer le rapport', true, function (ev) { tcEnvoyerRapportTechnique(contexte || 'connexion', ev && ev.target); });
+    }
+    p.boite.appendChild(barre);
+  };
+  dessiner();
+}
+
 /** Remplace confirm(). Retourne une promesse de booleen. */
 function tcConfirm(message, options) {
   const o = options || {};
@@ -16178,6 +16321,8 @@ function saveUserAccount(account) {
     localStorage.setItem('timecool_session_active', 'true');
     localStorage.setItem('tc_onboarding_done', '1');   // accueil termine : un rechargement ouvre l agenda (11/10)
   } catch(e) {}
+  // Le compte precedent quitte l appareil tout de suite, avant le premier chargement (mission 41).
+  if (typeof tcPreparerAppareilPourCompte === 'function') { try { tcPreparerAppareilPourCompte(); } catch (e) {} }
 }
 
 async function logoutUser() {
@@ -16498,7 +16643,7 @@ async function tcGoogleJeton(idToken) {
       // « Android » la ou Google attend celui de type « Application Web ».
       showToast('❌ Configuration Google incorrecte (audience du jeton)');
     } else if (e.code === 'reseau' || e.code === 'delai_depasse') {
-      showToast('❌ Serveur injoignable. Réessaie.');
+      tcVerifionsEnsemble('connexion_google');
     } else {
       showToast('❌ ' + (e.message || 'Connexion Google impossible'));
     }
@@ -16915,8 +17060,8 @@ async function chooseVerifyMethod(method) {
     // Auparavant l'échec était muet : l'écran s'affichait quoi qu'il arrive.
     if (e.code === 'trop_de_demandes') {
       showToast('⚠️ Trop de demandes. Réessaie dans une heure.');
-    } else if (e.code === 'reseau') {
-      showToast('❌ Serveur injoignable. Vérifie ta connexion.');
+    } else if (e.code === 'reseau' || e.code === 'delai_depasse') {
+      tcVerifionsEnsemble('inscription_code');
     } else {
       showToast('❌ ' + (e.message || 'Envoi impossible'));
     }
@@ -16998,8 +17143,7 @@ async function tcCreerCompte(preuve) {
     });
   } catch (e) {
     if (e.code === 'compte_existant')  showToast('⚠️ Ce compte existe déjà — connecte-toi plutôt.');
-    else if (e.code === 'delai_depasse') showToast('⏱️ Le serveur met trop de temps. Réessaie.');
-    else if (e.code === 'reseau')        showToast('❌ Serveur injoignable. Réessaie.');
+    else if (e.code === 'delai_depasse' || e.code === 'reseau') tcVerifionsEnsemble('inscription');
     else if (e.code === 'mot_de_passe_faible') showToast('⚠️ Mot de passe : 10 caractères minimum.');
     else showToast('❌ ' + (e.message || 'Création du compte impossible'));
     return false;
@@ -17062,8 +17206,7 @@ async function submitVerifyCode() {
       }
       if (e.code === 'trop_de_tentatives')   return showToast('⚠️ Trop d\'essais. Demande un nouveau code.');
       if (e.code === 'verification_expiree') return showToast('⏰ Code expiré. Demande un nouveau code.');
-      if (e.code === 'delai_depasse')        return showToast('⏱️ Le serveur met trop de temps. Réessaie.');
-      if (e.code === 'reseau')               return showToast('❌ Serveur injoignable. Réessaie.');
+      if (e.code === 'delai_depasse' || e.code === 'reseau') return tcVerifionsEnsemble('inscription_verification');
       return showToast('❌ ' + (e.message || 'Vérification impossible'));
     }
     await tcCreerCompte(preuve);
@@ -17160,8 +17303,8 @@ async function submitLogin() {
     // Message unique : ne pas révéler si le compte existe.
     if (e.code === 'identifiants_invalides') {
       showToast('❌ Identifiant ou mot de passe incorrect');
-    } else if (e.code === 'reseau') {
-      showToast('❌ Serveur injoignable. Vérifie ta connexion.');
+    } else if (e.code === 'reseau' || e.code === 'delai_depasse') {
+      tcVerifionsEnsemble('connexion');
     } else {
       showToast('❌ ' + (e.message || 'Connexion impossible'));
     }
@@ -17185,6 +17328,8 @@ async function submitLogin() {
     localStorage.setItem('timecool_session_active', 'true');
     localStorage.setItem('tc_onboarding_done', '1');   // accueil termine : un rechargement ouvre l agenda (11/10)
   } catch(e) {}
+  // Le compte precedent quitte l appareil tout de suite, avant le premier chargement (mission 41).
+  if (typeof tcPreparerAppareilPourCompte === 'function') { try { tcPreparerAppareilPourCompte(); } catch (e) {} }
 
   // Uniquement après une connexion email/mot de passe réelle — jamais
   // après Google Sign-In, qui a déjà son propre mécanisme de
@@ -21453,6 +21598,23 @@ const TC_JETON_CLE = 'tc_session_jeton';
 /** Au-delà, l'appel est abandonné et signalé comme tel. */
 const TC_DELAI_MS = 20000;
 
+/* Mission 41 : les dernieres requetes et erreurs, pour le rapport technique (« Envoyer le rapport »). Rien de lourd :
+   deux petites listes en memoire, jamais stockees, jamais de donnees personnelles (le chemin sans ses parametres). */
+const _tcJournalRequetes = [];
+const _tcJournalErreurs = [];
+function tcNoterRequete(methode, chemin, statut, ms) {
+  _tcJournalRequetes.push({ t: new Date().toISOString(), m: methode, c: String(chemin).split('?')[0].slice(0, 80), s: statut, ms: ms });
+  if (_tcJournalRequetes.length > 30) _tcJournalRequetes.shift();
+}
+function tcNoterErreur(texte) {
+  _tcJournalErreurs.push({ t: new Date().toISOString(), e: String(texte).slice(0, 300) });
+  if (_tcJournalErreurs.length > 15) _tcJournalErreurs.shift();
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('error', function (ev) { tcNoterErreur((ev && ev.message) || 'erreur'); });
+  window.addEventListener('unhandledrejection', function (ev) { const r = ev && ev.reason; tcNoterErreur(r && r.message ? r.message : String(r)); });
+}
+
 function tcJeton() {
   try { return localStorage.getItem(TC_JETON_CLE); } catch (e) { return null; }
 }
@@ -21484,6 +21646,7 @@ async function tcAppel(methode, chemin, corps, avecAuth = true) {
   const minuteur = setTimeout(function () { ctrl.abort(); }, TC_DELAI_MS);
 
   let reponse;
+  const _tcDebut = Date.now();
   try {
     reponse = await fetch(TC_API + chemin, {
       method: methode,
@@ -21495,11 +21658,13 @@ async function tcAppel(methode, chemin, corps, avecAuth = true) {
     const expire = (e && e.name === 'AbortError');
     const err = new Error(expire ? 'Le serveur met trop de temps à répondre' : 'Serveur injoignable');
     err.code = expire ? 'delai_depasse' : 'reseau';
+    tcNoterRequete(methode, chemin, err.code, Date.now() - _tcDebut);
     throw err;
   } finally {
     clearTimeout(minuteur);
   }
 
+  tcNoterRequete(methode, chemin, reponse.status, Date.now() - _tcDebut);
   let data = {};
   try { data = await reponse.json(); } catch (e) { /* corps non JSON */ }
 
@@ -22068,6 +22233,11 @@ const TC_BACKEND = {
   },
 
   /** Un commentaire depuis « Aide et commentaires » : enregistre en base et transmis a l equipe (mission 33). */
+  /** Le rapport technique (mission 41) : sans session obligatoire ; le jeton, s il existe, rattache le compte. */
+  async envoyerRapportTechnique(rapport) {
+    return tcAppel('POST', '/rapports-techniques', rapport);
+  },
+
   async envoyerCommentaire(texte, contexte) {
     return tcAppel('POST', '/commentaires', { texte: texte, version: (contexte && contexte.version) || '', appareil: (contexte && contexte.appareil) || '' });
   },
@@ -23584,6 +23754,9 @@ async function tcSyncAppliquer(elements) {
 /** Récupère tout ce qui a changé depuis le dernier passage. */
 async function tcSyncTirer() {
   let version = tcSyncEtat().version;
+  const compteTirage = tcSyncCompte();
+  // Garde-fou (mission 41) : le curseur de ce compte etait avance ici, et le voila a zero. Trois fois en 30 s, passe ; au-dela, boucle.
+  if (version === 0 && _tcDernierTirage && _tcDernierTirage.compte === compteTirage && _tcDernierTirage.version > 0 && tcNoterRechargementComplet()) return 0;
   let recus = 0;
   // Le premier chargement d'un gros agenda arrive en plusieurs pages.
   // La borne évite une boucle sans fin si le serveur répondait mal.
@@ -23594,6 +23767,7 @@ async function tcSyncTirer() {
     tcSyncPoserVersion(version);
     if (!d.suite) break;
   }
+  _tcDernierTirage = { compte: compteTirage, version: version };
   return recus;
 }
 
@@ -23836,10 +24010,79 @@ let _tcSyncEnCours = false;
 let _tcSyncMinuteur = null;
 let _tcSyncBientot = null;
 
+/*
+ * Deux onglets, deux comptes (13/10, Chrome de Charles : 51 688 requetes en une journee). Le stockage du navigateur
+ * (jeton, curseur de synchro, marqueur de compte) est commun a tous les onglets ; la memoire ne l est pas. Un onglet
+ * restait sur le compte A pendant qu un autre ouvrait le compte B : chacun prenait l etat de l autre pour un intrus,
+ * faisait le menage, rechargeait tout depuis zero, et l autre refaisait pareil une seconde plus tard.
+ * Regle : le compte qui fait foi est celui du stockage ; un onglet dont la memoire ne correspond plus se recharge,
+ * sans rien effacer (mission 41).
+ */
+let _tcOngletARecharger = false;
+function tcCompteDuStockage() {
+  try {
+    const s = JSON.parse(localStorage.getItem('timecool_user_account') || 'null');
+    return (s && (s.reference || s.email)) || null;
+  } catch (e) { return null; }
+}
+function tcOngletARechargerMaintenant(mot) {
+  if (_tcOngletARecharger) return;
+  _tcOngletARecharger = true;
+  if (_tcSonde) { clearTimeout(_tcSonde); _tcSonde = null; }
+  if (typeof showToast === 'function') { try { showToast(mot); } catch (e) {} }
+  setTimeout(function () { try { location.reload(); } catch (e) {} }, 1200);
+}
+/** Vrai si cet onglet n est plus sur le compte du stockage (un autre onglet a ouvert un autre compte) : il se recharge, aucun menage. */
+function tcOngletPerime() {
+  if (_tcOngletARecharger) return true;
+  const memoire = tcSyncCompte();
+  const stocke = tcCompteDuStockage();
+  if (!memoire || !stocke || memoire === stocke) return false;
+  tcOngletARechargerMaintenant('🔄 Un autre compte vient de s’ouvrir dans TimeCool : cette page se recharge');
+  return true;
+}
+
+/*
+ * Garde-fou : plus de 3 chargements complets (depuis zero) en 30 secondes, ce n est plus une synchro, c est une
+ * boucle. La synchro s arrete d elle-meme et le panneau « Quelque chose empêche TimeCool de se charger. » s ouvre :
+ * « Réparer » purge les donnees locales (la session reste) et relance une seule synchro.
+ */
+const TC_BOUCLE_MAX = 3;
+const TC_BOUCLE_FENETRE_MS = 30000;
+let _tcRechargementsComplets = [];
+let _tcSyncBloquee = false;
+/* Le dernier tirage de CET onglet (compte, version atteinte) : un chargement complet ne compte que si le meme compte
+   avait deja une version ici (curseur perdu, ou pris pour celui d un autre). Un compte neuf ou vide (version 0 apres
+   chaque tirage) et un vrai changement de compte ne comptent jamais. */
+let _tcDernierTirage = null;
+function tcNoterRechargementComplet() {
+  const maintenant = Date.now();
+  _tcRechargementsComplets = _tcRechargementsComplets.filter(function (t) { return maintenant - t < TC_BOUCLE_FENETRE_MS; });
+  _tcRechargementsComplets.push(maintenant);
+  if (_tcRechargementsComplets.length <= TC_BOUCLE_MAX) return false;
+  _tcSyncBloquee = true;
+  if (_tcSonde) { clearTimeout(_tcSonde); _tcSonde = null; }
+  if (typeof tcPanneauBoucle === 'function') { try { tcPanneauBoucle(); } catch (e) {} }
+  return true;
+}
+/** « Réparer » : les donnees du compte quittent l appareil (la session reste), puis une seule synchro repart. */
+async function tcReparerDonneesLocales() {
+  _tcRechargementsComplets = [];
+  _tcSyncBloquee = false;
+  _tcSyncEnCours = false;
+  tcViderDonneesDuCompte();
+  try { localStorage.setItem(TC_COMPTE_LOCAL_KEY, tcSyncCompte() || ''); } catch (e) {}
+  try { localStorage.setItem(TC_NETTOYAGE_KEY, TC_NETTOYAGE_VERSION); } catch (e) {}
+  await tcSyncTour();
+  if (typeof tcSyncPlanifier === 'function') tcSyncPlanifier();
+  return !_tcSyncBloquee;
+}
+
 /** Un tour complet : on lit d'abord, on écrit ensuite. */
 async function tcSyncTour() {
   if (_tcSyncEnCours) return;
   if (!tcJeton() || !tcSyncCompte()) return;   // pas de session : rien à faire
+  if (_tcSyncBloquee || tcOngletPerime()) return;   // boucle arretee, ou autre compte dans un autre onglet (mission 41)
   _tcSyncEnCours = true;
   _tcDernierTourComplet = Date.now();
   try {
@@ -23920,6 +24163,7 @@ function tcSyncActif() {
 async function tcSyncSonde() {
   if (_tcSyncEnCours) return;
   if (!tcJeton() || !tcSyncCompte()) return;
+  if (_tcSyncBloquee || tcOngletPerime()) return;
   try {
     if (Date.now() - _tcDernierTourComplet > TC_SYNC_FILET) {
       await tcSyncTour();
@@ -23935,6 +24179,7 @@ async function tcSyncSonde() {
 
 function tcSyncPlanifier() {
   if (_tcSonde) clearTimeout(_tcSonde);
+  if (_tcSyncBloquee || _tcOngletARecharger) return;
   _tcSonde = setTimeout(async function () {
     await tcSyncSonde();
     tcSyncPlanifier();
@@ -23952,6 +24197,9 @@ function tcSyncDemarrer() {
   let _tcRechargeAutreOnglet = null;
   window.addEventListener('storage', function (e) {
     const cle = e.key;
+    // Un autre onglet vient d ouvrir un autre compte, ou de fermer la session : cet onglet suit, sans menage (mission 41).
+    if (cle === TC_JETON_CLE) { if (!e.newValue && tcSyncCompte()) tcOngletARechargerMaintenant('👋 La session a été fermée dans un autre onglet'); return; }
+    if (cle === 'timecool_user_account') { tcOngletPerime(); return; }
     if (cle !== TC_EVENTS_KEY && cle !== TC_TASKS_KEY && cle !== 'timecool_birthdays' && cle !== 'timecool_contacts') return;
     if (_tcRechargeAutreOnglet) clearTimeout(_tcRechargeAutreOnglet);
     _tcRechargeAutreOnglet = setTimeout(async function () {

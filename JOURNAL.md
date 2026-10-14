@@ -2056,3 +2056,29 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   sous-dossier (jamais `maj/` ni le reste du cache), hors du fil principal, sans se plaindre d'un fichier encore ouvert
   ailleurs. Rien ne change à l'écran. Trois cas ajoutés à `verif-documents`. Non vérifié ici : compilation (construction de
   l'APK) et effacement réel sur un téléphone.
+- Mission 41 (14/10, chef de projet ; ok de Charles le 13/10 au soir) : fin de la boucle de chargement, garde-fou, panneau
+  « Vérifions ensemble ». Cause de la boucle, lue dans les traces du 13/10 (51 688 requêtes en une journée depuis
+  l'adresse de Charles, jusqu'à 355 par minute, `/sync?depuis=0` et `/sync?depuis=18` en alternance toutes les
+  secondes, avec les 5 clés à chaque fois) : deux onglets sur deux comptes dans le même Chrome. Le stockage du
+  navigateur (jeton, curseur `tc_sync_version`, marqueur `tc_compte_local`) est commun aux onglets, la mémoire
+  (`userAccount`) ne l'est pas : `tcSyncEtat` voyait le curseur de l'autre compte → version 0 → chargement complet,
+  et `tcPreparerAppareilPourCompte` prenait l'autre onglet pour un intrus → ménage (d'où « Chargement de tes
+  données… » qui clignotait et les clés rapatriées), chaque onglet à son tour. (1) Règle : le compte qui fait foi est
+  celui du stockage (`tcCompteDuStockage`) ; un onglet dont la mémoire ne correspond plus (`tcOngletPerime`) ne fait
+  aucun ménage et se recharge (« Un autre compte vient de s'ouvrir dans TimeCool : cette page se recharge ») ; une
+  session fermée dans un autre onglet recharge aussi (événement `storage` sur le jeton et le compte) ; le ménage du
+  compte précédent se fait dès la connexion (`submitLogin`, `saveUserAccount`), avant le premier chargement.
+  (2) Garde-fou : plus de 3 chargements complets en 30 s (`tcNoterRechargementComplet`) → synchro arrêtée
+  (`_tcSyncBloquee`) et panneau « Quelque chose empêche TimeCool de se charger. » : « Réparer »
+  (`tcReparerDonneesLocales` : ménage, session gardée, une seule synchro) et « Envoyer le rapport ». (3) « Vérifions
+  ensemble » (`tcVerifionsEnsemble`) à la place de « Serveur injoignable » aux 5 endroits de la connexion et de la
+  création de compte (réseau et délai dépassé) : « Tester ma connexion » (`GET /sante`, 8 s, sans cache) avec un
+  constat en mots simples, puis six gestes un à un (« Ça marche » / « Ça ne marche pas »), puis « Envoyer le
+  rapport ». Rapport (`tcRapportTechnique`) : version, navigateur, compte ou identifiant saisi, en ligne, adresse,
+  résultat du test, 20 dernières requêtes (chemin sans paramètres, statut, durée, notées dans `tcAppel`), 10 dernières
+  erreurs ; jamais de mot de passe ; rien de stocké. API : `POST /rapports-techniques` (sans session obligatoire,
+  `compteOptionnel` rattache le compte si le jeton est valable, 32 Ko au plus, 10 par heure et par adresse, gardé en
+  base, pas d'e-mail), migration `014_rapports_techniques.sql`. Nouvelle suite `verif-boucle-compte` (deux onglets
+  simulés sur un stockage commun, garde-fou, réparation, test de connexion, rapport, API, migration) ;
+  `verif-rapports-techniques-e2e` (à enregistrer après la mise en ligne de l'API). Aucun nouveau réglage ; rien au
+  démarrage sauf deux écouteurs d'erreurs et deux petites listes en mémoire.

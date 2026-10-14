@@ -602,6 +602,29 @@ function documentsMaxCompte(): int
     return max(1, (int) Conf::get('documents_max_compte', 20 * 1024 * 1024));
 }
 /** « 2 Mo », « 1,5 Mo », « 340 Ko ». */
+/**
+ * Le compte rattache au jeton s il y en a un de valable, sinon null : jamais d erreur (mission 41). Pour les
+ * routes ouvertes sans session, ou l utilisateur n est souvent pas connecte.
+ */
+function compteOptionnel(): ?array
+{
+    $entete = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if ($entete === '' && function_exists('apache_request_headers')) {
+        $h = apache_request_headers();
+        $entete = $h['Authorization'] ?? $h['authorization'] ?? '';
+    }
+    if (!preg_match('/^Bearer\s+([0-9a-f]{64})$/i', $entete, $m)) {
+        return null;
+    }
+    return Db::un(
+        'SELECT c.id, c.reference
+           FROM sessions s
+           JOIN comptes c ON c.id = s.compte_id
+          WHERE s.jeton_hash = ? AND s.revoque_le IS NULL AND s.expire_le > NOW() AND c.cloture_le IS NULL',
+        [Jeton::hacher(strtolower($m[1]))]
+    );
+}
+
 function documentsMoLisible(int $octets): string
 {
     // Arrondie vers le HAUT au centieme : « 2,01 Mo » pour 2 Mo + 200 octets, jamais « 2 Mo » qui contredirait le plafond.
@@ -4444,6 +4467,52 @@ switch ($route) {
             error_log('Commentaire ' . $commentaireId . ' : e-mail non envoyé : ' . $e->getMessage());
         }
         Rep::ok(['id' => $commentaireId, 'email_envoye' => $emailEnvoye, 'compte_de_test' => $compteDeTest]);
+
+    /*
+     * Un rapport technique envoye par l application quand elle n arrive pas a se charger ou a joindre le serveur
+     * (mission 41, 14/10 : « Envoyer le rapport »). Garde en base (table rapports_techniques, migration 014), jamais
+     * d e-mail. Sans session obligatoire : l utilisateur n est souvent pas connecte ; si un jeton valable est la,
+     * le compte est rattache. Plafond : 10 par heure et par adresse ; 32 Ko au plus. Pour l utilisateur, juste
+     * « Merci, rapport envoyé ».
+     */
+    case 'POST /rapports-techniques':
+        if ((int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 32768) {
+            Rep::erreur(413, 'rapport_trop_gros', 'Rapport trop gros.');
+        }
+        $entree = Entree::corps();
+        if ($entree === []) {
+            Rep::erreur(400, 'rapport_vide', 'Rapport vide.');
+        }
+        $ipRapport = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ipBin = $ipRapport !== '' ? (@inet_pton($ipRapport) ?: null) : null;
+        if ($ipBin !== null) {
+            $parHeure = Db::un('SELECT COUNT(*) AS n FROM rapports_techniques WHERE ip = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 HOUR)', [$ipBin]);
+            if ((int) ($parHeure['n'] ?? 0) >= 10) {
+                Rep::erreur(429, 'trop_de_demandes', 'Trop de rapports envoyés. Réessaie plus tard.');
+            }
+        }
+        $compteRapport = compteOptionnel();
+        $contexte = mb_substr(preg_replace('/[^a-z0-9_]/', '', strtolower((string) ($entree['contexte'] ?? ''))), 0, 40);
+        $versionRapport = mb_substr(trim((string) ($entree['version'] ?? '')), 0, 60);
+        $navigateur = mb_substr(trim((string) ($entree['navigateur'] ?? '')), 0, 255);
+        $compteRef = mb_substr(trim((string) ($entree['compte'] ?? '')), 0, 120);
+        $contenu = json_encode($entree, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($contenu) || strlen($contenu) > 65535) {
+            Rep::erreur(413, 'rapport_trop_gros', 'Rapport trop gros.');
+        }
+        Db::req(
+            'INSERT INTO rapports_techniques (compte_id, compte_ref, contexte, version, navigateur, ip, contenu) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [
+                $compteRapport !== null ? (int) $compteRapport['id'] : null,
+                $compteRef !== '' ? $compteRef : null,
+                $contexte !== '' ? $contexte : 'inconnu',
+                $versionRapport !== '' ? $versionRapport : null,
+                $navigateur !== '' ? $navigateur : null,
+                $ipBin,
+                $contenu,
+            ]
+        );
+        Rep::ok(['id' => (int) Db::pdo()->lastInsertId(), 'compte' => $compteRapport !== null]);
 
     case 'POST /compte/langue':
         $compte = Auth::compte();

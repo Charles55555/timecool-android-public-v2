@@ -70,9 +70,9 @@ function Appareil(serveur) {
     .forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
   const reglage = bloc('  reglage: {');
   if (reglage) vm.runInContext('const TC_SYNC_TYPES = { reglage: ' + reglage + ' };', ctx); else { ko++; console.log('  KO  TC_SYNC_TYPES.reglage introuvable'); }
-  vm.runInContext('let _tcSyncVusIci = {}; let _tcSyncEnCours = false; let _tcDernierTourComplet = 0; let _tcSyncBientot = null; let _tcSuppressionEnAttente = null; let _tcDeplacementEnAttente = null; let _tcImprevuEnAttente = 0; let _tcGroupeEnAttente = 0; let _isolatedCalendarId = null;', ctx);
+  vm.runInContext('let _tcSyncVusIci = {}; let _tcSyncEnCours = false; let _tcSyncBloquee = false; let _tcOngletARecharger = false; let _tcRechargementsComplets = []; let _tcSonde = null; let _tcDernierTirage = null; let _tcDernierTourComplet = 0; let _tcSyncBientot = null; let _tcSuppressionEnAttente = null; let _tcDeplacementEnAttente = null; let _tcImprevuEnAttente = 0; let _tcGroupeEnAttente = 0; let _isolatedCalendarId = null;', ctx);
   ['tcJeton', 'tcCleTransferable', 'tcCleReglage', 'tcSyncCanon', 'tcSyncEmpreinte', 'tcSyncCompte', 'tcSyncEtat', 'tcSyncPoserVersion', 'tcSyncEmpreintes', 'tcSyncPoserEmpreintes', 'tcAssainirRecu',
-   'tcSyncModifieIci', 'tcSyncAppliquer', 'tcSyncTirer', 'tcSyncPousser', 'tcSyncTour', 'tcPreparerAppareilPourCompte', 'tcViderDonneesDuCompte', 'loadCustomCalendars', 'saveCustomCalendars',
+   'tcSyncModifieIci', 'tcSyncAppliquer', 'tcSyncTirer', 'tcSyncPousser', 'tcSyncTour', 'tcCompteDuStockage', 'tcOngletARechargerMaintenant', 'tcOngletPerime', 'tcNoterRechargementComplet', 'tcPreparerAppareilPourCompte', 'tcViderDonneesDuCompte', 'loadCustomCalendars', 'saveCustomCalendars',
    'savePreference', 'applyTheme', 'selectLanguageFromSettings', 'tcAppliquerLangueRecue', 'tcViderChampsConnexion', 'logoutUser']
     .forEach((n) => { if (n === 'tcJeton') { vm.runInContext('function tcJeton() { return jeton; }', ctx); return; } const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
   // tcSyncBientot : le vrai programme un tour a 1,5 s ; ici il est note, et le tour est joue a la main quand le scenario le dit.

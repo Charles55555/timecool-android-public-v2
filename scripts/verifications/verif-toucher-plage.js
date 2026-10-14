@@ -113,8 +113,11 @@ titre('3. Vue Semaine simulee : la case touchee donne le jour et l heure, et « 
   vm.runInContext('_tcDrag = null;', ctx);
   // Sans pre-remplissage, openCreateModal garde son comportement (date du jour regarde, heure ronde a venir).
   champs.newEvtDate.value = ''; ouverts.length = 0;
+  // Le jour regarde doit etre un AUTRE jour qu aujourd hui (sinon l heure ronde a venir s applique) : 60 jours plus tard.
+  const autreJour = new Date(); autreJour.setDate(autreJour.getDate() + 60); autreJour.setHours(0, 0, 0, 0);
+  ctx.viewDate = autreJour;
   ctx.openCreateModal();
-  verifie('openCreateModal() sans argument : inchange (date = jour regarde, 9:00 → 10:00 un autre jour)', ouverts.length === 1 && champs.newEvtDate.value === '2026-10-14' && champs.newEvtStart.value === '09:00' && champs.newEvtEnd.value === '10:00', JSON.stringify([champs.newEvtDate.value, champs.newEvtStart.value, champs.newEvtEnd.value]));
+  verifie('openCreateModal() sans argument : inchange (date = jour regarde, 9:00 → 10:00 un autre jour)', ouverts.length === 1 && champs.newEvtDate.value === ctx.fmt(autreJour) && champs.newEvtStart.value === '09:00' && champs.newEvtEnd.value === '10:00', JSON.stringify([champs.newEvtDate.value, champs.newEvtStart.value, champs.newEvtEnd.value]));
 }
 
 titre('4. Les deux vues installent le geste ; la vue Mois est inchangee');
