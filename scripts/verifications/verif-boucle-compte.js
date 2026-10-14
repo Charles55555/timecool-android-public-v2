@@ -123,11 +123,13 @@ function Panneau() {
   El.prototype.removeChild = function (e) { this.children = this.children.filter((x) => x !== e); };
   Object.defineProperty(El.prototype, 'innerHTML', { set() { this.children = []; }, get() { return ''; } });
   const body = new El('body');
-  const c = { console, Date, String, setTimeout, clearTimeout, requestAnimationFrame: (f) => f(), AbortController: class { constructor() { this.signal = {}; } abort() {} }, TC_API: 'https://api.timecool.fr', navigator: { onLine: true }, _tcDernierTestConnexion: null, _tcPanneauVerifOuvert: false, toasts: [], document: { body, createElement: (t) => new El(t) }, sante: false, appelsSante: 0, tcEnvoyerRapportTechnique: () => {} };
+  const c = { console, Date, String, setTimeout, clearTimeout, requestAnimationFrame: (f) => f(), AbortController: class { constructor() { this.signal = {}; } abort() {} }, TC_API: 'https://api.timecool.fr', navigator: { onLine: true }, _tcDernierTestConnexion: null, _tcPanneauVerifOuvert: false, toasts: [], document: { body, createElement: (t) => new El(t) }, sante: false, appelsSante: 0, reel: false, appelsReels: [], tcEnvoyerRapportTechnique: () => {} };
   c.showToast = (m) => c.toasts.push(m);
   c.fetch = async () => { c.appelsSante++; if (c.sante) return { ok: true, status: 200 }; throw new Error('x'); };
+  // tcAppel : l appel de la meme forme que les vrais (Content-Type JSON + jeton, donc pre-vol CORS).
+  c.tcAppel = async (m, chemin) => { c.appelsReels.push(m + ' ' + chemin); if (c.reel) return { ok: true }; const e = new Error('Serveur injoignable'); e.code = 'reseau'; throw e; };
   vm.createContext(c);
-  for (const code of [constante('const TC_SANTE_DELAI_MS = [^;]*;') || 'const TC_SANTE_DELAI_MS = 8000;', etapes || 'const TC_ETAPES_VERIFICATION = [];', fonction(page, 'tcOuvrirPanneauAide'), fonction(page, 'tcAideElement'), fonction(page, 'tcAideBouton'), fonction(page, 'tcTesterConnexion'), fonction(page, 'tcVerifionsEnsemble')]) vm.runInContext(code || '', c);
+  for (const code of [constante('const TC_SANTE_DELAI_MS = [^;]*;') || 'const TC_SANTE_DELAI_MS = 8000;', etapes || 'const TC_ETAPES_VERIFICATION = [];', fonction(page, 'tcOuvrirPanneauAide'), fonction(page, 'tcAideElement'), fonction(page, 'tcAideBouton'), fonction(page, 'tcTesterConnexion'), fonction(page, 'tcTesterConnexionComplete'), fonction(page, 'tcVerifionsEnsemble')]) vm.runInContext(code || '', c);
   const tous = (n, out) => { out = out || []; out.push(n); n.children.forEach((e) => tous(e, out)); return out; };
   c.bouton = (libelle) => tous(body).find((n) => n.tag === 'button' && n.textContent === libelle) || null;
   c.texte = () => tous(body).filter((n) => n.className === 'tc-mod-tx').map((n) => n.textContent).join('\n');
@@ -139,13 +141,18 @@ P.tcVerifionsEnsemble('connexion');
 await P.clic('Tester ma connexion'); await P.clic('Commencer les étapes');
 const appelsAvant = P.appelsSante;
 await P.clic('Ça marche');
-verifie('« Ça marche » quand le serveur ne repond toujours pas : GET /sante relance, le panneau reste ouvert a la meme etape, un mot calme, pas de « Super »', P.appelsSante === appelsAvant + 1 && P._tcPanneauVerifOuvert === true && /Étape 1 sur 6/.test(P.texte()) && /Le serveur ne répond toujours pas depuis cet appareil\. Réessaie dans un instant, ou passe à l’étape suivante\./.test(P.texte()) && P.toasts.length === 0, P.texte().slice(-160) + ' | toasts ' + JSON.stringify(P.toasts));
+verifie('« Ça marche » quand le serveur ne repond toujours pas : GET /sante relance, pas d appel complet, le panneau reste ouvert a la meme etape, un mot calme, pas de « Super »', P.appelsSante === appelsAvant + 1 && P.appelsReels.length === 0 && P._tcPanneauVerifOuvert === true && /Étape 1 sur 6/.test(P.texte()) && /Le serveur ne répond toujours pas depuis cet appareil\. Réessaie dans un instant, ou passe à l’étape suivante\./.test(P.texte()) && P.toasts.length === 0, P.texte().slice(-160) + ' | toasts ' + JSON.stringify(P.toasts));
 await P.clic('Ça ne marche pas');
 verifie('« Ça ne marche pas » : etape suivante, sans l avis precedent', /Étape 2 sur 6/.test(P.texte()) && !/ne répond toujours pas/.test(P.texte()), P.texte().slice(0, 120));
-P.sante = true;
+// Le cas des Testeurs : le GET /sante simple passe (sans pre-vol), mais l appel de la meme forme que les vrais echoue.
+P.sante = true; P.reel = false;
 await P.clic('Ça marche');
-verifie('« Ça marche » quand le serveur repond : GET /sante relance, le panneau se ferme, « ✅ Super, c’est reparti »', P.appelsSante === appelsAvant + 2 && P._tcPanneauVerifOuvert === false && P.toasts.length === 1 && P.toasts[0] === '✅ Super, c’est reparti', JSON.stringify(P.toasts));
-const textesAide = [boucle, verif, fonction(page, 'tcTesterConnexion') || '', fonction(page, 'tcEnvoyerRapportTechnique') || '', etapes || ''].join('\n');
+verifie('« Ça marche », /sante simple ok mais l appel complet (JSON + jeton, pre-vol) echoue : reste a l etape, un mot calme, pas de « Super »', P.appelsSante === appelsAvant + 2 && P.appelsReels.length === 1 && P.appelsReels[0] === 'GET /sante' && P._tcPanneauVerifOuvert === true && /Étape 2 sur 6/.test(P.texte()) && /ne répond toujours pas/.test(P.texte()) && P.toasts.length === 0 && P._tcDernierTestConnexion.complet === false, JSON.stringify(P.appelsReels) + ' ' + JSON.stringify(P.toasts));
+P.reel = true;
+await P.clic('Ça marche');
+verifie('« Ça marche » quand les deux passent : le panneau se ferme, « ✅ Super, c’est reparti », complet note pour le rapport', P.appelsSante === appelsAvant + 3 && P.appelsReels.length === 2 && P._tcPanneauVerifOuvert === false && P.toasts.length === 1 && P.toasts[0] === '✅ Super, c’est reparti' && P._tcDernierTestConnexion.complet === true, JSON.stringify(P.toasts));
+verifie('pendant la verification, « Ça ne marche pas » est inactif ; rien n est affiche si le panneau a ete ferme entre-temps ; l appel complet a un delai', /bNon\.disabled = true;/.test(verif) && /if \(ferme\) return;/.test(verif) && /ferme = true; _tcPanneauVerifOuvert = false;/.test(verif) && /Promise\.race\(/.test(fonction(page, 'tcTesterConnexionComplete') || '') && /TC_SANTE_DELAI_MS/.test(fonction(page, 'tcTesterConnexionComplete') || ''));
+const textesAide = [boucle, verif, fonction(page, 'tcTesterConnexion') || '', fonction(page, 'tcTesterConnexionComplete') || '',fonction(page, 'tcEnvoyerRapportTechnique') || '', etapes || ''].join('\n');
 verifie('aucun tiret long dans les textes des panneaux', textesAide.indexOf('—') < 0 && textesAide.indexOf('–') < 0);
 // Simulation du test de connexion.
 async function test(reponse, enLigne) {

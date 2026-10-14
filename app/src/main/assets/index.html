@@ -8178,13 +8178,36 @@ async function tcTesterConnexion() {
   return constat;
 }
 
+/** Apres « Ça marche » : le test simple, puis un appel de la meme forme que les vrais (en-tetes JSON et jeton, donc
+ *  pre-vol CORS). Les deux doivent passer : un bloqueur peut laisser passer l un et pas l autre. */
+async function tcTesterConnexionComplete() {
+  await tcTesterConnexion();
+  if (!_tcDernierTestConnexion || _tcDernierTestConnexion.resultat !== 'serveur_ok') return false;
+  let complet = false;
+  let minuteur = null;
+  try {
+    await Promise.race([
+      tcAppel('GET', '/sante'),
+      new Promise(function (_, rejeter) { minuteur = setTimeout(function () { rejeter(new Error('delai')); }, TC_SANTE_DELAI_MS); })
+    ]);
+    complet = true;
+  } catch (e) {
+    complet = false;
+  } finally {
+    clearTimeout(minuteur);
+  }
+  _tcDernierTestConnexion.complet = complet;
+  return complet;
+}
+
 /** « Vérifions ensemble » : le test, puis les gestes un a un, puis le rapport. */
 let _tcPanneauVerifOuvert = false;
 function tcVerifionsEnsemble(contexte) {
   if (_tcPanneauVerifOuvert) return;
   _tcPanneauVerifOuvert = true;
   const p = tcOuvrirPanneauAide();
-  const fermer = function (mot) { _tcPanneauVerifOuvert = false; p.fermer(); if (mot) showToast(mot); };
+  let ferme = false;
+  const fermer = function (mot) { ferme = true; _tcPanneauVerifOuvert = false; p.fermer(); if (mot) showToast(mot); };
   let etape = -1;   // -1 : accueil et test ; 0 a 5 : les gestes ; 6 : le rapport
   let constat = '';
   let avis = '';    // apres « Ça marche » : le serveur ne repond toujours pas
@@ -8200,12 +8223,14 @@ function tcVerifionsEnsemble(contexte) {
       else tcAideBouton(barre, 'Commencer les étapes', true, function () { etape = 0; dessiner(); });
     } else if (etape < TC_ETAPES_VERIFICATION.length) {
       tcAideElement(p.boite, 'tc-mod-tx', 'Étape ' + (etape + 1) + ' sur ' + TC_ETAPES_VERIFICATION.length + '\n\n' + TC_ETAPES_VERIFICATION[etape] + (avis ? '\n\n' + avis : ''));
-      tcAideBouton(barre, 'Ça ne marche pas', false, function () { avis = ''; etape++; dessiner(); });
+      const bNon = tcAideBouton(barre, 'Ça ne marche pas', false, function () { avis = ''; etape++; dessiner(); });
       tcAideBouton(barre, 'Ça marche', true, async function (ev) {
-        // On revérifie vraiment avant de se réjouir : même test que « Tester ma connexion ».
+        // On revérifie vraiment avant de se réjouir : le test simple, puis un appel de la même forme que les vrais.
         if (ev && ev.target) { ev.target.disabled = true; ev.target.textContent = 'Vérification…'; }
-        await tcTesterConnexion();
-        if (_tcDernierTestConnexion && _tcDernierTestConnexion.resultat === 'serveur_ok') { fermer('✅ Super, c’est reparti'); return; }
+        bNon.disabled = true;
+        const ok = await tcTesterConnexionComplete();
+        if (ferme) return;
+        if (ok) { fermer('✅ Super, c’est reparti'); return; }
         avis = 'Le serveur ne répond toujours pas depuis cet appareil. Réessaie dans un instant, ou passe à l’étape suivante.';
         dessiner();
       });

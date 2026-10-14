@@ -2106,3 +2106,8 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « web sans horodatage » dans le dépôt. Plus de « page 10.5.54 » (constante TC_APP_VERSION d’un ancien mécanisme,
   qui ne désigne rien d’utile ; laissée en place, inutilisée par le rapport). La page web ne porte pas de numéro
   v2.0.NNN : seul l’APK le connaît. L’API ne change pas. verif-boucle-compte : 6 cas de plus (panneau simulé).
+  Reprise après l’examinateur (14/10) : le GET /sante simple (sans en-tête JSON ni jeton, donc sans pré-vol CORS) ne
+  suffit pas, puisque c’est un VRAI appel qui a échoué. « Ça marche » passe par `tcTesterConnexionComplete` : le test
+  simple, puis un appel de la même forme que les vrais (`tcAppel('GET', '/sante')`, délai TC_SANTE_DELAI_MS) ; les deux
+  doivent passer, sinon le panneau reste à l’étape. Le constat `complet` est noté pour le rapport. « Ça ne marche pas »
+  est inactif pendant la vérification ; rien ne s’affiche si le panneau a été fermé entre-temps.
