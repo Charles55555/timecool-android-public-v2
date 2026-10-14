@@ -129,7 +129,7 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
 
   titre('2. 20 min, le prochain (proposé avec son heure), tout décale d autant, Charly prévient, oui');
   await cliquer(1);
-  verifie('« Pour quel rendez-vous ? » : le prochain avec son heure (Dentiste à 11h00 ; pas le petit déjeuner passé, ni la fête, ni l agenda pro), ou un autre', carte()._questionnaire.question === 'Pour quel rendez-vous ?' && choixTextes() === 'Le prochain : « Dentiste » à 11h00 | Un autre', choixTextes());
+  verifie('« Pour quel rendez-vous ? » : le prochain avec son heure (Dentiste à 11h00 ; pas le petit déjeuner passé, ni la fête, ni l agenda pro), ou un autre', carte()._questionnaire.question === 'Pour quel rendez-vous ?' && choixTextes() === 'Le prochain : « Dentiste » aujourd’hui à 11h00 | Un autre', choixTextes());
   await cliquer(0);
   verifie('le rendez-vous et l heure d arrivée, puis « Et après ? » (Coach et Kiné suivent le même jour)', /Le rendez-vous : « Dentiste », .*\(arrivée vers 11h20\)\./.test(textes()) && carte()._questionnaire.question === 'Et après ?' && choixTextes() === 'Je rattrape (les suivants ne bougent pas) | Tout décale d’autant (les rendez-vous suivants du jour aussi)', textes());
   await taper('tout décale');
@@ -178,7 +178,13 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
   reinit([ev('a', 'Petit déjeuner', 0, 8, 0, 9, 0), ev('v', 'Fête', 0, 0, 0, 23, 59, { allDay: true })]);
   await ctx.tcPrevenirRetard('Je vais être en retard');
   await taper('10');
-  verifie('plus rien à venir : « Tu n’as aucun rendez-vous à venir : personne à prévenir. »', dc() === 'Tu n’as aucun rendez-vous à venir : personne à prévenir.' && enCours() === null, dc());
+  verifie('plus rien aujourd’hui : « Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir. »', dc() === 'Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.' && enCours() === null, dc());
+  // Examen (15/10) : le prochain est celui d AUJOURD HUI ; un rendez-vous de demain n est pas prévenu d un retard par le bouton.
+  reinit([ev('a', 'Petit déjeuner', 0, 8, 0, 9, 0), ev('d', 'Banque', 1, 10, 0, 11, 0, { contact: 'c1' })]);
+  await ctx.tcPrevenirRetard('Je vais être en retard'); await taper('10');
+  verifie('plus rien aujourd’hui mais un rendez-vous demain : « Tu n’as plus de rendez-vous aujourd’hui… », le contact de demain n est pas prévenu, rien ne part', dc() === 'Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.' && enCours() === null && trace.envois.length === 0, dc());
+  await prevenance('je suis en retard pour la banque'); await taper('10');
+  verifie('mais un rendez-vous visé par la phrase garde son jour : « Banque » demain, arrivée vers 10h10', enCours() && enCours().reponses._retardRdv.id === 'd' && /Le rendez-vous : « Banque », .*16 octobre.*\(arrivée vers 10h10\)\./.test(textes()), textes());
 
   titre('5. Les phrases tapées suivent le même parcours, avec ce qu elles disent déjà');
   reinit();

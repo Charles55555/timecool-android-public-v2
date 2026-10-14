@@ -19665,8 +19665,10 @@ const TC_QUESTIONNAIRE_RETARD = {
       avant: function (r) {
         if (r.minutes === 'plus') r.minutes = r.minutes_plus;
         r.action = 'retard';
-        r._prochain = tcQuestionnaireRdv(0, 13, 0, 1440)[0] || null;
-        if (!r._prochain && !r._vise) { tcQuestionnaireDire('Tu n’as aucun rendez-vous à venir : personne à prévenir.'); return false; }
+        // Le prochain d'AUJOURD'HUI : un retard ne s'annonce pas pour mardi prochain (examen de la mission 45). Un
+        // rendez-vous visé par la phrase (« en retard pour la banque ») garde son jour.
+        r._prochain = tcQuestionnaireRdv(0, 0, 0, 1440)[0] || null;
+        if (!r._prochain && !r._vise) { tcQuestionnaireDire('Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.'); return false; }
         r._autres = tcQuestionnaireRdv(0, 0, 0, 1440).filter(function (e) { return e !== r._prochain; });
         // Un seul rendez-vous possible : pas de question.
         if (r.pour === undefined && !r._autres.length) r.pour = 'prochain';
@@ -19674,7 +19676,7 @@ const TC_QUESTIONNAIRE_RETARD = {
       question: 'Pour quel rendez-vous ?',
       choix: function (r) {
         return [
-          { cle: 'prochain', texte: 'Le prochain : « ' + r._prochain.title + ' » à ' + tcQuestionnaireHeure(r._prochain.startH * 60 + r._prochain.startM), mots: /prochain|^1$/ },
+          { cle: 'prochain', texte: 'Le prochain : « ' + r._prochain.title + ' » aujourd’hui à ' + tcQuestionnaireHeure(r._prochain.startH * 60 + r._prochain.startM), mots: /prochain|^1$/ },
           { cle: 'autre', texte: 'Un autre', mots: /autre/ }
         ];
       } },

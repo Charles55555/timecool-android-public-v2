@@ -2223,3 +2223,7 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   Suites : verif-onglets-charly réécrite (parcours retard, phrases tapées, 38 cas), banc-charly (le retard tapé part au
   questionnaire), verif-marche-arriere (identifiant gardé), verif-sync-local-gagne (cas 4 bis : supprimé puis remis
   avec le même identifiant, tient et repart), verif-imprevu et verif-questionnaire-malade (singulier), verif-charly-campagne7 (identifiant gardé).
+  Reprise après l’examinateur (15/10) : « Le prochain » est le prochain rendez-vous d’AUJOURD’HUI (pas le premier des
+  quatorze jours : sans rendez-vous aujourd’hui, le bouton prévenait le contact de mardi prochain). Sans rendez-vous
+  aujourd’hui : « Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir. » ; un rendez-vous visé par la phrase
+  (« en retard pour la banque ») garde son jour. Le libellé dit « aujourd’hui à HHhMM ». verif-onglets-charly : deux cas (47 au total).
