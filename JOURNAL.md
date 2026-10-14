@@ -2197,3 +2197,29 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   ne touche que le prochain rendez-vous ou un rendez-vous précis (plus « le reste de la journée » pour ce cas). La règle
   « jamais le week-end sans plage déclarée » reste à faire valider par le chef / Charles avant la mise en ligne.
   verif-imprevu : cinq cas de plus (section 8).
+- Mission 45 (15/10, chef, validée par Charles) : « Prévenir d’un retard » passe sur le moteur de questionnaire
+  (TC_QUESTIONNAIRE_RETARD, dans le bloc du questionnaire guidé) : 1) « Tu as combien de retard ? » (10 min / 20 min /
+  30 min / Plus (je tape un nombre) ; un nombre tapé est pris tel quel ; « Plus » ouvre une carte sans bouton « Combien de
+  minutes ? Tape un nombre. » : le moteur pose désormais une étape « libre » sans choix) ; 2) « Pour quel rendez-vous ? »
+  (Le prochain : « X » à HHhMM / Un autre, puis « Lequel ? » parmi les rendez-vous à venir du jour ; sans autre
+  rendez-vous, la question n’est pas posée) ; 3) le rendez-vous et l’heure d’arrivée, puis « Et après ? » (Je rattrape
+  (les suivants ne bougent pas) / Tout décale d’autant (les rendez-vous suivants du jour aussi), créneaux montrés ;
+  sans suivant, pas de question) ; 4) qui prévient ; 5) récapitulatif « Oui, vas-y » ; 6) « C’est fait. » et le bilan.
+  Le rendez-vous en retard ne bouge pas (on y arrive en retard) et son contact reçoit le modèle « Je serai en retard »
+  des Paramètres complété de « Je serai là vers HHhMM » ; les suivants décalés reçoivent « Je décale » avec la nouvelle
+  heure (tcQuestionnaireMessage, tcQuestionnaireRecap et tcQuestionnaireExecuter distinguent le rendez-vous en retard,
+  `r._retardRdv`, des rendez-vous décalés, `r._liste`). Jamais un rendez-vous passé ni une journée entière. Le bouton
+  appelle tcPrevenirRetard('Je vais être en retard') ; une phrase tapée (tcDetecterPrevenance, type retard) passe par
+  tcGererPrevenance → tcPrevenirRetard(text, tcRdvVise(text)) avec ce qu’elle dit déjà (les minutes, « un quart
+  d’heure », « prochain », le rendez-vous visé) ; l’annulation tapée garde tcPrevenirDepuisChat. L’ancien chemin du
+  bouton (le prochain rendez-vous puis la feuille des minutes) et tcProchainRdv sont retirés ; la feuille
+  prevenirRetard reste pour la fiche contact. L’API ne change pas.
+  Complément (détails testeurs, v2.0.372) : avec un seul rendez-vous, les boutons s’accordent (« Je le décale (je te
+  propose un nouveau créneau) / Je le supprime », tcQuestionnaireActions(r), et la question « Que fait-on de ce
+  rendez-vous ? » aussi pour « malade ») ; « remets-le(s) » après une suppression garde l’identifiant d’origine (un
+  rendez-vous partagé retrouve son lien) : depuis la mission 23 (« ce que j’ai changé ici gagne »), un rendez-vous
+  présent ici sans empreinte est tenu pour modifié ici, la suppression annoncée par le serveur ne l’efface pas et il
+  repart au tour suivant (le serveur le remet en vie, supprime = 0) ; plus besoin d’un identifiant neuf.
+  Suites : verif-onglets-charly réécrite (parcours retard, phrases tapées, 38 cas), banc-charly (le retard tapé part au
+  questionnaire), verif-marche-arriere (identifiant gardé), verif-sync-local-gagne (cas 4 bis : supprimé puis remis
+  avec le même identifiant, tient et repart), verif-imprevu et verif-questionnaire-malade (singulier), verif-charly-campagne7 (identifiant gardé).

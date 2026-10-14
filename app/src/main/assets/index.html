@@ -13100,34 +13100,6 @@ function charlyQuickReply(text) {
 }
 
 /**
- * « Prévenir d'un retard » : le prochain rendez-vous (ou celui qui a
- * commencé il y a moins de 30 minutes), le message au contact (tu /
- * vous) préparé, et c'est l'utilisateur qui valide l'envoi. Sans
- * contact enregistré, Charly le dit : il ne peut prévenir personne.
- */
-function tcProchainRdv() {
-  const now = new Date();
-  const aujourdhui = tcISO(now);
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  const prochains = (Array.isArray(events) ? events : []).filter(function (e) {
-    return e && e.mode === mode && !e.allDay
-      && (e.date > aujourdhui || (e.date === aujourdhui && (e.startH * 60 + e.startM) >= minutes - 30));
-  }).sort(tcComparerEvenements);
-  return prochains[0] || null;
-}
-
-/** L'onglet « Prévenir d'un retard » : le prochain rendez-vous, puis la feuille habituelle. */
-async function tcPrevenirRetard() {
-  const ev = tcProchainRdv();
-  if (!ev) {
-    charlyIA.history.push({ role: 'assistant', content: 'Tu n\'as aucun rendez-vous à venir : personne à prévenir.' });
-    renderCharlyChat();
-    return;
-  }
-  await tcPrevenirDepuisChat('retard', ev, null);
-}
-
-/**
  * Prévenir le contact d'un rendez-vous depuis Charly : retard (avec ou
  * sans le nombre de minutes) ou annulation. Le message vient des modèles
  * des Paramètres, est relu, et c'est l'utilisateur qui valide l'envoi.
@@ -13215,12 +13187,12 @@ function tcDetecterPrevenance(text) {
 
 /** La demande écrite : on trouve le rendez-vous, puis on prévient. */
 async function tcGererPrevenance(text, intent) {
+  // Un retard : le questionnaire guidé (mission 45), avec ce que la phrase dit déjà (les minutes, le rendez-vous visé).
+  if (intent.type === 'retard') { await tcPrevenirRetard(text, tcRdvVise(text)); return; }
   tcPousserMessageUtilisateur(text);
-  const ev = tcRdvVise(text) || (intent.type === 'retard' ? tcProchainRdv() : null);
+  const ev = tcRdvVise(text);
   if (!ev) {
-    charlyIA.history.push({ role: 'assistant', content: intent.type === 'retard'
-      ? 'Tu n\'as aucun rendez-vous à venir : personne à prévenir.'
-      : 'Quel rendez-vous veux-tu annuler ? Dis-moi par exemple : « préviens Marc que j\'annule le rendez-vous de demain ».' });
+    charlyIA.history.push({ role: 'assistant', content: 'Quel rendez-vous veux-tu annuler ? Dis-moi par exemple : « préviens Marc que j\'annule le rendez-vous de demain ».' });
     renderCharlyChat();
     return;
   }
@@ -13282,8 +13254,8 @@ function charlyQuickAction(action) {
   if (action === 'malade') { tcDemarrerMalade('Je suis malade, décale tout'); return; }
   // Photo : le meme chemin que le trombone.
   if (action === 'photo') { charlyAttachAction('photo'); return; }
-  // Retard : le message au contact est prepare ici, jamais laisse au modele.
-  if (action === 'retard') { tcPrevenirRetard(); return; }
+  // Retard : le questionnaire guidé (mission 45) : combien, pour quel rendez-vous, et après, qui prévient, récapitulatif.
+  if (action === 'retard') { tcPrevenirRetard('Je vais être en retard'); return; }
   // Nouveau rdv : une seule question, posee par Charly, qui demande tout.
   if (action === 'rdv') { tcDemarrerNouveauRdv(); return; }
   // Imprévu : le questionnaire guidé (mission 44) : ce qui arrive, ce qui est touché, la solution, qui prévient, récapitulatif.
@@ -14346,11 +14318,11 @@ async function tcMarcheArriere(text) {
   _tcMarcheArriere = null;
   const remis = [];
   if (m.type === 'suppression') {
-    m.rdvs.forEach(function (copie, i) {
+    m.rdvs.forEach(function (copie) {
       if (events.some(function (e) { return e.id === copie.id; })) return;
-      // Un identifiant NEUF : l'ancien est parti au serveur comme supprime, et la synchro effacait a
-      // nouveau le rendez-vous remis (campagne 7, 11/10 : « 3 rendez-vous remis », agenda vide).
-      copie.id = 'charly_ai_' + Date.now() + '_r' + i;
+      // L'identifiant d'origine est gardé (testeurs, 15/10 : un rendez-vous partagé retrouve son lien). Depuis « ce que
+      // j'ai changé ici gagne » (mission 23), un rendez-vous présent ici sans empreinte est tenu pour modifié ici : la
+      // suppression annoncée par le serveur ne l'efface pas, et il repart au tour suivant (le serveur le remet en vie).
       events.push(copie);
       remis.push(copie);
     });
@@ -19004,7 +18976,7 @@ function tcChoixPeriode(text) {
    Une étape dont la réponse est déjà connue (la phrase disait
    « demain ») n'est pas posée. À la fin, « terminer » fait le travail,
    et pas avant. Les parcours : « Je suis malade, décale tout » et
-   « Gérer un imprévu » ; ils partagent les étapes « qui prévient » et
+   « Gérer un imprévu », « Prévenir d'un retard » ; ils partagent les étapes « qui prévient » et
    « récapitulatif », la proposition de créneaux et le bilan.
    ══════════════════════════════════════════════════════════════ */
 
@@ -19057,13 +19029,13 @@ async function tcQuestionnaireSuivant() {
     }
     if (q.reponses[etape.cle] !== undefined) continue;                     // déjà dit dans la phrase
     const choix = typeof etape.choix === 'function' ? etape.choix(q.reponses) : etape.choix;
-    if (!choix || !choix.length) continue;
+    if ((!choix || !choix.length) && typeof etape.libre !== 'function') continue;
     q.etape = etape.cle;
     q.essais = 2;
     const question = typeof etape.question === 'function' ? etape.question(q.reponses) : etape.question;
     charlyIA.history.push({ role: 'system_info', content: question, _questionnaire: {
       id: q.id, etape: etape.cle, question: question, etat: 'choix',
-      choix: choix.map(function (c) { return { cle: c.cle, texte: c.texte, ton: c.ton || '' }; })
+      choix: (choix || []).map(function (c) { return { cle: c.cle, texte: c.texte, ton: c.ton || '' }; })
     } });
     renderCharlyChat();
     return;
@@ -19263,12 +19235,15 @@ function tcQuestionnaireProposer(r, entete) {
   }).join('\n'));
 }
 
-/** Les trois actions sur des rendez-vous touchés. */
-const TC_QUESTIONNAIRE_ACTIONS = [
-  { cle: 'decaler', texte: 'Je les décale (je te propose de nouveaux créneaux)', mots: /decal|deplac|report|repouss|creneau/ },
-  { cle: 'supprimer', texte: 'Je les supprime', mots: /supprim|annul|efface|enlev|retire/, ton: 'rouge' },
-  { cle: 'rien', texte: 'Je ne touche à rien', mots: /rien|touche|laisse|garde/, ton: 'gris' }
-];
+/** Les trois actions sur les rendez-vous touchés ; au singulier quand il n'y en a qu'un (testeurs, 15/10). */
+function tcQuestionnaireActions(r) {
+  const un = r && Array.isArray(r._rdvs) && r._rdvs.length === 1;
+  return [
+    { cle: 'decaler', texte: un ? 'Je le décale (je te propose un nouveau créneau)' : 'Je les décale (je te propose de nouveaux créneaux)', mots: /decal|deplac|report|repouss|creneau/ },
+    { cle: 'supprimer', texte: un ? 'Je le supprime' : 'Je les supprime', mots: /supprim|annul|efface|enlev|retire/, ton: 'rouge' },
+    { cle: 'rien', texte: 'Je ne touche à rien', mots: /rien|touche|laisse|garde/, ton: 'gris' }
+  ];
+}
 
 /** L'étape « qui prévient » : une ligne d'information pour les rendez-vous sans contact, sans bloquer. */
 const TC_ETAPE_PREVENIR = {
@@ -19307,9 +19282,10 @@ function tcQuestionnaireRecap(r) {
         : '• Je laisse « ' + x.ev.title + ' » où il est (pas de place libre dans les deux semaines)');
     });
   } else if (r.action === 'retard') {
-    r._rdvs.forEach(function (e) {
+    (r._retardRdv ? [r._retardRdv] : r._rdvs).forEach(function (e) {
       lignes.push('• « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + ') : environ ' + r.minutes + ' minutes de retard, arrivée vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes)));
     });
+    (r._liste || []).forEach(function (x) { if (x.p) lignes.push('• Je décale « ' + x.ev.title + ' » au ' + tcQuestionnaireQuand(x.p.date, x.p)); });
   } else {
     r._rdvs.forEach(function (e) { lignes.push('• Je supprime « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + ')'); });
   }
@@ -19324,12 +19300,13 @@ function tcQuestionnaireRecap(r) {
 
 /** Le message à un contact pour un rendez-vous, avec les modèles des Paramètres (« Je décale », « J’annule », « Je serai en retard »). */
 function tcQuestionnaireMessage(r, c, ev, ancien) {
-  if (r.action === 'decaler') {
+  const enRetard = r.action === 'retard' && (!r._retardRdv || r._retardRdv.id === ev.id);
+  if (r.action === 'decaler' || (r.action === 'retard' && !enRetard)) {
     const nouveau = tcValeursDuRdv(c.name, ev);
     return tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
       + ' le ' + nouveau['[date]'] + ' à ' + nouveau['[heure]'] + '.';
   }
-  if (r.action === 'retard') {
+  if (enRetard) {
     const valeurs = tcValeursDuRdv(c.name, ev);
     valeurs['[minutes]'] = String(r.minutes);
     return tcRemplirModele(tcModeleMessage('retard', tcVouvoiement(c)), valeurs)
@@ -19352,6 +19329,10 @@ async function tcQuestionnaireExecuter(r, fin) {
   if (r.action === 'decaler') {
     deplaces = r._liste.filter(function (x) { return x.p && presents.indexOf(x.ev) > -1; });
     laisses = r._liste.filter(function (x) { return !x.p && presents.indexOf(x.ev) > -1; }).map(function (x) { return x.ev; });
+    if (deplaces.length) tcAppliquerDeplacement(deplaces, { silencieux: true });
+  } else if (r.action === 'retard' && Array.isArray(r._liste) && r._liste.length) {
+    // « Tout décale d'autant » : les rendez-vous suivants du jour bougent, celui du retard reste (on y arrive en retard).
+    deplaces = r._liste.filter(function (x) { return x.p && presents.indexOf(x.ev) > -1; });
     if (deplaces.length) tcAppliquerDeplacement(deplaces, { silencieux: true });
   } else if (r.action === 'supprimer') {
     supprimes = presents;
@@ -19385,7 +19366,7 @@ async function tcQuestionnaireExecuter(r, fin) {
   deplaces.forEach(function (x) { lignes.push('• Déplacé : « ' + x.ev.title + ' », ' + tcQuestionnaireQuand(x.ev.date, x.ev)); });
   laisses.forEach(function (e) { lignes.push('• Laissé en place : « ' + e.title + ' », ' + tcQuestionnaireQuand(e.date, e)); });
   supprimes.forEach(function (e) { lignes.push('• Supprimé : « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + ')'); });
-  if (r.action === 'retard') presents.forEach(function (e) { lignes.push('• Retard d’environ ' + r.minutes + ' minutes pour « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + '), arrivée vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes))); });
+  if (r.action === 'retard') presents.filter(function (e) { return !r._retardRdv || e.id === r._retardRdv.id; }).forEach(function (e) { lignes.push('• Retard d’environ ' + r.minutes + ' minutes pour « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + '), arrivée vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes))); });
   if (r.quoi === 'ajout' && deplaces.length) lignes.push('• La place est libre pour le rendez-vous qui s’ajoute : ajoute-le quand tu veux.');
   if (prevenus.length) lignes.push('• Prévenu par la messagerie TimeCool : ' + tcQuestionnaireNoms(prevenus));
   const aEnvoyer = [];
@@ -19492,8 +19473,8 @@ const TC_QUESTIONNAIRE_MALADE = {
         if (!r._rdvs.length) { tcQuestionnaireDire('Rien à décaler ' + p.label + '. Repose-toi.'); return false; }
         tcQuestionnaireDire('Voici tes rendez-vous ' + p.label + ' :\n' + r._rdvs.map(function (e) { return '• « ' + e.title + ' », ' + tcQuestionnaireQuand(e.date, e); }).join('\n'));
       },
-      question: 'Que fait-on ?',
-      choix: TC_QUESTIONNAIRE_ACTIONS },
+      question: function (r) { return r._rdvs.length === 1 ? 'Que fait-on de ce rendez-vous ?' : 'Que fait-on ?'; },
+      choix: tcQuestionnaireActions },
     { cle: 'fin_rien', si: function (r) { return r.action === 'rien'; },
       avant: function () { tcQuestionnaireDire('D’accord, je ne touche à rien. Repose-toi.'); return false; } },
     { cle: 'creneaux', si: function (r) { return r.action === 'decaler'; },
@@ -19608,11 +19589,123 @@ const TC_QUESTIONNAIRE_IMPREVU = {
       libre: function (text) { const m = tcQuestionnaireTexteNu(text).match(/\b(\d{1,3})\b/); return m && Number(m[1]) > 0 ? m[1] : null; } },
     { cle: 'action', si: function (r) { return r.quoi === 'partir_tot' || r.quoi === 'absent'; },
       question: function (r) { return r._rdvs.length === 1 ? 'Que fait-on de ce rendez-vous ?' : 'Que fait-on ?'; },
-      choix: TC_QUESTIONNAIRE_ACTIONS },
+      choix: tcQuestionnaireActions },
     { cle: 'fin_rien', si: function (r) { return r.action === 'rien'; },
       avant: function () { tcQuestionnaireDire('D’accord, je ne touche à rien.'); return false; } },
     { cle: 'creneaux', si: function (r) { return r.action === 'decaler'; },
       avant: function (r) { tcQuestionnaireProposer(r, r.quoi === 'ajout' ? 'Pour faire de la place, voici ce que je te propose :' : 'Voici ce que je te propose :'); } },
+    TC_ETAPE_PREVENIR,
+    TC_ETAPE_RECAP
+  ],
+  terminer: async function (r) {
+    if (r.recap !== 'oui') { tcQuestionnaireDire('D’accord, j’arrête là : je ne touche à rien.'); return; }
+    await tcQuestionnaireExecuter(r, 'C’est fait.');
+  }
+};
+
+/* ── « Prévenir d'un retard » (mission 45) ───────────────────── */
+
+/** Le retard proposé ; « Plus » ouvre une réponse libre, et un nombre tapé d'emblée (« 45 ») est pris tel quel. */
+const TC_RETARD_MINUTES = [
+  { cle: '10', texte: '10 min', mots: /\b10\b|dix/ },
+  { cle: '20', texte: '20 min', mots: /\b20\b|vingt/ },
+  { cle: '30', texte: '30 min', mots: /\b30\b|trente|demi/ },
+  { cle: 'plus', texte: 'Plus (je tape un nombre)', mots: /plus|autre|davantage/ }
+];
+
+/** Un nombre de minutes dans un texte (« 20 minutes », « 45 »), ou null. */
+function tcRetardMinutesTapees(text) {
+  const m = tcQuestionnaireTexteNu(text).match(/\b(\d{1,3})\b/);
+  return m && Number(m[1]) > 0 ? m[1] : null;
+}
+
+/** Ce que la phrase dit déjà : les minutes (« 10 min », « un quart d'heure ») et « le prochain ». */
+function tcRetardDansLaPhrase(text) {
+  const t = tcQuestionnaireTexteNu(text);
+  const connu = {};
+  const m = t.match(/\b(\d{1,3}) ?(min|mn|minutes?)\b/);
+  if (m) connu.minutes = m[1];
+  else if (/quart d heure/.test(t)) connu.minutes = '15';
+  else if (/demi heure/.test(t)) connu.minutes = '30';
+  else if (/\bune heure\b|\b1 ?h\b/.test(t)) connu.minutes = '60';
+  if (/prochain/.test(t)) connu.pour = 'prochain';
+  return connu;
+}
+
+/** Les rendez-vous suivants du même jour, décalés du même retard, sans dépasser minuit. */
+function tcRetardDecaler(suivants, minutes) {
+  const n = Number(minutes);
+  return suivants.map(function (e) {
+    const duree = (e.endH * 60 + e.endM) - (e.startH * 60 + e.startM);
+    let f = Math.min(1439, e.endH * 60 + e.endM + n);
+    let d = Math.max(0, Math.min(e.startH * 60 + e.startM + n, f - Math.max(duree, 0)));
+    return { ev: e, p: { date: e.date, startH: Math.floor(d / 60), startM: d % 60, endH: Math.floor(f / 60), endM: f % 60 } };
+  });
+}
+
+/**
+ * Le bouton « Prévenir d'un retard », ou une phrase (« je serai en retard », « préviens Marc que j'aurai 10 min de
+ * retard ») : la bulle, puis la première question qui reste. `rdv` : le rendez-vous que la phrase désigne, s'il y en a un.
+ */
+async function tcPrevenirRetard(text, rdv) {
+  if (text) tcPousserMessageUtilisateur(text);
+  const connu = tcRetardDansLaPhrase(text);
+  if (rdv) { connu.pour = 'autre'; connu._vise = rdv; }
+  await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_RETARD, connu);
+}
+
+/** Le parcours, étape par étape : combien, pour quoi, et après, qui prévient, récapitulatif. */
+const TC_QUESTIONNAIRE_RETARD = {
+  nom: 'retard',
+  etapes: [
+    { cle: 'minutes', question: 'Tu as combien de retard ?', choix: TC_RETARD_MINUTES, libre: tcRetardMinutesTapees },
+    { cle: 'minutes_plus', si: function (r) { return r.minutes === 'plus'; },
+      question: 'Combien de minutes ? Tape un nombre.', libre: tcRetardMinutesTapees },
+    { cle: 'pour',
+      avant: function (r) {
+        if (r.minutes === 'plus') r.minutes = r.minutes_plus;
+        r.action = 'retard';
+        r._prochain = tcQuestionnaireRdv(0, 13, 0, 1440)[0] || null;
+        if (!r._prochain && !r._vise) { tcQuestionnaireDire('Tu n’as aucun rendez-vous à venir : personne à prévenir.'); return false; }
+        r._autres = tcQuestionnaireRdv(0, 0, 0, 1440).filter(function (e) { return e !== r._prochain; });
+        // Un seul rendez-vous possible : pas de question.
+        if (r.pour === undefined && !r._autres.length) r.pour = 'prochain';
+      },
+      question: 'Pour quel rendez-vous ?',
+      choix: function (r) {
+        return [
+          { cle: 'prochain', texte: 'Le prochain : « ' + r._prochain.title + ' » à ' + tcQuestionnaireHeure(r._prochain.startH * 60 + r._prochain.startM), mots: /prochain|^1$/ },
+          { cle: 'autre', texte: 'Un autre', mots: /autre/ }
+        ];
+      } },
+    { cle: 'lequel', si: function (r) { return r.pour === 'autre' && !r._vise; },
+      avant: function (r) {
+        if (!r._autres.length) { tcQuestionnaireDire('Il n’y a pas d’autre rendez-vous à venir aujourd’hui.'); return false; }
+      },
+      question: 'Lequel ?',
+      choix: function (r) { return r._autres.map(function (e) { return { cle: e.id, texte: '« ' + e.title + ' », ' + tcFormaterHeure(e), mots: tcImprevuMotsDuTitre(e.title) }; }); } },
+    { cle: 'suite',
+      avant: function (r) {
+        r._retardRdv = r._vise || (r.pour === 'prochain' ? r._prochain : r._autres.filter(function (e) { return e.id === r.lequel; })[0]) || null;
+        if (!r._retardRdv) { tcQuestionnaireDire('Je ne retrouve pas ce rendez-vous.'); return false; }
+        r._rdvs = [r._retardRdv];
+        r._liste = [];
+        const debut = r._retardRdv.startH * 60 + r._retardRdv.startM;
+        r._suivants = tcQuestionnaireRdv(0, 13, 0, 1440).filter(function (e) { return e.date === r._retardRdv.date && e !== r._retardRdv && (e.startH * 60 + e.startM) > debut; });
+        tcQuestionnaireDire('Le rendez-vous : « ' + r._retardRdv.title + ' », ' + tcQuestionnaireQuand(r._retardRdv.date, r._retardRdv) + ' (arrivée vers ' + tcQuestionnaireHeure(debut + Number(r.minutes)) + ').');
+        if (!r._suivants.length) r.suite = 'rattrape';
+      },
+      question: 'Et après ?',
+      choix: [
+        { cle: 'rattrape', texte: 'Je rattrape (les suivants ne bougent pas)', mots: /rattrap|bouge|rien|garde/ },
+        { cle: 'decaler', texte: 'Tout décale d’autant (les rendez-vous suivants du jour aussi)', mots: /decal|tout|autant|suivant/ }
+      ] },
+    { cle: 'creneaux', si: function (r) { return r.suite === 'decaler'; },
+      avant: function (r) {
+        r._liste = tcRetardDecaler(r._suivants, r.minutes);
+        r._rdvs = [r._retardRdv].concat(r._suivants);
+        tcQuestionnaireDire('Voici ce que ça donne :\n' + r._liste.map(function (x) { return '• « ' + x.ev.title + ' » : ' + tcQuestionnaireQuand(x.p.date, x.p); }).join('\n'));
+      } },
     TC_ETAPE_PREVENIR,
     TC_ETAPE_RECAP
   ],

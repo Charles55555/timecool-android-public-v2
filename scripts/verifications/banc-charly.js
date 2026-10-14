@@ -59,9 +59,11 @@ const agenda = () => [
   ev('kine', 'Kiné', 7, 10, 0, 11, 0, { contact: 'c3' })
 ];
 
-const trace = { confirms: [], envois: [], feuilles: [], supprimes: [], contraintes: [], toasts: [] };
+const trace = { confirms: [], envois: [], feuilles: [], supprimes: [], contraintes: [], toasts: [], retards: [] };
 let reponses = [];
 const ctx = {
+  // Mission 45 : un retard tapé part au questionnaire guidé (vérifié dans verif-onglets-charly) ; ici, on note l appel.
+  tcPrevenirRetard: async (texte, rdv) => { trace.retards.push({ texte: texte, titre: rdv ? rdv.title : null }); },
   console, Date: DateFixe,
   mode: 'user', currentPage: 'chat', events: agenda(), charlyIA: { history: [] },
   contactsList: [{ id: 'c1', name: 'Marc Dupont', phone: '0600000000' }, { id: 'c2', name: 'Sophie Anceau', phone: '0600000001' }, { id: 'c3', name: 'Dr Lefèvre', email: 'l@x.fr' }],
@@ -105,7 +107,7 @@ if (modeles) vm.runInContext(modeles, ctx); else { ko++; console.log('  KO  TC_M
  'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
  'tcDetecterMalade', 'tcDetecterContrainte', 'tcRdvDeLaPeriode', 'tcGererContrainte',
  'detecterSuppressionRdv', 'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcMemoriserSuppression', 'tcSupprimerRdvs', 'tcRdvDesigne',
- 'tcProchainRdv', 'tcRdvVise', 'tcDetecterPrevenance', 'tcGererPrevenance', 'tcPrevenirDepuisChat', 'tcPrevenirRetard',
+ 'tcRdvVise', 'tcDetecterPrevenance', 'tcGererPrevenance', 'tcPrevenirDepuisChat',
  'detecterConsultationAgenda', 'detecterDemandeCreneau',
  'extraireLieuDuTexte', 'detecterRechercheProfessionnel', 'extraireAdresseDuTexte', 'detecterDemandeTrajet', 'detecterRechercheWeb',
  'tcEstDeplacement', 'tcVerbeConjugue', 'tcDetecterMarcheArriere'
@@ -358,7 +360,7 @@ console.log('  ' + Object.keys(parRoute).map((k) => k + ' ' + parRoute[k]).join(
 verifie('toutes les phrases vont au bon endroit', corpus.every(([p, a]) => { ctx.events = agenda(); try { return route(p) === a; } catch (e) { return false; } }));
 
 /* ── Quelques exécutions, pas seulement l'aiguillage ─────────────── */
-const reinit = () => { ctx.events = agenda(); ctx.charlyIA.history = []; Object.assign(trace, { confirms: [], envois: [], feuilles: [], supprimes: [], contraintes: [], toasts: [] }); reponses = []; vm.runInContext('_tcSuppressionEnAttente = null; _tcSuppressionChoix = null;', ctx); };
+const reinit = () => { ctx.events = agenda(); ctx.charlyIA.history = []; Object.assign(trace, { confirms: [], envois: [], feuilles: [], supprimes: [], contraintes: [], toasts: [], retards: [] }); reponses = []; vm.runInContext('_tcSuppressionEnAttente = null; _tcSuppressionChoix = null;', ctx); };
 const titres = () => ctx.events.map((e) => e.title);
 const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || { content: '' };
 
@@ -386,15 +388,14 @@ const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {
   titre('Prévenir par écrit');
   reinit();
   await ctx.tcGererPrevenance("préviens Marc que j'aurai 10 min de retard", ctx.tcDetecterPrevenance("préviens Marc que j'aurai 10 min de retard"));
-  verifie('le message dit 10 minutes de retard, et Charles valide', trace.confirms.length === 1 && /10 minutes de retard/.test(trace.confirms[0]) && /Dentiste/.test(trace.confirms[0]), trace.confirms[0]);
-  verifie('il part à Marc', trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont');
+  verifie('mission 45 : le questionnaire « retard » reçoit la phrase et le rendez-vous visé (Dentiste), rien ne part seul', trace.retards.length === 1 && trace.retards[0].titre === 'Dentiste' && /10 min de retard/.test(trace.retards[0].texte) && trace.envois.length === 0 && trace.confirms.length === 0, JSON.stringify(trace.retards));
   reinit();
   await ctx.tcGererPrevenance('je vais être en retard chez le dentiste', ctx.tcDetecterPrevenance('je vais être en retard chez le dentiste'));
-  verifie('sans le nombre de minutes : la feuille habituelle s ouvre, sur le bon rendez-vous', trace.feuilles.length === 1 && trace.feuilles[0].titre === 'Dentiste' && trace.feuilles[0].nom === 'Marc Dupont', JSON.stringify(trace.feuilles));
-  verifie('et rien ne part sans elle', trace.envois.length === 0);
+  verifie('sans le nombre de minutes : le questionnaire, sur le bon rendez-vous (il demandera combien)', trace.retards.length === 1 && trace.retards[0].titre === 'Dentiste' && trace.feuilles.length === 0, JSON.stringify(trace.retards));
+  verifie('et rien ne part sans lui', trace.envois.length === 0);
   reinit();
   await ctx.tcGererPrevenance('je serai en retard', ctx.tcDetecterPrevenance('je serai en retard'));
-  verifie('« je serai en retard » : le prochain rendez-vous (la réunion de 14h ; le tennis de 9h a commencé depuis une heure), sans contact', /Réunion équipe/.test(dernier().content) && /pas de contact/.test(dernier().content), dernier().content);
+  verifie('« je serai en retard » : aucun rendez-vous désigné, le questionnaire choisira le prochain', trace.retards.length === 1 && trace.retards[0].titre === null, JSON.stringify(trace.retards));
   reinit();
   await ctx.tcGererPrevenance("dis à Sophie que j'annule le déjeuner", ctx.tcDetecterPrevenance("dis à Sophie que j'annule le déjeuner"));
   verifie('annulation : le message d annulation, et Charles valide', trace.confirms.length === 1 && /annuler « Déjeuner avec Sophie »/.test(trace.confirms[0]) && /annuler notre rendez-vous/.test(trace.confirms[0]), trace.confirms[0]);
@@ -404,18 +405,10 @@ const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {
   verifie('s il refuse : rien ne part, rien n est retiré', trace.envois.length === 0 && ctx.events.length === 10);
   reinit();
   await ctx.tcGererPrevenance('je suis en retard pour le golf', ctx.tcDetecterPrevenance('je suis en retard pour le golf'));
-  verifie('le golf n a pas de contact : Charly le dit', /Partie de golf/.test(dernier().content) && /pas de contact/.test(dernier().content));
+  verifie('« en retard pour le golf » : le golf est désigné (le questionnaire dira qu il n a pas de contact)', trace.retards.length === 1 && trace.retards[0].titre === 'Partie de golf', JSON.stringify(trace.retards));
   reinit();
   await ctx.tcGererPrevenance("informe Sophie que j'annule", ctx.tcDetecterPrevenance("informe Sophie que j'annule"));
   verifie('« informe Sophie que j annule » trouve son rendez-vous', trace.confirms.length === 1 && /Déjeuner avec Sophie/.test(trace.confirms[0]));
-
-  titre('L onglet « Prévenir d un retard »');
-  reinit();
-  await ctx.tcPrevenirRetard();
-  verifie('le prochain rendez-vous (la réunion de 14h), sans contact : Charly le dit', /Réunion équipe/.test(dernier().content) && /pas de contact/.test(dernier().content), dernier().content);
-  reinit(); ctx.events = agenda().filter((e) => e.id !== 'tennis' && e.id !== 'reunion');
-  await ctx.tcPrevenirRetard();
-  verifie('avec un contact : la feuille des minutes s ouvre, rien ne part seul', trace.feuilles.length === 1 && trace.feuilles[0].titre === 'Dentiste' && trace.envois.length === 0);
 
   titre('Contrainte limitée à la partie du jour');
   reinit();

@@ -153,7 +153,7 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
   reinit();
   await ctx.tcDemarrerImprevu('j’ai un imprévu');
   await taper('je ne peux pas venir'); await taper('1');
-  verifie('un seul rendez-vous : « Que fait-on de ce rendez-vous ? »', carte()._questionnaire.question === 'Que fait-on de ce rendez-vous ?', carte()._questionnaire.question);
+  verifie('un seul rendez-vous : « Que fait-on de ce rendez-vous ? », et les boutons au singulier (testeurs, 15/10)', carte()._questionnaire.question === 'Que fait-on de ce rendez-vous ?' && choixTextes() === 'Je le décale (je te propose un nouveau créneau) | Je le supprime | Je ne touche à rien', carte()._questionnaire.question + ' / ' + choixTextes());
   await taper('2'); await taper('personne'); await taper('oui');
   verifie('« Dentiste » supprimé par la mécanique habituelle, rien d envoyé, « remets-le »', !ctx.events.find((e) => e.id === 'b') && trace.envois.length === 0 && /^C’est fait\.\n• Supprimé : « Dentiste » \(/.test(dc()) && /remets-le »/.test(dc()) && memoire().type === 'suppression' && JSON.stringify(memoire().prevenus) === '[]', dc());
   await ctx.tcMarcheArriere('remets-le');

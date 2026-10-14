@@ -110,7 +110,8 @@ titre('2. Consultation d un jour : la liste exacte, construite par la page');
   await c4.tcMarcheArriere('remets-les');
   const remis = c4.events.filter((e) => ['Formation', 'Rdv banque', 'Rendez-vous avec Zorglub'].indexOf(e.title) > -1);
   verifie('les 3 rendez-vous sont vraiment dans l agenda', remis.length === 3 && c4.events.length === 6, c4.events.map((e) => e.title).join(','));
-  verifie('avec un identifiant NEUF (l ancien est supprime sur le serveur)', remis.every((e) => supprimes.indexOf(e.id) < 0 && /^charly_ai_\d+_r\d$/.test(e.id)), remis.map((e) => e.id).join(','));
+  // 15/10 (testeurs) : l identifiant d origine est garde, un rendez-vous partage retrouve son lien ; la synchro le remet en vie (verif-sync-local-gagne, 4 bis).
+  verifie('avec leur identifiant d origine (plus d identifiant neuf)', remis.every((e) => supprimes.indexOf(e.id) > -1), remis.map((e) => e.id).join(','));
   verifie('memes dates, heures et titres', remis.every((e) => e.date === '2026-10-13') && remis.find((e) => e.title === 'Formation').startH === 15);
   verifie('et Charly dit « 3 rendez-vous remis »', /3 rendez-vous remis/.test(c4.charlyIA.history[c4.charlyIA.history.length - 1].content));
 

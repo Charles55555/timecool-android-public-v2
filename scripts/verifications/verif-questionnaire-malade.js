@@ -164,6 +164,11 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   await taper('tu les préviens'); await taper('vas-y');
   verifie('« Dentiste » sans contact n empêche rien : les deux déplacés ; Sophie (SMS) : rien d ouvert dans la boucle, un bouton « Envoyer à Sophie Anceau » dans le bilan', trace.envois.length === 0 && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 2 && dernier()._envois && dernier()._envois.length === 1 && /✉️ Envoyer à Sophie Anceau</.test(ctx.tcRendreBilanQuestionnaire(dernier())), dc());
 
+  reinit([ev('d', 'Pharmacie', 0, 21, 0, 22, 0, { contact: 'c1' })]);
+  await ctx.tcDemarrerMalade('je suis malade'); await taper('1');
+  verifie('un seul rendez-vous : « Que fait-on de ce rendez-vous ? » et les boutons au singulier (testeurs, 15/10)', carte()._questionnaire.question === 'Que fait-on de ce rendez-vous ?' && choixTextes() === 'Je le décale (je te propose un nouveau créneau) | Je le supprime | Je ne touche à rien', carte()._questionnaire.question + ' / ' + choixTextes());
+  verifie('« je le supprime » tapé vaut le bouton', await taper('je le supprime') === true && enCours().reponses.action === 'supprimer');
+
   titre('7. Réponses pas comprises, vraie demande, deux questionnaires');
   reinit();
   await ctx.tcDemarrerMalade('je suis malade');

@@ -100,6 +100,21 @@ const serveur = (uid, v) => ({ type: 'reglage', uid: uid, contenu: { id: uid, v:
   await c4.tcSyncAppliquer([serveur('tc_theme', 'light')]);
   verifie('sans version connue, la valeur du serveur s applique meme sans empreinte', c4._stock.tc_theme === 'light', c4._stock.tc_theme);
 
+  titre('4 bis. Supprimé ici puis remis avec le même identifiant (« remets-le », 15/10) : tient, et repart');
+  const c4b = contexte();
+  c4b._stock.tc_theme = 'dark';
+  connu(c4b, { 'reglage:tc_theme': emp(c4b, 'tc_theme', 'dark') });
+  await c4b.tcSyncPousser();                                           // cet onglet l a eu en mémoire (rien à envoyer)
+  delete c4b._stock.tc_theme;                                        // supprimé ici
+  await c4b.tcSyncPousser();
+  verifie('la suppression part, et l empreinte est retirée', c4b._pousses.some((e) => e.uid === 'tc_theme' && e.contenu === null) && !('reglage:tc_theme' in c4b.tcSyncEmpreintes()), JSON.stringify(c4b._pousses));
+  c4b._pousses.length = 0;
+  c4b._stock.tc_theme = 'dark';                                      // remis, même identifiant
+  await c4b.tcSyncAppliquer([{ type: 'reglage', uid: 'tc_theme', supprime: 1 }]);   // le tour tire notre propre suppression
+  verifie('la suppression venue du serveur n efface pas l objet remis (présent ici sans empreinte : modifié ici)', c4b._stock.tc_theme === 'dark', c4b._stock.tc_theme);
+  await c4b.tcSyncPousser();
+  verifie('et il repart au tour suivant, avec son identifiant (le serveur le remet en vie)', c4b._pousses.some((e) => e.uid === 'tc_theme' && e.contenu && e.contenu.v === 'dark'), JSON.stringify(c4b._pousses));
+
   titre('5. Un rendez-vous sans type est « Personnel » partout');
   const c5 = { console };
   vm.createContext(c5);
