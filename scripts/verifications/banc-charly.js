@@ -103,7 +103,7 @@ if (modeles) vm.runInContext(modeles, ctx); else { ko++; console.log('  KO  TC_M
  'tcPeriodeAgenda', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'tcPeriodeCoherente', 'tcBorneDeFin', 'tcJoursDansTexte',
  'tcPhraseNonCompris', 'parseFrenchDateFromText', 'tcContactDuRdv', 'tcRemplirModele', 'tcValeursDuRdv', 'tcModeleMessage',
  'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
- 'tcDetecterContrainte', 'tcRdvDeLaPeriode', 'tcGererContrainte',
+ 'tcDetecterMalade', 'tcDetecterContrainte', 'tcRdvDeLaPeriode', 'tcGererContrainte',
  'detecterSuppressionRdv', 'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcMemoriserSuppression', 'tcSupprimerRdvs', 'tcRdvDesigne',
  'tcProchainRdv', 'tcRdvVise', 'tcDetecterPrevenance', 'tcGererPrevenance', 'tcPrevenirDepuisChat', 'tcPrevenirRetard',
  'detecterConsultationAgenda', 'detecterDemandeCreneau',
@@ -124,6 +124,7 @@ function route(text) {
     "  if (tcDetecterMarcheArriere(text)) return 'marche-arriere';" +
     "  if (tcDetecterPrevenance(text)) return 'prevenance';" +
     "  if (/\\b(imprevu|reorganis)/.test(tcSansAccents(text)) && !tcPeriodeContrainte(text)) return 'imprevu';" +
+    "  if (tcDetecterMalade(text)) return 'malade';" +
     "  if (tcDetecterContrainte(text)) return 'contrainte';" +
     "  if (detecterSuppressionRdv(text)) return 'suppression';" +
     "  if (detecterConsultationAgenda(text)) return 'consultation';" +
@@ -142,7 +143,7 @@ function route(text) {
 titre('L ordre des traitements dans l application est celui du banc');
 {
   const src = extraire('charlySendMessage') || '';
-  const ordre = ['tcDetecterMarcheArriere(text)', 'tcDetecterPrevenance(text)', 'tcDemarrerImprevu()', 'tcDetecterContrainte(text)', 'detecterSuppressionRdv(text)',
+  const ordre = ['tcDetecterMarcheArriere(text)', 'tcDetecterPrevenance(text)', 'tcDemarrerImprevu()', 'tcDetecterMalade(text)', 'tcDetecterContrainte(text)', 'detecterSuppressionRdv(text)',
     'detecterConsultationAgenda(text)', 'detecterDemandeCreneau(text)', 'detecterRechercheProfessionnel(text)',
     'detecterDemandeTrajet(text)', 'detecterRechercheWeb(text)', 'const _faqMatch', 'const _unavailMatch'];
   const pos = ordre.map((o) => src.indexOf(o));
@@ -173,7 +174,7 @@ const corpus = [
   ['annule le rdv avec Sophie', 'suppression'],
   ['supprime le kiné du 12 octobre', 'suppression'],
   ['annule les enfants samedi', 'suppression'],
-  ['je suis malade, annule tout demain', 'suppression'],
+  ['je suis malade, annule tout demain', 'malade'],   // mission 43 : le questionnaire guidé (période et action déjà dites)
   ['supprime le tennis de lundi stp', 'suppression'],
   ['annule mes rendez-vous de demain après-midi', 'suppression'],
   ['tu peux enlever le rdv dentiste', 'suppression'],
@@ -213,7 +214,9 @@ const corpus = [
   ['je ne pourrai pas honorer mes rdv demain', 'contrainte'],
   ['je ne pourrai pas honorer mes rendez-vous de la semaine', 'contrainte'],
   ["j'ai un empêchement demain", 'contrainte'],
-  ['je suis malade demain', 'contrainte'],
+  ['je suis malade demain', 'malade'],
+  ['je suis malade', 'malade'],
+  ['Je suis malade, décale tout', 'malade'],
   ['je suis indisponible mercredi', 'contrainte'],
   ['je ne peux pas aller à mes rendez-vous demain après-midi', 'contrainte'],
   ["impossible d'honorer mes engagements cette semaine", 'contrainte'],

@@ -2126,3 +2126,31 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   AND uid IN ('demo_1','demo_2','demo_3')` (rien à retirer chez Google). Suite : verif-demonstration-locale
   (serveur simulé, deux appareils, compte d’avant, vieilles empreintes, deux onglets, appairage, sauvegarde, stockage) ;
   verif-transfert charge les deux prédicats avec le bloc d’appairage.
+- Mission 43 (14/10, chef, validée par Charles) : « Je suis malade, décale tout » devient un questionnaire guidé. Constat
+  du 14/10 au soir : Charly listait les rendez-vous déjà passés du jour (11h, 14h, 17h) et un voyage en journée entière,
+  puis redemandait « annule ou déplace ? » alors que le bouton disait « décale tout ». Un petit moteur de questionnaire
+  (bloc « QUESTIONNAIRE GUIDÉ DE CHARLY », devant showConflictWarning) : une liste d’étapes (clé, question, choix avec
+  mots reconnus au clavier, condition `si`, `avant` qui prépare l’étape et peut tout arrêter), une question à la fois en
+  carte à boutons numérotés (message `_questionnaire`, rendu par tcRendreQuestionnaire, boutons inactifs une fois
+  répondu ou après rechargement), réponse tapée acceptée (numéro, texte du choix, mots : tcQuestionnaireChoixTape, lue
+  dans charlySendMessage avant « Vers quand ? » et sans clé API), une relance puis abandon, une vraie demande fait tomber
+  le questionnaire et suit son chemin ; le travail n’est fait qu’à la fin (`terminer`). Premier parcours
+  TC_QUESTIONNAIRE_MALADE : 1) période (Ce qui reste aujourd’hui / Demain matin / Demain après-midi / Demain toute la
+  journée / Les 2 ou 3 prochains jours), sautée si la phrase la dit ; 2) liste des rendez-vous de la période pas encore
+  commencés (jamais un passé, jamais une journée entière ni un voyage, agenda courant seulement), sinon « Rien à décaler
+  … Repose-toi. » ; 3) action (Je les décale (je te propose de nouveaux créneaux) / Je les supprime / Je ne touche à rien),
+  sautée si la phrase dit « décale » ou « annule » ; 4) créneaux proposés à partir du lendemain de la période dans les
+  plages ouvertes (tcCreneauxDisponibles), chaque rendez-vous avec sa durée, sinon « je le laisse où il est » ;
+  5) qui prévient (Je préviens les contacts moi-même / Tu les préviens / Personne), ligne d’information pour les
+  rendez-vous sans contact, question sautée s’il n’y a aucun contact ; 6) récapitulatif « Voici ce que je vais faire : »
+  puis « Oui, vas-y » / « Non, j’arrête » ; 7) « C’est fait. Repose-toi. » et le bilan (déplacé, supprimé, laissé en
+  place, prévenu par la messagerie TimeCool, message prêt à envoyer (SMS ou email), sans numéro ni email, à prévenir
+  toi-même, marche arrière « remets-les »). Mécanique existante réutilisée : tcAppliquerDeplacement et tcSupprimerRdvs
+  (nouvelle option `silencieux` : le questionnaire fait son propre bilan ; sans option, rien ne change), modèles de
+  messages « Je décale » / « J’annule », tcTransmettrePrevenance, démarches, marche arrière. Le bouton appelle
+  tcDemarrerMalade('Je suis malade, décale tout') ; une phrase tapée avec « malade » (tcDetecterMalade, avant la
+  contrainte dans charlySendMessage) suit le même parcours avec ce qu’elle dit déjà (tcMaladeDansLaPhrase). Le ménage du
+  compte arrête le questionnaire. L’API ne change pas. Suites : verif-questionnaire-malade (nouvelle, 52 cas, horloge
+  fixée au 14/10 20h30), verif-boutons-charly et banc-charly mises à jour (« malade » est une route à part).
+  Réserve connue (mécanique existante) : plusieurs contacts à prévenir par SMS ou email d’affilée, seul le dernier
+  message s’ouvre dans l’application du téléphone ; les autres restent dans la conversation locale.

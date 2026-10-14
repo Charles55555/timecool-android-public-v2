@@ -40,6 +40,7 @@ const ctx = {
   charlyIA: { history: [], config: { demoMode: false } },
   renderCharlyChat: () => { appels.push('render'); },
   tcGererContrainte: (t) => { appels.push('contrainte:' + t); },
+  tcDemarrerMalade: (t) => { appels.push('malade:' + t); },
   charlyAttachAction: (t) => { appels.push('trombone:' + t); },
   charlySendMessage: () => { appels.push('envoi:' + ctx.document.getElementById('charlyInput').value); },
   tcPrevenirRetard: () => {}, tcDemarrerNouveauRdv: () => {}, tcDemarrerImprevu: () => {}, startAssistant: () => {}, tcDemarrerCalculTrajet: () => {},
@@ -55,8 +56,8 @@ if (!ko) {
   ctx.charlyQuickAction('groupe');
   verifie('« Rendez-vous à plusieurs » : Charly demande « Avec qui ? » et attend les prénoms (2 essais)', ctx.charlyIA.history.length === 1 && /^Avec qui \?/.test(ctx.charlyIA.history[0].content) && vm.runInContext('_tcGroupeEnAttente', ctx) === 2 && appels.indexOf('render') > -1, ctx.charlyIA.history[0] && ctx.charlyIA.history[0].content);
   ctx.charlyQuickAction('malade');
-  // Apostrophe droite obligatoire : tcPeriodeAgenda lit /aujourd'?hui/ sur le texte brut.
-  verifie('« Je suis malade, décale tout » : la contrainte du jour (liste des rendez-vous, puis annuler / déplacer et s’excuser), avec « aujourd\'hui » reconnu, et l attente « Avec qui ? » tombe', appels.indexOf("contrainte:Je suis malade, décale tout aujourd'hui") > -1 && /aujourd'?hui/.test(appels.find((a) => a.indexOf('contrainte:') === 0) || '') && vm.runInContext('_tcGroupeEnAttente', ctx) === 0, appels.find((a) => a.indexOf('contrainte:') === 0));
+  // Mission 43 : le questionnaire guidé (tcDemarrerMalade) ; sans jour dans le texte du bouton, la période est demandée.
+  verifie('« Je suis malade, décale tout » : le questionnaire guidé démarre avec le texte du bouton, et l attente « Avec qui ? » tombe', appels.indexOf('malade:Je suis malade, décale tout') > -1 && vm.runInContext('_tcGroupeEnAttente', ctx) === 0, appels.find((a) => a.indexOf('malade:') === 0));
   ctx.charlyQuickAction('libre');
   verifie('« Quand suis-je libre ? » : la question est pré-remplie et envoyée', appels.indexOf('envoi:Quand suis-je libre cette semaine ?') > -1, appels.join(' ; '));
   ctx.charlyQuickAction('photo');
@@ -69,7 +70,7 @@ verifie('avec deux contacts cités, le parcours « à plusieurs » démarre sans
 verifie('sans deux prénoms, Charly redemande une fois puis laisse le message suivre son chemin', /_tcGroupeEnAttente -= 1;\s+if \(_tcGroupeEnAttente > 0\) \{[\s\S]*?tcPhraseNonCompris\('Avec qui \?/.test(csm));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
-titre('4. « Je suis malade, décale tout » va jusqu à la liste du jour, avec l apostrophe droite ET typographique');
+titre('4. Une contrainte tapée (tcGererContrainte) va jusqu à la liste du jour, avec l apostrophe droite ET typographique');
 // Horloge fixee : dimanche 11 octobre 2026, 14h20 ; deux rendez-vous ce jour-la, un demain.
 const FIXE = new Date(2026, 9, 11, 14, 20, 0);
 class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); } static now() { return FIXE.getTime(); } }
@@ -94,9 +95,9 @@ let ko4 = 0;
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, c4); else { ko4++; console.log('  KO  ' + n + ' introuvable'); } });
 ko += ko4;
 if (!ko4) {
-  const bouton = (fonction(page, 'charlyQuickAction') || '').match(/tcGererContrainte\(("|')((?:[^"\\]|\\.)*?)\1\)/);
-  verifie('le texte du bouton « malade » est passé à tcGererContrainte', !!bouton, bouton && bouton[2]);
-  const essais = [bouton ? bouton[2] : '', "Je suis malade, décale tout aujourd'hui", 'Je suis malade, décale tout aujourd’hui'];
+  const bouton = (fonction(page, 'charlyQuickAction') || '').match(/tcDemarrerMalade\(("|')((?:[^"\\]|\\.)*?)\1\)/);
+  verifie('le texte du bouton « malade » est passé à tcDemarrerMalade (mission 43 : le questionnaire guidé)', !!bouton && /malade/.test(bouton[2]), bouton && bouton[2]);
+  const essais = ["Je suis malade, décale tout aujourd'hui", 'Je suis malade, décale tout aujourd’hui'];
   (async () => {
     for (const texte of essais) {
       trace.montres.length = 0; c4.charlyIA.history.length = 0;

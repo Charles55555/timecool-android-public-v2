@@ -11475,6 +11475,7 @@ function tcDemandePrecedente(m) {
 function renderChatMessage(m) {
   if (m && m._groupe) return tcRendreGroupe(m);
   if (m && m._questionType) return tcRendreQuestionType(m);
+  if (m && m._questionnaire) return tcRendreQuestionnaire(m);
   if (m.role === 'user') {
     return `
       <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
@@ -13322,9 +13323,9 @@ function charlyQuickAction(action) {
   _tcGroupeEnAttente = 0;
   // 2e ligne (mission 22) : chaque bouton lance le parcours existant.
   if (action === 'groupe') { tcDemarrerRdvAPlusieurs(); return; }
-  // Malade : la contrainte du jour (liste des rendez-vous, puis annuler / deplacer et s excuser), rien ne part sans validation.
-  // Apostrophe droite : tcPeriodeAgenda reconnait « aujourd'hui » tel quel, pas « aujourd’hui ».
-  if (action === 'malade') { tcGererContrainte("Je suis malade, décale tout aujourd'hui"); return; }
+  // Malade : le questionnaire guidé (mission 43) : période, liste de ce qui n a pas commencé, créneaux proposés, qui prévient,
+  // récapitulatif, puis le travail. Le bouton dit déjà « décale » : la question « que fait-on ? » est sautée.
+  if (action === 'malade') { tcDemarrerMalade('Je suis malade, décale tout'); return; }
   // Photo : le meme chemin que le trombone.
   if (action === 'photo') { charlyAttachAction('photo'); return; }
   // Retard : le message au contact est prepare ici, jamais laisse au modele.
@@ -14389,7 +14390,8 @@ async function tcMarcheArriere(text) {
   showToast('↩️ Rendez-vous remis');
 }
 
-function tcSupprimerRdvs(cible) {
+function tcSupprimerRdvs(cible, options) {
+  const o = options || {};
   tcMemoriserSuppression(cible);
   const ids = new Set(cible.map(e => e.id));
   let n = 0;
@@ -14407,12 +14409,12 @@ function tcSupprimerRdvs(cible) {
     categorie: 'rdv',
     detail: `Charly IA a annulé ${n} rendez-vous à la demande de l'utilisateur : ${cible.map(e => `${e.title} (${e.date})`).join(', ')}.`
   });
-  charlyIA.history.push({role: 'system_info', content: (n === 1
+  if (!o.silencieux) charlyIA.history.push({role: 'system_info', content: (n === 1
     ? `✅ C'est fait : « ${cible[0].title} » (${tcFormaterDateHumaine(cible[0].date)} ${tcFormaterHeure(cible[0])}) est supprimé.`
     : `✅ C'est fait : ${n} rendez-vous supprimés.`) + ' Pour revenir en arrière, dis-moi « remets-' + (n === 1 ? 'le' : 'les') + ' ».'});
   renderCharlyChat();
   if (currentPage === 'calendar') render();
-  showToast('✅ Rendez-vous annulé' + (n>1?'s':''));
+  if (!o.silencieux) showToast('✅ Rendez-vous annulé' + (n>1?'s':''));
 }
 
 /** Plus de deux mots : une nouvelle demande, pas une reponse a la question qui attend. */
@@ -14509,7 +14511,8 @@ function _tcLigneRdv(ev) {
  * ailleurs dans le temps — Google Agenda le corrige au lieu d'en créer
  * un second.
  */
-function tcAppliquerDeplacement(liste) {
+function tcAppliquerDeplacement(liste, options) {
+  const o = options || {};
   _tcMarcheArriere = { type: 'deplacement', rdvs: liste.map(function (x) {
     return { id: x.ev.id, date: x.ev.date, dateFin: x.ev.dateFin, startH: x.ev.startH, startM: x.ev.startM, endH: x.ev.endH, endM: x.ev.endM };
   }) };
@@ -14524,7 +14527,7 @@ function tcAppliquerDeplacement(liste) {
   saveEventsToStorage();
   if (currentPage === 'calendar') render();
   const lignes = liste.map(x => '• ' + _tcLigneRdv(x.ev)).join('\n');
-  charlyIA.history.push({role: 'system_info', isHTML: true,
+  if (!o.silencieux) charlyIA.history.push({role: 'system_info', isHTML: true,
     content: '✅ <b>C\'est fait, rendez-vous déplacé' + (liste.length > 1 ? 's' : '') + ' :</b><br>'
       + escapeHTMLSafe(lignes).replace(/\n/g, '<br>')
       + '<br><span style="font-size:12px; color:var(--text-sec);">Pour revenir en arrière, dis-moi « remets-' + (liste.length > 1 ? 'les' : 'le') + ' ».</span>'});
@@ -14536,7 +14539,7 @@ function tcAppliquerDeplacement(liste) {
     categorie: 'rdv',
     detail: 'Charly IA a déplacé à la demande de l\'utilisateur : ' + liste.map(x => _tcLigneRdv(x.ev)).join(', ') + '.'
   });
-  showToast('✅ Rendez-vous déplacé' + (liste.length > 1 ? 's' : ''));
+  if (!o.silencieux) showToast('✅ Rendez-vous déplacé' + (liste.length > 1 ? 's' : ''));
 }
 
 /**
@@ -15043,6 +15046,12 @@ async function charlySendMessage() {
     if (await tcRepondreImprevu(text)) return;
   }
 
+  // === RÉPONSE TAPÉE À LA QUESTION D'UN QUESTIONNAIRE GUIDÉ (« 2 », « demain matin », « oui ») ===
+  // Sans clé API non plus : tout se lit sur l'appareil. Une vraie demande fait tomber le questionnaire et suit son chemin.
+  if (_tcQuestionnaire) {
+    if (await tcQuestionnaireRepondreTexte(text)) return;
+  }
+
   // === RÉPONSE À « VERS QUAND ? » (déplacer les rendez-vous d'une période) ===
   if (_tcDeplacementPeriode) {
     if (await tcRepondreDeplacementPeriode(text)) return;
@@ -15211,6 +15220,12 @@ async function charlySendMessage() {
   if (/\b(imprevu|reorganis)/.test(tcSansAccents(text)) && !tcPeriodeContrainte(text)) {
     tcPousserMessageUtilisateur(text);
     tcDemarrerImprevu();
+    return;
+  }
+
+  // === « JE SUIS MALADE » : le questionnaire guidé (mission 43), jamais le modèle ; la période et l'action de la phrase sont gardées ===
+  if (tcDetecterMalade(text)) {
+    await tcDemarrerMalade(text);
     return;
   }
 
@@ -18981,6 +18996,396 @@ function tcChoixPeriode(text) {
   if (/\b(rien|garde|laisse|touche)/.test(t)) return 'rien';
   return null;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43, 14/10)
+
+   Une question à la fois, des boutons numérotés, une réponse tapée
+   (« 2 », « demain matin », « oui ») vaut le bouton. Un questionnaire
+   est une liste d'étapes ; chaque étape a une clé, une question, des
+   choix (clé, texte, mots reconnus au clavier), au besoin une condition
+   « si » et un « avant » qui prépare l'étape (calcule une liste, la
+   montre) et peut arrêter tout le parcours en rendant faux. Une étape
+   dont la réponse est déjà connue (la phrase disait « demain ») n'est
+   pas posée. À la fin, « terminer » fait le travail, et pas avant.
+   Le premier parcours : « Je suis malade, décale tout ». Les autres
+   boutons de Charly viendront sur le même moteur.
+   ══════════════════════════════════════════════════════════════ */
+
+/** Le questionnaire en cours (un seul à la fois), ou null. */
+let _tcQuestionnaire = null;
+/** Numérote les cartes : deux questionnaires ne partagent jamais un identifiant, même dans la même milliseconde. */
+let _tcQuestionnaireNumero = 0;
+
+/** Démarre un questionnaire ; `connu` est ce que la phrase a déjà dit ({ periode: 'demain' }). */
+async function tcQuestionnaireDemarrer(def, connu) {
+  tcQuestionnaireArreter();
+  _tcQuestionnaire = { id: 'qq' + Date.now() + '-' + (++_tcQuestionnaireNumero), def: def, reponses: Object.assign({}, connu || {}), etape: null, essais: 2 };
+  await tcQuestionnaireSuivant();
+}
+
+/** Arrête le questionnaire en cours ; sa carte garde ses boutons, inactifs. */
+function tcQuestionnaireArreter() {
+  const q = _tcQuestionnaire;
+  _tcQuestionnaire = null;
+  if (!q) return;
+  const m = tcQuestionnaireCarte(q.id);
+  if (m) m._questionnaire.etat = 'abandon';
+}
+
+/** La carte (message de l'historique) d'un questionnaire, celle qui attend encore. */
+function tcQuestionnaireCarte(id) {
+  const h = (typeof charlyIA !== 'undefined' && charlyIA && Array.isArray(charlyIA.history)) ? charlyIA.history : [];
+  for (let i = h.length - 1; i >= 0; i--) {
+    const m = h[i];
+    if (m && m._questionnaire && m._questionnaire.id === id && m._questionnaire.etat === 'choix') return m;
+  }
+  return null;
+}
+
+/** L'étape suivante qui a quelque chose à demander ; sans étape restante, la fin. */
+async function tcQuestionnaireSuivant() {
+  const q = _tcQuestionnaire;
+  if (!q) return;
+  const etapes = q.def.etapes;
+  let i = 0;
+  if (q.etape !== null) { while (i < etapes.length && etapes[i].cle !== q.etape) i++; i++; }
+  for (; i < etapes.length; i++) {
+    const etape = etapes[i];
+    if (q !== _tcQuestionnaire) return;                                   // arrêté entre-temps
+    if (typeof etape.si === 'function' && !etape.si(q.reponses)) continue;
+    if (typeof etape.avant === 'function') {
+      const suite = await etape.avant(q.reponses);
+      if (suite === false) { if (q === _tcQuestionnaire) _tcQuestionnaire = null; return; }
+      if (q !== _tcQuestionnaire) return;
+    }
+    if (q.reponses[etape.cle] !== undefined) continue;                     // déjà dit dans la phrase
+    const choix = typeof etape.choix === 'function' ? etape.choix(q.reponses) : etape.choix;
+    if (!choix || !choix.length) continue;
+    q.etape = etape.cle;
+    q.essais = 2;
+    const question = typeof etape.question === 'function' ? etape.question(q.reponses) : etape.question;
+    charlyIA.history.push({ role: 'system_info', content: question, _questionnaire: {
+      id: q.id, etape: etape.cle, question: question, etat: 'choix',
+      choix: choix.map(function (c) { return { cle: c.cle, texte: c.texte, ton: c.ton || '' }; })
+    } });
+    renderCharlyChat();
+    return;
+  }
+  _tcQuestionnaire = null;
+  await q.def.terminer(q.reponses);
+}
+
+/** Un bouton touché : la réponse est notée sur la carte et dans le questionnaire, l'étape suivante vient. */
+async function tcQuestionnaireRepondre(id, indice) {
+  const q = _tcQuestionnaire;
+  const m = tcQuestionnaireCarte(id);
+  if (!m || !q || q.id !== id || m._questionnaire.etape !== q.etape) return;
+  const choix = m._questionnaire.choix[indice];
+  if (!choix) return;
+  m._questionnaire.etat = 'fait';
+  m._questionnaire.reponse = choix.cle;
+  q.reponses[q.etape] = choix.cle;
+  renderCharlyChat();
+  await tcQuestionnaireSuivant();
+}
+
+/** Le choix désigné au clavier : son numéro, son texte, ou un de ses mots ; null si aucun ou plusieurs. */
+function tcQuestionnaireChoixTape(choix, text) {
+  const t = tcSansAccents(String(text || '')).replace(/[’'´]/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  if (/^[1-9]$/.test(t)) { const n = parseInt(t, 10); return n <= choix.length ? n - 1 : null; }
+  const memeTexte = function (c) { return tcSansAccents(c.texte).replace(/[’'´]/g, ' ').replace(/\([^)]*\)/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() === t; };
+  const exacts = [];
+  choix.forEach(function (c, i) { if (memeTexte(c)) exacts.push(i); });
+  if (exacts.length === 1) return exacts[0];
+  const parMots = [];
+  choix.forEach(function (c, i) { if (c.mots && c.mots.test(t)) parMots.push(i); });
+  return parMots.length === 1 ? parMots[0] : null;
+}
+
+/**
+ * Une réponse tapée pendant qu'une question attend. Vrai si elle a été prise. Une vraie demande (« annule le
+ * dentiste ») arrête le questionnaire, Charly le dit, et le message suit son chemin ; sinon une relance, puis l'arrêt.
+ */
+async function tcQuestionnaireRepondreTexte(text) {
+  const q = _tcQuestionnaire;
+  if (!q || q.etape === null) return false;
+  const m = tcQuestionnaireCarte(q.id);
+  if (!m) { _tcQuestionnaire = null; return false; }
+  const etape = q.def.etapes.filter(function (e) { return e.cle === q.etape; })[0];
+  const choix = (etape && (typeof etape.choix === 'function' ? etape.choix(q.reponses) : etape.choix)) || [];
+  const indice = tcQuestionnaireChoixTape(choix, text);
+  if (indice !== null) {
+    tcPousserMessageUtilisateur(text);
+    await tcQuestionnaireRepondre(q.id, indice);
+    return true;
+  }
+  if (tcRessembleAUneDemande(text) || q.essais <= 1) {
+    tcQuestionnaireArreter();
+    charlyIA.history.push({ role: 'assistant', content: 'D’accord, je laisse tomber la question qui attendait. Je passe à ta nouvelle demande.' });
+    return false;
+  }
+  q.essais -= 1;
+  tcPousserMessageUtilisateur(text);
+  charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('Touche un bouton, ou tape son numéro (1 à ' + choix.length + ').') });
+  renderCharlyChat();
+  return true;
+}
+
+/** La carte d'une question : la question, puis les choix numérotés en boutons. Une fois répondu, le choix reste marqué. */
+function tcRendreQuestionnaire(m) {
+  const q = m._questionnaire;
+  const actif = q.etat === 'choix' && !!_tcQuestionnaire && _tcQuestionnaire.id === q.id;
+  const NUM = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣'];
+  const couleurs = { rouge: ['#fce8e6', '#b3261e', '#f5b8b3'], gris: ['#f1f3f4', 'var(--text-sec)', 'var(--border)'], '': ['#e8f0fe', '#1a56b8', '#c8d7ee'] };
+  const boutons = q.choix.map(function (c, i) {
+    const k = couleurs[c.ton] || couleurs[''];
+    const choisi = q.etat === 'fait' && q.reponse === c.cle;
+    return '<button ' + (actif ? '' : 'disabled ') + 'onclick="tcQuestionnaireRepondre(\'' + q.id + '\', ' + i + ')" style="padding:11px 12px; background:'
+      + (choisi ? '#1a73e8' : k[0]) + '; color:' + (choisi ? '#fff' : k[1]) + '; border:1.5px solid ' + k[2]
+      + '; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; text-align:left;' + (actif || choisi ? '' : ' opacity:0.55;') + '">'
+      + (NUM[i] || (i + 1) + '.') + ' ' + escapeHTMLSafe(c.texte) + '</button>';
+  }).join('');
+  return tcBulleCharly(escapeHTMLSafe(q.question).replace(/\n/g, '<br>')
+    + '<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">' + boutons + '</div>');
+}
+
+/* ── « Je suis malade » : le premier parcours ─────────────────── */
+
+/** Les périodes proposées : jours (depuis aujourd'hui), partie de journée en minutes, mots reconnus au clavier. */
+const TC_MALADE_PERIODES = {
+  aujourdhui:       { texte: 'Ce qui reste aujourd’hui',   label: 'pour le reste de la journée', jours: [0, 0], debut: 0,   fin: 1440, mots: /aujourd|ce soir|cet apres|ce matin|reste/ },
+  demain_matin:     { texte: 'Demain matin',               label: 'demain matin',                jours: [1, 1], debut: 0,   fin: 720,  mots: /matin/ },
+  demain_apresmidi: { texte: 'Demain après-midi',          label: 'demain après-midi',           jours: [1, 1], debut: 720, fin: 1440, mots: /apres.?midi|aprem/ },
+  demain:           { texte: 'Demain toute la journée',    label: 'demain',                      jours: [1, 1], debut: 0,   fin: 1440, mots: /^demain$|toute la journee|journee entiere|tout demain/ },
+  prochains_jours:  { texte: 'Les 2 ou 3 prochains jours', label: 'pour les 3 prochains jours',  jours: [0, 2], debut: 0,   fin: 1440, mots: /prochains|jours|2 ou 3|deux ou trois/ }
+};
+
+/** « Malade » dans la phrase : le questionnaire guidé, jamais le modèle. Une question (« comment… ? ») n'en est pas une. */
+function tcDetecterMalade(text) {
+  const t = tcSansAccents(String(text || '')).trim();
+  return /\bmalade\b/.test(t) && !/^comment\b/.test(t);
+}
+
+/** Ce que la phrase dit déjà : la période et l'action, pour sauter ces questions. */
+function tcMaladeDansLaPhrase(text) {
+  const sans = tcSansAccents(String(text || '')).replace(/[’'´]/g, "'");
+  const connu = {};
+  if (/apres-?demain/.test(sans)) {
+    // Pas une option du questionnaire : on demande.
+  } else if (/\bdemain\b/.test(sans)) {
+    if (/\bmatin/.test(sans)) connu.periode = 'demain_matin';
+    else if (/apres-?midi|\baprem\b/.test(sans)) connu.periode = 'demain_apresmidi';
+    else connu.periode = 'demain';
+  } else if (/aujourd'?hui|ce soir|cet apres-?midi|ce matin/.test(sans)) {
+    connu.periode = 'aujourdhui';
+  } else if (/prochains jours|(2|3|deux|trois) (ou (3|trois) )?(prochains )?jours/.test(sans)) {
+    connu.periode = 'prochains_jours';
+  }
+  if (/\b(decal|deplac|report|repouss)/.test(sans)) connu.action = 'decaler';
+  else if (/\b(annul|supprim|efface|enleve|retire)/.test(sans)) connu.action = 'supprimer';
+  return connu;
+}
+
+/** Le bouton ou la phrase : la bulle de l'utilisateur, puis la première question qui reste. */
+async function tcDemarrerMalade(text) {
+  if (text) tcPousserMessageUtilisateur(text);
+  await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_MALADE, tcMaladeDansLaPhrase(text));
+}
+
+/** Une bulle de Charly, en texte simple (jamais lue comme une proposition de rendez-vous). */
+function tcMaladeDire(texte) {
+  charlyIA.history.push({ role: 'system_info', isHTML: true, content: escapeHTMLSafe(texte).replace(/\n/g, '<br>') });
+  renderCharlyChat();
+}
+
+/** « jeudi 15 octobre, 09h à 10h » */
+function tcMaladeQuand(date, horaire) {
+  const d = tcFormaterDateHumaine(date);
+  return d.charAt(0).toLowerCase() + d.slice(1) + ', ' + tcFormaterHeure(horaire);
+}
+
+/** « Marc Dupont, Sophie Anceau et Paul Martin » */
+function tcMaladeNoms(contacts) {
+  const noms = contacts.map(function (c) { return c.name; });
+  if (noms.length <= 1) return noms.join('');
+  return noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1];
+}
+
+/** Les contacts des rendez-vous, chacun une fois. */
+function tcMaladeContacts(rdvs) {
+  const vus = {}, liste = [];
+  rdvs.forEach(function (e) {
+    const c = tcContactDuRdv(e);
+    if (c && !vus[c.id]) { vus[c.id] = true; liste.push(c); }
+  });
+  return liste;
+}
+
+/**
+ * Les rendez-vous d'une période : à heure, du vrai agenda, pas encore commencés (jamais un rendez-vous passé),
+ * jamais une journée entière ni un voyage.
+ */
+function tcMaladeRdv(cle) {
+  const p = TC_MALADE_PERIODES[cle];
+  if (!p) return [];
+  const now = new Date();
+  const jour0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const plus = function (n) { const d = new Date(jour0); d.setDate(d.getDate() + n); return tcISO(d); };
+  const debutISO = plus(p.jours[0]), finISO = plus(p.jours[1]), aujourdhui = plus(0);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  return (Array.isArray(events) ? events : []).filter(function (e) {
+    if (!e || e.mode !== mode || tcEstBandeau(e)) return false;
+    if (e.date < debutISO || e.date > finISO) return false;
+    const d = e.startH * 60 + e.startM, f = e.endH * 60 + e.endM;
+    if (e.date === aujourdhui && d <= nowMin) return false;
+    return d < p.fin && f > p.debut;
+  }).sort(tcComparerEvenements);
+}
+
+/**
+ * Un nouveau créneau pour chaque rendez-vous, dans l'ordre, à partir du lendemain de la période (on est malade :
+ * jamais le même jour), dans les plages ouvertes de l'agenda (tcCreneauxDisponibles), chacun avec sa durée.
+ * `p` vaut null quand rien ne tient dans les deux semaines : le rendez-vous reste où il est.
+ */
+function tcMaladeCreneaux(rdvs, cle) {
+  const p = TC_MALADE_PERIODES[cle] || TC_MALADE_PERIODES.aujourdhui;
+  const now = new Date();
+  const debut = new Date(now.getFullYear(), now.getMonth(), now.getDate() + p.jours[1] + 1);
+  const fin = new Date(debut.getFullYear(), debut.getMonth(), debut.getDate() + 13);
+  const libres = tcCreneauxDisponibles({ debut: debut, fin: fin }, 1000).creneaux.map(function (c) { return { date: c.date, debut: c.debut, fin: c.fin }; });
+  return rdvs.map(function (e) {
+    const duree = Math.max(15, (e.endH * 60 + e.endM) - (e.startH * 60 + e.startM));
+    const c = libres.filter(function (x) { return x.fin - x.debut >= duree; })[0];
+    if (!c) return { ev: e, p: null };
+    const d = c.debut;
+    c.debut += duree;
+    return { ev: e, p: { date: c.date, startH: Math.floor(d / 60), startM: d % 60, endH: Math.floor((d + duree) / 60), endM: (d + duree) % 60 } };
+  });
+}
+
+/** « Voici ce que je vais faire : … », ligne par ligne. */
+function tcMaladeRecap(r) {
+  const lignes = [];
+  if (r.action === 'decaler') {
+    r._liste.forEach(function (x) {
+      lignes.push(x.p ? '• Je décale « ' + x.ev.title + ' » au ' + tcMaladeQuand(x.p.date, x.p)
+        : '• Je laisse « ' + x.ev.title + ' » où il est (pas de place libre dans les deux semaines)');
+    });
+  } else {
+    r._rdvs.forEach(function (e) { lignes.push('• Je supprime « ' + e.title + ' » (' + tcMaladeQuand(e.date, e) + ')'); });
+  }
+  if (r._contacts.length) {
+    const noms = tcMaladeNoms(r._contacts);
+    if (r.prevenir === 'charly') lignes.push('• Je préviens ' + noms);
+    else if (r.prevenir === 'moi') lignes.push('• Tu préviens ' + noms + ' toi-même');
+    else lignes.push('• Je ne préviens personne');
+  }
+  return lignes.join('\n');
+}
+
+/** « Oui, vas-y » : le travail, avec la mécanique habituelle (déplacement, suppression, messages), puis le bilan. */
+async function tcMaladeExecuter(r) {
+  const presents = r._rdvs.filter(function (e) { return events.indexOf(e) > -1; });
+  const anciens = presents.map(function (e) { return { id: e.id, date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM }; });
+  let deplaces = [], laisses = [], supprimes = [];
+  if (r.action === 'decaler') {
+    deplaces = r._liste.filter(function (x) { return x.p && presents.indexOf(x.ev) > -1; });
+    laisses = r._liste.filter(function (x) { return !x.p && presents.indexOf(x.ev) > -1; }).map(function (x) { return x.ev; });
+    if (deplaces.length) tcAppliquerDeplacement(deplaces, { silencieux: true });
+  } else {
+    supprimes = presents;
+    if (supprimes.length) tcSupprimerRdvs(supprimes, { silencieux: true });
+  }
+  const touches = r.action === 'decaler' ? deplaces.map(function (x) { return x.ev; }) : supprimes;
+  const contacts = tcMaladeContacts(touches);
+  const prevenus = [], prets = [], sansMoyen = [];
+  if (r.prevenir === 'charly') {
+    for (const c of contacts) {
+      const ev = touches.filter(function (e) { return e.contact === c.id; })[0];
+      const ancien = anciens.filter(function (a) { return a.id === ev.id; })[0] || ev;
+      let texte;
+      if (r.action === 'decaler') {
+        const nouveau = tcValeursDuRdv(c.name, ev);
+        texte = tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
+          + ' le ' + nouveau['[date]'] + ' à ' + nouveau['[heure]'] + '.';
+      } else {
+        texte = tcRemplirModele(tcModeleMessage('annule', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien));
+      }
+      const chemin = await tcTransmettrePrevenance(c, texte);
+      if (chemin === 'timecool') prevenus.push(c);
+      else if (chemin === 'aucun') sansMoyen.push(c);
+      else prets.push(c);
+    }
+  }
+  const lignes = ['C’est fait. Repose-toi.'];
+  deplaces.forEach(function (x) { lignes.push('• Déplacé : « ' + x.ev.title + ' », ' + tcMaladeQuand(x.ev.date, x.ev)); });
+  laisses.forEach(function (e) { lignes.push('• Laissé en place : « ' + e.title + ' », ' + tcMaladeQuand(e.date, e)); });
+  supprimes.forEach(function (e) { lignes.push('• Supprimé : « ' + e.title + ' » (' + tcMaladeQuand(e.date, e) + ')'); });
+  if (prevenus.length) lignes.push('• Prévenu par la messagerie TimeCool : ' + tcMaladeNoms(prevenus));
+  if (prets.length) lignes.push('• Message prêt à envoyer (SMS ou email) : ' + tcMaladeNoms(prets));
+  if (sansMoyen.length) lignes.push('• Sans numéro ni email dans ta fiche contact : ' + tcMaladeNoms(sansMoyen));
+  if (r.prevenir === 'moi' && contacts.length) lignes.push('• À prévenir toi-même : ' + tcMaladeNoms(contacts));
+  if (deplaces.length || supprimes.length) lignes.push('Pour revenir en arrière, dis-moi « remets-' + (deplaces.length + supprimes.length > 1 ? 'les' : 'le') + ' ».');
+  tcMaladeDire(lignes.join('\n'));
+}
+
+/** Le parcours, étape par étape. */
+const TC_QUESTIONNAIRE_MALADE = {
+  nom: 'malade',
+  etapes: [
+    { cle: 'periode', question: 'Je m’occupe de ton agenda pour quand ?',
+      choix: Object.keys(TC_MALADE_PERIODES).map(function (k) { return { cle: k, texte: TC_MALADE_PERIODES[k].texte, mots: TC_MALADE_PERIODES[k].mots }; }) },
+    { cle: 'action',
+      avant: function (r) {
+        const p = TC_MALADE_PERIODES[r.periode];
+        r._rdvs = tcMaladeRdv(r.periode);
+        if (!r._rdvs.length) { tcMaladeDire('Rien à décaler ' + p.label + '. Repose-toi.'); return false; }
+        tcMaladeDire('Voici tes rendez-vous ' + p.label + ' :\n' + r._rdvs.map(function (e) { return '• « ' + e.title + ' », ' + tcMaladeQuand(e.date, e); }).join('\n'));
+      },
+      question: 'Que fait-on ?',
+      choix: [
+        { cle: 'decaler', texte: 'Je les décale (je te propose de nouveaux créneaux)', mots: /decal|deplac|report|repouss|creneau/ },
+        { cle: 'supprimer', texte: 'Je les supprime', mots: /supprim|annul|efface|enlev|retire/, ton: 'rouge' },
+        { cle: 'rien', texte: 'Je ne touche à rien', mots: /rien|touche|laisse|garde/, ton: 'gris' }
+      ] },
+    { cle: 'fin_rien', si: function (r) { return r.action === 'rien'; },
+      avant: function () { tcMaladeDire('D’accord, je ne touche à rien. Repose-toi.'); return false; } },
+    { cle: 'creneaux', si: function (r) { return r.action === 'decaler'; },
+      avant: function (r) {
+        r._liste = tcMaladeCreneaux(r._rdvs, r.periode);
+        tcMaladeDire('Voici ce que je te propose :\n' + r._liste.map(function (x) {
+          return x.p ? '• « ' + x.ev.title + ' » : ' + tcMaladeQuand(x.p.date, x.p)
+            : '• « ' + x.ev.title + ' » : je n’ai pas trouvé de place libre dans les deux semaines, je le laisse où il est';
+        }).join('\n'));
+      } },
+    { cle: 'prevenir',
+      avant: function (r) {
+        r._contacts = tcMaladeContacts(r._rdvs);
+        const sans = r._rdvs.filter(function (e) { return !tcContactDuRdv(e); });
+        if (sans.length === r._rdvs.length) tcMaladeDire('Aucun de ces rendez-vous n’a de contact enregistré : personne à prévenir.');
+        else if (sans.length) tcMaladeDire('Sans contact enregistré, donc personne à prévenir : ' + sans.map(function (e) { return '« ' + e.title + ' »'; }).join(', ') + '.');
+        if (!r._contacts.length) r.prevenir = 'personne';
+      },
+      question: function (r) { return 'Qui prévient ' + tcMaladeNoms(r._contacts) + ' ?'; },
+      choix: [
+        { cle: 'moi', texte: 'Je préviens les contacts moi-même', mots: /\bmoi\b|je (les )?previens|je m en occupe/ },
+        { cle: 'charly', texte: 'Tu les préviens', mots: /^tu\b|\btoi\b|charly|previens.les/ },
+        { cle: 'personne', texte: 'Personne', mots: /personne|aucun|^non\b/, ton: 'gris' }
+      ] },
+    { cle: 'recap',
+      question: function (r) { return 'Voici ce que je vais faire :\n' + tcMaladeRecap(r); },
+      choix: [
+        { cle: 'oui', texte: 'Oui, vas-y', mots: /^(oui|ouais|ok|okay|yes|go|vas y|d accord|daccord|confirme|c est bon)\b/ },
+        { cle: 'non', texte: 'Non, j’arrête', mots: /^(non|no|nan|stop|arrete|laisse|annule)\b/, ton: 'gris' }
+      ] }
+  ],
+  terminer: async function (r) {
+    if (r.recap !== 'oui') { tcMaladeDire('D’accord, j’arrête là : je ne touche à rien.'); return; }
+    await tcMaladeExecuter(r);
+  }
+};
 
 function showConflictWarning(conflicts, msg) {
   // Construire un message d'alerte
@@ -23985,6 +24390,7 @@ function tcViderDonneesDuCompte() {
   if (typeof _tcDeplacementEnAttente !== 'undefined') _tcDeplacementEnAttente = null;
   if (typeof _tcImprevuEnAttente !== 'undefined') _tcImprevuEnAttente = 0;
   if (typeof _tcGroupeEnAttente !== 'undefined') _tcGroupeEnAttente = 0;
+  if (typeof _tcQuestionnaire !== 'undefined') _tcQuestionnaire = null;
   if (typeof _isolatedCalendarId !== 'undefined') _isolatedCalendarId = null;
   if (typeof loadCustomCalendars === 'function') loadCustomCalendars(); // stockage vide : « Mon agenda » seul
   if (typeof renderCharlyChat === 'function') { try { renderCharlyChat(); } catch (e) {} }
