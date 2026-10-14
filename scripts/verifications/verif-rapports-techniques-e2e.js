@@ -1,6 +1,8 @@
 // Mission 41 (14/10) : POST /rapports-techniques et GET /sante contre l'API réelle. Sans session, puis avec un compte
 // sonde jetable (…@exemple-timecool.fr). À lancer APRÈS la migration 014 et la mise en ligne de l'API
-// (ou TC_API=http://127.0.0.1:8099 avec api-locale.sh).
+// (ou TC_API=http://127.0.0.1:8099 avec api-locale.sh). Rejouable à volonté : trois rapports par passage, et le plafond de
+// 10 par heure ne s'applique pas aux appels venus du serveur (c'est de là que tournent les suites) ; le plafond lui-même
+// est vérifié en lecture par verif-boucle-compte.
 const API = process.env.TC_API || 'https://api.timecool.fr';
 
 let ko = 0;
@@ -60,11 +62,6 @@ const rapport = (contexte) => ({
   dire(vide.code === 400 && vide.d && vide.d.erreur === 'rapport_vide', 'corps vide : 400 rapport_vide', 'HTTP ' + vide.code + ' ' + JSON.stringify(vide.d));
   const gros = await appel('POST', '/rapports-techniques', Object.assign(rapport('boucle'), { bourrage: 'x'.repeat(40000) }));
   dire(gros.code === 413 && gros.d && gros.d.erreur === 'rapport_trop_gros', 'plus de 32 Ko : 413 rapport_trop_gros', 'HTTP ' + gros.code + ' ' + JSON.stringify(gros.d));
-
-  console.log('\nLe plafond (10 par heure et par adresse) :');
-  let dernier = null;
-  for (let i = 0; i < 9; i++) dernier = await appel('POST', '/rapports-techniques', rapport('plafond'));
-  dire(dernier.code === 429 && dernier.d && dernier.d.erreur === 'trop_de_demandes', 'au-delà de 10 dans l’heure : 429 trop_de_demandes (3 déjà envoyés + 9)', 'HTTP ' + dernier.code + ' ' + JSON.stringify(dernier.d));
 
   console.log('\n' + ko + ' anomalie(s).');
   process.exit(ko ? 1 : 0);

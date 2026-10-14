@@ -4485,7 +4485,9 @@ switch ($route) {
         }
         $ipRapport = $_SERVER['REMOTE_ADDR'] ?? '';
         $ipBin = $ipRapport !== '' ? (@inet_pton($ipRapport) ?: null) : null;
-        if ($ipBin !== null) {
+        // Pas de plafond pour le serveur lui-meme (les suites de verification tournent de la) ; les utilisateurs le gardent.
+        $depuisLeServeur = in_array($ipRapport, ['127.0.0.1', '::1', '82.165.253.73'], true);
+        if ($ipBin !== null && !$depuisLeServeur) {
             $parHeure = Db::un('SELECT COUNT(*) AS n FROM rapports_techniques WHERE ip = ? AND cree_le > DATE_SUB(NOW(), INTERVAL 1 HOUR)', [$ipBin]);
             if ((int) ($parHeure['n'] ?? 0) >= 10) {
                 Rep::erreur(429, 'trop_de_demandes', 'Trop de rapports envoyés. Réessaie plus tard.');

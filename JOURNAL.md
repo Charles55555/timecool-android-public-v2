@@ -2091,3 +2091,9 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   version comme « modifiée ici » (`tcSyncModifieIci`) et la repousse. Les rendez-vous de démonstration naissent
   désormais avec la catégorie normalisée (littéraux : `TC_AGENDA_ALIAS` n'existe pas encore quand `generateEvents()`
   s'exécute). Cas ajouté à `verif-boucle-compte` ; rejeu réel « second onglet » : calme après correction.
+- Mission 41 c (14/10, chef) : l'e2e `verif-rapports-techniques-e2e` est rejouable à volonté et enregistrée dans
+  verifier.sh (après verif-documents-e2e). Elle n'envoie plus que trois rapports par passage (sans session, jeton
+  valable, jeton inconnu ; le corps vide et le trop gros ne créent pas de ligne) et ne teste plus le plafond en
+  envoyant 12 rapports : le plafond de 10 par heure et par adresse ne s'applique pas aux appels venus du serveur
+  lui-même (127.0.0.1, ::1, 82.165.253.73, même liste que GET /taches/rappels), d'où tournent les suites ; les
+  utilisateurs le gardent. Le plafond est vérifié en lecture par `verif-boucle-compte`. L'API change : à redéployer.
