@@ -3726,6 +3726,8 @@ function generateEvents() {
   const evts = [];
 
   // Quelques jalons de démonstration (jour férié, anniversaire) pour montrer que l'agenda fonctionne.
+  // Ils restent sur l appareil (mission 42) : reconnus a leur identifiant « demo_ » (tcEstDemonstration), jamais
+  // synchronises, ni transferes, ni sauvegardes ; le mode « user » ne sert qu a les afficher.
   // Categories deja normalisees (« personnel », « famille », voir TC_AGENDA_ALIAS) : avec les anciennes couleurs, un
   // second onglet qui les relisait normalisees les repoussait sans fin (mission 41, 14/10).
   evts.push({date:'2026-05-01', startH:0, startM:0, endH:23, endM:59, title:'🇫🇷 Fête du Travail', cat:'personnel', mode:'user', id:'demo_1', allDay:true});
@@ -23446,21 +23448,30 @@ const TC_SYNC_EMPREINTES_KEY = 'tc_sync_empreintes';
  * l'identifiant stable d'un objet. Ajouter une famille demande trois
  * lignes ici et rien ailleurs — ni côté serveur, ni en base.
  */
+/** Les trois rendez-vous de demonstration (demo_1 a demo_3) vivent sur l appareil, jamais ailleurs (mission 42). */
+function tcEstDemonstration(e) {
+  return !!e && typeof e.id === 'string' && e.id.indexOf('demo_') === 0;
+}
+
+/** Ce qui appartient a l utilisateur : ses rendez-vous et ceux de Charly, jamais la demonstration. */
+function tcEstDeLUtilisateur(e) {
+  if (!e || tcEstDemonstration(e)) return false;
+  return e.mode === 'user' || (typeof e.id === 'string' && e.id.indexOf('charly_ai_') === 0);
+}
+
 const TC_SYNC_TYPES = {
   rdv: {
     // Les rendez-vous de démonstration ne quittent pas l'appareil : ce
-    // ne sont pas les données de l'utilisateur.
-    lire: function () {
-      return events.filter(function (e) {
-        return e.mode === 'user' || (e.id && e.id.indexOf('charly_ai_') === 0);
-      });
-    },
+    // ne sont pas les données de l'utilisateur (mission 42 : ils ont le
+    // mode « user », on les reconnait a leur identifiant).
+    lire: function () { return events.filter(tcEstDeLUtilisateur); },
     id: function (o) { return o.id; },
+    // Encore sur le serveur pour les comptes d avant : ce qui en descend
+    // est ignore, et leur absence ici n est jamais annoncee comme une suppression.
+    ignorer: function (uid) { return typeof uid === 'string' && uid.indexOf('demo_') === 0; },
     poser: function (liste) {
-      const demo = events.filter(function (e) {
-        return e.mode !== 'user' && !(e.id && e.id.indexOf('charly_ai_') === 0);
-      });
-      events = demo.concat(liste);
+      const garde = events.filter(function (e) { return !tcEstDeLUtilisateur(e); });
+      events = garde.concat(liste.filter(function (e) { return !tcEstDemonstration(e); }));
       return saveEventsToStorage();
     }
   },
@@ -23755,6 +23766,7 @@ async function tcSyncAppliquer(elements) {
   const parType = {};
   elements.forEach(function (e) {
     if (!TC_SYNC_TYPES[e.type]) return;   // type inconnu de cette version
+    if (TC_SYNC_TYPES[e.type].ignorer && TC_SYNC_TYPES[e.type].ignorer(e.uid)) return;   // reste sur le serveur, jamais ici
     (parType[e.type] = parType[e.type] || []).push(e);
   });
 
@@ -23865,6 +23877,8 @@ async function tcSyncPousser() {
     // Un objet en lecture seule absent d'ici n'a pas été supprimé ici :
     // annoncer sa disparition l'effacerait chez tout le monde.
     if (TC_SYNC_TYPES[type] && TC_SYNC_TYPES[type].lectureSeule) return;
+    // Ce que la famille ignore (demonstration) n a jamais ete envoye : rien a supprimer la-bas.
+    if (TC_SYNC_TYPES[type] && TC_SYNC_TYPES[type].ignorer && TC_SYNC_TYPES[type].ignorer(cle.slice(i + 1))) return;
     // Jamais eu dans cet onglet : un autre onglet l a cree, ce n est pas une suppression.
     if (!_tcSyncVusIci[cle]) return;
     const v = vues[type];
@@ -24536,9 +24550,7 @@ function tcRassemblerDonnees() {
   return {
     version: 1,
     cree_le: new Date().toISOString(),
-    evenements: events.filter(function (e) {
-      return e.mode === 'user' || (e.id && e.id.indexOf('charly_ai_') === 0);
-    }),
+    evenements: events.filter(tcEstDeLUtilisateur),
     taches: tasksList,
     anniversaires: birthdays,
     reglages: tcReglagesTransferables()
@@ -24553,13 +24565,12 @@ async function tcInstallerDonnees(p) {
 
   if (Array.isArray(p.evenements)) {
     // Les rendez-vous de démonstration restent : ce sont ceux de
-    // l'utilisateur, et eux seuls, qui sont remplacés.
-    const demo = events.filter(function (e) {
-      return e.mode !== 'user' && !(e.id && e.id.indexOf('charly_ai_') === 0);
-    });
-    events = demo.concat(p.evenements);
+    // l'utilisateur, et eux seuls, qui sont remplacés (et ceux du paquet, s il en a, n entrent pas).
+    const garde = events.filter(function (e) { return !tcEstDeLUtilisateur(e); });
+    const recus = p.evenements.filter(function (e) { return !tcEstDemonstration(e); });
+    events = garde.concat(recus);
     await saveEventsToStorage();
-    bilan.evenements = p.evenements.length;
+    bilan.evenements = recus.length;
   }
   if (Array.isArray(p.taches)) {
     tasksList = p.taches;
@@ -27837,7 +27848,7 @@ function buildBackupPayload() {
   return {
     version: TC_BACKUP_VERSION,
     exportDate: new Date().toISOString(), // horodatage — permet "sauvegarde du [date]"
-    events: events.filter(e => e.mode === 'user' || (e.id && e.id.startsWith('charly_ai_'))),
+    events: events.filter(tcEstDeLUtilisateur),   // jamais la demonstration (mission 42)
     tasks: tasksList,
     contacts: contactsList,
     messages: messages,
@@ -27937,8 +27948,8 @@ function importTimeCoolData(event) {
     _tcRestoring = true;
     try {
       // Rendez-vous
-      const demoEvents = events.filter(e => e.mode !== 'user' && !(e.id && e.id.startsWith('charly_ai_')));
-      events = [...demoEvents, ...backup.events];
+      const garde = events.filter(e => !tcEstDeLUtilisateur(e));
+      events = [...garde, ...backup.events.filter(e => !tcEstDemonstration(e))];
       saveEventsToStorage();
 
       // Tâches

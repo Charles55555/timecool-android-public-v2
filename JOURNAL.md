@@ -2111,3 +2111,18 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   simple, puis un appel de la même forme que les vrais (`tcAppel('GET', '/sante')`, délai TC_SANTE_DELAI_MS) ; les deux
   doivent passer, sinon le panneau reste à l’étape. Le constat `complet` est noté pour le rapport. « Ça ne marche pas »
   est inactif pendant la vérification ; rien ne s’affiche si le panneau a été fermé entre-temps.
+- Mission 42 (14/10, chef) : les trois rendez-vous de démonstration (demo_1 Fête du Travail, demo_2 Victoire 1945,
+  demo_3 Anniversaire Marie) restent sur l’appareil. Ils ont le mode « user » (c’est ce qui les affiche) et tout le code
+  les prenait pour des rendez-vous de l’utilisateur : ils montaient au serveur, puis vers Google Agenda et les autres
+  appareils du compte. Deux prédicats dans le bloc de synchronisation : `tcEstDemonstration(e)` (identifiant « demo_ »)
+  et `tcEstDeLUtilisateur(e)` (mode user ou Charly, jamais la démonstration). La famille rdv de TC_SYNC_TYPES lit sans
+  eux, `ignorer(uid)` fait sauter ce qui en descend du serveur (comptes d’avant) sans empreinte ni marque « vu ici », et
+  une ancienne empreinte de démonstration n’est jamais annoncée comme suppression ; `poser` garde les démonstrations
+  locales. Même règle pour le paquet d’appairage (tcRassemblerDonnees / tcInstallerDonnées) et la sauvegarde
+  (buildBackupPayload / restauration). Le stockage local (tc_user_events) ne change pas : ils y vivent, modifiés ou
+  supprimés, et ne sont pas recréés (generateEvents ne sert qu’à un stockage vide). L’API ne change pas. État du serveur
+  le 14/10 : 27 comptes ont encore demo_1 à demo_3 dans `elements` (81 lignes, 1 compte les a supprimées), aucun lien
+  Google (google_agenda_liens) sur ces uid. Proposition au chef : migration 015 `DELETE FROM elements WHERE type = 'rdv'
+  AND uid IN ('demo_1','demo_2','demo_3')` (rien à retirer chez Google). Suite : verif-demonstration-locale
+  (serveur simulé, deux appareils, compte d’avant, vieilles empreintes, deux onglets, appairage, sauvegarde, stockage) ;
+  verif-transfert charge les deux prédicats avec le bloc d’appairage.

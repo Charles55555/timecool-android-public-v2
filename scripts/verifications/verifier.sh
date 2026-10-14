@@ -123,6 +123,7 @@ lancer verif-contacts-bloques "$PAGE"
 lancer verif-types-rdv "$PAGE"
 lancer verif-sync-local-gagne "$PAGE"
 lancer verif-boucle-compte "$PAGE" "$API" backend/sql/014_rapports_techniques.sql
+lancer verif-demonstration-locale "$PAGE"
 lancer verif-bande-semaine "$PAGE"
 lancer verif-ligne-semaine "$PAGE"
 lancer verif-compte-langue-theme "$PAGE" "$API"

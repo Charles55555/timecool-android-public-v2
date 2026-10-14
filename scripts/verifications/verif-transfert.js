@@ -26,7 +26,9 @@ ctx.globalThis = ctx;
 vm.createContext(ctx);
 // Les fonctions déclarées au premier niveau deviennent globales dans le
 // contexte ; pas les `const`. On expose donc la liste explicitement.
-vm.runInContext(html.slice(html.indexOf('const TC_ECDH = '),
+// Mission 42 : les deux predicats de la demonstration vivent dans le bloc de synchronisation.
+vm.runInContext(html.slice(html.indexOf('function tcEstDemonstration('), html.indexOf('const TC_SYNC_TYPES = {'))
+  + html.slice(html.indexOf('const TC_ECDH = '),
   html.indexOf('/* ── Les deux écrans'))
   + '\nglobalThis.TC_JAMAIS_TRANSFERE = TC_JAMAIS_TRANSFERE;', ctx);
 
