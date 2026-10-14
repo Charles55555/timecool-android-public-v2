@@ -79,6 +79,17 @@ verifie('le changement de compte se fait DES la connexion (submitLogin, saveUser
 const demarrer = fonction(page, 'tcSyncDemarrer') || '';
 verifie('un autre onglet qui ouvre un autre compte ou ferme la session : cet onglet suit (evenement storage sur le jeton et le compte)', /if \(cle === TC_JETON_CLE\) \{ if \(!e\.newValue && tcSyncCompte\(\)\) tcOngletARechargerMaintenant\(/.test(demarrer) && /if \(cle === 'timecool_user_account'\) \{ tcOngletPerime\(\); return; \}/.test(demarrer));
 
+// Second onglet sur le MEME compte : les rendez-vous de demonstration doivent naitre avec une categorie deja normalisee,
+// sinon l onglet qui les relit normalisees (tcCatNormalisee) et celui qui les a en memoire se les repoussent sans fin.
+(function () {
+  const gen = fonction(page, 'generateEvents') || '';
+  const alias = constante('const TC_AGENDA_ALIAS = \\{[\\s\\S]*?\\};');
+  const cA = vm.createContext({}); vm.runInContext(alias || 'const TC_AGENDA_ALIAS = {};', cA);
+  const anciennes = Object.keys(vm.runInContext('TC_AGENDA_ALIAS', cA));
+  const cats = (gen.match(/cat:'([a-z]+)'/g) || []).map((m) => m.slice(5, -1));
+  verifie('les rendez-vous de demonstration naissent avec une categorie normalisee (aucune ancienne couleur de TC_AGENDA_ALIAS)', cats.length >= 3 && cats.every((c) => anciennes.indexOf(c) < 0), cats.join(',') + ' / anciennes : ' + anciennes.join(','));
+})();
+
 titre('2. Garde-fou : plus de 3 chargements complets en 30 s');
 const j3 = []; const s3 = { tc_session_jeton: 'j', timecool_user_account: JSON.stringify({ reference: 'GARY' }), tc_compte_local: 'GARY' };
 const G = Appareil(s3, 'GARY', serveur, j3);

@@ -2082,3 +2082,12 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   simulés sur un stockage commun, garde-fou, réparation, test de connexion, rapport, API, migration) ;
   `verif-rapports-techniques-e2e` (à enregistrer après la mise en ligne de l'API). Aucun nouveau réglage ; rien au
   démarrage sauf deux écouteurs d'erreurs et deux petites listes en mémoire.
+- Mission 41, suite (14/10) : rejeu réel dans Chrome (deux cadres sur un même stockage, comptes de test, API de
+  production). Deux comptes : l'onglet périmé se recharge avec le mot, aucun ménage répété, garde-fou muet. Mais un
+  SECOND va-et-vient est apparu, présent aussi sur la page publiée : un second onglet ouvert sur le MÊME compte
+  (page chargée après coup) poussait les trois rendez-vous de démonstration chaque seconde, dans les deux onglets.
+  Cause : `generateEvents()` les crée avec les anciennes couleurs (« orange », « yellow ») ; l'onglet qui les relit
+  depuis le stockage les normalise (« personnel », « famille », `tcCatNormalisee`) ; chaque onglet voit l'autre
+  version comme « modifiée ici » (`tcSyncModifieIci`) et la repousse. Les rendez-vous de démonstration naissent
+  désormais avec la catégorie normalisée (littéraux : `TC_AGENDA_ALIAS` n'existe pas encore quand `generateEvents()`
+  s'exécute). Cas ajouté à `verif-boucle-compte` ; rejeu réel « second onglet » : calme après correction.

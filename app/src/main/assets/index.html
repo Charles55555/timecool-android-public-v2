@@ -3725,10 +3725,12 @@ function generateEvents() {
   // Seuls quelques événements de démonstration minimaux sont conservés
   const evts = [];
 
-  // Quelques jalons de démonstration (jour férié, anniversaire) pour montrer que l'agenda fonctionne
-  evts.push({date:'2026-05-01', startH:0, startM:0, endH:23, endM:59, title:'🇫🇷 Fête du Travail', cat:'orange', mode:'user', id:'demo_1', allDay:true});
-  evts.push({date:'2026-05-08', startH:0, startM:0, endH:23, endM:59, title:'🇫🇷 Victoire 1945', cat:'orange', mode:'user', id:'demo_2', allDay:true});
-  evts.push({date:'2026-04-22', startH:9, startM:0, endH:18, endM:0, title:'🎂 Anniversaire Marie', cat:'yellow', mode:'user', id:'demo_3'});
+  // Quelques jalons de démonstration (jour férié, anniversaire) pour montrer que l'agenda fonctionne.
+  // Categories deja normalisees (« personnel », « famille », voir TC_AGENDA_ALIAS) : avec les anciennes couleurs, un
+  // second onglet qui les relisait normalisees les repoussait sans fin (mission 41, 14/10).
+  evts.push({date:'2026-05-01', startH:0, startM:0, endH:23, endM:59, title:'🇫🇷 Fête du Travail', cat:'personnel', mode:'user', id:'demo_1', allDay:true});
+  evts.push({date:'2026-05-08', startH:0, startM:0, endH:23, endM:59, title:'🇫🇷 Victoire 1945', cat:'personnel', mode:'user', id:'demo_2', allDay:true});
+  evts.push({date:'2026-04-22', startH:9, startM:0, endH:18, endM:0, title:'🎂 Anniversaire Marie', cat:'famille', mode:'user', id:'demo_3'});
 
   return evts;
 }
