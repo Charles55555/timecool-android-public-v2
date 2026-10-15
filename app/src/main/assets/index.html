@@ -19075,6 +19075,13 @@ function tcQuestionnaireChoixTape(choix, text) {
   return parMots.length === 1 ? parMots[0] : null;
 }
 
+/** La relance d'une étape : la sienne (texte ou fonction) quand elle s'impose, sinon « touche un bouton » ou « réponds en quelques mots ». */
+function tcQuestionnaireRelance(etape, reponses, choix) {
+  const sienne = etape ? (typeof etape.relance === 'function' ? etape.relance(reponses) : etape.relance) : '';
+  if (sienne && (etape.multiple || etape.relanceForte || !choix.length)) return sienne;
+  return choix.length ? 'Touche un bouton, ou tape son numéro (1 à ' + choix.length + ').' : 'Réponds en quelques mots.';
+}
+
 /** Les choix désignés au clavier pour une étape à plusieurs choix : des numéros (« 2 et 3 »), ou des mots de plusieurs choix. */
 function tcQuestionnaireChoixTapes(choix, text) {
   const t = tcQuestionnaireTexteNu(text);
@@ -19138,7 +19145,7 @@ async function tcQuestionnaireRepondreTexte(text) {
   }
   q.essais -= 1;
   tcPousserMessageUtilisateur(text);
-  charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris((etape && etape.relance && (etape.multiple || !choix.length)) ? etape.relance : (choix.length ? 'Touche un bouton, ou tape son numéro (1 à ' + choix.length + ').' : 'Réponds en quelques mots.')) });
+  charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris(tcQuestionnaireRelance(etape, q.reponses, choix)) });
   renderCharlyChat();
   return true;
 }
@@ -19346,16 +19353,20 @@ function tcQuestionnaireMessage(r, c, ev, ancien) {
  * vraiment prévenus sont notés pour la marche arrière (« remets-les » ne parle qu'à eux).
  */
 async function tcQuestionnaireExecuter(r, fin) {
-  const presents = r._rdvs.filter(function (e) { return events.indexOf(e) > -1; });
+  // Par identifiant, jamais par objet : la synchronisation peut avoir remplacé les objets de l'agenda entre la question et
+  // « Oui, vas-y » (le bilan du retard perdait sa ligne, testeurs 15/10).
+  const frais = function (e) { return (Array.isArray(events) ? events : []).filter(function (x) { return x && e && x.id === e.id; })[0] || null; };
+  const presents = r._rdvs.map(frais).filter(Boolean);
+  const present = function (e) { return presents.some(function (x) { return e && x.id === e.id; }); };
   const anciens = presents.map(function (e) { return { id: e.id, date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM }; });
   let deplaces = [], laisses = [], supprimes = [];
   if (r.action === 'decaler') {
-    deplaces = r._liste.filter(function (x) { return x.p && presents.indexOf(x.ev) > -1; });
-    laisses = r._liste.filter(function (x) { return !x.p && presents.indexOf(x.ev) > -1; }).map(function (x) { return x.ev; });
+    deplaces = r._liste.filter(function (x) { return x.p && present(x.ev); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
+    laisses = r._liste.filter(function (x) { return !x.p && present(x.ev); }).map(function (x) { return frais(x.ev); });
     if (deplaces.length) tcAppliquerDeplacement(deplaces, { silencieux: true });
   } else if (r.action === 'retard' && Array.isArray(r._liste) && r._liste.length) {
     // « Tout décale d'autant » : les rendez-vous suivants du jour bougent, celui du retard reste (on y arrive en retard).
-    deplaces = r._liste.filter(function (x) { return x.p && presents.indexOf(x.ev) > -1; });
+    deplaces = r._liste.filter(function (x) { return x.p && present(x.ev); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
     if (deplaces.length) tcAppliquerDeplacement(deplaces, { silencieux: true });
   } else if (r.action === 'supprimer') {
     supprimes = presents;
@@ -19809,6 +19820,33 @@ function tcNouveauRdvContactTape(text) {
 }
 
 /**
+ * Le titre d'une phrase tapée à « C'est quel rendez-vous ? » : la phrase sans le jour, l'heure, la durée ni les mots de
+ * remplissage du début (« rdv », « un »), mais avec ses petits mots (« Pot de départ », « Repas de famille » : testeurs,
+ * mission 48). Vide si rien ne reste ; tcTitreDepuisDemande sert alors de filet.
+ */
+function tcNouveauRdvTitre(texte) {
+  let s = ' ' + String(texte || '').replace(/[’']/g, ' ') + ' ';
+  const sans = function (re) { s = s.replace(re, ' '); };
+  sans(/\b(?:pendant|durant|pour|duree de|durée de)\s+\d{1,2}\s?(?:h|heures?)(?:\s?\d{2})?\b/gi);
+  sans(/\b(?:pendant|durant|pour|de)\s+(?:une|deux|trois)\s+heures?\b/gi);
+  sans(/\b\d{1,3}\s?(?:min|mn|minutes?)\b/gi);
+  sans(/(?:\s(?:a|à|vers)\s+|\s)(?:[01]?\d|2[0-3])\s?(?:h|:)\s?(?:[0-5]\d)?(?![0-9])/gi);
+  sans(/\b(?:aujourd\s?hui|apr[eè]s[- ]?demain|demain|ce soir|ce matin|cet apr[eè]s[- ]midi|cette semaine|semaine prochaine|la semaine prochaine)\b/gi);
+  sans(/\b(?:dans|d\s?ici)\s+\d{1,2}\s+(?:jours?|semaines?)\b/gi);
+  sans(/\b(?:ce |le |la )?(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?:\s+(?:prochaine?|qui vient))?(?:\s+\d{1,2}(?!\d))?\b/gi);
+  sans(/\b(?:le )?\d{1,2}(?:er)?\s+(?:janvier|janv|f[eé]vrier|f[eé]vr|f[eé]v|mars|avril|avr|mai|juin|juillet|juil|ao[uû]t|septembre|sept|octobre|oct|novembre|nov|d[eé]cembre|d[eé]c)\.?(?:\s+\d{4})?\b/gi);
+  sans(/\b(?:le )?\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{4})?\b/g);
+  sans(/\b(?:le )?\d{1,2}(?=\s|$)/g);
+  s = s.replace(/\s+/g, ' ').trim();
+  // Les mots de remplissage du début seulement : « rdv », « un rendez-vous », « ajoute », « mets-moi ».
+  for (let n = 0; n < 6; n++) s = s.replace(/^(?:rdv|rendez[- ]?vous|un|une|le|la|les|l|mon|ma|mes|ajoute[sz]?|ajouter|cr[eé]e[sz]?|cr[eé]er|mets?|mettre|note[sz]?|noter|planifie[sz]?|prends?|prendre|moi|me|pour|stp|svp|s il te plait|s il vous plait|je veux|je voudrais|j aimerais)\s+/i, '');
+  s = s.replace(/^[\s,;:.!-]+|[\s,;:.!-]+$/g, '').trim();
+  if (!s) return '';
+  s = s.slice(0, 60);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
  * Ce qu'une phrase tapée à « C'est quel rendez-vous ? » dit déjà : le titre, et au besoin le jour, l'heure, la durée et
  * le contact (« Dentiste demain 10h », « déjeuner avec Marie mardi 12h30 »). Les étapes ainsi connues ne sont pas posées.
  */
@@ -19824,7 +19862,7 @@ function tcNouveauRdvPhrase(text) {
     const c = tcNouveauRdvContactTape(mAvec[1]);
     if (c) { aussi.avec = 'contact'; aussi.contact = c.id; texteTitre = brut.replace(mAvec[0], ' '); }
   }
-  const titre = tcTitreDepuisDemande(texteTitre) || (aussi.contact ? 'Rendez-vous' : '');
+  const titre = tcNouveauRdvTitre(texteTitre) || tcTitreDepuisDemande(texteTitre) || (aussi.contact ? 'Rendez-vous' : '');
   if (!titre) return null;
   const now = new Date();
   const d = tcDateDemandee(brut, now);
@@ -19920,7 +19958,7 @@ function tcNouveauRdvDurees(r) {
 
 /**
  * Les créneaux du serveur pour un contact qui a TimeCool, ou plusieurs : les heures où chacun est libre dans la
- * période (mission 46 : /rdv/groupe/proposer accepte depuis, jusqua, combien, par_jour). { etat: 'ok' | 'erreur', … }.
+ * période (/rdv/groupe/proposer avec depuis, jusqua, combien, par_jour), pour la durée choisie. { etat: 'ok' | 'erreur', … }.
  */
 async function tcNouveauRdvCommuns(r) {
   if (typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte()) return { etat: 'erreur' };
@@ -19928,7 +19966,7 @@ async function tcNouveauRdvCommuns(r) {
   const dureeH = Math.min(3, Math.max(1, Math.ceil((r._dureeMin || r._dureeCherchee || 60) / 60)));
   try {
     const res = await TC_BACKEND.proposerRdvGroupe(r._invites.map(function (c) { return c.referenceCompte; }), dureeH, 'physique',
-      { depuis: jours[0], jusqua: jours[jours.length - 1], combien: 10, par_jour: 3 });
+      { depuis: jours[0], jusqua: jours[jours.length - 1], combien: 40, par_jour: 12 });
     return {
       etat: 'ok',
       creneaux: (Array.isArray(res.creneaux) ? res.creneaux : []).map(function (c) {
@@ -19940,18 +19978,53 @@ async function tcNouveauRdvCommuns(r) {
   } catch (e) { return { etat: 'erreur' }; }
 }
 
+/** Les noms des fiches contact pour des prénoms rendus par le serveur (« Gaelle » sans tréma devient « Gaëlle Perrin »). */
+function tcNouveauRdvNomsDuServeur(prenoms, invites) {
+  return (prenoms || []).map(function (p) {
+    const cle = tcSansAccents(String(p || '')).trim();
+    const c = (invites || []).filter(function (x) { return x && tcSansAccents(String(x.name || '')).split(' ')[0] === cle; })[0];
+    return c ? c.name : p;
+  });
+}
+
 /**
- * Trois créneaux au plus, dans la période, dans les plages ouvertes de « Mes disponibilités » (tcPlagesDuJour : sans
- * plage déclarée, lundi-vendredi 9h-18h, jamais le week-end), hors de ce qui est déjà noté, jamais dans le passé. Avec
- * l'agenda d'un contact (ou de plusieurs), les heures viennent du serveur et passent par le même tamis. Un seul jour :
- * le début, le milieu et la fin de la journée ; plusieurs jours : le premier créneau de chaque jour.
+ * `combien` créneaux étalés : un seul jour, le début, le milieu et la fin de la journée ; plusieurs jours, le premier de
+ * chaque jour, puis le deuxième…
+ */
+function tcNouveauRdvEtaler(liste, combien) {
+  const l = liste.slice().sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : a.debut - b.debut); });
+  if (!l.length || combien <= 0) return [];
+  if (l.every(function (c) { return c.date === l[0].date; })) {
+    if (l.length <= combien) return l;
+    if (combien === 1) return [l[0]];
+    if (combien === 2) return [l[0], l[l.length - 1]];
+    return [l[0], l[Math.floor(l.length / 2)], l[l.length - 1]];
+  }
+  const parJour = {}, ordre = [];
+  l.forEach(function (c) { if (!parJour[c.date]) { parJour[c.date] = []; ordre.push(c.date); } parJour[c.date].push(c); });
+  const out = [];
+  for (let k = 0; out.length < combien; k++) {
+    let ajoute = false;
+    ordre.forEach(function (d) { if (out.length < combien && parJour[d][k]) { out.push(parJour[d][k]); ajoute = true; } });
+    if (!ajoute) break;
+  }
+  return out;
+}
+
+/**
+ * Trois créneaux au plus, dans la période, pour la durée choisie, dans les plages ouvertes de « Mes disponibilités »
+ * (tcPlagesDuJour : sans plage déclarée, lundi-vendredi 9h-18h, jamais le week-end), hors de ce qui est déjà noté, jamais
+ * dans le passé, au quart d'heure. Avec l'agenda d'un contact (ou de plusieurs), les heures viennent du serveur et passent
+ * par le même tamis : ceux où tout le monde est libre d'abord, puis ceux où il manque quelqu'un ; à chaque fois étalés
+ * (un jour : début, milieu, fin de journée ; plusieurs jours : un par jour).
  */
 function tcNouveauRdvPropositions(r) {
   const duree = r._dureeMin || r._dureeCherchee || 60;
   const now = new Date();
   const aujourdhui = tcISO(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const parJour = r._jours.map(function (iso) {
+  const tous = [];
+  r._jours.forEach(function (iso) {
     const plages = tcPlagesDuJour(new Date(iso + 'T12:00:00')).plages;
     const pris = tcOccupationsDuJour(iso);
     const plancher = iso === aujourdhui ? Math.ceil((nowMin + 15) / 15) * 15 : 0;
@@ -19959,31 +20032,18 @@ function tcNouveauRdvPropositions(r) {
       return d >= plancher && plages.some(function (p) { return d >= p.debut && d + duree <= p.fin; })
         && !pris.some(function (o) { return d < o.fin && d + duree > o.debut; });
     };
-    if (Array.isArray(r._communs)) return r._communs.filter(function (c) { return c.date === iso && libre(c.debut); });
-    const candidats = [];
+    if (Array.isArray(r._communs)) { r._communs.forEach(function (c) { if (c.date === iso && libre(c.debut)) tous.push(c); }); return; }
     plages.forEach(function (p) {
-      for (let d = Math.ceil(Math.max(p.debut, plancher) / 15) * 15; d + duree <= p.fin; d += 30) { if (libre(d)) candidats.push({ date: iso, debut: d }); }
+      for (let d = Math.ceil(Math.max(p.debut, plancher) / 15) * 15; d + duree <= p.fin; d += 30) { if (libre(d)) tous.push({ date: iso, debut: d }); }
     });
-    return candidats;
   });
+  if (!Array.isArray(r._communs)) return tcNouveauRdvEtaler(tous, 3);
+  const groupes = {};
+  tous.forEach(function (c) { const k = (c.manquants || []).length; (groupes[k] = groupes[k] || []).push(c); });
   const out = [];
-  if (Array.isArray(r._communs)) {
-    // Le serveur a déjà classé : ceux où tout le monde est libre d'abord.
-    const tous = [];
-    parJour.forEach(function (l) { l.forEach(function (c) { tous.push(c); }); });
-    tous.sort(function (a, b) { return (a.manquants.length - b.manquants.length) || (a.date < b.date ? -1 : (a.date > b.date ? 1 : a.debut - b.debut)); });
-    return tous.slice(0, 3);
-  }
-  if (parJour.length === 1) {
-    const l = parJour[0];
-    if (l.length <= 3) return l;
-    return [l[0], l[Math.floor(l.length / 2)], l[l.length - 1]];
-  }
-  for (let k = 0; out.length < 3; k++) {
-    let ajoute = false;
-    parJour.forEach(function (l) { if (out.length < 3 && l[k]) { out.push(l[k]); ajoute = true; } });
-    if (!ajoute) break;
-  }
+  Object.keys(groupes).map(Number).sort(function (a, b) { return a - b; }).forEach(function (k) {
+    tcNouveauRdvEtaler(groupes[k], 3 - out.length).forEach(function (c) { out.push(c); });
+  });
   return out;
 }
 
@@ -20003,7 +20063,6 @@ function tcNouveauRdvHeureTapee(text) {
   if (d && d.date) date = tcISO(d.date);
   else date = (r._jours || [aujourdhui]).filter(function (iso) { return iso !== aujourdhui || debut > nowMin; })[0] || null;
   if (!date || date < aujourdhui || (date === aujourdhui && debut <= nowMin)) return null;
-  if (r.avec === 'plusieurs' && (h.m || 0) !== 0) return null;   // le serveur travaille à l'heure ronde
   return { date: date, debut: debut };
 }
 
@@ -20151,14 +20210,18 @@ function tcNouveauRdvQuestionCreneau(r, refaire) {
   if (r.avec === 'plusieurs') {
     if (!Array.isArray(r._communs)) {
       // Personne de consultable : mes créneaux à moi, et je le dis (mission 47).
-      s = n ? 'Voici des créneaux libres chez toi ' + quand + '. Touche-en un, ou tape une heure (ex : 14h).'
-        : 'Je ne vois aucun créneau libre chez toi ' + quand + '. Tape une heure (ex : 14h), ou un autre jour (ex : mardi 10h).';
+      s = n ? 'Voici des créneaux libres chez toi ' + quand + '. Touche-en un, ou tape une heure (ex : 14h30).'
+        : 'Je ne vois aucun créneau libre chez toi ' + quand + '. Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).';
     } else {
       s = n ? 'Voici les créneaux ' + quand + ' où ' + (r._propositions.every(function (p) { return !(p.manquants || []).length; }) ? 'tout le monde est libre' : 'le plus de monde est libre')
-        + '. Touche-en un, ou tape une heure (ex : 14h).'
-        : 'Je n’ai trouvé aucun créneau ' + quand + ' où tout le monde est libre. Tape une heure (ex : 14h), ou un autre jour (ex : mardi 10h).';
+        + '. Touche-en un, ou tape une heure (ex : 14h30).'
+        : 'Je n’ai trouvé aucun créneau ' + quand + ' où tout le monde est libre. Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).';
     }
-    if (r._sansAcces && r._sansAcces.length) s += ' Je n’ai pas pu regarder l’agenda de ' + tcQuestionnaireNoms(r._sansAcces) + ' : je propose quand même.';
+    if (r._sansAcces && r._sansAcces.length) {
+      // Un membre qui a TimeCool mais ne m'a pas ouvert ses disponibilités : le dire tel quel (testeurs, mission 48).
+      const noms = tcNouveauRdvNomsDuServeur(r._sansAcces, r._invites);
+      s += ' ' + tcQuestionnaireNoms(noms) + (noms.length > 1 ? ' ne m’ont pas ouvert leurs disponibilités' : ' ne m’a pas ouvert ses disponibilités') + ' : je propose quand même.';
+    }
     return s;
   }
   s = n ? 'Voici des créneaux libres ' + quand + '. Touche-en un, ou tape une heure (ex : 14h30).'
@@ -20166,6 +20229,7 @@ function tcNouveauRdvQuestionCreneau(r, refaire) {
   if (r._contact && r._contact.referenceCompte) {
     const prenom = (r._contact.name || '').split(' ')[0];
     if (r._agendas === 'ok' && n) s += ' ' + prenom + ' est libre aussi.';
+    else if (r._agendas === 'non') s += ' ' + prenom + ' ne m’a pas ouvert ses disponibilités : je propose quand même.';
     else if (r._agendas !== 'ok') s += ' Je n’ai pas pu regarder l’agenda de ' + prenom + '.';
   }
   return s;
@@ -20183,6 +20247,8 @@ const TC_ETAPES_NRDV_FIN = [
     { cle: 'duree',
       question: function (r) { return r.avec === 'plusieurs' ? 'Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h.' : 'Combien de temps ?'; },
       choix: tcNouveauRdvDurees,
+      relance: function (r) { return r.avec === 'plusieurs' ? 'À plusieurs, c’est 1 h, 2 h ou 3 h : touche un bouton, ou tape son numéro (1 à 3).' : ''; },
+      relanceForte: true,
       // À plusieurs, une durée tapée hors des heures rondes (« 30 min », « 4 h ») n'est pas prise : la relance le redit (examen, 15/10).
       libre: function (text) {
         const v = tcNouveauRdvDureeTapee(text);
@@ -20289,8 +20355,12 @@ const TC_QUESTIONNAIRE_NOUVEAU_RDV = {
         return { valeur: tcISO(d.date), aussi: aussi };
       },
       relance: 'Tape un jour (ex : mardi, le 20 octobre, 20/10).' },
+    TC_ETAPE_NRDV_DUREE,
+    TC_ETAPE_NRDV_DUREE_AUTRE,
     { cle: 'creneau',
       avant: async function (r) {
+        // La durée est connue : les créneaux sont cherchés pour elle (testeurs, mission 48).
+        r._dureeMin = Number(r.duree === 'autre' ? r.duree_autre : r.duree) || 60;
         r._jours = tcNouveauRdvJours(r);
         r._contact = r.avec === 'contact' && r.contact ? ((Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c.id === r.contact; })[0] || null) : null;
         r._invites = r.avec === 'plusieurs' ? (r._groupe || []) : (r._contact && r._contact.referenceCompte && !r._contact.blocked ? [r._contact] : []);
@@ -20314,8 +20384,6 @@ const TC_QUESTIONNAIRE_NOUVEAU_RDV = {
       choix: tcNouveauRdvChoixCreneau,
       libre: tcNouveauRdvHeureTapee,
       relance: 'Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).' },
-    TC_ETAPE_NRDV_DUREE,
-    TC_ETAPE_NRDV_DUREE_AUTRE,
     TC_ETAPE_NRDV_VERIF,
     TC_ETAPE_NRDV_CRENEAU_BIS,
     TC_ETAPE_NRDV_VERIF_BIS,
@@ -20399,7 +20467,7 @@ function tcPlusieursRecap(r) {
   ].join('\n');
 }
 
-/** Les propositions en attente, lues sur l'appareil. */
+/** Les propositions en attente, lues sur l'appareil (jamais synchronisées : voir TC_SYNC_DEJA_SYNCHRONISE). */
 function tcPlusieursEnAttente() {
   try { const l = JSON.parse(localStorage.getItem(TC_PLUSIEURS_CLE) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; }
 }
@@ -20428,7 +20496,7 @@ async function tcDemarrerRdvAPlusieurs(text) {
 
 /**
  * « Oui, propose-leur » : la proposition part dans la messagerie de chacun (une convocation, boutons Présent / Absent,
- * mission 27b), rien n'est inscrit ; la proposition est gardée ici jusqu'aux réponses (tcPlusieursVerifier).
+ * mission 27b), rien n'est inscrit ; la proposition est gardée ici, avec ses minutes, jusqu'aux réponses (tcPlusieursVerifier).
  */
 async function tcPlusieursEnvoyer(r) {
   const p = tcNouveauRdvHoraire(r);
@@ -20446,7 +20514,7 @@ async function tcPlusieursEnvoyer(r) {
   const noms = envoyes.map(tcPlusieursNom);
   const quand = tcQuestionnaireQuand(p.date, p);
   const liste = tcPlusieursEnAttente();
-  liste.push({ id: res.id, titre: r._titre, cat: r._cat, date: p.date, heure: p.startH, duree: Math.max(1, Math.round(r._dureeMin / 60)),
+  liste.push({ id: res.id, titre: r._titre, cat: r._cat, date: p.date, debut: p.startH * 60 + p.startM, fin: p.endH * 60 + p.endM, heure: p.startH,
     references: envoyes.map(function (m) { return m.reference; }), noms: noms, quand: quand, envoye: Date.now() });
   tcPlusieursEnregistrer(liste);
   tcQuestionnaireDire('C’est envoyé.\n• « ' + r._titre + ' », ' + quand + '\n• Prévenus : ' + tcQuestionnaireNoms(noms)
@@ -20454,7 +20522,7 @@ async function tcPlusieursEnvoyer(r) {
 }
 
 let _tcPlusieursDernierControle = 0;
-/** Combien de temps une inscription réservée par un onglet reste la sienne (deux onglets lisent le même stockage). */
+/** Combien de temps une proposition réservée par un onglet reste la sienne (deux onglets lisent le même stockage). */
 const TC_PLUSIEURS_RESERVATION_MS = 120000;
 
 /** La proposition d'un identifiant, relue à l'instant sur l'appareil, avec la liste entière. */
@@ -20465,33 +20533,27 @@ function tcPlusieursRelire(id) {
 function tcPlusieursRetirer(id) {
   tcPlusieursEnregistrer(tcPlusieursEnAttente().filter(function (x) { return !x || x.id !== id; }));
 }
-
-/** Le rendez-vous chez moi seulement, quand le serveur ne peut l'écrire chez personne (aucune plage ouverte). */
-function tcPlusieursNoterChezMoi(p) {
-  const fin = Math.min(23, p.heure + p.duree);
-  events.push({ date: p.date, startH: p.heure, startM: 0, endH: fin, endM: fin === 23 && p.heure + p.duree > 23 ? 59 : 0,
-    title: p.titre + ' avec ' + tcQuestionnaireNoms(p.noms || []), cat: p.cat || 'travail', mode: mode === 'pro' ? 'pro' : 'user', id: 'charly_ai_' + Date.now() + '_0' });
-  saveEventsToStorage();
+/** Réserve la proposition à cet onglet (relue à l'instant) ; null si un autre onglet l'a prise ou traitée. */
+function tcPlusieursReserver(id) {
+  const relu = tcPlusieursRelire(id);
+  if (!relu.p) return null;
+  if (relu.p.enCours && Date.now() - relu.p.enCours < TC_PLUSIEURS_RESERVATION_MS) return null;
+  relu.p.enCours = Date.now();
+  tcPlusieursEnregistrer(relu.liste);
+  return relu.p;
 }
-
-/** Un mot dans la messagerie de ceux qui ont dit oui mais chez qui le serveur n'écrit pas : ils l'ajoutent de leur côté. */
-async function tcPlusieursEcrireAuxNonInscrits(p, membres) {
-  for (const m of membres) {
-    if (!m.reference) continue;
-    try {
-      await TC_BACKEND.envoyerMessage(m.reference, 'Rendez-vous « ' + p.titre + ' », ' + p.quand + ' : tout le monde a dit oui. Je ne peux pas l’écrire dans ton agenda, ajoute-le de ton côté.',
-        (typeof tcLangueForceePour === 'function') ? tcLangueForceePour(m.reference) : null);
-    } catch (e) {}
-  }
+function tcPlusieursLiberer(id) {
+  const relu = tcPlusieursRelire(id);
+  if (relu.p) { delete relu.p.enCours; tcPlusieursEnregistrer(relu.liste); }
 }
 
 /**
- * Les réponses, relues sur le serveur (au plus une fois par minute, sauf force) : tout le monde présent → le rendez-vous
- * s'inscrit chez tous avec le titre et la catégorie (/rdv/groupe/confirmer, mission 46) et Charly le dit ; quelqu'un absent,
- * ou le créneau passé sans réponse → rien n'est inscrit, Charly le dit. Appelée à chaque tour de synchronisation.
- * Le serveur n'écrit que chez ceux qui m'ont ouvert leurs plages : ceux qui ont dit oui sans cela reçoivent un mot et
- * l'ajoutent de leur côté ; personne de joignable, le rendez-vous est noté chez moi seulement (examen, 15/10). Un seul
- * onglet inscrit : la proposition est réservée (relue à l'instant) avant l'appel, et libérée si le serveur se tait.
+ * Les réponses, relues sur le serveur (au plus une fois par minute, sauf force), à chaque tour de synchronisation.
+ * Tout le monde présent → la confirmation par convocation (/convocations/confirmer, mission 48) : le serveur inscrit le
+ * rendez-vous chez moi et chez chacun d'eux, aux minutes de la proposition, avec le titre et la catégorie, une seule fois ;
+ * Charly dit chez qui. Quelqu'un absent (la convocation est close), ou le créneau passé sans réponse → rien n'est inscrit,
+ * Charly le dit. Déjà confirmée ailleurs → retirée sans un mot (celui qui a confirmé l'a dit) ; confirmée entre-temps
+ * (deja) → « déjà inscrit ». Un seul onglet agit : la proposition est réservée avant, libérée si le serveur se tait.
  */
 async function tcPlusieursVerifier(force) {
   if (!tcPlusieursEnAttente().length) return false;
@@ -20499,67 +20561,51 @@ async function tcPlusieursVerifier(force) {
   if (!force && Date.now() - _tcPlusieursDernierControle < 60000) return false;
   _tcPlusieursDernierControle = Date.now();
   let change = false;
-  for (const p0 of tcPlusieursEnAttente()) {
+  for (const p of tcPlusieursEnAttente()) {
     let etat;
-    try { etat = await TC_BACKEND.etatConvocation(p0.id); } catch (e) { continue; }
+    try { etat = await TC_BACKEND.etatConvocation(p.id); } catch (e) { continue; }
+    const statut = (etat && etat.statut) || 'attente';
     const membres = (etat && Array.isArray(etat.membres)) ? etat.membres : [];
     const absents = membres.filter(function (m) { return m.statut === 'absent'; }).map(tcPlusieursNom);
     const attente = membres.filter(function (m) { return m.statut !== 'present' && m.statut !== 'absent'; }).map(tcPlusieursNom);
-    const presents = membres.filter(function (m) { return m.statut === 'present'; });
-    const relu = tcPlusieursRelire(p0.id);
-    const p = relu.p;
-    if (!p) continue;   // un autre onglet l'a traitée entre-temps
-    if (absents.length) {
+    const debutMin = typeof p.debut === 'number' ? p.debut : (Number(p.heure) || 0) * 60;
+    if (statut === 'confirmee') { tcPlusieursRetirer(p.id); change = true; continue; }
+    if (statut === 'refusee' || absents.length) {
+      if (!tcPlusieursReserver(p.id)) continue;
       tcPlusieursRetirer(p.id); change = true;
-      tcPlusieursDire('Pour « ' + p.titre + ' » (' + p.quand + '), ' + tcQuestionnaireNoms(absents) + ' ne ' + (absents.length > 1 ? 'peuvent' : 'peut')
-        + ' pas venir : je n’inscris rien. Relance « Rendez-vous à plusieurs » pour un autre créneau.', p.titre);
+      tcPlusieursDire('Pour « ' + p.titre + ' » (' + p.quand + '), ' + (absents.length ? tcQuestionnaireNoms(absents) + ' ne ' + (absents.length > 1 ? 'peuvent' : 'peut') + ' pas venir' : 'quelqu’un ne peut pas venir')
+        + ' : je n’inscris rien. Relance « Rendez-vous à plusieurs » pour un autre créneau.', p.titre);
       continue;
     }
-    if (attente.length) {
-      if (Date.now() > new Date(p.date + 'T' + String(p.heure).padStart(2, '0') + ':00:00').getTime()) {
+    if (statut !== 'attente') { tcPlusieursRetirer(p.id); change = true; continue; }
+    if (attente.length || !membres.length) {
+      if (Date.now() > new Date(p.date + 'T' + tcQuestionnaireHeure(debutMin).replace('h', ':') + ':00').getTime()) {
+        if (!tcPlusieursReserver(p.id)) continue;
         tcPlusieursRetirer(p.id); change = true;
-        tcPlusieursDire('Le créneau de « ' + p.titre + ' » (' + p.quand + ') est passé sans réponse de ' + tcQuestionnaireNoms(attente) + ' : je n’inscris rien.', p.titre);
+        tcPlusieursDire('Le créneau de « ' + p.titre + ' » (' + p.quand + ') est passé sans réponse' + (attente.length ? ' de ' + tcQuestionnaireNoms(attente) : '') + ' : je n’inscris rien.', p.titre);
       }
       continue;
     }
     // Tout le monde a dit oui : un seul onglet inscrit (réservation relue à l'instant, deux minutes).
-    if (p.enCours && Date.now() - p.enCours < TC_PLUSIEURS_RESERVATION_MS) continue;
-    p.enCours = Date.now();
-    tcPlusieursEnregistrer(relu.liste);
+    if (!tcPlusieursReserver(p.id)) continue;
     let res;
     try {
-      res = await TC_BACKEND.confirmerRdvGroupe(p.references, p.date, p.heure, p.duree, 'physique', { titre: p.titre, cat: p.cat });
+      res = await TC_BACKEND.confirmerConvocation(p.id, { titre: p.titre, cat: p.cat });
     } catch (e) {
-      if (e && e.code === 'creneau_pris' && /joignable/i.test(e.message || '')) {
-        // Personne de joignable : le serveur n'écrit chez personne (aucune plage ouverte) ; chez moi, oui, et je leur écris.
-        tcPlusieursRetirer(p.id); change = true;
-        tcPlusieursNoterChezMoi(p);
-        await tcPlusieursEcrireAuxNonInscrits(p, presents);
-        tcPlusieursDire('Tout le monde a dit oui pour « ' + p.titre + ' » (' + p.quand + ') : c’est noté dans ton agenda. Mais je ne peux pas écrire dans l’agenda de '
-          + tcQuestionnaireNoms(presents.map(tcPlusieursNom)) + ' (leurs plages ne me sont pas ouvertes) : je leur ai envoyé un message pour qu’ils l’ajoutent de leur côté.', p.titre);
-        continue;
-      }
       if (e && e.code === 'creneau_pris') {
         tcPlusieursRetirer(p.id); change = true;
-        tcPlusieursDire('Tout le monde a répondu pour « ' + p.titre + ' », mais le créneau (' + p.quand + ') vient d’être pris chez quelqu’un : rien n’est inscrit.', p.titre);
+        tcPlusieursDire('Tout le monde a dit oui pour « ' + p.titre + ' », mais le créneau (' + p.quand + ') vient d’être pris dans ton agenda : rien n’est inscrit.', p.titre);
         continue;
       }
-      // Serveur muet : la réservation est levée, on réessaie au prochain tour.
-      const encore = tcPlusieursRelire(p.id);
-      if (encore.p) { delete encore.p.enCours; tcPlusieursEnregistrer(encore.liste); }
+      tcPlusieursLiberer(p.id);   // l'état a changé, ou le serveur se tait : au prochain tour
       continue;
     }
     tcPlusieursRetirer(p.id); change = true;
     const inclus = Array.isArray(res.inclus) ? res.inclus : [];
-    const exclus = Array.isArray(res.exclus) ? res.exclus : [];
-    // Présents que le serveur n'a ni inscrits ni écartés : ils ne m'ont pas ouvert leurs plages.
-    const nonInscrits = presents.filter(function (m) { return inclus.indexOf(m.prenom) < 0 && exclus.indexOf(m.prenom) < 0; });
-    if (nonInscrits.length) await tcPlusieursEcrireAuxNonInscrits(p, nonInscrits);
-    const noms = nonInscrits.map(tcPlusieursNom);
-    tcPlusieursDire('Tout le monde a répondu pour « ' + p.titre + ' » : c’est confirmé, ' + p.quand + ', avec ' + tcQuestionnaireNoms(inclus) + '. ' + (inclus.length > 1 ? 'Chacun l’a' : 'C’est') + ' dans ' + (inclus.length > 1 ? 'son' : 'ton') + ' agenda.'
-      + (exclus.length ? '\n• Pas ajouté chez ' + tcQuestionnaireNoms(exclus) + ' : déjà pris à ce moment-là.' : '')
-      + (noms.length ? '\n• ' + tcQuestionnaireNoms(noms) + (noms.length > 1 ? ' ont dit oui, mais je ne peux pas écrire dans leurs agendas (leurs plages ne me sont pas ouvertes) : je leur ai envoyé un message pour qu’ils l’ajoutent de leur côté.'
-        : ' a dit oui, mais je ne peux pas écrire dans son agenda (ses plages ne me sont pas ouvertes) : je lui ai envoyé un message pour l’ajouter de son côté.') : ''), p.titre);
+    const noms = (Array.isArray(res.references) && res.references.length ? res.references : p.references || []).map(function (ref, i) { return tcPlusieursNom({ reference: ref, prenom: inclus[i] || '' }); });
+    const quand = res.quand || p.quand;
+    if (res.deja) tcPlusieursDire('« ' + p.titre + ' » est déjà inscrit (confirmé il y a un instant) : ' + quand + ', avec ' + tcQuestionnaireNoms(noms) + '.', p.titre);
+    else tcPlusieursDire('Tout le monde a répondu pour « ' + p.titre + ' » : c’est confirmé, ' + quand + ', avec ' + tcQuestionnaireNoms(noms) + '. Chacun l’a dans son agenda.', p.titre);
     if (typeof tcSyncBientot === 'function') tcSyncBientot();
   }
   return change;
@@ -20609,8 +20655,10 @@ const TC_QUESTIONNAIRE_PLUSIEURS = {
     { cle: 'date', si: function (r) { return r.quand === 'date'; },
       question: 'Quel jour ? Tape une date (ex : mardi, le 20 octobre, 20/10).',
       libre: tcPlusieursDateTapee, relance: 'Tape un jour (ex : mardi, le 20 octobre, 20/10).' },
+    TC_ETAPE_NRDV_DUREE,
     { cle: 'creneau',
       avant: async function (r) {
+        r._dureeMin = Number(r.duree) || 60;
         r._jours = tcPlusieursJours(r);
         r._quandLabel = r.quand === 'date' ? '' : TC_PLUSIEURS_QUAND[r.quand].label;
         r._communs = null;
@@ -20627,8 +20675,7 @@ const TC_QUESTIONNAIRE_PLUSIEURS = {
       question: function (r) { return tcNouveauRdvQuestionCreneau(r, false); },
       choix: tcNouveauRdvChoixCreneau,
       libre: tcNouveauRdvHeureTapee,
-      relance: 'Tape une heure ronde (ex : 14h), ou un autre jour (ex : mardi 10h).' },
-    TC_ETAPE_NRDV_DUREE,
+      relance: 'Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).' },
     TC_ETAPE_NRDV_VERIF,
     TC_ETAPE_NRDV_CRENEAU_BIS,
     TC_ETAPE_NRDV_VERIF_BIS,
@@ -23941,6 +23988,13 @@ const TC_BACKEND = {
   async etatConvocation(id) {
     return tcAppel('POST', '/convocations/etat', { convocation: id });
   },
+  /** Tout le monde a répondu présent : le rendez-vous s inscrit chez chacun, avec le titre et la catégorie, une seule fois (mission 48). */
+  async confirmerConvocation(id, options) {
+    const corps = { convocation: id };
+    if (options && options.titre) corps.titre = options.titre;
+    if (options && options.cat) corps.cat = options.cat;
+    return tcAppel('POST', '/convocations/confirmer', corps);
+  },
 
   /** Un commentaire depuis « Aide et commentaires » : enregistre en base et transmis a l equipe (mission 33). */
   /** Le rapport technique (mission 41) : sans session obligatoire ; le jeton, s il existe, rattache le compte. */
@@ -25313,7 +25367,10 @@ const TC_SYNC_DEJA_SYNCHRONISE = [
    * bloc, la clé est annoncée disparue au tour suivant, et le serveur
    * vide la ligne.
    */
-  'timecool_api_keys'
+  'timecool_api_keys',
+  // Les propositions de rendez-vous à plusieurs en attente de réponses : à l appareil qui les a envoyées. Synchronisée,
+  // une proposition déjà traitée revenait et Charly se répétait ou se contredisait (testeurs, mission 48).
+  'timecool_rdv_plusieurs'
 ];
 
 /** Une clé est-elle un réglage à synchroniser ? */

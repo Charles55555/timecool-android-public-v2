@@ -716,6 +716,12 @@ function documentsLigne(array $d): array
 }
 
 /** « lundi 12 octobre », pour un horodatage. */
+/** Le statut d une convocation, pour la page : attente (active), refusee (quelqu un a dit absent), confirmee, passee (mission 48). */
+function convocationStatutLisible(string $statut): string
+{
+    return ['active' => 'attente', 'annulee' => 'refusee', 'confirmee' => 'confirmee', 'passee' => 'passee'][$statut] ?? $statut;
+}
+
 function rdvLibelleJour(int $ts): string
 {
     $jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -3116,8 +3122,8 @@ switch ($route) {
         $typeRdv = typeRdvValide($corps['type'] ?? null) ?? 'physique';
         $sansAcces = [];
         $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
-        // Mission 46 : une période (jamais dans le passé, 31 jours au plus), le nombre voulu (1 à 10) et le nombre par
-        // jour (1 à 3). Sans ces champs, comme avant : de demain à J+14, le meilleur de chaque jour, trois en tout.
+        // Mission 46 : une période (jamais dans le passé, 31 jours au plus), le nombre voulu (1 à 40) et le nombre par
+        // jour (1 à 12). Sans ces champs, comme avant : de demain à J+14, le meilleur de chaque jour, trois en tout.
         $jourValide = static fn(?string $d): ?string => ($d !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) === 1 && strtotime($d) !== false) ? $d : null;
         $depuis = $jourValide(Entree::texte('depuis', 10));
         $jusqua = $jourValide(Entree::texte('jusqua', 10));
@@ -3137,9 +3143,9 @@ switch ($route) {
             }
         }
         $combien = Entree::entier('combien');
-        $combien = ($combien !== null && $combien >= 1 && $combien <= 10) ? $combien : 3;
+        $combien = ($combien !== null && $combien >= 1 && $combien <= 40) ? $combien : 3;
         $parJour = Entree::entier('par_jour');
-        $parJour = ($parJour !== null && $parJour >= 1 && $parJour <= 3) ? $parJour : 1;
+        $parJour = ($parJour !== null && $parJour >= 1 && $parJour <= 12) ? $parJour : 1;
         $creneaux = $invites === [] ? [] : creneauxCommuns((int) $moi['id'], $invites, $duree, $combien, $depuis, $jusqua, $parJour);
         Rep::ok([
             'creneaux'   => $creneaux,
@@ -3354,6 +3360,10 @@ switch ($route) {
             Rep::erreur(404, 'convocation_introuvable', 'Convocation introuvable.');
         }
         Db::req('UPDATE convocation_reponses SET reponse = ?, repondu_le = NOW() WHERE id = ?', [$statut, $m['id']]);
+        if ($statut === 'absent') {
+            // Quelqu un ne peut pas : la proposition est close, rien ne s inscrira (mission 48).
+            Db::req('UPDATE convocations SET statut = "annulee" WHERE id = ? AND statut = "active"', [$convocationId]);
+        }
         $organisateur = Db::un('SELECT * FROM comptes WHERE id = ?', [$m['organisateur_id']]);
         if ($organisateur !== null) {
             convocationRepondue($moi, (string) $organisateur['reference'], $convocationId, $statut);
@@ -3386,7 +3396,114 @@ switch ($route) {
         $debut = substr((string) $c['debut'], 11, 5);
         $fin = substr((string) $c['fin'], 11, 5);
         Rep::ok(['id' => (int) $c['id'], 'titre' => (string) $c['titre'], 'jour' => $jour, 'debut' => $debut, 'fin' => $fin,
-            'quand' => rdvLibelleJour((int) strtotime((string) $c['debut'])) . ' de ' . $debut . ' à ' . $fin, 'membres' => $membres]);
+            'quand' => rdvLibelleJour((int) strtotime((string) $c['debut'])) . ' de ' . $debut . ' à ' . $fin, 'membres' => $membres,
+            'statut' => convocationStatutLisible((string) $c['statut']), 'rdv_uid' => (string) ($c['rdv_uid'] ?? '')]);
+
+    /*
+     * Mission 48 (Charles, 15/10) : un « Présent » vaut accord. Quand tous les membres ont répondu présent, l organisateur
+     * confirme la convocation : le rendez-vous s inscrit chez lui et chez chacun d eux, aux heures et minutes de la
+     * convocation, avec le titre et la catégorie, sans exiger leurs plages. Une seule fois : la convocation passe
+     * « confirmee » sous verrou ; un second appel (autre onglet, autre appareil) reçoit deja = true et le même rendez-vous.
+     * Le créneau doit être encore libre chez l organisateur (409 creneau_pris sinon, rien n est écrit).
+     */
+    case 'POST /convocations/confirmer':
+        $moi = Auth::compte();
+        $convocationId = Entree::entier('convocation');
+        $c = $convocationId === null ? null : Db::un('SELECT * FROM convocations WHERE id = ? AND organisateur_id = ?', [$convocationId, $moi['id']]);
+        if ($c === null) {
+            Rep::erreur(404, 'convocation_introuvable', 'Convocation introuvable.');
+        }
+        $titre = Entree::texte('titre', 120) ?? (string) $c['titre'];
+        $cat = Entree::texte('cat', 20);
+        if ($cat === null || !in_array($cat, ['travail', 'sante', 'famille', 'amis', 'sport', 'voyages', 'personnel', 'perso'], true)) {
+            $cat = 'travail';
+        }
+        $debutTs = (int) strtotime((string) $c['debut']);
+        $finTs = (int) strtotime((string) $c['fin']);
+        $jour = date('Y-m-d', $debutTs);
+        $quand = rdvLibelleJour($debutTs) . ', ' . date('H\hi', $debutTs) . ' à ' . date('H\hi', $finTs);
+        $membres = Db::tous(
+            'SELECT m.reponse, k.* FROM convocation_reponses m JOIN comptes k ON k.id = m.compte_id
+              WHERE m.convocation_id = ? AND m.compte_id IS NOT NULL ORDER BY k.prenom, k.nom',
+            [$convocationId]
+        );
+        $presents = array_values(array_filter($membres, static fn(array $m): bool => $m['reponse'] === 'present'));
+        $prenoms = array_map(static fn(array $m): string => texteSur((string) $m['prenom']), $presents);
+        $references = array_map(static fn(array $m): string => (string) $m['reference'], $presents);
+        $dejaFait = static function () use ($c, $convocationId, $jour, $quand, $prenoms, $references, $titre): void {
+            $relu = Db::un('SELECT rdv_uid FROM convocations WHERE id = ?', [$convocationId]);
+            Rep::ok(['deja' => true, 'uid' => (string) ($relu['rdv_uid'] ?? ''), 'date' => $jour, 'quand' => $quand, 'titre' => $titre,
+                'inclus' => $prenoms, 'references' => $references]);
+        };
+        if ((string) $c['statut'] === 'confirmee') {
+            $dejaFait();
+        }
+        if ((string) $c['statut'] !== 'active') {
+            Rep::erreur(409, 'convocation_close', 'Cette proposition n est plus en attente.');
+        }
+        if ($membres === []) {
+            Rep::erreur(400, 'reponses_incompletes', 'Personne n a de compte TimeCool dans cette proposition.');
+        }
+        if (count($presents) !== count($membres)) {
+            Rep::erreur(400, 'reponses_incompletes', 'Tout le monde n a pas encore répondu présent.');
+        }
+        $uid = 'tc_grp_' . bin2hex(random_bytes(8));
+        $moiNom = texteSur(trim($moi['prenom'] . ' ' . $moi['nom']));
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            // Verrous dans l ordre des identifiants, comme /rdv/groupe/confirmer.
+            $ids = array_merge([(int) $moi['id']], array_map(static fn(array $m): int => (int) $m['id'], $presents));
+            sort($ids);
+            foreach ($ids as $idCompte) {
+                Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$idCompte]);
+            }
+            $maj = Db::req('UPDATE convocations SET statut = "confirmee", rdv_uid = ?, confirme_le = NOW() WHERE id = ? AND statut = "active"', [$uid, $convocationId]);
+            if ($maj->rowCount() === 0) {
+                // Un autre onglet ou appareil vient de confirmer : la même réponse que lui.
+                $pdo->rollBack();
+                $dejaFait();
+            }
+            if (!creneauRetenuEstLibre((int) $moi['id'], (string) $c['debut'], (string) $c['fin'])) {
+                $pdo->rollBack();
+                Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris dans ton agenda : rien n’est inscrit.');
+            }
+            $entree = static function (string $noms) use ($jour, $debutTs, $finTs, $uid, $titre, $cat): array {
+                return [
+                    'id'     => $uid,
+                    'type'   => 'physique',
+                    'date'   => $jour,
+                    'startH' => (int) date('G', $debutTs), 'startM' => (int) date('i', $debutTs),
+                    'endH'   => (int) date('G', $finTs), 'endM' => (int) date('i', $finTs),
+                    'title'  => mb_substr($titre . ' avec ' . $noms, 0, 120),
+                    'cat'    => $cat,
+                    'mode'   => 'user',
+                ];
+            };
+            $ecritures = [[
+                'compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => $uid,
+                'contenu'   => $entree(implode(', ', $prenoms)),
+            ]];
+            foreach ($presents as $m) {
+                $autres = array_values(array_filter($prenoms, static fn(string $p): bool => $p !== texteSur((string) $m['prenom'])));
+                $ecritures[] = [
+                    'compte_id' => (int) $m['id'], 'type' => 'rdv', 'uid' => $uid,
+                    'contenu'   => $entree(implode(', ', array_merge([$moiNom], $autres))),
+                ];
+            }
+            elementsPoser($ecritures);
+            foreach ($presents as $m) {
+                $autres = array_values(array_filter($prenoms, static fn(string $p): bool => $p !== texteSur((string) $m['prenom'])));
+                messagePoser($moi, $m, 'Rendez-vous confirmé : « ' . $titre . ' », ' . $quand . ', avec ' . implode(', ', array_merge([$moiNom], $autres)) . '. Il est dans ton agenda.');
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+        Rep::ok(['deja' => false, 'uid' => $uid, 'date' => $jour, 'quand' => $quand, 'titre' => $titre, 'inclus' => $prenoms, 'references' => $references]);
 
     case 'POST /messages/envoyer':
         $moi = Auth::compte();

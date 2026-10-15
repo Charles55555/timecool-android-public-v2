@@ -149,6 +149,16 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
   await ctx.tcMarcheArriere('remets-les');
   verifie('« remets-les » : Coach et Kiné reviennent ; personne à rappeler (Marc n a pas bougé, Sophie n a pas été prévenue)', ctx.events.find((e) => e.id === 'c').startM === 0 && ctx.events.find((e) => e.id === 'k').startM === 30 && /2 rendez-vous remis/.test(dc()) && !/Pense à prévenir/.test(dc()), dc());
 
+  // Mission 48 (testeurs) : « Personne » ; et la synchronisation a remplacé les objets de l agenda entre la question et « Oui » :
+  // le bilan retrouve les rendez-vous par identifiant, la ligne du retard est là, les suivants bougent quand même.
+  reinit();
+  ctx.charlyQuickAction('retard');
+  await new Promise((r) => setTimeout(r, 0));
+  await cliquer(1); await cliquer(0); await taper('tout décale'); await taper('personne');
+  ctx.events = ctx.events.map((e) => Object.assign({}, e));   // comme après un tour de synchronisation
+  await taper('oui');
+  verifie('« Personne », objets remplacés : « C’est fait. », la ligne du retard, puis deux « Déplacé » ; Coach et Kiné décalés ; rien n est parti', /^C’est fait\.\n• Retard d’environ 20 minutes pour « Dentiste »/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 2 && ctx.events.find((e) => e.id === 'c').startM === 20 && ctx.events.find((e) => e.id === 'k').startM === 50 && trace.envois.length === 0 && !/Prévenu par|Message prêt/.test(dc()), dc());
+
   titre('3. « Plus » puis un nombre ; « 45 » tapé d emblée ; je rattrape ; personne');
   reinit();
   await ctx.tcPrevenirRetard('Je vais être en retard');

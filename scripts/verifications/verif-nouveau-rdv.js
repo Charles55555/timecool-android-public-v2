@@ -1,11 +1,12 @@
-// « Créer un nouveau rdv » (bouton Charly) sur le moteur de questionnaire (mission 46, chef, 15/10, validée par Charles).
+// « Créer un nouveau rdv » (bouton Charly) sur le moteur de questionnaire (mission 46, chef, 15/10, validée par Charles ;
+// mission 48 : la durée avant les créneaux, le titre garde ses « de », trois créneaux étalés, « ne m'a pas ouvert ses disponibilités »).
 //
 // Une question à la fois, boutons numérotés, « 2 » ou un texte tapé vaut le bouton, étapes sautées si la phrase les dit
 // déjà, rien n'est créé avant « Oui, crée-le ». Chronologie : quoi (Travail / Médecin / Famille / Amis / Autre, ou un titre
-// tapé), avec qui (Personne / Un contact / Plusieurs), quand (Aujourd'hui / Demain / Cette semaine / Je choisis une date)
-// puis trois créneaux libres dans « Mes disponibilités » (sans plage : lundi-vendredi 9h-18h, jamais le week-end) et dans
-// l'agenda du contact s'il a TimeCool et est consultable (/rdv/groupe/proposer avec une période), combien de temps
-// (30 min / 1 h / 2 h / Autre, la durée habituelle de la catégorie en premier), récapitulatif « Oui, crée-le », puis
+// tapé), avec qui (Personne / Un contact / Plusieurs), quand (Aujourd'hui / Demain / Cette semaine / Je choisis une date),
+// combien de temps (30 min / 1 h / 2 h / Autre, la durée habituelle de la catégorie en premier), puis trois créneaux libres
+// pour cette durée dans « Mes disponibilités » (sans plage : lundi-vendredi 9h-18h, jamais le week-end) et dans l'agenda du
+// contact s'il a TimeCool et est consultable (/rdv/groupe/proposer avec une période), récapitulatif « Oui, crée-le », puis
 // « C'est noté. » : la proposition part au contact (messagerie TimeCool, ou message prêt par SMS / email) ; à plusieurs,
 // le serveur l'inscrit chez tout le monde (/rdv/groupe/confirmer avec le titre et la catégorie).
 const fs = require('fs');
@@ -40,14 +41,15 @@ verifie('l onglet rdv lance le questionnaire avec sa bulle', /action === 'rdv'\)
 verifie('le serveur : proposerRdvGroupe accepte une période (depuis, jusqua, combien, par_jour), confirmerRdvGroupe un titre et une catégorie',
   /async proposerRdvGroupe\(references, duree, type, options\)/.test(page) && /\['depuis', 'jusqua', 'combien', 'par_jour'\]/.test(page)
   && /async confirmerRdvGroupe\(references, date, heure, duree, type, options\)/.test(page) && /if \(options && options\.titre\) corps\.titre = options\.titre;/.test(page));
+verifie('la durée est demandée avant les créneaux, dans les deux parcours (mission 48)', /TC_ETAPE_NRDV_DUREE,\s+TC_ETAPE_NRDV_DUREE_AUTRE,\s+\{ cle: 'creneau',/.test(page) && /TC_ETAPE_NRDV_DUREE,\s+\{ cle: 'creneau',/.test(page));
 if (api) {
   verifie('API : creneauxCommuns prend une période et un nombre par jour, sans changer son appel d avant',
     /function creneauxCommuns\(int \$organisateurId, array \$invites, int \$duree, int \$combien = 3, \?string \$depuis = null, \?string \$jusqua = null, int \$parJour = 1\): array/.test(api));
   verifie('API : aujourd hui, jamais une heure déjà passée, à l heure de Paris (PHP tourne en UTC)', /if \(\$date === \$aujourdhui && \$h <= \$heureActuelle\) \{\s+continue;/.test(api) && /\$maintenant = new DateTime\('now', new DateTimeZone\('Europe\/Paris'\)\);\s+\$aujourdhui = \$maintenant->format\('Y-m-d'\);\s+\$heureActuelle = \(int\) \$maintenant->format\('G'\);/.test(api));
   const prop = api.slice(api.indexOf("case 'POST /rdv/groupe/proposer':"), api.indexOf("case 'POST /rdv/groupe/confirmer':"));
-  verifie('API : /rdv/groupe/proposer lit depuis, jusqua (jamais dans le passé, 30 jours au plus), combien (1-10) et par_jour (1-3)',
+  verifie('API : /rdv/groupe/proposer lit depuis, jusqua (jamais dans le passé, 30 jours au plus), combien (1-40) et par_jour (1-12)',
     /Entree::texte\('depuis', 10\)/.test(prop) && /Entree::texte\('jusqua', 10\)/.test(prop) && /\$depuis < date\('Y-m-d'\)/.test(prop) && /strtotime\('\+30 day', strtotime\(\$depuis\)\)/.test(prop)
-    && /Entree::entier\('combien'\)/.test(prop) && /Entree::entier\('par_jour'\)/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, \$combien, \$depuis, \$jusqua, \$parJour\)/.test(prop), prop.length);
+    && /\$combien <= 40\) \? \$combien : 3;/.test(prop) && /\$parJour <= 12\) \? \$parJour : 1;/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, \$combien, \$depuis, \$jusqua, \$parJour\)/.test(prop), prop.length);
   const conf = api.slice(api.indexOf("case 'POST /rdv/groupe/confirmer':"), api.indexOf('/* Message libre d un compte'));
   verifie('API : /rdv/groupe/confirmer lit un titre (120) et une catégorie connue ; sans eux, les prénoms et Travail comme avant',
     /Entree::texte\('titre', 120\)/.test(conf) && /Entree::texte\('cat', 20\)/.test(conf) && /\$titre = \$titreDonne !== null \? \$titreDonne \. ' avec ' \. \$noms : \$noms;/.test(conf) && /'cat'    => \$catDonnee \?\? 'travail',/.test(conf));
@@ -93,12 +95,12 @@ const ctx = {
     confirmerRdvGroupe: async (refs, date, heure, duree, type, options) => { trace.confirmations.push({ refs: refs, date: date, heure: heure, duree: duree, type: type, options: options }); if (trace.reponseConfirmer instanceof Error) throw trace.reponseConfirmer; return trace.reponseConfirmer || { inclus: [], exclus: [] }; }
   },
   escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
-  localStorage: { getItem: () => null, setItem() {} },
+  localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   tcDemarrerRdvAPlusieurs() {}, charlyAttachAction() {}, startAssistant() {}, tcDemarrerCalculTrajet() {}, charlySendMessage() {}, tcDemarrerMalade() {}, tcDemarrerImprevu() {}, tcPrevenirRetard() {},
   document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null
 };
 vm.createContext(ctx);
-vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcGroupeEnAttente = 0;', ctx);
+vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null;', ctx);
 [/const TC_VERBES_DE_DEMANDE = \[[^\]]*\];/, /const TC_MSG_MODELES = \{[\s\S]*?\n\};/, /const TC_JOURS_FR = [^;]*;/, /const TC_MOIS_FR = [^;]*;/, /const TC_PETITS_MOTS = \[[^\]]*\];/].forEach((re) => { const m = page.match(re); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  constante introuvable : ' + re); } });
 ['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'tcEvenementFin', 'tcEvenementCouvre',
  'tcEvenementSurPlusieursJours', 'tcEstBandeau', 'tcMinutesDeHeure', 'tcSansTempsProtege', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour',
@@ -133,7 +135,7 @@ const reinit = (evts) => {
 };
 const bouton = async () => { ctx.charlyQuickAction('rdv'); await new Promise((r) => setTimeout(r, 0)); };
 const nouveaux = () => ctx.events.filter((e) => String(e.id).indexOf('charly_ai_') === 0);
-const nb = () => ctx.events.length;
+const DUREE_PLUSIEURS = 'Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h.';
 
 (async () => {
   titre('1. L onglet : la bulle, puis « C’est quel rendez-vous ? » avec cinq boutons');
@@ -142,18 +144,18 @@ const nb = () => ctx.events.length;
   verifie('la bulle de l utilisateur puis la carte', H().length === 2 && H()[0].role === 'user' && H()[0].content === 'Je veux créer un nouveau rendez-vous' && carte() && question() === 'C’est quel rendez-vous ? Touche un bouton, ou tape son nom (ex : Dentiste demain 10h).', textes());
   verifie('les cinq choix, textes exacts', choixTextes() === 'Travail | Médecin | Famille | Amis | Autre', choixTextes());
 
-  titre('2. Médecin, personne, demain, trois créneaux, 1 h, récapitulatif, « Oui, crée-le »');
+  titre('2. Médecin, personne, demain, 1 h, trois créneaux, récapitulatif, « Oui, crée-le »');
   await cliquer(1);
   verifie('« Avec qui ? » : Personne / Un contact / Plusieurs', question() === 'Avec qui ?' && choixTextes() === 'Personne | Un contact | Plusieurs', choixTextes());
   await taper('personne');
   verifie('« Quand ? » : Aujourd’hui / Demain / Cette semaine / Je choisis une date', question() === 'Quand ?' && choixTextes() === 'Aujourd’hui | Demain | Cette semaine | Je choisis une date', choixTextes());
   await taper('2');
-  verifie('trois créneaux demain, dans 9h-18h (sans plage déclarée), hors Banque 10h-11h : début, milieu, fin de journée',
+  verifie('« Combien de temps ? » vient AVANT les créneaux (mission 48) : 30 min / 1 h / 2 h / Autre (sans durée habituelle)', question() === 'Combien de temps ?' && choixTextes() === '30 min | 1 h | 2 h | Autre (je tape)', question() + ' / ' + choixTextes());
+  await cliquer(1);
+  verifie('trois créneaux demain pour 1 h, dans 9h-18h (sans plage déclarée), hors Banque 10h-11h : début, milieu, fin de journée',
     question() === 'Voici des créneaux libres demain. Touche-en un, ou tape une heure (ex : 14h30).' && choixTextes() === 'vendredi 16 octobre à 09h00 | vendredi 16 octobre à 14h00 | vendredi 16 octobre à 17h00', question() + ' / ' + choixTextes());
   verifie('personne n a été interrogé au serveur (pas de contact)', trace.propositions.length === 0);
   await cliquer(0);
-  verifie('« Combien de temps ? » : 30 min / 1 h / 2 h / Autre (sans durée habituelle)', question() === 'Combien de temps ?' && choixTextes() === '30 min | 1 h | 2 h | Autre (je tape)', choixTextes());
-  await cliquer(1);
   verifie('le récapitulatif : le titre et la catégorie, le jour, l heure et la durée ; « Oui, crée-le » / « Non, j’arrête »',
     question() === 'Voici ce que je vais faire :\n• « Médecin » (Santé)\n• Vendredi 16 octobre, 09h à 10h (1 h)' && choixTextes() === 'Oui, crée-le | Non, j’arrête', question() + ' / ' + choixTextes());
   verifie('rien n est créé avant « Oui, crée-le »', nouveaux().length === 0 && trace.saves === 0 && trace.demarches.length === 0);
@@ -190,7 +192,16 @@ const nb = () => ctx.events.length;
   await ctx.tcQuestionnaireEnvoyer(bilan3._envoisId, 0);
   verifie('le bouton touché : le SMS part avec ce texte, le bouton s éteint', trace.envois.length === 1 && trace.envois[0][0] === 'Sophie Anceau' && bilan3._envois[0].fait === 'sms', JSON.stringify(trace.envois));
 
-  titre('4. Un contact qui a TimeCool : le serveur est interrogé sur la période ; la proposition part par la messagerie');
+  titre('3b. Le titre tapé garde ses petits mots (mission 48) : « Pot de départ », « Repas de famille »');
+  reinit(); await bouton(); await taper('Pot de départ demain 14h');
+  verifie('« Pot de départ demain 14h » : le titre est « Pot de départ », le jour et l heure sont connus', enCours().reponses.quoi === 'Pot de départ' && enCours().reponses.date === iso(1) && enCours().reponses.creneau.debut === 840, JSON.stringify(enCours().reponses));
+  reinit(); await bouton(); await taper('rdv repas de famille mardi 12h30 pendant 2 h');
+  verifie('« rdv repas de famille mardi 12h30 pendant 2 h » : « Repas de famille », mardi 12h30, 2 h', enCours().reponses.quoi === 'Repas de famille' && enCours().reponses.date === iso(5) && enCours().reponses.creneau.debut === 750 && enCours().reponses.duree === '120', JSON.stringify(enCours().reponses));
+  verifie('tcNouveauRdvTitre : « Dentiste demain 10h » → Dentiste ; « ajoute un rendez-vous chez le coiffeur le 20 octobre à 9h » → Chez le coiffeur ; « 14h » seul → rien',
+    ctx.tcNouveauRdvTitre('Dentiste demain 10h') === 'Dentiste' && ctx.tcNouveauRdvTitre('ajoute un rendez-vous chez le coiffeur le 20 octobre à 9h') === 'Chez le coiffeur' && ctx.tcNouveauRdvTitre('14h') === '',
+    [ctx.tcNouveauRdvTitre('Dentiste demain 10h'), ctx.tcNouveauRdvTitre('ajoute un rendez-vous chez le coiffeur le 20 octobre à 9h'), ctx.tcNouveauRdvTitre('14h')].join(' / '));
+
+  titre('4. Un contact qui a TimeCool : le serveur est interrogé sur la période, pour la durée choisie ; la proposition part par la messagerie');
   reinit();
   trace.reponseProposer = { creneaux: [{ date: iso(0), heure: 8, minute: 0, manquants: [] }, { date: iso(0), heure: 13, minute: 0, manquants: [] }, { date: iso(0), heure: 16, minute: 0, manquants: [] }], invites: ['Marc'], sans_acces: [] };
   await bouton();
@@ -198,35 +209,40 @@ const nb = () => ctx.events.length;
   await taper('avec Marc');
   verifie('« avec Marc » tapé à « Avec qui ? » : le contact est trouvé, « Quand ? » suit', question() === 'Quand ?' && enCours().reponses.avec === 'contact' && enCours().reponses.contact === 'c1', textes());
   await taper("aujourd'hui");
-  verifie('le serveur a été interrogé pour Marc, sur aujourd hui seulement, 1 h, dix créneaux, trois par jour',
-    trace.propositions.length === 1 && JSON.stringify(trace.propositions[0]) === JSON.stringify({ refs: ['REF1'], duree: 1, type: 'physique', options: { depuis: iso(0), jusqua: iso(0), combien: 10, par_jour: 3 } }), JSON.stringify(trace.propositions));
+  verifie('la durée d abord ; le serveur n a pas encore été interrogé', question() === 'Combien de temps ?' && trace.propositions.length === 0, textes());
+  await taper('1 h');
+  verifie('le serveur a été interrogé pour Marc, sur aujourd hui seulement, 1 h, quarante créneaux, douze par jour',
+    trace.propositions.length === 1 && JSON.stringify(trace.propositions[0]) === JSON.stringify({ refs: ['REF1'], duree: 1, type: 'physique', options: { depuis: iso(0), jusqua: iso(0), combien: 40, par_jour: 12 } }), JSON.stringify(trace.propositions));
   verifie('les heures du serveur passent par mes plages (8h est fermé) ; « Marc est libre aussi. »',
     question() === 'Voici des créneaux libres aujourd’hui. Touche-en un, ou tape une heure (ex : 14h30). Marc est libre aussi.' && choixTextes() === 'jeudi 15 octobre à 13h00 | jeudi 15 octobre à 16h00', question() + ' / ' + choixTextes());
   await cliquer(0);
-  await taper('1 h');
   verifie('le récapitulatif : « J’envoie la proposition à Marc par la messagerie TimeCool »', /\n• Avec Marc Dupont\n• Jeudi 15 octobre, 13h à 14h \(1 h\)\n• J’envoie la proposition à Marc par la messagerie TimeCool$/.test(question()), question());
   await taper('oui');
   verifie('créé avec Marc, 13h-14h, Travail ; la proposition est partie par TimeCool ; « J’ai envoyé la proposition à Marc. »',
     nouveaux().length === 1 && nouveaux()[0].contact === 'c1' && nouveaux()[0].cat === 'travail' && nouveaux()[0].startH === 13
     && trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont' && trace.envois[0][1] === 'Bonjour Marc, je te propose un rendez-vous « Travail » le jeudi 15 octobre à 13h00 (1 h). Dis-moi si ça te convient.'
     && dc() === 'C’est noté.\n• « Travail », jeudi 15 octobre, 13h à 14h, avec Marc Dupont\n• J’ai envoyé la proposition à Marc.', dc() + ' / ' + JSON.stringify(trace.envois));
+  reinit();
+  trace.reponseProposer = { creneaux: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].map((h) => ({ date: iso(1), heure: h, minute: 0, manquants: [] })), invites: ['Marc'], sans_acces: [] };
+  await bouton(); await cliquer(0); await taper('Marc Dupont'); await taper('demain'); await cliquer(1);
+  verifie('douze heures du serveur : trois créneaux étalés sur la journée (9h, 14h, 17h ; 10h pris par Banque), jamais seulement le matin (mission 48)', choixTextes() === 'vendredi 16 octobre à 09h00 | vendredi 16 octobre à 14h00 | vendredi 16 octobre à 17h00', choixTextes());
 
-  titre('5. Un contact TimeCool dont l agenda n est pas consultable, ou un serveur muet : mes créneaux, et Charly le dit');
+  titre('5. Un contact TimeCool qui n a pas ouvert ses disponibilités, ou un serveur muet : mes créneaux, et Charly le dit tel quel');
   reinit();
   trace.reponseProposer = { creneaux: [], invites: [], sans_acces: ['Marc'] };
-  await bouton(); await cliquer(0); await taper('Marc Dupont'); await taper('demain');
-  verifie('sans accès : mes trois créneaux de demain, « Je n’ai pas pu regarder l’agenda de Marc. »',
-    question() === 'Voici des créneaux libres demain. Touche-en un, ou tape une heure (ex : 14h30). Je n’ai pas pu regarder l’agenda de Marc.' && choixTextes() === 'vendredi 16 octobre à 09h00 | vendredi 16 octobre à 14h00 | vendredi 16 octobre à 17h00', question());
+  await bouton(); await cliquer(0); await taper('Marc Dupont'); await taper('demain'); await cliquer(1);
+  verifie('pas ouvert : mes trois créneaux de demain, « Marc ne m’a pas ouvert ses disponibilités : je propose quand même. »',
+    question() === 'Voici des créneaux libres demain. Touche-en un, ou tape une heure (ex : 14h30). Marc ne m’a pas ouvert ses disponibilités : je propose quand même.' && choixTextes() === 'vendredi 16 octobre à 09h00 | vendredi 16 octobre à 14h00 | vendredi 16 octobre à 17h00', question());
   reinit();
   trace.reponseProposer = new Error('réseau');
-  await bouton(); await cliquer(0); await taper('Marc Dupont'); await taper('demain');
-  verifie('serveur muet : pareil', /Je n’ai pas pu regarder l’agenda de Marc\.$/.test(question()) && choixTextes().split(' | ').length === 3, question());
+  await bouton(); await cliquer(0); await taper('Marc Dupont'); await taper('demain'); await cliquer(1);
+  verifie('serveur muet : « Je n’ai pas pu regarder l’agenda de Marc. »', /Je n’ai pas pu regarder l’agenda de Marc\.$/.test(question()) && choixTextes().split(' | ').length === 3, question());
   reinit();
   trace.connecte = false;
-  await bouton(); await cliquer(0); await taper('Marc Dupont'); await taper('demain');
+  await bouton(); await cliquer(0); await taper('Marc Dupont'); await taper('demain'); await cliquer(1);
   verifie('hors connexion : pas d appel, mes créneaux, et Charly le dit', trace.propositions.length === 0 && /Je n’ai pas pu regarder l’agenda de Marc\.$/.test(question()), question());
 
-  titre('6. Plusieurs : les prénoms tapés, les créneaux communs du serveur, le serveur inscrit chez tout le monde');
+  titre('6. Plusieurs : les prénoms tapés, la durée avant, les créneaux communs du serveur pour cette durée, le serveur inscrit chez tout le monde');
   reinit();
   trace.reponseProposer = { creneaux: [{ date: iso(4), heure: 9, minute: 0, manquants: ['Paul'] }, { date: iso(1), heure: 14, minute: 0, manquants: [] }], invites: ['Marc', 'Paul'], sans_acces: [] };
   trace.reponseConfirmer = { date: iso(1), heure: '14:00', libelle: 'vendredi 16 octobre', duree: 2, type: 'physique', inclus: ['Marc', 'Paul'], exclus: [] };
@@ -236,11 +252,14 @@ const nb = () => ctx.events.length;
   await taper('Marc et Paul');
   verifie('deux contacts TimeCool cités : « plusieurs », puis « Quand ? »', question() === 'Quand ?' && enCours().reponses.avec === 'plusieurs' && enCours().reponses._groupe.length === 2, textes());
   await cliquer(2);
-  verifie('le serveur est interrogé pour les deux, sur les sept jours', trace.propositions.length === 1 && trace.propositions[0].refs.join(',') === 'REF1,REF3' && trace.propositions[0].options.depuis === iso(0) && trace.propositions[0].options.jusqua === iso(6), JSON.stringify(trace.propositions));
-  verifie('les créneaux communs, ceux où tout le monde est libre d abord, qui manque sous les autres',
-    question() === 'Voici les créneaux cette semaine où le plus de monde est libre. Touche-en un, ou tape une heure (ex : 14h).' && choixTextes() === 'vendredi 16 octobre à 14h00 | lundi 19 octobre à 09h00 (pas libre : Paul)', question() + ' / ' + choixTextes());
-  await cliquer(0);
+  verifie('à plusieurs : 1 h / 2 h / 3 h seulement, et le mot qui le dit', question() === DUREE_PLUSIEURS && choixTextes() === '1 h | 2 h | 3 h', question() + ' / ' + choixTextes());
+  await taper('30 min');
+  verifie('« 30 min » tapé à plusieurs : refusé, et la relance redit « 1 h, 2 h ou 3 h » (mission 48)', dc() === ctx.tcPhraseNonCompris('À plusieurs, c’est 1 h, 2 h ou 3 h : touche un bouton, ou tape son numéro (1 à 3).') && enCours() !== null, dc());
   await taper('2h');
+  verifie('le serveur est interrogé pour les deux, sur les sept jours, pour 2 h', trace.propositions.length === 1 && trace.propositions[0].refs.join(',') === 'REF1,REF3' && trace.propositions[0].duree === 2 && trace.propositions[0].options.depuis === iso(0) && trace.propositions[0].options.jusqua === iso(6), JSON.stringify(trace.propositions));
+  verifie('les créneaux communs, ceux où tout le monde est libre d abord, qui manque sous les autres',
+    question() === 'Voici les créneaux cette semaine où le plus de monde est libre. Touche-en un, ou tape une heure (ex : 14h30).' && choixTextes() === 'vendredi 16 octobre à 14h00 | lundi 19 octobre à 09h00 (pas libre : Paul)', question() + ' / ' + choixTextes());
+  await cliquer(0);
   verifie('le récapitulatif : avec qui, le créneau, « Je l’inscris dans l’agenda de Marc Dupont et Paul Martin »',
     question() === 'Voici ce que je vais faire :\n• « Réunion projet » (Travail)\n• Avec Marc Dupont et Paul Martin\n• Vendredi 16 octobre, 14h à 16h (2 h)\n• Je l’inscris dans l’agenda de Marc Dupont et Paul Martin', question());
   verifie('rien n est inscrit avant « Oui, crée-le »', trace.confirmations.length === 0);
@@ -252,7 +271,7 @@ const nb = () => ctx.events.length;
   reinit();
   trace.reponseProposer = { creneaux: [{ date: iso(1), heure: 14, minute: 0, manquants: [] }], invites: ['Marc', 'Paul'], sans_acces: [] };
   trace.reponseConfirmer = Object.assign(new Error('pris'), { code: 'creneau_pris' });
-  await bouton(); await taper('Réunion projet'); await taper('Marc et Paul'); await taper('demain'); await cliquer(0); await cliquer(1); await cliquer(0);
+  await bouton(); await taper('Réunion projet'); await taper('Marc et Paul'); await taper('demain'); await cliquer(0); await cliquer(0); await cliquer(0);
   verifie('créneau pris entre-temps : rien n est créé, Charly le dit', /^Ce créneau vient d’être pris chez quelqu’un : rien n’est créé\./.test(dc()) && nouveaux().length === 0, dc());
   reinit();
   await bouton(); await taper('Réunion projet'); await cliquer(2);
@@ -261,33 +280,22 @@ const nb = () => ctx.events.length;
   verifie('sans prénom connu : une relance propre à cette question', dc() === ctx.tcPhraseNonCompris('Donne-moi au moins deux prénoms de tes contacts qui ont TimeCool (ex : Paul et Marie).'), dc());
   await taper('Marc Dupont');
   verifie('un seul contact cité : on continue avec ce contact, pas à plusieurs', question() === 'Quand ?' && enCours().reponses.avec === 'contact' && enCours().reponses.contact === 'c1', textes());
-
-  // Examen (15/10) : le serveur inscrit des heures rondes (1 à 3) ; le récapitulatif doit annoncer ce qui sera inscrit.
   reinit();
   trace.reponseProposer = { creneaux: [{ date: iso(1), heure: 14, minute: 0, manquants: [] }], invites: ['Marc', 'Paul'], sans_acces: [] };
   trace.reponseConfirmer = { inclus: ['Marc', 'Paul'], exclus: [] };
-  await bouton(); await taper('Réunion projet'); await taper('Marc et Paul'); await taper('demain'); await cliquer(0);
-  verifie('à plusieurs : 1 h / 2 h / 3 h seulement, et le mot qui le dit', question() === 'Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h.' && choixTextes() === '1 h | 2 h | 3 h', question() + ' / ' + choixTextes());
-  await taper('30 min');
-  verifie('« 30 min » tapé à plusieurs : refusé, relance', dc() === ctx.tcPhraseNonCompris('Touche un bouton, ou tape son numéro (1 à 3).') && enCours() !== null, dc());
-  await taper('4 h');
-  verifie('« 4 h » tapé à plusieurs : refusé, le questionnaire tombe (deuxième relance épuisée)', enCours() === null, dc());
-  reinit();
-  trace.reponseProposer = { creneaux: [{ date: iso(1), heure: 14, minute: 0, manquants: [] }], invites: ['Marc', 'Paul'], sans_acces: [] };
-  trace.reponseConfirmer = { inclus: ['Marc', 'Paul'], exclus: [] };
-  await bouton(); await taper('Réunion projet'); await taper('Marc et Paul'); await taper('demain'); await cliquer(0); await taper('3h');
+  await bouton(); await taper('Réunion projet'); await taper('Marc et Paul'); await taper('demain'); await taper('3h'); await cliquer(0);
   verifie('« 3h » tapé : le récapitulatif annonce 14h à 17h (3 h)', /Vendredi 16 octobre, 14h à 17h \(3 h\)/.test(question()), question());
   await cliquer(0);
   verifie('le serveur inscrit 3 h, exactement ce qui était annoncé', trace.confirmations.length === 1 && trace.confirmations[0].duree === 3 && dc() === 'C’est noté : « Réunion projet », vendredi 16 octobre, 14h à 17h, avec Marc et Paul. Chacun l’a dans son agenda.', JSON.stringify(trace.confirmations) + ' ' + dc());
 
   titre('7. La durée habituelle de la catégorie passe en premier');
   reinit(agenda().concat([ev('x1', 'Ostéo', -7, 9, 0, 9, 45, { cat: 'sante' }), ev('x2', 'Radio', -3, 14, 0, 14, 45, { cat: 'sante' })]));
-  await bouton(); await cliquer(1); await cliquer(0); await cliquer(1); await cliquer(0);
+  await bouton(); await cliquer(1); await cliquer(0); await cliquer(1);
   verifie('deux rendez-vous Santé de 45 min : « 45 min (comme d’habitude) » en premier', choixTextes() === '45 min (comme d’habitude) | 30 min | 1 h | 2 h | Autre (je tape)', choixTextes());
-  await cliquer(0);
-  verifie('retenue : 45 min', /09h à 09h45 \(45 min\)/.test(question()), question());
+  await cliquer(0); await cliquer(0);
+  verifie('retenue : 45 min, et les créneaux cherchés pour 45 min', /09h à 09h45 \(45 min\)/.test(question()), question());
   reinit(agenda().concat([ev('x1', 'Ostéo', -7, 9, 0, 10, 0, { cat: 'sante' }), ev('x2', 'Radio', -3, 14, 0, 15, 0, { cat: 'sante' })]));
-  await bouton(); await cliquer(1); await cliquer(0); await cliquer(1); await cliquer(0);
+  await bouton(); await cliquer(1); await cliquer(0); await cliquer(1);
   verifie('une durée déjà proposée (1 h) : elle passe devant, sans doublon', choixTextes() === '1 h (comme d’habitude) | 30 min | 2 h | Autre (je tape)', choixTextes());
 
   titre('8. « Non, j’arrête », « Autre » durée, une date choisie, le week-end fermé, une heure tapée quand même');
@@ -303,27 +311,26 @@ const nb = () => ctx.events.length;
   await taper('bof');
   verifie('un jour illisible : une relance propre à cette question', dc() === ctx.tcPhraseNonCompris('Tape un jour (ex : mardi, le 20 octobre, 20/10).'), dc());
   await taper('samedi');
-  verifie('samedi, sans plage déclarée : fermé, aucun créneau, mais une heure tapée reste possible',
-    question() === 'Je ne vois aucun créneau libre le samedi 17 octobre dans tes disponibilités. Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).' && choixTextes() === '', question());
-  await taper('10h');
   await cliquer(3);
   verifie('« Autre (je tape) » : Charly demande la durée', question() === 'Combien de temps ? Tape une durée (ex : 45 min, 1h30).', question());
   await taper('1h30');
+  verifie('samedi, sans plage déclarée : fermé, aucun créneau, mais une heure tapée reste possible',
+    question() === 'Je ne vois aucun créneau libre le samedi 17 octobre dans tes disponibilités. Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).' && choixTextes() === '', question());
+  await taper('10h');
   verifie('le récapitulatif : Coiffeur (Personnel), samedi 17 octobre, 10h à 11h30 (1 h 30)', question() === 'Voici ce que je vais faire :\n• « Coiffeur » (Personnel)\n• Samedi 17 octobre, 10h à 11h30 (1 h 30)', question());
   await taper('ok');
   verifie('créé 10h-11h30 le samedi, catégorie Personnel', nouveaux().length === 1 && nouveaux()[0].date === iso(2) && nouveaux()[0].startH === 10 && nouveaux()[0].endH === 11 && nouveaux()[0].endM === 30 && nouveaux()[0].cat === 'perso', JSON.stringify(nouveaux()));
   reinit();
-  await bouton(); await cliquer(2); await cliquer(0); await taper('mardi');
+  await bouton(); await cliquer(2); await cliquer(0); await taper('mardi'); await cliquer(1);
   verifie('« mardi » tapé à « Quand ? » : le jour est compris (mardi 20 octobre)', question() === 'Voici des créneaux libres le mardi 20 octobre. Touche-en un, ou tape une heure (ex : 14h30).' && /mardi 20 octobre à 09h00/.test(choixTextes()), question() + ' / ' + choixTextes());
 
   titre('9. Aujourd hui à 10h : jamais une heure passée ; ce qui est déjà noté est évité (Dentiste 11h-12h, Coach 15h-16h, Kiné 17h30)');
   reinit();
-  await bouton(); await cliquer(2); await cliquer(0); await cliquer(0);
-  verifie('les créneaux d aujourd hui : 12h15, 13h15, 16h15', choixTextes() === 'jeudi 15 octobre à 12h15 | jeudi 15 octobre à 13h15 | jeudi 15 octobre à 16h15', choixTextes());
+  await bouton(); await cliquer(2); await cliquer(0); await cliquer(0); await cliquer(1);
+  verifie('les créneaux d aujourd hui pour 1 h : 12h15, 13h15, 16h15', choixTextes() === 'jeudi 15 octobre à 12h15 | jeudi 15 octobre à 13h15 | jeudi 15 octobre à 16h15', choixTextes());
   await taper('9h');
   verifie('une heure passée tapée : relance (touche un bouton ou tape son numéro)', dc() === ctx.tcPhraseNonCompris('Touche un bouton, ou tape son numéro (1 à 3).') && enCours() !== null, dc());
   await taper('14h');
-  await cliquer(1);
   verifie('14h tapé : récapitulatif à 14h-15h', /Jeudi 15 octobre, 14h à 15h \(1 h\)/.test(question()), question());
 
   titre('10. Une vraie demande pendant le questionnaire le fait tomber ; un contact sans numéro ni email');
@@ -332,7 +339,7 @@ const nb = () => ctx.events.length;
   const pris = await taper('annule le dentiste');
   verifie('« annule le dentiste » : le questionnaire s arrête, le message suit son chemin', pris === false && enCours() === null && dc() === 'D’accord, je laisse tomber la question qui attendait. Je passe à ta nouvelle demande.', dc());
   reinit();
-  await bouton(); await cliquer(2); await taper('Lucie'); await cliquer(1); await cliquer(0); await cliquer(1);
+  await bouton(); await cliquer(2); await taper('Lucie'); await cliquer(1); await cliquer(1); await cliquer(0);
   verifie('le récapitulatif prévient : Lucie n a ni numéro ni email', /• Lucie n’a ni numéro ni email dans ta fiche : tu le préviens toi-même$/.test(question()), question());
   await cliquer(0);
   verifie('créé avec Lucie ; le bilan dit « À prévenir toi-même »', nouveaux().length === 1 && nouveaux()[0].contact === 'c4' && /• Sans numéro ni email dans ta fiche contact : Lucie Bernard\. À prévenir toi-même\.$/.test(dc()) && trace.envois.length === 0, dc());

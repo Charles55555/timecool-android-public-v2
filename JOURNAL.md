@@ -2327,3 +2327,38 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   l’instant dans le stockage, deux minutes) avant l’appel, et libérée si le serveur se tait. API inchangée (une vraie
   confirmation par convocation côté API, qui inscrirait les présents sans exiger les plages, reste une décision du chef).
   verif-rdv-plusieurs : six cas de plus (60).
+
+## 15/10/2026 : corrections des testeurs sur « Créer un nouveau rdv » et « Rendez-vous à plusieurs » (mission 48 = 46b / 47b, validée par Charles)
+
+- Bloquant : la liste des propositions à plusieurs (timecool_rdv_plusieurs) partait au serveur comme un réglage ; une
+  proposition traitée revenait et Charly se répétait ou se contredisait. Elle reste désormais sur l'appareil qui a envoyé
+  (TC_SYNC_DEJA_SYNCHRONISE : la ligne du serveur est vidée au tour suivant) ; et le serveur porte le statut de chaque
+  convocation (attente / refusee / confirmee), relu avant d'agir.
+- Décision de Charles : un « Présent » vaut accord. Nouvelle route POST /convocations/confirmer (organisateur) : quand tous
+  les membres ont répondu présent, le rendez-vous s'inscrit chez lui et chez chacun d'eux, aux heures et minutes de la
+  convocation, avec le titre et la catégorie, sans exiger leurs plages ; une seule fois (statut active → confirmee sous
+  verrou, rdv_uid, confirme_le) ; un second appel reçoit deja = true ; 409 creneau_pris si le créneau n'est plus libre chez
+  l'organisateur ; un message « Rendez-vous confirmé… Il est dans ton agenda. » à chacun. POST /convocations/repondre
+  « absent » clôt la convocation (statut annulee) ; POST /convocations/etat rend statut et rdv_uid. Migration
+  backend/sql/016_convocations_confirmation.sql (ENUM + confirmee, rdv_uid, confirme_le ; rejouable), à jouer par le chef
+  avant de déployer l'API. Plus de « noté chez moi seulement » ni de mot « ajoute-le de ton côté » : tcPlusieursVerifier
+  appelle confirmerConvocation, dit chez qui (« avec Marc Dupont et Paul Martin. Chacun l'a dans son agenda. », noms des
+  fiches), « déjà inscrit » si deja, « pris dans ton agenda » sur 409, retire sans un mot une convocation déjà confirmée
+  ailleurs ; la réservation d'un onglet (relue à l'instant) vaut pour chaque action.
+- Gênants : le titre tapé garde ses petits mots (tcNouveauRdvTitre : « Pot de départ », « Repas de famille » ; les mots de
+  date, d'heure et de durée sont retirés, les mots de remplissage du début seulement) ; la durée est demandée AVANT les
+  créneaux dans les deux parcours (le serveur est interrogé pour elle) ; les minutes sont gardées partout (proposition,
+  convocation, inscription, « créneau passé ») et une heure tapée à la demi-heure est acceptée à plusieurs ; deux onglets :
+  le second ne dit plus « rien n'est inscrit » (réservation, et deja) ; « tout le monde libre d'abord » : le serveur peut
+  rendre jusqu'à 12 créneaux par jour et 40 en tout (/rdv/groupe/proposer, la page les demande) et la page les range par
+  nombre de manquants, puis les étale (un jour : début, milieu, fin ; plusieurs jours : un par jour), ce qui corrige aussi
+  « jamais l'après-midi » avec un contact TimeCool et les deux seuls créneaux de « Cette semaine ».
+- Détails : « 30 min » tapé à plusieurs → la relance redit « À plusieurs, c'est 1 h, 2 h ou 3 h » (relance d'étape en
+  fonction des réponses, relanceForte) ; le bilan d'un questionnaire retrouve les rendez-vous par identifiant (la
+  synchronisation peut remplacer les objets de l'agenda entre la question et « Oui » : la ligne du retard manquait avec
+  « Personne ») ; les prénoms rendus par le serveur (« Gaelle ») deviennent les noms des fiches (« Gaëlle Perrin ») ;
+  « X ne m'a pas ouvert ses disponibilités : je propose quand même » (un contact TimeCool sans accès), « Je n'ai pas pu
+  regarder l'agenda de X » seulement quand le serveur se tait.
+- Suites : verif-nouveau-rdv (76 cas, nouvel ordre, titres), verif-rdv-plusieurs (72 cas : route de confirmation, statut,
+  minutes, deux onglets, noms, ordre dans une journée), verif-rdv-groupe (plafonds, ordre sous PHP), verif-onglets-charly
+  (retard « Personne » avec objets remplacés).

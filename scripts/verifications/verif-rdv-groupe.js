@@ -104,6 +104,11 @@ $c = creneauxCommuns(1, [$A], 1, 3);
 $ok = count($c) >= 1;
 foreach ($c as $x) { $ok = $ok && $iso($x['date']) === 2 && in_array($x['heure'], [14, 15], true) && $x['manquants'] === []; }
 t('Alice ne reçoit que le mardi 14h-16h : seuls ces creneaux sont complets', $ok, json_encode($c));
+
+// Mission 48 : dans une journee, ceux ou tout le monde est libre d abord (Alice ouverte 11h-12h et 14h-15h), puis les autres, dans l ordre des heures
+Db::$rdv = []; Db::$dispo = [2 => ['travail' => [['jours' => [1, 2, 3, 4, 5, 6, 7], 'debut' => '11:00', 'fin' => '12:00'], ['jours' => [1, 2, 3, 4, 5, 6, 7], 'debut' => '14:00', 'fin' => '15:00']]], 3 => ['travail' => [['jours' => [1, 2, 3, 4, 5, 6, 7], 'debut' => '09:00', 'fin' => '18:00']]]];
+$c = creneauxCommuns(1, [$A, $B], 1, 40, $jour(1), $jour(1), 12);
+t('un jour, douze par jour : 11h et 14h (tout le monde libre) d abord, puis ceux ou Alice manque, dans l ordre des heures', count($c) === 9 && $c[0]['heure'] === 11 && $c[0]['manquants'] === [] && $c[1]['heure'] === 14 && $c[1]['manquants'] === [] && $c[2]['heure'] === 9 && $c[2]['manquants'] === ['Alice'] && $c[8]['heure'] === 17, json_encode($c));
 echo json_encode($res);
 `;
   const f = path.join(os.tmpdir(), 'verif-groupe-' + process.pid + '.php');
@@ -122,7 +127,7 @@ echo json_encode($res);
 titre('2. Les routes : autorisation, verrous, verification a la confirmation');
 const prop = api.slice(api.indexOf("case 'POST /rdv/groupe/proposer':"), api.indexOf("case 'POST /rdv/groupe/confirmer':"));
 const conf = api.slice(api.indexOf("case 'POST /rdv/groupe/confirmer':"), api.indexOf('/* Message libre d un compte'));
-verifie('proposer : passe par invitesRdvGroupe (autorisation par fiche) et creneauxCommuns', /invitesRdvGroupe\(\$moi/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, \$combien, \$depuis, \$jusqua, \$parJour\)/.test(prop) && /\$combien = \(\$combien !== null && \$combien >= 1 && \$combien <= 10\) \? \$combien : 3;/.test(prop) && /\$parJour = \(\$parJour !== null && \$parJour >= 1 && \$parJour <= 3\) \? \$parJour : 1;/.test(prop));
+verifie('proposer : passe par invitesRdvGroupe (autorisation par fiche) et creneauxCommuns', /invitesRdvGroupe\(\$moi/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, \$combien, \$depuis, \$jusqua, \$parJour\)/.test(prop) && /\$combien = \(\$combien !== null && \$combien >= 1 && \$combien <= 40\) \? \$combien : 3;/.test(prop) && /\$parJour = \(\$parJour !== null && \$parJour >= 1 && \$parJour <= 12\) \? \$parJour : 1;/.test(prop));
 verifie('proposer : duree bornee a 1-3 heures', /\$duree < 1 \|\| \$duree > 3/.test(prop));
 const inv = fonction(api, 'invitesRdvGroupe') || '';
 verifie('de 1 a 12 personnes, refus sinon', /count\(\$references\) > 12/.test(inv) && /Rep::erreur\(400, 'participants_invalides'/.test(inv));
