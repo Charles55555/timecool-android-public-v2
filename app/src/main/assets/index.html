@@ -13251,8 +13251,9 @@ function charlyQuickAction(action) {
     tcDemarrerCalculTrajet("J'aimerais calculer un trajet.");
     return;
   }
+  // Quand suis-je libre : le questionnaire guidé (mission 49) : quand, pour combien de temps, la liste, y mettre quelque chose.
+  if (action === 'libre') { tcDemarrerLibre('Quand suis-je libre ?'); return; }
   const prompts = {
-    libre: 'Quand suis-je libre cette semaine ?',
     trajet: "J'aimerais calculer un trajet. Demande-moi les adresses de départ et d'arrivée et l'heure du rendez-vous.",
     reserver: "J'aimerais faire une réservation (restaurant ou hôtel). Pose-moi les questions nécessaires."
   };
@@ -18921,7 +18922,7 @@ function tcChoixPeriode(text) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43, 14/10 ; mission 44, 15/10 ; missions 46 et 47, 15/10)
+   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43, 14/10 ; mission 44, 15/10 ; missions 46, 47 et 49, 15/10)
 
    Une question à la fois, des boutons numérotés, une réponse tapée
    (« 2 », « demain matin », « oui ») vaut le bouton. Un questionnaire
@@ -18933,8 +18934,8 @@ function tcChoixPeriode(text) {
    Une étape dont la réponse est déjà connue (la phrase disait
    « demain ») n'est pas posée. À la fin, « terminer » fait le travail,
    et pas avant. Les parcours : « Je suis malade, décale tout » et
-   « Gérer un imprévu », « Prévenir d'un retard », « Créer un nouveau rdv » et « Rendez-vous à
-   plusieurs » ; ils partagent les étapes « qui prévient » et « récapitulatif », la proposition de
+   « Gérer un imprévu », « Prévenir d'un retard », « Créer un nouveau rdv », « Rendez-vous à
+   plusieurs » et « Quand suis-je libre ? » ; ils partagent les étapes « qui prévient » et « récapitulatif », la proposition de
    créneaux et le bilan. Une réponse libre peut dire plus que l'étape (« Dentiste demain 10h ») :
    { valeur, aussi } remplit les autres. Une étape « multiple » (avec qui, à plusieurs) accepte
    plusieurs boutons, puis « C'est tout » ; des prénoms ou des numéros tapés valent les boutons.
@@ -19997,28 +19998,36 @@ function tcNouveauRdvEtaler(liste, combien) {
   if (l.every(function (c) { return c.date === l[0].date; })) {
     if (l.length <= combien) return l;
     if (combien === 1) return [l[0]];
-    if (combien === 2) return [l[0], l[l.length - 1]];
-    return [l[0], l[Math.floor(l.length / 2)], l[l.length - 1]];
+    // Répartis sur la journée : le premier, le dernier, et les autres à égale distance (trois : début, milieu, fin).
+    const out = [];
+    for (let i = 0; i < combien; i++) { const k = Math.round(i * (l.length - 1) / (combien - 1)); if (out.indexOf(l[k]) < 0) out.push(l[k]); }
+    return out;
   }
+  // Plusieurs jours : le nombre voulu réparti entre les jours (les premiers jours en ont un de plus), et dans chaque jour
+  // les créneaux sont répartis sur la journée (deux : le premier et le dernier), jamais deux heures qui se suivent.
   const parJour = {}, ordre = [];
   l.forEach(function (c) { if (!parJour[c.date]) { parJour[c.date] = []; ordre.push(c.date); } parJour[c.date].push(c); });
-  const out = [];
-  for (let k = 0; out.length < combien; k++) {
+  const quota = {};
+  let reste = combien;
+  for (let k = 0; reste > 0; k++) {
     let ajoute = false;
-    ordre.forEach(function (d) { if (out.length < combien && parJour[d][k]) { out.push(parJour[d][k]); ajoute = true; } });
+    ordre.forEach(function (d) { if (reste > 0 && parJour[d].length > (quota[d] || 0)) { quota[d] = (quota[d] || 0) + 1; reste--; ajoute = true; } });
     if (!ajoute) break;
   }
+  const out = [];
+  ordre.forEach(function (d) { tcNouveauRdvEtaler(parJour[d], quota[d] || 0).forEach(function (c) { out.push(c); }); });
   return out;
 }
 
 /**
- * Trois créneaux au plus, dans la période, pour la durée choisie, dans les plages ouvertes de « Mes disponibilités »
+ * Trois créneaux au plus (ou `combien`), dans la période, pour la durée choisie, dans les plages ouvertes de « Mes disponibilités »
  * (tcPlagesDuJour : sans plage déclarée, lundi-vendredi 9h-18h, jamais le week-end), hors de ce qui est déjà noté, jamais
  * dans le passé, au quart d'heure. Avec l'agenda d'un contact (ou de plusieurs), les heures viennent du serveur et passent
  * par le même tamis : ceux où tout le monde est libre d'abord, puis ceux où il manque quelqu'un ; à chaque fois étalés
  * (un jour : début, milieu, fin de journée ; plusieurs jours : un par jour).
  */
-function tcNouveauRdvPropositions(r) {
+function tcNouveauRdvPropositions(r, combien) {
+  const voulu = combien || 3;
   const duree = r._dureeMin || r._dureeCherchee || 60;
   const now = new Date();
   const aujourdhui = tcISO(now);
@@ -20037,12 +20046,12 @@ function tcNouveauRdvPropositions(r) {
       for (let d = Math.ceil(Math.max(p.debut, plancher) / 15) * 15; d + duree <= p.fin; d += 30) { if (libre(d)) tous.push({ date: iso, debut: d }); }
     });
   });
-  if (!Array.isArray(r._communs)) return tcNouveauRdvEtaler(tous, 3);
+  if (!Array.isArray(r._communs)) return tcNouveauRdvEtaler(tous, voulu);
   const groupes = {};
   tous.forEach(function (c) { const k = (c.manquants || []).length; (groupes[k] = groupes[k] || []).push(c); });
   const out = [];
   Object.keys(groupes).map(Number).sort(function (a, b) { return a - b; }).forEach(function (k) {
-    tcNouveauRdvEtaler(groupes[k], 3 - out.length).forEach(function (c) { out.push(c); });
+    tcNouveauRdvEtaler(groupes[k], voulu - out.length).forEach(function (c) { out.push(c); });
   });
   return out;
 }
@@ -20684,6 +20693,154 @@ const TC_QUESTIONNAIRE_PLUSIEURS = {
   terminer: async function (r) {
     if (r.recap !== 'oui') { tcQuestionnaireDire('D’accord, j’arrête là : rien n’est envoyé.'); return; }
     await tcPlusieursEnvoyer(r);
+  }
+};
+
+
+/* ── « Quand suis-je libre ? » (mission 49) ─────────────────── */
+
+/** « Quand ? » : la période ; « Je choisis une date » demande le jour. */
+const TC_LIBRE_QUAND = {
+  aujourdhui: { texte: 'Aujourd’hui',         label: 'aujourd’hui',          mots: /^(aujourd ?hui|ce soir|ce matin|cet apres midi)$/ },
+  demain:     { texte: 'Demain',              label: 'demain',               mots: /^demain$/ },
+  semaine:    { texte: 'Cette semaine',       label: 'cette semaine',        mots: /^(cette semaine|semaine)$/ },
+  prochaine:  { texte: 'Semaine prochaine',   label: 'la semaine prochaine', mots: /prochaine/ },
+  date:       { texte: 'Je choisis une date', label: '',                     mots: /date|choisis|autre jour|plus tard/ }
+};
+
+/** « Pour combien de temps ? » ; une demi-journée vaut quatre heures. */
+const TC_LIBRE_DUREES = [
+  { cle: '30',  texte: '30 min',           mots: /^(30( ?min(utes)?)?|trente( minutes)?|une demi heure|demi heure)$/ },
+  { cle: '60',  texte: '1 h',              mots: /^(1 ?h|une heure|1 heure|60( ?min(utes)?)?)$/ },
+  { cle: '120', texte: '2 h',              mots: /^(2 ?h|deux heures|2 heures|120( ?min(utes)?)?)$/ },
+  { cle: '240', texte: 'Une demi-journée', mots: /demi.?journee|matinee|apres midi|^4 ?h$|quatre heures|240/ }
+];
+
+/**
+ * Les jours (ISO) de la période ; `suivante` : la période d'après (aujourd'hui → demain ; demain → les jours suivants de la
+ * semaine ; cette semaine → la semaine prochaine ; la semaine prochaine → celle d'après ; une date → les sept jours suivants).
+ */
+function tcLibreJours(r, suivante) {
+  const now = new Date();
+  const jour0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lundi = ((8 - jour0.getDay()) % 7) || 7;
+  let depart, fin, base = jour0;
+  if (r.quand === 'date' && r.date) { base = new Date(r.date + 'T12:00:00'); depart = suivante ? 1 : 0; fin = suivante ? 7 : 0; }
+  else if (r.quand === 'demain') { depart = suivante ? 2 : 1; fin = suivante ? 6 : 1; }
+  else if (r.quand === 'semaine') { depart = suivante ? lundi : 0; fin = suivante ? lundi + 6 : 6; }
+  else if (r.quand === 'prochaine') { depart = suivante ? lundi + 7 : lundi; fin = depart + 6; }
+  else { depart = suivante ? 1 : 0; fin = suivante ? 1 : 0; }
+  const out = [];
+  for (let n = depart; n <= fin; n++) { const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + n); out.push(tcISO(d)); }
+  return out;
+}
+
+/** « aujourd'hui », « demain », « les jours suivants de la semaine », « la semaine d'après », « le mardi 20 octobre », « les sept jours suivants ». */
+function tcLibreLabel(r, suivante) {
+  if (r.quand === 'date' && r.date) {
+    if (suivante) return 'les sept jours suivants';
+    const d = tcFormaterDateHumaine(r.date);
+    return 'le ' + d.charAt(0).toLowerCase() + d.slice(1);
+  }
+  if (!suivante) return (TC_LIBRE_QUAND[r.quand] || TC_LIBRE_QUAND.aujourdhui).label;
+  return { aujourdhui: 'demain', demain: 'les jours suivants de la semaine', semaine: 'la semaine prochaine', prochaine: 'la semaine d’après' }[r.quand] || 'demain';
+}
+
+/** Une date tapée à « Quand ? » ou « Quel jour ? », avec la durée si elle est dite (« mardi pendant 2 h »). */
+function tcLibreDateTapee(text) {
+  const now = new Date();
+  const d = tcDateDemandee(text, now);
+  if (!d || d.invalide || !d.date || tcISO(d.date) < tcISO(now)) return null;
+  const aussi = {};
+  const duree = tcNouveauRdvDureeDansLaPhrase(text);
+  if (duree) aussi.duree = duree;
+  return { valeur: tcISO(d.date), aussi: aussi };
+}
+function tcLibreQuandTape(text) {
+  const d = tcLibreDateTapee(text);
+  if (!d) return null;
+  d.aussi.date = d.valeur;
+  return { valeur: 'date', aussi: d.aussi };
+}
+
+/** Les créneaux libres de la période pour la durée, six au plus, étalés (tcNouveauRdvPropositions, sans agenda d'autrui). */
+function tcLibreListe(r, suivante) {
+  r._jours = tcLibreJours(r, suivante);
+  r._quandLabel = tcLibreLabel(r, suivante);
+  r._communs = null;
+  return tcNouveauRdvPropositions(r, 6);
+}
+
+/** La liste, regroupée par jour : « • vendredi 16 octobre : 09h00, 14h00 et 17h00 ». */
+function tcLibreTexte(libres) {
+  const parJour = {}, ordre = [];
+  libres.forEach(function (c) { if (!parJour[c.date]) { parJour[c.date] = []; ordre.push(c.date); } parJour[c.date].push(tcQuestionnaireHeure(c.debut)); });
+  return ordre.map(function (d) {
+    const j = tcFormaterDateHumaine(d);
+    return '• ' + j.charAt(0).toLowerCase() + j.slice(1) + ' : ' + tcQuestionnaireNoms(parJour[d]);
+  }).join('\n');
+}
+
+/** Montre la liste trouvée. */
+function tcLibreMontrer(r) {
+  tcQuestionnaireDire('Voici tes créneaux libres ' + r._quandLabel + ' pour ' + tcDureeLisible(r._dureeMin) + ' :\n' + tcLibreTexte(r._libres));
+}
+
+/** Le bouton « Quand suis-je libre ? » : la bulle, puis la première question. */
+async function tcDemarrerLibre(text) {
+  if (text) tcPousserMessageUtilisateur(text);
+  await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_LIBRE, {});
+}
+
+/** Le parcours : quand, pour combien de temps, la liste (ou la période suivante), y mettre quelque chose, lequel. */
+const TC_QUESTIONNAIRE_LIBRE = {
+  nom: 'libre',
+  etapes: [
+    { cle: 'quand', question: 'Quand ?',
+      choix: Object.keys(TC_LIBRE_QUAND).map(function (k) { return { cle: k, texte: TC_LIBRE_QUAND[k].texte, mots: TC_LIBRE_QUAND[k].mots }; }),
+      libre: tcLibreQuandTape },
+    { cle: 'date', si: function (r) { return r.quand === 'date'; },
+      question: 'Quel jour ? Tape une date (ex : mardi, le 20 octobre, 20/10).',
+      libre: tcLibreDateTapee, relance: 'Tape un jour (ex : mardi, le 20 octobre, 20/10).' },
+    { cle: 'duree', question: 'Pour combien de temps ?', choix: TC_LIBRE_DUREES, libre: tcNouveauRdvDureeTapee },
+    { cle: 'liste',
+      avant: function (r) {
+        r._dureeMin = Number(r.duree) || 60;
+        r._libres = tcLibreListe(r, false);
+        if (r._libres.length) tcLibreMontrer(r);
+      } },
+    { cle: 'suivante', si: function (r) { return !r._libres.length; },
+      question: function (r) { return 'Rien de libre ' + r._quandLabel + ' dans tes disponibilités. Je regarde ' + tcLibreLabel(r, true) + ' ?'; },
+      choix: [
+        { cle: 'oui', texte: 'Oui, regarde', mots: /^(oui|ouais|ok|okay|yes|regarde|vas y|d accord|daccord)\b/ },
+        { cle: 'non', texte: 'Non, merci', mots: /^(non|no|nan|stop|laisse|merci)\b/, ton: 'gris' }
+      ] },
+    { cle: 'liste2', si: function (r) { return !r._libres.length && r.suivante === 'oui'; },
+      avant: function (r) {
+        r._libres = tcLibreListe(r, true);
+        if (!r._libres.length) { tcQuestionnaireDire('Rien de libre non plus ' + r._quandLabel + ' dans tes disponibilités.'); return false; }
+        tcLibreMontrer(r);
+      } },
+    { cle: 'fin_non', si: function (r) { return !r._libres.length; },
+      avant: function () { tcQuestionnaireDire('D’accord.'); return false; } },
+    { cle: 'mettre', question: 'Tu veux y mettre quelque chose ?',
+      choix: [
+        { cle: 'oui', texte: 'Oui', mots: /^(oui|ouais|ok|okay|yes|volontiers|vas y|d accord|daccord)\b/ },
+        { cle: 'non', texte: 'Non', mots: /^(non|no|nan|pas maintenant|laisse)\b/, ton: 'gris' }
+      ] },
+    { cle: 'lequel', si: function (r) { return r.mettre === 'oui'; },
+      avant: function (r) { r._propositions = r._libres; },
+      question: 'Lequel ? Touche un créneau, ou tape une heure (ex : 14h30).',
+      choix: tcNouveauRdvChoixCreneau,
+      libre: tcNouveauRdvHeureTapee,
+      relance: 'Touche un créneau, ou tape une heure (ex : 14h30).' }
+  ],
+  terminer: async function (r) {
+    if (r.mettre !== 'oui') { tcQuestionnaireDire('D’accord.'); return; }
+    const c = tcNouveauRdvCreneauChoisi(r, 'lequel');
+    if (!c) { tcQuestionnaireDire('Je ne retrouve pas ce créneau.'); return; }
+    // La suite est « Créer un nouveau rdv », avec le jour, l'heure et la durée déjà remplis : il reste quoi, avec qui, le récapitulatif.
+    await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_NOUVEAU_RDV, { quand: 'date', date: c.date, creneau: { date: c.date, debut: c.debut }, duree: String(r._dureeMin) });
   }
 };
 

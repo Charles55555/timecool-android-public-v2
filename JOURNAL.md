@@ -2362,3 +2362,29 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
 - Suites : verif-nouveau-rdv (76 cas, nouvel ordre, titres), verif-rdv-plusieurs (72 cas : route de confirmation, statut,
   minutes, deux onglets, noms, ordre dans une journée), verif-rdv-groupe (plafonds, ordre sous PHP), verif-onglets-charly
   (retard « Personne » avec objets remplacés).
+
+## 15/10/2026 : « Quand suis-je libre ? » sur le questionnaire guidé (mission 49, chef, validée par Charles)
+
+- Le bouton ne pré-remplit plus « Quand suis-je libre cette semaine ? » (la phrase tapée garde son chemin, tcGererDemandeCreneau) :
+  il lance un parcours du moteur de questionnaire, tcDemarrerLibre('Quand suis-je libre ?') → TC_QUESTIONNAIRE_LIBRE.
+  « Quand ? » (Aujourd'hui / Demain / Cette semaine = sept jours / Semaine prochaine = du lundi au dimanche / Je choisis
+  une date ; une date tapée vaut le bouton, « mardi pendant 2 h » donne aussi la durée) ; « Pour combien de temps ? »
+  (30 min / 1 h / 2 h / Une demi-journée = 4 h) ; la liste des créneaux libres pour cette durée (tcNouveauRdvPropositions
+  avec six au plus : Mes disponibilités, lundi-vendredi 9h-18h sans plage, jamais le week-end, jamais le passé, hors
+  rendez-vous notés, démo comprise), regroupée par jour (« • vendredi 16 octobre : 09h00, 12h00, 13h00, 14h30, 15h30 et
+  17h00 ») ; rien → « Rien de libre <période> dans tes disponibilités. Je regarde <période suivante> ? » (demain, les
+  jours suivants de la semaine, la semaine prochaine, celle d'après, les sept jours suivants d'une date), « Oui, regarde »
+  / « Non, merci », et « Rien de libre non plus … » s'il le faut ; « Tu veux y mettre quelque chose ? » Oui / Non ;
+  « Lequel ? » (les créneaux numérotés, ou une heure tapée) puis le questionnaire « Créer un nouveau rdv » démarre avec le
+  jour, l'heure et la durée déjà remplis (il reste quoi, avec qui, le récapitulatif, « Oui, crée-le ») ; Non → « D'accord. ».
+  Rien n'est créé avant « Oui, crée-le ».
+- tcNouveauRdvEtaler : un nombre voulu quelconque ; un seul jour, les créneaux répartis sur la journée (le premier, le
+  dernier, les autres à égale distance ; trois = début, milieu, fin comme avant) ; plusieurs jours, le nombre réparti
+  entre les jours (les premiers en ont un de plus) et, dans chaque jour, réparti sur la journée (deux = le premier et le
+  dernier, jamais deux heures qui se suivent). Les propositions des missions 46 à 48 (trois) ne changent pas.
+- API inchangée.
+- Suites : verif-quand-libre (25 cas : bouton, demain 1 h avec la liste et l'enchaînement sur « Créer un nouveau rdv »
+  (jour, heure, durée sautés), Non, heure tapée, cette semaine une demi-journée (répartition entre jours, démo comptée),
+  samedi fermé → sept jours suivants, tout pris → demain → rien non plus, phrase « mardi pendant 2 h », semaine prochaine
+  30 min), enregistrée dans verifier.sh ; verif-boutons-charly (le bouton passe par le questionnaire). Rejouée Chrome sur
+  la page entière : la liste, « Lequel ? », l'enchaînement, la création, samedi fermé.

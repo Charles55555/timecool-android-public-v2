@@ -45,6 +45,7 @@ const ctx = {
   charlySendMessage: () => { appels.push('envoi:' + ctx.document.getElementById('charlyInput').value); },
   tcPrevenirRetard: () => {}, tcDemarrerNouveauRdv: () => {}, tcDemarrerImprevu: () => {}, startAssistant: () => {}, tcDemarrerCalculTrajet: () => {},
   tcDemarrerRdvAPlusieurs: (t) => { appels.push('plusieurs:' + t); },
+  tcDemarrerLibre: (t) => { appels.push('libre:' + t); },
   _agendaChecked: null, Set,
   document: { getElementById: () => ctx._champ }, _champ: { value: '' }
 };
@@ -61,7 +62,8 @@ if (!ko) {
   // Mission 43 : le questionnaire guidé (tcDemarrerMalade) ; sans jour dans le texte du bouton, la période est demandée.
   verifie('« Je suis malade, décale tout » : le questionnaire guidé démarre avec le texte du bouton', appels.indexOf('malade:Je suis malade, décale tout') > -1, appels.find((a) => a.indexOf('malade:') === 0));
   ctx.charlyQuickAction('libre');
-  verifie('« Quand suis-je libre ? » : la question est pré-remplie et envoyée', appels.indexOf('envoi:Quand suis-je libre cette semaine ?') > -1, appels.join(' ; '));
+  // Mission 49 : le questionnaire guidé (tcDemarrerLibre), avec la bulle du bouton ; plus de phrase pré-remplie.
+  verifie('« Quand suis-je libre ? » : le questionnaire guidé démarre avec la bulle du bouton', appels.indexOf('libre:Quand suis-je libre ?') > -1 && appels.indexOf('envoi:Quand suis-je libre cette semaine ?') < 0, appels.join(' ; '));
   ctx.charlyQuickAction('photo');
   verifie('« Photo → rendez-vous » : le même chemin que le trombone (Photos)', appels.indexOf('trombone:photo') > -1);
 }
