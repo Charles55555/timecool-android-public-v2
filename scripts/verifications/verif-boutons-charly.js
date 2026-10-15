@@ -44,30 +44,32 @@ const ctx = {
   charlyAttachAction: (t) => { appels.push('trombone:' + t); },
   charlySendMessage: () => { appels.push('envoi:' + ctx.document.getElementById('charlyInput').value); },
   tcPrevenirRetard: () => {}, tcDemarrerNouveauRdv: () => {}, tcDemarrerImprevu: () => {}, startAssistant: () => {}, tcDemarrerCalculTrajet: () => {},
+  tcDemarrerRdvAPlusieurs: (t) => { appels.push('plusieurs:' + t); },
   _agendaChecked: null, Set,
   document: { getElementById: () => ctx._champ }, _champ: { value: '' }
 };
 vm.createContext(ctx);
 ['let _tcImprevuEnAttente = 0;', 'let _tcGroupeEnAttente = 0;', 'let _tcGroupeEnAttenteDepuis = 0;'].forEach((d) => vm.runInContext(d, ctx));
 { const m = page.match(/const TC_VERBES_DE_DEMANDE = \[[^\]]*\];/); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  TC_VERBES_DE_DEMANDE introuvable'); } }
-['tcSansAccents', 'tcRessembleAUneDemande', 'tcDemandeHorsPrenoms', 'tcDemarrerRdvAPlusieurs', 'charlyQuickAction'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+['tcSansAccents', 'tcRessembleAUneDemande', 'charlyQuickAction'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 verifie('tcRessembleAUneDemande (règle de « qui est-ce ? ») n est déclarée qu une fois dans la page : réutilisée, pas doublée', page.split('function tcRessembleAUneDemande(').length - 1 === 1);
 if (!ko) {
   ctx.charlyQuickAction('groupe');
-  verifie('« Rendez-vous à plusieurs » : Charly demande « Avec qui ? » et attend les prénoms (2 essais)', ctx.charlyIA.history.length === 1 && /^Avec qui \?/.test(ctx.charlyIA.history[0].content) && vm.runInContext('_tcGroupeEnAttente', ctx) === 2 && appels.indexOf('render') > -1, ctx.charlyIA.history[0] && ctx.charlyIA.history[0].content);
+  // Mission 47 : le questionnaire guidé (tcDemarrerRdvAPlusieurs), avec la bulle du bouton.
+  verifie('« Rendez-vous à plusieurs » : le questionnaire guidé démarre avec la bulle du bouton', appels.indexOf('plusieurs:Je veux un rendez-vous à plusieurs') > -1, appels.join(' ; '));
   ctx.charlyQuickAction('malade');
   // Mission 43 : le questionnaire guidé (tcDemarrerMalade) ; sans jour dans le texte du bouton, la période est demandée.
-  verifie('« Je suis malade, décale tout » : le questionnaire guidé démarre avec le texte du bouton, et l attente « Avec qui ? » tombe', appels.indexOf('malade:Je suis malade, décale tout') > -1 && vm.runInContext('_tcGroupeEnAttente', ctx) === 0, appels.find((a) => a.indexOf('malade:') === 0));
+  verifie('« Je suis malade, décale tout » : le questionnaire guidé démarre avec le texte du bouton', appels.indexOf('malade:Je suis malade, décale tout') > -1, appels.find((a) => a.indexOf('malade:') === 0));
   ctx.charlyQuickAction('libre');
   verifie('« Quand suis-je libre ? » : la question est pré-remplie et envoyée', appels.indexOf('envoi:Quand suis-je libre cette semaine ?') > -1, appels.join(' ; '));
   ctx.charlyQuickAction('photo');
   verifie('« Photo → rendez-vous » : le même chemin que le trombone (Photos)', appels.indexOf('trombone:photo') > -1);
 }
 
-titre('3. La réponse à « Avec qui ? » dans charlySendMessage');
+titre('3. L ancienne attente « Avec qui ? » (prénoms tapés, deux essais) a disparu : le bouton passe par le questionnaire (mission 47)');
 const csm = fonction(page, 'charlySendMessage') || '';
-verifie('avec deux contacts cités, le parcours « à plusieurs » démarre sans mot de rendez-vous, avant la détection habituelle', /if \(_tcGroupeEnAttente > 0\) \{\s+const cites = tcComptesCitesDansTexte\(text\);\s+if \(cites\.length >= 2\) \{ _tcGroupeEnAttente = 0; await tcGererRdvGroupe\(text, \{ contacts: cites, duree: 1 \}\); return; \}[\s\S]*?\}\s+const _groupe = tcDetecterRdvGroupe\(text\);/.test(csm));
-verifie('sans deux prénoms, Charly redemande une fois puis laisse le message suivre son chemin', /_tcGroupeEnAttente -= 1;\s+if \(_tcGroupeEnAttente > 0\) \{[\s\S]*?tcPhraseNonCompris\('Avec qui \?/.test(csm));
+verifie('plus d attente « Avec qui ? » dans charlySendMessage ni dans la page', !/_tcGroupeEnAttente|tcDemandeHorsPrenoms/.test(page) && /const _groupe = tcDetecterRdvGroupe\(text\);/.test(csm));
+verifie('la phrase tapée « trouve-nous un créneau avec A et B » suit toujours son chemin (tcDetecterRdvGroupe, tcGererRdvGroupe)', /if \(_groupe\) \{\s+await tcGererRdvGroupe\(text, _groupe\);/.test(csm));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
 
 titre('4. Une contrainte tapée (tcGererContrainte) va jusqu à la liste du jour, avec l apostrophe droite ET typographique');
@@ -109,12 +111,8 @@ if (!ko4) {
     verifie('sans jour reconnu, Charly le dit (jamais de bulle sans réponse)', trace.montres.length === 0 && c4.charlyIA.history.length === 2 && /pas compris quel jour/.test(c4.charlyIA.history[1].content), JSON.stringify(c4.charlyIA.history));
     verifie('tcPeriodeContrainte lit « aujourd’hui » et « demain » avec l apostrophe typographique ou droite', !!c4.tcPeriodeContrainte('aujourd’hui') && !!c4.tcPeriodeContrainte("aujourd'hui") && !!c4.tcPeriodeContrainte('demain'));
 
-    titre('5. L attente « Avec qui ? » n avale pas une vraie demande, expire, et tombe au ménage');
-    verifie('« ajoute un rdv dentiste demain 10h », « annule le coach », « quand suis-je libre vendredi ? », « montre ma semaine », « rdv à 15h30 » sont des demandes', ['ajoute un rdv dentiste demain 10h', 'annule le coach', 'quand suis-je libre vendredi ?', 'montre ma semaine', 'rdv à 15h30'].every((t) => ctx.tcDemandeHorsPrenoms(t)), ['ajoute un rdv dentiste demain 10h', 'annule le coach', 'quand suis-je libre vendredi ?', 'montre ma semaine', 'rdv à 15h30'].map((t) => t + '=' + ctx.tcDemandeHorsPrenoms(t)).join(' '));
-    verifie('« avec Paul », « Paul », « euh », « je sais pas » n en sont pas (une relance, une seule)', ['avec Paul', 'Paul', 'euh', 'je sais pas', 'ma femme et moi'].every((t) => !ctx.tcDemandeHorsPrenoms(t)), ['avec Paul', 'Paul', 'euh', 'je sais pas', 'ma femme et moi'].map((t) => t + '=' + ctx.tcDemandeHorsPrenoms(t)).join(' '));
-    verifie('charlySendMessage : une vraie demande ou une attente de plus de 10 min fait tomber l attente ; sinon une relance', /if \(tcDemandeHorsPrenoms\(text\) \|\| Date\.now\(\) - _tcGroupeEnAttenteDepuis > 10 \* 60 \* 1000\) _tcGroupeEnAttente = 0;\s+else _tcGroupeEnAttente -= 1;\s+if \(_tcGroupeEnAttente > 0\) \{/.test(csm));
-    verifie('tcDemarrerRdvAPlusieurs horodate l attente', /_tcGroupeEnAttenteDepuis = Date\.now\(\);/.test(fonction(page, 'tcDemarrerRdvAPlusieurs') || ''));
-    verifie('le ménage du compte remet l attente « Avec qui ? » à zéro', /_tcGroupeEnAttente = 0;/.test(fonction(page, 'tcViderDonneesDuCompte') || ''));
+    titre('5. Le ménage du compte (plus rien à remettre à zéro pour l ancienne attente)');
+    verifie('le ménage du compte remet le questionnaire en cours à zéro, et plus rien pour l ancienne attente', /_tcQuestionnaire = null;/.test(fonction(page, 'tcViderDonneesDuCompte') || '') && !/_tcGroupeEnAttente/.test(fonction(page, 'tcViderDonneesDuCompte') || ''));
 
     console.log('');
     console.log(ko + ' anomalie(s).');

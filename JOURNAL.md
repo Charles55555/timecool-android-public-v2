@@ -2281,3 +2281,40 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   proposées (« Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h. ») et une autre durée tapée est refusée par la relance :
   le récapitulatif annonce exactement ce qui est inscrit. Réserve 1 prise : creneauxCommuns lit « aujourd’hui » et l’heure
   courante à l’heure de Paris (DateTime, Europe/Paris), PHP tournant en UTC. verif-nouveau-rdv : cinq cas de plus (71).
+
+## 15/10/2026 : « Rendez-vous à plusieurs » sur le questionnaire guidé (mission 47, chef, validée par Charles) : avec qui, pour quoi, quand, durée, proposition, réponses
+
+- Le bouton « Rendez-vous à plusieurs » ne demande plus des prénoms tapés en deux essais : il lance un parcours du moteur
+  de questionnaire, tcDemarrerRdvAPlusieurs('Je veux un rendez-vous à plusieurs') → TC_QUESTIONNAIRE_PLUSIEURS, qui
+  réutilise la branche « Plusieurs » de la mission 46 (mêmes créneaux communs, même inscription). L'ancienne attente
+  « Avec qui ? » (_tcGroupeEnAttente, tcDemandeHorsPrenoms, la branche de charlySendMessage) est retirée ; la phrase tapée
+  « trouve-nous un créneau avec A et B » suit toujours son chemin (tcDetecterRdvGroupe, la carte de choix).
+- Chronologie : « Avec qui ? » (les contacts qui ont TimeCool, ni bloqués, les plus probables d'abord, neuf au plus ;
+  plusieurs boutons puis « ✔️ C'est tout », ou des prénoms / numéros tapés ; au moins deux) ; « C'est pour quoi ? »
+  (Travail / Famille / Amis / Autre, ou un sujet tapé qui peut dire le jour et l'heure, « Réunion projet mardi 14h ») ;
+  « Quand ? » (Cette semaine = sept jours / Semaine prochaine = du lundi au dimanche / Je choisis une date) ; trois
+  créneaux communs du serveur (/rdv/groupe/proposer sur la période, tamisés par mes plages : lundi-vendredi 9h-18h sans
+  plage déclarée, jamais le week-end, jamais le passé), ceux où tout le monde est libre d'abord, qui manque sous les
+  autres ; personne de consultable → mes créneaux à moi et « Je n'ai pas pu regarder l'agenda de … : je propose quand
+  même » ; une heure ronde tapée vaut un choix ; « Combien de temps ? » 1 h / 2 h / 3 h (la durée habituelle de la
+  catégorie en premier, si elle est ronde) ; « Voici ce que je vais faire : » (qui, quoi, créneau, durée, la suite) puis
+  « Oui, propose-leur » / « Non, j'arrête ».
+- Le travail : rien n'est inscrit ; la proposition part dans la messagerie de chacun comme une convocation (mission 27b,
+  boutons Présent / Absent, /convocations), « C'est envoyé. » avec la liste des prévenus ; la proposition est gardée sur
+  l'appareil (timecool_rdv_plusieurs : identifiant, titre, catégorie, créneau, durée, références). À chaque tour de
+  synchronisation (au plus une fois par minute), tcPlusieursVerifier relit les réponses (/convocations/etat) : tout le
+  monde présent → /rdv/groupe/confirmer l'inscrit chez tous avec le titre et la catégorie (mission 46), Charly le dit
+  (« Tout le monde a répondu pour « … » : c'est confirmé, …, avec A et B. Chacun l'a dans son agenda. ») et, depuis une
+  autre page, un mot à l'écran ; quelqu'un absent, ou le créneau passé sans réponse, ou pris entre-temps → rien n'est
+  inscrit, Charly le dit ; serveur muet → au prochain tour.
+- Le moteur : une étape « multiple » (min) accepte plusieurs boutons (tcQuestionnaireRepondre allume ou éteint), puis
+  « ✔️ C'est tout » (tcQuestionnaireValider) ; des prénoms ou des numéros tapés (« Marc et Paul », « 2 et 3 »,
+  tcQuestionnaireChoixTapes) s'ajoutent et font avancer dès qu'il y en a assez, sinon « J'ai noté …. Et qui d'autre ? » ;
+  la relance d'une étape multiple est la sienne. Les étapes de fin de « Créer un nouveau rdv » (durée, vérification,
+  nouvelle proposition) deviennent des constantes partagées (TC_ETAPES_NRDV_FIN).
+- API inchangée (routes de la mission 46 et de la mission 27b).
+- Suites : verif-rdv-plusieurs (54 cas : page, bouton, choix multiples par boutons / prénoms / numéros, parcours complet
+  avec la période envoyée au serveur, réponses en attente / présents / absent / passé / pris / muet / hors connexion,
+  personne de consultable, moins de deux contacts, phrase qui dit tout, « Autre », date tapée, durée habituelle, « Non »),
+  enregistrée dans verifier.sh ; verif-boutons-charly (le bouton passe par le questionnaire, l'ancienne attente a
+  disparu). Rejouée Chrome sur la page entière : les boutons allumés, « C'est tout », les créneaux, l'envoi, la confirmation.
