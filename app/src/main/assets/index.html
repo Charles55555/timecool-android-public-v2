@@ -20454,54 +20454,114 @@ async function tcPlusieursEnvoyer(r) {
 }
 
 let _tcPlusieursDernierControle = 0;
+/** Combien de temps une inscription réservée par un onglet reste la sienne (deux onglets lisent le même stockage). */
+const TC_PLUSIEURS_RESERVATION_MS = 120000;
+
+/** La proposition d'un identifiant, relue à l'instant sur l'appareil, avec la liste entière. */
+function tcPlusieursRelire(id) {
+  const liste = tcPlusieursEnAttente();
+  return { liste: liste, p: liste.filter(function (x) { return x && x.id === id; })[0] || null };
+}
+function tcPlusieursRetirer(id) {
+  tcPlusieursEnregistrer(tcPlusieursEnAttente().filter(function (x) { return !x || x.id !== id; }));
+}
+
+/** Le rendez-vous chez moi seulement, quand le serveur ne peut l'écrire chez personne (aucune plage ouverte). */
+function tcPlusieursNoterChezMoi(p) {
+  const fin = Math.min(23, p.heure + p.duree);
+  events.push({ date: p.date, startH: p.heure, startM: 0, endH: fin, endM: fin === 23 && p.heure + p.duree > 23 ? 59 : 0,
+    title: p.titre + ' avec ' + tcQuestionnaireNoms(p.noms || []), cat: p.cat || 'travail', mode: mode === 'pro' ? 'pro' : 'user', id: 'charly_ai_' + Date.now() + '_0' });
+  saveEventsToStorage();
+}
+
+/** Un mot dans la messagerie de ceux qui ont dit oui mais chez qui le serveur n'écrit pas : ils l'ajoutent de leur côté. */
+async function tcPlusieursEcrireAuxNonInscrits(p, membres) {
+  for (const m of membres) {
+    if (!m.reference) continue;
+    try {
+      await TC_BACKEND.envoyerMessage(m.reference, 'Rendez-vous « ' + p.titre + ' », ' + p.quand + ' : tout le monde a dit oui. Je ne peux pas l’écrire dans ton agenda, ajoute-le de ton côté.',
+        (typeof tcLangueForceePour === 'function') ? tcLangueForceePour(m.reference) : null);
+    } catch (e) {}
+  }
+}
+
 /**
  * Les réponses, relues sur le serveur (au plus une fois par minute, sauf force) : tout le monde présent → le rendez-vous
  * s'inscrit chez tous avec le titre et la catégorie (/rdv/groupe/confirmer, mission 46) et Charly le dit ; quelqu'un absent,
  * ou le créneau passé sans réponse → rien n'est inscrit, Charly le dit. Appelée à chaque tour de synchronisation.
+ * Le serveur n'écrit que chez ceux qui m'ont ouvert leurs plages : ceux qui ont dit oui sans cela reçoivent un mot et
+ * l'ajoutent de leur côté ; personne de joignable, le rendez-vous est noté chez moi seulement (examen, 15/10). Un seul
+ * onglet inscrit : la proposition est réservée (relue à l'instant) avant l'appel, et libérée si le serveur se tait.
  */
 async function tcPlusieursVerifier(force) {
-  const liste = tcPlusieursEnAttente();
-  if (!liste.length) return false;
+  if (!tcPlusieursEnAttente().length) return false;
   if (typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte()) return false;
   if (!force && Date.now() - _tcPlusieursDernierControle < 60000) return false;
   _tcPlusieursDernierControle = Date.now();
   let change = false;
-  const retirer = function (p) { const k = liste.indexOf(p); if (k > -1) liste.splice(k, 1); change = true; };
-  for (const p of liste.slice()) {
+  for (const p0 of tcPlusieursEnAttente()) {
     let etat;
-    try { etat = await TC_BACKEND.etatConvocation(p.id); } catch (e) { continue; }
+    try { etat = await TC_BACKEND.etatConvocation(p0.id); } catch (e) { continue; }
     const membres = (etat && Array.isArray(etat.membres)) ? etat.membres : [];
     const absents = membres.filter(function (m) { return m.statut === 'absent'; }).map(tcPlusieursNom);
     const attente = membres.filter(function (m) { return m.statut !== 'present' && m.statut !== 'absent'; }).map(tcPlusieursNom);
+    const presents = membres.filter(function (m) { return m.statut === 'present'; });
+    const relu = tcPlusieursRelire(p0.id);
+    const p = relu.p;
+    if (!p) continue;   // un autre onglet l'a traitée entre-temps
     if (absents.length) {
-      retirer(p);
+      tcPlusieursRetirer(p.id); change = true;
       tcPlusieursDire('Pour « ' + p.titre + ' » (' + p.quand + '), ' + tcQuestionnaireNoms(absents) + ' ne ' + (absents.length > 1 ? 'peuvent' : 'peut')
         + ' pas venir : je n’inscris rien. Relance « Rendez-vous à plusieurs » pour un autre créneau.', p.titre);
       continue;
     }
     if (attente.length) {
       if (Date.now() > new Date(p.date + 'T' + String(p.heure).padStart(2, '0') + ':00:00').getTime()) {
-        retirer(p);
+        tcPlusieursRetirer(p.id); change = true;
         tcPlusieursDire('Le créneau de « ' + p.titre + ' » (' + p.quand + ') est passé sans réponse de ' + tcQuestionnaireNoms(attente) + ' : je n’inscris rien.', p.titre);
       }
       continue;
     }
+    // Tout le monde a dit oui : un seul onglet inscrit (réservation relue à l'instant, deux minutes).
+    if (p.enCours && Date.now() - p.enCours < TC_PLUSIEURS_RESERVATION_MS) continue;
+    p.enCours = Date.now();
+    tcPlusieursEnregistrer(relu.liste);
     let res;
     try {
       res = await TC_BACKEND.confirmerRdvGroupe(p.references, p.date, p.heure, p.duree, 'physique', { titre: p.titre, cat: p.cat });
     } catch (e) {
-      if (e && e.code === 'creneau_pris') {
-        retirer(p);
-        tcPlusieursDire('Tout le monde a répondu pour « ' + p.titre + ' », mais le créneau (' + p.quand + ') vient d’être pris chez quelqu’un : rien n’est inscrit.', p.titre);
+      if (e && e.code === 'creneau_pris' && /joignable/i.test(e.message || '')) {
+        // Personne de joignable : le serveur n'écrit chez personne (aucune plage ouverte) ; chez moi, oui, et je leur écris.
+        tcPlusieursRetirer(p.id); change = true;
+        tcPlusieursNoterChezMoi(p);
+        await tcPlusieursEcrireAuxNonInscrits(p, presents);
+        tcPlusieursDire('Tout le monde a dit oui pour « ' + p.titre + ' » (' + p.quand + ') : c’est noté dans ton agenda. Mais je ne peux pas écrire dans l’agenda de '
+          + tcQuestionnaireNoms(presents.map(tcPlusieursNom)) + ' (leurs plages ne me sont pas ouvertes) : je leur ai envoyé un message pour qu’ils l’ajoutent de leur côté.', p.titre);
+        continue;
       }
-      continue;   // serveur muet : on réessaie au prochain tour
+      if (e && e.code === 'creneau_pris') {
+        tcPlusieursRetirer(p.id); change = true;
+        tcPlusieursDire('Tout le monde a répondu pour « ' + p.titre + ' », mais le créneau (' + p.quand + ') vient d’être pris chez quelqu’un : rien n’est inscrit.', p.titre);
+        continue;
+      }
+      // Serveur muet : la réservation est levée, on réessaie au prochain tour.
+      const encore = tcPlusieursRelire(p.id);
+      if (encore.p) { delete encore.p.enCours; tcPlusieursEnregistrer(encore.liste); }
+      continue;
     }
-    retirer(p);
-    tcPlusieursDire('Tout le monde a répondu pour « ' + p.titre + ' » : c’est confirmé, ' + p.quand + ', avec ' + tcQuestionnaireNoms(res.inclus || p.noms) + '. Chacun l’a dans son agenda.'
-      + (res.exclus && res.exclus.length ? '\n• Pas ajouté chez ' + tcQuestionnaireNoms(res.exclus) + ' : déjà pris à ce moment-là.' : ''), p.titre);
+    tcPlusieursRetirer(p.id); change = true;
+    const inclus = Array.isArray(res.inclus) ? res.inclus : [];
+    const exclus = Array.isArray(res.exclus) ? res.exclus : [];
+    // Présents que le serveur n'a ni inscrits ni écartés : ils ne m'ont pas ouvert leurs plages.
+    const nonInscrits = presents.filter(function (m) { return inclus.indexOf(m.prenom) < 0 && exclus.indexOf(m.prenom) < 0; });
+    if (nonInscrits.length) await tcPlusieursEcrireAuxNonInscrits(p, nonInscrits);
+    const noms = nonInscrits.map(tcPlusieursNom);
+    tcPlusieursDire('Tout le monde a répondu pour « ' + p.titre + ' » : c’est confirmé, ' + p.quand + ', avec ' + tcQuestionnaireNoms(inclus) + '. ' + (inclus.length > 1 ? 'Chacun l’a' : 'C’est') + ' dans ' + (inclus.length > 1 ? 'son' : 'ton') + ' agenda.'
+      + (exclus.length ? '\n• Pas ajouté chez ' + tcQuestionnaireNoms(exclus) + ' : déjà pris à ce moment-là.' : '')
+      + (noms.length ? '\n• ' + tcQuestionnaireNoms(noms) + (noms.length > 1 ? ' ont dit oui, mais je ne peux pas écrire dans leurs agendas (leurs plages ne me sont pas ouvertes) : je leur ai envoyé un message pour qu’ils l’ajoutent de leur côté.'
+        : ' a dit oui, mais je ne peux pas écrire dans son agenda (ses plages ne me sont pas ouvertes) : je lui ai envoyé un message pour l’ajouter de son côté.') : ''), p.titre);
     if (typeof tcSyncBientot === 'function') tcSyncBientot();
   }
-  if (change) tcPlusieursEnregistrer(liste);
   return change;
 }
 

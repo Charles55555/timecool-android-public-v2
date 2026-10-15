@@ -2318,3 +2318,12 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   personne de consultable, moins de deux contacts, phrase qui dit tout, « Autre », date tapée, durée habituelle, « Non »),
   enregistrée dans verifier.sh ; verif-boutons-charly (le bouton passe par le questionnaire, l'ancienne attente a
   disparu). Rejouée Chrome sur la page entière : les boutons allumés, « C'est tout », les créneaux, l'envoi, la confirmation.
+  Reprise après l’examinateur (15/10) : le serveur n’écrit que chez ceux qui m’ont ouvert leurs plages ; un membre qui a
+  dit « Présent » sans cela n’était ni inscrit ni nommé, et Charly disait « chacun l’a dans son agenda ». Désormais
+  tcPlusieursVerifier dit la vérité : « X a dit oui, mais je ne peux pas écrire dans son agenda (ses plages ne me sont
+  pas ouvertes) » et lui envoie un message TimeCool pour qu’il l’ajoute de son côté ; personne de joignable (409
+  « Personne n est joignable ») → le rendez-vous est noté chez moi seulement (« Titre avec A et B »), un message à chacun,
+  et Charly le dit. Deux onglets du même appareil inscrivaient deux fois : la proposition est réservée (enCours, relue à
+  l’instant dans le stockage, deux minutes) avant l’appel, et libérée si le serveur se tait. API inchangée (une vraie
+  confirmation par convocation côté API, qui inscrirait les présents sans exiger les plages, reste une décision du chef).
+  verif-rdv-plusieurs : six cas de plus (60).

@@ -52,7 +52,7 @@ function agenda() {
 }
 
 const stockage = {};
-const trace = { saves: 0, toasts: [], propositions: [], confirmations: [], convocations: [], etats: [], connecte: true, reponseProposer: null, reponseConfirmer: null, reponseConvocation: null, reponseEtat: null };
+const trace = { saves: 0, toasts: [], propositions: [], confirmations: [], convocations: [], etats: [], messages: [], connecte: true, reponseProposer: null, reponseConfirmer: null, reponseConvocation: null, reponseEtat: null };
 const ctx = {
   console, String, Number, Array, Object, RegExp, Promise, JSON, Math, parseInt, Date: DateFixe,
   mode: 'user', currentPage: 'chat', events: [], charlyIA: { history: [], config: {} }, viewDate: null,
@@ -76,7 +76,8 @@ const ctx = {
     proposerRdvGroupe: async (refs, duree, type, options) => { trace.propositions.push({ refs: refs, duree: duree, type: type, options: options }); if (trace.reponseProposer instanceof Error) throw trace.reponseProposer; return trace.reponseProposer || { creneaux: [], invites: [], sans_acces: [] }; },
     confirmerRdvGroupe: async (refs, date, heure, duree, type, options) => { trace.confirmations.push({ refs: refs, date: date, heure: heure, duree: duree, type: type, options: options }); if (trace.reponseConfirmer instanceof Error) throw trace.reponseConfirmer; return trace.reponseConfirmer || { inclus: [], exclus: [] }; },
     envoyerConvocation: async (c) => { trace.convocations.push(c); if (trace.reponseConvocation instanceof Error) throw trace.reponseConvocation; return trace.reponseConvocation || { id: 77, quand: 'x', envoyes: [], sans_compte: [] }; },
-    etatConvocation: async (id) => { trace.etats.push(id); if (trace.reponseEtat instanceof Error) throw trace.reponseEtat; return trace.reponseEtat || { membres: [] }; }
+    etatConvocation: async (id) => { trace.etats.push(id); if (trace.reponseEtat instanceof Error) throw trace.reponseEtat; return trace.reponseEtat || { membres: [] }; },
+    envoyerMessage: async (ref, texte) => { trace.messages.push([ref, texte]); return true; }
   },
   escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
   localStorage: { getItem: (k) => (k in stockage ? stockage[k] : null), setItem(k, v) { stockage[k] = String(v); }, removeItem(k) { delete stockage[k]; } },
@@ -116,7 +117,7 @@ const rendu = () => ctx.tcRendreQuestionnaire(carte());
 const attente = () => ctx.tcPlusieursEnAttente();
 const reinit = (evts) => {
   ctx.events = evts || agenda(); ctx.charlyIA.history = []; ctx.currentPage = 'chat';
-  trace.saves = 0; trace.toasts.length = 0; trace.propositions.length = 0; trace.confirmations.length = 0; trace.convocations.length = 0; trace.etats.length = 0;
+  trace.saves = 0; trace.toasts.length = 0; trace.propositions.length = 0; trace.confirmations.length = 0; trace.convocations.length = 0; trace.etats.length = 0; trace.messages.length = 0;
   trace.connecte = true; trace.reponseProposer = null; trace.reponseConfirmer = null; trace.reponseConvocation = null; trace.reponseEtat = null;
   Object.keys(stockage).forEach((k) => delete stockage[k]);
   vm.runInContext('_tcQuestionnaire = null; _tcMarcheArriere = null; _tcPlusieursDernierControle = 0;', ctx);
@@ -235,6 +236,50 @@ const CONVOC = () => ({ id: 77, quand: 'vendredi 16 octobre de 14:00 à 15:00', 
   verifie('serveur muet à la lecture des réponses : pareil', H().length === n5 && attente().length === 1);
   trace.connecte = false;
   verifie('hors connexion : rien', (await ctx.tcPlusieursVerifier(true)) === false);
+
+  titre('5b. Examen (15/10) : ceux qui ont dit oui sans m avoir ouvert leurs plages ; personne de joignable ; deux onglets');
+  const PROPOSITION = () => JSON.stringify([{ id: 81, titre: 'Travail', cat: 'travail', date: iso(5), heure: 16, duree: 1, references: ['REF1', 'REF3'], noms: ['Marc Dupont', 'Paul Martin'], quand: 'mardi 20 octobre, 16h à 17h', envoye: 0 }]);
+  const PRESENTS = () => ({ membres: [{ reference: 'REF1', prenom: 'Marc', nom: 'Dupont', statut: 'present' }, { reference: 'REF3', prenom: 'Paul', nom: 'Martin', statut: 'present' }] });
+  const relance = () => { vm.runInContext('_tcPlusieursDernierControle = 0;', ctx); };
+  reinit();
+  stockage['timecool_rdv_plusieurs'] = PROPOSITION();
+  trace.reponseEtat = PRESENTS();
+  trace.reponseConfirmer = { inclus: ['Marc'], exclus: [] };
+  await ctx.tcPlusieursVerifier(true);
+  verifie('un sur deux sans plages ouvertes : inscrit chez Marc ; Paul a dit oui, Charly le dit et lui écrit (un message TimeCool), la proposition est retirée',
+    trace.confirmations.length === 1 && dc() === 'Tout le monde a répondu pour « Travail » : c’est confirmé, mardi 20 octobre, 16h à 17h, avec Marc. C’est dans ton agenda.\n• Paul Martin a dit oui, mais je ne peux pas écrire dans son agenda (ses plages ne me sont pas ouvertes) : je lui ai envoyé un message pour l’ajouter de son côté.'
+    && trace.messages.length === 1 && trace.messages[0][0] === 'REF3' && /« Travail », mardi 20 octobre, 16h à 17h : tout le monde a dit oui\. Je ne peux pas l’écrire dans ton agenda, ajoute-le de ton côté\./.test(trace.messages[0][1]) && attente().length === 0 && ctx.events.length === 3, dc() + ' / ' + JSON.stringify(trace.messages));
+  reinit();
+  stockage['timecool_rdv_plusieurs'] = PROPOSITION();
+  trace.reponseEtat = PRESENTS();
+  trace.reponseConfirmer = Object.assign(new Error('Personne n est joignable pour ce rendez-vous.'), { code: 'creneau_pris' });
+  await ctx.tcPlusieursVerifier(true);
+  const chezMoi = ctx.events.filter((e) => String(e.id).indexOf('charly_ai_') === 0)[0];
+  verifie('personne de joignable (tous sans plages ouvertes) : noté chez moi seulement (16h-17h, Travail), un message à chacun, Charly dit la vérité, la proposition est retirée',
+    chezMoi && chezMoi.title === 'Travail avec Marc Dupont et Paul Martin' && chezMoi.date === iso(5) && chezMoi.startH === 16 && chezMoi.endH === 17 && chezMoi.cat === 'travail' && trace.saves === 1
+    && dc() === 'Tout le monde a dit oui pour « Travail » (mardi 20 octobre, 16h à 17h) : c’est noté dans ton agenda. Mais je ne peux pas écrire dans l’agenda de Marc Dupont et Paul Martin (leurs plages ne me sont pas ouvertes) : je leur ai envoyé un message pour qu’ils l’ajoutent de leur côté.'
+    && trace.messages.length === 2 && trace.messages.map((m) => m[0]).join(',') === 'REF1,REF3' && attente().length === 0, dc() + ' / ' + JSON.stringify(chezMoi));
+  reinit();
+  stockage['timecool_rdv_plusieurs'] = PROPOSITION();
+  trace.reponseEtat = PRESENTS();
+  trace.reponseConfirmer = { inclus: ['Marc', 'Paul'], exclus: [] };
+  await Promise.all([ctx.tcPlusieursVerifier(true), ctx.tcPlusieursVerifier(true)]);
+  verifie('deux onglets en même temps : une seule inscription, un seul mot de Charly', trace.confirmations.length === 1 && H().filter((m) => /c’est confirmé/.test(String(m.content))).length === 1 && attente().length === 0, trace.confirmations.length + ' ' + textes());
+  reinit();
+  stockage['timecool_rdv_plusieurs'] = JSON.stringify(JSON.parse(PROPOSITION()).map((p) => Object.assign(p, { enCours: vm.runInContext('Date.now()', ctx) - 30000 })));
+  trace.reponseEtat = PRESENTS();
+  await ctx.tcPlusieursVerifier(true);
+  verifie('réservée par un autre onglet il y a 30 s : cet onglet n inscrit pas', trace.confirmations.length === 0 && attente().length === 1);
+  stockage['timecool_rdv_plusieurs'] = JSON.stringify(JSON.parse(PROPOSITION()).map((p) => Object.assign(p, { enCours: vm.runInContext('Date.now()', ctx) - 5 * 60000 })));
+  relance();
+  await ctx.tcPlusieursVerifier(true);
+  verifie('réservation vieille de cinq minutes (onglet fermé) : cet onglet inscrit', trace.confirmations.length === 1 && attente().length === 0);
+  reinit();
+  stockage['timecool_rdv_plusieurs'] = PROPOSITION();
+  trace.reponseEtat = PRESENTS();
+  trace.reponseConfirmer = new Error('réseau');
+  await ctx.tcPlusieursVerifier(true);
+  verifie('serveur muet à l inscription : la réservation est levée, la proposition reste', attente().length === 1 && !attente()[0].enCours);
 
   titre('6. Personne de consultable : mes créneaux, et Charly le dit ; moins de deux contacts TimeCool ; serveur muet');
   reinit(); await bouton();
