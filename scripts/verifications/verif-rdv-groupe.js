@@ -122,7 +122,7 @@ echo json_encode($res);
 titre('2. Les routes : autorisation, verrous, verification a la confirmation');
 const prop = api.slice(api.indexOf("case 'POST /rdv/groupe/proposer':"), api.indexOf("case 'POST /rdv/groupe/confirmer':"));
 const conf = api.slice(api.indexOf("case 'POST /rdv/groupe/confirmer':"), api.indexOf('/* Message libre d un compte'));
-verifie('proposer : passe par invitesRdvGroupe (autorisation par fiche) et creneauxCommuns', /invitesRdvGroupe\(\$moi/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, 3\)/.test(prop));
+verifie('proposer : passe par invitesRdvGroupe (autorisation par fiche) et creneauxCommuns', /invitesRdvGroupe\(\$moi/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, \$combien, \$depuis, \$jusqua, \$parJour\)/.test(prop) && /\$combien = \(\$combien !== null && \$combien >= 1 && \$combien <= 10\) \? \$combien : 3;/.test(prop) && /\$parJour = \(\$parJour !== null && \$parJour >= 1 && \$parJour <= 3\) \? \$parJour : 1;/.test(prop));
 verifie('proposer : duree bornee a 1-3 heures', /\$duree < 1 \|\| \$duree > 3/.test(prop));
 const inv = fonction(api, 'invitesRdvGroupe') || '';
 verifie('de 1 a 12 personnes, refus sinon', /count\(\$references\) > 12/.test(inv) && /Rep::erreur\(400, 'participants_invalides'/.test(inv));
@@ -166,7 +166,7 @@ verifie('prevenir ou annuler : jamais intercepte ici', det('préviens William Ay
 titre('4. Branchements dans la page');
 verifie('Charly intercepte avant le modele (apres « prevenir »)', page.indexOf('const _prevenance = tcDetecterPrevenance(text);') < page.indexOf('const _groupe = tcDetecterRdvGroupe(text);') && page.indexOf('const _groupe = tcDetecterRdvGroupe(text);') < page.indexOf('// === IMPRÉVU sans jour'));
 verifie('la carte est dessinee par renderChatMessage', /function renderChatMessage\(m\) \{\s+if \(m && m\._groupe\) return tcRendreGroupe\(m\);/.test(page));
-verifie('les deux appels au serveur existent', /async proposerRdvGroupe\(references, duree, type\)/.test(page) && /\/rdv\/groupe\/proposer/.test(page) && /\/rdv\/groupe\/confirmer/.test(page));
+verifie('les deux appels au serveur existent', /async proposerRdvGroupe\(references, duree, type, options\)/.test(page) && /\/rdv\/groupe\/proposer/.test(page) && /\/rdv\/groupe\/confirmer/.test(page));
 const confirmer = fonction(page, 'tcConfirmerRdvGroupe') || '';
 verifie('creneau pris (409) : la recherche est relancee seule', /e\.code === 'creneau_pris'/.test(confirmer) && /tcProposerRdvGroupe\(g\.references, g\.duree/.test(confirmer));
 verifie('apres confirmation, la synchronisation ramene le rendez-vous', /tcSyncTour\(\)/.test(confirmer));

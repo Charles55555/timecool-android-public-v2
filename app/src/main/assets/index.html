@@ -13199,14 +13199,6 @@ async function tcGererPrevenance(text, intent) {
   await tcPrevenirDepuisChat(intent.type, ev, intent.minutes);
 }
 
-const TC_QUESTION_NOUVEAU_RDV = 'Tu veux créer un nouveau rendez-vous !\nQuel jour, à quelle heure, à quelle adresse et avec qui ou pourquoi ? (ex : demain 14h30, Dr Martin)';
-
-/** Charly ouvre la conversation avec sa question ; la réponse suit le chemin normal. */
-function tcDemarrerNouveauRdv() {
-  charlyIA.history.push({ role: 'assistant', content: TC_QUESTION_NOUVEAU_RDV });
-  renderCharlyChat();
-}
-
 /* « Rendez-vous a plusieurs » (bouton) : Charly a demande « Avec qui ? », la reponse donne les prenoms (2 essais). */
 let _tcGroupeEnAttente = 0;
 let _tcGroupeEnAttenteDepuis = 0;
@@ -13256,8 +13248,8 @@ function charlyQuickAction(action) {
   if (action === 'photo') { charlyAttachAction('photo'); return; }
   // Retard : le questionnaire guidé (mission 45) : combien, pour quel rendez-vous, et après, qui prévient, récapitulatif.
   if (action === 'retard') { tcPrevenirRetard('Je vais être en retard'); return; }
-  // Nouveau rdv : une seule question, posee par Charly, qui demande tout.
-  if (action === 'rdv') { tcDemarrerNouveauRdv(); return; }
+  // Nouveau rdv : le questionnaire guidé (mission 46) : quoi, avec qui, quand (trois créneaux), combien de temps, récapitulatif.
+  if (action === 'rdv') { tcDemarrerNouveauRdv('Je veux créer un nouveau rendez-vous'); return; }
   // Imprévu : le questionnaire guidé (mission 44) : ce qui arrive, ce qui est touché, la solution, qui prévient, récapitulatif.
   if (action === 'impprevu') { tcDemarrerImprevu('J’ai un imprévu'); return; }
   // Agenda : ouvrir la page checklist au lieu d'envoyer un message
@@ -18964,7 +18956,7 @@ function tcChoixPeriode(text) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43, 14/10 ; mission 44, 15/10)
+   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43, 14/10 ; mission 44, 15/10 ; mission 46, 15/10)
 
    Une question à la fois, des boutons numérotés, une réponse tapée
    (« 2 », « demain matin », « oui ») vaut le bouton. Un questionnaire
@@ -18976,8 +18968,9 @@ function tcChoixPeriode(text) {
    Une étape dont la réponse est déjà connue (la phrase disait
    « demain ») n'est pas posée. À la fin, « terminer » fait le travail,
    et pas avant. Les parcours : « Je suis malade, décale tout » et
-   « Gérer un imprévu », « Prévenir d'un retard » ; ils partagent les étapes « qui prévient » et
-   « récapitulatif », la proposition de créneaux et le bilan.
+   « Gérer un imprévu », « Prévenir d'un retard » et « Créer un nouveau rdv » ; ils partagent les
+   étapes « qui prévient » et « récapitulatif », la proposition de créneaux et le bilan. Une réponse
+   libre peut dire plus que l'étape (« Dentiste demain 10h ») : { valeur, aussi } remplit les autres.
    ══════════════════════════════════════════════════════════════ */
 
 /** Le questionnaire en cours (un seul à la fois), ou null. */
@@ -19063,6 +19056,11 @@ async function tcQuestionnaireRepondreLibre(valeur) {
   const q = _tcQuestionnaire;
   const m = q && tcQuestionnaireCarte(q.id);
   if (!m) return;
+  // « Dentiste demain 10h » à « C'est quel rendez-vous ? » : le titre pour cette étape, le reste pour les suivantes (mission 46).
+  if (valeur && typeof valeur === 'object' && valeur.aussi) {
+    Object.keys(valeur.aussi).forEach(function (k) { q.reponses[k] = valeur.aussi[k]; });
+    valeur = valeur.valeur;
+  }
   m._questionnaire.etat = 'fait';
   m._questionnaire.reponse = valeur;
   q.reponses[q.etape] = valeur;
@@ -19120,7 +19118,7 @@ async function tcQuestionnaireRepondreTexte(text) {
   }
   q.essais -= 1;
   tcPousserMessageUtilisateur(text);
-  charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('Touche un bouton, ou tape son numéro (1 à ' + choix.length + ').') });
+  charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris(choix.length ? 'Touche un bouton, ou tape son numéro (1 à ' + choix.length + ').' : ((etape && etape.relance) || 'Réponds en quelques mots.')) });
   renderCharlyChat();
   return true;
 }
@@ -19363,10 +19361,11 @@ async function tcQuestionnaireExecuter(r, fin) {
     }
   }
   const lignes = [fin];
+  // Le retard d'abord, puis ce qui a bougé à cause de lui (testeurs, 15/10).
+  if (r.action === 'retard') presents.filter(function (e) { return !r._retardRdv || e.id === r._retardRdv.id; }).forEach(function (e) { lignes.push('• Retard d’environ ' + r.minutes + ' minutes pour « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + '), arrivée vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes))); });
   deplaces.forEach(function (x) { lignes.push('• Déplacé : « ' + x.ev.title + ' », ' + tcQuestionnaireQuand(x.ev.date, x.ev)); });
   laisses.forEach(function (e) { lignes.push('• Laissé en place : « ' + e.title + ' », ' + tcQuestionnaireQuand(e.date, e)); });
   supprimes.forEach(function (e) { lignes.push('• Supprimé : « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + ')'); });
-  if (r.action === 'retard') presents.filter(function (e) { return !r._retardRdv || e.id === r._retardRdv.id; }).forEach(function (e) { lignes.push('• Retard d’environ ' + r.minutes + ' minutes pour « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + '), arrivée vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes))); });
   if (r.quoi === 'ajout' && deplaces.length) lignes.push('• La place est libre pour le rendez-vous qui s’ajoute : ajoute-le quand tu veux.');
   if (prevenus.length) lignes.push('• Prévenu par la messagerie TimeCool : ' + tcQuestionnaireNoms(prevenus));
   const aEnvoyer = [];
@@ -19649,6 +19648,8 @@ function tcRetardDecaler(suivants, minutes) {
  */
 async function tcPrevenirRetard(text, rdv) {
   if (text) tcPousserMessageUtilisateur(text);
+  // Sans rendez-vous aujourd'hui (et aucun visé par la phrase), inutile de demander le retard (testeurs, 15/10).
+  if (!rdv && !tcQuestionnaireRdv(0, 0, 0, 1440).length) { tcQuestionnaireArreter(); tcQuestionnaireDire('Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.'); return; }
   const connu = tcRetardDansLaPhrase(text);
   if (rdv) { connu.pour = 'autre'; connu._vise = rdv; }
   await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_RETARD, connu);
@@ -19716,6 +19717,556 @@ const TC_QUESTIONNAIRE_RETARD = {
     await tcQuestionnaireExecuter(r, 'C’est fait.');
   }
 };
+
+/* ── « Créer un nouveau rdv » (mission 46) ───────────────────── */
+
+/** Les boutons de « C'est quel rendez-vous ? » : chacun donne le titre et la catégorie ; « Autre » demande le nom. */
+const TC_NOUVEAU_RDV_QUOI = {
+  travail: { texte: 'Travail', titre: 'Travail', cat: 'travail', mots: /^(travail|boulot|bureau|pro)$/ },
+  medecin: { texte: 'Médecin', titre: 'Médecin', cat: 'sante',   mots: /^(medecin|docteur|dr|sante|toubib)$/ },
+  famille: { texte: 'Famille', titre: 'Famille', cat: 'famille', mots: /^(famille|familial)$/ },
+  amis:    { texte: 'Amis',    titre: 'Amis',    cat: 'amis',    mots: /^(amis?|copains?|copines?|potes?)$/ },
+  autre:   { texte: 'Autre',   titre: '',        cat: 'perso',   mots: /^(autre|autre chose)$/ }
+};
+
+/** « Quand ? » : les jours visés (depuis aujourd'hui) ; « Je choisis une date » demande le jour. */
+const TC_NOUVEAU_RDV_QUAND = {
+  aujourdhui: { texte: 'Aujourd’hui',         label: 'aujourd’hui',   jours: [0, 0], mots: /^(aujourd ?hui|ce soir|ce matin|cet apres midi|tout de suite)$/ },
+  demain:     { texte: 'Demain',              label: 'demain',        jours: [1, 1], mots: /^demain$/ },
+  semaine:    { texte: 'Cette semaine',       label: 'cette semaine', jours: [0, 6], mots: /semaine/ },
+  date:       { texte: 'Je choisis une date', label: '',              jours: null,   mots: /date|choisis|autre jour|plus tard/ }
+};
+
+/** « Combien de temps ? » ; la durée habituelle de la catégorie passe devant (tcNouveauRdvDurees). */
+const TC_NOUVEAU_RDV_DUREES = [
+  { cle: '30',    texte: '30 min',          mots: /^(30( ?min(utes)?)?|trente( minutes)?|une demi heure|demi heure)$/ },
+  { cle: '60',    texte: '1 h',             mots: /^(1 ?h|une heure|1 heure|60( ?min(utes)?)?)$/ },
+  { cle: '120',   texte: '2 h',             mots: /^(2 ?h|deux heures|2 heures|120( ?min(utes)?)?)$/ },
+  { cle: 'autre', texte: 'Autre (je tape)', mots: /^(autre|autre chose|plus|moins)$/ }
+];
+
+/** Une durée tapée (« 45 », « 45 min », « 1h30 », « deux heures »), en minutes (chaîne), ou null. */
+function tcNouveauRdvDureeTapee(text) {
+  const t = tcQuestionnaireTexteNu(text);
+  if (!t) return null;
+  let n = null, m;
+  if ((m = t.match(/^(\d{1,2}) ?h ?(\d{2})?$/))) n = Number(m[1]) * 60 + (m[2] ? Number(m[2]) : 0);
+  else if ((m = t.match(/\b(\d{1,3}) ?(min|mn|minutes?)\b/))) n = Number(m[1]);
+  else if ((m = t.match(/\b(\d{1,2}) ?(h|heures?)( ?(\d{2})| et demie?| et quart)?\b/))) n = Number(m[1]) * 60 + (m[4] ? Number(m[4]) : (/demi/.test(m[3] || '') ? 30 : (/quart/.test(m[3] || '') ? 15 : 0)));
+  else if (/quart d heure/.test(t)) n = 15;
+  else if (/demi heure/.test(t)) n = 30;
+  else if (/\bune heure\b/.test(t)) n = 60;
+  else if (/\bdeux heures\b/.test(t)) n = 120;
+  else if (/\btrois heures\b/.test(t)) n = 180;
+  else if ((m = t.match(/^(\d{1,3})$/))) n = Number(m[1]);
+  return n !== null && n >= 5 && n <= 720 ? String(n) : null;
+}
+
+/** La durée dite dans une phrase (« pendant 2 h », « 45 min »), ou null : jamais l'heure du rendez-vous (« 10h »). */
+function tcNouveauRdvDureeDansLaPhrase(text) {
+  const t = tcQuestionnaireTexteNu(text);
+  let m = t.match(/\b(?:pendant|durant|pour|duree de|duree)\s+(\d{1,2}) ?(h|heures?)(?: ?(\d{2}))?\b/);
+  if (m) return tcNouveauRdvDureeTapee(m[1] + 'h' + (m[3] || ''));
+  m = t.match(/\b(\d{1,3}) ?(min|mn|minutes)\b/);
+  if (m) return tcNouveauRdvDureeTapee(m[1] + ' min');
+  if (/\b(?:pendant|durant|pour|de) (une|deux|trois) heures?\b/.test(t)) return tcNouveauRdvDureeTapee(t.match(/(une|deux|trois) heures?/)[0]);
+  return null;
+}
+
+/** Un contact désigné par son nom (« Marie », « avec Marc Dupont ») : le seul qui corresponde, sinon null. */
+function tcNouveauRdvContactTape(text) {
+  const nom = String(text || '').replace(/^\s*(avec|chez)\s+/i, '').trim();
+  if (!nom) return null;
+  const connu = (typeof tcContactDuSurnom === 'function') ? tcContactDuSurnom(nom) : null;
+  if (connu) return connu;
+  const trouves = (typeof tcResoudreContact === 'function') ? tcResoudreContact(nom) : [];
+  return trouves.length === 1 ? trouves[0] : null;
+}
+
+/**
+ * Ce qu'une phrase tapée à « C'est quel rendez-vous ? » dit déjà : le titre, et au besoin le jour, l'heure, la durée et
+ * le contact (« Dentiste demain 10h », « déjeuner avec Marie mardi 12h30 »). Les étapes ainsi connues ne sont pas posées.
+ */
+function tcNouveauRdvPhrase(text) {
+  const brut = String(text || '').trim();
+  const t = tcQuestionnaireTexteNu(brut);
+  if (!t || /\?/.test(brut)) return null;
+  if (/\b(annul|supprim|efface|deplac|decal|report|repouss|malade|retard|imprevu)/.test(t)) return null;
+  const aussi = {};
+  let texteTitre = brut;
+  const mAvec = brut.match(/\b(?:avec|chez)\s+([A-Za-zÀ-ÿ'’-]{2,}(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’-]+)?)/);
+  if (mAvec) {
+    const c = tcNouveauRdvContactTape(mAvec[1]);
+    if (c) { aussi.avec = 'contact'; aussi.contact = c.id; texteTitre = brut.replace(mAvec[0], ' '); }
+  }
+  const titre = tcTitreDepuisDemande(texteTitre) || (aussi.contact ? 'Rendez-vous' : '');
+  if (!titre) return null;
+  const now = new Date();
+  const d = tcDateDemandee(brut, now);
+  const h = tcHeureDansTexte(brut.toLowerCase());
+  if (d && d.date && !d.invalide) {
+    const iso = tcISO(d.date);
+    if (iso >= tcISO(now)) {
+      aussi.quand = 'date';
+      aussi.date = iso;
+      if (h) {
+        const debut = h.h * 60 + (h.m || 0);
+        if (iso !== tcISO(now) || debut > now.getHours() * 60 + now.getMinutes()) aussi.creneau = { date: iso, debut: debut };
+      }
+    }
+  }
+  const duree = tcNouveauRdvDureeDansLaPhrase(brut);
+  if (duree) aussi.duree = duree;
+  return { valeur: titre, aussi: aussi };
+}
+
+/** Les contacts proposés à « Lequel ? » : les plus récents d'abord (tcClasserContacts), sept au plus. */
+function tcNouveauRdvCandidats() {
+  const liste = (Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c && !c.blocked && String(c.name || '').trim(); });
+  return ((typeof tcClasserContacts === 'function') ? tcClasserContacts(liste.slice()) : liste).slice(0, 7);
+}
+
+/** Les jours (ISO) de la période choisie. */
+function tcNouveauRdvJours(r) {
+  if (r.quand === 'date' && r.date) return [r.date];
+  const p = TC_NOUVEAU_RDV_QUAND[r.quand] || TC_NOUVEAU_RDV_QUAND.aujourdhui;
+  const now = new Date();
+  const out = [];
+  for (let n = p.jours[0]; n <= p.jours[1]; n++) { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + n); out.push(tcISO(d)); }
+  return out;
+}
+
+/** « aujourd'hui », « demain », « cette semaine », « le mardi 20 octobre ». */
+function tcNouveauRdvQuandLabel(r) {
+  if (r.quand === 'date' && r.date) { const d = tcFormaterDateHumaine(r.date); return 'le ' + d.charAt(0).toLowerCase() + d.slice(1); }
+  return (TC_NOUVEAU_RDV_QUAND[r.quand] || TC_NOUVEAU_RDV_QUAND.aujourdhui).label;
+}
+
+/** « jeudi 16 octobre à 10h00 » */
+function tcNouveauRdvQuandDebut(date, debut) {
+  const d = tcFormaterDateHumaine(date);
+  return d.charAt(0).toLowerCase() + d.slice(1) + ' à ' + tcQuestionnaireHeure(debut);
+}
+
+/** Le libellé d'un créneau proposé, avec ceux qui n'y sont pas libres (rendez-vous à plusieurs). */
+function tcNouveauRdvLibelle(p) {
+  return tcNouveauRdvQuandDebut(p.date, p.debut) + (p.manquants && p.manquants.length ? ' (pas libre : ' + tcQuestionnaireNoms(p.manquants) + ')' : '');
+}
+
+/**
+ * La durée habituelle d'une catégorie : la durée la plus fréquente de ses rendez-vous (au moins deux fois), ou null.
+ * Les rendez-vous de démonstration ne font pas une habitude.
+ */
+function tcNouveauRdvDureeHabituelle(cat) {
+  const comptes = {};
+  (Array.isArray(events) ? events : []).forEach(function (e) {
+    if (!e || e.mode !== mode || e.cat !== cat || tcEstBandeau(e)) return;
+    if (typeof e.id === 'string' && e.id.indexOf('demo_') === 0) return;
+    const d = (e.endH * 60 + e.endM) - (e.startH * 60 + e.startM);
+    if (d < 5 || d > 720) return;
+    comptes[d] = (comptes[d] || 0) + 1;
+  });
+  let meilleur = null;
+  Object.keys(comptes).forEach(function (d) {
+    if (comptes[d] >= 2 && (meilleur === null || comptes[d] > comptes[meilleur] || (comptes[d] === comptes[meilleur] && Number(d) < Number(meilleur)))) meilleur = d;
+  });
+  return meilleur === null ? null : Number(meilleur);
+}
+
+/** Les choix de durée, la durée habituelle de la catégorie en premier. */
+function tcNouveauRdvDurees(r) {
+  const base = TC_NOUVEAU_RDV_DUREES.map(function (c) { return Object.assign({}, c); });
+  const h = r._dureeHabituelle;
+  if (!h) return base;
+  let trouve = null;
+  base.forEach(function (c, k) { if (c.cle === String(h)) trouve = k; });
+  if (trouve !== null) { const c = base.splice(trouve, 1)[0]; c.texte += ' (comme d’habitude)'; base.unshift(c); }
+  else base.unshift({ cle: String(h), texte: tcDureeLisible(h) + ' (comme d’habitude)', mots: new RegExp('^' + h + '( ?min(utes)?)?$|habitude') });
+  return base;
+}
+
+/**
+ * Les créneaux du serveur pour un contact qui a TimeCool, ou plusieurs : les heures où chacun est libre dans la
+ * période (mission 46 : /rdv/groupe/proposer accepte depuis, jusqua, combien, par_jour). { etat: 'ok' | 'erreur', … }.
+ */
+async function tcNouveauRdvCommuns(r) {
+  if (typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte()) return { etat: 'erreur' };
+  const jours = r._jours;
+  const dureeH = Math.min(3, Math.max(1, Math.ceil((r._dureeMin || r._dureeCherchee || 60) / 60)));
+  try {
+    const res = await TC_BACKEND.proposerRdvGroupe(r._invites.map(function (c) { return c.referenceCompte; }), dureeH, 'physique',
+      { depuis: jours[0], jusqua: jours[jours.length - 1], combien: 10, par_jour: 3 });
+    return {
+      etat: 'ok',
+      creneaux: (Array.isArray(res.creneaux) ? res.creneaux : []).map(function (c) {
+        return { date: c.date, debut: Number(c.heure) * 60 + Number(c.minute || 0), manquants: Array.isArray(c.manquants) ? c.manquants : [] };
+      }),
+      sansAcces: Array.isArray(res.sans_acces) ? res.sans_acces : [],
+      invites: Array.isArray(res.invites) ? res.invites : []
+    };
+  } catch (e) { return { etat: 'erreur' }; }
+}
+
+/**
+ * Trois créneaux au plus, dans la période, dans les plages ouvertes de « Mes disponibilités » (tcPlagesDuJour : sans
+ * plage déclarée, lundi-vendredi 9h-18h, jamais le week-end), hors de ce qui est déjà noté, jamais dans le passé. Avec
+ * l'agenda d'un contact (ou de plusieurs), les heures viennent du serveur et passent par le même tamis. Un seul jour :
+ * le début, le milieu et la fin de la journée ; plusieurs jours : le premier créneau de chaque jour.
+ */
+function tcNouveauRdvPropositions(r) {
+  const duree = r._dureeMin || r._dureeCherchee || 60;
+  const now = new Date();
+  const aujourdhui = tcISO(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const parJour = r._jours.map(function (iso) {
+    const plages = tcPlagesDuJour(new Date(iso + 'T12:00:00')).plages;
+    const pris = tcOccupationsDuJour(iso);
+    const plancher = iso === aujourdhui ? Math.ceil((nowMin + 15) / 15) * 15 : 0;
+    const libre = function (d) {
+      return d >= plancher && plages.some(function (p) { return d >= p.debut && d + duree <= p.fin; })
+        && !pris.some(function (o) { return d < o.fin && d + duree > o.debut; });
+    };
+    if (Array.isArray(r._communs)) return r._communs.filter(function (c) { return c.date === iso && libre(c.debut); });
+    const candidats = [];
+    plages.forEach(function (p) {
+      for (let d = Math.ceil(Math.max(p.debut, plancher) / 15) * 15; d + duree <= p.fin; d += 30) { if (libre(d)) candidats.push({ date: iso, debut: d }); }
+    });
+    return candidats;
+  });
+  const out = [];
+  if (Array.isArray(r._communs)) {
+    // Le serveur a déjà classé : ceux où tout le monde est libre d'abord.
+    const tous = [];
+    parJour.forEach(function (l) { l.forEach(function (c) { tous.push(c); }); });
+    tous.sort(function (a, b) { return (a.manquants.length - b.manquants.length) || (a.date < b.date ? -1 : (a.date > b.date ? 1 : a.debut - b.debut)); });
+    return tous.slice(0, 3);
+  }
+  if (parJour.length === 1) {
+    const l = parJour[0];
+    if (l.length <= 3) return l;
+    return [l[0], l[Math.floor(l.length / 2)], l[l.length - 1]];
+  }
+  for (let k = 0; out.length < 3; k++) {
+    let ajoute = false;
+    parJour.forEach(function (l) { if (out.length < 3 && l[k]) { out.push(l[k]); ajoute = true; } });
+    if (!ajoute) break;
+  }
+  return out;
+}
+
+/** Une heure tapée à la place d'un bouton (« 14h30 », « mardi 10h ») : le créneau, ou null (passé, ou rien d'une heure). */
+function tcNouveauRdvHeureTapee(text) {
+  const r = _tcQuestionnaire ? _tcQuestionnaire.reponses : {};
+  const brut = String(text || '');
+  const h = tcHeureDansTexte(brut.toLowerCase());
+  if (!h) return null;
+  const debut = h.h * 60 + (h.m || 0);
+  const now = new Date();
+  const aujourdhui = tcISO(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const d = tcDateDemandee(brut, now);
+  if (d && d.invalide) return null;
+  let date = null;
+  if (d && d.date) date = tcISO(d.date);
+  else date = (r._jours || [aujourdhui]).filter(function (iso) { return iso !== aujourdhui || debut > nowMin; })[0] || null;
+  if (!date || date < aujourdhui || (date === aujourdhui && debut <= nowMin)) return null;
+  if (r.avec === 'plusieurs' && (h.m || 0) !== 0) return null;   // le serveur travaille à l'heure ronde
+  return { date: date, debut: debut };
+}
+
+/** Le créneau retenu : un bouton (« c1 ») ou une heure tapée. */
+function tcNouveauRdvCreneauChoisi(r, cle) {
+  const v = r[cle];
+  if (v && typeof v === 'object' && v.date) return { date: v.date, debut: v.debut, tape: true };
+  const m = typeof v === 'string' && v.match(/^c(\d)$/);
+  const p = m && Array.isArray(r._propositions) ? r._propositions[Number(m[1])] : null;
+  return p ? { date: p.date, debut: p.debut, manquants: p.manquants || [] } : null;
+}
+
+/** Ce qui gêne un créneau avec la durée choisie : un rendez-vous qu'il chevauche, ou (créneau proposé) la fin des plages. */
+function tcNouveauRdvGene(r) {
+  const c = r._creneau, fin = c.debut + r._dureeMin;
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  const chevauche = (Array.isArray(events) ? events : []).filter(function (e) {
+    if (!e || e.mode !== evMode || tcEstBandeau(e)) return false;
+    if (!(typeof tcEvenementCouvre === 'function' ? tcEvenementCouvre(e, c.date) : e.date === c.date)) return false;
+    return c.debut < e.endH * 60 + e.endM && fin > e.startH * 60 + e.startM;
+  })[0];
+  if (chevauche) return { title: chevauche.title };
+  if (!c.tape && !tcPlagesDuJour(new Date(c.date + 'T12:00:00')).plages.some(function (p) { return c.debut >= p.debut && fin <= p.fin; })) return { plage: true };
+  return null;
+}
+
+/** Le texte de « Voici ce que je vais faire : », ligne par ligne. */
+function tcNouveauRdvRecap(r) {
+  const l = [];
+  const cats = (typeof AGENDA_CATEGORIES !== 'undefined' && Array.isArray(AGENDA_CATEGORIES)) ? AGENDA_CATEGORIES : [];
+  const cat = cats.filter(function (c) { return c.id === r._cat; })[0];
+  l.push('• « ' + r._titre + ' »' + (cat ? ' (' + cat.label + ')' : ''));
+  if (r.avec === 'contact' && r._contact) l.push('• Avec ' + r._contact.name);
+  else if (r.avec === 'plusieurs') l.push('• Avec ' + tcQuestionnaireNoms(r._invites));
+  l.push('• ' + tcFormaterDateHumaine(r._creneau.date) + ', ' + tcFormaterHeure(tcNouveauRdvHoraire(r)) + ' (' + tcDureeLisible(r._dureeMin) + ')');
+  if (r._gene && r._gene.title) l.push('• Ça chevauche « ' + r._gene.title + ' » : je le note quand même');
+  if (r.avec === 'contact' && r._contact) {
+    const prenom = (r._contact.name || '').split(' ')[0];
+    if (r._contact.referenceCompte) l.push('• J’envoie la proposition à ' + prenom + ' par la messagerie TimeCool');
+    else if (r._contact.phone || r._contact.email) l.push('• Je prépare le message pour ' + prenom + ' (SMS ou email), tu l’envoies d’un geste');
+    else l.push('• ' + prenom + ' n’a ni numéro ni email dans ta fiche : tu le préviens toi-même');
+  } else if (r.avec === 'plusieurs') {
+    l.push('• Je l’inscris dans l’agenda de ' + tcQuestionnaireNoms(r._invites) + (r._sansAcces && r._sansAcces.length ? ' (sauf ' + tcQuestionnaireNoms(r._sansAcces) + ' : je ne vois pas son agenda)' : ''));
+  }
+  return l.join('\n');
+}
+
+/** Le début et la fin du rendez-vous, prêts pour l'agenda. */
+function tcNouveauRdvHoraire(r) {
+  const debut = r._creneau.debut, fin = Math.min(1439, debut + r._dureeMin);
+  return { date: r._creneau.date, startH: Math.floor(debut / 60), startM: debut % 60, endH: Math.floor(fin / 60), endM: fin % 60 };
+}
+
+/** Le message de proposition à un contact (tu ou vous selon sa fiche). */
+function tcNouveauRdvTexteProposition(c, r, p) {
+  const v = tcVouvoiement(c);
+  const valeurs = tcValeursDuRdv(c.name, p);
+  return 'Bonjour ' + valeurs['[Prénom]'] + ', je ' + (v ? 'vous' : 'te') + ' propose un rendez-vous « ' + r._titre + ' » le ' + valeurs['[date]']
+    + ' à ' + valeurs['[heure]'] + ' (' + tcDureeLisible(r._dureeMin) + '). ' + (v ? 'Dites-moi si cela vous convient.' : 'Dis-moi si ça te convient.');
+}
+
+/** Le bouton « Créer un nouveau rdv » : la bulle, puis la première question. */
+async function tcDemarrerNouveauRdv(text) {
+  if (text) tcPousserMessageUtilisateur(text);
+  await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_NOUVEAU_RDV, {});
+}
+
+/**
+ * « Oui, crée-le » : le rendez-vous s'écrit comme la carte « Ajouter » de Charly (mêmes données, même enregistrement,
+ * même démarche), puis la proposition part au contact : par la messagerie TimeCool s'il a un compte, sinon un message
+ * prêt (SMS ou email) à envoyer d'un geste. À plusieurs : le serveur l'inscrit chez tout le monde (/rdv/groupe/confirmer).
+ */
+async function tcNouveauRdvCreer(r) {
+  const p = tcNouveauRdvHoraire(r);
+  const quand = tcQuestionnaireQuand(p.date, p);
+  if (r.avec === 'plusieurs') {
+    let res;
+    try {
+      res = await TC_BACKEND.confirmerRdvGroupe(r._invites.map(function (c) { return c.referenceCompte; }), p.date, p.startH,
+        Math.min(3, Math.max(1, Math.ceil(r._dureeMin / 60))), 'physique', { titre: r._titre, cat: r._cat });
+    } catch (e) {
+      tcQuestionnaireDire(e && e.code === 'creneau_pris'
+        ? 'Ce créneau vient d’être pris chez quelqu’un : rien n’est créé. Relance « Créer un nouveau rdv » pour en choisir un autre.'
+        : 'Je n’arrive pas à joindre le serveur : rien n’est créé. Réessaie dans un instant.');
+      return;
+    }
+    const lignes = ['C’est noté : « ' + r._titre + ' », ' + quand + ', avec ' + tcQuestionnaireNoms(res.inclus || []) + '. Chacun l’a dans son agenda.'];
+    if (res.exclus && res.exclus.length) lignes.push('• Pas ajouté chez ' + tcQuestionnaireNoms(res.exclus) + ' : déjà pris à ce moment-là.');
+    tcQuestionnaireDire(lignes.join('\n'));
+    if (typeof tcSyncTour === 'function') tcSyncTour();
+    return;
+  }
+  const ev = { date: p.date, startH: p.startH, startM: p.startM, endH: p.endH, endM: p.endM, title: r._titre, cat: r._cat,
+    mode: mode === 'pro' ? 'pro' : 'user', id: 'charly_ai_' + Date.now() + '_0' };
+  if (r._contact) ev.contact = r._contact.id;
+  events.push(ev);
+  {
+    const parts = p.date.split('-').map(Number);
+    viewDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (currentPage === 'calendar') render();
+  }
+  const heures = tcQuestionnaireHeure(p.startH * 60 + p.startM) + '-' + tcQuestionnaireHeure(p.endH * 60 + p.endM);
+  addDemarche({ icon: '📅', title: 'Nouveau rendez-vous : ' + r._titre, summary: heures + ' : ' + r._titre, status: 'ajoutee', categorie: 'rdv',
+    detail: 'Charly a créé « ' + r._titre + ' » dans ton agenda : ' + quand + '.' });
+  saveEventsToStorage();
+  const lignes = ['C’est noté.', '• « ' + r._titre + ' », ' + quand + (r._contact ? ', avec ' + r._contact.name : '')];
+  const envois = [];
+  if (r._contact) {
+    const c = r._contact, prenom = (c.name || '').split(' ')[0];
+    const envoi = { nom: c.name, phone: c.phone || '', email: c.email || '', titre: '', texte: tcNouveauRdvTexteProposition(c, r, p) };
+    if (c.referenceCompte) {
+      const chemin = await tcTransmettrePrevenance(c, envoi.texte);
+      if (chemin === 'timecool') lignes.push('• J’ai envoyé la proposition à ' + prenom + '.');
+      else if (chemin === 'aucun') lignes.push('• Sans numéro ni email dans ta fiche contact : ' + c.name + '. À prévenir toi-même.');
+      else { envoi.fait = chemin; envois.push(envoi); lignes.push('• La messagerie n’a pas répondu : message prêt pour ' + prenom + ' (SMS ou email).'); }
+    } else if (c.phone || c.email) {
+      envois.push(envoi);
+      lignes.push('• Message prêt, à envoyer toi-même d’un geste (SMS ou email) : ' + c.name);
+    } else {
+      lignes.push('• Sans numéro ni email dans ta fiche contact : ' + c.name + '. À prévenir toi-même.');
+    }
+  }
+  if (!envois.length) { tcQuestionnaireDire(lignes.join('\n')); return; }
+  charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero) });
+  renderCharlyChat();
+}
+
+/** Les choix d'un créneau : les propositions numérotées ; une heure tapée vaut un bouton. */
+function tcNouveauRdvChoixCreneau(r) {
+  return (r._propositions || []).map(function (p, i) { return { cle: 'c' + i, texte: tcNouveauRdvLibelle(p) }; });
+}
+
+/** La question « Voici des créneaux… », selon ce qu'on a trouvé et ce qu'on a pu regarder. */
+function tcNouveauRdvQuestionCreneau(r, refaire) {
+  const quand = tcNouveauRdvQuandLabel(r);
+  const n = (r._propositions || []).length;
+  let s = '';
+  if (refaire) {
+    s = 'Avec ' + tcDureeLisible(r._dureeMin) + ', ' + tcNouveauRdvQuandDebut(r._creneau.date, r._creneau.debut)
+      + (r._gene && r._gene.title ? ' chevauche « ' + r._gene.title + ' ».' : ' dépasse tes disponibilités.') + ' ';
+    s += n ? 'Voici ce qui tient. Touche-en un, ou tape une autre heure.' : 'Je ne vois rien d’autre de libre ' + quand + ' : tape une autre heure (ex : 14h30), ou un autre jour (ex : mardi 10h).';
+    return s;
+  }
+  if (r.avec === 'plusieurs') {
+    s = n ? 'Voici les créneaux ' + quand + ' où ' + (r._propositions.every(function (p) { return !p.manquants.length; }) ? 'tout le monde est libre' : 'le plus de monde est libre')
+      + '. Touche-en un, ou tape une heure (ex : 14h).'
+      : 'Je n’ai trouvé aucun créneau ' + quand + ' où tout le monde est libre. Tape une heure (ex : 14h), ou un autre jour (ex : mardi 10h).';
+    if (r._sansAcces && r._sansAcces.length) s += ' Je ne peux pas voir l’agenda de ' + tcQuestionnaireNoms(r._sansAcces) + ' : je ne l’ai pas compté.';
+    return s;
+  }
+  s = n ? 'Voici des créneaux libres ' + quand + '. Touche-en un, ou tape une heure (ex : 14h30).'
+    : 'Je ne vois aucun créneau libre ' + quand + ' dans tes disponibilités. Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).';
+  if (r._contact && r._contact.referenceCompte) {
+    const prenom = (r._contact.name || '').split(' ')[0];
+    if (r._agendas === 'ok' && n) s += ' ' + prenom + ' est libre aussi.';
+    else if (r._agendas !== 'ok') s += ' Je n’ai pas pu regarder l’agenda de ' + prenom + '.';
+  }
+  return s;
+}
+
+/** L'étape « récapitulatif » de ce parcours : « Oui, crée-le » ; rien n'est créé avant. */
+const TC_ETAPE_RECAP_CREER = {
+  cle: 'recap',
+  question: function (r) { return 'Voici ce que je vais faire :\n' + tcNouveauRdvRecap(r); },
+  choix: TC_ETAPE_RECAP.choix.map(function (c) { return Object.assign({}, c, { texte: c.cle === 'oui' ? 'Oui, crée-le' : c.texte }); })
+};
+
+/** Le parcours, étape par étape : quoi, avec qui, quand (puis trois créneaux), combien de temps, récapitulatif. */
+const TC_QUESTIONNAIRE_NOUVEAU_RDV = {
+  nom: 'nouveau_rdv',
+  etapes: [
+    { cle: 'quoi', question: 'C’est quel rendez-vous ? Touche un bouton, ou tape son nom (ex : Dentiste demain 10h).',
+      choix: Object.keys(TC_NOUVEAU_RDV_QUOI).map(function (k) { return { cle: k, texte: TC_NOUVEAU_RDV_QUOI[k].texte, mots: TC_NOUVEAU_RDV_QUOI[k].mots }; }),
+      libre: tcNouveauRdvPhrase, relance: 'Tape le nom du rendez-vous (ex : Dentiste).' },
+    { cle: 'titre', si: function (r) { return r.quoi === 'autre'; },
+      question: 'D’accord. Tape le nom du rendez-vous (ex : Coiffeur, ou Coiffeur mardi 10h).',
+      libre: tcNouveauRdvPhrase, relance: 'Tape le nom du rendez-vous (ex : Coiffeur).' },
+    { cle: 'prepare',
+      avant: function (r) {
+        const q = TC_NOUVEAU_RDV_QUOI[r.quoi];
+        if (q && q.titre) { r._titre = q.titre; r._cat = q.cat; }
+        else { r._titre = String(q ? r.titre : r.quoi).trim(); r._cat = tcCategorieDuTitre(r._titre) || 'perso'; }
+        r._dureeHabituelle = tcNouveauRdvDureeHabituelle(r._cat);
+        r._dureeCherchee = r._dureeHabituelle || 60;
+      } },
+    { cle: 'avec', question: 'Avec qui ?',
+      choix: [
+        { cle: 'personne', texte: 'Personne', mots: /^(personne|seul|seule|moi|aucun|non|moi seul)$/ },
+        { cle: 'contact', texte: 'Un contact', mots: /^(un contact|contact|quelqu un|une personne)$/ },
+        { cle: 'plusieurs', texte: 'Plusieurs', mots: /^(plusieurs|un groupe|groupe|a plusieurs|des contacts)$/ }
+      ],
+      libre: function (text) {
+        if (!tcQuestionnaireTexteNu(text)) return null;
+        const comptes = tcComptesCitesDansTexte(text);
+        if (comptes.length >= 2) return { valeur: 'plusieurs', aussi: { _groupe: comptes } };
+        const c = tcNouveauRdvContactTape(text);
+        return c ? { valeur: 'contact', aussi: { contact: c.id } } : null;
+      } },
+    { cle: 'contact', si: function (r) { return r.avec === 'contact'; },
+      avant: function (r) {
+        if (r.contact !== undefined) return;
+        r._candidats = tcNouveauRdvCandidats();
+        if (!r._candidats.length) { tcQuestionnaireDire('Tu n’as pas encore de contact : je note le rendez-vous sans personne.'); r.avec = 'personne'; r.contact = null; }
+      },
+      question: 'Lequel ? Touche un contact, ou tape son nom.',
+      choix: function (r) { return (r._candidats || []).map(function (c) { return { cle: c.id, texte: c.name, mots: tcImprevuMotsDuTitre(c.name) }; }); },
+      libre: function (text) { const c = tcNouveauRdvContactTape(text); return c ? c.id : null; } },
+    { cle: 'noms', si: function (r) { return r.avec === 'plusieurs' && !r._groupe; },
+      question: 'Avec qui ? Donne-moi leurs prénoms (ex : Paul et Marie), parmi tes contacts qui ont TimeCool.',
+      libre: function (text) {
+        const comptes = tcComptesCitesDansTexte(text);
+        if (comptes.length >= 2) return { valeur: 'ok', aussi: { _groupe: comptes } };
+        if (comptes.length === 1) return { valeur: 'un', aussi: { avec: 'contact', contact: comptes[0].id } };
+        return null;
+      },
+      relance: 'Donne-moi au moins deux prénoms de tes contacts qui ont TimeCool (ex : Paul et Marie).' },
+    { cle: 'quand', question: 'Quand ?',
+      choix: Object.keys(TC_NOUVEAU_RDV_QUAND).map(function (k) { return { cle: k, texte: TC_NOUVEAU_RDV_QUAND[k].texte, mots: TC_NOUVEAU_RDV_QUAND[k].mots }; }),
+      libre: function (text) {
+        const now = new Date();
+        const d = tcDateDemandee(text, now);
+        if (!d || d.invalide || !d.date || tcISO(d.date) < tcISO(now)) return null;
+        const aussi = { date: tcISO(d.date) };
+        const h = tcHeureDansTexte(String(text).toLowerCase());
+        if (h) { const debut = h.h * 60 + (h.m || 0); if (aussi.date !== tcISO(now) || debut > now.getHours() * 60 + now.getMinutes()) aussi.creneau = { date: aussi.date, debut: debut }; }
+        return { valeur: 'date', aussi: aussi };
+      } },
+    { cle: 'date', si: function (r) { return r.quand === 'date'; },
+      question: 'Quel jour ? Tape une date (ex : mardi, le 20 octobre, 20/10).',
+      libre: function (text) {
+        const now = new Date();
+        const d = tcDateDemandee(text, now);
+        if (!d || d.invalide || !d.date || tcISO(d.date) < tcISO(now)) return null;
+        const h = tcHeureDansTexte(String(text).toLowerCase());
+        const aussi = {};
+        if (h) { const debut = h.h * 60 + (h.m || 0); if (tcISO(d.date) !== tcISO(now) || debut > now.getHours() * 60 + now.getMinutes()) aussi.creneau = { date: tcISO(d.date), debut: debut }; }
+        return { valeur: tcISO(d.date), aussi: aussi };
+      },
+      relance: 'Tape un jour (ex : mardi, le 20 octobre, 20/10).' },
+    { cle: 'creneau',
+      avant: async function (r) {
+        r._jours = tcNouveauRdvJours(r);
+        r._contact = r.avec === 'contact' && r.contact ? ((Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c.id === r.contact; })[0] || null) : null;
+        r._invites = r.avec === 'plusieurs' ? (r._groupe || []) : (r._contact && r._contact.referenceCompte && !r._contact.blocked ? [r._contact] : []);
+        r._communs = null;
+        r._agendas = '';
+        r._sansAcces = [];
+        if (r.avec === 'plusieurs' && r._invites.length < 2) { tcQuestionnaireDire('Il me faut au moins deux contacts qui ont TimeCool pour un rendez-vous à plusieurs.'); return false; }
+        if (r._invites.length && r.creneau === undefined) {
+          const res = await tcNouveauRdvCommuns(r);
+          if (r.avec === 'plusieurs') {
+            if (res.etat !== 'ok') { tcQuestionnaireDire('Je n’arrive pas à interroger les agendas pour le moment : je ne peux pas chercher de créneau commun.'); return false; }
+            if (!res.invites.length) { tcQuestionnaireDire('Je ne peux consulter l’agenda d’aucune de ces personnes : je ne peux pas chercher de créneau commun.'); return false; }
+            r._communs = res.creneaux;
+            r._sansAcces = res.sansAcces;
+          } else if (res.etat === 'ok' && !res.sansAcces.length) { r._agendas = 'ok'; r._communs = res.creneaux; }
+          else r._agendas = res.etat === 'ok' ? 'non' : 'erreur';
+        }
+        if (r.creneau === undefined) r._propositions = tcNouveauRdvPropositions(r);
+      },
+      question: function (r) { return tcNouveauRdvQuestionCreneau(r, false); },
+      choix: tcNouveauRdvChoixCreneau,
+      libre: tcNouveauRdvHeureTapee,
+      relance: 'Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).' },
+    { cle: 'duree', question: 'Combien de temps ?', choix: tcNouveauRdvDurees, libre: tcNouveauRdvDureeTapee },
+    { cle: 'duree_autre', si: function (r) { return r.duree === 'autre'; },
+      question: 'Combien de temps ? Tape une durée (ex : 45 min, 1h30).', libre: tcNouveauRdvDureeTapee, relance: 'Tape une durée (ex : 45 min, 1h30).' },
+    { cle: 'verif',
+      avant: function (r) {
+        r._dureeMin = Number(r.duree === 'autre' ? r.duree_autre : r.duree) || 60;
+        r._creneau = tcNouveauRdvCreneauChoisi(r, 'creneau');
+        if (!r._creneau) { tcQuestionnaireDire('Je ne retrouve pas ce créneau.'); return false; }
+        r._gene = tcNouveauRdvGene(r);
+        r._refaire = !!r._gene;
+      } },
+    { cle: 'creneau_bis', si: function (r) { return r._refaire; },
+      avant: function (r) { r._propositions = tcNouveauRdvPropositions(r); },
+      question: function (r) { return tcNouveauRdvQuestionCreneau(r, true); },
+      choix: tcNouveauRdvChoixCreneau,
+      libre: tcNouveauRdvHeureTapee,
+      relance: 'Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).' },
+    { cle: 'verif_bis', si: function (r) { return r._refaire; },
+      avant: function (r) {
+        r._creneau = tcNouveauRdvCreneauChoisi(r, 'creneau_bis');
+        if (!r._creneau) { tcQuestionnaireDire('Je ne retrouve pas ce créneau.'); return false; }
+        r._gene = tcNouveauRdvGene(r);
+        if (r._gene && !r._gene.title) r._gene = null;   // hors des plages, mais choisi : on le note
+      } },
+    TC_ETAPE_RECAP_CREER
+  ],
+  terminer: async function (r) {
+    if (r.recap !== 'oui') { tcQuestionnaireDire('D’accord, j’arrête là : rien n’est créé.'); return; }
+    await tcNouveauRdvCreer(r);
+  }
+};
+
 
 function showConflictWarning(conflicts, msg) {
   // Construire un message d'alerte
@@ -23035,16 +23586,21 @@ const TC_BACKEND = {
   },
 
   /** Les creneaux ou tout le monde est libre, pour un rendez-vous a plusieurs. */
-  async proposerRdvGroupe(references, duree, type) {
+  async proposerRdvGroupe(references, duree, type, options) {
     const corps = { references: references, duree: duree };
     if (tcTypeRdvValide(type)) corps.type = type;
+    // Mission 46 : la période (depuis, jusqua), le nombre voulu et le nombre par jour ; sans eux, comme avant (demain + 14 jours, un par jour).
+    if (options) ['depuis', 'jusqua', 'combien', 'par_jour'].forEach(function (k) { if (options[k] !== undefined && options[k] !== null) corps[k] = options[k]; });
     return tcAppel('POST', '/rdv/groupe/proposer', corps);
   },
 
   /** Inscrit le creneau choisi dans tous les agendas. */
-  async confirmerRdvGroupe(references, date, heure, duree, type) {
+  async confirmerRdvGroupe(references, date, heure, duree, type, options) {
     const corps = { references: references, date: date, heure: heure, duree: duree };
     if (tcTypeRdvValide(type)) corps.type = type;
+    // Mission 46 : le titre et la catégorie du rendez-vous créé par le questionnaire ; sans eux, comme avant (les prénoms).
+    if (options && options.titre) corps.titre = options.titre;
+    if (options && options.cat) corps.cat = options.cat;
     return tcAppel('POST', '/rdv/groupe/confirmer', corps);
   },
 

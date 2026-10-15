@@ -2227,3 +2227,52 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   quatorze jours : sans rendez-vous aujourd’hui, le bouton prévenait le contact de mardi prochain). Sans rendez-vous
   aujourd’hui : « Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir. » ; un rendez-vous visé par la phrase
   (« en retard pour la banque ») garde son jour. Le libellé dit « aujourd’hui à HHhMM ». verif-onglets-charly : deux cas (47 au total).
+
+## 15/10/2026 : « Créer un nouveau rdv » sur le questionnaire guidé (mission 46, chef, validée par Charles) : quoi, avec qui, quand, durée, récapitulatif
+
+- Le bouton « Créer un nouveau rdv » ne pose plus une question unique laissée au modèle : il lance un parcours du moteur de
+  questionnaire (mission 43), tcDemarrerNouveauRdv('Je veux créer un nouveau rendez-vous') → TC_QUESTIONNAIRE_NOUVEAU_RDV.
+  Une question à la fois, boutons numérotés, « 2 » ou un texte tapé vaut le bouton, rien n'est créé avant « Oui, crée-le ».
+  Chronologie : « C'est quel rendez-vous ? » (Travail / Médecin / Famille / Amis / Autre : le bouton donne le titre et la
+  catégorie ; un titre tapé est rangé par tcCategorieDuTitre, sinon Personnel ; « Autre » demande le nom) ; « Avec qui ? »
+  (Personne / Un contact / Plusieurs ; « Lequel ? » liste ses contacts, les plus probables d'abord, sept au plus, ou un nom
+  tapé ; « Plusieurs » demande les prénoms de contacts qui ont TimeCool) ; « Quand ? » (Aujourd'hui / Demain / Cette semaine
+  (sept jours) / Je choisis une date, ou une date tapée) ; puis trois créneaux libres au plus, dans les plages de « Mes
+  disponibilités » (tcPlagesDuJour : sans plage déclarée lundi-vendredi 9h-18h, jamais le week-end ; un jour fermé le reste),
+  hors de ce qui est déjà noté (les rendez-vous de démonstration comptent), jamais dans le passé : un seul jour, le début,
+  le milieu et la fin de la journée ; plusieurs jours, le premier créneau de chaque jour ; une heure tapée vaut un choix ;
+  « Combien de temps ? » (30 min / 1 h / 2 h / Autre, la durée habituelle de la catégorie en premier : la plus fréquente de
+  ses rendez-vous, au moins deux fois) ; si la durée fait chevaucher un rendez-vous ou dépasser les plages, Charly le dit et
+  repropose ce qui tient ; « Voici ce que je vais faire : » (titre et catégorie, avec qui, jour, heure, durée, ce qui part)
+  puis « Oui, crée-le » / « Non, j'arrête ».
+- Le travail : le rendez-vous s'écrit comme la carte « Ajouter » de Charly (mêmes champs, identifiant charly_ai_, contact,
+  saveEventsToStorage, démarche « Nouveau rendez-vous : … », agenda ouvert sur le jour) ; « C'est noté. » puis la
+  proposition au contact : par la messagerie TimeCool s'il a un compte (« J'ai envoyé la proposition à Marie. »), sinon un
+  message prêt par SMS ou email avec le bouton « ✉️ Envoyer à … » du bilan (même mécanique que les missions 43-45) ; sans
+  numéro ni email, « À prévenir toi-même ». Le lien à usage unique n'est pas utilisé ici : le clic du contact inscrirait un
+  second rendez-vous (le serveur écrit dans l'agenda de l'organisateur), alors que celui-ci existe déjà depuis
+  « Oui, crée-le » ; un message de proposition suffit (à confirmer par le chef).
+- À plusieurs : la mécanique « rendez-vous à plusieurs » existante, dans le questionnaire : /rdv/groupe/proposer donne les
+  créneaux communs de la période (tamisés par mes plages), avec qui manque sous chacun ; « Oui, crée-le » appelle
+  /rdv/groupe/confirmer, qui inscrit le rendez-vous chez tout le monde avec le titre et la catégorie ; rien n'est écrit ici
+  (la synchronisation le ramène) ; « C'est noté : …, avec A et B. Chacun l'a dans son agenda. » Un créneau pris
+  entre-temps : rien n'est créé, Charly le dit.
+- Un contact qui a TimeCool : son agenda est regardé par la même route (une seule référence) ; sans accès (il ne m'a pas
+  classé, ou bloqué) ou serveur muet ou hors connexion, mes créneaux seuls et « Je n'ai pas pu regarder l'agenda de … ».
+- Les étapes connues par la phrase sont sautées : « Dentiste demain 10h » tapé à la première question donne le titre, le
+  jour et l'heure (tcNouveauRdvPhrase ; « avec Marc » désigne le contact, « pendant 2 h » la durée). Pour cela, une réponse
+  libre peut rendre { valeur, aussi } : le moteur range « aussi » dans les autres étapes (tcQuestionnaireRepondreLibre) ;
+  et une étape sans bouton a sa propre relance (`relance`), au lieu de « tape son numéro (1 à 0) ».
+- API (deux routes, champs optionnels, compatibles) : POST /rdv/groupe/proposer accepte `depuis` et `jusqua` (jamais dans
+  le passé, 31 jours au plus), `combien` (1 à 10) et `par_jour` (1 à 3) ; creneauxCommuns prend ces paramètres (sans eux,
+  comme avant : de demain à J+14, le meilleur de chaque jour, trois en tout) et, aujourd'hui, ne propose jamais une heure
+  passée. POST /rdv/groupe/confirmer accepte `titre` (120) et `cat` (une catégorie connue) ; sans eux, les prénoms et
+  Travail comme avant. La page : TC_BACKEND.proposerRdvGroupe(…, options) et confirmerRdvGroupe(…, options).
+- Deux détails du retard (testeurs, mission 45) : sans rendez-vous aujourd'hui (et aucun visé par la phrase), « Tu n'as plus
+  de rendez-vous aujourd'hui : personne à prévenir. » vient AVANT « Tu as combien de retard ? », qui n'est plus posée
+  (tcPrevenirRetard) ; dans le bilan, la ligne « Retard d'environ … » vient avant les lignes « Déplacé ».
+- Suites : verif-nouveau-rdv réécrite (66 cas : page et API, bouton, parcours complets, phrase qui dit tout, contact SMS,
+  contact TimeCool avec la période envoyée au serveur, sans accès / muet / hors connexion, plusieurs, durée habituelle,
+  « Non », « Autre », date tapée, week-end fermé avec heure tapée, aujourd'hui sans heure passée, vraie demande qui fait
+  tomber le questionnaire, contact sans moyen) ; verif-onglets-charly (retard : question non posée, ordre du bilan) ;
+  verif-rdv-groupe (signatures). Rejouée Chrome sur la page entière : les deux parcours, le bouton d'envoi, le retard.

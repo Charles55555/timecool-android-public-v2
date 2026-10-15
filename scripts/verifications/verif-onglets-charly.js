@@ -144,6 +144,8 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
   const bilan2 = dernier();
   verifie('Sophie (SMS) : un bouton « Envoyer à Sophie Anceau » avec le message « Je décale » et la nouvelle heure', bilan2._envois && bilan2._envois.length === 1 && bilan2._envois[0].nom === 'Sophie Anceau' && /je dois décaler notre rendez-vous du .*15 octobre à 15h00/.test(bilan2._envois[0].texte) && /15 octobre à 15h20\.$/.test(bilan2._envois[0].texte), JSON.stringify(bilan2._envois));
   verifie('« C’est fait. » puis le bilan : deux « Déplacé », le retard annoncé pour Dentiste seul, Marc prévenu, Sophie à envoyer, « remets-les »', /^C’est fait\.\n/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 2 && (dc().match(/• Retard d’environ 20 minutes pour « Dentiste »/g) || []).length === 1 && !/Retard d’environ 20 minutes pour « Coach »/.test(dc()) && /• Prévenu par la messagerie TimeCool : Marc Dupont/.test(dc()) && /Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && /remets-les »/.test(dc()) && enCours() === null, dc());
+  // Testeurs (15/10) : la ligne du retard vient avant les lignes « Déplacé ».
+  verifie('la ligne du retard vient avant les « Déplacé »', dc().indexOf('• Retard d’environ 20 minutes pour « Dentiste »') > -1 && dc().indexOf('• Retard d’environ 20 minutes pour « Dentiste »') < dc().indexOf('• Déplacé : '), dc());
   await ctx.tcMarcheArriere('remets-les');
   verifie('« remets-les » : Coach et Kiné reviennent ; personne à rappeler (Marc n a pas bougé, Sophie n a pas été prévenue)', ctx.events.find((e) => e.id === 'c').startM === 0 && ctx.events.find((e) => e.id === 'k').startM === 30 && /2 rendez-vous remis/.test(dc()) && !/Pense à prévenir/.test(dc()), dc());
 
@@ -177,11 +179,11 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
   verifie('un seul rendez-vous possible aujourd’hui : ni « Pour quel rendez-vous ? » ni « Et après ? », droit à « Qui prévient Marc Dupont ? »', carte()._questionnaire.question === 'Qui prévient Marc Dupont ?' && !/Pour quel rendez-vous|Et après/.test(textes()), textes());
   reinit([ev('a', 'Petit déjeuner', 0, 8, 0, 9, 0), ev('v', 'Fête', 0, 0, 0, 23, 59, { allDay: true })]);
   await ctx.tcPrevenirRetard('Je vais être en retard');
-  await taper('10');
-  verifie('plus rien aujourd’hui : « Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir. »', dc() === 'Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.' && enCours() === null, dc());
+  // Testeurs (15/10) : la phrase vient AVANT « Tu as combien de retard ? », qui n'est pas posée.
+  verifie('plus rien aujourd’hui : « Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir. », sans poser « Tu as combien de retard ? »', dc() === 'Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.' && enCours() === null && carte() === null && !/Tu as combien de retard/.test(textes()), textes());
   // Examen (15/10) : le prochain est celui d AUJOURD HUI ; un rendez-vous de demain n est pas prévenu d un retard par le bouton.
   reinit([ev('a', 'Petit déjeuner', 0, 8, 0, 9, 0), ev('d', 'Banque', 1, 10, 0, 11, 0, { contact: 'c1' })]);
-  await ctx.tcPrevenirRetard('Je vais être en retard'); await taper('10');
+  await ctx.tcPrevenirRetard('Je vais être en retard');
   verifie('plus rien aujourd’hui mais un rendez-vous demain : « Tu n’as plus de rendez-vous aujourd’hui… », le contact de demain n est pas prévenu, rien ne part', dc() === 'Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.' && enCours() === null && trace.envois.length === 0, dc());
   await prevenance('je suis en retard pour la banque'); await taper('10');
   verifie('mais un rendez-vous visé par la phrase garde son jour : « Banque » demain, arrivée vers 10h10', enCours() && enCours().reponses._retardRdv.id === 'd' && /Le rendez-vous : « Banque », .*16 octobre.*\(arrivée vers 10h10\)\./.test(textes()), textes());

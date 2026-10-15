@@ -1001,7 +1001,7 @@ function personneDisponible(array $occupes, array $permises, string $jour, int $
  *
  * $invites : [ [ 'id' => int, 'prenom' => string, 'categories' => string[] ], ... ]
  */
-function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $combien = 3): array
+function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $combien = 3, ?string $depuis = null, ?string $jusqua = null, int $parJour = 1): array
 {
     $occOrg = rdvOccupation($organisateurId);
     $occupes = [];
@@ -1014,17 +1014,35 @@ function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $c
     $mois = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
              'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
+    // Mission 46 : une période (depuis, jusqua) et plusieurs créneaux par jour, à la demande ; sans eux, comme avant
+    // (de demain à J+14, le meilleur de chaque jour). Aujourd'hui, jamais une heure déjà passée.
+    $listeJours = [];
+    if ($depuis === null && $jusqua === null) {
+        for ($j = 1; $j <= 14; $j++) {
+            $listeJours[] = date('Y-m-d', strtotime("+$j day"));
+        }
+    } else {
+        $d = $depuis ?? date('Y-m-d', strtotime('+1 day'));
+        $f = $jusqua ?? date('Y-m-d', strtotime('+13 day', strtotime($d)));
+        for ($t = strtotime($d), $n = 0; date('Y-m-d', $t) <= $f && $n < 31; $t = strtotime('+1 day', $t), $n++) {
+            $listeJours[] = date('Y-m-d', $t);
+        }
+    }
+    $aujourdhui = date('Y-m-d');
+    $heureActuelle = (int) date('G');
     $candidats = [];
-    for ($j = 1; $j <= 14; $j++) {
-        $t = strtotime("+$j day");
+    foreach ($listeJours as $date) {
+        $t = strtotime($date);
         $jsem = (int) date('w', $t);
-        $date = date('Y-m-d', $t);
         $permises = [];
         foreach ($invites as $inv) {
             $permises[$inv['id']] = heuresPermisesDuJour($dispos[$inv['id']], $inv['categories'], $jsem);
         }
-        $meilleur = null;
+        $duJour = [];
         for ($h = 8; $h + $duree <= 20; $h++) {
+            if ($date === $aujourdhui && $h <= $heureActuelle) {
+                continue;
+            }
             if (!creneauEstLibre($occOrg, $date, $h * 60, ($h + $duree) * 60)) {
                 continue;
             }
@@ -1037,22 +1055,22 @@ function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $c
             if (count($manquants) >= count($invites)) {
                 continue;
             }
-            if ($meilleur === null || count($manquants) < count($meilleur['manquants'])) {
-                $meilleur = [
-                    'date'      => $date,
-                    'heure'     => $h,
-                    'minute'    => 0,
-                    'duree'     => $duree,
-                    'libelle'   => $jours[$jsem] . ' ' . (int) date('j', $t) . ' ' . $mois[(int) date('n', $t)],
-                    'manquants' => $manquants,
-                ];
-            }
+            $duJour[] = [
+                'date'      => $date,
+                'heure'     => $h,
+                'minute'    => 0,
+                'duree'     => $duree,
+                'libelle'   => $jours[$jsem] . ' ' . (int) date('j', $t) . ' ' . $mois[(int) date('n', $t)],
+                'manquants' => $manquants,
+            ];
         }
-        if ($meilleur !== null) {
-            $candidats[] = $meilleur;
+        // Le meilleur du jour d'abord (le moins de personnes manquantes, puis le plus tôt), un seul sauf demande.
+        usort($duJour, static fn(array $a, array $b): int => (count($a['manquants']) <=> count($b['manquants'])) ?: ($a['heure'] <=> $b['heure']));
+        foreach (array_slice($duJour, 0, max(1, $parJour)) as $c) {
+            $candidats[] = $c;
         }
     }
-    usort($candidats, static fn(array $a, array $b): int => count($a['manquants']) <=> count($b['manquants']));
+    usort($candidats, static fn(array $a, array $b): int => (count($a['manquants']) <=> count($b['manquants'])) ?: (strcmp($a['date'], $b['date']) ?: ($a['heure'] <=> $b['heure'])));
     return array_slice($candidats, 0, $combien);
 }
 
@@ -3096,7 +3114,31 @@ switch ($route) {
         $typeRdv = typeRdvValide($corps['type'] ?? null) ?? 'physique';
         $sansAcces = [];
         $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
-        $creneaux = $invites === [] ? [] : creneauxCommuns((int) $moi['id'], $invites, $duree, 3);
+        // Mission 46 : une période (jamais dans le passé, 31 jours au plus), le nombre voulu (1 à 10) et le nombre par
+        // jour (1 à 3). Sans ces champs, comme avant : de demain à J+14, le meilleur de chaque jour, trois en tout.
+        $jourValide = static fn(?string $d): ?string => ($d !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) === 1 && strtotime($d) !== false) ? $d : null;
+        $depuis = $jourValide(Entree::texte('depuis', 10));
+        $jusqua = $jourValide(Entree::texte('jusqua', 10));
+        if ($depuis !== null && $depuis < date('Y-m-d')) {
+            $depuis = date('Y-m-d');
+        }
+        if ($jusqua !== null) {
+            if ($depuis === null) {
+                $depuis = date('Y-m-d', strtotime('+1 day'));
+            }
+            if ($jusqua < $depuis) {
+                $jusqua = $depuis;
+            }
+            $borne = date('Y-m-d', strtotime('+30 day', strtotime($depuis)));
+            if ($jusqua > $borne) {
+                $jusqua = $borne;
+            }
+        }
+        $combien = Entree::entier('combien');
+        $combien = ($combien !== null && $combien >= 1 && $combien <= 10) ? $combien : 3;
+        $parJour = Entree::entier('par_jour');
+        $parJour = ($parJour !== null && $parJour >= 1 && $parJour <= 3) ? $parJour : 1;
+        $creneaux = $invites === [] ? [] : creneauxCommuns((int) $moi['id'], $invites, $duree, $combien, $depuis, $jusqua, $parJour);
         Rep::ok([
             'creneaux'   => $creneaux,
             'invites'    => array_column($invites, 'prenom'),
@@ -3120,6 +3162,12 @@ switch ($route) {
             Rep::erreur(400, 'creneau_invalide', 'Creneau invalide.');
         }
         $typeRdv = typeRdvValide($corps['type'] ?? null) ?? 'physique';
+        // Mission 46 : le titre et la catégorie du questionnaire « Créer un nouveau rdv » ; sans eux, comme avant (les prénoms, Travail).
+        $titreDonne = Entree::texte('titre', 120);
+        $catDonnee = Entree::texte('cat', 20);
+        if ($catDonnee !== null && !in_array($catDonnee, ['travail', 'sante', 'famille', 'amis', 'sport', 'voyages', 'personnel', 'perso'], true)) {
+            $catDonnee = null;
+        }
         $sansAcces = [];
         $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
         if ($invites === []) {
@@ -3161,7 +3209,8 @@ switch ($route) {
 
             $uid = 'tc_grp_' . bin2hex(random_bytes(8));
             $moiNom = texteSur(trim($moi['prenom'] . ' ' . $moi['nom']));
-            $entree = static function (string $titre) use ($jour, $heure, $duree, $uid, $typeRdv): array {
+            $entree = static function (string $noms) use ($jour, $heure, $duree, $uid, $typeRdv, $titreDonne, $catDonnee): array {
+                $titre = $titreDonne !== null ? $titreDonne . ' avec ' . $noms : $noms;
                 return [
                     'id'     => $uid,
                     'type'   => $typeRdv,
@@ -3169,7 +3218,7 @@ switch ($route) {
                     'startH' => $heure, 'startM' => 0,
                     'endH'   => $heure + $duree, 'endM' => 0,
                     'title'  => mb_substr($titre, 0, 120),
-                    'cat'    => 'travail',
+                    'cat'    => $catDonnee ?? 'travail',
                     'mode'   => 'user',
                 ];
             };
