@@ -2276,3 +2276,8 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « Non », « Autre », date tapée, week-end fermé avec heure tapée, aujourd'hui sans heure passée, vraie demande qui fait
   tomber le questionnaire, contact sans moyen) ; verif-onglets-charly (retard : question non posée, ordre du bilan) ;
   verif-rdv-groupe (signatures). Rejouée Chrome sur la page entière : les deux parcours, le bouton d'envoi, le retard.
+  Reprise après l’examinateur (15/10) : à plusieurs, le serveur inscrit des heures rondes (1 à 3) alors que le récapitulatif
+  annonçait la durée choisie (30 min → 1 h inscrite, 4 h → 3 h). Désormais, à plusieurs, seules 1 h / 2 h / 3 h sont
+  proposées (« Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h. ») et une autre durée tapée est refusée par la relance :
+  le récapitulatif annonce exactement ce qui est inscrit. Réserve 1 prise : creneauxCommuns lit « aujourd’hui » et l’heure
+  courante à l’heure de Paris (DateTime, Europe/Paris), PHP tournant en UTC. verif-nouveau-rdv : cinq cas de plus (71).

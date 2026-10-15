@@ -19873,8 +19873,16 @@ function tcNouveauRdvDureeHabituelle(cat) {
   return meilleur === null ? null : Number(meilleur);
 }
 
-/** Les choix de durée, la durée habituelle de la catégorie en premier. */
+/** À plusieurs, le serveur inscrit des heures rondes (1 à 3) : seules ces durées sont proposées, et annoncées. */
+const TC_NOUVEAU_RDV_DUREES_PLUSIEURS = [
+  { cle: '60',  texte: '1 h', mots: /^(1 ?h|une heure|1 heure|60( ?min(utes)?)?)$/ },
+  { cle: '120', texte: '2 h', mots: /^(2 ?h|deux heures|2 heures|120( ?min(utes)?)?)$/ },
+  { cle: '180', texte: '3 h', mots: /^(3 ?h|trois heures|3 heures|180( ?min(utes)?)?)$/ }
+];
+
+/** Les choix de durée, la durée habituelle de la catégorie en premier ; à plusieurs, 1 h / 2 h / 3 h seulement. */
 function tcNouveauRdvDurees(r) {
+  if (r.avec === 'plusieurs') return TC_NOUVEAU_RDV_DUREES_PLUSIEURS.map(function (c) { return Object.assign({}, c); });
   const base = TC_NOUVEAU_RDV_DUREES.map(function (c) { return Object.assign({}, c); });
   const h = r._dureeHabituelle;
   if (!h) return base;
@@ -20049,8 +20057,9 @@ async function tcNouveauRdvCreer(r) {
   if (r.avec === 'plusieurs') {
     let res;
     try {
+      // La durée est une heure ronde (1 à 3), celle du récapitulatif : le serveur inscrit exactement ce qui est annoncé.
       res = await TC_BACKEND.confirmerRdvGroupe(r._invites.map(function (c) { return c.referenceCompte; }), p.date, p.startH,
-        Math.min(3, Math.max(1, Math.ceil(r._dureeMin / 60))), 'physique', { titre: r._titre, cat: r._cat });
+        Math.min(3, Math.max(1, Math.round(r._dureeMin / 60))), 'physique', { titre: r._titre, cat: r._cat });
     } catch (e) {
       tcQuestionnaireDire(e && e.code === 'creneau_pris'
         ? 'Ce créneau vient d’être pris chez quelqu’un : rien n’est créé. Relance « Créer un nouveau rdv » pour en choisir un autre.'
@@ -20235,7 +20244,16 @@ const TC_QUESTIONNAIRE_NOUVEAU_RDV = {
       choix: tcNouveauRdvChoixCreneau,
       libre: tcNouveauRdvHeureTapee,
       relance: 'Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).' },
-    { cle: 'duree', question: 'Combien de temps ?', choix: tcNouveauRdvDurees, libre: tcNouveauRdvDureeTapee },
+    { cle: 'duree',
+      question: function (r) { return r.avec === 'plusieurs' ? 'Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h.' : 'Combien de temps ?'; },
+      choix: tcNouveauRdvDurees,
+      // À plusieurs, une durée tapée hors des heures rondes (« 30 min », « 4 h ») n'est pas prise : la relance le redit (examen, 15/10).
+      libre: function (text) {
+        const v = tcNouveauRdvDureeTapee(text);
+        const r = _tcQuestionnaire ? _tcQuestionnaire.reponses : {};
+        if (v !== null && r.avec === 'plusieurs' && (Number(v) % 60 !== 0 || Number(v) > 180)) return null;
+        return v;
+      } },
     { cle: 'duree_autre', si: function (r) { return r.duree === 'autre'; },
       question: 'Combien de temps ? Tape une durée (ex : 45 min, 1h30).', libre: tcNouveauRdvDureeTapee, relance: 'Tape une durée (ex : 45 min, 1h30).' },
     { cle: 'verif',

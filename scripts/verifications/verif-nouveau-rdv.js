@@ -43,7 +43,7 @@ verifie('le serveur : proposerRdvGroupe accepte une période (depuis, jusqua, co
 if (api) {
   verifie('API : creneauxCommuns prend une période et un nombre par jour, sans changer son appel d avant',
     /function creneauxCommuns\(int \$organisateurId, array \$invites, int \$duree, int \$combien = 3, \?string \$depuis = null, \?string \$jusqua = null, int \$parJour = 1\): array/.test(api));
-  verifie('API : aujourd hui, jamais une heure déjà passée', /if \(\$date === \$aujourdhui && \$h <= \$heureActuelle\) \{\s+continue;/.test(api));
+  verifie('API : aujourd hui, jamais une heure déjà passée, à l heure de Paris (PHP tourne en UTC)', /if \(\$date === \$aujourdhui && \$h <= \$heureActuelle\) \{\s+continue;/.test(api) && /\$maintenant = new DateTime\('now', new DateTimeZone\('Europe\/Paris'\)\);\s+\$aujourdhui = \$maintenant->format\('Y-m-d'\);\s+\$heureActuelle = \(int\) \$maintenant->format\('G'\);/.test(api));
   const prop = api.slice(api.indexOf("case 'POST /rdv/groupe/proposer':"), api.indexOf("case 'POST /rdv/groupe/confirmer':"));
   verifie('API : /rdv/groupe/proposer lit depuis, jusqua (jamais dans le passé, 30 jours au plus), combien (1-10) et par_jour (1-3)',
     /Entree::texte\('depuis', 10\)/.test(prop) && /Entree::texte\('jusqua', 10\)/.test(prop) && /\$depuis < date\('Y-m-d'\)/.test(prop) && /strtotime\('\+30 day', strtotime\(\$depuis\)\)/.test(prop)
@@ -261,6 +261,24 @@ const nb = () => ctx.events.length;
   verifie('sans prénom connu : une relance propre à cette question', dc() === ctx.tcPhraseNonCompris('Donne-moi au moins deux prénoms de tes contacts qui ont TimeCool (ex : Paul et Marie).'), dc());
   await taper('Marc Dupont');
   verifie('un seul contact cité : on continue avec ce contact, pas à plusieurs', question() === 'Quand ?' && enCours().reponses.avec === 'contact' && enCours().reponses.contact === 'c1', textes());
+
+  // Examen (15/10) : le serveur inscrit des heures rondes (1 à 3) ; le récapitulatif doit annoncer ce qui sera inscrit.
+  reinit();
+  trace.reponseProposer = { creneaux: [{ date: iso(1), heure: 14, minute: 0, manquants: [] }], invites: ['Marc', 'Paul'], sans_acces: [] };
+  trace.reponseConfirmer = { inclus: ['Marc', 'Paul'], exclus: [] };
+  await bouton(); await taper('Réunion projet'); await taper('Marc et Paul'); await taper('demain'); await cliquer(0);
+  verifie('à plusieurs : 1 h / 2 h / 3 h seulement, et le mot qui le dit', question() === 'Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h.' && choixTextes() === '1 h | 2 h | 3 h', question() + ' / ' + choixTextes());
+  await taper('30 min');
+  verifie('« 30 min » tapé à plusieurs : refusé, relance', dc() === ctx.tcPhraseNonCompris('Touche un bouton, ou tape son numéro (1 à 3).') && enCours() !== null, dc());
+  await taper('4 h');
+  verifie('« 4 h » tapé à plusieurs : refusé, le questionnaire tombe (deuxième relance épuisée)', enCours() === null, dc());
+  reinit();
+  trace.reponseProposer = { creneaux: [{ date: iso(1), heure: 14, minute: 0, manquants: [] }], invites: ['Marc', 'Paul'], sans_acces: [] };
+  trace.reponseConfirmer = { inclus: ['Marc', 'Paul'], exclus: [] };
+  await bouton(); await taper('Réunion projet'); await taper('Marc et Paul'); await taper('demain'); await cliquer(0); await taper('3h');
+  verifie('« 3h » tapé : le récapitulatif annonce 14h à 17h (3 h)', /Vendredi 16 octobre, 14h à 17h \(3 h\)/.test(question()), question());
+  await cliquer(0);
+  verifie('le serveur inscrit 3 h, exactement ce qui était annoncé', trace.confirmations.length === 1 && trace.confirmations[0].duree === 3 && dc() === 'C’est noté : « Réunion projet », vendredi 16 octobre, 14h à 17h, avec Marc et Paul. Chacun l’a dans son agenda.', JSON.stringify(trace.confirmations) + ' ' + dc());
 
   titre('7. La durée habituelle de la catégorie passe en premier');
   reinit(agenda().concat([ev('x1', 'Ostéo', -7, 9, 0, 9, 45, { cat: 'sante' }), ev('x2', 'Radio', -3, 14, 0, 14, 45, { cat: 'sante' })]));

@@ -1028,8 +1028,10 @@ function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $c
             $listeJours[] = date('Y-m-d', $t);
         }
     }
-    $aujourdhui = date('Y-m-d');
-    $heureActuelle = (int) date('G');
+    // L'heure de Paris, pas celle du serveur (UTC) : à 10h à Paris, 10h est passé.
+    $maintenant = new DateTime('now', new DateTimeZone('Europe/Paris'));
+    $aujourdhui = $maintenant->format('Y-m-d');
+    $heureActuelle = (int) $maintenant->format('G');
     $candidats = [];
     foreach ($listeJours as $date) {
         $t = strtotime($date);
