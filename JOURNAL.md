@@ -243,6 +243,7 @@ préférence de notification par contact ; fuseaux horaires (plus tard, validé 
 - **Alerte sentinelle du 06/10, 22h55 UTC — corrigée** : `POST /rdv/lien/creer` répondait 500 quand un créneau finissait avant son début (contrainte `ck_creneaux_ordre`). Appels venus de l'adresse de Charles, agent « node » : vraisemblablement des contrôles de la session du PC. L'API vérifie désormais l'ordre et répond 400 `creneau_invalide`. Aucun utilisateur touché.
 
 - **Veille du 05/10** : rien d'alarmant. Disque 14 %, certificats valides 50 jours et plus, SSH calme, copie IONOS ok le 05/10 à 03h29 UTC (toujours du lundi au vendredi seulement). 4 mises à jour système en attente, et redémarrage demandé depuis le 01/10 : à faire à un moment calme, par root, après avoir prévu la relance de la session serveur.
+- **Veille du 19/10** : copie IONOS réussie le lundi 19/10 à 05h29 (heure de Paris), TimeCool répond, aucune nouvelle panne depuis celle du 06/10. Disque 14 %, certificats 36 et 39 jours (renouvellement automatique). Seule alerte : redémarrage demandé depuis 13 jours (trois nouveaux noyaux Linux et libc6 en attente) — à faire par root à un moment calme, puis relancer la session serveur.
 
 - **SSH saturé le 03/10 vers 03h30 UTC, réglé par la session du PC** :
   212.112.98.73 faisait de la force brute en tenant 100+ connexions non
