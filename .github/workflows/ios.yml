@@ -31,6 +31,10 @@ env:
   # Version figee : une nouvelle version de XcodeGen ne doit pas casser
   # la fabrication sans qu'on ait rien change.
   XCODEGEN_VERSION: "2.46.0"
+  # Empreinte de cette archive (identique a celle publiee par GitHub) :
+  # une archive remplacee a la source ne serait jamais executee. A
+  # changer en meme temps que la version.
+  XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
 
 jobs:
   build:
@@ -51,6 +55,7 @@ jobs:
         run: |
           curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
             "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
           unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
           "$RUNNER_TEMP/xcodegen/bin/xcodegen" --version
 
