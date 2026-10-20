@@ -1,0 +1,97 @@
+name: Build TimeCool iPhone
+
+# Fabrique l'application iPhone sur un Mac de GitHub, pour ne plus louer
+# un Mac a chaque essai. Le depot est public : ces Mac sont gratuits.
+#
+# Compilation pour l'iPhone simule seulement, SANS signature : le compte
+# developpeur Apple n'existe pas encore. Le jour ou il existe, une etape
+# de signature et d'envoi a TestFlight viendra s'ajouter ici.
+
+on:
+  push:
+    branches: [ main ]
+    # Seulement quand ce qui finit dans l'application iPhone change : la
+    # coque, la page partagee, le script qui la recopie, ce fichier.
+    paths:
+      - 'ios/**'
+      - 'app/src/main/assets/**'
+      - 'scripts/preparer-ios.sh'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deux envois rapproches : seul le dernier compte, le precedent s'arrete.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Version figee : une nouvelle version de XcodeGen ne doit pas casser
+  # la fabrication sans qu'on ait rien change.
+  XCODEGEN_VERSION: "2.46.0"
+
+jobs:
+  build:
+    name: Build iPhone (simulateur)
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Version de Xcode
+        run: xcodebuild -version
+
+      # Meme methode que sur le Mac loue : l'archive compilee, sans
+      # Homebrew.
+      - name: Installer XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" --version
+
+      # La page n'est pas versionnee dans ios/ : on la recopie depuis
+      # l'original, exactement comme sur le Mac.
+      - name: Copier la page dans le projet
+        run: bash scripts/preparer-ios.sh
+
+      - name: Fabriquer le projet Xcode
+        working-directory: ios
+        run: '"$RUNNER_TEMP/xcodegen/bin/xcodegen" generate'
+
+      - name: Compiler pour l'iPhone simule
+        working-directory: ios
+        run: |
+          xcodebuild build \
+            -project TimeCool.xcodeproj \
+            -scheme TimeCool \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/derive" \
+            CODE_SIGNING_ALLOWED=NO
+
+      # Garde l'application compilee : elle s'installe sur n'importe quel
+      # iPhone simule par glisser-deposer, sans recompiler.
+      - name: Preparer l'archive
+        run: |
+          APP="$RUNNER_TEMP/derive/Build/Products/Debug-iphonesimulator/TimeCool.app"
+          [ -d "$APP" ] || { echo "TimeCool.app introuvable" >&2; exit 1; }
+          # La page doit etre dans le paquet, sinon l'ecran reste blanc.
+          [ -f "$APP/web/index.html" ] || { echo "index.html absent du paquet" >&2; exit 1; }
+          [ -f "$APP/pont.js" ] || { echo "pont.js absent du paquet" >&2; exit 1; }
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" dist/TimeCool-simulateur.zip
+          ls -lh dist/TimeCool-simulateur.zip
+
+      - name: Upload app en artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeCool-iPhone-simulateur-${{ github.run_number }}
+          path: dist/TimeCool-simulateur.zip
+          retention-days: 30
+          if-no-files-found: error

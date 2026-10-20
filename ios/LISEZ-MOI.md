@@ -83,9 +83,14 @@ l'onglet **Signing & Capabilities**.
 
 Xcode fabrique alors tout seul ce qu'il faut pour compiler.
 
+**Pour l'iPhone simulé, cette étape ne sert à rien** (constaté le
+19/09/2026) : saute-la. Elle ne vaut que pour un vrai iPhone ou pour
+l'App Store, avec le compte développeur.
+
 ## 6. Compiler
 
-En haut à gauche, choisis **iPhone 15** dans la liste des appareils —
+En haut à gauche, choisis un **iPhone** dans la liste des appareils
+(le 19/09/2026 : iPhone 17 Pro) —
 c'est l'iPhone simulé, il n'y a pas besoin d'en posséder un.
 
 Puis appuie sur le bouton ▶.
@@ -103,6 +108,26 @@ grave. Xcode affiche ses erreurs en rouge dans le panneau de gauche.
 **Recopie-les telles quelles** et envoie-les-moi. Ne cherche pas à les
 corriger toi-même : la plupart tiennent à un détail que je peux régler
 en une ligne.
+
+---
+
+## La fabrication automatique, sans Mac loué
+
+`.github/workflows/ios.yml` refait les étapes 2, 3, 4 et 6 sur un Mac
+de GitHub, gratuit puisque le dépôt est public. Elle part seule à chaque
+envoi sur GitHub qui touche `ios/`, la page ou `scripts/preparer-ios.sh`,
+ou à la main (onglet Actions → « Build TimeCool iPhone » → Run workflow).
+
+Lire le résultat depuis le serveur :
+
+```
+gh run list --workflow ios.yml -L 3
+gh run view <numéro> --log-failed
+```
+
+Elle garde `TimeCool-simulateur.zip` (30 jours) : l'application
+compilée, qu'on dépose sur un iPhone simulé. Sans compte Apple, pas de
+signature, donc pas encore de vrai iPhone ni de TestFlight.
 
 ---
 

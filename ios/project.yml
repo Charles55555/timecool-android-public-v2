@@ -49,3 +49,7 @@ targets:
         INFOPLIST_FILE: TimeCool/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"   # iPhone seulement pour cette version
+    # Schema partage : sans lui, xcodebuild -scheme TimeCool echoue sur
+    # un Mac neuf (celui de GitHub Actions) ; Xcode, lui, en invente un
+    # a l'ouverture, ce qui le masquait sur le Mac loue.
+    scheme: {}
