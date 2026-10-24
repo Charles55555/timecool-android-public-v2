@@ -2556,3 +2556,11 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   Sophie Anceau. » « préviens Marc » quand c'est Marc qui est en retard → « Marc Dupont est en retard ; tu veux prévenir quelqu'un
   d'autre, ou lui écrire ? ». « tu es en retard » tapé à Charly = une remarque, pas un retard à annoncer : « Je ne suis pas sûr de
   comprendre : tu veux dire que je réponds trop tard, ou que quelqu'un est en retard ? ». La relecture avant envoi est gardée.
+- (suite, 24/10, examinateur) Prévenir du retard d'un autre : le rendez-vous n'est cité (« pour « Réunion avec Marc et Sophie » à
+  11h ») que s'il est d'aujourd'hui, en cours ou dans les deux heures, et si le destinataire y participe avec le retardataire ;
+  sinon « … a du retard. » sans titre : jamais le prochain rendez-vous d'un autre jour, jamais un rendez-vous privé révélé à un
+  tiers (seul ce qui concerne les deux circule).
+  Chef : le titre, le lieu et l'heure ne sont donnés que si le destinataire participe (contact du rendez-vous ou prénom dans le
+  titre) ; un tiers ne voit jamais un rendez-vous où il n'est pas (cas ajouté au garde-fou : un point avec Marc seul, maintenant →
+  pas de titre). Réserve « titre doublé » corrigée : « Dermatologue » puis « chez le dermato mardi 15h » ne se compose pas, le
+  complément porte déjà l'objet.

@@ -282,7 +282,23 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     ctx.userAccount = { firstname: 'Inès' }; ctx.events = agenda();
     ctx.charlyIA.history = [];
     await ctx.tcPrevenirRetardAutre('préviens Sophie', classer('préviens Sophie', bulle('Marc est en retard')).retardAutre);
-    verifie('tcPrevenirRetardAutre : le message rédigé par Charly « Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard pour « Dentiste », <date> 15h à 16h. » part à Sophie Anceau après confirmation', envois.length === 1 && envois[0][0] === 'Sophie Anceau' && envois[0][1] === 'Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard pour « Dentiste », ' + iso(1) + ' 15h à 16h.' && /Envoyé à Sophie Anceau/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content), JSON.stringify(envois));
+    verifie('tcPrevenirRetardAutre : le message rédigé par Charly « Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard. » part à Sophie Anceau après confirmation ; le Dentiste de demain (privé) n est jamais cité', envois.length === 1 && envois[0][0] === 'Sophie Anceau' && envois[0][1] === 'Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard.' && /Envoyé à Sophie Anceau/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content), JSON.stringify(envois));
+    ctx.events = agenda().concat([ev('reu', 'Réunion avec Marc et Sophie', 0, 11, 0, 12, 0, { contact: 'c1' }), ev('prive', 'Point avec Marc', 0, 10, 30, 11, 0, { contact: 'c1' })]);   // aujourd hui 10h : réunion à 11h (dans l heure) avec les deux ; un point privé avec Marc seul
+    ctx.charlyIA.history = []; envois.length = 0;
+    await ctx.tcPrevenirRetardAutre('préviens Sophie', classer('préviens Sophie', bulle('Marc est en retard')).retardAutre);
+    verifie('un rendez-vous d aujourd hui, proche, où Sophie participe : il est cité (« pour « Réunion avec Marc et Sophie » à 11h ») ; le point privé avec Marc seul, jamais', envois.length === 1 && envois[0][1] === 'Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard pour « Réunion avec Marc et Sophie » à 11h à 12h.', JSON.stringify(envois));
+    ctx.events = agenda().concat([ev('prive2', 'Point avec Marc', 0, 10, 30, 11, 0, { contact: 'c1' })]);   // aujourd hui, proche, mais Sophie n y est pas
+    ctx.charlyIA.history = []; envois.length = 0;
+    await ctx.tcPrevenirRetardAutre('préviens Sophie', classer('préviens Sophie', bulle('Marc est en retard')).retardAutre);
+    verifie('destinataire absent du rendez-vous (un point avec Marc seul, maintenant) : pas de titre, « Marc Dupont a du retard. »', envois.length === 1 && envois[0][1] === 'Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard.', JSON.stringify(envois));
+    ctx.events = agenda().concat([ev('tard', 'Réunion avec Marc et Sophie', 0, 15, 0, 16, 0, { contact: 'c1' })]);   // aujourd hui mais dans 5 heures
+    ctx.charlyIA.history = []; envois.length = 0;
+    await ctx.tcPrevenirRetardAutre('préviens Sophie', classer('préviens Sophie', bulle('Marc est en retard')).retardAutre);
+    verifie('un rendez-vous d aujourd hui mais dans cinq heures : pas cité', envois.length === 1 && envois[0][1] === 'Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard.', JSON.stringify(envois));
+    ctx.events = agenda(); ctx.charlyIA.history = []; envois.length = 0;
+    await ctx.tcPrevenirRetardAutre('préviens Marc', classer('préviens Marc', bulle('Sophie est en retard')).retardAutre);
+    verifie('« Sophie est en retard » + « préviens Marc » : le déjeuner avec Sophie de mardi (privé, un autre jour) n est jamais révélé à Marc', envois.length === 1 && envois[0][1] === 'Bonjour Marc, Inès me demande de te prévenir : Sophie Anceau a du retard.', JSON.stringify(envois));
+    ctx.events = agenda();
     ctx.charlyIA.history = []; envois.length = 0;
     await ctx.tcPrevenirRetardAutre('préviens le', classer('préviens Sophie', bulle('Marc est en retard')).retardAutre);
     verifie('sans personne nommée : « Qui veux-tu prévenir ? », rien ne part', envois.length === 0 && /Qui veux-tu prévenir \?/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content));
@@ -290,7 +306,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       verifie('la réponse « Sophie » ou « Sophie Anceau » à « Qui veux-tu prévenir ? » retrouve le chemin (retardAutre, proposition gardée)', !!classer('Sophie', hQui).retardAutre && classer('Sophie', hQui).retardAutre.texte === 'Marc est en retard' && !!classer('Sophie Anceau', hQui).retardAutre && !classer('mes rdv de demain', hQui).retardAutre, JSON.stringify(classer('Sophie', hQui)));
       ctx.charlyIA.history = []; envois.length = 0;
       await ctx.tcPrevenirRetardAutre('Sophie', classer('Sophie', hQui).retardAutre);
-      verifie('et « Sophie » envoie bien à Sophie Anceau le message rédigé', envois.length === 1 && /^Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard pour « Dentiste »/.test(envois[0][1]), JSON.stringify(envois)); }
+      verifie('et « Sophie » envoie bien à Sophie Anceau le message rédigé (sans le Dentiste de demain)', envois.length === 1 && envois[0][1] === 'Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du retard.', JSON.stringify(envois)); }
     ctx.charlyIA.history = []; envois.length = 0;
     await ctx.tcPrevenirRetardAutre('préviens Sophie', classer('préviens Sophie', bulle('le train est en retard')).retardAutre);
     verifie('« le train est en retard » puis « préviens Sophie » → « Bonjour Sophie, Inès me demande de te prévenir : le train a du retard. »', envois.length === 1 && envois[0][1] === 'Bonjour Sophie, Inès me demande de te prévenir : le train a du retard.', JSON.stringify(envois));
@@ -311,6 +327,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     delete ctx.tcConfirm; delete ctx.tcTransmettrePrevenance; delete ctx.tcDirePrevenance; }
   verifie('charlySendMessage appelle tcPrevenirRetardAutre sur la réponse « préviens X »', /if \(_classe\.retardAutre\) \{ await tcPrevenirRetardAutre\(text, _classe\.retardAutre\); return; \}/.test(csm));
   ctx.events = agenda();
+  verifie('« Dermatologue » puis « chez le dermato mardi 15h » : l objet est déjà là, pas de titre doublé (le complément part seul)', classer('chez le dermato mardi 15h', h2).classe === 'claire' && !classer('chez le dermato mardi 15h', h2).compose, classer('chez le dermato mardi 15h', h2).compose);
   verifie('mais « mardi 15h » après « Dermatologue », « 14h » après « golf samedi », « demain » après « annule tout » se composent toujours', classer('mardi 15h', h2).compose === 'Dermatologue mardi 15h' && classer('14h', bulle('golf samedi')).compose === 'golf samedi 14h' && classer('demain', bulle('annule tout')).compose === 'annule tout demain');
   // Groupe 1 : les petites phrases sociales, une réponse, jamais « pas compris ».
   const sociaux = { 'tkt': /Merci/, 'mdr': /😄/, 'ptdr': /😄/, '😂': /😊/, '👍': /😊/, 'ras': /Je suis là/, 'ça va et toi': /Très bien, merci/, 'rien': /Je suis là/, 'tu sers à rien': /Pardon, je fais de mon mieux/, 'je t’ai pas parlé': /je me tais/,

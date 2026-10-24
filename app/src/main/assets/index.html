@@ -19037,7 +19037,10 @@ function tcClasserMessage(text, histoire) {
       // Après « Qui veux-tu prévenir ? », un nom de contact suffit (« Sophie », « Sophie Anceau »).
       const retardAutre = proposition.titre === 'retard' && (/^(stp |svp )?(previens|prevenir|avertis|avertir|informe|informer|dis a|dis le a|dis lui|envoie un (message|sms|texto) a|previens le|previens la|previens les|oui previens)\b/.test(norm)
         || (proposition.attendNom && mots.length <= 3 && !!tcClasseContactEcrit(brut)));
-      return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : Object.assign(claire('complement'), { compose: piece ? proposition.texte + ' ' + brut.trim() : null, retardAutre: retardAutre ? proposition : null });
+      // Le complément reprend déjà l'objet (« Dermatologue » puis « chez le dermato mardi 15h ») : pas de titre doublé, il part seul.
+      const motsTitre = tcSansAccents(String(proposition.titre || '')).split(/[^a-z0-9]+/).filter(function (t) { return t.length >= 4; });
+      const dejaLa = motsTitre.length && mots.some(function (m) { return m.length >= 4 && motsTitre.some(function (t) { return t.startsWith(m) || m.startsWith(t); }); });
+      return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : Object.assign(claire('complement'), { compose: (piece && !dejaLa) ? proposition.texte + ' ' + brut.trim() : null, retardAutre: retardAutre ? proposition : null });
     }
     // « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») : la même
     // question, précise ; « non », « cv » : les deux exemples. La proposition reste gardée : « mardi 15h » ensuite passe avec elle.
@@ -19331,14 +19334,23 @@ async function tcPrevenirRetardAutre(text, proposition) {
   // retard pour « Dentiste », vendredi 16 octobre 15h. » ; le rendez-vous est le prochain avec le retardataire, s'il y en a un.
   const prenom = String(contact.name || '').split(' ')[0];
   const moi = (typeof userAccount !== 'undefined' && userAccount) ? String(userAccount.firstname || userAccount.firstName || userAccount.prenom || '').trim() : '';
+  // Le rendez-vous n'est cité que s'il est d'AUJOURD'HUI, en cours ou dans les deux heures, avec le retardataire ET le destinataire :
+  // seul ce qui les concerne tous les deux circule, jamais un rendez-vous privé d'un autre jour (examinateur).
   let pour = '';
   if (proposition.contact) {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const aujourdhui = tcISO(now);
     const retardContact = (Array.isArray(contactsList) ? contactsList : []).find(function (c) { return c && c.name === proposition.contact; });
     const prenomRetard = tcSansAccents(String(proposition.contact).split(' ')[0]);
+    const prenomDest = tcSansAccents(prenom);
+    const participe = function (e, c, prenomC) { return (c && e.contact === c.id) || (prenomC.length >= 3 && tcSansAccents(e.title).indexOf(prenomC) > -1); };
     const rdv = (Array.isArray(events) ? events : []).filter(function (e) {
-      return e && e.mode === mode && e.title && e.date >= tcISO(new Date()) && ((retardContact && e.contact === retardContact.id) || tcSansAccents(e.title).indexOf(prenomRetard) > -1);
+      if (!e || e.mode !== mode || !e.title || e.allDay || e.date !== aujourdhui) return false;
+      const debut = Number(e.startH) * 60 + Number(e.startM || 0), fin = Number(e.endH) * 60 + Number(e.endM || 0);
+      return debut <= nowMin + 120 && fin >= nowMin && participe(e, retardContact, prenomRetard) && participe(e, contact, prenomDest);
     }).sort(tcComparerEvenements)[0];
-    if (rdv) pour = ' pour « ' + rdv.title + ' », ' + tcFormaterDateHumaine(rdv.date) + ' ' + tcFormaterHeure(rdv);
+    if (rdv) pour = ' pour « ' + rdv.title + ' » à ' + tcFormaterHeure(rdv);
   }
   const texte = 'Bonjour ' + prenom + ', ' + (moi ? moi + ' me demande de te prévenir' : 'je suis chargé de te prévenir') + ' : ' + retardataire + ' a du retard' + pour + '.';
   if (typeof tcConfirm === 'function' && !(await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »'))) {
