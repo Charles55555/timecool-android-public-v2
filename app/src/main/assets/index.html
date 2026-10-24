@@ -12091,14 +12091,20 @@ function tcContexteDatePourIA(now) {
  * La reponse a la forme d une reponse du modele (prose + bloc [AGENDA]) : les memes garde-fous s appliquent ensuite.
  * '' si ce n est pas le cas : le message suit son chemin habituel (campagne 10, mission 19).
  */
+/** « M. Dubois », « Mme Lambert », « Me Durand » en tete du texte tape : la civilite, ou null (« m'appeler » n'en est pas une ; mission 56). */
+function tcCiviliteEnTete(brut) {
+  const m = String(brut || '').trim().match(/^(?:stp |svp )?(M\.|M|Mr\.?|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr\.?|Docteur|Me|Ma[iî]tre)(?=\s)\s+[A-Za-zÀ-ÿ]/);
+  return m ? m[1].replace(/^M$/i, 'M.') : null;
+}
+
 function tcCreationLocale(texte, now, forcer) {
   const brut = String(texte || '');
   if (/\?/.test(brut)) return '';
   const t = tcSansAccents(brut).replace(/[’']/g, ' ');
   // « réserve » : une reservation de restaurant ou d hotel n est pas une creation locale (examen de la mission 19).
   // « Mme Lambert brushing samedi 10h », « M. Dubois vendredi 9h » : un client nomme en tete vaut une demande de rendez-vous (pros, mission 56).
-  if (!/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?)\b/.test(t)
-      && !(/^(?:stp |svp )?(?:m|mr|mme|mlle|monsieur|madame|mademoiselle|dr|docteur|maitre|me)\.? [a-z]/.test(t) && !/\b(a|ont|est|m a|m ont) (appele|telephone|ecrit|envoye|annule|confirme|demande|dit|rappele|passe|laisse)\b/.test(t))) return '';
+  if (!/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|doit m appeler|doit me rappeler|doit me telephoner|doit m ecrire)\b/.test(t)
+      && !((typeof tcCiviliteEnTete === 'function' && tcCiviliteEnTete(brut)) && !/\b(a|ont|est|m a|m ont) (appele|telephone|ecrit|envoye|annule|confirme|demande|dit|rappele|passe|laisse)\b/.test(t))) return '';
   if (/\b(restaurant|resto|hotel|table|billets?|train|vol|avion)\b/.test(t)) return '';
   if (/\b(annule[rsz]?|annulation|supprime[rsz]?|efface[rsz]?|enleve[rsz]?|retire[rsz]?)\b/.test(t)) return '';
   if (tcEstDeplacement(brut)) return '';
@@ -12123,10 +12129,11 @@ function tcCreationLocale(texte, now, forcer) {
   if (!titre) return '';
   // « note cafe avec Marc et Sophie jeudi 15h » : les prenoms de contacts gardent leur « avec » et leur « et » dans le titre (chef, mission 55).
   let titreFinal = titre;
-  if (/^(?:stp |svp )?(?:m|mr|mme|mlle|monsieur|madame|mademoiselle|dr|docteur)\.? [a-z]/.test(t) && !/^(?:M\.?|Mr|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr|Docteur)\b/i.test(titreFinal)) {
-    const civ = String(brut).trim().match(/^(?:stp |svp )?(M\.|M|Mr\.?|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr\.?|Docteur)\b\.?/i);
-    if (civ) titreFinal = civ[1].replace(/^M$/i, 'M.') + ' ' + titreFinal;
-  }
+  { const civ = (typeof tcCiviliteEnTete === 'function') ? tcCiviliteEnTete(brut) : null;
+    if (civ && !/^(?:M\.?|Mr|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr|Docteur|Me|Ma[iî]tre)\b/i.test(titreFinal)) titreFinal = civ + ' ' + titreFinal;
+    // « Paul doit m'appeler jeudi 14h » : un rendez-vous « Appel de Paul » (chef, mission 56).
+    const mAppel = String(brut).trim().match(/^([A-ZÀ-Ý][A-Za-zÀ-ÿ-]+(?: [A-ZÀ-Ý][A-Za-zÀ-ÿ-]+)?) doit (?:m['’ ]appeler|me rappeler|me t[ée]l[ée]phoner)\b/);
+    if (mAppel) titreFinal = 'Appel de ' + mAppel[1]; }
   if (/\bavec\b/.test(t) && !/\bavec\b/i.test(titre) && typeof tcContactsParMots === 'function') {
     const prenoms = [], objet = [];
     titre.split(/\s+/).forEach(function (w) { let c = false; try { c = w.length >= 3 && tcContactsParMots([tcSansAccents(w)]).length > 0; } catch (e) { c = false; } (c ? prenoms : objet).push(w); });
@@ -19171,15 +19178,19 @@ function tcClasserMessage(text, histoire) {
   }
   // 2c quinquies (mission 56, pros et invitations).
   //   « Gaëlle peut voir mon agenda ? », « Partage mon agenda avec Gaëlle » : la réponse fixe sur le partage (chef).
-  //   Un appareil ou un service nommé (iPhone, téléphone, ordi, Google, Outlook) : une question sur l'application, pas sur le partage (chef).
-  if (/\b(mon agenda|mes rendez vous|mes rdv|mon planning|mon calendrier)\b/.test(norm) && /\b(voir|acces|retrouver|consulter|ouvrir|avoir|peut|peux|peuvent)\b/.test(norm)
-      && /\b(iphone|telephone|portable|mobile|ordi|ordinateur|pc|mac|tablette|android|ipad)\b/.test(norm) && !/\b(google|outlook|icloud|apple)\b/.test(norm)) {
-    return pasSur('partage', 'Oui : avec le même compte, ton agenda est le même sur le web et sur l’iPhone.');
-  }
-  if (/\b(peut|peuvent|peux|voit|voient|voir|a acces|ont acces|acces|partage|partager|partages|montre|montrer)\b/.test(norm) && /\b(mon agenda|mes rendez vous|mes rdv|mon planning|mon calendrier)\b/.test(norm)
-      && !/\b(je veux voir|montre moi|affiche|qu est ce que j ai|j ai quoi|iphone|telephone|portable|mobile|ordi|ordinateur|pc|mac|tablette|android|ipad|google|outlook|icloud|apple)\b/.test(norm)
-      && (tcClasseNomConnu(brut) || /\b(qui|quelqu un|les autres|tout le monde|mes contacts|mes clients)\b/.test(norm) || /^partage/.test(norm))) {
-    return pasSur('partage', 'Non. Personne ne voit ton agenda ; seul un créneau circule quand tu le proposes.');
+  //   Un tiers (contact nommé, « il / elle / son / quelqu'un / les autres ») : la réponse du chef, d'abord ; un appareil nommé pour MOI
+  //   (« je / mon ») : une question sur l'application, pas sur le partage (chef). Google / Outlook / iCloud : les parcours de synchro.
+  {
+    const parleAgenda = /\b(mon agenda|mes rendez vous|mes rdv|mon planning|mon calendrier)\b/.test(norm) && !/\b(google|outlook|icloud|apple)\b/.test(norm);
+    const tiers = tcClasseNomConnu(brut) || /\b(qui|quelqu un|les autres|tout le monde|mes contacts|mes clients|il|elle|ils|elles|son|sa|ses|leur)\b/.test(norm) || /^partage/.test(norm);
+    if (parleAgenda && /\b(peut|peuvent|peux|voit|voient|voir|a acces|ont acces|acces|partage|partager|partages|montre|montrer)\b/.test(norm) && tiers
+        && !/\b(je veux voir|montre moi|affiche|qu est ce que j ai|j ai quoi)\b/.test(norm)) {
+      return pasSur('partage', 'Non. Personne ne voit ton agenda ; seul un créneau circule quand tu le proposes.');
+    }
+    const appareil = norm.match(/\b(iphone|ipad|telephone|portable|mobile|ordi|ordinateur|pc|mac|tablette|android)\b/);
+    if (parleAgenda && appareil && !tiers && /\b(voir|acces|retrouver|consulter|ouvrir|avoir|peut|peux|peuvent|on)\b/.test(norm) && /\b(je|j|mon|mes|ma|moi|on)\b/.test(norm)) {
+      return pasSur('partage', 'Oui : avec le même compte, tu retrouves ton agenda sur tous tes appareils (téléphone, tablette, ordinateur).');
+    }
   }
   //   « Je veux plus voir Paul » : retirer ses rendez-vous, ou le bloquer ? (chef)
   {
@@ -19192,11 +19203,12 @@ function tcClasserMessage(text, histoire) {
   //   « Rappelle à M. Dubois son rendez-vous », « envoie un rappel à Mme Martin » : un rappel au client, jamais une annulation (chef).
   {
     //   Le nom s'arrête à « que / qu' / pour / son rdv » (« rappelle à Paul qu'on a rdv demain ») ; sans fiche, seulement un nom écrit en majuscule ou M. / Mme (« au dentiste » suit son chemin).
-    const mRappelClient = norm.match(/^(?:stp |svp |tu peux )?(?:rappelle|rappeler|rappelles|envoie un rappel|envoyer un rappel|envoie un sms de rappel|fais un rappel) (?:a|au|a la) (.+?)(?:\s+(?:que|qu|qu on|qu il|qu elle|pour|de|son|le|notre|leur|ses)\b.*)?( stp| svp)?$/);
+    //   (« Mme de Villiers » : le « de » d'un nom n'est pas une coupe ; une civilité seule ne suffit pas.)
+    const mRappelClient = norm.match(/^(?:stp |svp |tu peux )?(?:rappelle|rappeler|rappelles|envoie un rappel|envoyer un rappel|envoie un sms de rappel|fais un rappel) (?:a|au|a la) ((?:m|mr|mme|mlle|monsieur|madame|mademoiselle|dr|docteur|me|maitre) (?:de |du |d |le |la |van |von )?[a-z-]+|[a-z-]+(?: [a-z-]+)?)(?:\s+(?:que|qu|qu on|qu il|qu elle|pour|de|son|le|notre|leur|ses)\b.*)?( stp| svp)?$/);
     if (mRappelClient && mRappelClient[1] && !/^(moi|me|nous)\b/.test(mRappelClient[1]) && /\b(rendez vous|rdv|rendez|rappel)\b/.test(norm)) {
       const c = tcClasseContactEcrit(mRappelClient[1]);
       if (c) return Object.assign(claire('complement'), { compose: 'dis à ' + c.name + ' que je te rappelle notre rendez-vous' });
-      const qui = String(brut).trim().replace(/^(?:stp |svp |tu peux )?(?:rappelle|rappeler|rappelles|envoie un rappel|envoyer un rappel|envoie un sms de rappel|fais un rappel)\s+(?:à|a|au|à la|a la)\s+/i, '').replace(/\s+(?:que|qu['’]|qu|pour|de|son|le|notre|leur|ses)\b.*$/i, '').replace(/[.!?]+$/, '').trim();
+      const qui = String(brut).trim().replace(/^(?:stp |svp |tu peux )?(?:rappelle|rappeler|rappelles|envoie un rappel|envoyer un rappel|envoie un sms de rappel|fais un rappel)\s+(?:à|a|au|à la|a la)\s+/i, '').replace(/\s+(?:que|qu['’]|qu|pour|son|le|notre|leur|ses)\b.*$/, '').replace(/\s+de\s+[a-zà-ÿ].*$/, '').replace(/[.!?]+$/, '').trim();
       if (/^(?:M\.?|Mr|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr|Docteur)\b|^[A-ZÀ-Ý]/.test(qui)) return pasSur('piece_manquante', 'Je n’ai pas les coordonnées de ' + qui + ' : tu me donnes son numéro, et je lui envoie le rappel ?', { moment: null, contact: null, metier: null, titre: 'rappel client', texte: '', etape: 'suite', composable: false });
     }
   }
@@ -20765,8 +20777,11 @@ function tcDetecterRappelDate(text, now) {
   const heure = tcHeureDansTexte((dateDite + ' ' + reste).toLowerCase());
   let objet = reste;
   const coupe = tcSansAccents(reste).toLowerCase().search(/\s(?:le |ce |cette |la |pour le |pour |d ici )?(?:\d{1,2}(?:er)? (?:janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)|\d{1,2}\/\d{1,2}|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres[- ]demain|aujourd|ce soir|ce matin|cet apres|la semaine|semaine prochaine|dans \d)\b/);
-  if (coupe > -1) objet = reste.slice(0, coupe);
+  // « vérifier mes rdv de demain » : la date fait partie de l'objet quand « de / du / des / pour » la précède, le titre reste entier (chef).
+  if (coupe > -1 && !/(^|\s)(de|du|des|d|pour)\s*$/.test(tcSansAccents(reste).toLowerCase().slice(0, coupe))) objet = reste.slice(0, coupe);
   objet = objet.replace(/\s*(?:a|à|vers)\s*\d{1,2}\s?(?:h|heures?)(?:\s?\d{2})?\s*$/i, '').replace(/[\s,;:]+$/, '').trim();
+  // Un petit mot resté en fin d'objet après la coupe (« vérifier mes rdv de » demain) tombe.
+  objet = objet.replace(/\s+(?:de|du|des|d|pour|à|a|le|la|les|mes|mon|ma|un|une|au|aux|en|sur|avec)\s*$/i, '').trim();
   if (!objet || objet.split(/\s+/).length > 8) return null;
   const titre = 'Rappel : ' + objet;
   if (heure) {

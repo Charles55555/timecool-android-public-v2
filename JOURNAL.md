@@ -2768,3 +2768,8 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « la semaine prochaine » (oui = du lundi au vendredi) notées ; « ajoute quand même » ajoute la carte telle qu'affichée (tcAjouterCartePendante,
   dernier jour, dernière heure) ; « Je veux plus voir Paul » → « ou je bloque ce contact ? » ; le titre garde « M. » (« M. Dubois ») ; « Mme Lambert
   a appelé samedi 10h » part au modèle.
+- Troisième passage (examinateur + chef) : partage : la vie privée d'abord (« Paul peut voir mon agenda sur son téléphone ? » → « Non. Personne ne voit ton
+  agenda… »), le « oui » seulement pour moi sur mes appareils, phrase unique du chef (« …tu retrouves ton agenda sur tous tes appareils (téléphone, tablette,
+  ordinateur). ») ; rappel au client : « Mme de Villiers », « M. Le Goff » restent entiers (particule, « Le ») ; rappel daté : la date précédée de « de / du /
+  pour » reste dans l'objet (« Rappel : vérifier mes rdv de demain », noté demain), un petit mot final tombe ; tcCiviliteEnTete lit la civilité dans le texte
+  tapé (« M. », « Mme », « Me » + espace ; « m'appeler » n'en est pas une) ; « Paul doit m'appeler jeudi 14h » → « Appel de Paul » ; « Me Durand » gardé.
