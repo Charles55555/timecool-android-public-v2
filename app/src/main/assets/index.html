@@ -19047,14 +19047,19 @@ function tcClasserMessage(text, histoire) {
   //     demande d'abord, sans lister tous les rendez-vous ; avec un indice (« dentiste »), il vise ce rendez-vous ; la réponse (« annule »,
   //     « décale-le à mardi ») se lit avec « « Dentiste » ».
   {
-    const mDoute = norm.match(/^(?:je (?:ne )?vais pas y aller|j irai pas|je n irai pas|je n y vais pas|j y vais pas|je (?:ne )?viens pas|je (?:ne )?viendrai pas|j y vais plus|je n y vais plus|je (?:ne )?peux (?:plus|pas) y aller|(?:le |mon |un )?(?:rdv|rendez vous) annule|j ai (?:encore |completement |totalement )?oublie (?:le |la |mon |ma |l )?(.+)|j avais oublie (?:le |la |mon |ma |l )?(.+))( finalement)?$/);
+    // Jamais quand la phrase porte un verbe d'action clair (« j'ai oublié de te dire, ajoute golf samedi 10h ») : l'action l'emporte (chef).
+    const verbesAction = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
+    // (« rdv annulé » : le participe n'est pas un ordre.)
+    const porteAction = mots.some(function (m) { return verbesAction.indexOf(m) > -1 && !(m === 'annule' && /^(le |mon |un )?(rdv|rendez vous) annule( finalement)?$/.test(norm)); });
+    const mDoute = porteAction ? null : norm.match(/^(?:je (?:ne )?vais pas y aller|j irai pas|je n irai pas|je n y vais pas|j y vais pas|je (?:ne )?viens pas|je (?:ne )?viendrai pas|j y vais plus|je n y vais plus|je (?:ne )?peux (?:plus|pas) y aller|(?:le |mon |un )?(?:rdv|rendez vous) annule|j ai (?:encore |completement |totalement )?oublie (?:le |la |mon |ma |l )?(.+)|j avais oublie (?:le |la |mon |ma |l )?(.+))( finalement)?$/);
     if (mDoute) {
       const indice = (mDoute[1] || mDoute[2] || '').trim();
       let vise = null;
       try { vise = indice && typeof tcRdvVise === 'function' ? tcRdvVise(indice) : null; } catch (e) { vise = null; }
       if (vise) return pasSur('piece_manquante', 'Pour « ' + vise.title + ' » (' + tcFormaterDateHumaine(vise.date) + ' ' + tcFormaterHeure(vise) + ') : tu veux que je l’annule, ou que je le décale ?',
         { moment: null, contact: null, metier: null, titre: vise.title, texte: '« ' + vise.title + ' »', etape: 'suite', composeApres: true });
-      return pasSur('piece_manquante', 'Tu veux l’annuler ou le décaler, et lequel ?', { moment: null, contact: null, metier: null, titre: 'annulation', texte: '', etape: 'suite', composable: false });
+      // « oublié » sans rendez-vous connu ni mot de rendez-vous (« j'ai oublié mon parapluie ») : pas une annulation, la phrase suit son chemin.
+      if (!indice || /\b(rdv|rendez vous|rendez)\b/.test(norm)) return pasSur('piece_manquante', 'Tu veux l’annuler ou le décaler, et lequel ?', { moment: null, contact: null, metier: null, titre: 'annulation', texte: '', etape: 'suite', composable: false });
     }
   }
   if (/^(je suis|je serai|je serais|j suis|jsuis) (libre|dispo|disponible)\b/.test(norm) && !/\?/.test(brut) && !/\b(quand|quel|quelle|a quelle heure)\b/.test(norm) && mots.length <= 6) {
@@ -19839,12 +19844,19 @@ function tcHeuresEnLettres(texte) {
   let t = String(texte || '');
   const nombres = Object.keys(TC_NOMBRES_LETTRES).sort(function (a, b) { return b.length - a.length; }).map(function (n) { return n.replace(/[-\s]/g, '[-\\s]'); }).join('|');
   const re = new RegExp('(^|[\\s,;:(])(' + nombres + ')(\\s+heures?)?(\\s+(?:et\\s+)?(?:quart|demie?|trente|quinze|quarante-cinq|quarante cinq|cinq|dix|vingt|vingt-cinq|vingt cinq|trente-cinq|trente cinq|quarante|cinquante|cinquante-cinq|cinquante cinq))?(?=$|[\\s,.;:!?)])', 'gi');
-  t = t.replace(re, function (tout, avant, nombre, heures, minutes) {
+  t = t.replace(re, function (tout, avant, nombre, heures, minutes, offset) {
     const cle = nombre.toLowerCase().replace(/\s+/g, ' ');
     const h = TC_NOMBRES_LETTRES[cle] !== undefined ? TC_NOMBRES_LETTRES[cle] : TC_NOMBRES_LETTRES[cle.replace(/ /g, '-')];
     if (h === undefined) return tout;
     const estMidi = /^(midi|minuit)$/.test(cle);
     if (!heures && !estMidi) return tout;   // « deux rendez-vous » : un nombre, pas une heure
+    // Une durée, pas une heure du jour : « dans une heure », « il y a trois heures », « une heure de route », « pendant deux heures ».
+    const avantTexte = tcSansAccents(t.slice(0, offset)).replace(/[’']/g, ' ');
+    const apresTexte = tcSansAccents(t.slice(offset + tout.length));
+    if (/(^|\s)(dans|il y a|y a|pendant|durant|depuis|environ|encore|ca fait|plus de|moins de|en|de|d|pour|sous|d ici)\s*$/.test(avantTexte)) return tout;
+    if (/^\s+(de|d)\s/.test(apresTexte + ' ')) return tout;
+    // « une heure » ne vaut 1h qu'après « à » (« à une heure ») ; « midi », « minuit » toujours.
+    if (/^(une|un)$/.test(cle) && !/(^|\s)[àa]\s*$/.test(avantTexte)) return tout;
     let m = '';
     if (minutes) {
       const mm = minutes.trim().replace(/^et\s+/, '').replace(/\s+/g, ' ').toLowerCase();
@@ -19897,18 +19909,58 @@ async function tcAjouterQuandMeme(text) {
 }
 
 /* ─── Une journée entière (« anniversaire de Gaëlle le 12 novembre ») : notée sans heure, sans question ─── */
-const TC_JOURNEE_ENTIERE = /\b(anniversaire|anniv|fete|ferie|vacances|conge|conges|pont|journee entiere|toute la journee|seminaire|salon|mariage|bapteme|communion|deuil|enterrement|examen|concours|deplacement|voyage)\b/;
+/* Seuls les mots qui disent une journée (chef) : anniversaire, fête, férié, vacances, congé, pont, mariage, baptême, communion,
+   « toute la journée ». Un « rdv » dans la phrase, un salon, un examen, un déplacement : un rendez-vous, on demande l'heure. */
+const TC_JOURNEE_ENTIERE = /\b(anniversaire|anniv|fete|ferie|vacances|conge|conges|pont|journee entiere|toute la journee|mariage|bapteme|communion)\b/;
 function tcDetecterJourneeEntiere(text) {
   const sans = tcSansAccents(String(text || '')).replace(/[’']/g, ' ');
-  if (!/\b(ajoute|ajouter|note|noter|mets|met|mettre|cree|creer|planifie|bloque|inscris|enregistre|rappelle moi|rdv|rendez vous)\b/.test(sans) && !/^(l |le |la )?(anniversaire|anniv|fete)\b/.test(sans)) return null;
+  if (/\b(rdv|rendez vous|rendez-vous)\b/.test(sans)) return null;
+  if (!/\b(ajoute|ajouter|note|noter|mets|met|mettre|cree|creer|planifie|bloque|inscris|enregistre|rappelle moi)\b/.test(sans) && !/^(l |le |la |les |mes |mon |ma )?(anniversaire|anniv|fete|vacances|conges?|pont)\b/.test(sans)) return null;
   if (!TC_JOURNEE_ENTIERE.test(sans)) return null;
   if (tcHeureDansTexte(sans)) return null;
   if (/\b(matin|midi|apres midi|aprem|soir|soiree)\b/.test(sans)) return null;
+  // « du 20 au 30 octobre », « du lundi au mercredi » : une période, un seul événement sur plusieurs jours, titre sans la période.
+  const periode = tcPeriodeDuAu(text, new Date());
+  if (periode) {
+    const titre = tcTitreJourneeEntiere(text.replace(/\s+du\s+.*$/i, '')) || tcTitreDepuisDemande(text.replace(/\s+du\s+.*$/i, ''));
+    if (!titre) return null;
+    return { date: tcISO(periode.debut), dateFin: tcISO(periode.fin), titre: titre.charAt(0).toUpperCase() + titre.slice(1), libelle: periode.libelle };
+  }
+  if (/\bdu\s+\S+\s+au\b/.test(sans)) return null;   // une période que la page ne sait pas lire : le modèle
   const demande = tcDateDemandee(text, new Date());
   if (!demande || demande.invalide || !demande.date) return null;
   const titre = tcTitreJourneeEntiere(text) || tcTitreDepuisDemande(text);
   if (!titre) return null;
-  return { date: tcISO(demande.date), titre: titre.charAt(0).toUpperCase() + titre.slice(1), libelle: demande.libelle };
+  return { date: tcISO(demande.date), dateFin: null, titre: titre.charAt(0).toUpperCase() + titre.slice(1), libelle: demande.libelle };
+}
+
+/** « du 20 au 30 octobre », « du 3 au 5 novembre », « du lundi au mercredi » : { debut, fin, libelle } ou null. */
+function tcPeriodeDuAu(text, now) {
+  const sans = tcSansAccents(String(text || '')).replace(/[’']/g, ' ');
+  const ref = now ? new Date(now) : new Date();
+  const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const MOIS = { janvier: 0, janv: 0, fevrier: 1, fevr: 1, fev: 1, mars: 2, avril: 3, avr: 3, mai: 4, juin: 5, juillet: 6, juil: 6, aout: 7, septembre: 8, sept: 8, octobre: 9, oct: 9, novembre: 10, nov: 10, decembre: 11, dec: 11 };
+  const MOIS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  let m = sans.match(/\bdu (\d{1,2})(?:er)?(?: (janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec))? au (\d{1,2})(?:er)? (janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)\b/);
+  if (m) {
+    const moisFin = MOIS[m[4]], moisDebut = m[2] ? MOIS[m[2]] : moisFin;
+    let annee = ref.getFullYear();
+    let fin = new Date(annee, moisFin, Number(m[3]));
+    if (fin < jour0) { annee++; fin = new Date(annee, moisFin, Number(m[3])); }
+    let debut = new Date(annee, moisDebut, Number(m[1]));
+    if (debut > fin) debut = new Date(annee - 1, moisDebut, Number(m[1]));
+    if (isNaN(debut) || isNaN(fin) || debut.getDate() !== Number(m[1]) || fin.getDate() !== Number(m[3])) return null;
+    return { debut: debut, fin: fin, libelle: 'du ' + Number(m[1]) + (m[2] && moisDebut !== moisFin ? ' ' + MOIS_FR[moisDebut] : '') + ' au ' + Number(m[3]) + ' ' + MOIS_FR[moisFin] };
+  }
+  m = sans.match(/\bdu (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) au (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/);
+  if (m) {
+    const JOURS = { dimanche: 0, lundi: 1, mardi: 2, mercredi: 3, jeudi: 4, vendredi: 5, samedi: 6 };
+    const plus = function (n) { const d = new Date(jour0); d.setDate(d.getDate() + n); return d; };
+    let d1 = (JOURS[m[1]] - jour0.getDay() + 7) % 7; if (d1 === 0) d1 = 7;
+    let d2 = (JOURS[m[2]] - jour0.getDay() + 7) % 7; while (d2 <= d1) d2 += 7;
+    return { debut: plus(d1), fin: plus(d2), libelle: 'du ' + m[1] + ' au ' + m[2] };
+  }
+  return null;
 }
 
 /** « Ajoute anniversaire de Gaëlle le 12 novembre » → « anniversaire de Gaëlle » : le texte sans le verbe ni la date, le « de » gardé. */
@@ -19917,7 +19969,8 @@ function tcTitreJourneeEntiere(text) {
   // La date et ce qui suit : « le 12 novembre », « demain », « lundi prochain », « 12/11 », « ce week-end ».
   const coupe = tcSansAccents(t).search(/\s(?:le |ce |ces |la |cette |pour le |pour )?(?:\d{1,2}(?:er)? (?:janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)|\d{1,2}\/\d{1,2}|demain|apres-?demain|aujourd ?hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|week-?end|semaine prochaine|dans \d)/);
   if (coupe > -1) t = t.slice(0, coupe);
-  t = t.replace(/^(?:stp |svp )?(?:ajoute|ajouter|note|noter|mets|met|mettre|cree|crée|creer|créer|planifie|bloque|inscris|enregistre|rappelle moi|rappelle-moi)(?:-moi| moi)?\s+(?:un |une |le |la |l |mon |ma |rdv |rendez-vous |rendez vous )?/i, '').trim();
+  t = t.replace(/^(?:stp |svp )?(?:ajoute|ajouter|note|noter|mets|met|mettre|cree|crée|creer|créer|planifie|bloque|inscris|enregistre|rappelle moi|rappelle-moi)(?:-moi| moi)?\s+(?:un |une |le |la |l |mon |ma |mes |rdv |rendez-vous |rendez vous )?/i, '').trim();
+  t = t.replace(/^(?:mes|mon|ma|les|le|la|l|un|une|des)\s+/i, '').trim();
   t = t.replace(/\s+(?:dans|sur|a|à) mon agenda$/i, '').trim();
   return t.length >= 3 ? t : '';
 }
@@ -19925,19 +19978,21 @@ function tcTitreJourneeEntiere(text) {
 async function tcGererJourneeEntiere(text, o) {
   tcPousserMessageUtilisateur(text);
   const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  const quand = o.dateFin ? o.libelle : tcFormaterDateHumaine(o.date);
   const doublon = (Array.isArray(events) ? events : []).find(function (e) { return e && e.mode === evMode && e.date === o.date && e.allDay && tcSansAccents(e.title) === tcSansAccents(o.titre); });
   if (doublon) {
-    charlyIA.history.push({ role: 'assistant', content: '« ' + o.titre + ' » est déjà noté le ' + tcFormaterDateHumaine(o.date) + ', toute la journée.', nature: 'reponse' });
+    charlyIA.history.push({ role: 'assistant', content: '« ' + o.titre + ' » est déjà noté ' + (o.dateFin ? quand : 'le ' + quand) + ', toute la journée.', nature: 'reponse' });
     renderCharlyChat();
     return;
   }
   const cat = (typeof tcCategorieDuTitre === 'function' && tcCategorieDuTitre(o.titre)) || (/anniversaire|anniv|fete|mariage|bapteme|communion/.test(tcSansAccents(o.titre)) ? 'famille' : 'perso');
   const ev = { id: 'charly_ai_' + Date.now(), title: o.titre, date: o.date, allDay: true, startH: 0, startM: 0, endH: 23, endM: 59, cat: cat, mode: evMode };
+  if (o.dateFin && o.dateFin > o.date) ev.dateFin = o.dateFin;   // une période (« du 20 au 30 octobre ») : un seul événement sur plusieurs jours
   events.push(ev);
   saveEventsToStorage();
   if (typeof currentPage !== 'undefined' && currentPage === 'calendar' && typeof render === 'function') render();
-  if (typeof addDemarche === 'function') addDemarche({ icon: '📅', title: 'Nouveau rendez-vous : ' + o.titre, summary: tcFormaterDateHumaine(o.date) + ', toute la journée', status: 'ajoutee', categorie: 'rdv', detail: 'Charly IA a noté « ' + o.titre + ' » le ' + tcFormaterDateHumaine(o.date) + ', toute la journée.' });
-  charlyIA.history.push({ role: 'assistant', content: 'C’est noté : « ' + o.titre + ' », ' + tcFormaterDateHumaine(o.date) + ', toute la journée.', nature: 'action' });
+  if (typeof addDemarche === 'function') addDemarche({ icon: '📅', title: 'Nouveau rendez-vous : ' + o.titre, summary: quand + ', toute la journée', status: 'ajoutee', categorie: 'rdv', detail: 'Charly IA a noté « ' + o.titre + ' » ' + quand + ', toute la journée.' });
+  charlyIA.history.push({ role: 'assistant', content: 'C’est noté : « ' + o.titre + ' », ' + quand + ', toute la journée.', nature: 'action' });
   renderCharlyChat();
 }
 

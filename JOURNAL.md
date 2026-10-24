@@ -2632,3 +2632,12 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   ordinaire le refusait : « Déjà dans ton agenda, rien à ajouter »), et dit : « C'est noté : « Dentiste », lundi 26 octobre 10h à 11h
   (ajouté quand même). » ; la carte « j'ajoute quand même » est marquée validée. Remarque pour le juge des TESTEURS : les confirmations
   historiques d'annulation (tcGererSuppressionRdv) et « Annulation abandonnée » restent des cartes système (rôle system_info).
+- (suite, 24/10, examinateur et chef) Journée entière seulement pour les mots qui le disent (anniversaire, fête, férié, vacances, congé,
+  pont, mariage, baptême, communion, « toute la journée ») et jamais avec « rdv » dans la phrase : « rdv salon de coiffure samedi »,
+  « note examen médical mardi », « rdv déplacement chez le client jeudi » demandent l'heure (niveau 2). « Vacances du 20 au 30
+  octobre », « congés du 28 décembre au 3 janvier », « du lundi au mercredi » (tcPeriodeDuAu) : un seul événement sur plusieurs jours
+  (dateFin), titre sans la période (« Vacances »), « C'est noté : « Vacances », du 20 au 30 octobre, toute la journée. ». Les durées
+  en lettres restent des durées (« dans une heure », « il y a trois heures », « une heure de route », « pendant deux heures ») ; « une
+  heure » ne vaut 1h qu'après « à ». « j'ai oublié de te dire, ajoute golf samedi 10h » : un verbe d'action l'emporte (création) ;
+  « j'ai oublié mon parapluie » (ni rendez-vous connu ni mot de rendez-vous) n'est pas une annulation ; « J'ai encore oublié le
+  dentiste » garde « tu veux que je l'annule, ou que je le décale ? ».
