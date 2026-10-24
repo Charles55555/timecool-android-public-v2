@@ -2522,3 +2522,16 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   l'APK vient du pont natif). Non modifiée : au chef de décider (deployer-web.sh pourrait l'estampiller à chaque publication).
 - API inchangée. Suite : verif-classement-charly, section 8 (abréviations, 24 phrases sociales, annulation sans cible exécutée,
   déplacement local exécuté avec et sans contact, à plusieurs, marche arrière).
+- (suite, 24/10, examinateur et chef) La bulle de l'utilisateur montre TOUJOURS ce qu'il a tapé (tcBulleTapee, _tcTexteTape) ; le
+  texte corrigé sert au classement, aux détecteurs et au modèle (_corrige dans tcHistoriquePourIA). Un jour abrégé (lun…dim) ne
+  devient un jour que tout en minuscules, hors prénom d'un contact, pas après la/le/un/une/soirée/de/Pr…, et suivi d'une heure ou
+  d'un nombre, ou cité seul (« au bord de la mer samedi », « soirée jeu », « jeu de société », « Sam vient », « le Pr Martin »
+  restent) ; « pr » et « cc » retirés ; « w » → « avec » seulement devant un nom (jamais « w end »). Un complément après une
+  question du classement se lit avec ce qui a été dit (compose : « Dermatologue » + « mardi 15h » → « Dermatologue mardi 15h »).
+  « Supprime mon compte », « annule mon abonnement », « annule la synchro » → « Pour ton compte, ton abonnement ou tes réglages,
+  c'est dans ton profil (menu ☰) : je ne peux pas le faire d'ici. » « Le match est annulé » (information) → « Je retire « Match de
+  foot » de ton agenda ? » (oui/non), ou « rien à retirer ». « Annule tout » → « Tous tes rendez-vous, mais de quel jour ? », la
+  réponse « demain » devient « annule tout demain » (la liste du jour, oui/non) : jamais une suppression en masse. « Annule » sans
+  cible : seulement le verbe seul (avec ça / stp / le rendez-vous) ou « <contact connu> a annulé » ; « efface le message »,
+  « pourquoi tu as annulé ? » suivent leur chemin. Noël : le compte à rebours seulement sur la question (« c'est quand Noël »,
+  « combien de jours avant Noël »), jamais sur « dîner de Noël le 24 à 20h ».

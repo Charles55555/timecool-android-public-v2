@@ -13405,7 +13405,7 @@ function detecterRechercheWeb(text) {
 
 /** Pousse le message utilisateur dans l'historique et rafraîchit — évite la répétition dans les 3 handlers. */
 function tcPousserMessageUtilisateur(text) {
-  charlyIA.history.push({role:'user', content:text});
+  charlyIA.history.push({role:'user', content:tcBulleTapee(text), _corrige: text});
   const inp = document.getElementById('charlyInput');
   inp.value = ''; inp.style.height = 'auto';
   renderCharlyChat();
@@ -14667,7 +14667,7 @@ function tcHistoriquePourIA() {
       // l agenda reel, envoye a part, fait foi.
       content: m.role === 'assistant'
         ? String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, '').replace(/\n{3,}/g, '\n\n').trim()
-        : String(m.content || '')
+        : String(m._corrige || m.content || '')
     }));
   // Un message d assistant qui n etait qu une carte est vide : il ne part pas (les API refusent un contenu vide) ;
   // deux messages de meme role qui se suivent (une bulle d application retiree entre eux) sont fusionnes (mission 34).
@@ -14999,8 +14999,11 @@ const TC_CHARLY_PRESENTATION = 'Je suis Charly, ton assistant personnel créé p
 async function charlySendMessage() {
   const inp = document.getElementById('charlyInput');
   // Mission 51 : les abréviations et fautes courantes sont corrigées avant tout (« dem » → « demain », « anule » → « annule »,
-  // « rendevous » → « rendez-vous ») : c'est ce message que lisent le classement, les détecteurs et le modèle.
-  const text = tcCorrigerAbreviations(inp.value.trim());
+  // « rendevous » → « rendez-vous ») : c'est ce message que lisent le classement, les détecteurs et le modèle. La bulle de
+  // l'utilisateur montre toujours ce qu'il a tapé (tcBulleTapee ; décision du chef, 24/10).
+  const texteTape = inp.value.trim();
+  let text = tcCorrigerAbreviations(texteTape);
+  _tcTexteTape = { tape: texteTape, corrige: text };
   if (!text) return;
   if (charlyIA.isLoading) { showToast('Charly réfléchit déjà…'); return; }
 
@@ -15164,7 +15167,7 @@ async function charlySendMessage() {
   if (_isGreet && _isFirst) {
     const _h = new Date().getHours();
     const _sal = _h < 18 ? 'Bonjour' : 'Bonsoir';
-    charlyIA.history.push({role:'user', content:text});
+    charlyIA.history.push({role:'user', content:tcBulleTapee(text), _corrige: text});
     inp.value = ''; inp.style.height = 'auto';
     renderCharlyChat();
     await new Promise(r => setTimeout(r, 700));
@@ -15179,6 +15182,7 @@ async function charlySendMessage() {
   // quel que soit le modèle : une contestation, une réaction, un mot seul ou une phrase hors sujet ne vont ni aux détecteurs ni au modèle.
   {
     const _classe = tcClasserMessage(text, charlyIA.history);
+    if (_classe.compose) { text = _classe.compose; _tcTexteTape = { tape: texteTape, corrige: text }; }
     if (_classe.classe !== 'claire') {
       tcPousserMessageUtilisateur(text);
       await new Promise(r => setTimeout(r, 400));
@@ -15229,6 +15233,21 @@ async function charlySendMessage() {
   // une confirmation explicite avant toute suppression réelle ===
   if (detecterSuppressionRdv(text)) {
     await tcGererSuppressionRdv(text);
+    return;
+  }
+  // === UNE INFORMATION D'ANNULATION : « le match est annulé » → « Je retire « Match » de ton agenda ? » (oui/non), jamais une
+  // suppression directe ni l'aide figée (mission 51, chef). ===
+  {
+    const _objetAnnule = tcDetecterInfoAnnulation(text);
+    if (_objetAnnule) {
+      await tcGererInfoAnnulation(text, _objetAnnule);
+      return;
+    }
+  }
+  // === ANNULER SANS CIBLE : « annule », « stp annule », « annule ça », « Hugo a annulé » → « Lequel ? » avec les prochains
+  // rendez-vous, jamais l'aide figée du modèle (mission 51). ===
+  if (tcDetecterSuppressionSansCible(text)) {
+    await tcGererSuppressionSansCible(text);
     return;
   }
   // === ANNULER SANS CIBLE : « annule », « stp annule », « annule ça », « Hugo a annulé » → « Lequel ? » avec les prochains
@@ -15395,7 +15414,7 @@ async function charlySendMessage() {
   const _ressembleRdv = !!tcHeureDansTexte(text.toLowerCase()) || !!tcPeriodeAgenda(text);
   const _faqMatch = !_isQuickAction && !_ressembleRdv && _faq.find(f => f.keys.some(k => tcContientMot(text.toLowerCase(), k)));
   if (_faqMatch) {
-    charlyIA.history.push({role:'user', content:text});
+    charlyIA.history.push({role:'user', content:tcBulleTapee(text), _corrige: text});
     inp.value = ''; inp.style.height = 'auto';
     renderCharlyChat();
     await new Promise(r => setTimeout(r, 600));
@@ -15408,7 +15427,7 @@ async function charlySendMessage() {
   const _isChecklistMsg = text.includes('vie quotidienne') || text.includes('Voici ce que j');
   const _unavailMatch = !_isChecklistMsg && _unavailable.find(u => u.keys.some(k => tcContientMot(_textForCheck, k)));
   if (_unavailMatch) {
-    charlyIA.history.push({role:'user', content:text});
+    charlyIA.history.push({role:'user', content:tcBulleTapee(text), _corrige: text});
     inp.value = ''; inp.style.height = 'auto';
     renderCharlyChat();
     await new Promise(r => setTimeout(r, 600));
@@ -15418,7 +15437,7 @@ async function charlySendMessage() {
   }
 
   // Add user message
-  charlyIA.history.push({role:'user', content:text});
+  charlyIA.history.push({role:'user', content:tcBulleTapee(text), _corrige: text});
   inp.value = '';
   inp.style.height = 'auto';
   renderCharlyChat();
@@ -18938,7 +18957,7 @@ function tcClasserMessage(text, histoire) {
   const pasSur = function (classe, question, proposition, indices) {
     // Une réponse (pas une question de clarification) : l'au revoir, « pas de retard », le hors agenda, et les petites phrases
     // sociales (acquiescement, remerciement, salutation, social : mission 51, décision du chef).
-    const nature = (['au_revoir', 'retard_annule', 'hors_agenda', 'social', 'acquiescement', 'remerciement', 'salutation'].indexOf(classe) > -1) ? 'reponse' : 'question';
+    const nature = (['au_revoir', 'retard_annule', 'hors_agenda', 'social', 'acquiescement', 'remerciement', 'salutation', 'compte'].indexOf(classe) > -1) ? 'reponse' : 'question';
     return { classe: classe, question: question, proposition: proposition || null, indices: indices || null, raison: null, nature: nature };
   };
   // Dans une autre langue, le classement français n'a pas de sens : le modèle garde la main (sa consigne dit de demander).
@@ -18964,6 +18983,16 @@ function tcClasserMessage(text, histoire) {
   // 2b. Une petite phrase sociale (« tkt », « mdr », « ça va et toi », « quelle heure il est », « t'es nul », une blague…) : une
   //     réponse courte et gentille, jamais « pas compris » (mission 51, chef) ; l'heure et la date, Charly les a.
   if (typeof tcClasseSocial === 'function') { const social = tcClasseSocial(brut, norm, mots); if (social) return pasSur('social', social); }
+  // 2c. Le compte, l'abonnement, les réglages (« supprime mon compte », « annule mon abonnement ») : pas un rendez-vous, Charly oriente (chef, mission 51).
+  if (mots.length <= 8 && /\b(supprime|supprimer|efface|effacer|annule|annuler|resilie|resilier|ferme|fermer|desactive|desactiver|change|changer|modifie|modifier|arrete|arreter|coupe|couper)\b/.test(norm)
+      && /\b(compte|abonnement|profil|mot de passe|synchro|synchronisation|mes donnees|mon mail|mon email|mon adresse mail|mon numero|les notifications|la notification)\b/.test(norm)) {
+    return pasSur('compte', 'Pour ton compte, ton abonnement ou tes réglages, c’est dans ton profil (menu ☰) : je ne peux pas le faire d’ici.');
+  }
+  // 2d. « Annule tout », « efface tout mon agenda » : jamais une suppression en masse, Charly demande le jour (chef, mission 51) ;
+  //     la réponse (« demain ») est lue avec « annule tout ».
+  if (/^(stp |svp |charly )?(annule|supprime|efface|vide|retire|enleve) (tout|tous|toute|toutes|tous mes rdv|tous mes rendez vous|toutes mes rdv|tout mon agenda|mon agenda|l agenda|tous les rdv|tous les rendez vous)( stp| svp| s il te plait)?$/.test(norm)) {
+    return pasSur('piece_manquante', 'Tous tes rendez-vous, mais de quel jour ?', { moment: null, contact: null, metier: null, titre: 'tout', texte: 'annule tout', etape: 'suite' });
+  }
   // 3. Abandon, remerciement, salutation, au revoir : une phrase, une question (sauf l'au revoir).
   if (TC_CLASSE_ABANDONS.indexOf(norm) > -1) return pasSur('abandon', 'D’accord, je laisse tomber : tu veux autre chose ?');
   if (TC_CLASSE_REMERCIEMENTS.indexOf(norm) > -1) return pasSur('remerciement', 'Avec plaisir, tu veux autre chose ?');
@@ -19001,7 +19030,8 @@ function tcClasserMessage(text, histoire) {
     if (proposition.etape !== 'suite' && accord) {
       return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
     }
-    if (!reaction) return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : claire('complement');
+    // Un complément : il passe, et charlySendMessage le lit avec ce qui a été dit (« Dermatologue » + « mardi 15h », « annule tout » + « demain »).
+    if (!reaction) return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : Object.assign(claire('complement'), { compose: proposition.texte ? proposition.texte + ' ' + brut.trim() : null });
     // « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») : la même
     // question, précise ; « non », « cv » : les deux exemples. La proposition reste gardée : « mardi 15h » ensuite passe avec elle.
     if (accord && precedent.content) return pasSur('suite_proposition', String(precedent.content), proposition);
@@ -19075,10 +19105,14 @@ const TC_ABREVIATIONS = {
   dej: 'déjeuner', 'déj': 'déjeuner', dèj: 'déjeuner', rendevous: 'rendez-vous', rendezvous: 'rendez-vous', rdz: 'rendez-vous', rdvs: 'rdv',
   anule: 'annule', anulle: 'annule', annulle: 'annule', anuler: 'annuler', suprime: 'supprime', supprimme: 'supprime', suprimer: 'supprimer',
   decalle: 'décale', 'décalle': 'décale', decaler: 'décaler', deplase: 'déplace', sui: 'suis', retar: 'retard', jsuis: 'je suis', jai: 'j’ai', jaurai: 'j’aurai',
-  quesque: 'qu’est-ce que', keske: 'qu’est-ce que', malad: 'malade', bcp: 'beaucoup', w: 'avec', pr: 'pour', qd: 'quand', tjs: 'toujours', tjrs: 'toujours',
-  pcq: 'parce que', dsl: 'désolé', ajt: 'ajoute', rapel: 'rappel', rappel: 'rappel', prochin: 'prochain', prochaîne: 'prochaine', semaîne: 'semaine',
-  aujourdui: 'aujourd’hui', mtn: 'maintenant', bjr: 'bonjour', slt: 'salut', cc: 'coucou'
+  quesque: 'qu’est-ce que', keske: 'qu’est-ce que', malad: 'malade', bcp: 'beaucoup', qd: 'quand', tjs: 'toujours', tjrs: 'toujours',
+  pcq: 'parce que', dsl: 'désolé', ajt: 'ajoute', rapel: 'rappel', prochin: 'prochain', prochaîne: 'prochaine', semaîne: 'semaine',
+  aujourdui: 'aujourd’hui', mtn: 'maintenant', bjr: 'bonjour', slt: 'salut'
 };
+/* Un jour abrégé ne se remplace que tout en minuscules, hors prénom connu, pas après un article ou un mot qui en fait un nom
+   (« la mer », « soirée jeu », « jeu de société »), et seulement s'il est suivi d'une heure ou d'un nombre, ou cité seul. */
+const TC_ABREVIATIONS_AVANT_JOUR = ['avec', 'chez', 'et', 'de', 'pour', 'a', 'à', 'au', 'du', 'des', 'aux', 'en', 'la', 'le', 'les', 'un', 'une', 'ma', 'mon', 'mes', 'ta', 'ton', 'tes', 'sa', 'son', 'ses',
+  'soiree', 'soirée', 'nuit', 'bord', 'mme', 'mr', 'm', 'dr', 'pr', 'cher', 'chere', 'chère', 'salut', 'bonjour', 'coucou', 'rappelle', 'appelle', 'previens', 'préviens', 'dis', 'ecris', 'écris'];
 const TC_ABREVIATIONS_JOURS = { lun: 'lundi', mar: 'mardi', mer: 'mercredi', jeu: 'jeudi', ven: 'vendredi', sam: 'samedi', dim: 'dimanche' };
 const TC_ABREVIATIONS_PHRASES = [[/\bpeu pas\b/gi, 'peux pas'], [/\brendez vous\b/gi, 'rendez-vous'], [/\bqu est ce que\b/gi, 'qu’est-ce que'], [/\bqu est ce qu\b/gi, 'qu’est-ce qu'],
   [/\best ce que\b/gi, 'est-ce que'], [/\bje peu\b/gi, 'je peux'], [/\bje veu\b/gi, 'je veux'], [/\bje sui\b/gi, 'je suis'], [/\bj ai\b/gi, 'j’ai']];
@@ -19091,6 +19125,16 @@ function tcCorrigerAbreviations(texte) {
   if (/https?:\/\/|@|\bwww\./.test(t)) return t;
   TC_ABREVIATIONS_PHRASES.forEach(function (p) { t = t.replace(p[0], p[1]); });
   const mots = t.split(/(\s+)/);
+  const pleins = mots.filter(function (x) { return x && !/^\s+$/.test(x); });
+  // Les prénoms des contacts connus (« Sam », « Mar ») ne sont jamais des jours.
+  const prenoms = {};
+  try {
+    (Array.isArray(contactsList) ? contactsList : []).forEach(function (c) { String(c && c.name || '').split(/\s+/).forEach(function (w) { const p = tcSansAccents(w); if (p) prenoms[p] = true; }); });
+  } catch (e) {}
+  const voisin = function (i, sens) {
+    for (let j = i + sens; j >= 0 && j < mots.length; j += sens) { if (mots[j] && !/^\s+$/.test(mots[j])) return mots[j]; }
+    return '';
+  };
   for (let i = 0; i < mots.length; i++) {
     const brut = mots[i];
     if (!brut || /^\s+$/.test(brut)) continue;
@@ -19098,12 +19142,17 @@ function tcCorrigerAbreviations(texte) {
     if (!m) continue;
     const mot = m[2], bas = mot.toLowerCase();
     let remplacement = null;
-    if (Object.prototype.hasOwnProperty.call(TC_ABREVIATIONS, bas)) remplacement = TC_ABREVIATIONS[bas];
+    if (bas === 'w') {
+      // « rdv w hugo » : « avec » devant un nom seulement ; jamais « w end », « w-e ».
+      const suivant = tcSansAccents(voisin(i, 1)).replace(/[^a-z]/g, '');
+      if (suivant.length >= 3 && ['end', 'eek', 'week'].indexOf(suivant) < 0 && !/^-/.test(m[3])) remplacement = 'avec';
+    } else if (Object.prototype.hasOwnProperty.call(TC_ABREVIATIONS, bas)) remplacement = TC_ABREVIATIONS[bas];
     else if (Object.prototype.hasOwnProperty.call(TC_ABREVIATIONS_JOURS, bas)) {
-      let precedent = '';
-      for (let j = i - 1; j >= 0; j--) { if (mots[j] && !/^\s+$/.test(mots[j])) { precedent = mots[j].toLowerCase().replace(/[^a-zà-ÿ]/g, ''); break; } }
-      // « avec Sam », « chez Mar », « et Dim », « de Mer » : un prénom, pas un jour. Un mot tout en majuscules (« SAM ») non plus.
-      if (['avec', 'chez', 'et', 'de', 'pour', 'a', 'à', 'au', 'du', 'mme', 'mr', 'm', 'dr'].indexOf(precedent) < 0 && mot !== mot.toUpperCase()) remplacement = TC_ABREVIATIONS_JOURS[bas];
+      const precedent = tcSansAccents(voisin(i, -1)).replace(/[^a-z]/g, '');
+      const suivant = voisin(i, 1);
+      const suiviNombre = /^\d/.test(suivant);
+      const minuscules = mot === bas;
+      if (minuscules && !prenoms[tcSansAccents(bas)] && TC_ABREVIATIONS_AVANT_JOUR.indexOf(precedent) < 0 && (suiviNombre || pleins.length === 1)) remplacement = TC_ABREVIATIONS_JOURS[bas];
     }
     if (remplacement) mots[i] = m[1] + remplacement + m[3];
   }
@@ -19134,7 +19183,7 @@ const TC_CLASSE_SOCIAL = [
     return 'Nous sommes le ' + tcSocialDateLongue(new Date()) + '.' + TC_SOCIAL_SUITE; }],
   [/^(on sera quel jour demain|demain on est quel jour|quel jour demain|demain c est quel jour|c est quel jour demain|quel jour on sera demain|demain on sera quel jour|quel jour est on demain)$/, function () {
     const d = new Date(); d.setDate(d.getDate() + 1); return 'Demain, c’est ' + tcSocialDateLongue(d, true) + '.' + TC_SOCIAL_SUITE; }],
-  [/\bnoel\b/, function () {
+  [/^(c est quand noel|quand est noel|noel c est quand|c est quand noel cette annee|dans combien de jours noel|combien de jours avant noel|combien de jours jusqu a noel|il reste combien de jours avant noel|noel c est dans combien de jours|quand est ce que c est noel|noel est quand|c est dans combien de temps noel|combien de jours il reste avant noel|combien de jours avant noel cette annee)$/, function () {
     const now = new Date(); const an = now.getMonth() === 11 && now.getDate() > 25 ? now.getFullYear() + 1 : now.getFullYear();
     const noel = new Date(an, 11, 25); const jours = Math.round((noel - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
     return 'Noël, c’est le ' + tcSocialDateLongue(noel, true) + (jours > 0 ? ' : dans ' + jours + ' jour' + (jours > 1 ? 's' : '') : jours === 0 ? ' : c’est aujourd’hui 🎄' : '') + '.' + TC_SOCIAL_SUITE; }],
@@ -19164,16 +19213,64 @@ function tcClasseSocial(brut, norm, mots) {
   return null;
 }
 
+/* ─── La bulle de l'utilisateur montre TOUJOURS ce qu'il a tapé (chef, 24/10) ; la correction sert en interne. ─── */
+let _tcTexteTape = null;
+/** Le texte à montrer dans la bulle : ce qui a été tapé, si « texte » est bien sa version corrigée ; sinon le texte tel quel. */
+function tcBulleTapee(texte) {
+  const t = _tcTexteTape;
+  if (t && t.corrige === texte) { _tcTexteTape = null; return t.tape; }
+  return texte;
+}
+
+/* ─── Une information d'annulation : « le match est annulé », « la réunion a été annulée » → « Je retire … de ton agenda ? » ─── */
+function tcDetecterInfoAnnulation(text) {
+  const norm = tcClasseNormaliser(text);
+  const m = norm.match(/^(?:le |la |les |l |mon |ma |mes |notre |nos )?(.{2,50}?) (?:est|sont|a ete|ont ete) (?:finalement )?annulee?s?(?: finalement| hier| ce matin| aujourd hui)?$/);
+  if (!m) return null;
+  if (/\b(je|j ai|mon retard|moi)\b/.test(m[1])) return null;
+  return m[1].trim();
+}
+
+/** Le rendez-vous nommé est dans l'agenda : la confirmation « Je retire … ? » (oui/non) ; sinon on le dit, rien n'est touché. */
+async function tcGererInfoAnnulation(text, objet) {
+  tcPousserMessageUtilisateur(text);
+  const now = new Date();
+  const nowStr = tcISO(now);
+  const mots = tcMotsDeRdv(objet);
+  const liste = (Array.isArray(events) ? events : []).filter(function (e) {
+    return e && e.mode === mode && e.title && e.date >= nowStr && mots.length && tcTitreContient(e.title, mots);
+  }).sort(tcComparerEvenements);
+  if (!liste.length) {
+    charlyIA.history.push({ role: 'assistant', content: 'D’accord. Je ne trouve pas « ' + objet + ' » dans ton agenda à venir : rien à retirer.', nature: 'reponse' });
+    renderCharlyChat();
+    return;
+  }
+  const ev = liste[0];
+  _tcSuppressionEnAttente = [ev];
+  charlyIA.history.push({ role: 'system_info', isHTML: true, nature: 'question', content: '⚠️ <b>Je retire « ' + escapeHTMLSafe(ev.title) + ' » de ton agenda ?</b><br><br>'
+    + escapeHTMLSafe('• ' + ev.title + ' : ' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev)) + '<br><br>Réponds « oui » ou « non ».' });
+  renderCharlyChat();
+}
+
 /* ─── Annuler sans cible : « Annule », « stp annule », « annule ça », « Hugo a annulé » ─── */
 function tcDetecterSuppressionSansCible(text) {
   const norm = tcClasseNormaliser(text);
   const mots = norm ? norm.split(' ') : [];
-  if (!mots.length || mots.length > 5) return false;
-  if (!/\b(annule|annuler|annules|supprime|supprimer|efface|effacer|a annule|ont annule|est annule|annulation)\b/.test(norm)) return false;
-  // Une marche arrière (« annule la suppression ») ou une vraie cible (« annule le golf ») : pas ici.
-  if (/\b(suppression|annulation|deplacement|ce que tu viens|ce que tu as)\b/.test(norm)) return false;
-  if (typeof detecterSuppressionRdv === 'function' && detecterSuppressionRdv(text)) return false;
-  return true;
+  if (!mots.length || mots.length > 6) return false;
+  // Le verbe seul, avec « ça », « le rdv », « stp » : « annule », « stp annule », « annule ça », « supprime le rendez-vous stp ».
+  if (/^(stp |svp |s il te plait |s il vous plait |charly )?(annule|annuler|annules|supprime|supprimer|efface|effacer|annule le|supprime le|efface le)( ca| cela| le| la| le rdv| le rendez vous| ce rdv| ce rendez vous| mon rdv| mon rendez vous)?( stp| svp| s il te plait| s il vous plait| merci)?$/.test(norm)) {
+    return !(typeof detecterSuppressionRdv === 'function' && detecterSuppressionRdv(text));
+  }
+  // « Hugo a annulé », « Marc Dupont a annulé » : un contact connu, et lui seul.
+  const m = norm.match(/^(.+?) (a|ont) annule( le rdv| le rendez vous| notre rdv| notre rendez vous)?$/);
+  if (m) {
+    try {
+      const candidats = m[1].split(' ').filter(function (w) { return w.length >= 2 && TC_CLASSE_MOTS_DE_MOMENT.indexOf(w) < 0; });
+      const trouves = (candidats.length && typeof tcContactsParMots === 'function') ? tcContactsParMots(candidats) : [];
+      return trouves.length === 1;
+    } catch (e) { return false; }
+  }
+  return false;
 }
 
 /** « Lequel ? » avec les prochains rendez-vous (trois au plus) ; un seul : la confirmation habituelle ; aucun : on le dit. */
