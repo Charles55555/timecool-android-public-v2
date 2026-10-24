@@ -19034,7 +19034,9 @@ function tcClasserMessage(text, histoire) {
       const piece = proposition.texte && proposition.composable !== false && !indices.detecteur && !indices.verbe && mots.length <= 5 && !/^(non|plutot|en fait|finalement|ah non|mais non|pas)\b/.test(norm);
       // Après « Marc est en retard » → « je décale…, ou je préviens quelqu'un ? », « préviens Sophie » = prévenir Sophie du retard de
       // MARC (le sujet du retard reste dans le fil ; chef, mission 51) : charlySendMessage le fait (tcPrevenirRetardAutre).
-      const retardAutre = proposition.titre === 'retard' && /^(stp |svp )?(previens|prevenir|avertis|avertir|informe|informer|dis a|dis le a|dis lui|envoie un (message|sms|texto) a|previens le|previens la|previens les|oui previens)\b/.test(norm);
+      // Après « Qui veux-tu prévenir ? », un nom de contact suffit (« Sophie », « Sophie Anceau »).
+      const retardAutre = proposition.titre === 'retard' && (/^(stp |svp )?(previens|prevenir|avertis|avertir|informe|informer|dis a|dis le a|dis lui|envoie un (message|sms|texto) a|previens le|previens la|previens les|oui previens)\b/.test(norm)
+        || (proposition.attendNom && mots.length <= 3 && !!tcClasseContactEcrit(brut)));
       return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : Object.assign(claire('complement'), { compose: piece ? proposition.texte + ' ' + brut.trim() : null, retardAutre: retardAutre ? proposition : null });
     }
     // « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») : la même
@@ -19053,6 +19055,8 @@ function tcClasserMessage(text, histoire) {
   //     (le détecteur de prévenance ne l'a pas pris), Charly demande ce qu'il doit faire (chef, 24/10).
   //     « pas de retard », « finalement pas de retard » : un retard annoncé qui tombe, ou une simple information : « Bien noté, pas de retard. »
   if (/\bretard\b/.test(norm) && !indices.detecteur && /\b(pas de|sans|aucun|zero|plus de|finalement pas) retard\b/.test(norm)) return pasSur('retard_annule', 'Bien noté, pas de retard.', null, indices);
+  //     « tu es en retard », « t'es en retard » : une remarque à Charly, pas un retard à annoncer : il demande ce qu'il veut dire (chef).
+  if (/^(tu es|t es|t|vous etes|tu est|charly tu es|charly t es) (en |tres en |encore en )?retard\b/.test(norm)) return pasSur('doute', 'Je ne suis pas sûr de comprendre : tu veux dire que je réponds trop tard, ou que quelqu’un est en retard ?', null, indices);
   if (/\bretard\b/.test(norm) && !indices.detecteur) {
     const candidats = mots.filter(function (m) { return m !== 'retard' && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0 && m.length >= 3 && !/^\d/.test(m); });
     let c = null;
@@ -19300,15 +19304,43 @@ async function tcPrevenirRetardAutre(text, proposition) {
   const candidats = norm.split(' ').filter(function (m) { return m.length >= 3 && !/^(stp|svp|previens|prevenir|avertis|avertir|informe|informer|dis|envoie|message|sms|texto|oui|que|retard)$/.test(m) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0; });
   let contact = null;
   try { const trouves = (candidats.length && typeof tcContactsParMots === 'function') ? tcContactsParMots(candidats) : []; contact = trouves.length === 1 ? trouves[0] : null; } catch (e) { contact = null; }
+  const attendNom = Object.assign({}, proposition, { attendNom: true });
   if (!contact) {
-    charlyIA.history.push({ role: 'assistant', content: 'Qui veux-tu prévenir ? Dis-moi son nom, parmi tes contacts.', nature: 'question', _classement: 'retard_autre', _proposition: proposition, _texte: text });
+    charlyIA.history.push({ role: 'assistant', content: 'Qui veux-tu prévenir ? Dis-moi son nom, parmi tes contacts.', nature: 'question', _classement: 'retard_autre', _proposition: attendNom, _texte: text });
     renderCharlyChat();
     return;
   }
-  // Le message dit le retard de l'autre, avec les mots de l'utilisateur (« Marc est en retard »).
-  const info = String(proposition.texte || (proposition.contact ? proposition.contact + ' est en retard' : 'il y a du retard')).trim().replace(/[.!]+$/, '');
+  // Le retardataire : le contact nommé (« Marc est en retard »), ou une chose (« le train est en retard »). Jamais « tu », jamais
+  // une question recopiée (« en retard ? »), jamais le destinataire lui-même.
+  let retardataire = proposition.contact || null;
+  if (!retardataire) {
+    const m = tcSansAccents(String(proposition.texte || '')).replace(/[’']/g, ' ').match(/^((?:le|la|les|l|mon|ma|mes|notre|nos)\s+\S+(?:\s+\S+)?)\s+(?:est|sont|a|ont)\s+(?:du\s+|en\s+|encore\s+|un peu\s+)?retard/);
+    if (m && !/^(?:le|la|les|l|mon|ma|mes|notre|nos)\s+(?:tu|vous|il|elle|ils|elles|on|je)\b/.test(m[1])) retardataire = m[1];
+  }
+  if (!retardataire) {
+    charlyIA.history.push({ role: 'assistant', content: 'Je ne sais pas qui est en retard : dis-moi par exemple « Marc est en retard », et je préviens ' + contact.name + '.', nature: 'question' });
+    renderCharlyChat();
+    return;
+  }
+  if (tcSansAccents(retardataire) === tcSansAccents(contact.name)) {
+    charlyIA.history.push({ role: 'assistant', content: contact.name + ' est en retard ; tu veux prévenir quelqu’un d’autre, ou lui écrire ?', nature: 'question', _classement: 'retard_autre', _proposition: attendNom, _texte: text });
+    renderCharlyChat();
+    return;
+  }
+  // Le message est rédigé par Charly, jamais recopié (chef) : « Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a du
+  // retard pour « Dentiste », vendredi 16 octobre 15h. » ; le rendez-vous est le prochain avec le retardataire, s'il y en a un.
   const prenom = String(contact.name || '').split(' ')[0];
-  const texte = 'Bonjour ' + prenom + ', ' + info.charAt(0).toUpperCase() + info.slice(1) + '.';
+  const moi = (typeof userAccount !== 'undefined' && userAccount) ? String(userAccount.firstname || userAccount.firstName || userAccount.prenom || '').trim() : '';
+  let pour = '';
+  if (proposition.contact) {
+    const retardContact = (Array.isArray(contactsList) ? contactsList : []).find(function (c) { return c && c.name === proposition.contact; });
+    const prenomRetard = tcSansAccents(String(proposition.contact).split(' ')[0]);
+    const rdv = (Array.isArray(events) ? events : []).filter(function (e) {
+      return e && e.mode === mode && e.title && e.date >= tcISO(new Date()) && ((retardContact && e.contact === retardContact.id) || tcSansAccents(e.title).indexOf(prenomRetard) > -1);
+    }).sort(tcComparerEvenements)[0];
+    if (rdv) pour = ' pour « ' + rdv.title + ' », ' + tcFormaterDateHumaine(rdv.date) + ' ' + tcFormaterHeure(rdv);
+  }
+  const texte = 'Bonjour ' + prenom + ', ' + (moi ? moi + ' me demande de te prévenir' : 'je suis chargé de te prévenir') + ' : ' + retardataire + ' a du retard' + pour + '.';
   if (typeof tcConfirm === 'function' && !(await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »'))) {
     charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne préviens personne.', nature: 'reponse' });
     renderCharlyChat();

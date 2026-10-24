@@ -2547,3 +2547,12 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   en silence. Après « Marc est en retard » → « je décale…, ou je préviens quelqu'un ? », « préviens Sophie » = prévenir Sophie du
   retard de MARC (tcPrevenirRetardAutre : « Bonjour Sophie, Marc est en retard. », relu et confirmé avant de partir) ; sans nom,
   « Qui veux-tu prévenir ? » ; le sujet du retard reste dans le fil.
+- (suite, 24/10, examinateur et chef) Prévenir du retard d'un autre : après « Qui veux-tu prévenir ? » (proposition gardée avec
+  attendNom), un nom de contact seul (« Sophie », « Sophie Anceau ») lance l'envoi, comme pour toute question précise de Charly. Le
+  message est rédigé par Charly, jamais recopié de la phrase tapée : « Bonjour Sophie, Inès me demande de te prévenir : Marc Dupont a
+  du retard pour « Dentiste », vendredi 16 octobre 15h. » (le prénom du compte, userAccount ; le prochain rendez-vous avec le
+  retardataire s'il existe ; une chose aussi : « le train a du retard » ; sans prénom : « je suis chargé de te prévenir »). « en
+  retard ? » puis « préviens Sophie » → « Je ne sais pas qui est en retard : dis-moi par exemple « Marc est en retard », et je préviens
+  Sophie Anceau. » « préviens Marc » quand c'est Marc qui est en retard → « Marc Dupont est en retard ; tu veux prévenir quelqu'un
+  d'autre, ou lui écrire ? ». « tu es en retard » tapé à Charly = une remarque, pas un retard à annoncer : « Je ne suis pas sûr de
+  comprendre : tu veux dire que je réponds trop tard, ou que quelqu'un est en retard ? ». La relecture avant envoi est gardée.
