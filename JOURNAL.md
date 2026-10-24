@@ -2473,3 +2473,5 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   météo). « pas de retard », « finalement pas de retard » → « Bien noté, pas de retard. », aucun questionnaire. La phrase hors
   agenda est celle du chef : « Je m'occupe de ton agenda : rendez-vous, créneaux, retards, trajets, météo et recherche d'un
   professionnel. Je ne peux pas t'aider pour ça. » (nature réponse). La nature de la bulle du classement vient du classement.
+- (suite, 24/10) Le hors agenda l'emporte sur le fil : « où aller manger ce soir ? » juste après une question de Charly (la
+  sienne ou celle du modèle) reçoit la phrase hors agenda, jamais un passage au modèle comme réponse ou complément.

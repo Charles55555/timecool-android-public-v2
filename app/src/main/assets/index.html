@@ -18924,9 +18924,19 @@ function tcClasserMessage(text, histoire) {
   const reaction = TC_CLASSE_REACTIONS.indexOf(norm) > -1 || TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1 || (mots.length === 1 && mots[0].length <= 3 && !/\d/.test(mots[0]));
   const ouiNon = (typeof tcReponseOuiNon === 'function') ? tcReponseOuiNon(brut) : null;
   const accord = ouiNon === true || TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1;
-  // 4. Charly venait de poser une question (le modèle « C'est pour quoi, à 16h ? », un détecteur) : ce message est la réponse,
-  //    il suit son chemin.
-  if (precedent && tcClassePoseUneQuestion(precedent) && !apresMaQuestion) return claire('reponse');
+  // Les indices de clarté, et le hors agenda (chef, 24/10) : « où aller manger ce soir ? », « où on va en vacances ? »,
+  // « pharmacie de garde à côté » : un « où » qui ne parle pas d'un rendez-vous, ou une recherche de lieu, sans détecteur ni
+  // verbe de demande (« trouve-moi un restaurant à côté du bureau » passe). Hors agenda quel que soit le fil : jamais un
+  // « complément » ni une « réponse ».
+  const indices = tcClasseIndices(brut, norm, mots);
+  const ou = /(^|\s)où(\s|$)/.test(String(brut).toLowerCase().replace(/[?!.,;:]/g, ' '));
+  const parleRdv = /\b(rdv|rendez vous|rendez|prochain|prochaine|agenda)\b/.test(norm) || tcClasseNomConnu(brut);
+  const verbesDemande = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
+  const imperatif = mots.some(function (m) { return verbesDemande.indexOf(m) > -1; });
+  const horsAgenda = !indices.detecteur && !imperatif && ((ou && !parleRdv) || indices.recherche);
+  // 4. Charly venait de poser une question PRÉCISE (le modèle « C'est pour quoi, à 16h ? », un détecteur) : ce message est la
+  //    réponse, il suit son chemin (sauf le hors agenda).
+  if (precedent && tcClassePoseUneQuestion(precedent) && !apresMaQuestion) return horsAgenda ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : claire('reponse');
   // 5. Après MA question qui proposait déjà quelque chose (« tu veux noter quelque chose mercredi à 15h ? », « un rendez-vous
   //    « Dermatologue » ? ») : « oui » reçoit la question de ce qui manque, avec ce qui a été dit ; un complément (« dentiste »,
   //    « oui mardi 15h ») passe, le modèle a l'historique ; « non » ou une réaction : la question avec deux exemples.
@@ -18934,7 +18944,7 @@ function tcClasserMessage(text, histoire) {
     if (proposition.etape !== 'suite' && accord) {
       return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
     }
-    if (!reaction) return claire('complement');
+    if (!reaction) return horsAgenda ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : claire('complement');
     // « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») : la même
     // question, précise ; « non », « cv » : les deux exemples. La proposition reste gardée : « mardi 15h » ensuite passe avec elle.
     if (accord && precedent.content) return pasSur('suite_proposition', String(precedent.content), proposition);
@@ -18944,8 +18954,7 @@ function tcClasserMessage(text, histoire) {
   if (apresMaQuestion && reaction) return pasSur('reaction', tcClasseQuestionExemple());
   if (TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1) return pasSur('acquiescement', 'D’accord, tu veux autre chose ?');
   if (reaction) return pasSur('reaction', TC_CLASSE_QUESTION_GENERALE);
-  // 7. Les indices de clarté (le retard d'un autre et le hors agenda se jugent avant la « suite après un résultat »).
-  const indices = tcClasseIndices(brut, norm, mots);
+  // 7. Le retard d'un autre et le hors agenda se jugent avant la « suite après un résultat ».
   // 8a. Le retard de quelqu'un ou de quelque chose d'autre (« Marc est en retard », « le train est en retard ») : pas MON retard
   //     (le détecteur de prévenance ne l'a pas pris), Charly demande ce qu'il doit faire (chef, 24/10).
   //     « pas de retard », « finalement pas de retard » : un retard annoncé qui tombe, ou une simple information : « Bien noté, pas de retard. »
@@ -18960,11 +18969,7 @@ function tcClasserMessage(text, histoire) {
   // 8b. Hors agenda (chef, 24/10) : « où aller manger ce soir ? », « où on va en vacances ? », « pharmacie de garde à côté » : un
   //     « où » qui ne parle pas d'un rendez-vous, ou une recherche de lieu, sans détecteur ni verbe de demande (« trouve-moi un
   //     restaurant à côté du bureau » passe) : Charly dit ce dont il s'occupe.
-  const ou = /(^|\s)où(\s|$)/.test(String(brut).toLowerCase().replace(/[?!.,;:]/g, ' '));
-  const parleRdv = /\b(rdv|rendez vous|rendez|prochain|prochaine|agenda)\b/.test(norm) || tcClasseNomConnu(brut);
-  const verbesDemande = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
-  const imperatif = mots.some(function (m) { return verbesDemande.indexOf(m) > -1; });
-  if (!indices.detecteur && !imperatif && ((ou && !parleRdv) || indices.recherche)) return pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices);
+  if (horsAgenda) return pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices);
   // 8c. Une courte suite après un RÉSULTAT de Charly (« Demain, tu as Dentiste à 15h. ») : « et à 15h ? », « plutôt 16h »,
   //     « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » : le modèle a l'historique, elle passe. Jamais après une
   //     question ouverte (l'accueil, « tu veux autre chose ? ») : là, tout se classe.
