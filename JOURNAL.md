@@ -2564,3 +2564,31 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   titre) ; un tiers ne voit jamais un rendez-vous où il n'est pas (cas ajouté au garde-fou : un point avec Marc seul, maintenant →
   pas de titre). Réserve « titre doublé » corrigée : « Dermatologue » puis « chez le dermato mardi 15h » ne se compose pas, le
   complément porte déjà l'objet.
+
+## 24/10/2026 : mission 52, les 28 ratés restants et les réserves (chef, suite des missions 50 et 51)
+
+- Batterie TESTEURS v2.0.381 : 91 % (272/300). Bloc « MISSION 52 » après le bloc 51 ; retouches des blocs 50 et 51.
+- 1. Bug de date : tcHeureDansTexte lisait « h » (de « heures ») avant « heures » et perdait les minutes de « 11 heures 30 » ;
+  « heures » passe d'abord. tcCreationLocale prenait « N heures » pour une durée : seules « pendant / de / environ N heures » et
+  « N heures de » le sont. « rendez vous banque mardi 11 heures 30 », « note coiffeur samedi prochain à 10 heures », « rendé vous
+  chez le dentisse mardi a 15 heure » (fautes corrigées en interne : rendé, dentisse) font la carte directement, le modèle n'écrit
+  plus « déjà passé » ni « tu veux dire ? ». 1 bis : « mai rendez-vous » (faute pour « mes ») → « mes rendez-vous » (jamais le
+  mois de mai) : la consultation « cette semaine » liste les rendez-vous.
+- 2. L'aide figée du modèle (« Pour le supprimer, écris-moi par exemple… ») ne sort plus : tcRemplacerAideFigee la remplace par
+  « Lequel ? » numéroté (ou la confirmation, ou « rien à annuler »). « rdv annulé », « je vais pas y aller », « j'y vais pas »,
+  « mets Paul de côté » (le contact Paul) → « Lequel ? » ; « je peux plus aller au dentiste lundi » → « Je retire « Dentiste » ? »
+  (avec le jour) ; « rappelle Hugo » → « Tu veux que je te mette un rappel pour Hugo Besnard, ou que je lui propose un créneau ? ».
+- 3. Plus d'accueil sur une phrase d'agenda : « Quand est-ce qu'on se voit ? » → « Avec qui ? Dis-moi son nom, et je cherche un
+  créneau. » (la réponse « Marc » devient « trouve un créneau avec Marc ») ; « On remet ça » → « Quel rendez-vous veux-tu remettre,
+  et à quand ? » (la réponse devient « décale … ») ; « je suis à la bourre » = « je suis en retard » (le questionnaire retard).
+- 5. Humeur (« ça me tue ces réunions », « je suis malade de ce boulot ») : réponse sociale ; tcDetecterMalade ne part que pour
+  l'utilisateur lui-même (« mon chat est malade », « Marc est malade », « malade de ce boulot » non). « annule le premier »,
+  « décale le deuxième » après une liste : l'élément de la dernière liste affichée (tcDernierListeRdv), confirmation oui/non ou
+  « À quand ? ». « non c'était pour Hugo » après une création : le rendez-vous du message précédent reçoit ce contact.
+- 6. Réserves : « … de 11h à 12h » ; « Je suis libre demain » (affirmation) → « Noté. Tu veux que je propose ce créneau à
+  quelqu'un ? » ; « Tu es libre demain ? » → réponse sociale ; « kiné près de chez moi » → recherche de professionnel (un lieu
+  suffit) ; « je n'aurai pas de retard », « pas de retard pour Marc ? », « je ne serai pas en retard » → « Bien noté, pas de
+  retard. » (tcDetecterPrevenance ignore un retard nié).
+- 7. scripts/deployer-web.sh : TC_APP_VERSION est estampillée à chaque publication (AAAA.MM.JJ-HHMM, heure de Paris), la source
+  garde « 10.5.54 ».
+- API inchangée. Suite : verif-classement-charly, section 9.

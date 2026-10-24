@@ -12104,7 +12104,8 @@ function tcCreationLocale(texte, now) {
   if (typeof detecterConsultationAgenda === 'function' && detecterConsultationAgenda(brut)) return '';
   if (typeof detecterDemandeCreneau === 'function' && detecterDemandeCreneau(brut)) return '';
   // Une plage ou une duree (« de 14h à 16h », « 14h-16h », « jusqu'à 17h », « pendant 2 heures ») : le modele la lit, pas ici.
-  if (/\bde \d{1,2} ?h ?\d{0,2} (?:a|au) \d{1,2} ?h|\d{1,2} ?h ?\d{0,2} ?- ?\d{1,2} ?h|\bjusqu ?(?:a|au) \d{1,2} ?h|\b(?:pendant|durant|duree|dure) |\b\d+ ?heures?\b/.test(t)) return '';
+  // « 11 heures 30 », « a 10 heures » sont une heure ; une duree, c est « pendant 2 heures », « de 2 heures », « 2 heures de » (mission 52).
+  if (/\bde \d{1,2} ?h ?\d{0,2} (?:a|au) \d{1,2} ?h|\d{1,2} ?h ?\d{0,2} ?- ?\d{1,2} ?h|\bjusqu ?(?:a|au) \d{1,2} ?h|\b(?:pendant|durant|duree|dure) |\b(?:pendant|durant|de|environ|dure|duree) \d+ ?heures?\b|\b\d+ ?heures? (?:de|pour) /.test(t)) return '';
   // Deux demandes (« dentiste demain à 10h et coach jeudi à 14h ») : plus d un jour ou plus d une heure.
   if ((t.match(/\b\d{1,2} ?h(?:\d{2})?\b|\b\d{1,2}:\d{2}\b/g) || []).length > 1) return '';
   if (tcJoursCites(brut, now).length > 1 || /\b(puis|ensuite)\b/.test(t)) return '';
@@ -13175,6 +13176,8 @@ function tcDetecterPrevenance(text) {
   // « retard », « retard 10 min », « 10 min de retard » seuls (sans autre sujet ni negation, sans verbe ni « je ») : le questionnaire
   // retard demande a qui (mission 50). « Marc est en retard », « pas de retard », « en retard ? » ne sont pas MON retard.
   const seulRetard = /^(retard( de)?( \d{1,3} ?(min|mn|minutes?))?|\d{1,3} ?(min|mn|minutes?) de retard)$/.test(t.replace(/[?!.,;:]/g, ' ').replace(/\s+/g, ' ').trim());
+  // Un retard nie n est pas un retard a annoncer (mission 52).
+  if (/\b(pas|aucun|sans|zero|plus) (de |d |en )?retard\b/.test(t)) return null;
   if (/\bretard\b/.test(t) && (verbe || moi || seulRetard)) {
     const m = t.match(/(\d{1,3})\s*(min\b|mn\b|minutes?)/);
     let minutes = m ? parseInt(m[1], 10) : null;
@@ -13335,7 +13338,9 @@ function detecterRechercheProfessionnel(text) {
     || /\b(cherche|trouve|recherche)[- ](moi|nous)\b/.test(t)
     || /\b(connais[- ]tu|tu connais)\b/.test(t)
     || /\b(un bon|une bonne|il me faut|j['’]ai besoin d['’])/.test(t)
-    || /\bpropose[- ]?moi\b/.test(t);
+    || /\bpropose[- ]?moi\b/.test(t)
+    // « kiné près de chez moi », « pharmacie à côté », « dentiste dans le coin » : un lieu suffit (mission 52).
+    || /(^|\s)(pr[eè]s de|[àa] c[ôo]t[ée]( de)?|proche|le plus proche|la plus proche|autour|dans le coin|pas loin|aux alentours|dans mon quartier|en ville)(?=\s|$|[.,;!?])/.test(t);
   if (!declencheur) return null;
 
   const profession = TC_PROFESSIONS.find(p => tcContientMot(t, p)) || null;
@@ -13971,7 +13976,8 @@ function detecterSuppressionRdv(text) {
  * est une date, pas une heure.
  */
 function tcHeureDansTexte(t) {
-  const m = String(t).toLowerCase().match(/\b([01]?\d|2[0-3])\s*(?:h|:|heures?)\s*([0-5]\d)?(?![0-9])/);
+  // « heures » avant « h » : « 11 heures 30 » gardait « 11 h » et perdait les minutes (mission 52).
+  const m = String(t).toLowerCase().match(/\b([01]?\d|2[0-3])\s*(?:heures?|h|:)\s*([0-5]\d)?(?![0-9])/);
   if (!m) return null;
   return { h: Number(m[1]), m: m[2] ? Number(m[2]) : null };
 }
@@ -15184,6 +15190,12 @@ async function charlySendMessage() {
     const _classe = tcClasserMessage(text, charlyIA.history);
     if (_classe.compose) { text = _classe.compose; _tcTexteTape = { tape: texteTape, corrige: text }; }
     if (_classe.retardAutre) { await tcPrevenirRetardAutre(text, _classe.retardAutre); return; }
+    // Mission 52 : « annule le premier », « décale le deuxième » visent la dernière liste affichée ; « non c'était pour Hugo » corrige
+    // le contact du rendez-vous qu'on vient de créer.
+    const _ordinal = tcDetecterOrdinalListe(text);
+    if (_ordinal) { await tcGererOrdinalListe(text, _ordinal); return; }
+    const _correction = tcDetecterCorrectionContact(text);
+    if (_correction) { await tcGererCorrectionContact(text, _correction); return; }
     if (_classe.classe !== 'claire') {
       tcPousserMessageUtilisateur(text);
       await new Promise(r => setTimeout(r, 400));
@@ -15505,6 +15517,8 @@ async function charlySendMessage() {
       if (invente && /(annul|supprim|effac|d[ée]plac|d[ée]cal|report|repouss|avanc|reprogramm)/i.test(reply)) reply = invente;
     }
 
+    // L'aide figée (« Pour le supprimer, écris-moi par exemple… ») ne sort jamais : « Lequel ? » avec les prochains rendez-vous (mission 52).
+    reply = tcRemplacerAideFigee(reply);
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId, nature: tcNatureReponse(reply)});
     // Un déplacement compris s'exécute (ou pose sa seule question),
@@ -18985,6 +18999,24 @@ function tcClasserMessage(text, histoire) {
       && /\b(compte|abonnement|profil|mot de passe|synchro|synchronisation|mes donnees|mon mail|mon email|mon adresse mail|mon numero|les notifications|la notification)\b/.test(norm)) {
     return pasSur('compte', 'Pour ton compte, ton abonnement ou tes réglages, c’est dans ton profil (menu ☰) : je ne peux pas le faire d’ici.');
   }
+  // 2c bis (mission 52). « Quand est-ce qu'on se voit ? » → avec qui ; « on remet ça » → quel rendez-vous, à quand ; « rappelle Hugo » →
+  //     un rappel ou un créneau ; « je suis libre demain » (affirmation) → noté, le proposer à quelqu'un ?
+  if (/\b(quand )?(est ce qu |est ce que )?on se (voit|revoit|retrouve|rencontre|cale|capte)\b/.test(norm) && !/\b(avec|chez)\b/.test(norm) && mots.length <= 8) {
+    return pasSur('piece_manquante', 'Avec qui ? Dis-moi son nom, et je cherche un créneau.', { moment: null, contact: null, metier: null, titre: 'créneau', texte: 'trouve un créneau avec', etape: 'suite' });
+  }
+  if (/^(on remet ca|on remet ça|on remet a plus tard|on remettra ca|remettons ca|a remettre|on le remet|on la remet|c est a remettre)( a plus tard)?$/.test(norm)) {
+    return pasSur('piece_manquante', 'Quel rendez-vous veux-tu remettre, et à quand ?', { moment: null, contact: null, metier: null, titre: 'remettre', texte: 'décale', etape: 'suite' });
+  }
+  {
+    const mRappel = norm.match(/^(?:stp |svp )?(?:rappelle|rappeler|rappelle moi de rappeler|recontacte|recontacter|rappelle le|rappelle la|rappelle a) (\S+(?: \S+)?)$/);
+    if (mRappel && !/^(moi|me|toi|le|la|les|lui|ca|ça|de|que)$/.test(mRappel[1]) && !tcHeureDansTexte(brut.toLowerCase())) {
+      const c = tcClasseContactEcrit(mRappel[1]);
+      if (c) return pasSur('piece_manquante', 'Tu veux que je te mette un rappel pour ' + c.name + ', ou que je lui propose un créneau ?', { moment: null, contact: c.name, metier: null, titre: 'rappel', texte: brut.trim(), etape: 'suite', composable: false });
+    }
+  }
+  if (/^(je suis|je serai|je serais|j suis|jsuis) (libre|dispo|disponible)\b/.test(norm) && !/\?/.test(brut) && mots.length <= 6) {
+    return pasSur('piece_manquante', 'Noté. Tu veux que je propose ce créneau à quelqu’un ?', { moment: tcClasseMomentEcrit(brut) || null, contact: null, metier: null, titre: 'libre', texte: brut.trim(), etape: 'suite', composable: false });
+  }
   // 2d. « Annule tout », « efface tout mon agenda » : jamais une suppression en masse, Charly demande le jour (chef, mission 51) ;
   //     la réponse (« demain ») est lue avec « annule tout ».
   if (/^(stp |svp |charly )?(annule|supprime|efface|vide|retire|enleve) (tout|tous|toute|toutes|tous mes rdv|tous mes rendez vous|toutes mes rdv|tout mon agenda|mon agenda|l agenda|tous les rdv|tous les rendez vous)( stp| svp| s il te plait)?$/.test(norm)) {
@@ -19057,7 +19089,7 @@ function tcClasserMessage(text, histoire) {
   // 8a. Le retard de quelqu'un ou de quelque chose d'autre (« Marc est en retard », « le train est en retard ») : pas MON retard
   //     (le détecteur de prévenance ne l'a pas pris), Charly demande ce qu'il doit faire (chef, 24/10).
   //     « pas de retard », « finalement pas de retard » : un retard annoncé qui tombe, ou une simple information : « Bien noté, pas de retard. »
-  if (/\bretard\b/.test(norm) && !indices.detecteur && /\b(pas de|sans|aucun|zero|plus de|finalement pas) retard\b/.test(norm)) return pasSur('retard_annule', 'Bien noté, pas de retard.', null, indices);
+  if (/\bretard\b/.test(norm) && !indices.detecteur && /\b(pas|sans|aucun|zero|plus|finalement pas|jamais) (de |d |en )?retard\b/.test(norm)) return pasSur('retard_annule', 'Bien noté, pas de retard.', null, indices);
   //     « tu es en retard », « t'es en retard » : une remarque à Charly, pas un retard à annoncer : il demande ce qu'il veut dire (chef).
   if (/^(tu es|t es|t|vous etes|tu est|charly tu es|charly t es) (en |tres en |encore en )?retard\b/.test(norm)) return pasSur('doute', 'Je ne suis pas sûr de comprendre : tu veux dire que je réponds trop tard, ou que quelqu’un est en retard ?', null, indices);
   if (/\bretard\b/.test(norm) && !indices.detecteur) {
@@ -19096,7 +19128,7 @@ function tcClasserMessage(text, histoire) {
 function tcNatureReponse(reply) {
   const r = String(reply || '');
   if (r.indexOf('[AGENDA]') > -1) return 'action';
-  if (/Sauf erreur de ma part/.test(r)) return 'question';
+  if (/Sauf erreur de ma part|^Lequel \?|Réponds « oui » ou « non »/.test(r)) return 'question';
   return 'reponse';
 }
 
@@ -19119,15 +19151,18 @@ const TC_ABREVIATIONS = {
   decalle: 'décale', 'décalle': 'décale', decaler: 'décaler', deplase: 'déplace', sui: 'suis', retar: 'retard', jsuis: 'je suis', jai: 'j’ai', jaurai: 'j’aurai',
   quesque: 'qu’est-ce que', keske: 'qu’est-ce que', malad: 'malade', bcp: 'beaucoup', qd: 'quand', tjs: 'toujours', tjrs: 'toujours',
   pcq: 'parce que', dsl: 'désolé', ajt: 'ajoute', rapel: 'rappel', prochin: 'prochain', prochaîne: 'prochaine', semaîne: 'semaine',
-  aujourdui: 'aujourd’hui', mtn: 'maintenant', bjr: 'bonjour', slt: 'salut'
+  aujourdui: 'aujourd’hui', mtn: 'maintenant', bjr: 'bonjour', slt: 'salut',
+  rende: 'rendez', 'rendé': 'rendez', dentisse: 'dentiste', dentist: 'dentiste', kine: 'kiné', coifeur: 'coiffeur', medcin: 'médecin', medecin: 'médecin'
 };
 /* Un jour abrégé ne se remplace que tout en minuscules, hors prénom connu, pas après un article ou un mot qui en fait un nom
    (« la mer », « soirée jeu », « jeu de société »), et seulement s'il est suivi d'une heure ou d'un nombre, ou cité seul. */
 const TC_ABREVIATIONS_AVANT_JOUR = ['avec', 'chez', 'et', 'de', 'pour', 'a', 'à', 'au', 'du', 'des', 'aux', 'en', 'la', 'le', 'les', 'un', 'une', 'ma', 'mon', 'mes', 'ta', 'ton', 'tes', 'sa', 'son', 'ses',
   'soiree', 'soirée', 'nuit', 'bord', 'mme', 'mr', 'm', 'dr', 'pr', 'cher', 'chere', 'chère', 'salut', 'bonjour', 'coucou', 'rappelle', 'appelle', 'previens', 'préviens', 'dis', 'ecris', 'écris'];
 const TC_ABREVIATIONS_JOURS = { lun: 'lundi', mar: 'mardi', mer: 'mercredi', jeu: 'jeudi', ven: 'vendredi', sam: 'samedi', dim: 'dimanche' };
-const TC_ABREVIATIONS_PHRASES = [[/\bpeu pas\b/gi, 'peux pas'], [/\brendez vous\b/gi, 'rendez-vous'], [/\bqu est ce que\b/gi, 'qu’est-ce que'], [/\bqu est ce qu\b/gi, 'qu’est-ce qu'],
-  [/\best ce que\b/gi, 'est-ce que'], [/\bje peu\b/gi, 'je peux'], [/\bje veu\b/gi, 'je veux'], [/\bje sui\b/gi, 'je suis'], [/\bj ai\b/gi, 'j’ai']];
+const TC_ABREVIATIONS_PHRASES = [[/\bpeu pas\b/gi, 'peux pas'], [/\brendez vous\b/gi, 'rendez-vous'], [/\brend[ée] vous\b/gi, 'rendez-vous'], [/\bqu est ce que\b/gi, 'qu’est-ce que'], [/\bqu est ce qu\b/gi, 'qu’est-ce qu'],
+  [/\best ce que\b/gi, 'est-ce que'], [/\bje peu\b/gi, 'je peux'], [/\bje veu\b/gi, 'je veux'], [/\bje sui\b/gi, 'je suis'], [/\bj ai\b/gi, 'j’ai'],
+  // « à la bourre » = en retard ; « mai rendez-vous » (faute pour « mes ») n'est pas le mois de mai (mission 52).
+  [/(^|\s)[àa] la bourre\b/gi, '$1en retard'], [/\bmai (rdv|rendez-vous|rendez vous|rendevous|rendez)\b/gi, 'mes $1'], [/\bm[ée]s? rdv\b/gi, 'mes rdv']];
 
 /** Le message tel que Charly le lit : abréviations et fautes courantes corrigées, mot entier par mot entier. */
 function tcCorrigerAbreviations(texte) {
@@ -19205,7 +19240,10 @@ const TC_CLASSE_SOCIAL = [
     return a + ' ' + mot + ' ' + b + (mot === 'fois' || mot === 'plus' ? ' font ' : ' font ') + r + '.' + TC_SOCIAL_SUITE; }],
   [/^(tu es la|t es la|t es toujours la|tu es toujours la|tu m entends|tu es reveille|allo|youhou|coucou tu es la|il y a quelqu un)$/, 'Oui, je suis là !' + TC_SOCIAL_SUITE],
   [/^(bonne idee|bonne question|c est une bonne idee|pas bete|pas mal|interessant|ah ok interessant)$/, 'Merci 😊' + TC_SOCIAL_SUITE],
-  [/^(je suis fatigue|je suis fatiguee|je suis creve|je suis crevee|je suis epuise|je suis epuisee|j en ai marre|je suis a bout|dure journee|journee difficile|je suis stresse|je suis stressee)$/, 'Courage 😊 Si tu veux alléger ta journée, dis-moi quel rendez-vous décaler ?']
+  [/^(je suis fatigue|je suis fatiguee|je suis creve|je suis crevee|je suis epuise|je suis epuisee|j en ai marre|je suis a bout|dure journee|journee difficile|je suis stresse|je suis stressee)$/, 'Courage 😊 Si tu veux alléger ta journée, dis-moi quel rendez-vous décaler ?'],
+  // L'humeur (mission 52) : « ça me tue ces réunions », « je suis malade de ce boulot » : ni le parcours malade, ni une pièce manquante.
+  [/^((ca|ça) me (tue|tuent|saoule|soule|gonfle|fatigue|epuise)\b.*|ces (reunions|rdv|rendez vous|journees) me (tuent|saoulent|fatiguent|epuisent)|je suis malade de (ce|cette|ces|mon|ma|mes) .*|j en ai marre de (ce|cette|ces|mon|ma|mes) .*|ras le bol( de .*)?|j en ai ras le bol.*|marre de ce boulot|ce boulot me tue|ce travail me tue)$/, 'Courage 😊 Si tu veux alléger ta semaine, dis-moi quel rendez-vous décaler ou annuler ?'],
+  [/^(tu es|t es|es tu|vous etes) (libre|dispo|disponible)( demain| aujourd hui| ce soir| ce week end| samedi| dimanche| lundi| mardi| mercredi| jeudi| vendredi)?$/, 'Je suis toujours là pour toi 😊 Tu veux voir ton agenda, ou noter un rendez-vous ?']
 ];
 
 /** « jeudi 15 octobre 2026 » (avec l'année) ou « vendredi 16 octobre » (sans). */
@@ -19237,6 +19275,9 @@ function tcBulleTapee(texte) {
 /* ─── Une information d'annulation : « le match est annulé », « la réunion a été annulée » → « Je retire … de ton agenda ? » ─── */
 function tcDetecterInfoAnnulation(text) {
   const norm = tcClasseNormaliser(text);
+  // « je peux plus aller au dentiste lundi », « je ne pourrai pas venir au rdv de mardi » : l'objet après le verbe (mission 52).
+  const mPlus = norm.match(/^je (?:ne )?(?:peux|pourrai|pourrais|vais|irai) (?:plus|pas) (?:aller|venir|y aller|etre|me rendre|passer)(?: au rdv de| au rendez vous de| au rdv| au rendez vous| au| a la| a l| chez le| chez la| chez| a mon| a ma| a)? (.{2,50})$/);
+  if (mPlus && !/\b(travail|boulot|ecole|bureau)\b/.test(mPlus[1])) return mPlus[1].trim();
   const m = norm.match(/^(?:le |la |les |l |mon |ma |mes |notre |nos )?(.{2,50}?) (?:est|sont|a ete|ont ete) (?:finalement )?annulee?s?(?: finalement| hier| ce matin| aujourd hui)?$/);
   if (!m) return null;
   if (/\b(je|j ai|mon retard|moi)\b/.test(m[1])) return null;
@@ -19275,7 +19316,9 @@ async function tcGererInfoAnnulation(text, objet) {
     if ((jours.length || quand !== 'ce jour-là') && autres.length) {
       const ev = autres[0];
       _tcSuppressionEnAttente = [ev];
-      charlyIA.history.push({ role: 'system_info', isHTML: true, nature: 'question', content: 'Je ne trouve pas de « ' + escapeHTMLSafe(objet.replace(/\s+(du|de|le|la|les|de la|du)\s+.*$/, '')) + ' » ' + escapeHTMLSafe(String(quand).toLowerCase()) + '. Tu as <b>' + escapeHTMLSafe(ev.title) + '</b> ' + escapeHTMLSafe(tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev)) + ' : c’est celui-là que je retire ?<br><br>Réponds « oui » ou « non ».' });
+      // L'objet sans ses mots de moment (« dentiste lundi » → « dentiste », « golf du 26 » → « golf »).
+      const objetCourt = objet.split(/\s+/).filter(function (w) { const b = tcSansAccents(w); return b && !/^\d/.test(b) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(b) < 0 && !/^(du|de|le|la|les|prochain|prochaine|dernier|derniere|ce|cette)$/.test(b); }).join(' ') || objet;
+      charlyIA.history.push({ role: 'system_info', isHTML: true, nature: 'question', content: 'Je ne trouve pas de « ' + escapeHTMLSafe(objetCourt) + ' » ' + escapeHTMLSafe(String(quand).toLowerCase()) + '. Tu as <b>' + escapeHTMLSafe(ev.title) + '</b> ' + escapeHTMLSafe(tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev)) + ' : c’est celui-là que je retire ?<br><br>Réponds « oui » ou « non ».' });
       renderCharlyChat();
       return;
     }
@@ -19350,7 +19393,7 @@ async function tcPrevenirRetardAutre(text, proposition) {
       const debut = Number(e.startH) * 60 + Number(e.startM || 0), fin = Number(e.endH) * 60 + Number(e.endM || 0);
       return debut <= nowMin + 120 && fin >= nowMin && participe(e, retardContact, prenomRetard) && participe(e, contact, prenomDest);
     }).sort(tcComparerEvenements)[0];
-    if (rdv) pour = ' pour « ' + rdv.title + ' » à ' + tcFormaterHeure(rdv);
+    if (rdv) pour = ' pour « ' + rdv.title + ' » de ' + tcFormaterHeure(rdv);
   }
   const texte = 'Bonjour ' + prenom + ', ' + (moi ? moi + ' me demande de te prévenir' : 'je suis chargé de te prévenir') + ' : ' + retardataire + ' a du retard' + pour + '.';
   if (typeof tcConfirm === 'function' && !(await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »'))) {
@@ -19372,6 +19415,10 @@ function tcDetecterSuppressionSansCible(text) {
   if (/^(stp |svp |s il te plait |s il vous plait |charly )?(annule|annuler|annules|supprime|supprimer|efface|effacer|annule le|supprime le|efface le)( ca| cela| le| la| le rdv| le rendez vous| ce rdv| ce rendez vous| mon rdv| mon rendez vous)?( stp| svp| s il te plait| s il vous plait| merci)?$/.test(norm)) {
     return !(typeof detecterSuppressionRdv === 'function' && detecterSuppressionRdv(text));
   }
+  // « rdv annulé », « je vais pas y aller », « j'y vais pas » : un rendez-vous à retirer, lequel ? (mission 52)
+  if (/^((le |mon |un )?(rdv|rendez vous) annule|je (ne )?vais pas y aller|j irai pas|je n irai pas|je n y vais pas|j y vais pas|je (ne )?viens pas|je (ne )?viendrai pas|j y vais plus|je n y vais plus)( finalement)?$/.test(norm)) return true;
+  // « mets Paul de côté » : le rendez-vous avec Paul, lequel ?
+  if (/^(mets|met|mettre) (.+) de cote$/.test(norm)) return true;
   // « Hugo a annulé », « Marc Dupont a annulé » : un contact connu, et lui seul.
   const m = norm.match(/^(.+?) (a|ont) annule( le rdv| le rendez vous| notre rdv| notre rendez vous)?$/);
   if (m) {
@@ -19385,8 +19432,8 @@ function tcDetecterSuppressionSansCible(text) {
 }
 
 /** « Lequel ? » avec les prochains rendez-vous (trois au plus) ; un seul : la confirmation habituelle ; aucun : on le dit. */
-async function tcGererSuppressionSansCible(text) {
-  tcPousserMessageUtilisateur(text);
+async function tcGererSuppressionSansCible(text, sansBulle) {
+  if (!sansBulle) tcPousserMessageUtilisateur(text);
   const now = new Date();
   const nowStr = tcISO(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -19396,8 +19443,10 @@ async function tcGererSuppressionSansCible(text) {
   // « Hugo a annulé » : les rendez-vous avec Hugo d'abord (le prénom se cherche parmi les mots qui ne sont ni le verbe ni un petit mot).
   let contact = null;
   try {
-    const candidats = tcClasseNormaliser(text).split(' ').filter(function (m) { return m.length >= 3 && !/^(annule|annuler|annules|supprime|supprimer|efface|effacer|annulation|stp|svp|est|ont|pas|tout|toute)$/.test(m) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0; });
-    const trouves = (candidats.length && typeof tcContactsParMots === 'function') ? tcContactsParMots(candidats) : [];
+    const candidats = tcClasseNormaliser(text).split(' ').filter(function (m) { return m.length >= 3 && !/^(annule|annuler|annules|supprime|supprimer|efface|effacer|annulation|stp|svp|est|ont|pas|tout|toute|mets|met|mettre|cote|vais|aller|viens|rdv)$/.test(m) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0; });
+    // Chaque mot peut être un prénom (« mets Paul de côté ») : un seul contact au total.
+    const trouves = [];
+    candidats.forEach(function (w) { (typeof tcContactsParMots === 'function' ? tcContactsParMots([w]) : []).forEach(function (c) { if (trouves.indexOf(c) < 0) trouves.push(c); }); });
     contact = trouves.length === 1 ? trouves[0] : null;
   } catch (e) { contact = null; }
   if (contact) {
@@ -19438,15 +19487,23 @@ function tcDeplacementLocal(text, now) {
   let candidats = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && e.title && e.date >= jour0 && !e.allDay; });
   if (!candidats.length) return null;
   // Le jour de départ (« de mardi », « de lundi ») : les rendez-vous de ce jour.
-  const departs = tcJoursCites(text, ref, true);
+  const base = candidats.slice();
+  let departs = tcJoursCites(text, ref, true);
+  let jourEstDestination = false;
   if (departs.length) candidats = candidats.filter(function (e) { return departs.indexOf(e.date) > -1; });
   // Les mots du titre ou du contact (« dentiste », « déjeuner avec Paul »).
   const mots = tcMotsDeRdv(text).filter(function (w) { return ['meme', 'prochaine', 'prochain', 'semaine', 'heure', 'horaire', 'plutot', 'finalement'].indexOf(w) < 0; });
-  if (mots.length) {
-    const parMot = candidats.filter(function (e) {
+  const parMotDans = function (liste) {
+    return liste.filter(function (e) {
       const c = (typeof tcContactDuRdv === 'function') ? tcContactDuRdv(e) : null;
       return tcTitreContient(e.title, mots) || (c && c.name && tcTitreContient(c.name, mots));
     });
+  };
+  if (mots.length) {
+    let parMot = parMotDans(candidats);
+    // « décale « Partie de golf » mardi 11h » : le titre est sûr mais rien ce jour-là ; le jour cité est alors la destination.
+    // Seulement avec un verbe de déplacement et sans « un / une » (« mets un rdv dentiste mardi 15h » est une création).
+    if (!parMot.length && departs.length && tcEstDeplacement(text) && !/\b(un|une)\b/.test(sans)) { parMot = parMotDans(base); if (parMot.length) jourEstDestination = true; }
     if (!parMot.length) return null;
     candidats = parMot;
   } else if (!departs.length) {
@@ -19462,6 +19519,7 @@ function tcDeplacementLocal(text, now) {
   // « même heure ». Sans jour ni heure de destination : le chemin habituel.
   const tous = tcJoursCites(text, ref, false);
   let dateCible = null;
+  if (jourEstDestination) departs = [];
   const autres = tous.filter(function (j) { return departs.indexOf(j) < 0; });
   if (autres.length === 1) dateCible = autres[0];
   else if (autres.length > 1) return null;
@@ -19505,6 +19563,142 @@ async function tcGererDeplacementLocal(text, d) {
     return;
   }
   tcExecuterDeplacement(d.liste);
+  renderCharlyChat();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 52 (24/10, chef, suite des missions 50 et 51) : les 28 ratés restants et les réserves
+
+   - L'aide figée du modèle (« Pour le supprimer, écris-moi par exemple… ») est remplacée par « Lequel ? » numéroté, dans la page.
+   - « annule le premier », « décale le deuxième » après une liste : l'élément de la liste.
+   - « non c'était pour Hugo » après une création : le contact du rendez-vous qu'on vient de créer est corrigé.
+   ═══════════════════════════════════════════════════════════════ */
+/** Les prochains rendez-vous (à venir, triés), n au plus. */
+function tcProchainsRdv(n) {
+  const now = new Date();
+  const nowStr = tcISO(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  return (Array.isArray(events) ? events : []).filter(function (e) {
+    return e && e.mode === mode && e.title && (e.date > nowStr || (e.date === nowStr && (e.allDay || (Number(e.startH) * 60 + Number(e.startM || 0)) >= nowMin)));
+  }).sort(tcComparerEvenements).slice(0, n || 3);
+}
+
+/** « 1. Dentiste : vendredi 16 octobre 15h à 16h » : une ligne de la liste « Lequel ? ». */
+function tcLigneLequel(e, i) {
+  return (i + 1) + '. ' + e.title + ' : ' + tcFormaterDateHumaine(e.date) + ' ' + tcFormaterHeure(e);
+}
+
+/**
+ * Le modèle a répondu par son aide figée (« Pour le supprimer, écris-moi par exemple… ») : la page répond à sa place par « Lequel ? »
+ * avec les prochains rendez-vous (et garde le choix), ou la confirmation s'il n'y en a qu'un, ou « rien à annuler ».
+ */
+function tcRemplacerAideFigee(reply) {
+  const r = String(reply || '');
+  if (!/Pour le (supprimer|retirer|annuler|rappeler), (écris|ecris)-moi/.test(r)) return reply;
+  const liste = tcProchainsRdv(3);
+  if (!liste.length) return 'Je ne vois aucun rendez-vous à venir dans ton agenda : rien à annuler.';
+  if (liste.length === 1) {
+    _tcSuppressionEnAttente = liste;
+    return 'Tu veux annuler ce rendez-vous ?\n• ' + liste[0].title + ' : ' + tcFormaterDateHumaine(liste[0].date) + ' ' + tcFormaterHeure(liste[0]) + '\nRéponds « oui » ou « non ».';
+  }
+  _tcSuppressionChoix = liste;
+  return 'Lequel ?\n' + liste.map(tcLigneLequel).join('\n') + '\nDis-moi son numéro, son heure ou son nom.';
+}
+
+/* ─── « annule le premier », « décale le deuxième » : l'élément de la dernière liste affichée ─── */
+const TC_RANGS = { premier: 1, premiere: 1, '1er': 1, '1ere': 1, deuxieme: 2, '2e': 2, '2eme': 2, second: 2, seconde: 2, troisieme: 3, '3e': 3, '3eme': 3, quatrieme: 4, '4e': 4, dernier: -1, derniere: -1 };
+function tcDetecterOrdinalListe(text) {
+  const norm = tcClasseNormaliser(text);
+  const m = norm.match(/^(annule|supprime|efface|retire|decale|deplace|reporte|repousse) (?:le |la |celui |celle |celui du |celle du )?(premier|premiere|1er|1ere|deuxieme|2e|2eme|second|seconde|troisieme|3e|3eme|quatrieme|4e|dernier|derniere)(?: rdv| rendez vous)?( stp| svp)?$/);
+  if (!m) return null;
+  return { verbe: m[1], rang: TC_RANGS[m[2]] };
+}
+
+/** Les rendez-vous de la dernière liste que Charly a affichée (« • … : Titre », « 1. Titre : … », « « Titre » : … »), dans l'ordre. */
+function tcDernierListeRdv() {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  const tous = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === mode && e.title; });
+  for (let i = h.length - 1; i >= 0; i--) {
+    const m = h[i];
+    if (!m || m.role === 'user') continue;
+    const texte = String(m.content || '').replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '');
+    const lignes = texte.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return /^(•|\d+\.)\s/.test(l); });
+    if (lignes.length < 1) continue;
+    const trouves = [];
+    lignes.forEach(function (l) {
+      const ev = tous.filter(function (e) { return l.indexOf(e.title) > -1 && (l.indexOf(tcFormaterDateHumaine(e.date)) > -1 || l.indexOf(e.date) > -1 || l.indexOf(tcFormaterHeure(e)) > -1); })
+        .sort(function (a, b) { return b.title.length - a.title.length; })[0];
+      if (ev && trouves.indexOf(ev) < 0) trouves.push(ev);
+    });
+    if (trouves.length) return trouves;
+    // Une liste affichée mais aucun rendez-vous reconnu (une liste d'autre chose) : on continue de remonter.
+  }
+  return [];
+}
+
+/** Annuler ou décaler le n-ième de la dernière liste : la confirmation oui/non, ou « à quand ? ». */
+async function tcGererOrdinalListe(text, o) {
+  tcPousserMessageUtilisateur(text);
+  const liste = tcDernierListeRdv();
+  if (!liste.length) {
+    charlyIA.history.push({ role: 'assistant', content: 'Je n’ai pas de liste sous les yeux : lequel ? Dis-moi son nom ou son jour.', nature: 'question' });
+    renderCharlyChat();
+    return;
+  }
+  const idx = o.rang === -1 ? liste.length - 1 : o.rang - 1;
+  if (idx < 0 || idx >= liste.length) {
+    charlyIA.history.push({ role: 'assistant', content: 'La liste n’a que ' + liste.length + ' rendez-vous : lequel ?', nature: 'question' });
+    renderCharlyChat();
+    return;
+  }
+  const ev = liste[idx];
+  if (/^(annule|supprime|efface|retire)$/.test(o.verbe)) {
+    _tcSuppressionEnAttente = [ev];
+    charlyIA.history.push({ role: 'system_info', isHTML: true, nature: 'question', content: '⚠️ <b>Tu veux annuler ce rendez-vous ?</b><br><br>' + escapeHTMLSafe('• ' + ev.title + ' : ' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev)) + '<br><br>Cette action est définitive. Réponds « oui » ou « non ».' });
+    renderCharlyChat();
+    return;
+  }
+  // Décaler : à quand ? La réponse (« mardi 11h ») se lit avec « décale « Titre » ».
+  charlyIA.history.push({ role: 'assistant', content: 'À quand veux-tu décaler « ' + ev.title + ' » (' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + ') ?', nature: 'question',
+    _classement: 'piece_manquante', _proposition: { moment: null, contact: null, metier: null, titre: ev.title, texte: 'décale « ' + ev.title + ' »', etape: 'suite' }, _texte: text });
+  renderCharlyChat();
+}
+
+/* ─── « non c'était pour Hugo » après une création : le contact du rendez-vous qu'on vient de créer ─── */
+function tcDetecterCorrectionContact(text) {
+  const norm = tcClasseNormaliser(text);
+  const m = norm.match(/^(?:non|ah non|en fait|non non|pardon|oups|euh non|non en fait)?[ ,]*(?:c etait|c est|plutot|c etait plutot|c est plutot|je voulais dire) (?:pour|avec) (.{2,40})$/);
+  if (!m) return null;
+  const c = (typeof tcClasseContactEcrit === 'function') ? tcClasseContactEcrit(m[1]) : null;
+  return c ? { contact: c } : null;
+}
+
+/** Le rendez-vous créé à partir du message précédent reçoit ce contact ; sinon Charly demande lequel. */
+async function tcGererCorrectionContact(text, o) {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  let precedent = '';
+  for (let i = h.length - 1; i >= 0; i--) { if (h[i] && h[i].role === 'user') { precedent = String(h[i]._corrige || h[i].content || ''); break; } }
+  tcPousserMessageUtilisateur(text);
+  let ev = null;
+  if (precedent) {
+    const titre = tcTitreDepuisDemande(precedent);
+    const demande = tcDateDemandee(precedent, new Date());
+    const mots = tcSansAccents(titre || '').split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3; });
+    const dateStr = (demande && demande.date) ? tcISO(demande.date) : null;
+    const candidats = (Array.isArray(events) ? events : []).filter(function (e) {
+      return e && e.mode === mode && e.title && (!dateStr || e.date === dateStr) && mots.length && tcTitreContient(e.title, mots);
+    }).sort(tcComparerEvenements);
+    ev = candidats[0] || null;
+  }
+  if (!ev) {
+    charlyIA.history.push({ role: 'assistant', content: 'Je ne vois pas quel rendez-vous corriger : lequel ?', nature: 'question' });
+    renderCharlyChat();
+    return;
+  }
+  ev.contact = o.contact.id;
+  saveEventsToStorage();
+  if (typeof currentPage !== 'undefined' && currentPage === 'calendar' && typeof render === 'function') render();
+  charlyIA.history.push({ role: 'assistant', content: 'D’accord : « ' + ev.title + ' » (' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + ') est maintenant avec ' + o.contact.name + '.', nature: 'reponse' });
   renderCharlyChat();
 }
 
@@ -20421,8 +20615,14 @@ const TC_MALADE_PERIODES = {
 
 /** « Malade » dans la phrase : le questionnaire guidé, jamais le modèle. Une question (« comment… ? ») n'en est pas une. */
 function tcDetecterMalade(text) {
-  const t = tcSansAccents(String(text || '')).trim();
-  return /\bmalade\b/.test(t) && !/^comment\b/.test(t);
+  const t = tcSansAccents(String(text || '')).replace(/[’']/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!/\bmalade\b/.test(t) || /^comment\b/.test(t)) return false;
+  // « malade de ce boulot » : une humeur ; « mon chat est malade », « Marc est malade » : quelqu un d autre. Le parcours malade,
+  // c est l utilisateur lui-meme (mission 52).
+  if (/\bmalade de (ce|cette|ces|mon|ma|mes|son|sa|ses|la|le|les|tout|toi|vous|lui)\b/.test(t)) return false;
+  const moi = /\b(je|j|suis|me sens|jsuis|moi)\b/.test(t);
+  if (!moi && /\b(est|sont|sera|seront|tombe|tombent|a ete) malade/.test(t)) return false;
+  return true;
 }
 
 /** Ce que la phrase dit déjà : la période et l'action, pour sauter ces questions. */

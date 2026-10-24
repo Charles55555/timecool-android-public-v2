@@ -29,7 +29,9 @@ HORODATAGE=$(date +%s)
 grep -q '__TC_DEPLOIEMENT__' "$SOURCE" \
   || { echo "Marqueur __TC_DEPLOIEMENT__ absent de la source." >&2; exit 1; }
 
-sed "s/__TC_DEPLOIEMENT__/$HORODATAGE/" "$SOURCE" | tee "$CIBLE/index.html" > /dev/null
+# TC_APP_VERSION est estampillee a chaque publication (mission 52, decision du chef) : les testeurs datent leurs passages.
+VERSION_WEB=$(TZ=Europe/Paris date -d "@$HORODATAGE" '+%Y.%m.%d-%H%M')
+sed -e "s/__TC_DEPLOIEMENT__/$HORODATAGE/" -e "s/const TC_APP_VERSION = '[^']*';/const TC_APP_VERSION = '$VERSION_WEB';/" "$SOURCE" | tee "$CIBLE/index.html" > /dev/null
 printf '{"deploiement":"%s"}\n' "$HORODATAGE" | tee "$CIBLE/version.json" > /dev/null
 # N utile qu a la toute premiere creation. Plesk reprend ensuite le
 # fichier a son compte, et le chmod echoue alors — avec set -e, il
