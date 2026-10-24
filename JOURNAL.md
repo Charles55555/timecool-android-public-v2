@@ -2705,3 +2705,17 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   prochaine » = les créneaux (60 min) ; « j'ai une heure de libre » reste une affirmation. Les réponses « aucun créneau… un autre jour ? »
   portent la nature question.
 - API inchangée. Suite : verif-classement-charly section 12 ; verif-charly-campagne10 adaptée (patch-suites-m55).
+- Second passage (verdict EXAMINATEUR, 9 défauts, décisions du chef) : tcDeplacementLocal ignore « de N heure(s) » comme heure cible et le lit
+  comme un décalage (« décale le dentiste de 1 heure » → +1 h, « avance d'une heure » → -1 h, « de 30 minutes ») ; « je suis pris / prise /
+  bloqué / retenu + un moment » → « Noté, mardi tu n'es pas disponible. Je décale quelque chose ? » (le parcours contrainte garde la main
+  quand il reconnaît la phrase), « je suis coincé au bureau » reste « Tu es retenu… » ; « X a changé de numéro / d'adresse / de mail » → « tu veux
+  que je mette à jour sa fiche ? », « a changé » seul ne vise plus un rendez-vous (il faut d'heure, d'horaire, de jour, décalé, reporté) ;
+  « merci, et jeudi 15h ? » : le reste se classe (compose sans le merci) ; après des créneaux, « non, mardi plutôt » passe ; tcDetecterPlusieursCites
+  exige une demande de créneau commun (trouver, proposer, un moment, quand), sans heure, sans question ni consultation, et au moins un invité sans
+  compte (sinon tcDetecterRdvGroupe) ; « note café avec Marc et Sophie jeudi 15h » fait une carte (titre jusqu'à 5 mots ; les mots « avec » et les
+  prénoms ne comptent plus dans la garde « même titre ») ; les messages aux contacts recopient le texte dicté avec ses accents (« j'aurai 10 min
+  de retard », « j'annule le tennis », « Sophie est en retard »), « à lui / à elle » → « à toi » ; tcSansHesitations ne retire « attends », « en fait »,
+  « du coup », « voilà », « bon » qu'en tête ou isolés (« on attend le plombier », « Paul attend ma réponse » intacts), jamais « je veux dire » devant
+  « à » ; « non annule pas » garde son non ; tcDetecterChangementJourCarte ignore un jour précédé de « pas » ; « mets le rdv dentiste à jeudi 10h »
+  (l'article) ne crée rien ; « retard de Marc au dentiste » n'est pas mon retard ; « comme tu veux » après une question précise est une réponse.
+  Une vraie liste de mots de moment (TC_CLASSE_VRAI_MOMENT) remplace l'usage fautif de TC_CLASSE_MOTS_DE_MOMENT (qui contient « au », « non »).

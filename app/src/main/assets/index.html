@@ -12120,12 +12120,18 @@ function tcCreationLocale(texte, now, forcer) {
   const titre = tcTitreDepuisDemande(brut);
   if (!titre) return '';
   // Une phrase longue (« …c'est pour mes dents de sagesse et il faut apporter la radio ») : le modele fait le tri.
-  if (titre.split(/\s+/).length > 3 || t.split(/\s+/).filter(Boolean).length > 12) return '';
+  // « Cafe avec Marc et Sophie » (5 mots) est un titre complet (chef, mission 55) ; une phrase de plus de 12 mots part au modele.
+  if (titre.split(/\s+/).length > 5 || t.split(/\s+/).filter(Boolean).length > 12) return '';
   // Un rendez-vous a venir porte deja un mot du titre (« mets le dentiste à jeudi 10h ») : c est un deplacement, pas une creation.
   // Sauf « ajoute quand meme » (forcer, mission 53), et sauf quand la phrase dit « rdv / rendez-vous / reunion / seance / consultation » :
   // « rdv chez le dentiste a 17 heures demain » est un nouveau rendez-vous, meme avec un Dentiste un autre jour (mission 55).
-  if (!forcer && !/\b(rdv|rendez|reunion|seance|consultation)\b/.test(t) && typeof events !== 'undefined' && Array.isArray(events)) {
-    const motsT = tcSansAccents(titre).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4; });
+  // (« mets le rdv dentiste a jeudi 10h », avec l'article, designe un rendez-vous existant : la garde reste.)
+  if (!forcer && (!/\b(rdv|rendez|reunion|seance|consultation)\b/.test(t) || /\b(le|la|l|mon|ma|ce|cette) (rdv|rendez|reunion|seance|consultation)\b/.test(t)) && typeof events !== 'undefined' && Array.isArray(events)) {
+    const motsT = tcSansAccents(titre).split(/[^a-z0-9]+/).filter(function (w) {
+      if (w.length < 4 || /^(avec|chez|pour|sans|dans|vers)$/.test(w)) return false;
+      try { if (typeof tcContactsParMots === 'function' && tcContactsParMots([w]).length) return false; } catch (e) {}
+      return true;
+    });
     const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
     const ref = now ? new Date(now) : new Date();
     const debutStr = tcISO(new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()));
@@ -13184,11 +13190,15 @@ function tcDetecterPrevenance(text) {
   let destinataire = null, texteLibre = null;
   const mLibre = t.match(/^(?:stp |svp |charly )?(?:envoie[sz]?|envoi|envoyer|dis|dites|ecris|ecrire|previens|prevenez|prevenir|avertis|fais savoir|faire savoir)(?: (?:un |lui |leur )?(?:message|sms|texto|mail|mot))? (?:a|au|a la) ([a-z][a-z-]+(?: [a-z][a-z-]+)?) (?:que|qu')\s*(.+)$/);
   if (mLibre && typeof tcContactsParMots === 'function') {
-    try { const c = tcContactsParMots(mLibre[1].split(' ')); if (c.length === 1) { destinataire = c[0]; texteLibre = mLibre[2].trim(); } } catch (e) { destinataire = null; }
+    // Le texte a recopier garde ses accents : il est pris dans la phrase d'origine (meme longueur, sans accents = meme position).
+    const brutTexte = String(text || '');
+    try { const c = tcContactsParMots(mLibre[1].split(' ')); if (c.length === 1) { destinataire = c[0]; texteLibre = (brutTexte.length === t.length ? brutTexte.slice(brutTexte.length - mLibre[2].length) : mLibre[2]).trim(); } } catch (e) { destinataire = null; }
   }
   const arrive = t.match(/\b(?:j'?\s?arrive|je serai la|je suis la|j'?y suis) (?:dans|d'?ici) (\d{1,3}) ?(?:min\b|mn\b|minutes?)/);
   // « retard 10 min dentiste » : la phrase commence par « retard » et nomme un rendez-vous (« Marc est en retard » reste le retard d'un autre).
-  const retardNomme = /^(en )?retard\b/.test(t.replace(/[?!.,;:]/g, ' ').trim()) && typeof tcRdvVise === 'function' && !!tcRdvVise(text);
+  let retardNomme = /^(en )?retard\b/.test(t.replace(/[?!.,;:]/g, ' ').trim()) && typeof tcRdvVise === 'function' && !!tcRdvVise(text);
+  // « retard de Marc au dentiste » : le retard d'un contact, pas le mien.
+  if (retardNomme) { const mDe = t.match(/^(?:en )?retard (?:de|d') (\S+)/); try { if (mDe && typeof tcContactsParMots === 'function' && tcContactsParMots([tcSansAccents(mDe[1])]).length) retardNomme = false; } catch (e) {} }
   // « retard », « retard 10 min », « 10 min de retard » seuls (sans autre sujet ni negation, sans verbe ni « je ») : le questionnaire
   // retard demande a qui (mission 50). « Marc est en retard », « pas de retard », « en retard ? » ne sont pas MON retard.
   const seulRetard = /^(retard( de)?( \d{1,3} ?(min|mn|minutes?))?|\d{1,3} ?(min|mn|minutes?) de retard)$/.test(t.replace(/[?!.,;:]/g, ' ').replace(/\s+/g, ' ').trim());
@@ -13199,10 +13209,10 @@ function tcDetecterPrevenance(text) {
     let minutes = m ? parseInt(m[1], 10) : (arrive ? parseInt(arrive[1], 10) : null);
     if (!minutes && /quart d'?heure/.test(t)) minutes = 15;
     if (!minutes && /demi-?\s?heure/.test(t)) minutes = 30;
-    return { type: 'retard', minutes: minutes || null, destinataire: destinataire };
+    return { type: 'retard', minutes: minutes || null, destinataire: destinataire, texte: texteLibre };
   }
   if ((verbe || destinataire) && /(annul|ne viendrai pas|ne pourrai pas venir|ne peux pas venir|ne viens pas|ne viens plus)/.test(t)) {
-    return { type: 'annule', minutes: null, destinataire: destinataire };
+    return { type: 'annule', minutes: null, destinataire: destinataire, texte: texteLibre };
   }
   // « dis a Paul que je pense a lui » : un message libre pour un contact (mission 55).
   if (destinataire && texteLibre && texteLibre.split(' ').length <= 25) return { type: 'message', minutes: null, destinataire: destinataire, texte: texteLibre };
@@ -13212,7 +13222,8 @@ function tcDetecterPrevenance(text) {
 /** La demande écrite : on trouve le rendez-vous, puis on prévient. */
 async function tcGererPrevenance(text, intent) {
   // Un destinataire nommé sans rendez-vous visé (« envoie à Gaëlle que j'arrive dans 10 minutes »), ou un message libre : le message part à lui (mission 55).
-  if (intent.destinataire && (intent.type === 'message' || !tcRdvVise(text))) { await tcPrevenirContactLibre(text, intent); return; }
+  // (un texte qui ne parle pas de moi, « dis à Marc que Sophie est en retard », part tel quel, jamais dans MON questionnaire retard.)
+  if (intent.destinataire && (intent.type === 'message' || !tcRdvVise(text) || (intent.texte && !/^(je|j)\b/.test(tcSansAccents(intent.texte).replace(/[’']/g, ' '))))) { await tcPrevenirContactLibre(text, intent); return; }
   // Un retard : le questionnaire guidé (mission 45), avec ce que la phrase dit déjà (les minutes, le rendez-vous visé).
   if (intent.type === 'retard') { await tcPrevenirRetard(text, tcRdvVise(text)); return; }
   tcPousserMessageUtilisateur(text);
@@ -18985,6 +18996,9 @@ function tcClasseQuestion(brut, norm, mots) {
 }
 
 /* Les mots qui ne nomment rien (jours, moments, petits mots) : ce qui reste est l'objet du message. */
+/* Un vrai mot de moment (jour, partie de journée, mois, heure) dans un texte normalisé ; la liste TC_CLASSE_MOTS_DE_MOMENT ci-dessous
+   mélange petits mots et moments pour écarter des candidats, elle ne dit pas qu'un moment est écrit (mission 55). */
+const TC_CLASSE_VRAI_MOMENT = /(^|\s)(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres demain|aujourd hui|ce soir|ce matin|cet aprem|cet apres midi|matin|matinee|midi|soir|soiree|apres midi|aprem|semaine|week end|weekend|journee|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|\d{1,2} ?h ?\d{0,2}|\d{1,2} heures?)(?=\s|$)/;
 const TC_CLASSE_MOTS_DE_MOMENT = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche', 'demain', 'aujourd', 'hui', 'apres', 'aprem', 'matin',
   'midi', 'soir', 'soiree', 'nuit', 'semaine', 'prochain', 'prochaine', 'week', 'end', 'weekend', 'ce', 'cet', 'cette', 'le', 'la', 'les', 'l', 'un', 'une',
   'des', 'du', 'de', 'd', 'a', 'au', 'aux', 'et', 'ou', 'pour', 'avec', 'chez', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'h', 'heure', 'heures', 'min', 'mn',
@@ -19079,6 +19093,8 @@ function tcClasserMessage(text, histoire) {
   if (TC_CLASSE_DOUTES.indexOf(norm) > -1) return pasSur('doute', 'Je peux me tromper : qu’est-ce qui ne te semble pas juste ?');
   // 2b. Une petite phrase sociale (« tkt », « mdr », « ça va et toi », « quelle heure il est », « t'es nul », une blague…) : une
   //     réponse courte et gentille, jamais « pas compris » (mission 51, chef) ; l'heure et la date, Charly les a.
+  //     « comme tu veux », « peu importe » juste après une question précise de Charly (« Je le mets mardi ou jeudi ? ») : une réponse, elle passe (examinateur, mission 55).
+  if (/^(comme tu veux|comme tu le sens|peu importe|c est toi qui vois|osef|ca m est egal|n importe|au choix|les deux)$/.test(norm) && precedent && !apresMaQuestion && tcClassePoseUneQuestion(precedent)) return claire('reponse');
   if (typeof tcClasseSocial === 'function') { const social = tcClasseSocial(brut, norm, mots); if (social) return pasSur('social', social); }
   // 2c. Le compte, l'abonnement, les réglages (« supprime mon compte », « annule mon abonnement ») : pas un rendez-vous, Charly oriente (chef, mission 51).
   if (mots.length <= 8 && /\b(supprime|supprimer|efface|effacer|annule|annuler|resilie|resilier|ferme|fermer|desactive|desactiver|change|changer|modifie|modifier|arrete|arreter|coupe|couper)\b/.test(norm)
@@ -19115,10 +19131,21 @@ function tcClasserMessage(text, histoire) {
     }
   }
   //   « Je suis coincé au bureau », « bloqué dans les bouchons », « je peux pas me libérer » : un retard ou un empêchement, Charly demande.
-  if (/^(je suis|jsuis|j suis|je me retrouve|je reste) (coince|coincee|bloque|bloquee|retenu|retenue|pris|prise|scotche|scotchee|planque)( au| a| dans| en| sur| chez| ici| la)?\b/.test(norm)
-      || /^(je suis|jsuis|je vais etre|je serai) (dans|en plein dans) (les |des )?(bouchons|embouteillages)/.test(norm)
-      || /^(je peux pas|je ne peux pas|j arrive pas a|je n arrive pas a|impossible de) (me liberer|partir|sortir|m echapper|me degager|quitter le bureau)/.test(norm)) {
-    return pasSur('retard_autre', 'Tu es retenu : je décale ton prochain rendez-vous, ou je préviens quelqu’un ?', { moment: null, contact: null, metier: null, titre: 'retard', texte: brut.trim(), etape: 'suite', composable: false });
+  //   Avec un jour, une heure ou une période (« je suis pris mardi », « je suis prise de 14h à 16h », « bloqué toute la journée jeudi ») :
+  //   une indisponibilité, notée ; le parcours contrainte (« indisponible mardi ») garde la main quand il reconnaît la phrase (chef).
+  {
+    const mPris = norm.match(/^(?:je suis|jsuis|j suis|je serai|je me retrouve|je reste) (coince|coincee|bloque|bloquee|retenu|retenue|pris|prise|scotche|scotchee|planque|occupe|occupee|pas dispo|pas disponible|indisponible)\b(.*)$/);
+    const momentDit = mPris && (TC_CLASSE_VRAI_MOMENT.test(mPris[2]) || /(^|\s)(toute|jusqu|a partir)(\s|$)/.test(mPris[2]) || !!tcHeureDansTexte(brut.toLowerCase()));
+    const contrainte = (typeof tcDetecterContrainte === 'function') ? tcDetecterContrainte(brut) : false;
+    if (mPris && momentDit && !contrainte) {
+      const quand = String(brut).trim().replace(/^(je suis|jsuis|j suis|je serai|je me retrouve|je reste)\s+\S+\s*/i, '').replace(/[.!?]+$/, '').trim();
+      return pasSur('piece_manquante', 'Noté, ' + quand + ' tu n’es pas disponible. Je décale quelque chose ?', { moment: quand, contact: null, metier: null, titre: 'indisponible', texte: '', etape: 'suite', composable: false });
+    }
+    if (!contrainte && ((mPris && !momentDit && !/^(occupe|occupee|pas dispo|pas disponible|indisponible)$/.test(mPris[1]))
+        || /^(je suis|jsuis|je vais etre|je serai) (dans|en plein dans) (les |des )?(bouchons|embouteillages)/.test(norm)
+        || /^(je peux pas|je ne peux pas|j arrive pas a|je n arrive pas a|impossible de) (me liberer|partir|sortir|m echapper|me degager|quitter le bureau)/.test(norm))) {
+      return pasSur('retard_autre', 'Tu es retenu : je décale ton prochain rendez-vous, ou je préviens quelqu’un ?', { moment: null, contact: null, metier: null, titre: 'retard', texte: brut.trim(), etape: 'suite', composable: false });
+    }
   }
   //   « Lundi ça va pas le faire », « demain c'est mort » : le jour ne va pas, Charly demande ce qu'il décale, avec les rendez-vous du jour.
   {
@@ -19140,7 +19167,14 @@ function tcClasserMessage(text, histoire) {
   }
   //   « Le kiné a changé d'heure », « le dentiste a été décalé » : Charly demande la nouvelle heure ; la réponse (« 17h ») déplace « Kiné ».
   {
-    const mChange = norm.match(/^(?:le |la |l |mon |ma |mes )?(.{2,30}?) (?:a change d heure|a change d horaire|a change de jour|a change de date|a ete decale|a ete deplace|a ete reporte|a ete avance|est decale|est reporte|est deplace|a bouge|a change)( .*)?$/);
+    //   Seulement avec un mot d'horaire (d'heure, d'horaire, de jour, de date, décalé, reporté, avancé) : « le prix a changé », « la météo
+    //   a changé » suivent leur chemin ; « Paul a changé de numéro / d'adresse / de mail » : sa fiche contact (chef, mission 55).
+    const mFiche = norm.match(/^(.{2,30}?) a change (?:de |d )(numero|telephone|tel|portable|adresse|mail|email|nom|boite mail)\b/);
+    if (mFiche && !/\b(je|j|moi|tu|charly|mon|ma)\b/.test(mFiche[1])) {
+      const cF = tcClasseContactEcrit(mFiche[1]);
+      if (cF) return pasSur('piece_manquante', cF.name + ' a changé de ' + mFiche[2].replace(/^tel$/, 'téléphone').replace(/^numero$/, 'numéro') + ' : tu veux que je mette à jour sa fiche ?', { moment: null, contact: cF.name, metier: null, titre: 'fiche', texte: '', etape: 'suite', composable: false });
+    }
+    const mChange = norm.match(/^(?:le |la |l |mon |ma |mes )?(.{2,30}?) (?:a change d heure|a change d horaire|a change de jour|a change de date|a change d heure et de jour|a ete decale|a ete deplace|a ete reporte|a ete avance|est decale|est reporte|est deplace|a bouge)( .*)?$/);
     if (mChange && !/\b(je|j|moi|tu|charly)\b/.test(mChange[1]) && !tcHeureDansTexte(brut.toLowerCase())) {
       let vise = null;
       try { vise = typeof tcRdvVise === 'function' ? tcRdvVise(mChange[1]) : null; } catch (e) { vise = null; }
@@ -19159,7 +19193,9 @@ function tcClasserMessage(text, histoire) {
   }
   //   « pas libre, occupé », « aucun ne me va » juste après des créneaux proposés : Charly propose une autre semaine.
   if (precedent && !apresMaQuestion && /^(Voici ce qui est libre|Je ne vois aucun créneau|Sans plages ouvertes|Tes disponibilités ne sont pas ouvertes)/.test(String(precedent.content || ''))
-      && /^(pas libre|occupe|occupee|pas dispo|pas disponible|pas possible|aucun|aucun ne (me )?va|aucun ne convient|rien ne (me )?va|ca (ne )?va pas|ca (ne )?marche pas|non( merci)?|pas bon|pas ca|trop tot|trop tard|pas ces jours la|pas cette semaine)([ ,].*)?$/.test(norm) && mots.length <= 8) {
+      && /^(pas libre|occupe|occupee|pas dispo|pas disponible|pas possible|aucun|aucun ne (me )?va|aucun ne convient|rien ne (me )?va|ca (ne )?va pas|ca (ne )?marche pas|non( merci)?|pas bon|pas ca|trop tot|trop tard|pas ces jours la|pas cette semaine)([ ,].*)?$/.test(norm) && mots.length <= 8
+      // « non, mardi plutôt », « aucun, essaie vendredi », « pas ça, plutôt jeudi 15h » : un jour ou une heure est dit, il passe (examinateur).
+      && !TC_CLASSE_VRAI_MOMENT.test(norm) && !/\d/.test(norm) && !tcHeureDansTexte(brut.toLowerCase())) {
     return pasSur('piece_manquante', 'Aucun de ces créneaux ne te va : je regarde une autre semaine ?', { moment: null, contact: null, metier: null, titre: 'créneaux', texte: '', etape: 'suite', composable: false });
   }
   // 2c ter (mission 53). Une annulation douteuse (« je vais pas y aller », « j'ai encore oublié le dentiste », « rdv annulé ») : Charly
@@ -19194,7 +19230,19 @@ function tcClasserMessage(text, histoire) {
   if (TC_CLASSE_ABANDONS.indexOf(norm) > -1) return pasSur('abandon', 'D’accord, je laisse tomber : tu veux autre chose ?');
   if (TC_CLASSE_REMERCIEMENTS.indexOf(norm) > -1) return pasSur('remerciement', 'Avec plaisir, tu veux autre chose ?');
   // « merci Charly t'es top », « merci beaucoup c'est parfait » : un merci avec des mots gentils, rien d'autre (mission 55).
-  if (/^(merci|mrc|thx|thanks|merciii+)\b/.test(norm) && mots.length <= 8 && !/\b(mais|annule|decale|ajoute|note|rdv|rendez|previens|supprime|mets|trouve|propose|cherche|dis|pour|de|d)\b/.test(norm)) return pasSur('remerciement', 'Avec plaisir, tu veux autre chose ?');
+  if (/^(merci|mrc|thx|thanks|merciii+)\b/.test(norm)) {
+    const suiteMerci = String(brut).trim().replace(/^(merci|mrc|thx|thanks|merciii+)(\s+(beaucoup|bien|bcp|mille|infiniment|charly|a toi|à toi))*[\s,;:!.]*/i, '').trim();
+    const suiteNorm = tcClasseNormaliser(suiteMerci);
+    const porteSuite = suiteNorm && (TC_CLASSE_VRAI_MOMENT.test(suiteNorm) || /\d/.test(suiteNorm) || tcClasseNomConnu(suiteMerci) || tcHeureDansTexte(suiteMerci.toLowerCase())
+      || /\b(mais|annule|decale|ajoute|note|rdv|rendez|previens|supprime|mets|trouve|propose|cherche|dis|pour|et|alors|avec|chez)\b/.test(suiteNorm));
+    // « merci Charly t'es top » : un remerciement ; « merci, et jeudi 15h ? » : le reste de la phrase se classe, le merci tombe (chef, mission 55).
+    if (!porteSuite && mots.length <= 8) return pasSur('remerciement', 'Avec plaisir, tu veux autre chose ?');
+    if (porteSuite && suiteMerci.split(/\s+/).length >= 2) {
+      const r = tcClasserMessage(suiteMerci, histoire);
+      if (r && r.classe === 'claire' && !r.compose) r.compose = suiteMerci;
+      return r;
+    }
+  }
   if (TC_CLASSE_SALUTATIONS.indexOf(norm) > -1) {
     const h = new Date().getHours();
     return pasSur('salutation', (h < 18 ? 'Bonjour' : 'Bonsoir') + ' ! Qu’est-ce que je peux faire pour toi ?');
@@ -19747,13 +19795,30 @@ function tcDeplacementLocal(text, now) {
   const heures = [];
   const re = /\b(\d{1,2})\s?(?:h|heures?|:)\s?(\d{2})?\b/g;
   let m;
-  while ((m = re.exec(sans))) { const h = Number(m[1]); if (h >= 0 && h <= 23) heures.push({ h: h, m: m[2] ? Number(m[2]) : 0 }); }
+  while ((m = re.exec(sans))) {
+    const h = Number(m[1]);
+    if (h < 0 || h > 23) continue;
+    // « decale le kine de 1 heure », « repousse le dentiste de 2 heures », « dans 2h » : un decalage, pas une heure cible (examen, mission 55).
+    if (/(^|\s)(de|d|des|pendant|durant|environ|dans|d ici|encore)\s*$/.test(sans.slice(0, m.index)) && !/\s(a|au|vers|pour)\s*$/.test(sans.slice(0, m.index))) continue;
+    heures.push({ h: h, m: m[2] ? Number(m[2]) : 0 });
+  }
   let heureCible = null;
   if (heures.length) {
     // « de 14h à 16h » : la dernière heure est la destination ; une seule heure est la destination.
     heureCible = heures[heures.length - 1];
     // Une heure qui est celle du rendez-vous et une seule heure citée avec un jour de destination : c'est l'heure gardée (« le dentiste de 10h à mardi »).
     if (heures.length === 1 && dateCible && heureCible.h === Number(ev.startH) && heureCible.m === Number(ev.startM || 0) && /\bde \d{1,2}\s?h/.test(sans)) heureCible = null;
+  }
+  // « decale le kine de 1 heure », « avance le dentiste d'une heure », « repousse de 30 minutes » : un decalage de la duree dite (chef, mission 55).
+  if (!dateCible && !heureCible) {
+    const mDec = sans.match(/\b(?:de|d) ?(\d{1,2}|une|un|deux|trois|quatre) ?(h|heures?|min|mn|minutes?)\b(?!\s*(?:a|au)\s+\S)/) || (/\b(?:de|d) ?une demi[- ]?heure\b/.test(sans) ? ['', '30', 'min'] : null) || (/\b(?:de|d) ?un quart d ?heure\b/.test(sans) ? ['', '15', 'min'] : null);
+    if (mDec) {
+      const n = ({ une: 1, un: 1, deux: 2, trois: 3, quatre: 4 })[mDec[1]] || Number(mDec[1]);
+      const minutes = /^h/.test(mDec[2]) ? n * 60 : n;
+      const d0 = Number(ev.startH) * 60 + Number(ev.startM || 0) + minutes * (/\b(avance|avancer|avances|avancez|plus tot)\b/.test(sans) ? -1 : 1);
+      if (d0 < 0 || d0 > 23 * 60 + 45) return null;
+      heureCible = { h: Math.floor(d0 / 60), m: d0 % 60 };
+    }
   }
   if (!dateCible && !heureCible) return null;
   const debut = heureCible ? heureCible.h * 60 + heureCible.m : Number(ev.startH) * 60 + Number(ev.startM || 0);
@@ -20237,10 +20302,20 @@ function tcSansHesitations(texte) {
   let t = String(texte || '');
   if (!t.trim()) return t;
   const avant = t;
+  // « euh », « hum », « bah » : partout (ce ne sont jamais des mots). « bon » : en tête seulement, suivi d'une virgule ou d'une autre hésitation.
   t = t.replace(/(^|[\s,;])(?:euh+|heu+|hum+|hmm+|hm+|bah|beh|hein)(?=$|[\s,;.!?])/gi, '$1');
-  t = t.replace(/(^|[\s,;])(?:attends|attend|attendez|en fait|du coup|tu vois|voila|voilà|enfin bref|bref|je veux dire|comment dire)(?=$|[\s,;.!?])/gi, '$1');
+  t = t.replace(/^\s*bon(?:\s*,|\s+(?:ben|alors|euh|bah|heu))\s*/i, '');
+  // « attends », « en fait », « du coup », « voilà » : seulement en hésitation, en tête de phrase ou isolés (après une virgule, « non »,
+  // « oui », « euh ») ; jamais au milieu d'une phrase qui a un sens (« on attend le plombier », « Paul attend ma réponse ») ; « je veux
+  // dire » jamais devant « à / au » (« je veux dire à Paul que… ») : chef et examinateur, mission 55.
+  const tete = '(^\\s*|[,;]\\s*|\\b(?:non|oui|ok|euh|heu|bah)\\s+)';
+  t = t.replace(new RegExp(tete + '(?:attends|attend|attendez|en fait|du coup|tu vois|voila|voilà|enfin bref|bref|comment dire|alors)(?=$|[\\s,;.!?])', 'gi'), '$1');
+  t = t.replace(new RegExp(tete + 'je veux dire(?=$|[\\s,;.!?])(?!\\s+(?:à|a|au|aux)(?:\\s|$))', 'gi'), '$1');
+  // Deux hésitations à la suite (« euh attends en fait ») : on repasse une fois.
+  t = t.replace(new RegExp(tete + '(?:attends|attend|attendez|en fait|du coup|voila|voilà|bref|alors)(?=$|[\\s,;.!?])', 'gi'), '$1');
   // « non attends annule », « non en fait supprime » : le « non » d'hésitation devant le verbe tombe, la demande est le verbe.
-  t = t.replace(/^[\s,;]*non[\s,]+(?=(?:annule|annuler|supprime|supprimer|efface|effacer|laisse tomber|laisse|stop|arrete|arrête|oublie)\b)/i, '');
+  // (« non annule pas », « non annule rien » gardent leur « non » : c'est un refus d'annuler.)
+  t = t.replace(/^[\s,;]*non[\s,]+(?=(?:annule|annuler|supprime|supprimer|efface|effacer|laisse tomber|laisse|stop|arrete|arrête|oublie)\b(?!\s+(?:pas|rien|surtout pas)\b))/i, '');
   if (t === avant) return avant;
   // Le reste ne bouge pas : l'espace avant « ? » et « ! » reste (les détecteurs lisent « mardi ? »).
   t = t.replace(/\s*,(\s*,)+/g, ',').replace(/^[\s,;]+/, '').replace(/[\s,;]+$/, '').replace(/\s{2,}/g, ' ').replace(/\s+([,.])/g, '$1');
@@ -20284,7 +20359,9 @@ function tcDetecterChangementJourCarte(text) {
   if (!norm || norm.split(' ').length > 7) return null;
   if (!/^(on se fait ca|on fait ca|on se le fait|on se la fait|on se dit|on dit|on cale ca|on se cale|on part sur|on se refait ca|plutot|ou plutot|disons|mettons|finalement|non plutot|non)\b/.test(norm)) return null;
   if (/\b(annule|annuler|supprime|decale|rdv|rendez vous|heure|h)\b|\d/.test(norm)) return null;
-  const jours = tcJoursCites(String(text || '').replace(/[?!.,;]+/g, ' '), new Date(), false);
+  // « non pas mardi », « non, pas lundi, mardi » : un jour précédé de « pas » est refusé, pas demandé.
+  const texte = String(text || '').replace(/[?!.,;]+/g, ' ').replace(/\bpas\s+(?:le\s+)?(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apr[èe]s[- ]demain|ce soir|ce matin|cet apr[èe]s[- ]midi|aujourd.?hui)\b/gi, ' ');
+  const jours = tcJoursCites(texte, new Date(), false);
   return jours.length === 1 ? jours[0] : null;
 }
 
@@ -20323,13 +20400,25 @@ function tcDetecterPlusieursCites(text) {
   if (!/(rendez-?vous|\brdv\b|creneau|\bmoment\b|se voir|nous voir|\bvoir\b|se retrouver|reunion|dejeuner|diner|\bcafe\b|\bverre\b|visio|\bpoint\b)/.test(t)) return null;
   if (/(annul|supprim|deplac|decal|retard|previen|avertis|\bdis a\b|envoie|malade|empech)/.test(t)) return null;
   if (!/\b(et|avec|,)\b|,/.test(t)) return null;
+  // Une question ou une consultation (« le déjeuner avec Paul et Sophie il est à quelle heure ? », « montre-moi le rdv avec Marc et
+  // Sophie », « Marc et Sophie viennent au déjeuner ? ») n'est pas une demande de rendez-vous ; une création datée (« note café avec
+  // Marc et Sophie jeudi 15h ») suit le chemin de la carte (examen, mission 55).
+  if (/\?/.test(String(text || '')) || /\b(quelle heure|quand|montre|affiche|liste|est-ce|c est quand|viennent|vient|sont la|il est a)\b/.test(t)) return null;
+  if (typeof detecterConsultationAgenda === 'function' && detecterConsultationAgenda(String(text || ''))) return null;
+  if (typeof tcHeureDansTexte === 'function' && tcHeureDansTexte(String(text || '').toLowerCase())) return null;
+  if (/\b(note|ajoute|mets|cree|planifie|bloque|cale|programme|reserve)[sz]?\b/.test(t)) return null;
+  // Seulement une demande de créneau commun : trouver, proposer, chercher, un moment, quand, dispo (chef).
+  if (!/\b(trouve|trouver|trouvons|propose|proposer|cherche|chercher|cale|caler|organise|organiser|moment|creneau|creneaux|quand|dispo|disponibilit)/.test(t)) return null;
   const mots = tcClasseNormaliser(text).split(' ').filter(function (w) { return w.length >= 3 && TC_CLASSE_MOTS_DE_MOMENT.indexOf(w) < 0 && !/^(trouve|propose|cherche|moment|voir|pour|avec|semaine|prochaine|creneau|rendez|vous|rdv)$/.test(w); });
   const trouves = [];
   try {
     mots.forEach(function (w) { (typeof tcContactsParMots === 'function' ? tcContactsParMots([w]) : []).forEach(function (c) { if (trouves.indexOf(c) < 0) trouves.push(c); }); });
   } catch (e) { return null; }
   if (trouves.length < 2) return null;
-  return { contacts: trouves, sansCompte: trouves.filter(function (c) { return !c.referenceCompte; }) };
+  const sansCompte = trouves.filter(function (c) { return !c.referenceCompte; });
+  // Tous avec TimeCool : c'est tcDetecterRdvGroupe qui s'en occupe (jamais deux chemins).
+  if (!sansCompte.length) return null;
+  return { contacts: trouves, sansCompte: sansCompte };
 }
 
 /** Le questionnaire « rendez-vous à plusieurs » (mission 47) démarre ; ceux qui n'ont pas TimeCool sont nommés d'abord. */
@@ -20351,10 +20440,16 @@ async function tcPrevenirContactLibre(text, intent) {
   const prenom = String(contact.name || '').split(' ')[0];
   const moi = (typeof userAccount !== 'undefined' && userAccount) ? String(userAccount.firstname || userAccount.firstName || userAccount.prenom || '').trim() : '';
   const de = moi ? ('de la part ' + (/^[aeiouyhàâäéèêëîïôöùûü]/i.test(moi) ? 'd’' : 'de ') + moi) : 'de la part de ton contact';
+  // Le texte dicté est recopié tel quel (accents compris) ; « à lui / à elle » devient « à toi » puisque c'est lui qui lit.
+  const recopie = function (s) {
+    // (pas de « \b » devant « à » : l'accent n'est pas une lettre pour lui.)
+    return String(s || '').trim().replace(/[.!?\s]*$/, '').replace(/(^|\s)([àa]) (lui|elle)(?=\s|$|[,.!?])/gi, '$1$2 toi').replace(/(^|\s)(pour|avec|de|chez) (lui|elle)(?=\s|$|[,.!?])/gi, '$1$2 toi') + '.';
+  };
   let corps;
-  if (intent.type === 'retard') corps = intent.minutes ? 'j’arrive dans ' + intent.minutes + ' minutes.' : 'j’ai un peu de retard.';
+  if (intent.texte) corps = recopie(intent.texte);
+  else if (intent.type === 'retard') corps = intent.minutes ? 'j’aurai ' + intent.minutes + ' minutes de retard.' : 'j’aurai un peu de retard.';
   else if (intent.type === 'annule') corps = 'je dois annuler.';
-  else corps = String(intent.texte || '').trim().replace(/[.!?\s]*$/, '') + '.';
+  else corps = recopie(intent.texte);
   const texte = 'Bonjour ' + prenom + ', ' + de + ' : ' + corps;
   if (typeof tcConfirm === 'function' && !(await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »'))) {
     charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne préviens personne.', nature: 'reponse' });
