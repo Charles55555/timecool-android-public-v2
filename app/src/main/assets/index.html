@@ -12104,12 +12104,12 @@ function tcCreationLocale(texte, now, forcer) {
   if (typeof detecterConsultationAgenda === 'function' && detecterConsultationAgenda(brut)) return '';
   if (typeof detecterDemandeCreneau === 'function' && detecterDemandeCreneau(brut)) return '';
   // Une plage ou une duree (« de 14h à 16h », « 14h-16h », « jusqu'à 17h », « pendant 2 heures ») : le modele la lit, pas ici.
-  // Une plage « de 18h a 19h », « 18h-19h » : le debut et la fin viennent de la demande (mission 54 : le conflit est verifie par la page,
-  // plus par le modele). « 11 heures 30 », « a 10 heures » sont une heure ; une duree (« pendant 2 heures », « de 2 heures », « jusqu a 17h »
-  // seul) part au modele.
-  const plage = t.match(/\bde (\d{1,2}) ?h ?(\d{2})? (?:a|au|jusqu a|jusqu au) (\d{1,2}) ?h ?(\d{2})?\b/) || t.match(/\b(\d{1,2}) ?h ?(\d{2})? ?- ?(\d{1,2}) ?h ?(\d{2})?\b/);
+  // Une plage « de 18h a 19h », « de 9 a 11h », « de 9 a 11 », « 9-11h » : le debut et la fin viennent de la demande (mission 54 : le conflit
+  // est verifie par la page, plus par le modele ; dans « de A a B », A est une heure si B en est une). « 11 heures 30 », « a 10 heures »
+  // sont une heure ; une duree (« pendant 2 heures », « de 2 heures », « jusqu a 17h » seul) part au modele.
+  const plage = t.match(/\bde (\d{1,2})(?: ?h ?(\d{2})?)? (?:a|au|jusqu a|jusqu au) (\d{1,2})(?: ?h ?(\d{2})?)?\b/) || t.match(/\b(\d{1,2})(?: ?h ?(\d{2})?)? ?- ?(\d{1,2}) ?h ?(\d{2})?\b/);
   if (!plage && /\bjusqu ?(?:a|au) \d{1,2} ?h|\b(?:pendant|durant|duree|dure) |\b(?:pendant|durant|de|environ|dure|duree) \d+ ?heures?\b|\b\d+ ?heures? (?:de|pour) /.test(t)) return '';
-  if (plage && (Number(plage[3]) * 60 + Number(plage[4] || 0) <= Number(plage[1]) * 60 + Number(plage[2] || 0) || Number(plage[3]) > 23)) return '';
+  if (plage && (Number(plage[3]) * 60 + Number(plage[4] || 0) <= Number(plage[1]) * 60 + Number(plage[2] || 0) || Number(plage[3]) > 23 || Number(plage[1]) > 23)) return '';
   // Deux demandes (« dentiste demain à 10h et coach jeudi à 14h ») : plus d un jour ou plus d une heure (hors plage).
   if (!plage && (t.match(/\b\d{1,2} ?h(?:\d{2})?\b|\b\d{1,2}:\d{2}\b/g) || []).length > 1) return '';
   if (tcJoursCites(brut, now).length > 1 || /\b(puis|ensuite)\b/.test(t)) return '';
@@ -13735,10 +13735,10 @@ function tcCreneauxDisponibles(periode, maxi) {
  */
 function detecterDemandeCreneau(text) {
   const t = String(text || '').toLowerCase().trim();
-  // « 2 heures de libre », « deux heures de libre » : une durée voulue, pas une heure (mission 54).
-  const mDuree = tcSansAccents(t).match(/\b(\d{1,2}|une|un|deux|trois|quatre|cinq|six|sept|huit) ?(?:h|heures?) (?:de |d )?(?:libre|libres|dispo|disponible|creneau|creneaux|temps)\b/);
+  // « 2 heures de libre », « deux heures de libre », « 1h30 de libre » : une durée voulue, pas une heure (mission 54).
+  const mDuree = tcSansAccents(t).match(/\b(\d{1,2}|une|un|deux|trois|quatre|cinq|six|sept|huit) ?(?:h|heures?) ?(\d{2})? (?:de |d )?(?:libre|libres|dispo|disponible|creneau|creneaux|temps)\b/);
   const TC_DUREE_LETTRES = { une: 1, un: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8 };
-  const duree = mDuree ? (TC_DUREE_LETTRES[mDuree[1]] || Number(mDuree[1]) || 0) * 60 : 0;
+  const duree = mDuree ? (TC_DUREE_LETTRES[mDuree[1]] || Number(mDuree[1]) || 0) * 60 + Number(mDuree[2] || 0) : 0;
   const sansDuree = mDuree ? tcSansAccents(t).replace(mDuree[0], ' ') : t;
   // Une heure donnée : c'est une création, pas une demande de créneau.
   if (/\b\d{1,2}\s?h(\s?\d{2})?\b/.test(sansDuree) || /\b\d{1,2}:\d{2}\b/.test(sansDuree)) return null;
@@ -19086,7 +19086,8 @@ function tcClasserMessage(text, histoire) {
       if (!indice || /\b(rdv|rendez vous|rendez)\b/.test(norm)) return pasSur('piece_manquante', 'Tu veux l’annuler ou le décaler, et lequel ?', { moment: null, contact: null, metier: null, titre: 'annulation', texte: '', etape: 'suite', composable: false });
     }
   }
-  if (/^(je suis|je serai|je serais|j suis|jsuis) (libre|dispo|disponible)\b/.test(norm) && !/\?/.test(brut) && (!/\b(quand|quel|quelle|a quelle heure)\b/.test(norm) || /\bquand (tu veux|vous voulez|ca t arrange|tu peux)\b/.test(norm)) && mots.length <= 6) {
+  //     « je me libère mardi » = je serai disponible : la même affirmation (chef, mission 54).
+  if ((/^(je suis|je serai|je serais|j suis|jsuis) (libre|dispo|disponible)\b/.test(norm) || /^(je me libere|je vais me liberer|je peux me liberer|je me suis libere|je me libererai)\b/.test(norm)) && !/\?/.test(brut) && (!/\b(quand|quel|quelle|a quelle heure)\b/.test(norm) || /\bquand (tu veux|vous voulez|ca t arrange|tu peux)\b/.test(norm)) && mots.length <= 6) {
     return pasSur('piece_manquante', 'Noté. Tu veux que je propose ce créneau à quelqu’un ?', { moment: tcClasseMomentEcrit(brut) || null, contact: null, metier: null, titre: 'libre', texte: brut.trim(), etape: 'suite', composable: false });
   }
   // 2d. « Annule tout », « efface tout mon agenda » : jamais une suppression en masse, Charly demande le jour (chef, mission 51) ;
@@ -19119,7 +19120,12 @@ function tcClasserMessage(text, histoire) {
   // lieu est un lieu. Hors agenda : un « où » de recherche sans aucun lien avec l'agenda (ni rendez-vous, ni nom connu, ni
   // détecteur, ni verbe de demande) ; dans le fil d'une question, seulement s'il pose lui-même une question (« où aller manger ce
   // soir ? ») : « où tu veux », « à côté de la gare » passent.
-  const horsAgenda = ou && !parleRdv && !indices.detecteur && !imperatif;
+  // « vide le lave-vaisselle demain », « vide ma boîte mail », « libère-toi mardi » : un verbe de libération sans le temps de
+  // l'utilisateur (« libère MON mardi », « vide MA journée » sont des contraintes) ni mot d'agenda : hors agenda (chef, mission 54).
+  const videHorsAgenda = /^(vide|videz|vider|degage|degagez|degager|libere|liberez|liberer)\b/.test(norm)
+    && !(typeof tcLibererPeriode === 'function' && tcLibererPeriode(norm))
+    && !/\b(creneau|creneaux|rendez|rdv|heures?|\d{1,2} ?h|agenda|planning|journee|matinee|apres|aprem|soiree|semaine|temps|place|plage|plages)\b/.test(norm);
+  const horsAgenda = (ou && !parleRdv && !indices.detecteur && !imperatif) || videHorsAgenda;
   const horsAgendaFil = horsAgenda && /\?\s*$/.test(String(brut).trim());
   // 4. Charly venait de poser une question PRÉCISE (le modèle « C'est pour quoi, à 16h ? », un détecteur) : ce message est la
   //    réponse, il suit son chemin (sauf un « où » de recherche hors rendez-vous).
@@ -20196,14 +20202,23 @@ function tcPeriodeContrainte(text) {
  * Il faut dire qu'on ne peut pas, parler de rendez-vous, et nommer une
  * periode. Une heure precise vise UN rendez-vous : ce n'est pas ceci.
  */
+/** « libere mon mardi », « vide ma journee de demain », « degage-moi mon apres-midi » : liberer SON temps (possessif + jour, journee,
+ *  matinee, apres-midi, soiree, agenda, planning, semaine). Jamais « vide le lave-vaisselle », « vide ma boite mail », ni la forme
+ *  reflechie (« je me libere mardi » = je serai disponible, « libere-toi »). Texte sans accents, en minuscules (mission 54). */
+function tcLibererPeriode(t) {
+  if (/\b(?:je|tu|il|elle|on|nous|vous) (?:me|te|se|nous|vous) liber|\bme liberer\b|\bliber\w*[- ](?:toi|vous)\b/.test(t)) return false;
+  return /\b(?:libere|liberez|liberer|vide|videz|vider|degage|degagez|degager)(?:[- ](?:moi|nous))? (?:tout |toute )?(?:ma|mon) (?:journee|matinee|apres[- ]?midi|aprem|soiree|agenda|planning|semaine|week-end|weekend|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/.test(t);
+}
+
 function tcDetecterContrainte(text) {
   const t = tcSansAccents(String(text || '').toLowerCase());
   // Un verbe de suppression : c'est une suppression, pas une contrainte.
   if (/\b(annule|supprime|efface|enleve|retire)/.test(t)) return false;
-  // « Libere mon mardi », « vide ma journee de demain » : liberer une periode, c est la meme contrainte (mission 54).
-  const indispo = /(ne pourrai pas|ne pourrais pas|ne peux pas|n.?arriverai pas|impossible|indisponible|pas disponible|empechement|contrainte|honorer|malade|imprevu|reorganis|\bliber(e|er|ez|e-moi|e moi)\b|\bvide (ma|mon|la|le)\b|\bdegage (ma|mon|la|le)\b)/.test(t);
+  // « Libere mon mardi », « vide ma journee de demain », « degage mon apres-midi » : liberer SON temps, c est la meme contrainte (mission 54).
+  const liberer = typeof tcLibererPeriode === 'function' && tcLibererPeriode(t);
+  const indispo = liberer || /(ne pourrai pas|ne pourrais pas|ne peux pas|n.?arriverai pas|impossible|indisponible|pas disponible|empechement|contrainte|honorer|malade|imprevu|reorganis)/.test(t);
   // « J'ai un empechement demain » se comprend sans le mot rendez-vous.
-  const fort = /(indisponible|pas disponible|empechement|contrainte|malade|imprevu|reorganis|\bliber(e|er|ez|e-moi|e moi)\b|\bvide (ma|mon|la|le)\b|\bdegage (ma|mon|la|le)\b)/.test(t);
+  const fort = liberer || /(indisponible|pas disponible|empechement|contrainte|malade|imprevu|reorganis)/.test(t);
   const objet = fort || /(rdv|rendez-?vous|honorer|agenda|programme|engagements)/.test(t);
   if (!indispo || !objet) return false;
   // Une heure precise vise UN rendez-vous ; « a partir de 15h » est une periode.

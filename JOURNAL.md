@@ -2668,3 +2668,8 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
 - API inchangée. Suite : verif-classement-charly, section 11 (agenda garni : six rendez-vous sur la semaine).
 - Suite verif-charly-campagne10 : les deux plages « réunion mardi de 14h à 16h », « rdv dentiste mardi de 15h à 17h » passaient au modèle ; elles sont
   maintenant des créations locales (début et fin lus), une plage à l envers part toujours au modèle.
+- Second passage (verdict EXAMINATEUR + décisions du chef, mission 54) : « de 9 à 11h », « de 9 à 11 », « 9-11h », « de 9 à 11 h 30 » sont
+  des plages (A est une heure si B en est une), plus jamais une carte 11h-12h ; « libère / vide / dégage » n'est une contrainte qu'avec
+  MON temps (tcLibererPeriode : possessif + jour, journée, matinée, après-midi, soirée, agenda, planning, semaine), jamais à la forme
+  réfléchie ; « vide le lave-vaisselle demain », « vide ma boîte mail », « libère-toi mardi » → hors agenda (réponse courte) ;
+  « je me libère mardi » → « Noté. Tu veux que je propose ce créneau à quelqu'un ? » ; « trouve-moi 1h30 de libre demain » → 90 min.
