@@ -2673,3 +2673,35 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   MON temps (tcLibererPeriode : possessif + jour, journée, matinée, après-midi, soirée, agenda, planning, semaine), jamais à la forme
   réfléchie ; « vide le lave-vaisselle demain », « vide ma boîte mail », « libère-toi mardi » → hors agenda (réponse courte) ;
   « je me libère mardi » → « Noté. Tu veux que je propose ce créneau à quelqu'un ? » ; « trouve-moi 1h30 de libre demain » → 90 min.
+
+## 24/10/2026 : mission 55, dictée vocale et double sens (chef ; 100 phrases nouvelles des TESTEURS, 83 % → objectif 95 % sur 400)
+
+- Hésitations : tcSansHesitations (bloc 55, appelée par tcCorrigerAbreviations) retire « euh », « hum », « bah », « attends », « en fait »,
+  « du coup », « voilà », et le « non » devant « annule » (« euh non attends en fait annule » → « annule » → « Lequel ? » ; pendant une
+  proposition, « annule » / « stop » seuls = non). La bulle garde le texte tapé.
+- Nombres en lettres (tcHeuresEnLettres) : un jour devant un mois (« le cinq novembre », « le premier mai » → 5 novembre, 1er mai), des
+  minutes (« dans dix minutes » → 10), les fautes de dictée (onz, catorze, kinze, dizuit…), les jours 24 à 31. tcCreationLocale accepte 12
+  mots (« j'ai rendez-vous chez le cardiologue le cinq novembre à neuf heures ») et ne garde la garde « même titre → déplacement » que sans le
+  mot rdv / rendez-vous / réunion / séance / consultation : « rdv chez le dentiste à dix-sept heures demain » est un nouveau rendez-vous
+  (suite campagne10 adaptée : « rdv dentiste jeudi 10h » crée ; « mets le dentiste à jeudi 10h » reste un déplacement).
+- Déplacer en langage parlé : tcDeplacementLocal lit « à 11 heures » ; charlySendMessage déclenche aussi sur « mettre », « mets-la ».
+- Prévenir : tcDetecterPrevenance lit le destinataire nommé (« envoie à Gaëlle que… », « dis à Paul que… »), « j'arrive dans 10 minutes »
+  (retard), et « retard 10 min dentiste » (la phrase commence par retard et nomme un rendez-vous) ; tcGererPrevenance : destinataire sans
+  rendez-vous visé → tcPrevenirContactLibre (« Bonjour Gaëlle, de la part d'Inès : j'arrive dans 10 minutes. », confirmation avant envoi) ;
+  rendez-vous nommé → parcours retard direct. « Marc est en retard » reste le retard d'un autre.
+- À plusieurs : tcDetecterPlusieursCites (deux contacts connus cités pour se voir, dont un sans TimeCool) → le questionnaire à plusieurs,
+  après avoir nommé ceux qui n'ont pas TimeCool.
+- Annuler : tcCorrigerCibleSuppression pendant le « oui / non » (« non pas jeudi, vendredi » → la cible devient le Kiné de vendredi, même
+  question ; absent → « Je ne trouve pas de « Kiné » vendredi… c'est celui-là que je retire ? »). « Paul me pose un lapin », « Sophie se
+  désiste » = ce contact annule (« Je retire ton rendez-vous avec Paul ? »).
+- Double sens (bloc 50) : « On se fait ça mardi ? » sur une carte en attente → la carte change de jour (tcCorrigerDateCartePendante) ; sans
+  rien en cours → « Quoi, ça ? Dis-moi ce que je note mardi, et à quelle heure. » ; « Je suis coincé au bureau » → « Tu es retenu : je décale ton
+  prochain rendez-vous, ou je préviens quelqu'un ? » ; « Lundi ça va pas le faire » → « Je décale quoi, lundi ? Tu as « Dentiste » (10h). Je le
+  décale, ou je l'annule ? » ; « Le kiné a changé d'heure » → « À quelle heure, maintenant, pour « Kiné » (…) ? » puis « 17h » déplace le Kiné ;
+  « pas libre, occupé » après des créneaux → « Aucun de ces créneaux ne te va : je regarde une autre semaine ? ».
+- Phrases simples : « merci Charly t'es top » = remerciement ; « osef » = social ; la réponse à « ça me tue ces réunions » ne pose plus de
+  question. « Mets Paul de côté » → « Tu veux dire : annuler ton rendez-vous avec Paul, ou autre chose ? » (rien d'armé ; « oui » lance
+  l'annulation habituelle). « rendez-vous » seul → « Un rendez-vous : avec qui, quel jour, à quelle heure ? ». « une heure de libre la semaine
+  prochaine » = les créneaux (60 min) ; « j'ai une heure de libre » reste une affirmation. Les réponses « aucun créneau… un autre jour ? »
+  portent la nature question.
+- API inchangée. Suite : verif-classement-charly section 12 ; verif-charly-campagne10 adaptée (patch-suites-m55).

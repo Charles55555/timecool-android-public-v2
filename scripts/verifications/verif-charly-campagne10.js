@@ -95,7 +95,9 @@ const N = agenda().length;
     .forEach((texte) => verifie('« ' + texte + ' » n est pas une création simple (suit son chemin)', ctx.tcCreationLocale(texte, NOW) === '', ctx.tcCreationLocale(texte, NOW)));
   // Examen : un rendez-vous a venir porte deja le mot → deplacement, pas creation (doublon evite).
   ctx.events = agenda().concat([{ id: 'd', mode: 'user', date: '2026-10-16', startH: 11, startM: 0, endH: 12, endM: 0, title: 'Dentiste' }]);
-  ['mets le dentiste à jeudi 10h', 'mets mon dentiste jeudi à 10h', 'rdv dentiste jeudi 10h'].forEach((texte) => verifie('« ' + texte + ' » avec un « Dentiste » déjà dans l agenda → rien en local', ctx.tcCreationLocale(texte, NOW) === '', ctx.tcCreationLocale(texte, NOW)));
+  ['mets le dentiste à jeudi 10h', 'mets mon dentiste jeudi à 10h'].forEach((texte) => verifie('« ' + texte + ' » avec un « Dentiste » déjà dans l agenda → rien en local', ctx.tcCreationLocale(texte, NOW) === '', ctx.tcCreationLocale(texte, NOW)));
+  // Mission 55 : « rdv dentiste jeudi 10h » dit « rdv » : un nouveau rendez-vous, meme avec un Dentiste un autre jour (le conflit du meme jour reste vu par la page).
+  verifie('« rdv dentiste jeudi 10h » avec un « Dentiste » vendredi → un nouveau rendez-vous jeudi (mission 55)', ctx.tcCreationLocale('rdv dentiste jeudi 10h', NOW).indexOf('2026-10-15 | 10:00-11:00 | Dentiste | rdv') > -1, ctx.tcCreationLocale('rdv dentiste jeudi 10h', NOW));
   verifie('sans « Dentiste » dans l agenda, « rdv dentiste jeudi 10h » est bien créé en local', (ctx.events = agenda(), ctx.tcCreationLocale('rdv dentiste jeudi 10h', NOW).indexOf('2026-10-15 | 10:00-11:00 | Dentiste | rdv') > -1));
   const csm = fonction(page, 'charlySendMessage') || '';
   verifie('charlySendMessage : la création locale passe avant le modèle, puis les mêmes garde-fous (conflit local, formules)', /const _creationLocale = tcCreationLocale\(text, new Date\(\)\);\s+if \(_creationLocale\) \{\s+reply = _creationLocale;\s+\} else if \(charlyIA\.config\.demoMode\) \{/.test(csm) && csm.indexOf('reply = _creationLocale;') < csm.indexOf('reply = tcReponseConflitLocale(reply, text'));
