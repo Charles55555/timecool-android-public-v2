@@ -13172,7 +13172,8 @@ function tcDetecterPrevenance(text) {
   if (/\bcomment\b/.test(t)) return null;
   const verbe = /(previen|prevenir|avertis|avertir|informe|informer|\bdis (a|au|aux)\b|dire (a|au|aux)\b|fais savoir|envoie[sz]? (un |lui |leur )?(message|sms|texto|mail|mot)|ecris (a|au)\b)/.test(t);
   const moi = /\b(je|j')/.test(t);
-  if (/\bretard\b/.test(t) && (verbe || moi)) {
+  // « retard 10 min », « 10 min de retard » (quatre mots au plus, sans verbe ni « je ») : le questionnaire retard demande a qui (mission 50).
+  if (/\bretard\b/.test(t) && (verbe || moi || t.trim().split(/\s+/).length <= 4)) {
     const m = t.match(/(\d{1,3})\s*(min\b|mn\b|minutes?)/);
     let minutes = m ? parseInt(m[1], 10) : null;
     if (!minutes && /quart d'?heure/.test(t)) minutes = 15;
@@ -13810,6 +13811,10 @@ function detecterConsultationAgenda(text) {
   if (/\b(prochain (rdv|rendez-vous)|mon prochain (rdv|rendez-vous))\b/.test(t)) {
     return { type: 'prochain' };
   }
+  // « Où est mon rdv ? », « c'est où ? », « où ça se passe ? » : le lieu du prochain rendez-vous, ou de celui de la période (mission 50).
+  if (/(^|\s)où(\s|$)/.test(t.replace(/[?!.,;:]/g, ' ')) && /(rdv|rendez-vous|rendez vous|c'est où|ça se passe|ca se passe|je vais|on va|aller|mon prochain|le prochain)/.test(t)) {
+    return { type: 'lieu', periode: tcPeriodeAgenda(t) || tcPeriodeJourNomme(t) || null };
+  }
   // « Quand suis-je libre cette semaine ? » demande un créneau, pas la liste.
   if (/\bquand\b/.test(t)) return null;
 
@@ -13843,7 +13848,25 @@ async function tcGererConsultationAgenda(text, intent) {
   const evs = events.filter(e => e.mode === mode);
   let reply;
 
-  if (intent.type === 'prochain') {
+  if (intent.type === 'lieu') {
+    // Le lieu du rendez-vous visé : le premier de la période, sinon le prochain (mission 50).
+    const now = new Date();
+    const nowStr = tcISO(now);
+    const nowMin = now.getHours()*60 + now.getMinutes();
+    let vise;
+    if (intent.periode) {
+      const d = tcISO(intent.periode.debut), f = intent.periode.fin ? tcISO(intent.periode.fin) : d;
+      vise = evs.filter(e => e.date >= d && e.date <= f && (!intent.periode.jours || intent.periode.jours.indexOf(e.date) > -1)).sort(tcComparerEvenements)[0];
+    } else {
+      vise = evs.filter(e => e.date > nowStr || (e.date === nowStr && (e.allDay || (e.startH*60+e.startM) >= nowMin))).sort(tcComparerEvenements)[0];
+    }
+    if (!vise) {
+      reply = intent.periode ? `Tu n'as rien de noté ${intent.periode.label || 'à ce moment-là'}.` : "Tu n'as aucun rendez-vous à venir dans ton agenda.";
+    } else {
+      const lieu = String(vise.lieu || vise.location || '').trim();
+      reply = `${vise.title}, ${tcFormaterDateHumaine(vise.date)} ${tcFormaterHeure(vise)} : ` + (lieu ? lieu + '.' : 'aucun lieu noté.');
+    }
+  } else if (intent.type === 'prochain') {
     const now = new Date();
     const nowStr = tcISO(now);
     const nowMin = now.getHours()*60 + now.getMinutes();
@@ -15131,7 +15154,7 @@ async function charlySendMessage() {
     if (_classe.classe !== 'claire') {
       tcPousserMessageUtilisateur(text);
       await new Promise(r => setTimeout(r, 400));
-      charlyIA.history.push({ role: 'assistant', content: _classe.question, nature: _classe.classe === 'au_revoir' ? 'reponse' : 'question', _classement: _classe.classe });
+      charlyIA.history.push({ role: 'assistant', content: _classe.question, nature: _classe.classe === 'au_revoir' ? 'reponse' : 'question', _classement: _classe.classe, _proposition: _classe.proposition || null, _texte: text });
       renderCharlyChat();
       return;
     }
@@ -18571,12 +18594,16 @@ function showPeriodeConflits(conflicts, msg) {
    (ni créneaux, ni rendez-vous, ni décalage, ni annulation). La contestation (« je ne t'ai pas demandé ça ») : une
    excuse et la question de ce qu'il voulait, jamais la même action relancée.
    Le classement additionne des indices de clarté (détecteur de la page, verbe de demande, mot de question, sujet,
-   mot d'agenda, moment, longueur) et compare à un seuil (TC_CLASSE_SEUIL). Les réponses attendues (questionnaire,
+   mot d'agenda, moment, nom connu de l'agenda, longueur) et compare à un seuil (TC_CLASSE_SEUIL). Le contexte compte :
+   la réponse à une question de Charly passe ; une courte suite après un résultat de Charly (« et à 15h ? », « le golf »)
+   passe ; après une question du classement qui proposait déjà quelque chose (un moment, un contact, un métier), « oui »
+   reçoit la question de ce qui manque et un complément passe avec l'historique. Les réponses attendues (questionnaire,
    oui/non, trajet, « qui est-ce ? ») sont lues avant, dans charlySendMessage ; ici on ne voit que ce qui reste.
    Chaque message poussé ici porte nature: 'question' (lu par le juge des TESTEURS).
    ═══════════════════════════════════════════════════════════════ */
 const TC_CLASSE_SEUIL = 2;
 const TC_CLASSE_NON_COMPRIS = 'Sauf erreur de ma part, je n\'ai pas bien compris : ';
+const TC_CLASSE_QUESTION_GENERALE = TC_CLASSE_NON_COMPRIS + 'qu’est-ce que tu veux que je fasse ?';
 /* Ce qui, à lui seul, dit de quoi on parle (une question sur TimeCool, une fonction) : +2. */
 const TC_CLASSE_SUJETS = ['gratuit', 'prix', 'tarif', 'tarifs', 'abonnement', 'payant', 'cout', 'coute', 'rgpd', 'securite', 'securise',
   'securisees', 'confidentialite', 'confidentiel', 'donnees', 'appli', 'application', 'android', 'iphone', 'ios', 'telecharger',
@@ -18605,9 +18632,10 @@ const TC_CLASSE_REACTIONS = ['oui', 'non', 'ouais', 'nan', 'si', 'et', 'et alors
   'pardon', 'pourquoi', 'lol', 'mdr', 'ptdr', 'haha', 'hihi', 'ah', 'ah bon', 'bon', 'bof', 'euh', 'hum', 'hmm', 'mouais', 'peut etre',
   'je sais pas', 'je ne sais pas', 'j sais pas', 'aucune idee', 'cv', 'ca', 'ca alors', 'tiens', 'ben', 'bah', 'eh', 'oh', 'ah ouais',
   'et toi', 'moi', 'toi', 'encore', 'deja', 'quoi encore', 'c est tout', 'rien', 'non rien', 'ah non', 'ah si', 'mais non', 'mais oui',
-  'quand', 'ou', 'qui', 'lequel', 'laquelle', 'combien', 'test', 'essai', 'bonjour test'];
+  'quand', 'ou', 'qui', 'lequel', 'laquelle', 'combien', 'test', 'essai', 'bonjour test', 'non merci', 'nan merci'];
 const TC_CLASSE_ACQUIESCEMENTS = ['ok', 'okay', 'oki', 'd accord', 'daccord', 'ca marche', 'entendu', 'compris', 'je vois', 'ah ok', 'ah d accord',
-  'tres bien', 'bien', 'ok d accord', 'd accord ok', 'c est bon', 'c est note', 'ok c est bon', 'ok ok', 'parfait ok', 'ok parfait', 'bien recu', 'noté', 'note'];
+  'tres bien', 'bien', 'ok d accord', 'd accord ok', 'c est bon', 'c est note', 'ok c est bon', 'ok ok', 'parfait ok', 'ok parfait', 'bien recu', 'note',
+  'oui c est ca', 'oui voila', 'exactement', 'exact', 'c est ca', 'tout a fait', 'oui oui', 'yes', 'ouais ouais', 'oui merci', 'oui s il te plait', 'oui stp', 'volontiers'];
 const TC_CLASSE_REMERCIEMENTS = ['merci', 'merci beaucoup', 'merci charly', 'merci bien', 'super', 'cool', 'parfait', 'top', 'genial', 'nickel',
   'bravo', 'excellent', 'super merci', 'ok merci', 'merci super', 'trop bien', 'impeccable', 'c est parfait', 'parfait merci', 'top merci',
   'merci top', 'genial merci', 'merci c est parfait', 'merci beaucoup charly', 'super charly', 'bravo charly', 'merci a toi', 'je te remercie'];
@@ -18621,10 +18649,16 @@ const TC_CLASSE_DOUTES = ['tu es sur', 't es sur', 'es tu sur', 'tu es sure', 't
   'tu plaisantes', 'tu rigoles', 'ah oui', 'ah oui vraiment', 'tu crois', 'tu penses', 'vraiment sur'];
 const TC_CLASSE_ABANDONS = ['laisse tomber', 'laisse', 'stop', 'arrete', 'oublie', 'oublie ca', 'c est bon laisse', 'tant pis', 'laisse tomber charly',
   'abandonne', 'on oublie', 'non laisse', 'non laisse tomber', 'oublie ce que j ai dit', 'rien finalement', 'finalement rien', 'finalement non'];
-/* « Je ne t'ai pas demandé ça », « c'est pas ça », « n'importe quoi » : l'utilisateur conteste ma réponse. */
-const TC_CLASSE_CONTESTATION = /(\bje (ne )?(t|vous) ai (pas|rien|jamais) demande\b|\bje (n )?ai (pas|rien|jamais) demande\b|\bc est pas (ca|ce que|du tout)\b|\bce n est pas (ca|ce que)\b|\bpas (du tout )?ca\b|\bn importe quoi\b|\b(tu|t|vous) (n )?(as|a|avez) (pas|rien) compris\b|\btu (te trompes|t es trompe|as tort)\b|\bc est faux\b|\bmauvaise reponse\b|\ba cote\b|\bhors sujet\b|\bpas ce que je (voulais|demandais|disais|veux|demande)\b|\bje (ne )?voulais pas (ca|dire ca)\b|\bqui t a demande\b|\bje (ne )?parle pas de (ca|cela)\b|\bj ai pas dit ca\b|\bje n ai pas dit ca\b|\bje n ai jamais dit ca\b|\bc est pas ce que j ai (dit|demande)\b|\btu reponds a cote\b|\bca n a rien a voir\b|\brien a voir\b|\bje te parle pas de ca\b|\bje ne te parle pas de ca\b)/;
-/* Un verbe de demande qui suit une contestation : « pas ça, annule plutôt le golf » est une nouvelle demande. */
+/* Contestation en un mot ou deux : le message entier (« à côté du bureau » n'en est pas une). */
+const TC_CLASSE_CONTESTATIONS = ['pas ca', 'non pas ca', 'pas du tout', 'non pas du tout', 'c est pas ca', 'non c est pas ca', 'ce n est pas ca', 'pas ca non',
+  'non non pas ca', 'a cote de la plaque', 'rien a voir', 'ca n a rien a voir', 'n importe quoi', 'c est n importe quoi', 'non c est faux', 'c est faux',
+  'mauvaise reponse', 'tu reponds a cote', 'hors sujet', 'c est hors sujet', 'non non', 'non non non', 'mais non pas ca', 'pas ca du tout'];
+/* « Je ne t'ai pas demandé ça », « tu n'as pas compris » : l'utilisateur conteste ma réponse, où que ce soit dans la phrase. */
+const TC_CLASSE_CONTESTATION = /(\bje (ne )?(t|vous) ai (pas|rien|jamais) demande\b|\bje (n )?ai (pas|rien|jamais) demande\b|\bc est pas (ca|ce que|du tout)\b|\bce n est pas (ca|ce que)\b|\bn importe quoi\b|\b(tu|t|vous) (n )?(as|a|avez) (pas|rien) compris\b|\btu (te trompes|t es trompe|as tort)\b|\bmauvaise reponse\b|\ba cote de la plaque\b|\bhors sujet\b|\bpas ce que je (voulais|demandais|disais|veux|demande)\b|\bje (ne )?voulais pas (ca|dire ca)\b|\bqui t a demande\b|\bje (ne )?parle pas de (ca|cela)\b|\bj ai pas dit ca\b|\bje n ai pas dit ca\b|\bje n ai jamais dit ca\b|\bc est pas ce que j ai (dit|demande)\b|\btu reponds a cote\b|\bca n a rien a voir\b|\bje te parle pas de ca\b|\bje ne te parle pas de ca\b|\btu as mal compris\b|\bt as mal compris\b|\btu m as mal compris\b)/;
+/* Un verbe de demande qui suit une contestation : « c'est pas ça, annule plutôt le golf » est une nouvelle demande. */
 const TC_CLASSE_REPRISE_APRES_CONTESTATION = /\b(je veux|je voudrais|j aimerais|plutot|je te demande|je te demandais|je voulais)\b/;
+/* Une courte suite après un résultat de Charly : « et à 15h ? », « plutôt 16h », « avec qui ? », « le golf ». */
+const TC_CLASSE_SUITE_DEBUT = /^(et|plutot|ou|mais|sinon|aussi|avec|sans|apres|avant|puis|ensuite|donc|alors|pour|chez|vers|a|au|le|la|les|l|mon|ma|mes|celui|celle|ceux)\b/;
 
 /** Le texte sans accents, sans apostrophes ni ponctuation, en minuscules, un seul espace entre les mots. */
 function tcClasseNormaliser(texte) {
@@ -18656,9 +18690,17 @@ function tcClassePoseUneQuestion(message) {
   return /\?\s*(\p{Extended_Pictographic}|\s)*$/u.test(texte) || texte.slice(-60).indexOf('?') > -1;
 }
 
+/** Un mot du message nomme-t-il un rendez-vous de l'agenda, ou un contact ? */
+function tcClasseNomConnu(brut) {
+  try {
+    if (typeof tcMotDeLAgenda === 'function' && tcMotDeLAgenda(brut)) return true;
+    return !!tcClasseContactEcrit(brut);
+  } catch (e) { return false; }
+}
+
 /** Les indices de clarté d'un message, et leur somme. */
 function tcClasseIndices(brut, norm, mots) {
-  const indices = { score: 0, detecteur: false, verbe: false, question: false, sujet: false, agenda: false, moment: false, long: false };
+  const indices = { score: 0, detecteur: false, verbe: false, question: false, sujet: false, agenda: false, moment: false, connu: false, long: false };
   const bas = String(brut || '').toLowerCase();
   const essai = function (f) { try { return !!f(); } catch (e) { return false; } };
   // 1. Un détecteur de la page reconnaît la demande (il la prendra ensuite) : +3.
@@ -18685,8 +18727,8 @@ function tcClasseIndices(brut, norm, mots) {
     || /\b(peux|pourrais|veux|voudrais|pourriez|pouvez|voulez)[ -](tu|vous)\b/.test(norm) || /\btu peux\b/.test(norm) || /\bil (me )?faut\b/.test(norm)
     || /\bj (ai|aurai|aimerais|aurais)\b/.test(norm) || /\bon (peut|pourrait|va|doit)\b/.test(norm) || /\bbesoin\b/.test(norm);
   if (indices.verbe) indices.score += 2;
-  // 3. Un mot de question, avec au moins deux mots : +1.
-  indices.question = mots.length >= 2 && (/\b(quand|quel|quelle|quels|quelles|combien|comment|pourquoi|qui|quoi|est ce que|est ce qu|lequel|laquelle)\b/.test(norm) || /\boù\b/.test(bas));
+  // 3. Un mot de question, avec au moins deux mots : +1 (« où » se cherche à part : ù n'est pas une lettre pour \b).
+  indices.question = mots.length >= 2 && (/\b(quand|quel|quelle|quels|quelles|combien|comment|pourquoi|qui|quoi|est ce que|est ce qu|lequel|laquelle)\b/.test(norm) || /(^|\s)où(\s|$)/.test(bas.replace(/[?!.,;:]/g, ' ')));
   if (indices.question) indices.score += 1;
   // 4. Un sujet qui se suffit (une question sur TimeCool, une fonction) : +2.
   indices.sujet = TC_CLASSE_SUJETS.some(function (s) { return tcClasseContient(norm, s); });
@@ -18702,7 +18744,10 @@ function tcClasseIndices(brut, norm, mots) {
     || /\b(matin|midi|apres midi|aprem|soir|week end|weekend|ce soir|cette nuit|demain|hier)\b/.test(norm)
     || /\b\d{1,2}\/\d{1,2}\b/.test(bas) || /\ble \d{1,2}\b/.test(norm);
   if (indices.moment) indices.score += 1;
-  // 7. Une vraie phrase (six mots ou plus, « aujourd'hui » ou « c'est » comptant pour un) : +1.
+  // 7. Un nom connu de l'agenda (un rendez-vous noté, un contact) : +1 (« golf samedi », « anniversaire de Marc »).
+  indices.connu = tcClasseNomConnu(brut);
+  if (indices.connu) indices.score += 1;
+  // 8. Une vraie phrase (six mots ou plus, « aujourd'hui » ou « c'est » comptant pour un) : +1.
   const motsPleins = tcSansAccents(brut).replace(/[’'`´]/g, '').split(/[^a-z0-9]+/).filter(Boolean);
   indices.long = motsPleins.length >= 6;
   if (indices.long) indices.score += 1;
@@ -18739,74 +18784,148 @@ function tcClasseContactEcrit(brut) {
   } catch (e) { return null; }
 }
 
-/** La question de Charly quand il n'est pas sûr : une seule phrase, avec ce que le message dit déjà (un moment, un contact). */
+/**
+ * La question de Charly quand il n'est pas sûr : une seule phrase, avec ce que le message dit déjà (un moment, un contact,
+ * un métier). Rend { question, proposition } ; proposition (ou null) garde ce qui a été proposé, pour la suite.
+ */
 function tcClasseQuestion(brut, norm, mots) {
   const moment = tcClasseMomentEcrit(brut);
   const contact = tcClasseContactEcrit(brut);
   if (moment || contact) {
-    return TC_CLASSE_NON_COMPRIS + 'tu veux noter quelque chose' + (moment ? ' ' + moment : '') + (contact ? ' avec ' + contact.name : '') + ', ou autre chose ?';
+    return {
+      question: TC_CLASSE_NON_COMPRIS + 'tu veux noter quelque chose' + (moment ? ' ' + moment : '') + (contact ? ' avec ' + contact.name : '') + ', ou autre chose ?',
+      proposition: { moment: moment || null, contact: contact ? contact.name : null, metier: null, texte: String(brut).trim() }
+    };
   }
-  if (mots.length <= 3 && typeof TC_PROFESSIONS !== 'undefined') {
-    const metier = TC_PROFESSIONS.find(function (p) { return tcClasseContient(norm, tcClasseNormaliser(p)); });
-    if (metier) return TC_CLASSE_NON_COMPRIS + 'tu veux noter un rendez-vous « ' + String(brut).trim().replace(/[?!.…\s]+$/, '') + ' », ou autre chose ?';
-  }
-  return TC_CLASSE_NON_COMPRIS + 'qu’est-ce que tu veux que je fasse ?';
+  return { question: TC_CLASSE_QUESTION_GENERALE, proposition: null };
 }
 
+/* Les mots qui ne nomment rien (jours, moments, petits mots) : ce qui reste est l'objet du message. */
+const TC_CLASSE_MOTS_DE_MOMENT = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche', 'demain', 'aujourd', 'hui', 'apres', 'aprem', 'matin',
+  'midi', 'soir', 'soiree', 'nuit', 'semaine', 'prochain', 'prochaine', 'week', 'end', 'weekend', 'ce', 'cet', 'cette', 'le', 'la', 'les', 'l', 'un', 'une',
+  'des', 'du', 'de', 'd', 'a', 'au', 'aux', 'et', 'ou', 'pour', 'avec', 'chez', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'h', 'heure', 'heures', 'min', 'mn',
+  'minutes', 'vers', 'en', 'sur', 'dans', 'rdv', 'rendez', 'vous', 'oui', 'non', 'je', 'tu', 'il', 'on', 'moi', 'toi', 'y', 'ca', 'c', 'est', 'hier', 'janvier',
+  'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre', 'stp', 'svp', 'merci'];
+
 /**
- * Le classement d'un message tapé à Charly.
- * @returns {{classe: string, question: ?string, indices: ?Object}} classe 'claire' (le message suit son chemin) ou, pas sûr :
- *   'contestation', 'doute', 'abandon', 'remerciement', 'acquiescement', 'salutation', 'au_revoir', 'reaction', 'court', 'hors_sujet',
- *   avec la phrase à dire (une question, sauf 'au_revoir').
+ * Intention claire mais il manque une pièce (décision du chef, 24/10) : « golf samedi » (à quelle heure ?), « foot 14h » (quel
+ * jour ?), « anniversaire de Marc », « Dermatologue » (quel jour et à quelle heure ?). Charly demande LA pièce, jamais « pas compris ».
+ * Rend { question, proposition } ; null si le message n'a pas d'objet, ou s'il a déjà le jour et l'heure (il passe), ou s'il est long.
  */
-function tcClasserMessage(text, histoire) {
-  const brut = String(text || '');
-  // Dans une autre langue, le classement français n'a pas de sens : le modèle garde la main (sa consigne dit de demander).
-  if (typeof tcLangueCourante === 'function' && tcLangueCourante() !== 'fr') return { classe: 'claire', question: null, indices: null, raison: 'langue' };
-  const norm = tcClasseNormaliser(brut);
-  const mots = norm ? norm.split(' ') : [];
-  const precedent = tcClasseDernierMessageCharly(histoire);
-  const apresMaQuestion = !!(precedent && precedent._classement);
-  // Ponctuation seule (« ?? », « !!! », « … »).
-  if (!mots.length) return { classe: 'reaction', question: TC_CLASSE_NON_COMPRIS + 'qu’est-ce que tu veux que je fasse ?', indices: null };
-  // 1. Contestation : une excuse, et la question de ce qu'il voulait ; jamais la même action relancée.
-  const conteste = norm.match(TC_CLASSE_CONTESTATION);
-  if (conteste) {
-    const reste = norm.slice(conteste.index + conteste[0].length).trim();
-    const verbes = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []);
-    const nouvelleDemande = reste.split(' ').length >= 3 && (TC_CLASSE_REPRISE_APRES_CONTESTATION.test(reste) || reste.split(' ').some(function (m) { return verbes.indexOf(m) > -1; }));
-    if (!nouvelleDemande) return { classe: 'contestation', question: 'Pardon, j’ai répondu à côté : qu’est-ce que tu voulais ?', indices: null };
-  }
-  // 2. Doute sur ma réponse : je ne la répète pas, je demande ce qui cloche.
-  if (TC_CLASSE_DOUTES.indexOf(norm) > -1) return { classe: 'doute', question: 'Je peux me tromper : qu’est-ce qui ne te semble pas juste ?', indices: null };
-  // 3. Abandon, remerciement, acquiescement, salutation, au revoir : une phrase, une question (sauf l'au revoir).
-  if (TC_CLASSE_ABANDONS.indexOf(norm) > -1) return { classe: 'abandon', question: 'D’accord, je laisse tomber : tu veux autre chose ?', indices: null };
-  if (TC_CLASSE_REMERCIEMENTS.indexOf(norm) > -1) return { classe: 'remerciement', question: 'Avec plaisir, tu veux autre chose ?', indices: null };
-  if (TC_CLASSE_SALUTATIONS.indexOf(norm) > -1) {
-    const h = new Date().getHours();
-    return { classe: 'salutation', question: (h < 18 ? 'Bonjour' : 'Bonsoir') + ' ! Qu’est-ce que je peux faire pour toi ?', indices: null };
-  }
-  if (TC_CLASSE_AU_REVOIR.indexOf(norm) > -1) return { classe: 'au_revoir', question: 'À bientôt ! Je reste là si tu as besoin de moi.', indices: null };
-  // 4. Charly venait de poser une question (le modèle « C'est pour quoi, à 16h ? », un détecteur) : ce message est la réponse,
-  //    il suit son chemin. Après MA propre question (« qu'est-ce que tu veux que je fasse ? »), le message se classe comme un autre :
-  //    une simple réaction (« ok », « oui », « cv ») reçoit la question avec deux exemples, une demande claire passe.
-  const reaction = TC_CLASSE_REACTIONS.indexOf(norm) > -1 || TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1 || (mots.length === 1 && mots[0].length <= 3 && !/\d/.test(mots[0]));
-  if (precedent && tcClassePoseUneQuestion(precedent) && !apresMaQuestion) return { classe: 'claire', question: null, indices: null, raison: 'reponse' };
-  // 5. Un acquiescement, une réaction ou un mot seul, sans question en attente (« ok », « oui », « ?? », « et ? », « hein »).
-  if (apresMaQuestion && reaction) return { classe: 'reaction', question: tcClasseQuestionExemple(), indices: null };
-  if (TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1) return { classe: 'acquiescement', question: 'D’accord, tu veux autre chose ?', indices: null };
-  if (reaction) return { classe: 'reaction', question: TC_CLASSE_NON_COMPRIS + 'qu’est-ce que tu veux que je fasse ?', indices: null };
-  // 6. Les indices de clarté, et le seuil. Après ma question, la question générale ne se répète pas : les deux exemples.
-  const indices = tcClasseIndices(brut, norm, mots);
-  if (indices.score >= TC_CLASSE_SEUIL) return { classe: 'claire', question: null, indices: indices };
-  const question = tcClasseQuestion(brut, norm, mots);
-  const generale = question === TC_CLASSE_NON_COMPRIS + 'qu’est-ce que tu veux que je fasse ?';
-  return { classe: mots.length <= 3 ? 'court' : 'hors_sujet', question: (apresMaQuestion && generale) ? tcClasseQuestionExemple() : question, indices: indices };
+function tcClassePieceManquante(brut, norm, mots) {
+  if (mots.length > 5) return null;
+  const bas = String(brut || '').toLowerCase();
+  const heure = tcHeureDansTexte(bas);
+  const moment = tcClasseMomentEcrit(brut);
+  const jour = moment.replace(/\s*à \d{1,2}h\d{0,2}\s*$/, '').trim();
+  const objetMots = mots.filter(function (m) { return TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0 && !/^\d/.test(m); });
+  if (!objetMots.length) return null;
+  // L'objet, tel qu'il est écrit : du premier au dernier mot qui nomme quelque chose (« anniversaire de Marc »).
+  const bruts = String(brut).trim().replace(/[?!.…]+$/, '').split(/\s+/);
+  const idx = bruts.map(function (w, i) { return objetMots.indexOf(tcClasseNormaliser(w)) > -1 ? i : -1; }).filter(function (i) { return i > -1; });
+  const objet = bruts.slice(idx[0], idx[idx.length - 1] + 1).join(' ');
+  const contact = tcClasseContactEcrit(brut);
+  const pour = (contact && objetMots.every(function (m) { return tcSansAccents(contact.name).indexOf(m) > -1; })) ? 'avec ' + contact.name : 'pour « ' + objet + ' »';
+  const proposition = { moment: moment || null, contact: contact ? contact.name : null, metier: null, titre: objet, texte: String(brut).trim(), etape: 'suite' };
+  if (jour && heure) return { question: null, proposition: proposition };
+  if (jour) return { question: 'À quelle heure, ' + pour + ' ' + jour + ' ?', proposition: proposition };
+  if (heure) return { question: 'Quel jour, ' + pour + ' à ' + heure.h + 'h' + (heure.m ? String(heure.m).padStart(2, '0') : '') + ' ?', proposition: proposition };
+  // Sans aucun moment : seulement si l'objet est reconnu (un métier, un mot d'agenda, un rendez-vous ou un contact connu).
+  const metiers = (typeof TC_PROFESSIONS !== 'undefined' ? TC_PROFESSIONS : []).map(function (p) { return tcClasseNormaliser(p); });
+  const reconnu = TC_CLASSE_AGENDA.concat(metiers).some(function (s) { return tcClasseContient(norm, s); }) || tcClasseNomConnu(brut);
+  if (!reconnu) return null;
+  return { question: 'Quel jour et à quelle heure, ' + pour + ' ?', proposition: proposition };
+}
+
+/** Après « oui » à ma proposition : la question de ce qui manque, avec ce qui a été dit (le moment, le contact, ou le métier). */
+function tcClasseQuestionSuite(proposition) {
+  if (proposition.metier) return 'D’accord : quel jour et à quelle heure, pour « ' + proposition.metier + ' » ?';
+  return 'D’accord : qu’est-ce que je note' + (proposition.moment ? ' ' + proposition.moment : '') + (proposition.contact ? ' avec ' + proposition.contact : '') + ' ?';
 }
 
 /** Après ma propre question restée sans demande claire : la même question, avec deux exemples. */
 function tcClasseQuestionExemple() {
   return 'Qu’est-ce que tu veux que je fasse, par exemple « mes rendez-vous de demain » ou « dentiste mardi 15h » ?';
+}
+
+/**
+ * Le classement d'un message tapé à Charly.
+ * @returns {{classe: string, question: ?string, proposition: ?Object, indices: ?Object, raison: ?string}} classe 'claire' (le message
+ *   suit son chemin ; raison 'reponse', 'complement', 'suite' ou 'langue' quand c'est le contexte qui le laisse passer) ou, pas sûr :
+ *   'contestation', 'doute', 'abandon', 'remerciement', 'acquiescement', 'salutation', 'au_revoir', 'reaction', 'court', 'hors_sujet',
+ *   'suite_proposition', avec la phrase à dire (une question, sauf 'au_revoir') et la proposition qu'elle garde pour la suite.
+ */
+function tcClasserMessage(text, histoire) {
+  const brut = String(text || '');
+  const claire = function (raison) { return { classe: 'claire', question: null, proposition: null, indices: null, raison: raison }; };
+  const pasSur = function (classe, question, proposition, indices) { return { classe: classe, question: question, proposition: proposition || null, indices: indices || null, raison: null }; };
+  // Dans une autre langue, le classement français n'a pas de sens : le modèle garde la main (sa consigne dit de demander).
+  if (typeof tcLangueCourante === 'function' && tcLangueCourante() !== 'fr') return claire('langue');
+  const norm = tcClasseNormaliser(brut);
+  const mots = norm ? norm.split(' ') : [];
+  const precedent = tcClasseDernierMessageCharly(histoire);
+  const apresMaQuestion = !!(precedent && precedent._classement);
+  const proposition = (apresMaQuestion && precedent._proposition) ? precedent._proposition : null;
+  // Ponctuation seule (« ?? », « !!! », « … »).
+  if (!mots.length) return pasSur('reaction', apresMaQuestion ? tcClasseQuestionExemple() : TC_CLASSE_QUESTION_GENERALE);
+  // 1. Contestation : une excuse, et la question de ce qu'il voulait ; jamais la même action relancée.
+  const conteste = TC_CLASSE_CONTESTATIONS.indexOf(norm) > -1 ? { index: 0, 0: norm } : norm.match(TC_CLASSE_CONTESTATION);
+  if (conteste) {
+    const reste = norm.slice(conteste.index + conteste[0].length).trim();
+    const verbes = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []);
+    const nouvelleDemande = reste.split(' ').length >= 3 && (TC_CLASSE_REPRISE_APRES_CONTESTATION.test(reste) || reste.split(' ').some(function (m) { return verbes.indexOf(m) > -1; }));
+    if (!nouvelleDemande) return pasSur('contestation', 'Pardon, j’ai répondu à côté : qu’est-ce que tu voulais ?');
+  }
+  // 2. Doute sur ma réponse : je ne la répète pas, je demande ce qui cloche.
+  if (TC_CLASSE_DOUTES.indexOf(norm) > -1) return pasSur('doute', 'Je peux me tromper : qu’est-ce qui ne te semble pas juste ?');
+  // 3. Abandon, remerciement, salutation, au revoir : une phrase, une question (sauf l'au revoir).
+  if (TC_CLASSE_ABANDONS.indexOf(norm) > -1) return pasSur('abandon', 'D’accord, je laisse tomber : tu veux autre chose ?');
+  if (TC_CLASSE_REMERCIEMENTS.indexOf(norm) > -1) return pasSur('remerciement', 'Avec plaisir, tu veux autre chose ?');
+  if (TC_CLASSE_SALUTATIONS.indexOf(norm) > -1) {
+    const h = new Date().getHours();
+    return pasSur('salutation', (h < 18 ? 'Bonjour' : 'Bonsoir') + ' ! Qu’est-ce que je peux faire pour toi ?');
+  }
+  if (TC_CLASSE_AU_REVOIR.indexOf(norm) > -1) return pasSur('au_revoir', 'À bientôt ! Je reste là si tu as besoin de moi.');
+  const reaction = TC_CLASSE_REACTIONS.indexOf(norm) > -1 || TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1 || (mots.length === 1 && mots[0].length <= 3 && !/\d/.test(mots[0]));
+  const ouiNon = (typeof tcReponseOuiNon === 'function') ? tcReponseOuiNon(brut) : null;
+  const accord = ouiNon === true || TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1;
+  // 4. Charly venait de poser une question (le modèle « C'est pour quoi, à 16h ? », un détecteur) : ce message est la réponse,
+  //    il suit son chemin.
+  if (precedent && tcClassePoseUneQuestion(precedent) && !apresMaQuestion) return claire('reponse');
+  // 5. Après MA question qui proposait déjà quelque chose (« tu veux noter quelque chose mercredi à 15h ? », « un rendez-vous
+  //    « Dermatologue » ? ») : « oui » reçoit la question de ce qui manque, avec ce qui a été dit ; un complément (« dentiste »,
+  //    « oui mardi 15h ») passe, le modèle a l'historique ; « non » ou une réaction : la question avec deux exemples.
+  if (proposition) {
+    if (proposition.etape !== 'suite' && accord) {
+      return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
+    }
+    if (!reaction) return claire('complement');
+    return pasSur('reaction', tcClasseQuestionExemple());
+  }
+  // 6. Un acquiescement, une réaction ou un mot seul (« ok », « oui », « ?? », « et ? », « hein ») ; après ma question : les exemples.
+  if (apresMaQuestion && reaction) return pasSur('reaction', tcClasseQuestionExemple());
+  if (TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1) return pasSur('acquiescement', 'D’accord, tu veux autre chose ?');
+  if (reaction) return pasSur('reaction', TC_CLASSE_QUESTION_GENERALE);
+  // 7. Une courte suite après un résultat de Charly (« Demain, tu as Dentiste à 15h. ») : « et à 15h ? », « plutôt 16h »,
+  //    « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » : le modèle a l'historique, elle passe.
+  if (precedent && !apresMaQuestion && mots.length <= 6) {
+    const suite = /\?\s*$/.test(brut.trim()) || TC_CLASSE_SUITE_DEBUT.test(norm) || tcClasseNomConnu(brut)
+      || /\b(quand|quel|quelle|quels|quelles|combien|comment|pourquoi|qui|quoi|lequel|laquelle)\b/.test(norm) || /(^|\s)où(\s|$)/.test(brut.toLowerCase().replace(/[?!.,;:]/g, ' '));
+    if (suite) return claire('suite');
+  }
+  // 8. Les indices de clarté. Un détecteur ou un verbe de demande : le message passe.
+  const indices = tcClasseIndices(brut, norm, mots);
+  if (indices.detecteur || indices.verbe) return { classe: 'claire', question: null, proposition: null, indices: indices, raison: null };
+  // 9. Intention claire mais une pièce manque (« golf samedi », « foot 14h », « anniversaire de Marc », « Dermatologue ») :
+  //    Charly demande LA pièce ; avec l'objet, le jour et l'heure (« dentiste mardi 15h »), le message passe.
+  const piece = tcClassePieceManquante(brut, norm, mots);
+  if (piece && !piece.question) return { classe: 'claire', question: null, proposition: null, indices: indices, raison: 'objet_moment' };
+  if (piece) return pasSur('piece_manquante', piece.question, piece.proposition, indices);
+  // 10. Le seuil. Après ma question, la question générale ne se répète pas : les deux exemples.
+  if (indices.score >= TC_CLASSE_SEUIL) return { classe: 'claire', question: null, proposition: null, indices: indices, raison: null };
+  const q = tcClasseQuestion(brut, norm, mots);
+  const generale = q.question === TC_CLASSE_QUESTION_GENERALE;
+  return pasSur(mots.length <= 3 ? 'court' : 'hors_sujet', (apresMaQuestion && generale) ? tcClasseQuestionExemple() : q.question, q.proposition, indices);
 }
 
 /** La nature d'une réponse du modèle, pour le juge des TESTEURS : 'action' (un bloc [AGENDA]), 'question' (pas compris), 'reponse'. */

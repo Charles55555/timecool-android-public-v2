@@ -2426,3 +2426,29 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   place du classement dans charlySendMessage), enregistrée dans verifier.sh. Rejouée Chrome sur la page entière en mode
   démo : « Cv ? », « lundi », consultation, créneaux puis contestation, « merci », « tu es sûr ? », « Marc », « ok » après
   la question, hors sujet, annulation puis « non » (réponse attendue, lue avant le classement).
+
+## 24/10/2026 : mission 50, deuxième passage : trois niveaux (décision du chef) et le fil de la conversation (examinateur)
+
+- Trois niveaux au lieu de deux (chef, 24/10) : (1) intention claire et complète : le message suit son chemin ; (2) intention
+  claire mais une pièce manque : Charly demande LA pièce, précisément, jamais « pas compris » (tcClassePieceManquante : « golf
+  samedi » → « À quelle heure, pour « golf » samedi ? », « foot 14h » → « Quel jour, pour « foot » à 14h ? », « anniversaire de
+  Marc », « Dermatologue », « dentiste demain » → « Quel jour et à quelle heure, pour « … » ? », « Marc » → « … avec Marc Dupont ? » ;
+  « dentiste mardi 15h » (objet, jour, heure) passe ; « retard 10 min » part au questionnaire retard, qui demande à qui :
+  tcDetecterPrevenance accepte « retard » sans verbe ni « je » jusqu'à quatre mots) ; (3) vraiment pas sûr : la question calme.
+- Le fil compte : après une question du classement qui proposait déjà quelque chose (« tu veux noter quelque chose mercredi à
+  15h ? », « Quel jour et à quelle heure, pour « Dermatologue » ? »), « oui » reçoit la question de ce qui manque avec ce qui a
+  été dit (« D'accord : qu'est-ce que je note mercredi à 15h ? ») et un complément (« dentiste », « oui mardi 15h ») passe : le
+  modèle a l'historique, le Dermatologue n'est pas oublié ; « non », « cv » : la question avec deux exemples. La bulle du
+  classement garde _proposition et _texte. Une courte suite après un résultat de Charly sans « ? » (« Demain, tu as Dentiste à
+  15h. ») passe : « et à 15h ? », « plutôt 16h », « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » (six mots au
+  plus : un « ? », un début « et / plutôt / avec / le … », un mot de question, ou un nom connu de l'agenda).
+- Une contestation, c'est le message entier (« pas ça », « non non », « rien à voir », « à côté de la plaque ») ou une phrase qui
+  conteste (« je ne t'ai pas demandé », « tu n'as pas compris ») ; plus jamais « à côté » ou « rien à voir » au milieu d'une
+  information (« un restaurant à côté du bureau demain midi » passe).
+- « Où est mon rdv ? », « c'est où ? », « où est mon rdv de lundi ? » : consultation de type lieu (detecterConsultationAgenda,
+  tcGererConsultationAgenda) : « Dentiste, vendredi 16 octobre 15h : 12 rue de la Paix, Paris. », ou « … : aucun lieu noté. »,
+  ou « Tu n'as rien de noté <période>. ». « où » est reconnu comme mot de question ((^|\s)où(\s|$) : ù n'est pas une lettre pour
+  \b). Un nom connu de l'agenda (rendez-vous noté, contact) compte +1 dans le score. « noté » retiré des acquiescements.
+- Suite : verif-classement-charly refaite (40 pièges → question ; 7 informations qui ne sont pas des contestations ; niveau 2 ;
+  32 demandes claires ; le fil : réponse au modèle, « oui » après la proposition, complément, « non »/« cv » ; suite après un
+  résultat ; lieu du rendez-vous exécuté ; langue, seuil, nature).
