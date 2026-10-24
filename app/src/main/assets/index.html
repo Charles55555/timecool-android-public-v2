@@ -15183,6 +15183,7 @@ async function charlySendMessage() {
   {
     const _classe = tcClasserMessage(text, charlyIA.history);
     if (_classe.compose) { text = _classe.compose; _tcTexteTape = { tape: texteTape, corrige: text }; }
+    if (_classe.retardAutre) { await tcPrevenirRetardAutre(text, _classe.retardAutre); return; }
     if (_classe.classe !== 'claire') {
       tcPousserMessageUtilisateur(text);
       await new Promise(r => setTimeout(r, 400));
@@ -15243,12 +15244,6 @@ async function charlySendMessage() {
       await tcGererInfoAnnulation(text, _objetAnnule);
       return;
     }
-  }
-  // === ANNULER SANS CIBLE : « annule », « stp annule », « annule ça », « Hugo a annulé » → « Lequel ? » avec les prochains
-  // rendez-vous, jamais l'aide figée du modèle (mission 51). ===
-  if (tcDetecterSuppressionSansCible(text)) {
-    await tcGererSuppressionSansCible(text);
-    return;
   }
   // === ANNULER SANS CIBLE : « annule », « stp annule », « annule ça », « Hugo a annulé » → « Lequel ? » avec les prochains
   // rendez-vous, jamais l'aide figée du modèle (mission 51). ===
@@ -18803,7 +18798,9 @@ function tcClasseIndices(brut, norm, mots) {
     || essai(function () { return typeof tcDetecterMarcheArriere === 'function' && tcDetecterMarcheArriere(brut); })
     || essai(function () { return typeof tcEstDeplacement === 'function' && tcEstDeplacement(brut); })
     || essai(function () { return typeof tcEstUneReprise === 'function' && tcEstUneReprise(brut); })
-    || essai(function () { return typeof tcCreationLocale === 'function' && tcCreationLocale(brut, new Date()); });
+    || essai(function () { return typeof tcCreationLocale === 'function' && tcCreationLocale(brut, new Date()); })
+    || essai(function () { return typeof tcDetecterInfoAnnulation === 'function' && tcDetecterInfoAnnulation(brut); })
+    || essai(function () { return typeof tcDetecterSuppressionSansCible === 'function' && tcDetecterSuppressionSansCible(brut); });
   if (indices.detecteur) indices.score += 3;
   // 2. Un verbe de demande, ou « je veux / peux-tu / il faut » : +2.
   const verbes = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
@@ -19030,8 +19027,16 @@ function tcClasserMessage(text, histoire) {
     if (proposition.etape !== 'suite' && accord) {
       return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
     }
-    // Un complément : il passe, et charlySendMessage le lit avec ce qui a été dit (« Dermatologue » + « mardi 15h », « annule tout » + « demain »).
-    if (!reaction) return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : Object.assign(claire('complement'), { compose: proposition.texte ? proposition.texte + ' ' + brut.trim() : null });
+    // Un complément : il passe. S'il n'est qu'une pièce (un moment, un objet, un nom : pas de verbe de demande, pas de détecteur,
+    // cinq mots au plus, pas « non / plutôt / en fait »), charlySendMessage le lit avec ce qui a été dit (« Dermatologue » +
+    // « mardi 15h », « annule tout » + « demain ») ; une nouvelle demande (« préviens Sophie », « décale le dentiste ») part seule.
+    if (!reaction) {
+      const piece = proposition.texte && proposition.composable !== false && !indices.detecteur && !indices.verbe && mots.length <= 5 && !/^(non|plutot|en fait|finalement|ah non|mais non|pas)\b/.test(norm);
+      // Après « Marc est en retard » → « je décale…, ou je préviens quelqu'un ? », « préviens Sophie » = prévenir Sophie du retard de
+      // MARC (le sujet du retard reste dans le fil ; chef, mission 51) : charlySendMessage le fait (tcPrevenirRetardAutre).
+      const retardAutre = proposition.titre === 'retard' && /^(stp |svp )?(previens|prevenir|avertis|avertir|informe|informer|dis a|dis le a|dis lui|envoie un (message|sms|texto) a|previens le|previens la|previens les|oui previens)\b/.test(norm);
+      return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : Object.assign(claire('complement'), { compose: piece ? proposition.texte + ' ' + brut.trim() : null, retardAutre: retardAutre ? proposition : null });
+    }
     // « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») : la même
     // question, précise ; « non », « cv » : les deux exemples. La proposition reste gardée : « mardi 15h » ensuite passe avec elle.
     if (accord && precedent.content) return pasSur('suite_proposition', String(precedent.content), proposition);
@@ -19053,7 +19058,7 @@ function tcClasserMessage(text, histoire) {
     let c = null;
     try { const trouves = (candidats.length && typeof tcContactsParMots === 'function') ? tcContactsParMots(candidats) : []; c = trouves.length === 1 ? trouves[0] : null; } catch (e) { c = null; }
     return pasSur('retard_autre', 'D’accord : je décale ' + (c ? 'ton rendez-vous avec ' + c.name : 'un rendez-vous') + ', ou je préviens quelqu’un ?',
-      { moment: null, contact: c ? c.name : null, metier: null, titre: 'retard', texte: String(brut).trim(), etape: 'suite' }, indices);
+      { moment: null, contact: c ? c.name : null, metier: null, titre: 'retard', texte: String(brut).trim(), etape: 'suite', composable: false }, indices);
   }
   // 8b. Hors agenda (chef, 24/10) : « où aller manger ce soir ? », « où on va en vacances ? » : un « où » qui ne parle pas d'un
   //     rendez-vous, sans détecteur ni verbe de demande (« trouve-moi un restaurant à côté du bureau » passe) : Charly dit ce dont il s'occupe.
@@ -19237,11 +19242,46 @@ async function tcGererInfoAnnulation(text, objet) {
   const now = new Date();
   const nowStr = tcISO(now);
   const mots = tcMotsDeRdv(objet);
-  const liste = (Array.isArray(events) ? events : []).filter(function (e) {
+  const toutes = (Array.isArray(events) ? events : []).filter(function (e) {
     return e && e.mode === mode && e.title && e.date >= nowStr && mots.length && tcTitreContient(e.title, mots);
   }).sort(tcComparerEvenements);
+  let liste = toutes.slice();
+  // Le jour écrit (« du 26 », « de lundi », « de la semaine prochaine ») filtre la liste.
+  let jours = tcJoursCites(text, now, false);
+  if (!jours.length) {
+    // « du 26 », « le 20 » : le prochain jour du mois qui porte ce numéro (les jours cités de la page attendent un mois ou un nom de jour).
+    const mNum = tcClasseNormaliser(text).match(/\b(?:du|le|ce|au|de)\s+(\d{1,2})\b(?!\s?h)/);
+    if (mNum) {
+      const n = Number(mNum[1]);
+      for (let i = 0; i < 62 && n >= 1 && n <= 31; i++) { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i); if (d.getDate() === n) { jours = [tcISO(d)]; break; } }
+    }
+  }
+  if (jours.length) liste = liste.filter(function (e) { return jours.indexOf(e.date) > -1; });
+  else {
+    const periode = tcPeriodeAgenda(text) || tcPeriodeJourNomme(text);
+    if (periode) { const d = tcISO(periode.debut), f = tcISO(periode.fin || periode.debut); liste = liste.filter(function (e) { return e.date >= d && e.date <= f && (!periode.jours || periode.jours.indexOf(e.date) > -1); }); }
+  }
   if (!liste.length) {
+    // Un jour écrit, mais rien ce jour-là : on le dit, et on propose l'autre sans jamais le retirer en silence (chef, mission 51).
+    const autres = toutes.filter(function (e) { return liste.indexOf(e) < 0; });
+    const quand = jours.length ? tcFormaterDateHumaine(jours[0]) : ((tcPeriodeAgenda(text) || tcPeriodeJourNomme(text) || {}).label || 'ce jour-là');
+    if ((jours.length || quand !== 'ce jour-là') && autres.length) {
+      const ev = autres[0];
+      _tcSuppressionEnAttente = [ev];
+      charlyIA.history.push({ role: 'system_info', isHTML: true, nature: 'question', content: 'Je ne trouve pas de « ' + escapeHTMLSafe(objet.replace(/\s+(du|de|le|la|les|de la|du)\s+.*$/, '')) + ' » ' + escapeHTMLSafe(String(quand).toLowerCase()) + '. Tu as <b>' + escapeHTMLSafe(ev.title) + '</b> ' + escapeHTMLSafe(tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev)) + ' : c’est celui-là que je retire ?<br><br>Réponds « oui » ou « non ».' });
+      renderCharlyChat();
+      return;
+    }
     charlyIA.history.push({ role: 'assistant', content: 'D’accord. Je ne trouve pas « ' + objet + ' » dans ton agenda à venir : rien à retirer.', nature: 'reponse' });
+    renderCharlyChat();
+    return;
+  }
+  if (liste.length > 1) {
+    // Plusieurs rendez-vous ont ce mot : jamais deviner, « Lequel ? » (le numéro, l'heure ou le nom désignent le bon, puis oui/non).
+    _tcSuppressionChoix = liste.slice(0, 3);
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Lequel ?\n'
+      + _tcSuppressionChoix.map(function (e, i) { return (i + 1) + '. ' + e.title + ' : ' + tcFormaterDateHumaine(e.date) + ' ' + tcFormaterHeure(e); }).join('\n')
+      + '\nDis-moi son numéro, son heure ou son nom.' });
     renderCharlyChat();
     return;
   }
@@ -19249,6 +19289,33 @@ async function tcGererInfoAnnulation(text, objet) {
   _tcSuppressionEnAttente = [ev];
   charlyIA.history.push({ role: 'system_info', isHTML: true, nature: 'question', content: '⚠️ <b>Je retire « ' + escapeHTMLSafe(ev.title) + ' » de ton agenda ?</b><br><br>'
     + escapeHTMLSafe('• ' + ev.title + ' : ' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev)) + '<br><br>Réponds « oui » ou « non ».' });
+  renderCharlyChat();
+}
+
+/* ─── Après « Marc est en retard » : « préviens Sophie » = prévenir Sophie du retard de Marc (le sujet reste dans le fil ; chef) ─── */
+async function tcPrevenirRetardAutre(text, proposition) {
+  tcPousserMessageUtilisateur(text);
+  // La personne à prévenir : les mots après le verbe, parmi les contacts connus.
+  const norm = tcClasseNormaliser(text);
+  const candidats = norm.split(' ').filter(function (m) { return m.length >= 3 && !/^(stp|svp|previens|prevenir|avertis|avertir|informe|informer|dis|envoie|message|sms|texto|oui|que|retard)$/.test(m) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0; });
+  let contact = null;
+  try { const trouves = (candidats.length && typeof tcContactsParMots === 'function') ? tcContactsParMots(candidats) : []; contact = trouves.length === 1 ? trouves[0] : null; } catch (e) { contact = null; }
+  if (!contact) {
+    charlyIA.history.push({ role: 'assistant', content: 'Qui veux-tu prévenir ? Dis-moi son nom, parmi tes contacts.', nature: 'question', _classement: 'retard_autre', _proposition: proposition, _texte: text });
+    renderCharlyChat();
+    return;
+  }
+  // Le message dit le retard de l'autre, avec les mots de l'utilisateur (« Marc est en retard »).
+  const info = String(proposition.texte || (proposition.contact ? proposition.contact + ' est en retard' : 'il y a du retard')).trim().replace(/[.!]+$/, '');
+  const prenom = String(contact.name || '').split(' ')[0];
+  const texte = 'Bonjour ' + prenom + ', ' + info.charAt(0).toUpperCase() + info.slice(1) + '.';
+  if (typeof tcConfirm === 'function' && !(await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »'))) {
+    charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne préviens personne.', nature: 'reponse' });
+    renderCharlyChat();
+    return;
+  }
+  const chemin = await tcTransmettrePrevenance(contact, texte);
+  if (typeof tcDirePrevenance === 'function') tcDirePrevenance(chemin, contact.name);
   renderCharlyChat();
 }
 

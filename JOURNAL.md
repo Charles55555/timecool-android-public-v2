@@ -2535,3 +2535,15 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   cible : seulement le verbe seul (avec ça / stp / le rendez-vous) ou « <contact connu> a annulé » ; « efface le message »,
   « pourquoi tu as annulé ? » suivent leur chemin. Noël : le compte à rebours seulement sur la question (« c'est quand Noël »,
   « combien de jours avant Noël »), jamais sur « dîner de Noël le 24 à 20h ».
+- (suite, 24/10, examinateur) L'information d'annulation (« la réunion a été annulée », « la séance est annulée ») compte comme un
+  détecteur dans le classement : elle arrive à « Je retire … de ton agenda ? » au lieu d'une pièce manquante ; le jour écrit
+  (« du 26 », « de lundi », « de la semaine prochaine ») filtre les rendez-vous, et s'il en reste plusieurs, « Lequel ? »
+  (numéro, heure ou nom, puis oui/non). La composition d'un complément avec la question précédente ne se fait que pour une
+  pièce (pas de verbe de demande, pas de détecteur, cinq mots au plus, pas « non / plutôt / en fait ») : « préviens Sophie »,
+  « décale le dentiste », « en fait non, laisse tomber, mes rdv de demain » partent seuls ; jamais après « je décale…, ou je
+  préviens quelqu'un ? ». Le bloc « annuler sans cible » doublé par le passage précédent est retiré (le correctif le garantit).
+  Chef : un jour écrit sans rendez-vous ce jour-là (« le golf du 20 est annulé », aucun golf le 20) → « Je ne trouve pas de « golf »
+  mardi 20 octobre. Tu as Partie de golf lundi 19 octobre 14h : c'est celui-là que je retire ? » (oui/non), jamais un autre jour
+  en silence. Après « Marc est en retard » → « je décale…, ou je préviens quelqu'un ? », « préviens Sophie » = prévenir Sophie du
+  retard de MARC (tcPrevenirRetardAutre : « Bonjour Sophie, Marc est en retard. », relu et confirmé avant de partir) ; sans nom,
+  « Qui veux-tu prévenir ? » ; le sujet du retard reste dans le fil.
