@@ -2810,3 +2810,5 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « bien sûr », « vas-y », « envoie(-le) », « 👍 » valent oui ; un oui qui n'est ni net ni « oui mais » repose « J'envoie ? Réponds « oui » ou « non ». » (jamais fermé en
   silence). tcSansFaussesActions : la majuscule du nom réellement exigée (« Ton agenda est bloqué ce jour-là » reste), « c'est annulé / réglé » seulement seul
   (« C'est réglé ! ») ou à la première personne (« je l'ai annulé ») ; « c'est réglé : tu n'as rien jeudi », « c'est annulé de son côté » restent (constats, chef).
+- Quatrième passage (examinateur) : tcSansFaussesActions, « Nom est bloqué » : le « \b » après « é » ne marche pas en JS, remplacé par (?![a-zà-ÿ]) (« Hugo est
+  bloqué. », « Il est bloqué. » à nouveau remplacés) ; tcRepondreEnvoi : le non se lit sur la phrase entière (« pas maintenant », « pas tout de suite » = refus dit).
