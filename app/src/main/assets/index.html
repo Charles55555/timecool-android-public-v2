@@ -13165,6 +13165,8 @@ async function tcPrevenirDepuisChat(type, ev, minutes) {
   const question = type === 'retard'
     ? 'Prévenir ' + contact.name + ' de ton retard pour « ' + ev.title + ' » (' + quand + ') ?\n\n« ' + texte + ' »'
     : 'Envoyer ce message à ' + contact.name + ' et annuler « ' + ev.title + ' » (' + quand + ') ?\n\n« ' + texte + ' »';
+  // Le message est relu dans la conversation, rien ne part sans « oui » ; après l'envoi, l'annulation ou la note de retard (mission 57).
+  if (typeof tcProposerEnvoi === 'function') { await tcProposerEnvoi(contact, texte, false, type !== 'retard' ? { supprimer: ev } : { retardDe: ev }); return; }
   if (!await tcConfirm(question)) return;
   const chemin = await tcTransmettrePrevenance(contact, texte);
   tcDirePrevenance(chemin, contact.name);
@@ -20955,46 +20957,109 @@ async function tcDireAucunCreneau(text, intent) {
 /* ═══════════════════════════════════════════════════════════════
    MISSION 57 (25/10, chef) : demandes reçues et invitations, envois relus, jamais « c'est fait » sans action
 
-   - Tant que Charly ne lit pas la messagerie : toute phrase qui répond à une demande reçue ou à une invitation (« accepte la demande de
-     Hugo », « refuse », « présent », « propose-lui jeudi ») reçoit UNE réponse vraie, avec le chemin vers la messagerie.
+   - Tant que Charly ne lit pas la messagerie : une phrase qui répond à une DEMANDE REÇUE ou à une INVITATION REÇUE explicite (« accepte la
+     demande de Hugo », « refuse », « présent », « bloque Hugo », « propose-lui jeudi ») reçoit UNE réponse vraie, avec le chemin vers la messagerie.
+     Tout le reste garde son chemin : « absent jeudi », « bloque la matinée », « ajoute un point projet jeudi 14h », « envoie une invitation à Hugo… ».
    - Un message pour un contact est toujours relu dans une bulle (« J'envoie ? ») avant de partir : plus de fenêtre qui ne s'affiche pas.
-   - Une phrase du modèle qui prétend avoir bloqué, envoyé ou prévenu sans action réelle est remplacée.
+   - Une affirmation du modèle qui prétend avoir bloqué, envoyé ou prévenu sans action réelle est remplacée ; jamais une question.
    ═══════════════════════════════════════════════════════════════ */
 const TC_MESSAGERIE_REPONDRE = 'Les demandes reçues se répondent dans la messagerie, avec les boutons « Proposer un créneau » et « Refuser » (ou « Présent » / « Absent » pour une invitation). Je t’y emmène ?';
 const TC_MESSAGERIE_LIRE = 'Les demandes reçues et les réponses se lisent dans la messagerie. Je t’y emmène ?';
 const TC_MESSAGERIE_FAUSSE_ACTION = 'Je n’ai rien fait de moi-même : bloquer, envoyer ou répondre à une demande se fait dans la messagerie. Je t’y emmène ?';
+const TC_RECUE_JOURS = '(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres demain|aujourd hui|ce soir|ce matin|cet apres midi|la semaine prochaine|semaine prochaine|mon prochain creneau|\\d{1,2} ?h\\d{0,2}|a \\d{1,2} ?h\\d{0,2})';
 
-/** Une phrase qui parle d'une demande reçue ou d'une invitation : 'repondre' (accepter, refuser, présent, propose-lui…), 'lire' (« Hugo a
- *  répondu ? », « qui veut me voir ? », « c'est qui Lucie Marchand ? »), ou null. Jamais un message à transmettre (« dis à Hugo que… »). */
+/** Un nom de personne écrit avec une majuscule dans le texte tapé (« Hugo », « Lucie Marchand », « M. Dubois »), à la position du mot normalisé donné. */
+function tcRecueNomPropre(brut, motNorm) {
+  if (!motNorm) return false;
+  const re = new RegExp('(^|[\\s,;:])(M\\.|Mme|Mlle|Dr|Me)?\\s*([A-ZÀ-Ý][a-zà-ÿ-]*)');
+  const mots = String(brut || '').split(/[\s,;:]+/).filter(Boolean);
+  return mots.some(function (w) { return tcSansAccents(w).toLowerCase().replace(/[^a-z-]/g, '') === motNorm && /^[A-ZÀ-Ý]/.test(w.replace(/^[«"']/, '')); }) || re.test(' ' + String(brut || '').split(/\s+/).filter(function (w) { return tcSansAccents(w).toLowerCase().replace(/[^a-z-]/g, '') === motNorm; }).join(' '));
+}
+/** Le mot désigne quelqu'un : un contact connu, ou un nom écrit avec une majuscule (« Lucie »), ou un pronom de personne. */
+function tcRecuePersonne(brut, motNorm) {
+  if (!motNorm) return false;
+  if (/^(lui|elle|le|la|les|leur|eux|tout le monde|les deux)$/.test(motNorm)) return true;
+  try { if (typeof tcClasseContactEcrit === 'function' && tcClasseContactEcrit(motNorm)) return true; } catch (e) {}
+  if (/^(rdv|rendez|vous|reunion|creneau|plage|journee|matinee|soiree|semaine|tous|toutes|tout|mes|les|le|la|un|une|ma|mon|demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|matin|midi|soir|apres)$/.test(motNorm)) return false;
+  return tcRecueNomPropre(brut, motNorm.split(' ')[0]);
+}
+
+/**
+ * Une phrase qui répond à une demande reçue ou à une invitation reçue : 'repondre' ; une question sur une demande reçue : 'lire' ; sinon null.
+ * Seulement l'explicite (chef) : « la demande de Hugo », « l'invitation », « accepte / refuse (la demande, Hugo) », « présent / absent » seuls ou
+ * « au point projet », « bloque Hugo », « propose-lui », « dis oui à Hugo », « Hugo a répondu ? ». Jamais le temps (« bloque la matinée »), une
+ * création (« ajoute un point projet jeudi 14h », « envoie une invitation à Hugo pour dîner »), une règle (« refuse tous les rdv le dimanche »),
+ * ma présence (« je suis absent demain »), un message à transmettre (« dis à Hugo que c'est bon »), ni une consultation (« c'est qui mon rdv de 14h ? »).
+ */
 function tcDetecterDemandeRecue(text) {
-  const norm = tcClasseNormaliser(text);
-  if (!norm || norm.split(' ').length > 16) return null;
-  // Un message à transmettre, une question au contact : le chemin « prévenir » (jamais ici).
-  if (/^(stp |svp |charly )?(dis|dites|envoie|envoyer|ecris|previens|demande|demandez|reponds|repond) (a|au|a la) \S+/.test(norm) && !/^(dis|reponds|repond) (oui|non|ok) (a|au)\b/.test(norm) && !/\b(que|qu|si|quand|plutot)\b/.test(norm) === false) {
-    if (!/^(dis|reponds|repond) (oui|non|ok) (a|au)\b/.test(norm)) return null;
+  const brut = String(text || '').trim();
+  const norm = tcClasseNormaliser(brut);
+  if (!norm || norm.split(' ').length > 14) return null;
+  // Un message ou une question à transmettre à quelqu'un : le chemin « prévenir », jamais ici (sauf « dis oui / non à X », traité plus bas).
+  const transmettre = /^(stp |svp |charly )?(dis|dites|envoie|envoyer|ecris|previens|demande|demandez|reponds|repond) (a|au|a la) \S+/.test(norm) && !/^(dis|reponds|repond) (oui|non|ok) (a|au)\b/.test(norm);
+  if (transmettre) return null;
+  // Une création, un rappel, une règle d'agenda : jamais une demande reçue.
+  if (/^(stp |svp )?(ajoute|ajouter|cree|creer|note|noter|mets|mettre|planifie|programme|rappelle moi|rappelle-moi|fais moi penser|envoie une invitation|envoie une invit|cree une invitation|prepare)\b/.test(norm)) return null;
+  if (/\b(tous les|toutes les|chaque|le dimanche|le samedi|le lundi|le mardi|le mercredi|le jeudi|le vendredi|du matin|de l apres midi|du soir)\b/.test(norm) && !/\b(demande|invitation|convocation)\b/.test(norm)) return null;
+  if (/\b(demande|demandes) (de|d) (devis|prix|remboursement|conge|conges|rappel|facture|renseignement|renseignements|contact|info|infos|documents?)\b/.test(norm)) return null;
+  const question = /\?$/.test(brut) || /^(qui|combien|est ce que|est ce qu|il|elle|c est qui|qu est ce que|quoi)\b/.test(norm);
+  // L'objet explicite : la demande (de X), l'invitation (de X), la convocation, sa proposition.
+  const mObjet = norm.match(/\b(la|sa|cette|l|ma|ta|ses|les|des|mes|une) (demandes?|invitations?|convocations?|propositions?)( (recues?|en attente))?( (de|d) ([a-z-]+))?\b/);
+  let objet = false;
+  if (mObjet) {
+    const de = mObjet[7];
+    // « la demande de Hugo » : une personne ; « une invitation pour dîner », « une proposition de créneau » : pas une demande reçue.
+    objet = !de || tcRecuePersonne(brut, de);
+    if (/^(une|des)$/.test(mObjet[1]) && !question && !/\b(recues?|en attente|accepte|refuse|ignore|laisse tomber|reponds|reponse)\b/.test(norm)) objet = false;
+    if (/\b(invitation|invitations) (pour|a) (diner|dejeuner|un cafe|boire|manger|la reunion|mon anniversaire)\b/.test(norm)) objet = false;
   }
-  const question = /\?/.test(String(text || '')) || /^(qui|combien|est ce que|est ce qu|il|elle|c est qui|qu est ce que|quoi)\b/.test(norm);
-  const demande = /\b(la|une|cette|sa|ma|l|les|des|mes|ses|de|d) (demandes?|invitations?|convocations?|propositions?)( recues?| en attente| de \S+| d \S+)?\b/.test(norm) || /\bpoint projet\b/.test(norm);
-  // Lire : « Hugo a répondu ? », « il veut quoi Hugo ? », « qui veut me voir ? », « c'est qui Lucie Marchand ? », « combien j'ai de demandes ? ».
-  if (question && (/\b(a repondu|m a repondu|m a propose|m a demande|m a invite|a accepte|a refuse|veut decaler|veut quoi|est serieux|veut me voir|veulent me voir|m a invite a quoi)\b/.test(norm)
-      || /^c est qui\b/.test(norm) || /^qui (d autre )?(vient|participe|est invite|veut|a demande|m a)\b/.test(norm) || demande)) return 'lire';
-  // Répondre : accepter / refuser / présent / absent / propose-lui / dis oui / bloquer.
-  if (/^(ok |oui |non |d accord |bon |alors |et )?(accepte|accepter|acceptes|j accepte|refuse|refuser|refuses|je refuse|decline|rejette|valide la demande|valide l invitation|ignore|ignorer)( |$)/.test(norm)) return 'repondre';
-  if (/^(dis|reponds|repond|repondre) (oui|non|ok|que oui|que non) (a|au|a la|pour)?\b/.test(norm) || /^(reponds|repond) (oui|non)$/.test(norm)) return 'repondre';
-  if (/^(ok |oui |d accord )?(present|presente|absent|absente)( au| a la| pour le| pour la| jeudi| demain| lundi| mardi| mercredi| vendredi)?\b/.test(norm) && norm.split(' ').length <= 6) return 'repondre';
-  if (/^(je serai|je suis|je serais) (present|presente|absent|absente|la|de la partie)\b/.test(norm) || /^(compte sur moi|je participe|je participerai|je ne participe pas|je ne participerai pas|je viens|je viendrai|je serai la)\b/.test(norm) && /\b(point|reunion|invitation|convocation|projet|jeudi|lundi|mardi|mercredi|vendredi)\b/.test(norm)) return 'repondre';
-  if (/^je (ne )?(pourrai|pourrais|peux) pas venir (au |a la |a l )/.test(norm) || /^je (ne )?(viendrai|viens) pas (au |a la |a l )/.test(norm)) return 'repondre';
-  if (/\b(propose|proposez|proposer|donne|donnez|fixe|fixez|mets|mettez|offre)[ -]?(lui|leur)\b/.test(norm)) return 'repondre';
-  // « Propose deux créneaux à Hugo », « propose autre chose à Hugo », « propose à Hugo jeudi à 11h » (sans objet) : une réponse à sa demande.
-  if (/\bpropose[sz]? (?:un |deux |trois |d autres |un autre |plusieurs |autre )?(?:creneaux?|horaires?|autre chose|autres creneaux|un autre creneau) (?:a|au) [a-z-]+/.test(norm)) return 'repondre';
-  if (/^(?:ok |oui |non |d accord )?propose[sz]? (?:a|au) [a-z-]+ (?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres demain|\d{1,2} ?h|a \d{1,2} ?h|la semaine prochaine|mon prochain)/.test(norm)) return 'repondre';
-  // « bloque Hugo », « bloque-la », « je ne la connais pas, bloque-la » : bloquer se fait dans la messagerie.
-  if (/(^|\s)(refuse et )?bloque[ -]?(le|la|les|lui)(\s|$)/.test(norm) || (/^(refuse et |non |non, )?bloque[ -]?\S+/.test(norm) && !/\b(creneau|heure|h\d|\d{1,2} ?h|journee|matinee|apres midi|plage|temps|moi)\b/.test(norm))) return 'repondre';
-  // « Pas cette semaine pour Hugo », « je n'ai pas le temps pour Hugo » : une réponse (refus) à sa demande.
-  if (/^(pas|non pas|non|plutot pas) (cette semaine|ce mois|ce mois ci|ce soir|demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|maintenant|tout de suite|avant \S+) pour [a-z-]+$/.test(norm) || /^je n ai pas le temps pour [a-z-]+$/.test(norm)) return 'repondre';
+  // Lire : une question sur une demande reçue ou sur la réponse d'une personne.
+  if (question) {
+    const mA = norm.match(/^(?:qu est ce que |qu est ce qu |est ce que |est ce qu )?([a-z-]+) (a repondu|m a repondu|m a propose|m a demande|m a invite|a accepte|a refuse|a dit oui|a dit non|veut decaler|veut quoi|est serieux|veut me voir|m a invite a quoi)\b/);
+    if (mA && (/^(il|elle|ils|elles)$/.test(mA[1]) || tcRecuePersonne(brut, mA[1]))) return 'lire';
+    if (/^(il|elle) (veut|a repondu|a dit|a accepte|a refuse|propose|est serieux)\b/.test(norm)) return 'lire';
+    if (/^qui (veut|veulent|m a|a) (me voir|demande|invite|propose)\b/.test(norm) || /^qui (d autre )?(vient|participe|est invite) (au point|a la convocation|a l invitation)\b/.test(norm)) return 'lire';
+    const mQui = norm.match(/^c est qui ([a-z-]+(?: [a-z-]+)?)$/);
+    if (mQui && tcRecuePersonne(brut, mQui[1].split(' ')[0]) && !/\b(rdv|rendez|prochain|mon|ma)\b/.test(norm)) return 'lire';
+    if (objet || /\b(demandes?|invitations?) (en attente|recues?)\b/.test(norm) || /^combien .*\b(demandes|invitations)\b/.test(norm)) return 'lire';
+    return null;
+  }
+  // Répondre : accepter / refuser / ignorer / décliner, avec la demande, l'invitation, une personne, « tout », « la première », « la visio », ou seul.
+  const mRep = norm.match(/^(?:ok |oui |non |d accord |bon |alors |et )?(accepte|accepter|acceptes|j accepte|refuse|refuser|refuses|je refuse|decline|rejette|ignore|ignorer)(?: (.*))?$/);
+  if (mRep) {
+    const reste = (mRep[2] || '').trim();
+    if (!reste || /^(poliment|tout|toutes|tous|les deux|la premiere|la seconde|la deuxieme|la derniere|la visio|le telephone|en personne|la demande|l invitation|la proposition|et bloque .*|la demande de .*|l invitation de .*|la proposition de .*|ce que propose .*|(le |la |l )?(point|reunion|invitation|convocation)( .*)?)$/.test(reste) || objet) return 'repondre';
+    // « accepte Hugo demain à 11h », « refuse Gaëlle, propose jeudi 10h à Hugo », « accepte Hugo et Gaëlle » : une personne nommée en premier.
+    const premier = reste.split(' ')[0];
+    if (tcRecuePersonne(brut, premier) && !/\b(rdv|rendez vous|rendez|les rdv|mes rdv|creneau de|plage)\b/.test(reste)) return 'repondre';
+    return null;
+  }
+  if (/^(dis|reponds|repond|repondre) (oui|non|ok|que oui|que non)( (a|au|a la|pour) .*)?$/.test(norm)) return 'repondre';
+  // Présent / absent : seul, ou « au point projet », « à la réunion », « à l'invitation » ; jamais « absent jeudi », « je suis absent demain ».
+  if (/^(ok |oui |d accord )?(present|presente|absent|absente)$/.test(norm)) return 'repondre';
+  if (/^(ok |oui |d accord )?(je serai |je suis |je serais )?(present|presente|absent|absente) (au|a la|a l|pour le|pour la) (point|reunion|invitation|convocation|rendez vous de|rdv de)\b/.test(norm)) return 'repondre';
+  if (/^je (ne )?(pourrai|pourrais|peux) pas venir (au|a la|a l) (point|reunion|invitation|convocation)\b/.test(norm) || /^je (ne )?(viendrai|viens) pas (au|a la|a l) (point|reunion|invitation|convocation)\b/.test(norm)) return 'repondre';
+  // « propose-lui jeudi », « propose deux créneaux à Hugo », « propose à Hugo jeudi 11h » (rien d'autre), « donne-lui un créneau ».
+  if (/\bpropose[sz]?[ -](lui|leur)\b/.test(norm)) return 'repondre';
+  if (new RegExp('\\b(donne|donnez|fixe|fixez|mets|mettez|offre)[ -](lui|leur) (un creneau|un rendez vous|un rdv|un horaire|un autre creneau|' + TC_RECUE_JOURS + ')').test(norm)) return 'repondre';
+  if (/\bpropose[sz]? (un |deux |trois |d autres |un autre |plusieurs |autre )?(creneaux?|horaires?|autre chose|autres creneaux) (a|au) ([a-z-]+)/.test(norm)) {
+    const m = norm.match(/\bpropose[sz]? (?:un |deux |trois |d autres |un autre |plusieurs |autre )?(?:creneaux?|horaires?|autre chose|autres creneaux) (?:a|au) ([a-z-]+)/);
+    if (m && tcRecuePersonne(brut, m[1])) return 'repondre';
+  }
+  // « propose à Hugo jeudi 11h », « propose a ugo jeudi a 11h » (une personne, un moment, rien d'autre : la réponse à sa demande ; avec un objet, « pour le déjeuner », non).
+  { const m = norm.match(new RegExp('^(?:ok |oui |non |d accord )?propose[sz]? (?:a|au) ([a-z-]+) ' + TC_RECUE_JOURS + '(?: ' + TC_RECUE_JOURS + ')?$'));
+    if (m && !/^(tous|toutes|tout|moi|nous|chacun)$/.test(m[1])) return 'repondre'; }
+  // Bloquer une personne : « bloque Hugo », « bloque-la », « je ne la connais pas, bloque-la » ; jamais du temps (« bloque la matinée », « bloque vendredi »).
+  if (/(^|\s)bloque(?:[ -](le|la|les|lui))$/.test(norm)) return 'repondre';
+  { const m = norm.match(/^(?:refuse et |non |non, |et )?bloque[ -]?([a-z-]+)(?: ([a-z-]+))?$/);
+    if (m && tcRecuePersonne(brut, m[1]) && !/^(le|la|les|lui)$/.test(m[1])) return 'repondre'; }
   if (/\blaisse tomber (la |sa |cette |l )(demande|invitation|proposition|convocation)\b/.test(norm)) return 'repondre';
-  if (demande && !question && /\b(accepte|refuse|reponds|reponse|ok pour|d accord pour|oui pour|non pour|pas le temps|plus tard|on verra|ignore)\b/.test(norm)) return 'repondre';
-  if (demande && !question) return 'repondre';
+  // « pas cette semaine pour Hugo », « je n'ai pas le temps pour Hugo » : un refus, pour une personne.
+  { const m = norm.match(/^(?:pas|non pas|non|plutot pas) (?:cette semaine|ce mois|ce mois ci|ce soir|demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|maintenant|tout de suite|avant \S+) pour ([a-z-]+)$/) || norm.match(/^je n ai pas le temps pour ([a-z-]+)$/);
+    if (m && tcRecuePersonne(brut, m[1])) return 'repondre'; }
+  // L'objet explicite avec un mot de réponse (« ok pour la demande de Hugo », « réponds à la demande ») ; sans réponse, la question « lire » n'est pas posée : rien.
+  if (objet && /\b(ok pour|d accord pour|oui pour|non pour|reponds|reponse|plus tard|on verra|pas le temps)\b/.test(norm)) return 'repondre';
+  if (objet && /^(la|sa|cette|l) (demande|invitation|convocation|proposition)/.test(norm)) return 'repondre';
   return null;
 }
 
@@ -21033,12 +21098,13 @@ function tcOuvrirMessagerie(text) {
   renderCharlyChat();
 }
 
-/** Un message pour un contact est relu dans la conversation avant de partir : « J'envoie ? ». Rien ne part sans « oui ». */
-async function tcProposerEnvoi(contact, texte, telQuel) {
+/** Un message pour un contact est relu dans la conversation avant de partir : « J'envoie ? ». Rien ne part sans un « oui » net.
+ *  `apres` : ce que la page fait une fois envoyé ({ supprimer: ev } pour une annulation, { retardDe: ev } pour un retard). */
+async function tcProposerEnvoi(contact, texte, telQuel, apres) {
   const contenu = telQuel
     ? 'J’envoie ça tel quel à ' + contact.name + ' ? « ' + texte + ' ». Réponds « oui » ou « non ».'
     : 'Je propose d’envoyer à ' + contact.name + ' : « ' + texte + ' ». J’envoie ? Réponds « oui » ou « non ».';
-  charlyIA.history.push({ role: 'assistant', nature: 'question', content: contenu, _envoiEnAttente: { contact: contact, texte: texte } });
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: contenu, _envoiEnAttente: { contact: contact, texte: texte, apres: apres || null } });
   renderCharlyChat();
 }
 /** L'envoi qui attend un « oui », parmi les derniers messages, ou null. */
@@ -21050,14 +21116,20 @@ function tcEnvoiEnAttente() {
   }
   return null;
 }
-/** La réponse à « J'envoie ? » : oui → le message part et Charly le dit ; non → rien ne part ; autre chose → la question tombe, le message suit son chemin. */
+/**
+ * La réponse à « J'envoie ? » : un oui net → le message part et Charly le dit ; un non net → rien ne part ; « oui mais… », « plutôt dis… » → rien ne
+ * part, Charly demande le texte ; toute autre phrase → la question tombe sans envoyer, et la phrase suit son chemin (jamais perdue).
+ */
 async function tcRepondreEnvoi(text) {
   const m = tcEnvoiEnAttente();
   if (!m) return false;
-  const r = (typeof tcReponseOuiNon === 'function') ? tcReponseOuiNon(text) : null;
-  const refus = r === false || /^(non|annule|laisse|laisse tomber|stop|n envoie pas|n envoie rien|oublie)\b/.test(tcClasseNormaliser(text));
   const e = m._envoiEnAttente;
-  if (r === true) {
+  const norm = tcClasseNormaliser(text);
+  const mots = norm ? norm.split(' ') : [];
+  const ouiNet = mots.length <= 4 && /^(oui|ok|okay|yes|go|d accord|daccord|vas y|envoie|envoie le|envoie la|c est bon|oui envoie|ok envoie|oui vas y|oui c est bon|oui envoie le|parfait envoie|ca marche|oui ca marche|oui parfait|oui ok|ok vas y|envoie ca)$/.test(norm);
+  const nonNet = mots.length <= 3 && /^(non|nan|non merci|annule|annule ca|laisse|laisse tomber|stop|n envoie pas|n envoie rien|envoie pas|envoie rien|oublie|pas maintenant|surtout pas|non non)$/.test(norm);
+  const ouiMais = /^(oui|ok|d accord)[ ,]+(mais|plutot|sauf|change|en changeant|avec)\b/.test(norm) || /^(plutot|change|modifie|corrige|remplace|reecris|dis plutot|ecris plutot)\b/.test(norm);
+  if (ouiNet) {
     e._resolu = true;
     tcPousserMessageUtilisateur(text);
     const chemin = await tcTransmettrePrevenance(e.contact, e.texte);
@@ -21066,28 +21138,45 @@ async function tcRepondreEnvoi(text) {
       : (chemin === 'sms' || chemin === 'email') ? 'Le message est prêt pour ' + e.contact.name + ' : envoie-le.'
       : 'Je n’ai ni numéro ni mail pour ' + e.contact.name + ' : rien n’est parti.';
     charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: dit });
+    if (e.apres && e.apres.supprimer && typeof tcSupprimerRdvs === 'function') tcSupprimerRdvs([e.apres.supprimer]);
+    if (e.apres && e.apres.retardDe) charlyIA.history.push({ role: 'system_info', content: '⏰ ' + e.contact.name + ' est prévenu(e) de ton retard pour « ' + e.apres.retardDe.title + ' ».' });
     renderCharlyChat();
     return true;
   }
-  if (refus) {
+  if (nonNet) {
     e._resolu = true;
     tcPousserMessageUtilisateur(text);
     charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, je n’envoie rien.' });
     renderCharlyChat();
     return true;
   }
-  // Autre chose : la question tombe sans bruit, la nouvelle demande suit son chemin.
+  if (ouiMais) {
+    e._resolu = true;
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'D’accord, je n’envoie pas celui-là. Dis-moi le texte à envoyer à ' + e.contact.name + ' (par exemple « dis à ' + String(e.contact.name).split(' ')[0] + ' que … »).' });
+    renderCharlyChat();
+    return true;
+  }
+  // Autre chose : la question tombe sans bruit, la nouvelle phrase suit son chemin.
   e._resolu = true;
   return false;
 }
 
-/** Une phrase du modèle qui prétend avoir agi (« Je bloque Hugo. C'est fait ! », « C'est envoyé », « J'ai prévenu Paul ») sans bloc ni action : remplacée. */
+/**
+ * Une AFFIRMATION du modèle qui prétend avoir agi (« Je bloque Hugo. C'est fait ! », « C'est envoyé », « J'ai prévenu Paul », « Le message a bien
+ * été envoyé », « Hugo est prévenu ») sans bloc ni action : remplacée par la vérité. Jamais une question (« Tu veux que je bloque… ? »), une
+ * condition (« si c'est réglé », « une fois que c'est fait », « dès que tu valides »), ni « bloque » suivi de temps (une plage, une matinée).
+ */
 function tcSansFaussesActions(reply) {
   const r = String(reply || '');
   if (/\[AGENDA\]/.test(r)) return reply;
-  const re = /(c[’']est (?:fait|envoy[ée]|r[ée]gl[ée]|bloqu[ée]|refus[ée]|accept[ée])|je (?:le |la |les |l[’'])?bloque\b|j[’']ai (?:bloqu[ée]|envoy[ée]|pr[ée]venu|refus[ée]|accept[ée]|transmis|r[ée]pondu)|message envoy[ée]|(?:il|elle) est (?:bloqu[ée]e?|pr[ée]venu)|je (?:lui |leur )?(?:envoie|transmets) (?:ça|cela|le message|un message)\b)/i;
-  if (!re.test(r)) return reply;
-  return TC_MESSAGERIE_FAUSSE_ACTION;
+  // (pas d'assertion arrière : Safari ancien ne la lit pas.)
+  const phrases = r.replace(/([.!?])\s+/g, '$1\n').split(/\n+/).filter(Boolean);
+  const claim = /(c[’']est (?:fait|envoy[ée]|r[ée]gl[ée]|bloqu[ée]|refus[ée]|accept[ée]|annul[ée])|\bje (?:le |la |les |l[’'])?bloque\b|j[’']ai (?:bloqu[ée]|envoy[ée]|pr[ée]venu|refus[ée]|accept[ée]|transmis|r[ée]pondu|annul[ée])|message (?:a (?:bien )?[ée]t[ée] )?envoy[ée]|a (?:bien )?[ée]t[ée] (?:envoy[ée]|bloqu[ée]e?|pr[ée]venu|refus[ée]e?|accept[ée]e?)|(?:il|elle|[A-ZÀ-Ý][a-zà-ÿ-]+) est (?:bloqu[ée]e?|pr[ée]venue?|inform[ée]e?)|je (?:lui |leur )?(?:envoie|transmets) (?:ça|cela|le message|un message)\b)/i;
+  const condition = /\b(que je|si c|si tu|une fois que|d[èe]s que|quand tu|tu confirmes|tu valides|veux-tu|tu veux|pour bloquer|pour envoyer|si besoin|lorsque)\b/i;
+  const temps = /bloque\s+(?:ton |ta |tes |une |la |le |les |un |mon |ma )?(?:plage|cr[ée]neau|matin[ée]e?|apr[èe]s-midi|aprem|soir[ée]e?|journ[ée]e|semaine|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|\d{1,2} ?h|heure|temps|moment|pause)/i;
+  const faux = phrases.some(function (p) { return claim.test(p) && !/\?/.test(p) && !condition.test(p) && !temps.test(p); });
+  return faux ? TC_MESSAGERIE_FAUSSE_ACTION : reply;
 }
 
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */

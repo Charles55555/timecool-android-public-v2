@@ -2794,3 +2794,15 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
 - charlySendMessage : la demande reçue est lue avant le classement ; « ouvre la messagerie » avant la prévenance ; « J'envoie ? » avec les attentes ; la fausse
   action après tcSansFormulesFaites. tcDetecterPrevenance lit « réponds à X que… ». tcNatureReponse : « Je t'y emmène ? » = question.
 - API inchangée. Suite : verif-classement-charly section 14 (32 phrases « répondre », 12 « lire », 16 ordinaires, l'envoi relu oui / non, la fausse action).
+- Second passage (examinateur, 8 points + décisions du chef) : tcDetecterDemandeRecue réécrit, étroit : l'objet explicite (la / sa / cette demande, invitation,
+  convocation, proposition, « de X » = une personne connue ou écrite en majuscule ; jamais « demande de devis », « une invitation pour dîner »), accepte / refuse /
+  décline / ignore seuls ou avec une personne, « tout », « la première », « la visio », « le point projet » ; « dis oui / non à X » ; présent / absent seuls ou « au
+  point / à la réunion / à l'invitation » ; « je ne pourrai pas venir au point » ; « propose-lui », « propose deux créneaux à X », « propose à X jeudi 11h » (rien
+  d'autre) ; « bloque X » / « bloque-la » (une personne, jamais du temps) ; « laisse tomber la demande » ; « pas cette semaine pour X » ; « lire » : « X a répondu ? »,
+  « il veut quoi ? », « qui veut me voir ? », « c'est qui Lucie ? » (nom en majuscule), « des demandes en attente ? », « combien de demandes ? ». Exclus : un message à
+  transmettre, une création ou un rappel, une règle (« tous les », « le dimanche »), ma présence (« je suis absent demain »), le temps bloqué, « c'est qui mon rdv »,
+  « qui vient à la réunion de jeudi » (agenda, chef). tcSansFaussesActions : par phrase, seulement une affirmation (jamais « ? », « que je », « si c'est », « une fois
+  que », « dès que », ni « bloque » + temps) ; « Le message a bien été envoyé », « Hugo est prévenu » couverts. tcRepondreEnvoi : oui net (≤ 4 mots) envoie, non net
+  n'envoie rien, « oui mais… / plutôt… » n'envoie rien et demande le texte, toute autre phrase ferme la question et suit son chemin. tcPrevenirDepuisChat :
+  relecture en bulle (annulation du rendez-vous ou note de retard après l'envoi), plus de tcConfirm sur le chemin du chat (les fenêtres décaler / annuler / voyage
+  hors chat ne bougent pas, décision du chef). Suite : section 14, 46 cas négatifs.
