@@ -2753,3 +2753,18 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   A9 / A10 / A11 : les 22 phrases ratées du passage 500 répondent comme attendu.
 - Suites verif-charly-campagne10 et verif-creneaux-proposes : la forme exacte des deux lignes modifiées (chaîne de création locale, question « aucun créneau ») est
   acceptée (patch-suites-m56).
+- Second passage (examinateur, 14 points + décisions du chef) : tcAjusterCartePendante ne touche la carte que si le message parle d'elle (nom
+  exact du titre, « elle / il », « décale-la », « annule-le », « cette carte à 17h », « même heure la semaine prochaine » seul) ; « décale le kiné à
+  jeudi », « annule le kiné », « Martine a annulé » la laissent ; dates en minuscule (tcDateMinuscule) ; tcHeureCourte de la page réutilisée ;
+  tcDetecterRappelDate exige « de / d' / à + verbe » après « rappelle-moi » et lit une date en tête (« rappelle-moi le 5 novembre de payer… »,
+  « rappelle-moi mardi d'appeler le comptable »), « mes rdv de demain », « ce que j'ai demain », « demain » seul partent au modèle ; un créneau
+  a toujours une durée (23h30 → 23h59) ; tcCarteInvitation rend null avec deux invités (rendez-vous à plusieurs) ; tcDetecterRdvGroupe à un
+  contact exclut « mon / le rdv », une période passée, « où est » ; questions transmises : « s'il » → « si tu », un « je / mon » d'Inès → phrase
+  brute entre guillemets ; « On peut voir mon agenda sur l'iPhone ? » → « Oui : avec le même compte, ton agenda est le même sur le web et sur
+  l'iPhone. », la réponse « Non. Personne ne voit… » seulement avec un contact nommé ou « qui / quelqu'un / les autres » ; rappel au client :
+  le nom s'arrête à « que / qu' », sans fiche seulement un nom en majuscule ou M. / Mme ; retard d'un client suivi d'une action (« décale son
+  rdv de 30 minutes », « préviens Paul ») : l'action suit son chemin, le client remplace « son rdv » ; indisponibilités : liste du chef
+  (grève, congé, vacances, repos, pas là, reste chez moi, prends ma journée ; plus télétravail ni formation), période « du 2 au 6 novembre » et
+  « la semaine prochaine » (oui = du lundi au vendredi) notées ; « ajoute quand même » ajoute la carte telle qu'affichée (tcAjouterCartePendante,
+  dernier jour, dernière heure) ; « Je veux plus voir Paul » → « ou je bloque ce contact ? » ; le titre garde « M. » (« M. Dubois ») ; « Mme Lambert
+  a appelé samedi 10h » part au modèle.
