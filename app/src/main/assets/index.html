@@ -18934,14 +18934,7 @@ function tcClasserMessage(text, histoire) {
   if (apresMaQuestion && reaction) return pasSur('reaction', tcClasseQuestionExemple());
   if (TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1) return pasSur('acquiescement', 'D’accord, tu veux autre chose ?');
   if (reaction) return pasSur('reaction', TC_CLASSE_QUESTION_GENERALE);
-  // 7. Une courte suite après un résultat de Charly (« Demain, tu as Dentiste à 15h. ») : « et à 15h ? », « plutôt 16h »,
-  //    « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » : le modèle a l'historique, elle passe.
-  if (precedent && !apresMaQuestion && mots.length <= 6) {
-    const suite = /\?\s*$/.test(brut.trim()) || TC_CLASSE_SUITE_DEBUT.test(norm) || tcClasseNomConnu(brut)
-      || /\b(quand|quel|quelle|quels|quelles|combien|comment|pourquoi|qui|quoi|lequel|laquelle)\b/.test(norm) || /(^|\s)où(\s|$)/.test(brut.toLowerCase().replace(/[?!.,;:]/g, ' '));
-    if (suite) return claire('suite');
-  }
-  // 8. Les indices de clarté. Un détecteur ou un verbe de demande : le message passe.
+  // 7. Les indices de clarté (le retard d'un autre et le hors agenda se jugent avant la « suite après un résultat »).
   const indices = tcClasseIndices(brut, norm, mots);
   // 8a. Le retard de quelqu'un ou de quelque chose d'autre (« Marc est en retard », « le train est en retard ») : pas MON retard
   //     (le détecteur de prévenance ne l'a pas pris), Charly demande ce qu'il doit faire (chef, 24/10).
@@ -18960,6 +18953,14 @@ function tcClasserMessage(text, histoire) {
   const verbesDemande = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
   const imperatif = mots.some(function (m) { return verbesDemande.indexOf(m) > -1; });
   if (!indices.detecteur && !imperatif && ((ou && !parleRdv) || indices.recherche)) return pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices);
+  // 8c. Une courte suite après un résultat de Charly (« Demain, tu as Dentiste à 15h. ») : « et à 15h ? », « plutôt 16h »,
+  //     « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » : le modèle a l'historique, elle passe.
+  if (precedent && !apresMaQuestion && mots.length <= 6) {
+    const suite = /\?\s*$/.test(brut.trim()) || TC_CLASSE_SUITE_DEBUT.test(norm) || tcClasseNomConnu(brut)
+      || /\b(quand|quel|quelle|quels|quelles|combien|comment|pourquoi|qui|quoi|lequel|laquelle)\b/.test(norm) || ou;
+    if (suite) return claire('suite');
+  }
+  // 8d. Un détecteur ou un verbe de demande : le message passe.
   if (indices.detecteur || indices.verbe) return { classe: 'claire', question: null, proposition: null, indices: indices, raison: null };
   // 9. Intention claire mais une pièce manque (« golf samedi », « foot 14h », « anniversaire de Marc », « Dermatologue ») :
   //    Charly demande LA pièce ; avec l'objet, le jour et l'heure (« dentiste mardi 15h »), le message passe.

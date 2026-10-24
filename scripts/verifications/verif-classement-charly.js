@@ -219,6 +219,8 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
   verifie('« pas de retard » n est pas un retard à traiter (classé comme un autre message)', classer('pas de retard').classe !== 'retard_autre' && classer('pas de retard').classe !== 'claire');
   verifie('« pas ça mardi, mercredi » : « pas » ne devient pas l objet', !/« pas »/.test(classer('pas ça mardi, mercredi').question || ''), classer('pas ça mardi, mercredi').question);
   verifie('« Sophie demain » → « À quelle heure, avec Sophie Anceau demain ? »', classer('Sophie demain').question === 'À quelle heure, avec Sophie Anceau demain ?', classer('Sophie demain').question);
+  const apresRien = [{ role: 'user', content: 'non' }, { role: 'system_info', content: '❌ Annulation abandonnée, rien n\'a été touché.' }];
+  verifie('en cours de conversation (après un résultat), « Marc est en retard » reste le retard d un autre et « où aller manger ce soir ? » hors agenda ; « Marc vient ? » reste une suite qui passe', classer('Marc est en retard', apresRien).classe === 'retard_autre' && classer('où aller manger ce soir ?', apresRien).classe === 'hors_agenda' && classer('Marc vient ?', apresRien).classe === 'claire' && classer('c’est où ?', apresRien).classe === 'claire', [classer('Marc est en retard', apresRien).classe, classer('où aller manger ce soir ?', apresRien).classe, classer('Marc vient ?', apresRien).classe, classer('c’est où ?', apresRien).classe].join(' '));
 
   titre('7. La langue, le seuil, « où », la nature des réponses');
   ctx.currentLanguage = 'en';
