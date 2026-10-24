@@ -2814,3 +2814,8 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   bloqué. », « Il est bloqué. » à nouveau remplacés) ; tcRepondreEnvoi : le non se lit sur la phrase entière (« pas maintenant », « pas tout de suite » = refus dit).
 - Cinquième passage (examinateur) : tcSansFaussesActions, « Nom est bloqué » : les jours, mois et mots d'agenda en majuscule (Jeudi, Demain, Ton, Agenda…) ne sont
   pas des personnes ; « Jeudi est bloqué. », « Mardi est bloqué pour ton sport. » restent (constats), « Hugo est bloqué. » reste remplacé.
+- Sixième passage (chef) : tcSansFaussesActions, « X est bloqué / prévenu / informé » ne compte que si X est « il / elle » ou un contact qui a une fiche (tcContactsParMots) ;
+  « Jeudi est bloqué (formation). », « Paris est informé de tout. », « Demain est bloqué. » restent des constats.
+- À noter pour une mission à part (chef, 25/10) : trois e2e instables dans la nuit (verif-temps-protege-e2e, verif-blocage-silence-e2e, verif-qui-ecrit-e2e,
+  verif-refus-simple-e2e : « compte_existant » pour Axel, Tania, Clemence…) quand deux passages tournent en même temps (codeur et examinateur). À faire : nettoyer
+  les comptes d'essai avant chaque e2e, ou donner à chaque passage un nom de compte unique (suffixe horodaté).

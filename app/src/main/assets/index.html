@@ -21191,10 +21191,15 @@ function tcSansFaussesActions(reply) {
   const claim = /(c[’']est (?:fait|envoy[ée]|bloqu[ée]|refus[ée]|accept[ée])|\bje (?:le |la |les |l[’'])?bloque\b|j[’']ai (?:bloqu[ée]|envoy[ée]|pr[ée]venu|refus[ée]|accept[ée]|transmis|r[ée]pondu|annul[ée]|r[ée]gl[ée])|je l[’']ai (?:annul[ée]|r[ée]gl[ée]|envoy[ée])|message (?:a (?:bien )?[ée]t[ée] )?envoy[ée]|a (?:bien )?[ée]t[ée] (?:envoy[ée]|bloqu[ée]e?|pr[ée]venu|refus[ée]e?|accept[ée]e?)|je (?:lui |leur )?(?:envoie|transmets) (?:ça|cela|le message|un message)\b)/i;
   // « Hugo est prévenu », « Il est bloqué » : la majuscule réellement exigée (« ton agenda est bloqué ce jour-là » est un état, pas une action).
   // (pas de « \b » après une lettre accentuée : « é » n'est pas une lettre pour lui ; une assertion avant à la place.)
-  const claimNom = /(?:^|\s)(?:Il|Elle|[A-ZÀ-Ý][a-zà-ÿ-]+) est (?:bloqu[ée]e?|pr[ée]venue?|inform[ée]e?)(?![a-zà-ÿ])/;
-  // Un jour, un mois, un mot d'agenda en majuscule en tête de phrase n'est pas une personne : « Jeudi est bloqué. », « Mardi est bloqué pour ton sport. » sont des constats.
-  const motAgenda = /(?:^|\s)(?:Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi|Dimanche|Demain|Aujourd[’']hui|Ce|Cet|Cette|Le|La|Les|Ton|Ta|Tes|Votre|Vos|Mon|Ma|Mes|Son|Sa|Ses|Janvier|F[ée]vrier|Mars|Avril|Mai|Juin|Juillet|Ao[uû]t|Septembre|Octobre|Novembre|D[ée]cembre|Tout|Toute|Rien|Agenda|Cr[ée]neau|Plage|Matin[ée]e|Journ[ée]e|Semaine|Soir[ée]e|Apr[èe]s-midi) est (?:bloqu[ée]e?|pr[ée]venue?|inform[ée]e?)(?![a-zà-ÿ])/;
-  const nomSansAgenda = function (p) { return claimNom.test(p) && !motAgenda.test(p); };
+  const claimNom = /(?:^|\s)(Il|Elle|[A-ZÀ-Ý][a-zà-ÿ-]+) est (?:bloqu[ée]e?|pr[ée]venue?|inform[ée]e?)(?![a-zà-ÿ])/;
+  // « X est bloqué » ne compte que si X est « il / elle » ou un CONTACT (fiche existante) : un jour, un mois, « Demain », « Ton agenda », une ville en
+  // majuscule ne sont jamais une personne (« Jeudi est bloqué (formation). » est un constat sur l'agenda ; chef, 25/10).
+  const nomSansAgenda = function (p) {
+    const m = p.match(claimNom);
+    if (!m) return false;
+    if (/^(Il|Elle)$/.test(m[1])) return true;
+    try { return typeof tcContactsParMots === 'function' && tcContactsParMots([tcSansAccents(m[1]).toLowerCase()]).length > 0; } catch (e) { return false; }
+  };
   // « C'est annulé ! », « C'est réglé. » seuls : une action ; « c'est annulé de son côté », « c'est réglé : tu n'as rien jeudi » décrivent un état.
   const claimSeul = /^\s*c[’']est (?:annul[ée]|r[ée]gl[ée])\s*[!.]*\s*$/i;
   const condition = /\b(que je|si c|si tu|une fois que|d[èe]s que|quand tu|tu confirmes|tu valides|veux-tu|tu veux|pour bloquer|pour envoyer|si besoin|lorsque)\b/i;
