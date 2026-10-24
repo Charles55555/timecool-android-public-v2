@@ -15216,6 +15216,7 @@ async function charlySendMessage() {
     const _correction = tcDetecterCorrectionContact(text);
     if (_correction && await tcGererCorrectionContact(text, _correction)) return;
     if (_classe.correctionContact) { tcPousserMessageUtilisateur(text); tcAppliquerCorrectionContact(_classe.correctionContact); return; }
+    if (_classe.journee) { await tcGererJourneeEntiere(text, _classe.journee); return; }
     if (_classe.classe !== 'claire') {
       tcPousserMessageUtilisateur(text);
       await new Promise(r => setTimeout(r, 400));
@@ -19107,6 +19108,10 @@ function tcClasserMessage(text, histoire) {
     // « « Dentiste » est avec Marc Dupont : je le passe à Sophie Anceau ? » → « oui » : la correction s'applique (mission 52).
     if (proposition.correction && accord) return Object.assign(claire('complement'), { correctionContact: proposition.correction });
     if (proposition.correction && ouiNon === false) return pasSur('acquiescement', 'D’accord, je ne change rien.');
+    // « « du 30 au 20 octobre », c'est à l'envers : tu veux dire du 20 au 30 octobre ? » → « oui » : la période proposée se note (mission 53).
+    if (proposition.journee && accord) return Object.assign(claire('complement'), { journee: proposition.journee });
+    if (proposition.journee === null && accord && proposition.titre) return pasSur('piece_manquante', 'Dis-moi la période, par exemple « du 20 au 30 octobre ».', null);
+    if ((proposition.journee || proposition.journee === null) && ouiNon === false) return pasSur('acquiescement', 'D’accord, je ne note rien.');
     if (proposition.etape !== 'suite' && accord) {
       return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
     }
@@ -19922,9 +19927,19 @@ function tcDetecterJourneeEntiere(text) {
   // « du 20 au 30 octobre », « du lundi au mercredi » : une période, un seul événement sur plusieurs jours, titre sans la période.
   const periode = tcPeriodeDuAu(text, new Date());
   if (periode) {
-    const titre = tcTitreJourneeEntiere(text.replace(/\s+du\s+.*$/i, '')) || tcTitreDepuisDemande(text.replace(/\s+du\s+.*$/i, ''));
-    if (!titre) return null;
-    return { date: tcISO(periode.debut), dateFin: tcISO(periode.fin), titre: titre.charAt(0).toUpperCase() + titre.slice(1), libelle: periode.libelle };
+    const titreBrut = tcTitreJourneeEntiere(text.replace(/\s+du\s+.*$/i, '')) || tcTitreDepuisDemande(text.replace(/\s+du\s+.*$/i, ''));
+    if (!titreBrut) return null;
+    const titre = titreBrut.charAt(0).toUpperCase() + titreBrut.slice(1);
+    if (periode.erreur) {
+      // Une période à l'envers, déjà commencée ou de plus d'un mois : rien ne se crée seul, Charly demande (chef).
+      const s = periode.suggestion ? { date: tcISO(periode.suggestion.debut), dateFin: tcISO(periode.suggestion.fin), titre: titre, libelle: periode.suggestion.libelle } : null;
+      let question;
+      if (periode.erreur === 'inverse') question = '« ' + periode.libelle + ' », c’est à l’envers' + (s ? ' : tu veux dire ' + s.libelle + ' ?' : '. Tu veux dire quoi ?');
+      else if (periode.erreur === 'passe') question = '« ' + periode.libelle + ' » a déjà commencé' + (s ? ' : je note « ' + titre + ' » ' + s.libelle + ' ?' : '. Tu veux dire quoi ?');
+      else question = '« ' + periode.libelle + ' », c’est plus d’un mois : je note « ' + titre + ' » sur toute cette période ?';
+      return { question: question, suggestion: s, titre: titre };
+    }
+    return { date: tcISO(periode.debut), dateFin: tcISO(periode.fin), titre: titre, libelle: periode.libelle };
   }
   if (/\bdu\s+\S+\s+au\b/.test(sans)) return null;   // une période que la page ne sait pas lire : le modèle
   const demande = tcDateDemandee(text, new Date());
@@ -19948,9 +19963,22 @@ function tcPeriodeDuAu(text, now) {
     let fin = new Date(annee, moisFin, Number(m[3]));
     if (fin < jour0) { annee++; fin = new Date(annee, moisFin, Number(m[3])); }
     let debut = new Date(annee, moisDebut, Number(m[1]));
-    if (debut > fin) debut = new Date(annee - 1, moisDebut, Number(m[1]));
+    const libelleDe = function (a, b, mA, mB) { return 'du ' + a.getDate() + (mA !== mB ? ' ' + MOIS_FR[mA] : '') + ' au ' + b.getDate() + ' ' + MOIS_FR[mB]; };
+    // « du 30 au 20 octobre » (même mois, fin avant début) : à l'envers, Charly demande ; « du 28 décembre au 3 janvier » : le début est l'année d'avant.
+    if (debut > fin) {
+      if (moisDebut === moisFin) {
+        const d2 = new Date(annee, moisFin, Number(m[3])), f2 = new Date(annee, moisFin, Number(m[1]));
+        return { erreur: 'inverse', libelle: libelleDe(debut, fin, moisDebut, moisFin), suggestion: (d2 >= jour0 && !isNaN(d2) && !isNaN(f2)) ? { debut: d2, fin: f2, libelle: libelleDe(d2, f2, moisFin, moisFin) } : null };
+      }
+      debut = new Date(annee - 1, moisDebut, Number(m[1]));
+    }
     if (isNaN(debut) || isNaN(fin) || debut.getDate() !== Number(m[1]) || fin.getDate() !== Number(m[3])) return null;
-    return { debut: debut, fin: fin, libelle: 'du ' + Number(m[1]) + (m[2] && moisDebut !== moisFin ? ' ' + MOIS_FR[moisDebut] : '') + ' au ' + Number(m[3]) + ' ' + MOIS_FR[moisFin] };
+    const libelle = libelleDe(debut, fin, moisDebut, moisFin);
+    // Une période qui a déjà commencé : d'aujourd'hui à la fin, si l'utilisateur le confirme.
+    if (debut < jour0) return { erreur: 'passe', libelle: libelle, suggestion: fin >= jour0 ? { debut: jour0, fin: fin, libelle: 'd’aujourd’hui au ' + fin.getDate() + ' ' + MOIS_FR[moisFin] } : null };
+    // Plus d'un mois (31 jours) : jamais seul, il faut un « oui » (chef, mission 53).
+    if ((fin - debut) / 86400000 > 31) return { erreur: 'longue', libelle: libelle, suggestion: { debut: debut, fin: fin, libelle: libelle } };
+    return { debut: debut, fin: fin, libelle: libelle };
   }
   m = sans.match(/\bdu (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) au (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/);
   if (m) {
@@ -19972,11 +20000,21 @@ function tcTitreJourneeEntiere(text) {
   t = t.replace(/^(?:stp |svp )?(?:ajoute|ajouter|note|noter|mets|met|mettre|cree|crée|creer|créer|planifie|bloque|inscris|enregistre|rappelle moi|rappelle-moi)(?:-moi| moi)?\s+(?:un |une |le |la |l |mon |ma |mes |rdv |rendez-vous |rendez vous )?/i, '').trim();
   t = t.replace(/^(?:mes|mon|ma|les|le|la|l|un|une|des)\s+/i, '').trim();
   t = t.replace(/\s+(?:dans|sur|a|à) mon agenda$/i, '').trim();
+  // « toute la journée », « journée entière » ne sont pas le titre (« mets toute la journée formation jeudi » → « formation »).
+  t = t.replace(/\b(toute la journ[ée]e|journ[ée]e enti[èe]re|la journ[ée]e)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+  t = t.replace(/^(?:de |pour |en |:)\s*/i, '').trim();
   return t.length >= 3 ? t : '';
 }
 
 async function tcGererJourneeEntiere(text, o) {
   tcPousserMessageUtilisateur(text);
+  if (o.question) {
+    // La période est douteuse : la question, et la suggestion gardée pour un « oui » (rien n'est noté avant).
+    charlyIA.history.push({ role: 'assistant', content: o.question, nature: 'question', _classement: 'piece_manquante',
+      _proposition: { moment: null, contact: null, metier: null, titre: o.titre, texte: '', etape: 'suite', composable: false, journee: o.suggestion }, _texte: text });
+    renderCharlyChat();
+    return;
+  }
   const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
   const quand = o.dateFin ? o.libelle : tcFormaterDateHumaine(o.date);
   const doublon = (Array.isArray(events) ? events : []).find(function (e) { return e && e.mode === evMode && e.date === o.date && e.allDay && tcSansAccents(e.title) === tcSansAccents(o.titre); });

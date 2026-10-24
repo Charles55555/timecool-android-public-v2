@@ -2641,3 +2641,9 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   heure » ne vaut 1h qu'après « à ». « j'ai oublié de te dire, ajoute golf samedi 10h » : un verbe d'action l'emporte (création) ;
   « j'ai oublié mon parapluie » (ni rendez-vous connu ni mot de rendez-vous) n'est pas une annulation ; « J'ai encore oublié le
   dentiste » garde « tu veux que je l'annule, ou que je le décale ? ».
+- (suite, 24/10, examinateur et chef) Une période « du X au Y » se vérifie avant de créer (tcPeriodeDuAu) : fin avant le début dans le
+  même mois (« du 30 au 20 octobre », faute de frappe) → « « du 30 au 20 octobre », c'est à l'envers : tu veux dire du 20 au 30
+  octobre ? » ; déjà commencée → « a déjà commencé : je note « Vacances » d'aujourd'hui au 20 octobre ? » ; plus de 31 jours → « c'est
+  plus d'un mois : je note « Vacances » sur toute cette période ? » ; rien ne se crée avant « oui » (la période proposée est gardée
+  dans la bulle, « oui » la note, « non » → « D'accord, je ne note rien. »). « toute la journée » / « journée entière » ne restent pas
+  dans le titre (« mets toute la journée formation jeudi » → « Formation »).
