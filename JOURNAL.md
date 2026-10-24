@@ -2812,3 +2812,5 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   (« C'est réglé ! ») ou à la première personne (« je l'ai annulé ») ; « c'est réglé : tu n'as rien jeudi », « c'est annulé de son côté » restent (constats, chef).
 - Quatrième passage (examinateur) : tcSansFaussesActions, « Nom est bloqué » : le « \b » après « é » ne marche pas en JS, remplacé par (?![a-zà-ÿ]) (« Hugo est
   bloqué. », « Il est bloqué. » à nouveau remplacés) ; tcRepondreEnvoi : le non se lit sur la phrase entière (« pas maintenant », « pas tout de suite » = refus dit).
+- Cinquième passage (examinateur) : tcSansFaussesActions, « Nom est bloqué » : les jours, mois et mots d'agenda en majuscule (Jeudi, Demain, Ton, Agenda…) ne sont
+  pas des personnes ; « Jeudi est bloqué. », « Mardi est bloqué pour ton sport. » restent (constats), « Hugo est bloqué. » reste remplacé.
