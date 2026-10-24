@@ -2592,3 +2592,14 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
 - 7. scripts/deployer-web.sh : TC_APP_VERSION est estampillée à chaque publication (AAAA.MM.JJ-HHMM, heure de Paris), la source
   garde « 10.5.54 ».
 - API inchangée. Suite : verif-classement-charly, section 9.
+- (suite, 24/10, examinateur et rejouée Chrome) La recherche de professionnel par un lieu (« kiné près de chez moi ») ne part que
+  sans jour, sans heure et sans « rdv / rendez-vous » dans la phrase : « dentiste près de la gare mardi 15h », « avocat en ville
+  vendredi 14h » restent des rendez-vous. « Plus de retard » ne nie qu'après « n' / ne » (« je n'ai plus de retard ») ou seul ;
+  « j'aurai plus de retard que prévu » est un retard (questionnaire). « non c'était pour Hugo » : seulement juste après une création
+  par Charly (carte ou « C'est noté : rendez-vous ajouté » au dernier message de Charly, au-delà du « oui » ; sinon le dernier
+  rendez-vous créé charly_ai_) ; un contact déjà là → « « Dîner » est avec Marc Dupont : je le passe à Hugo Besnard ? » puis « oui »
+  (tcAppliquerCorrectionContact) ou « non » ; après une simple consultation (« le dentiste de demain ? »), Charly demande « Je remplace Marc Dupont par Sophie Anceau sur
+  « Dentiste » (…) ? » et attend oui ; après une question précise du modèle, la phrase lui revient comme réponse. « encore plus de
+  retard » → « je décale ou je préviens ? » ; « plus de retard du tout » → « Bien noté, pas de retard. » Quelqu'un
+  d'autre malade : « mon chat est malade » → « Bon courage 😊 … », « Marc est malade » → « Marc Dupont est malade : je décale ou
+  j'annule ton rendez-vous avec lui ? » ; plus de pièce manquante.

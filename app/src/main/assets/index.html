@@ -13176,8 +13176,8 @@ function tcDetecterPrevenance(text) {
   // « retard », « retard 10 min », « 10 min de retard » seuls (sans autre sujet ni negation, sans verbe ni « je ») : le questionnaire
   // retard demande a qui (mission 50). « Marc est en retard », « pas de retard », « en retard ? » ne sont pas MON retard.
   const seulRetard = /^(retard( de)?( \d{1,3} ?(min|mn|minutes?))?|\d{1,3} ?(min|mn|minutes?) de retard)$/.test(t.replace(/[?!.,;:]/g, ' ').replace(/\s+/g, ' ').trim());
-  // Un retard nie n est pas un retard a annoncer (mission 52).
-  if (/\b(pas|aucun|sans|zero|plus) (de |d |en )?retard\b/.test(t)) return null;
+  // Un retard nie n est pas un retard a annoncer (mission 52) ; « plus » ne nie qu apres « n / ne », seul, ou avec « du tout ».
+  if (/(\b(pas|aucun|sans|zero|jamais)|\bn'? ?(ai|aurai|a|aura|avons|aurons|avez|aurez|ont|auront|est|suis|serai|sera|es|seras|etes|sommes|serons|serez|seront) plus|^plus) (de |d'|d |en )?retard\b|plus (de |d'|d )?retard du tout/.test(t)) return null;
   if (/\bretard\b/.test(t) && (verbe || moi || seulRetard)) {
     const m = t.match(/(\d{1,3})\s*(min\b|mn\b|minutes?)/);
     let minutes = m ? parseInt(m[1], 10) : null;
@@ -13339,8 +13339,10 @@ function detecterRechercheProfessionnel(text) {
     || /\b(connais[- ]tu|tu connais)\b/.test(t)
     || /\b(un bon|une bonne|il me faut|j['’]ai besoin d['’])/.test(t)
     || /\bpropose[- ]?moi\b/.test(t)
-    // « kiné près de chez moi », « pharmacie à côté », « dentiste dans le coin » : un lieu suffit (mission 52).
-    || /(^|\s)(pr[eè]s de|[àa] c[ôo]t[ée]( de)?|proche|le plus proche|la plus proche|autour|dans le coin|pas loin|aux alentours|dans mon quartier|en ville)(?=\s|$|[.,;!?])/.test(t);
+    // « kiné près de chez moi », « pharmacie à côté », « dentiste dans le coin » : un lieu suffit, mais sans jour, sans heure et sans
+    // « rdv » dans la phrase : « dentiste près de la gare mardi 15h » est un rendez-vous, pas une recherche payante (mission 52).
+    || (/(^|\s)(pr[eè]s de|[àa] c[ôo]t[ée]( de)?|proche|le plus proche|la plus proche|autour|dans le coin|pas loin|aux alentours|dans mon quartier|en ville)(?=\s|$|[.,;!?])/.test(t)
+        && !tcHeureDansTexte(t) && !tcPeriodeAgenda(t) && !(typeof tcJoursNommes === 'function' && tcJoursNommes(t).length) && !/\b(rdv|rendez-?vous|rendez vous)\b/.test(t));
   if (!declencheur) return null;
 
   const profession = TC_PROFESSIONS.find(p => tcContientMot(t, p)) || null;
@@ -15195,7 +15197,8 @@ async function charlySendMessage() {
     const _ordinal = tcDetecterOrdinalListe(text);
     if (_ordinal) { await tcGererOrdinalListe(text, _ordinal); return; }
     const _correction = tcDetecterCorrectionContact(text);
-    if (_correction) { await tcGererCorrectionContact(text, _correction); return; }
+    if (_correction && await tcGererCorrectionContact(text, _correction)) return;
+    if (_classe.correctionContact) { tcPousserMessageUtilisateur(text); tcAppliquerCorrectionContact(_classe.correctionContact); return; }
     if (_classe.classe !== 'claire') {
       tcPousserMessageUtilisateur(text);
       await new Promise(r => setTimeout(r, 400));
@@ -19056,6 +19059,9 @@ function tcClasserMessage(text, histoire) {
   //    « Dermatologue » ? ») : « oui » reçoit la question de ce qui manque, avec ce qui a été dit ; un complément (« dentiste »,
   //    « oui mardi 15h ») passe, le modèle a l'historique ; « non » ou une réaction : la question avec deux exemples.
   if (proposition) {
+    // « « Dentiste » est avec Marc Dupont : je le passe à Sophie Anceau ? » → « oui » : la correction s'applique (mission 52).
+    if (proposition.correction && accord) return Object.assign(claire('complement'), { correctionContact: proposition.correction });
+    if (proposition.correction && ouiNon === false) return pasSur('acquiescement', 'D’accord, je ne change rien.');
     if (proposition.etape !== 'suite' && accord) {
       return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
     }
@@ -19089,7 +19095,20 @@ function tcClasserMessage(text, histoire) {
   // 8a. Le retard de quelqu'un ou de quelque chose d'autre (« Marc est en retard », « le train est en retard ») : pas MON retard
   //     (le détecteur de prévenance ne l'a pas pris), Charly demande ce qu'il doit faire (chef, 24/10).
   //     « pas de retard », « finalement pas de retard » : un retard annoncé qui tombe, ou une simple information : « Bien noté, pas de retard. »
-  if (/\bretard\b/.test(norm) && !indices.detecteur && /\b(pas|sans|aucun|zero|plus|finalement pas|jamais) (de |d |en )?retard\b/.test(norm)) return pasSur('retard_annule', 'Bien noté, pas de retard.', null, indices);
+  if (/\bretard\b/.test(norm) && !indices.detecteur && /(\b(pas|sans|aucun|zero|finalement pas|jamais)|\bn (ai|aurai|a|aura|avons|aurons|avez|aurez|ont|auront|est|suis|serai|sera|es|seras|etes|sommes|serons|serez|seront) plus|^plus) (de |d |en )?retard\b|plus (de |d )?retard du tout/.test(norm)) return pasSur('retard_annule', 'Bien noté, pas de retard.', null, indices);
+  // 8a bis (mission 52). Quelqu'un d'autre est malade (« mon chat est malade », « Marc est malade ») : pas le parcours malade (lui seul
+  //     est pour l'utilisateur) ; un contact → décaler ou annuler le rendez-vous avec lui ? ; sinon un mot gentil.
+  if (/\b(est|sont|a ete|ont ete) malades?\b/.test(norm) && !/\b(je|j|suis|jsuis|moi)\b/.test(norm) && !indices.detecteur) {
+    let c = null;
+    try {
+      const candidats = mots.filter(function (m) { return m.length >= 3 && !/^(est|sont|ete|malade|malades|encore|toujours|tres|vraiment)$/.test(m) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0; });
+      const trouves = [];
+      candidats.forEach(function (w) { (typeof tcContactsParMots === 'function' ? tcContactsParMots([w]) : []).forEach(function (x) { if (trouves.indexOf(x) < 0) trouves.push(x); }); });
+      c = trouves.length === 1 ? trouves[0] : null;
+    } catch (e) { c = null; }
+    if (c) return pasSur('piece_manquante', c.name + ' est malade : je décale ou j’annule ton rendez-vous avec ' + (/(^|\s)(mme|madame|elle)\b/.test(norm) ? 'elle' : 'lui') + ' ?', { moment: null, contact: c.name, metier: null, titre: 'malade', texte: 'rendez-vous avec ' + c.name, etape: 'suite', composable: false }, indices);
+    return pasSur('social', 'Bon courage 😊 Si ça change un rendez-vous, dis-moi lequel décaler ou annuler ?', null, indices);
+  }
   //     « tu es en retard », « t'es en retard » : une remarque à Charly, pas un retard à annoncer : il demande ce qu'il veut dire (chef).
   if (/^(tu es|t es|t|vous etes|tu est|charly tu es|charly t es) (en |tres en |encore en )?retard\b/.test(norm)) return pasSur('doute', 'Je ne suis pas sûr de comprendre : tu veux dire que je réponds trop tard, ou que quelqu’un est en retard ?', null, indices);
   if (/\bretard\b/.test(norm) && !indices.detecteur) {
@@ -19673,32 +19692,86 @@ function tcDetecterCorrectionContact(text) {
   return c ? { contact: c } : null;
 }
 
-/** Le rendez-vous créé à partir du message précédent reçoit ce contact ; sinon Charly demande lequel. */
+/** Charly vient-il de créer un rendez-vous ? (le dernier message de Charly est une carte ou « C'est noté : rendez-vous ajouté ») */
+function tcVientDeCreer() {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  for (let i = h.length - 1; i >= 0; i--) {
+    const m = h[i];
+    if (!m || m.role === 'user') continue;
+    const c = String(m.content || '');
+    return /\[AGENDA\]|C(’|')est noté : rendez-vous ajouté|C(’|')est noté\.|je te propose ceci/.test(c);
+  }
+  return false;
+}
+
+/**
+ * Le rendez-vous que Charly vient de créer reçoit ce contact ; s'il en avait déjà un, Charly demande avant de changer.
+ * Hors d'une création qui vient d'avoir lieu, rien : la phrase suit son chemin (une réponse au modèle, une consultation).
+ */
 async function tcGererCorrectionContact(text, o) {
   const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
-  let precedent = '';
-  for (let i = h.length - 1; i >= 0; i--) { if (h[i] && h[i].role === 'user') { precedent = String(h[i]._corrige || h[i].content || ''); break; } }
+  // Le modèle vient de poser une question précise (« C'est avec qui, ce déjeuner ? ») : la phrase lui revient comme réponse.
+  const dernierCharly = (typeof tcClasseDernierMessageCharly === 'function') ? tcClasseDernierMessageCharly(h) : null;
+  if (dernierCharly && !dernierCharly._classement && typeof tcClassePoseUneQuestion === 'function' && tcClassePoseUneQuestion(dernierCharly)) return false;
+  const vientDeCreer = tcVientDeCreer();
+  const anciens = h.slice();   // avant la bulle de ce message : c'est dans les messages d'avant qu'on cherche le rendez-vous
   tcPousserMessageUtilisateur(text);
   let ev = null;
-  if (precedent) {
+  // Le rendez-vous du dernier message qui en décrivait un (au-delà d'un « oui » de validation) : titre et date.
+  for (let i = anciens.length - 1; i >= 0 && !ev; i--) {
+    if (!anciens[i] || anciens[i].role !== 'user') continue;
+    const precedent = String(anciens[i]._corrige || anciens[i].content || '');
     const titre = tcTitreDepuisDemande(precedent);
-    const demande = tcDateDemandee(precedent, new Date());
     const mots = tcSansAccents(titre || '').split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3; });
+    if (!mots.length) continue;
+    const demande = tcDateDemandee(precedent, new Date());
     const dateStr = (demande && demande.date) ? tcISO(demande.date) : null;
     const candidats = (Array.isArray(events) ? events : []).filter(function (e) {
-      return e && e.mode === mode && e.title && (!dateStr || e.date === dateStr) && mots.length && tcTitreContient(e.title, mots);
+      return e && e.mode === mode && e.title && (!dateStr || e.date === dateStr) && tcTitreContient(e.title, mots);
     }).sort(tcComparerEvenements);
     ev = candidats[0] || null;
+  }
+  // À défaut, juste après une création : le dernier rendez-vous que Charly a créé (identifiant charly_ai_<horodatage>).
+  if (!ev && vientDeCreer) {
+    const crees = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === mode && /^charly_ai_\d+/.test(String(e.id)); })
+      .sort(function (a, b) { return Number(String(b.id).replace(/\D/g, '')) - Number(String(a.id).replace(/\D/g, '')); });
+    ev = crees[0] || null;
   }
   if (!ev) {
     charlyIA.history.push({ role: 'assistant', content: 'Je ne vois pas quel rendez-vous corriger : lequel ?', nature: 'question' });
     renderCharlyChat();
-    return;
+    return true;
   }
-  ev.contact = o.contact.id;
+  if (ev.contact === o.contact.id) {
+    charlyIA.history.push({ role: 'assistant', content: '« ' + ev.title + ' » est déjà avec ' + o.contact.name + '.', nature: 'reponse' });
+    renderCharlyChat();
+    return true;
+  }
+  // Un rendez-vous que Charly vient de créer, sans contact : la correction s'applique. Sinon (un contact déjà là, ou un rendez-vous
+  // existant après une simple consultation) : jamais un changement sans « oui » (chef, mission 52).
+  if (vientDeCreer && !ev.contact) {
+    tcAppliquerCorrectionContact({ evId: ev.id, contactId: o.contact.id, contactNom: o.contact.name });
+    return true;
+  }
+  const ancien = ev.contact ? (Array.isArray(contactsList) ? contactsList : []).find(function (c) { return c && c.id === ev.contact; }) : null;
+  const quand = tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev);
+  const question = ancien
+    ? 'Je remplace ' + ancien.name + ' par ' + o.contact.name + ' sur « ' + ev.title + ' » (' + quand + ') ?'
+    : 'Je mets ' + o.contact.name + ' sur « ' + ev.title + ' » (' + quand + ') ?';
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: question,
+    _classement: 'piece_manquante', _proposition: { moment: null, contact: o.contact.name, metier: null, titre: ev.title, texte: 'avec ' + o.contact.name, etape: 'suite', composable: false, correction: { evId: ev.id, contactId: o.contact.id, contactNom: o.contact.name } }, _texte: text });
+  renderCharlyChat();
+  return true;
+}
+
+/** Le contact du rendez-vous est changé, et Charly le dit. */
+function tcAppliquerCorrectionContact(c) {
+  const ev = (Array.isArray(events) ? events : []).find(function (e) { return e && e.id === c.evId; });
+  if (!ev) { charlyIA.history.push({ role: 'assistant', content: 'Je ne retrouve plus ce rendez-vous : rien n’a été changé.', nature: 'reponse' }); renderCharlyChat(); return; }
+  ev.contact = c.contactId;
   saveEventsToStorage();
   if (typeof currentPage !== 'undefined' && currentPage === 'calendar' && typeof render === 'function') render();
-  charlyIA.history.push({ role: 'assistant', content: 'D’accord : « ' + ev.title + ' » (' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + ') est maintenant avec ' + o.contact.name + '.', nature: 'reponse' });
+  charlyIA.history.push({ role: 'assistant', content: 'D’accord : « ' + ev.title + ' » (' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + ') est maintenant avec ' + c.contactNom + '.', nature: 'reponse' });
   renderCharlyChat();
 }
 
