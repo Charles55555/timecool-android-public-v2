@@ -18842,7 +18842,7 @@ const TC_CLASSE_RECHERCHE = /\b(a cote|pres de|pres d|proche|le plus proche|la p
  * Rend { question, proposition } ; null si le message n'a pas d'objet, ou s'il a déjà le jour et l'heure (il passe), ou s'il est long.
  */
 function tcClassePieceManquante(brut, norm, mots) {
-  if (mots.length > 5 || TC_CLASSE_RECHERCHE.test(norm)) return null;
+  if (mots.length > 10) return null;
   // Un sujet qui se suffit (« météo demain », « sms demain ») n'est jamais l'objet d'un rendez-vous à compléter.
   if (TC_CLASSE_SUJETS.some(function (s) { return tcClasseContient(norm, s); })) return null;
   const bas = String(brut || '').toLowerCase();
@@ -18859,7 +18859,10 @@ function tcClassePieceManquante(brut, norm, mots) {
   const contact = tcClasseContactEcrit(objet);
   const pour = (contact && objetMots.every(function (m) { return tcSansAccents(contact.name).indexOf(m) > -1; })) ? 'avec ' + contact.name : 'pour « ' + objet + ' »';
   const proposition = { moment: moment || null, contact: contact ? contact.name : null, metier: null, titre: objet, texte: String(brut).trim(), etape: 'suite' };
+  // L'objet, le jour et l'heure (« dermato à côté de la gare mardi 15h ») : un rendez-vous complet, il passe.
   if (jour && heure) return { question: null, proposition: proposition };
+  // Une recherche de lieu sans aucun moment (« pharmacie de garde à côté »), ou une phrase longue : pas une pièce à demander.
+  if (mots.length > 5 || (TC_CLASSE_RECHERCHE.test(norm) && !jour && !heure)) return null;
   if (jour) return { question: 'À quelle heure, ' + pour + ' ' + jour + ' ?', proposition: proposition };
   if (heure) return { question: 'Quel jour, ' + pour + ' à ' + heure.h + 'h' + (heure.m ? String(heure.m).padStart(2, '0') : '') + ' ?', proposition: proposition };
   // Sans aucun moment : seulement si l'objet est reconnu (un métier, un mot d'agenda, un rendez-vous ou un contact connu).
@@ -18933,10 +18936,16 @@ function tcClasserMessage(text, histoire) {
   const parleRdv = /\b(rdv|rendez vous|rendez|prochain|prochaine|agenda)\b/.test(norm) || tcClasseNomConnu(brut);
   const verbesDemande = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
   const imperatif = mots.some(function (m) { return verbesDemande.indexOf(m) > -1; });
-  const horsAgenda = !indices.detecteur && !imperatif && ((ou && !parleRdv) || indices.recherche);
+  // Le hors agenda ne se décide JAMAIS sur un mot de lieu (chef, 24/10) : « dermato à côté de la gare mardi 15h », « déjeuner au
+  // resto à côté du bureau samedi midi » sont des rendez-vous, le lieu n'en est qu'un détail ; une réponse à une question sur le
+  // lieu est un lieu. Hors agenda : un « où » de recherche sans aucun lien avec l'agenda (ni rendez-vous, ni nom connu, ni
+  // détecteur, ni verbe de demande) ; dans le fil d'une question, seulement s'il pose lui-même une question (« où aller manger ce
+  // soir ? ») : « où tu veux », « à côté de la gare » passent.
+  const horsAgenda = ou && !parleRdv && !indices.detecteur && !imperatif;
+  const horsAgendaFil = horsAgenda && /\?\s*$/.test(String(brut).trim());
   // 4. Charly venait de poser une question PRÉCISE (le modèle « C'est pour quoi, à 16h ? », un détecteur) : ce message est la
-  //    réponse, il suit son chemin (sauf le hors agenda).
-  if (precedent && tcClassePoseUneQuestion(precedent) && !apresMaQuestion) return horsAgenda ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : claire('reponse');
+  //    réponse, il suit son chemin (sauf un « où » de recherche hors rendez-vous).
+  if (precedent && tcClassePoseUneQuestion(precedent) && !apresMaQuestion) return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : claire('reponse');
   // 5. Après MA question qui proposait déjà quelque chose (« tu veux noter quelque chose mercredi à 15h ? », « un rendez-vous
   //    « Dermatologue » ? ») : « oui » reçoit la question de ce qui manque, avec ce qui a été dit ; un complément (« dentiste »,
   //    « oui mardi 15h ») passe, le modèle a l'historique ; « non » ou une réaction : la question avec deux exemples.
@@ -18944,7 +18953,7 @@ function tcClasserMessage(text, histoire) {
     if (proposition.etape !== 'suite' && accord) {
       return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
     }
-    if (!reaction) return horsAgenda ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : claire('complement');
+    if (!reaction) return horsAgendaFil ? pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices) : claire('complement');
     // « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») : la même
     // question, précise ; « non », « cv » : les deux exemples. La proposition reste gardée : « mardi 15h » ensuite passe avec elle.
     if (accord && precedent.content) return pasSur('suite_proposition', String(precedent.content), proposition);
@@ -18966,9 +18975,8 @@ function tcClasserMessage(text, histoire) {
     return pasSur('retard_autre', 'D’accord : je décale ' + (c ? 'ton rendez-vous avec ' + c.name : 'un rendez-vous') + ', ou je préviens quelqu’un ?',
       { moment: null, contact: c ? c.name : null, metier: null, titre: 'retard', texte: String(brut).trim(), etape: 'suite' }, indices);
   }
-  // 8b. Hors agenda (chef, 24/10) : « où aller manger ce soir ? », « où on va en vacances ? », « pharmacie de garde à côté » : un
-  //     « où » qui ne parle pas d'un rendez-vous, ou une recherche de lieu, sans détecteur ni verbe de demande (« trouve-moi un
-  //     restaurant à côté du bureau » passe) : Charly dit ce dont il s'occupe.
+  // 8b. Hors agenda (chef, 24/10) : « où aller manger ce soir ? », « où on va en vacances ? » : un « où » qui ne parle pas d'un
+  //     rendez-vous, sans détecteur ni verbe de demande (« trouve-moi un restaurant à côté du bureau » passe) : Charly dit ce dont il s'occupe.
   if (horsAgenda) return pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices);
   // 8c. Une courte suite après un RÉSULTAT de Charly (« Demain, tu as Dentiste à 15h. ») : « et à 15h ? », « plutôt 16h »,
   //     « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » : le modèle a l'historique, elle passe. Jamais après une

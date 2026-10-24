@@ -2475,3 +2475,10 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   professionnel. Je ne peux pas t'aider pour ça. » (nature réponse). La nature de la bulle du classement vient du classement.
 - (suite, 24/10) Le hors agenda l'emporte sur le fil : « où aller manger ce soir ? » juste après une question de Charly (la
   sienne ou celle du modèle) reçoit la phrase hors agenda, jamais un passage au modèle comme réponse ou complément.
+- (suite, 24/10, chef et examinateur) Le hors agenda ne se décide jamais sur un mot de lieu : « dermato à côté de la gare mardi
+  15h » (objet, jour, heure : passe, même en phrase longue), « déjeuner au resto à côté du bureau samedi midi », « dermato à
+  côté de la gare mardi » (« À quelle heure, pour « dermato à côté de la gare » mardi ? ») sont des demandes d'agenda, le lieu
+  n'en est qu'un détail ; une réponse à une question sur le lieu (« au restaurant à côté du bureau », « à côté de la gare »,
+  « où tu veux », « pharmacie de garde à côté ») est un lieu et passe. Le hors agenda ne reste que pour un « où » de recherche
+  sans aucun lien avec l'agenda (ni rendez-vous, ni nom connu, ni détecteur, ni verbe de demande : « où aller manger ce
+  soir ? », « où on va en vacances ? »), et dans le fil d'une question de Charly seulement s'il pose lui-même une question.
