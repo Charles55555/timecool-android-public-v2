@@ -77,15 +77,18 @@ const N = agenda().length;
     ['rdv dentiste mardi 15h', '2026-10-13 | 15:00-16:00 | Dentiste | rdv'],
     ['ajoute un déplacement à Lyon jeudi 9h', '2026-10-15 | 09:00-10:00 | Déplacement à Lyon | rdv'],
     ['rdv coach vendredi 15h', '2026-10-16 | 15:00-16:00 | Coach | rdv'],
-    ['rdv Dr. Martin mardi 9h', '2026-10-13 | 09:00-10:00 | Dr Martin | rdv']   // le point tombe (tcTitreDepuisDemande, inchange)
+    ['rdv Dr. Martin mardi 9h', '2026-10-13 | 09:00-10:00 | Dr Martin | rdv'],   // le point tombe (tcTitreDepuisDemande, inchange)
+    // Mission 54 : une plage « de 14h a 16h », « 15h-17h » est lue par la page (debut et fin), le conflit aussi.
+    ['réunion mardi de 14h à 16h', '2026-10-13 | 14:00-16:00 | Réunion | rdv'],
+    ['rdv coach mardi 15h-17h', '2026-10-13 | 15:00-17:00 | Coach | rdv']
   ];
   cas.forEach(([texte, ligne]) => {
     const r = ctx.tcCreationLocale(texte, NOW);
     verifie('« ' + texte + ' » → bloc « ' + ligne + ' » et prose « je te propose ceci »', r.indexOf('[AGENDA]\n' + ligne + '\n[/AGENDA]') > -1 && /je te propose ceci\./.test(r), r);
   });
   ['annule le dentiste', 'décale mon rdv de mardi à 16h', 'quand suis-je libre vendredi ?', 'qu est-ce que j ai mardi ?', 'rdv dentiste mardi', 'je suis malade', 'supprime tout mardi après-midi', 'rdv dentiste tous les mardis 15h', 'rdv dentiste mardi 15h ?',
-   // Examen : plage ou duree, deux demandes, phrase longue, reservation → le modele.
-   'réunion mardi de 14h à 16h', 'rdv dentiste mardi de 15h à 17h', 'rdv mardi 14h-16h', 'rdv dentiste mardi 15h jusqu’à 17h', 'rdv mardi 15h pendant 2 heures',
+   // Examen : duree, plage sans objet ou a l envers, deux demandes, phrase longue, reservation → le modele (la plage « de X a Y » : mission 54).
+   'rdv dentiste mardi de 17h à 15h', 'rdv mardi 14h-16h', 'rdv dentiste mardi 15h jusqu’à 17h', 'rdv mardi 15h pendant 2 heures',
    'ajoute dentiste demain à 10h et coach jeudi à 14h', 'rdv mardi 10h puis jeudi 14h',
    'Ajoute un rdv chez le dentiste mardi à 15h, c’est pour mes dents de sagesse et il faut apporter la radio',
    'réserve un restaurant vendredi à 20h', 'réserve une table mardi 20h']

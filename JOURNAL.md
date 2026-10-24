@@ -2647,3 +2647,24 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   plus d'un mois : je note « Vacances » sur toute cette période ? » ; rien ne se crée avant « oui » (la période proposée est gardée
   dans la bulle, « oui » la note, « non » → « D'accord, je ne note rien. »). « toute la journée » / « journée entière » ne restent pas
   dans le titre (« mets toute la journée formation jeudi » → « Formation »).
+
+## 24/10/2026 : mission 54, le modèle ne décide plus seul de ce qui est libre ou occupé (chef)
+
+- Cause commune cherchée d'abord : l'instantané envoyé au modèle (tcAgendaSnapshotPourIA) est juste (14 jours jour par jour, dates
+  locales tcISO, « rien, journée libre » seulement sans rendez-vous, règle absolue en tête) ; c'est la lecture du modèle qui faillait
+  (« aucun rendez-vous mardi » avec Réunion équipe à 14h, un kiné de jeudi pris pour un conflit du mercredi, « libre toute la semaine »
+  avec quatre rendez-vous). Les trois réponses viennent donc du code.
+- 1. « Libère mon mardi », « libère-moi vendredi après-midi », « vide ma journée de demain » : une contrainte (tcDetecterContrainte :
+  « libérer / vider / dégager » une période) → tcGererContrainte liste les rendez-vous du jour et propose les trois choix (« Je ne
+  touche à rien / Je les annule / Je les déplace ») ; sans rendez-vous : « Tu n'as aucun rendez-vous ce mardi : rien à annuler. ».
+- 2. « Mets piscine mercredi de 18h à 19h », « rdv coach lundi 9h-10h30 » : tcCreationLocale lit la plage (début et fin), la carte est
+  faite par la page et le conflit vérifié par la page (tcReponseConflitLocale) ; une plage à l'envers ou une durée (« pendant 2 heures »,
+  « jusqu'à 17h » seul) partent au modèle.
+- 3. « Trouve-moi 2 heures de libre cette semaine » : detecterDemandeCreneau lit la durée voulue (« 2 heures de libre », « deux
+  heures de libre ») et tcGererDemandeCreneau ne garde que les créneaux assez longs (« Voici ce qui est libre cette semaine pour
+  2 h : … ») ; aucun → « Je ne vois aucun créneau libre de 2 h cette semaine dans tes disponibilités. Tu veux que je regarde plus
+  loin, ou une durée plus courte ? ». « Je suis libre quand tu veux » redevient une affirmation (« Noté. Tu veux que je propose ce
+  créneau à quelqu'un ? »).
+- API inchangée. Suite : verif-classement-charly, section 11 (agenda garni : six rendez-vous sur la semaine).
+- Suite verif-charly-campagne10 : les deux plages « réunion mardi de 14h à 16h », « rdv dentiste mardi de 15h à 17h » passaient au modèle ; elles sont
+  maintenant des créations locales (début et fin lus), une plage à l envers part toujours au modèle.
