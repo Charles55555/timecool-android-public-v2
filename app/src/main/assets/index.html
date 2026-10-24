@@ -15161,7 +15161,7 @@ async function charlySendMessage() {
     if (_classe.classe !== 'claire') {
       tcPousserMessageUtilisateur(text);
       await new Promise(r => setTimeout(r, 400));
-      charlyIA.history.push({ role: 'assistant', content: _classe.question, nature: _classe.classe === 'au_revoir' ? 'reponse' : 'question', _classement: _classe.classe, _proposition: _classe.proposition || null, _texte: text });
+      charlyIA.history.push({ role: 'assistant', content: _classe.question, nature: _classe.nature || 'question', _classement: _classe.classe, _proposition: _classe.proposition || null, _texte: text });
       renderCharlyChat();
       return;
     }
@@ -18612,7 +18612,7 @@ const TC_CLASSE_SEUIL = 2;
 const TC_CLASSE_NON_COMPRIS = 'Sauf erreur de ma part, je n\'ai pas bien compris : ';
 const TC_CLASSE_QUESTION_GENERALE = TC_CLASSE_NON_COMPRIS + 'qu’est-ce que tu veux que je fasse ?';
 /* Hors agenda (« où aller manger ce soir ? ») : ce dont Charly s'occupe, en une phrase, et la question (chef, 24/10). */
-const TC_CLASSE_HORS_AGENDA = 'Je m’occupe seulement de ton agenda : je peux noter, décaler ou annuler un rendez-vous, prévenir quelqu’un ou trouver un créneau, qu’est-ce que je fais pour toi ?';
+const TC_CLASSE_HORS_AGENDA = 'Je m’occupe de ton agenda : rendez-vous, créneaux, retards, trajets, météo et recherche d’un professionnel. Je ne peux pas t’aider pour ça.';
 /* Ce qui, à lui seul, dit de quoi on parle (une question sur TimeCool, une fonction) : +2. */
 const TC_CLASSE_SUJETS = ['gratuit', 'prix', 'tarif', 'tarifs', 'abonnement', 'payant', 'cout', 'coute', 'rgpd', 'securite', 'securise',
   'securisees', 'confidentialite', 'confidentiel', 'donnees', 'appli', 'application', 'android', 'iphone', 'ios', 'telecharger',
@@ -18698,15 +18698,20 @@ const TC_CLASSE_QUESTIONS_OUVERTES = /(qu est ce que je peux faire|que puis je f
  * suivant est alors la réponse. Une question ouverte (« Qu'est-ce que je peux faire pour toi ? ») laisse le classement se faire.
  */
 function tcClassePoseUneQuestion(message) {
-  if (!message) return false;
+  return tcClasseQuestionDuMessage(message) === 'precise';
+}
+
+/** La question que pose un message de Charly : 'precise', 'ouverte' (l'accueil, « tu veux autre chose ? »), ou null (un résultat). */
+function tcClasseQuestionDuMessage(message) {
+  if (!message) return null;
   const texte = String(message.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!texte) return false;
+  if (!texte) return null;
   const fin = texte.slice(-80);
-  if (!(/\?\s*(\p{Extended_Pictographic}|\s)*$/u.test(texte) || fin.indexOf('?') > -1)) return false;
-  // La dernière question du message : ouverte, elle ne compte pas.
+  if (!(/\?\s*(\p{Extended_Pictographic}|\s)*$/u.test(texte) || fin.indexOf('?') > -1)) return null;
+  // La dernière question du message : ouverte, elle n'attend pas de réponse précise.
   const questions = texte.split('?').slice(0, -1);
   const derniere = tcClasseNormaliser(questions[questions.length - 1] || '');
-  return !TC_CLASSE_QUESTIONS_OUVERTES.test(derniere);
+  return TC_CLASSE_QUESTIONS_OUVERTES.test(derniere) ? 'ouverte' : 'precise';
 }
 
 /** Un mot du message nomme-t-il un rendez-vous de l'agenda, ou un contact ? */
@@ -18838,6 +18843,8 @@ const TC_CLASSE_RECHERCHE = /\b(a cote|pres de|pres d|proche|le plus proche|la p
  */
 function tcClassePieceManquante(brut, norm, mots) {
   if (mots.length > 5 || TC_CLASSE_RECHERCHE.test(norm)) return null;
+  // Un sujet qui se suffit (« météo demain », « sms demain ») n'est jamais l'objet d'un rendez-vous à compléter.
+  if (TC_CLASSE_SUJETS.some(function (s) { return tcClasseContient(norm, s); })) return null;
   const bas = String(brut || '').toLowerCase();
   const heure = tcHeureDansTexte(bas);
   const moment = tcClasseMomentEcrit(brut);
@@ -18883,7 +18890,10 @@ function tcClasseQuestionExemple() {
 function tcClasserMessage(text, histoire) {
   const brut = String(text || '');
   const claire = function (raison) { return { classe: 'claire', question: null, proposition: null, indices: null, raison: raison }; };
-  const pasSur = function (classe, question, proposition, indices) { return { classe: classe, question: question, proposition: proposition || null, indices: indices || null, raison: null }; };
+  const pasSur = function (classe, question, proposition, indices) {
+    const nature = (classe === 'au_revoir' || classe === 'retard_annule' || classe === 'hors_agenda') ? 'reponse' : 'question';
+    return { classe: classe, question: question, proposition: proposition || null, indices: indices || null, raison: null, nature: nature };
+  };
   // Dans une autre langue, le classement français n'a pas de sens : le modèle garde la main (sa consigne dit de demander).
   if (typeof tcLangueCourante === 'function' && tcLangueCourante() !== 'fr') return claire('langue');
   const norm = tcClasseNormaliser(brut);
@@ -18938,7 +18948,9 @@ function tcClasserMessage(text, histoire) {
   const indices = tcClasseIndices(brut, norm, mots);
   // 8a. Le retard de quelqu'un ou de quelque chose d'autre (« Marc est en retard », « le train est en retard ») : pas MON retard
   //     (le détecteur de prévenance ne l'a pas pris), Charly demande ce qu'il doit faire (chef, 24/10).
-  if (/\bretard\b/.test(norm) && !indices.detecteur && !/\b(pas de|sans|aucun|zero|plus de) retard\b/.test(norm)) {
+  //     « pas de retard », « finalement pas de retard » : un retard annoncé qui tombe, ou une simple information : « Bien noté, pas de retard. »
+  if (/\bretard\b/.test(norm) && !indices.detecteur && /\b(pas de|sans|aucun|zero|plus de|finalement pas) retard\b/.test(norm)) return pasSur('retard_annule', 'Bien noté, pas de retard.', null, indices);
+  if (/\bretard\b/.test(norm) && !indices.detecteur) {
     const candidats = mots.filter(function (m) { return m !== 'retard' && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0 && m.length >= 3 && !/^\d/.test(m); });
     let c = null;
     try { const trouves = (candidats.length && typeof tcContactsParMots === 'function') ? tcContactsParMots(candidats) : []; c = trouves.length === 1 ? trouves[0] : null; } catch (e) { c = null; }
@@ -18953,9 +18965,10 @@ function tcClasserMessage(text, histoire) {
   const verbesDemande = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
   const imperatif = mots.some(function (m) { return verbesDemande.indexOf(m) > -1; });
   if (!indices.detecteur && !imperatif && ((ou && !parleRdv) || indices.recherche)) return pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices);
-  // 8c. Une courte suite après un résultat de Charly (« Demain, tu as Dentiste à 15h. ») : « et à 15h ? », « plutôt 16h »,
-  //     « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » : le modèle a l'historique, elle passe.
-  if (precedent && !apresMaQuestion && mots.length <= 6) {
+  // 8c. Une courte suite après un RÉSULTAT de Charly (« Demain, tu as Dentiste à 15h. ») : « et à 15h ? », « plutôt 16h »,
+  //     « avec qui ? », « c'est où ? », « Marc vient ? », « le golf » : le modèle a l'historique, elle passe. Jamais après une
+  //     question ouverte (l'accueil, « tu veux autre chose ? ») : là, tout se classe.
+  if (precedent && !apresMaQuestion && mots.length <= 6 && tcClasseQuestionDuMessage(precedent) === null) {
     const suite = /\?\s*$/.test(brut.trim()) || TC_CLASSE_SUITE_DEBUT.test(norm) || tcClasseNomConnu(brut)
       || /\b(quand|quel|quelle|quels|quelles|combien|comment|pourquoi|qui|quoi|lequel|laquelle)\b/.test(norm) || ou;
     if (suite) return claire('suite');

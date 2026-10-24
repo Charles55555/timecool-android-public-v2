@@ -2466,3 +2466,10 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   ou le mot seul « retard », « retard 10 min », « 10 min de retard ») ; « Marc est en retard », « le train est en retard » :
   « D'accord : je décale ton rendez-vous avec Marc Dupont (un rendez-vous), ou je préviens quelqu'un ? ». Détails : « pas » et les
   petits mots ne deviennent pas l'objet (« pas ça mardi »), le contact se cherche dans l'objet (« Sophie demain » : avec Sophie Anceau).
+- (suite, 24/10, examinateur et chef) Un seul chemin d'entrée : la « courte suite » (« et à 15h ? », « le golf ») ne passe
+  qu'après un RÉSULTAT de Charly (tcClasseQuestionDuMessage : null), jamais après une question ouverte (l'accueil, « tu veux
+  autre chose ? ») ; après « Bonjour », « golf samedi », « Dermatologue ? », « il fait beau ? » reçoivent leur question. Un
+  sujet qui se suffit (météo, sms, prix…) n'est jamais l'objet d'un rendez-vous à compléter : « météo demain » passe (la
+  météo). « pas de retard », « finalement pas de retard » → « Bien noté, pas de retard. », aucun questionnaire. La phrase hors
+  agenda est celle du chef : « Je m'occupe de ton agenda : rendez-vous, créneaux, retards, trajets, météo et recherche d'un
+  professionnel. Je ne peux pas t'aider pour ça. » (nature réponse). La nature de la bulle du classement vient du classement.
