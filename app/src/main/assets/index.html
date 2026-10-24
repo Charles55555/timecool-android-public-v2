@@ -19879,10 +19879,21 @@ async function tcAjouterQuandMeme(text) {
     renderCharlyChat();
     return;
   }
+  // « Quand même » : on ajoute, même un doublon exact (la validation ordinaire le refuserait) ; la carte est marquée validée.
+  const p = (typeof extractAgendaProposals === 'function' ? extractAgendaProposals(reply) : [])[0];
   const tempId = 'msg_' + Date.now();
-  charlyIA.history.push({ role: 'assistant', content: reply.replace(/ : je te propose ceci\./, ' : j’ajoute quand même.'), tempId: tempId, nature: 'action' });
+  const carte = { role: 'assistant', content: reply.replace(/ : je te propose ceci\./, ' : j’ajoute quand même.'), tempId: tempId, nature: 'action', _validated: true };
+  charlyIA.history.push(carte);
+  if (!p) { renderCharlyChat(); return; }
+  const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  const ev = { id: 'charly_ai_' + Date.now(), title: p.title, date: p.date, startH: p.startH, startM: p.startM, endH: p.endH, endM: p.endM, mode: evMode,
+    cat: (typeof tcCategorieDuTitre === 'function' && tcCategorieDuTitre(p.title)) || 'perso' };
+  events.push(ev);
+  saveEventsToStorage();
+  if (typeof currentPage !== 'undefined' && currentPage === 'calendar' && typeof render === 'function') render();
+  if (typeof addDemarche === 'function') addDemarche({ icon: '📅', title: 'Nouveau rendez-vous : ' + ev.title, summary: tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + ' (ajouté quand même)', status: 'ajoutee', categorie: 'rdv', detail: 'Charly IA a ajouté « ' + ev.title + ' » le ' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + ', à la demande de l’utilisateur, malgré le doublon.' });
+  charlyIA.history.push({ role: 'assistant', content: 'C’est noté : « ' + ev.title + ' », ' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + ' (ajouté quand même).', nature: 'action' });
   renderCharlyChat();
-  if (typeof validateAgendaProposal === 'function') validateAgendaProposal(tempId);
 }
 
 /* ─── Une journée entière (« anniversaire de Gaëlle le 12 novembre ») : notée sans heure, sans question ─── */

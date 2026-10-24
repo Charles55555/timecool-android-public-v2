@@ -2628,3 +2628,7 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « j'ai faim », capitale) : une réponse courte sans question.
 - Règle permanente du chef : toute mission qui touche Charly passe la batterie TESTEURS avant son « publié ».
 - API inchangée. Suite : verif-classement-charly, section 10.
+- (suite, 24/10, rejouée Chrome) « ajoute quand même » : le rendez-vous est ajouté directement, même en doublon exact (la validation
+  ordinaire le refusait : « Déjà dans ton agenda, rien à ajouter »), et dit : « C'est noté : « Dentiste », lundi 26 octobre 10h à 11h
+  (ajouté quand même). » ; la carte « j'ajoute quand même » est marquée validée. Remarque pour le juge des TESTEURS : les confirmations
+  historiques d'annulation (tcGererSuppressionRdv) et « Annulation abandonnée » restent des cartes système (rôle system_info).
