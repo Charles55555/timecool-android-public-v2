@@ -2727,3 +2727,29 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « Café avec Marc et Sophie » (les prénoms de contacts gardent « avec » et « et » dans tcCreationLocale) ; messages aux contacts : « Bonjour Sophie,
   Inès me demande de te dire : … » ; « dis à Sophie qu'elle est géniale » → « …de te dire que tu es géniale. » (il/elle + verbe connu → 2e personne) ;
   verbe inconnu → la phrase brute entre guillemets et la confirmation « J'envoie ça tel quel à … ? ».
+
+## 24/10/2026 (soir) : mission 56, pros, clients, rappels et invitations (chef ; 100 phrases nouvelles, 84 % → objectif 95 % sur 500)
+
+- Bloc 56 (devant tcPhraseNonCompris) : tcAjusterCartePendante (le client nommé dans la carte proposée juste avant, ou « elle / il / décale-la »,
+  ou « même heure la semaine prochaine » seul : « a annulé » → « je laisse tomber la proposition « … » ? » (oui = abandon, _abandonSurOui ;
+  non = la garder), « veut décaler à mercredi », « d'une heure », « à 14h30 » → la carte recalée puis « Tu la valides ? ») ; tcDetecterRappelDate
+  (« Rappelle-moi de payer l'URSSAF le 5 novembre » → journée entière « Rappel : … » ; avec une heure → carte ; récurrence ou « dans une heure »
+  → modèle) ; tcCarteInvitation (« Invite Hugo à prendre un café mardi 16h », « Invite Paul à dîner samedi 20h », « Propose un rendez-vous à
+  Gaëlle jeudi 11h », « Envoie une invitation à Gaëlle pour mardi 10h » → carte « Café avec Hugo » avec l'invité en 6e champ) ;
+  tcQuestionTypeEnAttente (« en personne », « plutôt en visio », « par téléphone » répondent à « Par téléphone, en personne ou en visio ? ») ;
+  tcAucunCreneau / tcDireAucunCreneau (« avant lundi », « d'ici vendredi » sans créneau : la question vient de la page).
+- Page : « ajoute quand même » sur une carte ajoute même un doublon exact (tcAjouterQuandMeme) ; tcCreationLocale accepte un client nommé en
+  tête (« Mme Lambert brushing samedi 10h », « M. Dubois vendredi 9h ») ; detecterDemandeCreneau lit « un client / un créneau de 2h » comme
+  une durée ; tcDetecterRdvGroupe accepte UN contact avec compte sur une recherche de créneau commun (prends / trouve / propose… sans heure) ;
+  tcDetecterPrevenance lit « demande à X si / quand … » (message « Bonjour Gaëlle, Inès te demande si tu peux décaler notre rdv. ») ;
+  tcDetecterSuppressionSansCible : « annule le client / la cliente de 14h » → « Lequel ? ».
+- Bloc 50 : « Gaëlle peut voir mon agenda ? », « Partage mon agenda avec Gaëlle » → « Non. Personne ne voit ton agenda ; seul un créneau circule
+  quand tu le proposes. » ; « Je veux plus voir Paul » → « Je retire tes rendez-vous avec Paul, ou je le bloque ? » ; « Rappelle à M. Dubois son
+  rendez-vous » → sans fiche « Je n'ai pas les coordonnées de M. Dubois : tu me donnes son numéro… ? », avec fiche le message part ; « SMS à
+  Mme Martin » → « Je n'ai pas le numéro de Mme Martin : tu me le donnes ? » ; « M. Dubois arrivera 20 minutes en retard » → « D'accord : M. Dubois
+  aura 20 minutes de retard. Je ne préviens personne, ton rendez-vous reste tel quel. » ; « Je suis en grève jeudi », « je reste chez moi demain »,
+  « Je prends ma journée vendredi », « Je serai pas là la semaine prochaine » → « Je n'ai rien bloqué. Tu veux que je note « Indisponible » … ? ».
+- API inchangée. Suite : verif-classement-charly section 13 (≈ 20 vérifications) ; rejoué dans Chrome avec l'agenda des TESTEURS et les contextes
+  A9 / A10 / A11 : les 22 phrases ratées du passage 500 répondent comme attendu.
+- Suites verif-charly-campagne10 et verif-creneaux-proposes : la forme exacte des deux lignes modifiées (chaîne de création locale, question « aucun créneau ») est
+  acceptée (patch-suites-m56).

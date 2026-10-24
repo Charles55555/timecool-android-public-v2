@@ -364,7 +364,8 @@ verifie('et jamais deux fois de suite',
 
 titre('Le branchement');
 verifie('la demande est interceptée avant le modèle',
-  /const _creneau = detecterDemandeCreneau\(text\);\s*if \(_creneau\) \{\s*await tcGererDemandeCreneau/.test(page));
+  // (mission 56 : « avant lundi » sans aucun créneau est une question de la page, juste avant la recherche)
+  /const _creneau = detecterDemandeCreneau\(text\);\s*if \(_creneau\) \{\s*(?:\/\/[^\n]*\n\s*if \(typeof tcAucunCreneau[^\n]*\n\s*)?await tcGererDemandeCreneau/.test(page));
 verifie('et avant les API Google, qui sont payantes',
   page.indexOf('const _creneau = detecterDemandeCreneau(text);')
     < page.indexOf('const _recherchePro = detecterRechercheProfessionnel(text);'),

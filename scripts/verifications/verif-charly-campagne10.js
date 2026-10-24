@@ -100,7 +100,7 @@ const N = agenda().length;
   verifie('« rdv dentiste jeudi 10h » avec un « Dentiste » vendredi → un nouveau rendez-vous jeudi (mission 55)', ctx.tcCreationLocale('rdv dentiste jeudi 10h', NOW).indexOf('2026-10-15 | 10:00-11:00 | Dentiste | rdv') > -1, ctx.tcCreationLocale('rdv dentiste jeudi 10h', NOW));
   verifie('sans « Dentiste » dans l agenda, « rdv dentiste jeudi 10h » est bien créé en local', (ctx.events = agenda(), ctx.tcCreationLocale('rdv dentiste jeudi 10h', NOW).indexOf('2026-10-15 | 10:00-11:00 | Dentiste | rdv') > -1));
   const csm = fonction(page, 'charlySendMessage') || '';
-  verifie('charlySendMessage : la création locale passe avant le modèle, puis les mêmes garde-fous (conflit local, formules)', /const _creationLocale = tcCreationLocale\(text, new Date\(\)\);\s+if \(_creationLocale\) \{\s+reply = _creationLocale;\s+\} else if \(charlyIA\.config\.demoMode\) \{/.test(csm) && csm.indexOf('reply = _creationLocale;') < csm.indexOf('reply = tcReponseConflitLocale(reply, text'));
+  verifie('charlySendMessage : la création locale passe avant le modèle, puis les mêmes garde-fous (conflit local, formules)', /const _creationLocale = (?:tcCreationLocale\(text, new Date\(\)\)|\(\(typeof tcCarteInvitation === 'function'\) \? tcCarteInvitation\(text, new Date\(\)\) : ''\) \|\| \(_rappelHeure && _rappelHeure\.carte\) \|\| tcCreationLocale\(text, new Date\(\)\));\s+if \(_creationLocale\) \{\s+reply = _creationLocale;\s+\} else if \(charlyIA\.config\.demoMode\) \{/.test(csm) && csm.indexOf('reply = _creationLocale;') < csm.indexOf('reply = tcReponseConflitLocale(reply, text'));
 
   titre('(c) « annule le dentiste » sans dentiste : « je ne trouve pas », jamais le Dr. Martin');
   const c1 = contexte(); c1.events = agenda();
