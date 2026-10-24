@@ -21125,10 +21125,17 @@ async function tcRepondreEnvoi(text) {
   if (!m) return false;
   const e = m._envoiEnAttente;
   const norm = tcClasseNormaliser(text);
-  const mots = norm ? norm.split(' ') : [];
-  const ouiNet = mots.length <= 4 && /^(oui|ok|okay|yes|go|d accord|daccord|vas y|envoie|envoie le|envoie la|c est bon|oui envoie|ok envoie|oui vas y|oui c est bon|oui envoie le|parfait envoie|ca marche|oui ca marche|oui parfait|oui ok|ok vas y|envoie ca)$/.test(norm);
-  const nonNet = mots.length <= 3 && /^(non|nan|non merci|annule|annule ca|laisse|laisse tomber|stop|n envoie pas|n envoie rien|envoie pas|envoie rien|oublie|pas maintenant|surtout pas|non non)$/.test(norm);
-  const ouiMais = /^(oui|ok|d accord)[ ,]+(mais|plutot|sauf|change|en changeant|avec)\b/.test(norm) || /^(plutot|change|modifie|corrige|remplace|reecris|dis plutot|ecris plutot)\b/.test(norm);
+  // Les petits mots autour du oui (« oui stp », « oui merci », « oui vas-y envoie-le ») ne changent rien ; « ouais », « ouep », « carrément », « bien sûr » valent oui.
+  const nu = norm.replace(/\bbien sur\b/g, 'ok').replace(/\b(stp|svp|s il te plait|s il vous plait|merci|charly|allez|bien|alors|vite|maintenant|tout de suite)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const mots = nu ? nu.split(' ') : [];
+  const OUI = '(?:oui|ouais|ouep|yep|yes|ok|okay|d accord|daccord|carrement|parfait|c est bon|ca marche|go|vas y|envoie|envoie le|envoie la|envoie ca|envoie lui|c est parti|banco|exact|affirmatif|volontiers)';
+  // « 👍 », « ✅ », « 👌 » seuls valent oui (chef).
+  const pouce = /^\s*(?:👍|✅|👌|🙏|💯|🆗)+\s*$/.test(String(text || ''));
+  const ouiNet = pouce || (mots.length > 0 && mots.length <= 5 && new RegExp('^' + OUI + '(?: ' + OUI + ')*$').test(nu));
+  const nonNet = mots.length > 0 && mots.length <= 3 && /^(non|nan|non merci|annule|annule ca|laisse|laisse tomber|stop|n envoie pas|n envoie rien|envoie pas|envoie rien|oublie|pas maintenant|surtout pas|non non|non pas)$/.test(nu);
+  const ouiMais = /^(oui|ok|ouais|d accord)[ ,]+(mais|plutot|sauf|change|en changeant|avec|en remplacant|mais pas)\b/.test(norm) || /^(plutot|change|modifie|corrige|remplace|reecris|dis plutot|ecris plutot)\b/.test(norm);
+  // Une réponse qui commence par oui / ok / d'accord sans être nette ni un « oui mais » : la question est reposée, jamais fermée en silence (examinateur).
+  const ouiFlou = !ouiNet && !ouiMais && /^(oui|ouais|ok|okay|d accord|daccord)\b/.test(norm);
   if (ouiNet) {
     e._resolu = true;
     tcPousserMessageUtilisateur(text);
@@ -21157,6 +21164,12 @@ async function tcRepondreEnvoi(text) {
     renderCharlyChat();
     return true;
   }
+  if (ouiFlou) {
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'J’envoie ? Réponds « oui » ou « non ».', _envoiEnAttente: e });
+    renderCharlyChat();
+    return true;
+  }
   // Autre chose : la question tombe sans bruit, la nouvelle phrase suit son chemin.
   e._resolu = true;
   return false;
@@ -21172,10 +21185,15 @@ function tcSansFaussesActions(reply) {
   if (/\[AGENDA\]/.test(r)) return reply;
   // (pas d'assertion arrière : Safari ancien ne la lit pas.)
   const phrases = r.replace(/([.!?])\s+/g, '$1\n').split(/\n+/).filter(Boolean);
-  const claim = /(c[’']est (?:fait|envoy[ée]|r[ée]gl[ée]|bloqu[ée]|refus[ée]|accept[ée]|annul[ée])|\bje (?:le |la |les |l[’'])?bloque\b|j[’']ai (?:bloqu[ée]|envoy[ée]|pr[ée]venu|refus[ée]|accept[ée]|transmis|r[ée]pondu|annul[ée])|message (?:a (?:bien )?[ée]t[ée] )?envoy[ée]|a (?:bien )?[ée]t[ée] (?:envoy[ée]|bloqu[ée]e?|pr[ée]venu|refus[ée]e?|accept[ée]e?)|(?:il|elle|[A-ZÀ-Ý][a-zà-ÿ-]+) est (?:bloqu[ée]e?|pr[ée]venue?|inform[ée]e?)|je (?:lui |leur )?(?:envoie|transmets) (?:ça|cela|le message|un message)\b)/i;
+  // Une action de Charly affirmée : « c'est fait / envoyé / bloqué », « je bloque X », « j'ai envoyé / prévenu / annulé / réglé », « le message a bien été envoyé ».
+  const claim = /(c[’']est (?:fait|envoy[ée]|bloqu[ée]|refus[ée]|accept[ée])|\bje (?:le |la |les |l[’'])?bloque\b|j[’']ai (?:bloqu[ée]|envoy[ée]|pr[ée]venu|refus[ée]|accept[ée]|transmis|r[ée]pondu|annul[ée]|r[ée]gl[ée])|je l[’']ai (?:annul[ée]|r[ée]gl[ée]|envoy[ée])|message (?:a (?:bien )?[ée]t[ée] )?envoy[ée]|a (?:bien )?[ée]t[ée] (?:envoy[ée]|bloqu[ée]e?|pr[ée]venu|refus[ée]e?|accept[ée]e?)|je (?:lui |leur )?(?:envoie|transmets) (?:ça|cela|le message|un message)\b)/i;
+  // « Hugo est prévenu », « Il est bloqué » : la majuscule réellement exigée (« ton agenda est bloqué ce jour-là » est un état, pas une action).
+  const claimNom = /(?:^|\s)(?:Il|Elle|[A-ZÀ-Ý][a-zà-ÿ-]+) est (?:bloqu[ée]e?|pr[ée]venue?|inform[ée]e?)\b/;
+  // « C'est annulé ! », « C'est réglé. » seuls : une action ; « c'est annulé de son côté », « c'est réglé : tu n'as rien jeudi » décrivent un état.
+  const claimSeul = /^\s*c[’']est (?:annul[ée]|r[ée]gl[ée])\s*[!.]*\s*$/i;
   const condition = /\b(que je|si c|si tu|une fois que|d[èe]s que|quand tu|tu confirmes|tu valides|veux-tu|tu veux|pour bloquer|pour envoyer|si besoin|lorsque)\b/i;
   const temps = /bloque\s+(?:ton |ta |tes |une |la |le |les |un |mon |ma )?(?:plage|cr[ée]neau|matin[ée]e?|apr[èe]s-midi|aprem|soir[ée]e?|journ[ée]e|semaine|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|\d{1,2} ?h|heure|temps|moment|pause)/i;
-  const faux = phrases.some(function (p) { return claim.test(p) && !/\?/.test(p) && !condition.test(p) && !temps.test(p); });
+  const faux = phrases.some(function (p) { return (claim.test(p) || claimNom.test(p) || claimSeul.test(p)) && !/\?/.test(p) && !condition.test(p) && !temps.test(p); });
   return faux ? TC_MESSAGERIE_FAUSSE_ACTION : reply;
 }
 

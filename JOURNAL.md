@@ -2806,3 +2806,7 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   n'envoie rien, « oui mais… / plutôt… » n'envoie rien et demande le texte, toute autre phrase ferme la question et suit son chemin. tcPrevenirDepuisChat :
   relecture en bulle (annulation du rendez-vous ou note de retard après l'envoi), plus de tcConfirm sur le chemin du chat (les fenêtres décaler / annuler / voyage
   hors chat ne bougent pas, décision du chef). Suite : section 14, 46 cas négatifs.
+- Troisième passage (examinateur + chef) : tcRepondreEnvoi : les petits mots autour du oui tombent (stp, svp, merci, charly, allez…), « ouais », « ouep », « carrément »,
+  « bien sûr », « vas-y », « envoie(-le) », « 👍 » valent oui ; un oui qui n'est ni net ni « oui mais » repose « J'envoie ? Réponds « oui » ou « non ». » (jamais fermé en
+  silence). tcSansFaussesActions : la majuscule du nom réellement exigée (« Ton agenda est bloqué ce jour-là » reste), « c'est annulé / réglé » seulement seul
+  (« C'est réglé ! ») ou à la première personne (« je l'ai annulé ») ; « c'est réglé : tu n'as rien jeudi », « c'est annulé de son côté » restent (constats, chef).
