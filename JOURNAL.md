@@ -2455,3 +2455,14 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
 - (suite, 24/10) « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») :
   la même question précise, et la proposition reste gardée (aussi après les deux exemples) : « mardi 15h » ensuite passe, le
   Dermatologue est dans l'historique.
+- (suite, 24/10, examinateur et chef) Le classement tourne sur chaque message : une question OUVERTE de Charly (l'accueil « Qu'est-ce
+  que je peux faire pour toi ? », « tu veux autre chose ? », TC_CLASSE_QUESTIONS_OUVERTES) ne laisse plus passer le message suivant
+  sans classement (« Bonjour » puis « Cv ? » reçoit la question) ; seule une question précise (« C'est pour quoi, à 16h ? »,
+  « Quel jour ? ») attend sa réponse. « Où » : le lieu d'un rendez-vous seulement si l'on parle d'un rendez-vous (rdv, rendez-vous,
+  mon prochain, un titre de l'agenda, sans mot de recherche) ou « c'est où ? » seul ; « où aller manger ce soir ? », « où on va
+  en vacances ? », une recherche de lieu (« pharmacie de garde à côté ») sans détecteur : hors agenda, « Je m'occupe seulement de
+  ton agenda : je peux noter, décaler ou annuler un rendez-vous, prévenir quelqu'un ou trouver un créneau, qu'est-ce que je fais
+  pour toi ? ». « Retard » : le questionnaire de MON retard ne part que pour soi (« je suis en retard », « j'ai 10 min de retard »,
+  ou le mot seul « retard », « retard 10 min », « 10 min de retard ») ; « Marc est en retard », « le train est en retard » :
+  « D'accord : je décale ton rendez-vous avec Marc Dupont (un rendez-vous), ou je préviens quelqu'un ? ». Détails : « pas » et les
+  petits mots ne deviennent pas l'objet (« pas ça mardi »), le contact se cherche dans l'objet (« Sophie demain » : avec Sophie Anceau).

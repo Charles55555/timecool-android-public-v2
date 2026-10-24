@@ -13172,8 +13172,10 @@ function tcDetecterPrevenance(text) {
   if (/\bcomment\b/.test(t)) return null;
   const verbe = /(previen|prevenir|avertis|avertir|informe|informer|\bdis (a|au|aux)\b|dire (a|au|aux)\b|fais savoir|envoie[sz]? (un |lui |leur )?(message|sms|texto|mail|mot)|ecris (a|au)\b)/.test(t);
   const moi = /\b(je|j')/.test(t);
-  // « retard 10 min », « 10 min de retard » (quatre mots au plus, sans verbe ni « je ») : le questionnaire retard demande a qui (mission 50).
-  if (/\bretard\b/.test(t) && (verbe || moi || t.trim().split(/\s+/).length <= 4)) {
+  // « retard », « retard 10 min », « 10 min de retard » seuls (sans autre sujet ni negation, sans verbe ni « je ») : le questionnaire
+  // retard demande a qui (mission 50). « Marc est en retard », « pas de retard », « en retard ? » ne sont pas MON retard.
+  const seulRetard = /^(retard( de)?( \d{1,3} ?(min|mn|minutes?))?|\d{1,3} ?(min|mn|minutes?) de retard)$/.test(t.replace(/[?!.,;:]/g, ' ').replace(/\s+/g, ' ').trim());
+  if (/\bretard\b/.test(t) && (verbe || moi || seulRetard)) {
     const m = t.match(/(\d{1,3})\s*(min\b|mn\b|minutes?)/);
     let minutes = m ? parseInt(m[1], 10) : null;
     if (!minutes && /quart d'?heure/.test(t)) minutes = 15;
@@ -13812,7 +13814,12 @@ function detecterConsultationAgenda(text) {
     return { type: 'prochain' };
   }
   // « Où est mon rdv ? », « c'est où ? », « où ça se passe ? » : le lieu du prochain rendez-vous, ou de celui de la période (mission 50).
-  if (/(^|\s)où(\s|$)/.test(t.replace(/[?!.,;:]/g, ' ')) && /(rdv|rendez-vous|rendez vous|c'est où|ça se passe|ca se passe|je vais|on va|aller|mon prochain|le prochain)/.test(t)) {
+  // Seulement un rendez-vous (rdv, rendez-vous, mon prochain, un titre de l'agenda) sans mot de recherche (« où trouver un dentiste ? »,
+  // « où aller manger ? » vont ailleurs), ou « c'est où ? » seul, juste après un résultat.
+  const _ou = /(^|\s)où(\s|$)/.test(t.replace(/[?!.,;:]/g, ' '));
+  const _ouSeul = /^(c'est où|c est où|où ça|où ca|où|où ça se passe|ça se passe où|ca se passe où|c'est où exactement|où exactement)\s*\??$/.test(t.replace(/\s+/g, ' ').trim());
+  const _recherche = /\b(trouver|trouve|chercher|cherche|aller|manger|acheter|dormir|boire|proche|vacances|partir|un|une|des)\b/.test(t);
+  if (_ou && (_ouSeul || (!_recherche && (/\b(rdv|rendez-vous|rendez vous|mon prochain|le prochain)\b/.test(t) || tcMotDeLAgenda(t))))) {
     return { type: 'lieu', periode: tcPeriodeAgenda(t) || tcPeriodeJourNomme(t) || null };
   }
   // « Quand suis-je libre cette semaine ? » demande un créneau, pas la liste.
@@ -18604,6 +18611,8 @@ function showPeriodeConflits(conflicts, msg) {
 const TC_CLASSE_SEUIL = 2;
 const TC_CLASSE_NON_COMPRIS = 'Sauf erreur de ma part, je n\'ai pas bien compris : ';
 const TC_CLASSE_QUESTION_GENERALE = TC_CLASSE_NON_COMPRIS + 'qu’est-ce que tu veux que je fasse ?';
+/* Hors agenda (« où aller manger ce soir ? ») : ce dont Charly s'occupe, en une phrase, et la question (chef, 24/10). */
+const TC_CLASSE_HORS_AGENDA = 'Je m’occupe seulement de ton agenda : je peux noter, décaler ou annuler un rendez-vous, prévenir quelqu’un ou trouver un créneau, qu’est-ce que je fais pour toi ?';
 /* Ce qui, à lui seul, dit de quoi on parle (une question sur TimeCool, une fonction) : +2. */
 const TC_CLASSE_SUJETS = ['gratuit', 'prix', 'tarif', 'tarifs', 'abonnement', 'payant', 'cout', 'coute', 'rgpd', 'securite', 'securise',
   'securisees', 'confidentialite', 'confidentiel', 'donnees', 'appli', 'application', 'android', 'iphone', 'ios', 'telecharger',
@@ -18681,13 +18690,23 @@ function tcClasseDernierMessageCharly(histoire) {
   return null;
 }
 
-/** Ce dernier message de Charly posait-il une question ? (le message suivant est alors une réponse, pas une nouvelle demande) */
+/* Une question OUVERTE de Charly (l'accueil, « tu veux autre chose ? ») n'attend pas de réponse précise : le message suivant se classe. */
+const TC_CLASSE_QUESTIONS_OUVERTES = /(qu est ce que je peux faire|que puis je faire|qu est ce que je fais pour toi|autre chose|qu est ce que tu veux que je fasse|qu est ce que tu voulais|ne te semble pas juste|comment puis je t aider|que veux tu faire|je peux t aider|pose moi ta question|dis moi ce que|qu est ce que tu veux faire|que veux tu que je fasse|comment je peux t aider)/;
+
+/**
+ * Ce dernier message de Charly posait-il une question PRÉCISE (« C'est pour quoi, à 16h ? », « Quel jour ? ») ? Le message
+ * suivant est alors la réponse. Une question ouverte (« Qu'est-ce que je peux faire pour toi ? ») laisse le classement se faire.
+ */
 function tcClassePoseUneQuestion(message) {
   if (!message) return false;
   const texte = String(message.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   if (!texte) return false;
-  // Une question dans la dernière partie du message (« … Tu veux qu'on planifie quelque chose ? », « C'est pour quoi, à 16h ? »).
-  return /\?\s*(\p{Extended_Pictographic}|\s)*$/u.test(texte) || texte.slice(-60).indexOf('?') > -1;
+  const fin = texte.slice(-80);
+  if (!(/\?\s*(\p{Extended_Pictographic}|\s)*$/u.test(texte) || fin.indexOf('?') > -1)) return false;
+  // La dernière question du message : ouverte, elle ne compte pas.
+  const questions = texte.split('?').slice(0, -1);
+  const derniere = tcClasseNormaliser(questions[questions.length - 1] || '');
+  return !TC_CLASSE_QUESTIONS_OUVERTES.test(derniere);
 }
 
 /** Un mot du message nomme-t-il un rendez-vous de l'agenda, ou un contact ? */
@@ -18747,6 +18766,8 @@ function tcClasseIndices(brut, norm, mots) {
   // 7. Un nom connu de l'agenda (un rendez-vous noté, un contact) : +1 (« golf samedi », « anniversaire de Marc »).
   indices.connu = tcClasseNomConnu(brut);
   if (indices.connu) indices.score += 1;
+  // 7b. Une recherche de lieu (« pharmacie de garde à côté ») : notée, sans point ; sans détecteur ni verbe, c'est hors agenda.
+  indices.recherche = TC_CLASSE_RECHERCHE.test(norm);
   // 8. Une vraie phrase (six mots ou plus, « aujourd'hui » ou « c'est » comptant pour un) : +1.
   const motsPleins = tcSansAccents(brut).replace(/[’'`´]/g, '').split(/[^a-z0-9]+/).filter(Boolean);
   indices.long = motsPleins.length >= 6;
@@ -18805,7 +18826,10 @@ const TC_CLASSE_MOTS_DE_MOMENT = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendre
   'midi', 'soir', 'soiree', 'nuit', 'semaine', 'prochain', 'prochaine', 'week', 'end', 'weekend', 'ce', 'cet', 'cette', 'le', 'la', 'les', 'l', 'un', 'une',
   'des', 'du', 'de', 'd', 'a', 'au', 'aux', 'et', 'ou', 'pour', 'avec', 'chez', 'mon', 'ma', 'mes', 'ton', 'ta', 'tes', 'h', 'heure', 'heures', 'min', 'mn',
   'minutes', 'vers', 'en', 'sur', 'dans', 'rdv', 'rendez', 'vous', 'oui', 'non', 'je', 'tu', 'il', 'on', 'moi', 'toi', 'y', 'ca', 'c', 'est', 'hier', 'janvier',
-  'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre', 'stp', 'svp', 'merci'];
+  'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre', 'stp', 'svp', 'merci',
+  'pas', 'plutot', 'si', 'ne', 'n', 'mais', 'donc', 'alors', 'encore', 'aussi', 'meme', 'plus', 'moins', 'tout', 'tous', 'toute', 'toutes', 'rien', 'cela', 'ceci', 'bien', 'tres'];
+/* Une recherche de lieu (« pharmacie de garde à côté », « un resto près de la gare ») : ce n'est pas un rendez-vous à noter. */
+const TC_CLASSE_RECHERCHE = /\b(a cote|pres de|pres d|proche|le plus proche|la plus proche|de garde|ouvert|ouverte|autour|dans le coin|pas loin|aux alentours)\b/;
 
 /**
  * Intention claire mais il manque une pièce (décision du chef, 24/10) : « golf samedi » (à quelle heure ?), « foot 14h » (quel
@@ -18813,7 +18837,7 @@ const TC_CLASSE_MOTS_DE_MOMENT = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendre
  * Rend { question, proposition } ; null si le message n'a pas d'objet, ou s'il a déjà le jour et l'heure (il passe), ou s'il est long.
  */
 function tcClassePieceManquante(brut, norm, mots) {
-  if (mots.length > 5) return null;
+  if (mots.length > 5 || TC_CLASSE_RECHERCHE.test(norm)) return null;
   const bas = String(brut || '').toLowerCase();
   const heure = tcHeureDansTexte(bas);
   const moment = tcClasseMomentEcrit(brut);
@@ -18824,7 +18848,8 @@ function tcClassePieceManquante(brut, norm, mots) {
   const bruts = String(brut).trim().replace(/[?!.…]+$/, '').split(/\s+/);
   const idx = bruts.map(function (w, i) { return objetMots.indexOf(tcClasseNormaliser(w)) > -1 ? i : -1; }).filter(function (i) { return i > -1; });
   const objet = bruts.slice(idx[0], idx[idx.length - 1] + 1).join(' ');
-  const contact = tcClasseContactEcrit(brut);
+  // Le contact se cherche dans l'objet seul (« Sophie demain » : Sophie, pas « demain »).
+  const contact = tcClasseContactEcrit(objet);
   const pour = (contact && objetMots.every(function (m) { return tcSansAccents(contact.name).indexOf(m) > -1; })) ? 'avec ' + contact.name : 'pour « ' + objet + ' »';
   const proposition = { moment: moment || null, contact: contact ? contact.name : null, metier: null, titre: objet, texte: String(brut).trim(), etape: 'suite' };
   if (jour && heure) return { question: null, proposition: proposition };
@@ -18918,6 +18943,23 @@ function tcClasserMessage(text, histoire) {
   }
   // 8. Les indices de clarté. Un détecteur ou un verbe de demande : le message passe.
   const indices = tcClasseIndices(brut, norm, mots);
+  // 8a. Le retard de quelqu'un ou de quelque chose d'autre (« Marc est en retard », « le train est en retard ») : pas MON retard
+  //     (le détecteur de prévenance ne l'a pas pris), Charly demande ce qu'il doit faire (chef, 24/10).
+  if (/\bretard\b/.test(norm) && !indices.detecteur && !/\b(pas de|sans|aucun|zero|plus de) retard\b/.test(norm)) {
+    const candidats = mots.filter(function (m) { return m !== 'retard' && TC_CLASSE_MOTS_DE_MOMENT.indexOf(m) < 0 && m.length >= 3 && !/^\d/.test(m); });
+    let c = null;
+    try { const trouves = (candidats.length && typeof tcContactsParMots === 'function') ? tcContactsParMots(candidats) : []; c = trouves.length === 1 ? trouves[0] : null; } catch (e) { c = null; }
+    return pasSur('retard_autre', 'D’accord : je décale ' + (c ? 'ton rendez-vous avec ' + c.name : 'un rendez-vous') + ', ou je préviens quelqu’un ?',
+      { moment: null, contact: c ? c.name : null, metier: null, titre: 'retard', texte: String(brut).trim(), etape: 'suite' }, indices);
+  }
+  // 8b. Hors agenda (chef, 24/10) : « où aller manger ce soir ? », « où on va en vacances ? », « pharmacie de garde à côté » : un
+  //     « où » qui ne parle pas d'un rendez-vous, ou une recherche de lieu, sans détecteur ni verbe de demande (« trouve-moi un
+  //     restaurant à côté du bureau » passe) : Charly dit ce dont il s'occupe.
+  const ou = /(^|\s)où(\s|$)/.test(String(brut).toLowerCase().replace(/[?!.,;:]/g, ' '));
+  const parleRdv = /\b(rdv|rendez vous|rendez|prochain|prochaine|agenda)\b/.test(norm) || tcClasseNomConnu(brut);
+  const verbesDemande = (typeof TC_VERBES_DE_DEMANDE !== 'undefined' ? TC_VERBES_DE_DEMANDE : []).concat(TC_CLASSE_VERBES);
+  const imperatif = mots.some(function (m) { return verbesDemande.indexOf(m) > -1; });
+  if (!indices.detecteur && !imperatif && ((ou && !parleRdv) || indices.recherche)) return pasSur('hors_agenda', TC_CLASSE_HORS_AGENDA, null, indices);
   if (indices.detecteur || indices.verbe) return { classe: 'claire', question: null, proposition: null, indices: indices, raison: null };
   // 9. Intention claire mais une pièce manque (« golf samedi », « foot 14h », « anniversaire de Marc », « Dermatologue ») :
   //    Charly demande LA pièce ; avec l'objet, le jour et l'heure (« dentiste mardi 15h »), le message passe.
