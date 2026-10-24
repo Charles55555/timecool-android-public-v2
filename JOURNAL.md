@@ -2603,3 +2603,28 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   retard » → « je décale ou je préviens ? » ; « plus de retard du tout » → « Bien noté, pas de retard. » Quelqu'un
   d'autre malade : « mon chat est malade » → « Bon courage 😊 … », « Marc est malade » → « Marc Dupont est malade : je décale ou
   j'annule ton rendez-vous avec lui ? » ; plus de pièce manquante.
+
+## 24/10/2026 : mission 53, les 13 ratés restants (chef, dernier passage de ce chantier)
+
+- Batterie TESTEURS v2.0.382 : 96 % (287/300). Bloc « MISSION 53 » après le bloc 52 ; retouches des blocs 50, 51 et 52.
+- 1. Chaque message reçoit une bulle de Charly (rôle assistant), jamais une carte système seule ni « rien » : « Mets Paul de côté » →
+  « Je retire ton rendez-vous avec Paul Martin ? » (oui/non) ou « Lequel ? » ; les confirmations d'information d'annulation, d'ordinal
+  et de sans cible sont des bulles. « non c'était pour Hugo » sur une proposition pas encore validée : la carte est refaite avec Hugo
+  (tcCorrigerCartePendante, le 6e champ de la ligne [AGENDA]) et Charly demande de la valider.
+- 2. Annulation douteuse (classement, avant tout détecteur) : « Je vais pas y aller », « j'y vais plus », « rdv annulé » → « Tu veux
+  l'annuler ou le décaler, et lequel ? » (sans lister) ; « J'ai encore oublié le dentiste » → « Pour « Dentiste » (vendredi 16 octobre
+  15h à 16h) : tu veux que je l'annule, ou que je le décale ? » ; la réponse se lit AVANT l'objet (« annule » → « annule « Dentiste » »,
+  « décale-le à mardi » → « décale-le à mardi « Dentiste » » : déplacement local). Ces phrases ne sont plus « sans cible ».
+- 3. « Je dois voir le dentiste avant lundi » → une demande de créneau (tcPeriodeAvant : d'aujourd'hui à la veille ; « d'ici
+  vendredi », « avant demain ») : tcGererDemandeCreneau, dans Mes disponibilités (sans plage le week-end, pas de dimanche : le texte le
+  dit). « Quels sont mes créneaux libres mardi ? », « je suis libre quand cette semaine » → les créneaux (plus « Noté. Tu veux que je
+  propose… » : « quand » ou « ? » = question).
+- 5. « Ajoute anniversaire de Gaëlle le 12 novembre » sans heure → journée entière notée directement (allDay, Famille) : « C'est noté :
+  « Anniversaire de Gaëlle », jeudi 12 novembre, toute la journée. » ; une deuxième fois → « est déjà noté ». « ajoute quand même »
+  sans carte ni conflit en attente (le modèle avait refusé en prose) : la demande précédente est recréée (tcCreationLocale(…, forcer)
+  passe la garde « même titre ») et validée.
+- Heures en lettres (tcHeuresEnLettres, dans tcCorrigerAbreviations) : « dix-huit heures » → « 18 heures », « quatorze heures trente »
+  → « 14 heures 30 », « neuf heures et quart », « midi et demie » ; « deux rendez-vous » reste. Hors sujet courants (recette, pizza,
+  « j'ai faim », capitale) : une réponse courte sans question.
+- Règle permanente du chef : toute mission qui touche Charly passe la batterie TESTEURS avant son « publié ».
+- API inchangée. Suite : verif-classement-charly, section 10.
