@@ -13214,7 +13214,7 @@ function tcDetecterPrevenance(text) {
   const moi = /\b(je|j')/.test(t);
   // « envoie a Gaelle que j'arrive dans 10 minutes », « dis a Paul que j'annule » : le destinataire est nomme (mission 55).
   let destinataire = null, texteLibre = null;
-  const mLibre = t.match(/^(?:stp |svp |charly )?(?:envoie[sz]?|envoi|envoyer|dis|dites|ecris|ecrire|previens|prevenez|prevenir|avertis|fais savoir|faire savoir)(?: (?:un |lui |leur )?(?:message|sms|texto|mail|mot))? (?:a|au|a la) ([a-z][a-z-]+(?: [a-z][a-z-]+)?) (?:que|qu')\s*(.+)$/);
+  const mLibre = t.match(/^(?:stp |svp |charly )?(?:envoie[sz]?|envoi|envoyer|dis|dites|ecris|ecrire|previens|prevenez|prevenir|avertis|fais savoir|faire savoir|reponds|repond|repondre|reponds[- ]lui)(?: (?:un |lui |leur )?(?:message|sms|texto|mail|mot))? (?:a|au|a la) ([a-z][a-z-]+(?: [a-z][a-z-]+)?) (?:que|qu')\s*(.+)$/);
   if (mLibre && typeof tcContactsParMots === 'function') {
     // Le texte a recopier garde ses accents : il est pris dans la phrase d'origine (meme longueur, sans accents = meme position).
     const brutTexte = String(text || '');
@@ -15139,6 +15139,9 @@ async function charlySendMessage() {
     if (pris) return;
   }
 
+  // === « J'envoie ? » : la réponse à un message relu (oui → il part, non → rien) (mission 57) ===
+  if (typeof tcRepondreEnvoi === 'function' && await tcRepondreEnvoi(text)) return;
+
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
   if (typeof tcQuestionTypeEnAttente === 'function') {
     const _qt = tcQuestionTypeEnAttente();
@@ -15320,6 +15323,13 @@ async function charlySendMessage() {
   // === CLASSER AVANT DE RÉPONDRE (mission 50) : pas sûr d'avoir compris → une seule question, aucune action ===
   // Les réponses attendues (questionnaire, oui/non, trajet, « qui est-ce ? ») sont déjà passées au-dessus. Du code, le même
   // quel que soit le modèle : une contestation, une réaction, un mot seul ou une phrase hors sujet ne vont ni aux détecteurs ni au modèle.
+  // === UNE DEMANDE REÇUE, UNE INVITATION (« accepte la demande de Hugo », « présent », « propose-lui jeudi ») : tant que Charly ne lit pas la
+  // messagerie, une seule réponse vraie, avec le chemin vers la messagerie (chef, mission 57). ===
+  {
+    const _recue = (typeof tcDetecterDemandeRecue === 'function') ? tcDetecterDemandeRecue(text) : null;
+    if (_recue) { tcGererDemandeRecue(text, _recue); return; }
+  }
+
   {
     const _classe = tcClasserMessage(text, charlyIA.history);
     if (_classe.compose) { text = _classe.compose; _tcTexteTape = { tape: texteTape, corrige: text }; }
@@ -15344,6 +15354,9 @@ async function charlySendMessage() {
   // === PRÉVENIR : « préviens Marc que j'aurai 10 min de retard », « je serai en retard chez le dentiste » ===
   // Le message vient des modèles des Paramètres, relu et validé ici ; jamais laissé au modèle,
   // et jamais la liste « pas encore disponible » (sms, message).
+  // « ouvre la messagerie », « oui » après « Je t'y emmène ? » (mission 57).
+  if (typeof tcDetecterOuvrirMessagerie === 'function' && tcDetecterOuvrirMessagerie(text)) { tcOuvrirMessagerie(text); return; }
+
   const _prevenance = tcDetecterPrevenance(text);
   if (_prevenance) {
     await tcGererPrevenance(text, _prevenance);
@@ -15655,6 +15668,9 @@ async function charlySendMessage() {
       reply = reply + tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, new Date(), isAllDaysUser ? 7 : 1);
     }
     // Une simple question n appelle aucune carte (mission 31).
+    // « Je bloque Hugo. C'est fait ! », « C'est envoyé » sans action réelle : remplacé par la vérité (mission 57). (En tête des garde-fous :
+    // les suites campagne9, relance et notes-internes veulent les garde-fous suivants dans leur ordre exact.)
+    if (typeof tcSansFaussesActions === 'function') reply = tcSansFaussesActions(reply);
     reply = tcSansCarteApresQuestion(reply, text);
     // Filet : la date d'une proposition suit la demande, et jamais dans le passe (campagne 4, 11/10).
     reply = tcCorrigerPropositionsCharly(reply, text, new Date());
@@ -19532,7 +19548,7 @@ function tcClasserMessage(text, histoire) {
 function tcNatureReponse(reply) {
   const r = String(reply || '');
   if (r.indexOf('[AGENDA]') > -1) return 'action';
-  if (/Sauf erreur de ma part|^Lequel \?|Réponds « oui » ou « non »/.test(r)) return 'question';
+  if (/Sauf erreur de ma part|^Lequel \?|Réponds « oui » ou « non »|Je t’y emmène \?/.test(r)) return 'question';
   return 'reponse';
 }
 
@@ -19810,11 +19826,8 @@ async function tcPrevenirRetardAutre(text, proposition) {
     if (rdv) pour = ' pour « ' + rdv.title + ' » de ' + tcFormaterHeure(rdv);
   }
   const texte = 'Bonjour ' + prenom + ', ' + (moi ? moi + ' me demande de te prévenir' : 'je suis chargé de te prévenir') + ' : ' + retardataire + ' a du retard' + pour + '.';
-  if (typeof tcConfirm === 'function' && !(await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »'))) {
-    charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne préviens personne.', nature: 'reponse' });
-    renderCharlyChat();
-    return;
-  }
+  // Le message est relu dans la conversation, rien ne part sans « oui » (mission 57 : plus de fenêtre qui ne s'affiche pas).
+  if (typeof tcProposerEnvoi === 'function') { await tcProposerEnvoi(contact, texte, false); return; }
   const chemin = await tcTransmettrePrevenance(contact, texte);
   if (typeof tcDirePrevenance === 'function') tcDirePrevenance(chemin, contact.name);
   renderCharlyChat();
@@ -20641,6 +20654,8 @@ async function tcPrevenirContactLibre(text, intent) {
     const dem = moi ? moi + ' te demande' : 'je suis chargé de te demander';
     texte = 'Bonjour ' + prenom + ', ' + dem + (surete ? ' ' + recopie(q) + '.' : ' : « ' + q + ' ».');
   }
+  // Le message est relu dans la conversation, rien ne part sans « oui » (mission 57 : plus de fenêtre qui ne s'affiche pas).
+  if (typeof tcProposerEnvoi === 'function') { await tcProposerEnvoi(contact, texte, !surete); return; }
   const question = surete ? 'Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »' : 'J’envoie ça tel quel à ' + contact.name + ' ?\n\n« ' + texte + ' »';
   if (typeof tcConfirm === 'function' && !(await tcConfirm(question))) {
     charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne préviens personne.', nature: 'reponse' });
@@ -20935,6 +20950,144 @@ async function tcDireAucunCreneau(text, intent) {
   }
   charlyIA.history.push({ role: 'assistant', nature: 'question', content: texte });
   renderCharlyChat();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 57 (25/10, chef) : demandes reçues et invitations, envois relus, jamais « c'est fait » sans action
+
+   - Tant que Charly ne lit pas la messagerie : toute phrase qui répond à une demande reçue ou à une invitation (« accepte la demande de
+     Hugo », « refuse », « présent », « propose-lui jeudi ») reçoit UNE réponse vraie, avec le chemin vers la messagerie.
+   - Un message pour un contact est toujours relu dans une bulle (« J'envoie ? ») avant de partir : plus de fenêtre qui ne s'affiche pas.
+   - Une phrase du modèle qui prétend avoir bloqué, envoyé ou prévenu sans action réelle est remplacée.
+   ═══════════════════════════════════════════════════════════════ */
+const TC_MESSAGERIE_REPONDRE = 'Les demandes reçues se répondent dans la messagerie, avec les boutons « Proposer un créneau » et « Refuser » (ou « Présent » / « Absent » pour une invitation). Je t’y emmène ?';
+const TC_MESSAGERIE_LIRE = 'Les demandes reçues et les réponses se lisent dans la messagerie. Je t’y emmène ?';
+const TC_MESSAGERIE_FAUSSE_ACTION = 'Je n’ai rien fait de moi-même : bloquer, envoyer ou répondre à une demande se fait dans la messagerie. Je t’y emmène ?';
+
+/** Une phrase qui parle d'une demande reçue ou d'une invitation : 'repondre' (accepter, refuser, présent, propose-lui…), 'lire' (« Hugo a
+ *  répondu ? », « qui veut me voir ? », « c'est qui Lucie Marchand ? »), ou null. Jamais un message à transmettre (« dis à Hugo que… »). */
+function tcDetecterDemandeRecue(text) {
+  const norm = tcClasseNormaliser(text);
+  if (!norm || norm.split(' ').length > 16) return null;
+  // Un message à transmettre, une question au contact : le chemin « prévenir » (jamais ici).
+  if (/^(stp |svp |charly )?(dis|dites|envoie|envoyer|ecris|previens|demande|demandez|reponds|repond) (a|au|a la) \S+/.test(norm) && !/^(dis|reponds|repond) (oui|non|ok) (a|au)\b/.test(norm) && !/\b(que|qu|si|quand|plutot)\b/.test(norm) === false) {
+    if (!/^(dis|reponds|repond) (oui|non|ok) (a|au)\b/.test(norm)) return null;
+  }
+  const question = /\?/.test(String(text || '')) || /^(qui|combien|est ce que|est ce qu|il|elle|c est qui|qu est ce que|quoi)\b/.test(norm);
+  const demande = /\b(la|une|cette|sa|ma|l|les|des|mes|ses|de|d) (demandes?|invitations?|convocations?|propositions?)( recues?| en attente| de \S+| d \S+)?\b/.test(norm) || /\bpoint projet\b/.test(norm);
+  // Lire : « Hugo a répondu ? », « il veut quoi Hugo ? », « qui veut me voir ? », « c'est qui Lucie Marchand ? », « combien j'ai de demandes ? ».
+  if (question && (/\b(a repondu|m a repondu|m a propose|m a demande|m a invite|a accepte|a refuse|veut decaler|veut quoi|est serieux|veut me voir|veulent me voir|m a invite a quoi)\b/.test(norm)
+      || /^c est qui\b/.test(norm) || /^qui (d autre )?(vient|participe|est invite|veut|a demande|m a)\b/.test(norm) || demande)) return 'lire';
+  // Répondre : accepter / refuser / présent / absent / propose-lui / dis oui / bloquer.
+  if (/^(ok |oui |non |d accord |bon |alors |et )?(accepte|accepter|acceptes|j accepte|refuse|refuser|refuses|je refuse|decline|rejette|valide la demande|valide l invitation|ignore|ignorer)( |$)/.test(norm)) return 'repondre';
+  if (/^(dis|reponds|repond|repondre) (oui|non|ok|que oui|que non) (a|au|a la|pour)?\b/.test(norm) || /^(reponds|repond) (oui|non)$/.test(norm)) return 'repondre';
+  if (/^(ok |oui |d accord )?(present|presente|absent|absente)( au| a la| pour le| pour la| jeudi| demain| lundi| mardi| mercredi| vendredi)?\b/.test(norm) && norm.split(' ').length <= 6) return 'repondre';
+  if (/^(je serai|je suis|je serais) (present|presente|absent|absente|la|de la partie)\b/.test(norm) || /^(compte sur moi|je participe|je participerai|je ne participe pas|je ne participerai pas|je viens|je viendrai|je serai la)\b/.test(norm) && /\b(point|reunion|invitation|convocation|projet|jeudi|lundi|mardi|mercredi|vendredi)\b/.test(norm)) return 'repondre';
+  if (/^je (ne )?(pourrai|pourrais|peux) pas venir (au |a la |a l )/.test(norm) || /^je (ne )?(viendrai|viens) pas (au |a la |a l )/.test(norm)) return 'repondre';
+  if (/\b(propose|proposez|proposer|donne|donnez|fixe|fixez|mets|mettez|offre)[ -]?(lui|leur)\b/.test(norm)) return 'repondre';
+  // « Propose deux créneaux à Hugo », « propose autre chose à Hugo », « propose à Hugo jeudi à 11h » (sans objet) : une réponse à sa demande.
+  if (/\bpropose[sz]? (?:un |deux |trois |d autres |un autre |plusieurs |autre )?(?:creneaux?|horaires?|autre chose|autres creneaux|un autre creneau) (?:a|au) [a-z-]+/.test(norm)) return 'repondre';
+  if (/^(?:ok |oui |non |d accord )?propose[sz]? (?:a|au) [a-z-]+ (?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres demain|\d{1,2} ?h|a \d{1,2} ?h|la semaine prochaine|mon prochain)/.test(norm)) return 'repondre';
+  // « bloque Hugo », « bloque-la », « je ne la connais pas, bloque-la » : bloquer se fait dans la messagerie.
+  if (/(^|\s)(refuse et )?bloque[ -]?(le|la|les|lui)(\s|$)/.test(norm) || (/^(refuse et |non |non, )?bloque[ -]?\S+/.test(norm) && !/\b(creneau|heure|h\d|\d{1,2} ?h|journee|matinee|apres midi|plage|temps|moi)\b/.test(norm))) return 'repondre';
+  // « Pas cette semaine pour Hugo », « je n'ai pas le temps pour Hugo » : une réponse (refus) à sa demande.
+  if (/^(pas|non pas|non|plutot pas) (cette semaine|ce mois|ce mois ci|ce soir|demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|maintenant|tout de suite|avant \S+) pour [a-z-]+$/.test(norm) || /^je n ai pas le temps pour [a-z-]+$/.test(norm)) return 'repondre';
+  if (/\blaisse tomber (la |sa |cette |l )(demande|invitation|proposition|convocation)\b/.test(norm)) return 'repondre';
+  if (demande && !question && /\b(accepte|refuse|reponds|reponse|ok pour|d accord pour|oui pour|non pour|pas le temps|plus tard|on verra|ignore)\b/.test(norm)) return 'repondre';
+  if (demande && !question) return 'repondre';
+  return null;
+}
+
+/** La réponse vraie, en une bulle, avec le bouton vers la messagerie ; « oui » y emmène. */
+function tcGererDemandeRecue(text, type) {
+  tcPousserMessageUtilisateur(text);
+  const phrase = type === 'lire' ? TC_MESSAGERIE_LIRE : TC_MESSAGERIE_REPONDRE;
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: phrase, _classement: 'demande_recue', _texte: String(text || '').trim(),
+    _proposition: { moment: null, contact: null, metier: null, titre: 'messagerie', texte: '', etape: 'suite', composable: false, surOui: 'ouvre la messagerie' } });
+  renderCharlyChat();
+  tcAjouterBoutonMessagerie();
+}
+
+/** Le bouton « Ouvrir la messagerie » sous la dernière bulle de Charly. */
+function tcAjouterBoutonMessagerie() {
+  if (typeof document === 'undefined' || typeof tcDernierMessageCharly !== 'function') return;
+  setTimeout(function () {
+    const lastMsg = tcDernierMessageCharly();
+    if (!lastMsg) return;
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex; gap:6px; margin:8px auto; max-width:90%;';
+    div.innerHTML = '<button onclick="tcOuvrirMessagerie()" style="flex:1; padding:10px 12px; background:#e8f0fe; color:#1a56b8; border:1.5px solid #c8d7ee; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">💬 Ouvrir la messagerie</button>';
+    lastMsg.appendChild(div);
+  }, 100);
+}
+
+/** « ouvre la messagerie », « oui » après « Je t'y emmène ? » (composé) : la page Messages s'ouvre. */
+function tcDetecterOuvrirMessagerie(text) {
+  const norm = tcClasseNormaliser(text);
+  return /^(oui |ok |vas y |allez )?(ouvre|ouvrir|va dans|affiche|montre|emmene moi (dans|a|vers)|emmene moi|aller a|aller dans) (la |ma )?(messagerie|messages)( stp| svp)?$/.test(norm) || /^(oui )?(la |ma )?messagerie( stp| svp)?$/.test(norm);
+}
+function tcOuvrirMessagerie(text) {
+  if (text) tcPousserMessageUtilisateur(text);
+  if (typeof navigate === 'function') { try { navigate('messages'); } catch (e) {} }
+  charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Voilà, tu es dans la messagerie : les demandes reçues y attendent ta réponse.' });
+  renderCharlyChat();
+}
+
+/** Un message pour un contact est relu dans la conversation avant de partir : « J'envoie ? ». Rien ne part sans « oui ». */
+async function tcProposerEnvoi(contact, texte, telQuel) {
+  const contenu = telQuel
+    ? 'J’envoie ça tel quel à ' + contact.name + ' ? « ' + texte + ' ». Réponds « oui » ou « non ».'
+    : 'Je propose d’envoyer à ' + contact.name + ' : « ' + texte + ' ». J’envoie ? Réponds « oui » ou « non ».';
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: contenu, _envoiEnAttente: { contact: contact, texte: texte } });
+  renderCharlyChat();
+}
+/** L'envoi qui attend un « oui », parmi les derniers messages, ou null. */
+function tcEnvoiEnAttente() {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  for (let i = h.length - 1, n = 0; i >= 0 && n < 3; i--, n++) {
+    const m = h[i];
+    if (m && m.role === 'assistant' && m._envoiEnAttente) return m._envoiEnAttente._resolu ? null : m;
+  }
+  return null;
+}
+/** La réponse à « J'envoie ? » : oui → le message part et Charly le dit ; non → rien ne part ; autre chose → la question tombe, le message suit son chemin. */
+async function tcRepondreEnvoi(text) {
+  const m = tcEnvoiEnAttente();
+  if (!m) return false;
+  const r = (typeof tcReponseOuiNon === 'function') ? tcReponseOuiNon(text) : null;
+  const refus = r === false || /^(non|annule|laisse|laisse tomber|stop|n envoie pas|n envoie rien|oublie)\b/.test(tcClasseNormaliser(text));
+  const e = m._envoiEnAttente;
+  if (r === true) {
+    e._resolu = true;
+    tcPousserMessageUtilisateur(text);
+    const chemin = await tcTransmettrePrevenance(e.contact, e.texte);
+    if (typeof tcDirePrevenance === 'function') tcDirePrevenance(chemin, e.contact.name);
+    const dit = chemin === 'timecool' ? 'C’est envoyé à ' + e.contact.name + '.'
+      : (chemin === 'sms' || chemin === 'email') ? 'Le message est prêt pour ' + e.contact.name + ' : envoie-le.'
+      : 'Je n’ai ni numéro ni mail pour ' + e.contact.name + ' : rien n’est parti.';
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: dit });
+    renderCharlyChat();
+    return true;
+  }
+  if (refus) {
+    e._resolu = true;
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, je n’envoie rien.' });
+    renderCharlyChat();
+    return true;
+  }
+  // Autre chose : la question tombe sans bruit, la nouvelle demande suit son chemin.
+  e._resolu = true;
+  return false;
+}
+
+/** Une phrase du modèle qui prétend avoir agi (« Je bloque Hugo. C'est fait ! », « C'est envoyé », « J'ai prévenu Paul ») sans bloc ni action : remplacée. */
+function tcSansFaussesActions(reply) {
+  const r = String(reply || '');
+  if (/\[AGENDA\]/.test(r)) return reply;
+  const re = /(c[’']est (?:fait|envoy[ée]|r[ée]gl[ée]|bloqu[ée]|refus[ée]|accept[ée])|je (?:le |la |les |l[’'])?bloque\b|j[’']ai (?:bloqu[ée]|envoy[ée]|pr[ée]venu|refus[ée]|accept[ée]|transmis|r[ée]pondu)|message envoy[ée]|(?:il|elle) est (?:bloqu[ée]e?|pr[ée]venu)|je (?:lui |leur )?(?:envoie|transmets) (?:ça|cela|le message|un message)\b)/i;
+  if (!re.test(r)) return reply;
+  return TC_MESSAGERIE_FAUSSE_ACTION;
 }
 
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */

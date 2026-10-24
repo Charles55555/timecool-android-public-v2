@@ -2777,3 +2777,20 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   avec Paul », « montre mon agenda à Hugo ») ; « je peux voir mes rdv avec Hugo ? » = consultation, « s'il » n'est pas un tiers ; tcCiviliteEnTete : « Me » / « M »
   seulement devant un nom en majuscule qui n'est pas un verbe (« Me rappeler », « Me Faire couper » ne sont pas des civilités) ; « Me rappeler jeudi 14h »,
   « rappelle-moi demain 9h » = une carte « Rappel » à cette heure (sans heure, le modèle) ; « Mme de Villiers mardi 10h » garde la particule.
+
+## 25/10/2026 : mission 57, demandes reçues et invitations, envois relus, jamais « c'est fait » sans action (chef ; 100 phrases « deux comptes » à 64 %)
+
+- Bloc 57 (devant tcPhraseNonCompris). tcDetecterDemandeRecue : « repondre » (accepte / refuse / décline / ignore ; dis oui / non à X ; présent / absent /
+  je serai présent / je ne pourrai pas venir au… ; propose-lui, propose deux créneaux à X, propose à X jeudi 11h ; bloque X / bloque-la ; laisse tomber la
+  demande ; pas cette semaine pour X ; toute phrase avec « la / une demande, invitation, convocation ») ou « lire » (« Hugo a répondu ? », « il veut quoi
+  Hugo ? », « qui veut me voir ? », « c'est qui Lucie Marchand ? », « combien j'ai de demandes ? ») ; jamais un message à transmettre (« dis à Hugo que… »,
+  « demande à Hugo plutôt mercredi », « réponds à Hugo que je suis dispo »). tcGererDemandeRecue : une bulle (question) avec la phrase du chef et le bouton
+  « Ouvrir la messagerie » ; « oui » = « ouvre la messagerie » (tcDetecterOuvrirMessagerie / tcOuvrirMessagerie → navigate('messages')).
+- tcProposerEnvoi / tcEnvoiEnAttente / tcRepondreEnvoi : tout message pour un contact (tcPrevenirContactLibre, tcPrevenirRetardAutre) est relu dans la
+  conversation : « Je propose d'envoyer à X : « … ». J'envoie ? Réponds « oui » ou « non ». » (ou « J'envoie ça tel quel à X ? ») ; « oui » → tcTransmettrePrevenance
+  et « C'est envoyé à X. » / « Le message est prêt pour X : envoie-le. » ; « non » → « D'accord, je n'envoie rien. » ; autre chose → la question tombe. Plus de tcConfirm.
+- tcSansFaussesActions : une réponse du modèle sans bloc qui dit « c'est fait », « c'est envoyé », « je bloque X », « j'ai prévenu » est remplacée par « Je n'ai rien
+  fait de moi-même : bloquer, envoyer ou répondre à une demande se fait dans la messagerie. Je t'y emmène ? » (nature question).
+- charlySendMessage : la demande reçue est lue avant le classement ; « ouvre la messagerie » avant la prévenance ; « J'envoie ? » avec les attentes ; la fausse
+  action après tcSansFormulesFaites. tcDetecterPrevenance lit « réponds à X que… ». tcNatureReponse : « Je t'y emmène ? » = question.
+- API inchangée. Suite : verif-classement-charly section 14 (32 phrases « répondre », 12 « lire », 16 ordinaires, l'envoi relu oui / non, la fausse action).
