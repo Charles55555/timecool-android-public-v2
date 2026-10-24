@@ -2482,3 +2482,43 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « où tu veux », « pharmacie de garde à côté ») est un lieu et passe. Le hors agenda ne reste que pour un « où » de recherche
   sans aucun lien avec l'agenda (ni rendez-vous, ni nom connu, ni détecteur, ni verbe de demande : « où aller manger ce
   soir ? », « où on va en vacances ? »), et dans le fil d'une question de Charly seulement s'il pose lui-même une question.
+
+## 24/10/2026 : mission 51, les ratés de la batterie des TESTEURS (chef, suite de la mission 50)
+
+- Batterie TESTEURS v2.0.380 : 76 % (227/300), 40 phrases simples en « pas compris ». Six groupes corrigés, bloc « MISSION 51 »
+  à la suite du bloc de la mission 50 (devant tcPhraseNonCompris).
+- 1. Petites phrases sociales (tcClasseSocial, classe social, nature reponse) : « tkt » → « Merci 😊 Je peux t'aider pour un
+  rendez-vous ? », « mdr » → « 😄 … », « ras »/« rien » → « D'accord. Je suis là si tu as besoin de moi. », « ça va et toi » → « Très
+  bien, merci ! … », « tu sers à rien »/« t'es nul » → « Pardon, je fais de mon mieux : dis-moi ce que tu veux pour ton agenda ? »,
+  « je t'ai pas parlé » → « D'accord, je me tais. … », « tu m'aimes ? », « tu dors jamais ? », « tu parles anglais ? », une blague,
+  un poème, de la musique, « je m'ennuie », « quelle heure il est » (l'heure), « quel jour on est » (la date), « on sera quel jour
+  demain », « c'est quand Noël » (la date et les jours restants), « combien font 12 fois 7 » (le calcul), un émoji seul (« 😂 »,
+  « 👍 »). La question finale « Je peux t'aider pour un rendez-vous ? » est ouverte : le message suivant se classe. « dacc »,
+  « ah oui c'est vrai », « t'es génial », « merci bcp » : acquiescement ou remerciement, nature reponse (plus « question »).
+  « t'es une IA ? », « il fait quel temps demain » : des sujets qui se suffisent (présentation, météo), ils passent.
+- 2. tcCorrigerAbreviations, appelée au tout début de charlySendMessage : c'est le message corrigé que lisent le classement, les
+  détecteurs et le modèle (et que montre la bulle). dem/demin → demain, auj/ajd → aujourd'hui, lun…dim → le jour (sauf après
+  « avec / chez / et / de / pour / à » et sauf tout en majuscules : « déj avec Sam ven 12h » garde Sam), sem, aprem, déj, w → avec,
+  bcp, pr, qd, rendevous → rendez-vous, anule → annule, suprime → supprime, decalle → décale, sui → suis, retar → retard, jsuis,
+  jai, quesque, malad, peu pas → peux pas… Une adresse mail ou un lien ne sont pas touchés.
+- 3. Annuler sans cible (tcDetecterSuppressionSansCible, tcGererSuppressionSansCible) : « Annule », « stp annule », « Annule ça »,
+  « Hugo a annulé » → « Lequel ?\n1. … 2. … 3. …\nDis-moi son numéro, son heure ou son nom. » avec les trois prochains rendez-vous
+  (ceux avec le contact nommé d'abord) ; un seul → la confirmation oui/non habituelle ; aucun → « rien à annuler ». tcRdvDesigne
+  lit aussi le numéro (« 2 », « le deuxième »).
+- 4. Déplacer un rendez-vous existant sans le modèle (tcDeplacementLocal, tcGererDeplacementLocal, dans charlySendMessage après
+  « rendez-vous introuvable » et avant la demande de créneau) : le rendez-vous par le jour de départ (« de mardi ») et les mots du
+  titre ou du contact, la destination par un autre jour cité, « la semaine prochaine », « le lendemain », la dernière heure citée,
+  « même heure » ; la durée est gardée. Plusieurs rendez-vous conviennent → « Tu as 2 rendez-vous qui conviennent : … Lequel
+  veux-tu déplacer ? ». Puis tcExecuterDeplacement (sorti de tcTraiterDeplacement, partagé) : sans contact, déplacé tout de
+  suite (« C'est fait, rendez-vous déplacé », marche arrière possible) ; avec un contact, « Je déplace : … Veux-tu que je prévienne
+  X ? ». Plus jamais une carte [AGENDA] à la mauvaise date pour un déplacement compris.
+- 5. tcDetecterRdvGroupe : « un moment », « un déjeuner », « un dîner », « un café », « un verre », « une visio », « un appel », « un
+  point » avec deux comptes cités → le rendez-vous à plusieurs (« Trouve-nous un moment avec Hugo, Gaëlle et Paul », « Propose un
+  déjeuner à Hugo et Gaëlle »).
+- 6. tcDetecterMarcheArriere : « annule ce que tu viens de faire », « défais ce que tu as fait », « annule ta dernière action ».
+  Contestation : « c'est pas la question », « je te demande pas ça ». Après une liste, « c'est tout ? » passe (une suite).
+  « pourquoi jeudi ? » n'est plus une consultation de l'agenda.
+- TC_APP_VERSION « 10.5.54 » : constante d'un mécanisme version.json jamais servi, sans rapport avec v2.0.NNN (la version de
+  l'APK vient du pont natif). Non modifiée : au chef de décider (deployer-web.sh pourrait l'estampiller à chaque publication).
+- API inchangée. Suite : verif-classement-charly, section 8 (abréviations, 24 phrases sociales, annulation sans cible exécutée,
+  déplacement local exécuté avec et sans contact, à plusieurs, marche arrière).

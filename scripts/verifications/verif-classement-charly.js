@@ -68,10 +68,11 @@ const ctx = {
   contactsList: [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }],
   setTimeout: (f) => { if (f) f(); return 0; }, localStorage: { getItem: () => null },
   tcFormaterDateHumaine: (d) => d, escapeHTMLSafe: (t) => String(t), renderCharlyChat() {}, tcDefinirStatutCharly() {},
-  tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); }
+  tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); },
+  currentPage: 'chat', render() {}, saveEventsToStorage() {}, addDemarche() {}, showToast() {}
 };
 vm.createContext(ctx);
-vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcSuppressionChoix = null;', ctx);
+vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcSuppressionChoix = null; let _tcDeplacementEnAttente = null;', ctx);
 ['TC_JOURS_SEMAINE', 'TC_MOIS', 'TC_PROFESSIONS', 'TC_TRAJET_DECLENCHEURS', 'TC_WEB_DECLENCHEURS', 'TC_MOTS_CREUX', 'TC_VERBES_DE_DEMANDE', 'TC_JOURS_FR', 'TC_MOIS_FR', 'TC_PETITS_MOTS'].forEach((c) => {
   const src = extraireConst(c, c === 'TC_MOTS_CREUX' ? "\\.split\\(' '\\)\\);\\n" : (/DECLENCHEURS|PROFESSIONS|VERBES_DE_DEMANDE|PETITS_MOTS/.test(c) ? '\\];\\n' : ';\\n'));
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  constante introuvable : ' + c); }
@@ -84,7 +85,8 @@ vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null
  'extraireLieuDuTexte', 'detecterRechercheProfessionnel', 'extraireAdresseDuTexte', 'detecterDemandeTrajet', 'detecterRechercheWeb',
  'tcEstDeplacement', 'tcVerbeConjugue', 'tcDetecterMarcheArriere', 'tcEstUneReprise',
  'tcCreationLocale', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcJoursCites', 'tcDateEnLettres',
- 'tcMotsUtiles', 'tcContactsParMots', 'tcLangueCourante', 'tcDetecterRdvGroupe', 'tcMotsDuTexte', 'tcComptesCitesDansTexte'
+ 'tcMotsUtiles', 'tcContactsParMots', 'tcLangueCourante', 'tcDetecterRdvGroupe', 'tcMotsDuTexte', 'tcComptesCitesDansTexte',
+ 'tcAppliquerDeplacement', 'tcExecuterDeplacement', '_tcLigneRdv', 'tcRdvDesigne'
 ].forEach((n) => { const src = extraire(n); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (bloc) vm.runInContext(bloc, ctx);
 if (ko) { console.log(''); console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -231,6 +233,71 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
   verifie('« dermato à côté de la gare mardi » (jour sans heure, phrase longue) : jamais hors agenda (elle passe, le modèle demande l heure)', classer('dermato à côté de la gare mardi').classe !== 'hors_agenda', classer('dermato à côté de la gare mardi').classe + ' ' + classer('dermato à côté de la gare mardi').question);
   const apresRien = [{ role: 'user', content: 'non' }, { role: 'system_info', content: '❌ Annulation abandonnée, rien n\'a été touché.' }];
   verifie('en cours de conversation (après un résultat), « Marc est en retard » reste le retard d un autre et « où aller manger ce soir ? » hors agenda ; « Marc vient ? » reste une suite qui passe', classer('Marc est en retard', apresRien).classe === 'retard_autre' && classer('où aller manger ce soir ?', apresRien).classe === 'hors_agenda' && classer('Marc vient ?', apresRien).classe === 'claire' && classer('c’est où ?', apresRien).classe === 'claire', [classer('Marc est en retard', apresRien).classe, classer('où aller manger ce soir ?', apresRien).classe, classer('Marc vient ?', apresRien).classe, classer('c’est où ?', apresRien).classe].join(' '));
+
+  titre('8. Mission 51 : les ratés de la batterie des TESTEURS, six groupes');
+  // Groupe 2 : abréviations et fautes courantes, corrigées avant tout.
+  const corr = (t) => ctx.tcCorrigerAbreviations(t);
+  verifie('« rdv dentiste dem 14h » → « rdv dentiste demain 14h » ; « rdv coiffeur sam 10h » → samedi ; « rdv w hugo mar 9h » → « avec hugo mardi » ; « déj gaëlle ven 12h30 » → « déjeuner gaëlle vendredi »', corr('rdv dentiste dem 14h') === 'rdv dentiste demain 14h' && corr('rdv coiffeur sam 10h') === 'rdv coiffeur samedi 10h' && corr('rdv w hugo mar 9h') === 'rdv avec hugo mardi 9h' && corr('déj gaëlle ven 12h30') === 'déjeuner gaëlle vendredi 12h30', [corr('rdv dentiste dem 14h'), corr('rdv w hugo mar 9h'), corr('déj gaëlle ven 12h30')].join(' | '));
+  verifie('« déj avec Sam ven 12h » : Sam reste un prénom, ven devient vendredi ; « SAM » en majuscules aussi', corr('déj avec Sam ven 12h') === 'déjeuner avec Sam vendredi 12h' && corr('rdv SAM 10h') === 'rdv SAM 10h', corr('déj avec Sam ven 12h'));
+  verifie('fautes : « anule mon rendevous de lundi » → « annule mon rendez-vous de lundi » (annulation reconnue) ; « suprime le kiné de jeudi » ; « decalle la reunion » ; « je sui en retar » ; « quesque jai de prévu lundi » (consultation)', corr('anule mon rendevous de lundi') === 'annule mon rendez-vous de lundi' && !!ctx.detecterSuppressionRdv(corr('anule mon rendevous de lundi')) && corr('suprime le kiné de jeudi') === 'supprime le kiné de jeudi' && corr('decalle la reunion de mardi a jeudi meme heure') === 'décale la reunion de mardi a jeudi meme heure' && corr('je sui en retar de 10 minute pour le dentiste') === 'je suis en retard de 10 minute pour le dentiste' && !!ctx.detecterConsultationAgenda(corr('quesque jai de prévu lundi')), corr('quesque jai de prévu lundi'));
+  verifie('« rdv dentiste dem 14h » corrigé est complet et passe ; « merci bcp », « jsuis en retard » corrigés aussi', classer(corr('rdv dentiste dem 14h')).classe === 'claire' && classer(corr('merci bcp')).classe === 'remerciement' && !!ctx.tcDetecterPrevenance(corr('jsuis en retard')), classer(corr('rdv dentiste dem 14h')).classe);
+  verifie('une adresse mail ou un lien ne sont pas touchés', corr('écris à mar@exemple.fr') === 'écris à mar@exemple.fr');
+  verifie('« il fait quel temps demain », « t’es une IA ? » : un sujet qui se suffit, ils passent (météo, présentation)', classer('il fait quel temps demain').classe === 'claire' && classer('t’es une IA ?').classe === 'claire', classer('il fait quel temps demain').classe + ' ' + (classer('il fait quel temps demain').question || ''));
+  verifie('charlySendMessage lit le message corrigé dès le départ', /const text = tcCorrigerAbreviations\(inp\.value\.trim\(\)\);/.test(csm));
+  // Groupe 1 : les petites phrases sociales, une réponse, jamais « pas compris ».
+  const sociaux = { 'tkt': /Merci/, 'mdr': /😄/, 'ptdr': /😄/, '😂': /😊/, '👍': /😊/, 'ras': /Je suis là/, 'ça va et toi': /Très bien, merci/, 'rien': /Je suis là/, 'tu sers à rien': /Pardon, je fais de mon mieux/, 'je t’ai pas parlé': /je me tais/,
+    'raconte une blague': /blagues/, 'écris-moi un petit poème': /poésie/, 'mets de la musique': /musique/, 'je m’ennuie': /agenda/, 't’es nul': /Pardon/, 'tu dors jamais ?': /Jamais/, 'tu parles anglais ?': /langue/, 'tu m’aimes ?': /Je t’aime bien/,
+    'quelle heure il est': /^Il est 10h00\./, 'quel jour on est': /^Nous sommes le jeudi 15 octobre 2026\./, 'on sera quel jour demain': /^Demain, c’est vendredi 16 octobre\./, 'c’est quand Noël': /25 décembre : dans 71 jours/, 'combien de jours avant Noël': /dans 71 jours/, 'combien font 12 fois 7': /12 fois 7 font 84/ };
+  let nbSociaux = 0;
+  Object.keys(sociaux).forEach((p) => { const r = classer(p); const ok = r.classe === 'social' && r.nature === 'reponse' && sociaux[p].test(r.question); if (ok) nbSociaux++; else { ko++; console.log('  KO  social « ' + p + ' » → ' + r.classe + ' : ' + r.question); } });
+  verifie(nbSociaux + ' phrases sociales sur ' + Object.keys(sociaux).length + ' reçoivent une réponse courte (nature réponse)', nbSociaux === Object.keys(sociaux).length);
+  verifie('chaque réponse sociale finit par la question ouverte « Je peux t’aider pour un rendez-vous ? » ou « Je suis là si tu as besoin de moi. »', Object.keys(sociaux).every((p) => /(je peux t’aider pour un rendez-vous \?|Je suis là si tu as besoin de moi\.|pour ton agenda \?|décaler \?)$/i.test(classer(p).question)), Object.keys(sociaux).filter((p) => !/(je peux t’aider pour un rendez-vous \?|Je suis là si tu as besoin de moi\.|pour ton agenda \?|décaler \?)$/i.test(classer(p).question)).map((p) => classer(p).question).join(' | '));
+  verifie('après une réponse sociale (question ouverte), « Cv ? » se classe encore', classer('Cv ?', [{ role: 'user', content: 'tkt' }, { role: 'assistant', content: classer('tkt').question, nature: 'reponse', _classement: 'social' }]).classe === 'reaction');
+  verifie('« dacc », « ah oui c’est vrai », « t’es génial », « merci bcp » : acquiescement ou remerciement, nature réponse', classer('dacc').classe === 'acquiescement' && classer('dacc').nature === 'reponse' && classer('ah oui c’est vrai').classe === 'acquiescement' && ['remerciement', 'social'].indexOf(classer('t’es génial').classe) > -1 && classer('t’es génial').nature === 'reponse' && classer('merci bcp').classe === 'remerciement' && classer('merci bcp').nature === 'reponse', [classer('dacc').classe, classer('ah oui c’est vrai').classe, classer('t’es génial').classe, classer('merci bcp').classe].join(' '));
+  verifie('« c’est pas la question » : contestation ; après une liste, « c’est tout ? » passe (suite)', classer('c’est pas la question').classe === 'contestation' && classer('c’est tout ?', apresResultat).classe === 'claire');
+  verifie('« pourquoi jeudi ? » n est plus une consultation de l agenda', !ctx.detecterConsultationAgenda('pourquoi jeudi ?'));
+  // Groupe 3 : annuler sans cible.
+  verifie('tcDetecterSuppressionSansCible : « Annule », « stp annule », « Annule ça », « Hugo a annulé » oui ; « annule le golf », « annule la suppression », « annule ce que tu viens de faire » non', ['Annule', 'stp annule', 'Annule ça', 'Hugo a annulé'].every((p) => ctx.tcDetecterSuppressionSansCible(p)) && ['annule le golf', 'annule la suppression', 'annule ce que tu viens de faire'].every((p) => !ctx.tcDetecterSuppressionSansCible(p)));
+  verifie('tcDetecterMarcheArriere : « annule ce que tu viens de faire », « défais ce que tu as fait »', ctx.tcDetecterMarcheArriere('annule ce que tu viens de faire') && ctx.tcDetecterMarcheArriere('défais ce que tu as fait'));
+  ctx.charlyIA.history = []; ctx.events = agenda(); vm.runInContext('_tcSuppressionChoix = null; _tcSuppressionEnAttente = null;', ctx);
+  await ctx.tcGererSuppressionSansCible('Annule');
+  { const d = ctx.charlyIA.history[ctx.charlyIA.history.length - 1]; const choix = vm.runInContext('_tcSuppressionChoix', ctx);
+    verifie('« Annule » → « Lequel ? » avec les 3 prochains rendez-vous numérotés (Dentiste, Partie de golf, Déjeuner avec Sophie), nature question', /^Lequel \?\n1\. Dentiste : .*\n2\. Partie de golf : .*\n3\. Déjeuner avec Sophie : .*\nDis-moi son numéro, son heure ou son nom\.$/.test(d.content) && d.nature === 'question' && choix && choix.length === 3, d.content);
+    verifie('« 2 », « le deuxième », « le golf », « 14h » désignent la Partie de golf', ctx.tcRdvDesigne(choix, '2') === choix[1] && ctx.tcRdvDesigne(choix, 'le deuxième') === choix[1] && ctx.tcRdvDesigne(choix, 'le golf') === choix[1] && ctx.tcRdvDesigne(choix, '14h') === choix[1]); }
+  ctx.charlyIA.history = []; vm.runInContext('_tcSuppressionChoix = null;', ctx);
+  await ctx.tcGererSuppressionSansCible('Marc a annulé');
+  verifie('« Marc a annulé » (un seul rendez-vous avec Marc) : la confirmation oui/non sur le Dentiste', /Tu veux annuler ce rendez-vous \?/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content) && /Dentiste/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content) && vm.runInContext('_tcSuppressionEnAttente', ctx).length === 1);
+  ctx.charlyIA.history = []; ctx.events = []; vm.runInContext('_tcSuppressionEnAttente = null;', ctx);
+  await ctx.tcGererSuppressionSansCible('annule ça');
+  verifie('sans rendez-vous à venir : « rien à annuler »', /rien à annuler/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content));
+  // Groupe 4 : déplacer un rendez-vous existant, sans le modèle.
+  const agendaDep = () => agenda().concat([ev('reunion', 'Réunion équipe', 5, 14, 0, 15, 0)]);   // mardi 20 octobre 14h
+  const dep = (t) => { ctx.events = agendaDep(); return ctx.tcDeplacementLocal(t, new DateFixe()); };
+  const pl = (r) => r && r.liste ? r.liste[0].ev.title + ' → ' + r.liste[0].p.date + ' ' + r.liste[0].p.startH + ':' + String(r.liste[0].p.startM).padStart(2, '0') + '-' + r.liste[0].p.endH + ':' + String(r.liste[0].p.endM).padStart(2, '0') : JSON.stringify(r);
+  verifie('« déplace le dentiste à mercredi à 10h » → Dentiste mercredi 21 octobre 10h-11h (jamais une carte)', pl(dep('déplace le dentiste à mercredi à 10h')) === 'Dentiste → 2026-10-21 10:00-11:00', pl(dep('déplace le dentiste à mercredi à 10h')));
+  verifie('« Avance le déjeuner avec Sophie à 11h30 » → même jour, 11h30-13h00', pl(dep('Avance le déjeuner avec Sophie à 11h30')) === 'Déjeuner avec Sophie → ' + iso(5) + ' 11:30-13:00', pl(dep('Avance le déjeuner avec Sophie à 11h30')));
+  verifie('« Mets le dentiste de vendredi à 11h » → vendredi 16 octobre 11h-12h', pl(dep('Mets le dentiste de vendredi à 11h')) === 'Dentiste → ' + iso(1) + ' 11:00-12:00', pl(dep('Mets le dentiste de vendredi à 11h')));
+  verifie('« Reporte la réunion de mardi à la semaine prochaine même heure » → mardi 27 octobre 14h-15h', pl(dep('Reporte la réunion de mardi à la semaine prochaine même heure')) === 'Réunion équipe → 2026-10-27 14:00-15:00', pl(dep('Reporte la réunion de mardi à la semaine prochaine même heure')));
+  verifie('« décale la réunion de mardi à jeudi même heure » → jeudi 22 octobre 14h ; la faute « decalle … a jeudi meme heure » aussi, une fois corrigée', pl(dep('décale la réunion de mardi à jeudi même heure')) === 'Réunion équipe → 2026-10-22 14:00-15:00' && pl(dep(corr('decalle la reunion de mardi a jeudi meme heure'))) === 'Réunion équipe → 2026-10-22 14:00-15:00', pl(dep('décale la réunion de mardi à jeudi même heure')));
+  verifie('sans destination (« décale le dentiste »), ou sans rendez-vous connu (« déplace le piano à 10h ») : null, le chemin habituel', dep('décale le dentiste') === null && dep('déplace le piano à 10h') === null);
+  ctx.events = agendaDep().concat([ev('dej2', 'Déjeuner équipe', 6, 12, 0, 13, 0)]);
+  { const r = ctx.tcDeplacementLocal('décale le déjeuner à 13h', new DateFixe()); verifie('deux déjeuners conviennent : la page demande lequel, rien n est déplacé', r && r.question && /2 rendez-vous qui conviennent/.test(r.question) && /Lequel veux-tu déplacer \?$/.test(r.question), r && r.question); }
+  // L exécution : sans contact, déplacé tout de suite ; avec un contact, la question « prévenir ? ».
+  ctx.events = agendaDep(); ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null;', ctx);
+  await ctx.tcGererDeplacementLocal('décale le golf à 15h', ctx.tcDeplacementLocal('décale le golf à 15h', new DateFixe()));
+  { const golf = ctx.events.find((e) => e.id === 'golf'); const d = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+    verifie('« décale le golf à 15h » : le golf (sans contact) est déplacé à 15h-17h, « C’est fait, rendez-vous déplacé », marche arrière possible', golf.startH === 15 && golf.endH === 17 && golf.date === iso(4) && /C'est fait, rendez-vous déplacé/.test(d.content) && vm.runInContext('_tcMarcheArriere', ctx) && vm.runInContext('_tcMarcheArriere', ctx).type === 'deplacement', d.content); }
+  ctx.events = agendaDep(); ctx.charlyIA.history = [];
+  await ctx.tcGererDeplacementLocal('déplace le dentiste à mercredi à 10h', ctx.tcDeplacementLocal('déplace le dentiste à mercredi à 10h', new DateFixe()));
+  { const d = ctx.charlyIA.history[ctx.charlyIA.history.length - 1]; const att = vm.runInContext('_tcDeplacementEnAttente', ctx);
+    verifie('« déplace le dentiste à mercredi à 10h » (contact Marc Dupont) : « Je déplace : … Veux-tu que je prévienne Marc Dupont … ? », rien n est déplacé avant la réponse', /^Je déplace :\n• « Dentiste » : .*\n\nVeux-tu que je prévienne Marc Dupont, ou as-tu déjà vu le sujet ensemble \?$/.test(d.content) && d.nature === 'question' && att && att.liste.length === 1 && ctx.events.find((e) => e.id === 'dentiste').date === iso(1), d.content); }
+  verifie('charlySendMessage : le déplacement local passe après « rendez-vous introuvable » et avant la demande de créneau ; tcTraiterDeplacement partage tcExecuterDeplacement', csm.indexOf('const _local = tcDeplacementLocal(text, new Date());') > csm.indexOf('const introuvable = tcRdvNommeIntrouvable(') && csm.indexOf('const _local = tcDeplacementLocal(text, new Date());') < csm.indexOf('const _creneau = detecterDemandeCreneau(text);') && /tcExecuterDeplacement\(liste\);\s+return true;\s+\}/.test(extraire('tcTraiterDeplacement') || ''));
+  verifie('charlySendMessage : après « Lequel ? », le rendez-vous désigné passe par le « oui / non » (jamais de suppression immédiate)', /if \(_tcSuppressionChoix\) \{\s+const choisi = tcRdvDesigne\(_tcSuppressionChoix, text\);\s+_tcSuppressionChoix = null;\s+if \(choisi\) \{\s+tcPousserMessageUtilisateur\(text\);[\s\S]{0,200}_tcSuppressionEnAttente = \[choisi\];/.test(csm) && !/tcSupprimerRdvs\(\[choisi\]\)/.test(csm));
+  verifie('charlySendMessage : l annulation sans cible passe juste après l annulation ciblée', csm.indexOf('if (tcDetecterSuppressionSansCible(text)) {') > csm.indexOf('if (detecterSuppressionRdv(text)) {') && csm.indexOf('if (tcDetecterSuppressionSansCible(text)) {') < csm.indexOf('const _consultation = detecterConsultationAgenda(text);'));
+  // Groupe 5 : à plusieurs.
+  ctx.contactsList = ctx.contactsList.concat([{ id: 'h', name: 'Hugo Besnard', referenceCompte: 'HQ1' }, { id: 'g', name: 'Gaëlle Perrin', referenceCompte: 'GP1' }]);
+  verifie('« Trouve-nous un moment avec Hugo, Gaëlle et Paul cette semaine » et « Propose un déjeuner à Hugo et Gaëlle » : rendez-vous à plusieurs (deux comptes), pas les créneaux perso', !!ctx.tcDetecterRdvGroupe('Trouve-nous un moment avec Hugo, Gaëlle et Paul cette semaine') && ctx.tcDetecterRdvGroupe('Trouve-nous un moment avec Hugo, Gaëlle et Paul cette semaine').contacts.length >= 2 && !!ctx.tcDetecterRdvGroupe('Propose un déjeuner à Hugo et Gaëlle'), JSON.stringify(ctx.tcDetecterRdvGroupe('Trouve-nous un moment avec Hugo, Gaëlle et Paul cette semaine')));
+  verifie('mais « trouve-moi un moment cette semaine » (personne) reste une demande de créneau perso', !ctx.tcDetecterRdvGroupe('trouve-moi un moment cette semaine'));
 
   titre('7. La langue, le seuil, « où », la nature des réponses');
   ctx.currentLanguage = 'en';
