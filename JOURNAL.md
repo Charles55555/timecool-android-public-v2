@@ -2389,3 +2389,40 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   samedi fermé → sept jours suivants, tout pris → demain → rien non plus, phrase « mardi pendant 2 h », semaine prochaine
   30 min), enregistrée dans verifier.sh ; verif-boutons-charly (le bouton passe par le questionnaire). Rejouée Chrome sur
   la page entière : la liste, « Lequel ? », l'enchaînement, la création, samedi fermé.
+
+## 24/10/2026 : Charly ne répond que s'il est sûr d'avoir compris, sinon il demande (mission 50, chef, ok de Charles)
+
+- Règle générale, au cœur de Charly et non une rustine par cas : avant tout détecteur et avant le modèle, charlySendMessage
+  classe le message tapé (tcClasserMessage, bloc « CLASSER AVANT DE RÉPONDRE » devant tcPhraseNonCompris). Du code, le même
+  quel que soit le modèle et quelle que soit la phrase : un score d'indices de clarté (détecteur de la page +3, verbe de
+  demande ou « je veux / peux-tu / il faut » +2, sujet qui se suffit (prix, appli, qui es-tu…) +2, mot de question +1, mot
+  d'agenda ou métier +1, moment +1, phrase de six mots ou plus +1) comparé à un seuil (TC_CLASSE_SEUIL = 2).
+- « Claire » : le message suit son chemin habituel (détecteurs, questionnaires, FAQ, modèle). « Pas sûr » : une seule
+  phrase calme qui demande, jamais un résultat (ni créneaux, ni rendez-vous, ni décalage, ni annulation) :
+  contestation (« je ne t'ai pas demandé ça », « c'est pas ça », « n'importe quoi ») → « Pardon, j'ai répondu à côté :
+  qu'est-ce que tu voulais ? », jamais la même action relancée ; doute (« tu es sûr ? », « vraiment ? ») → « Je peux me
+  tromper : qu'est-ce qui ne te semble pas juste ? » ; remerciement → « Avec plaisir, tu veux autre chose ? » ;
+  acquiescement (« ok ») → « D'accord, tu veux autre chose ? » ; abandon (« laisse tomber ») ; salutation hors premier
+  message → « Bonjour ! Qu'est-ce que je peux faire pour toi ? » ; au revoir → « À bientôt ! Je reste là si tu as besoin
+  de moi. » ; réaction, abréviation ou mot seul (« Cv ? », « ?? », « et ? », « oui », « lundi », « 14h ») et hors sujet
+  (« il fait beau dehors ») → « Sauf erreur de ma part, je n'ai pas bien compris : … ? » avec ce que le message dit déjà
+  (« tu veux noter quelque chose lundi à 14h, ou autre chose ? », « … avec Marc Dupont … », « tu veux noter un rendez-vous
+  « Dermatologue », ou autre chose ? », sinon « qu'est-ce que tu veux que je fasse ? »).
+- Le contexte compte : quand Charly venait de poser une question (le modèle « C'est pour quoi, à 16h ? », un détecteur, ou
+  le classement lui-même), le message suivant est la réponse et passe (« dentiste », « oui », « lundi ») ; sauf une simple
+  réaction (« ok », « oui », « cv ») à la question du classement : « Qu'est-ce que tu veux que je fasse, par exemple « mes
+  rendez-vous de demain » ou « dentiste mardi 15h » ? ». Une contestation après une contestation suivie d'une vraie
+  demande (« pas ça, annule plutôt le golf ») passe. Les réponses attendues (questionnaire, oui/non d'annulation ou de
+  proposition, trajet, « qui est-ce ? ») sont lues avant le classement, comme avant. Dans une autre langue que le
+  français, le classement s'efface (le modèle garde la main, sa consigne lui dit de demander).
+- Pour le juge des 300 phrases de la session TESTEURS : chaque message poussé par le classement porte nature: 'question'
+  (ou 'reponse' pour l'au revoir) et _classement ; la réponse du modèle porte nature: 'action' (bloc [AGENDA]),
+  'question' (« Sauf erreur de ma part ») ou 'reponse' (tcNatureReponse, charlySendMessage et charlyProcessMessage).
+  Les TESTEURS passent par la page, comme un utilisateur : pas d'endpoint.
+- API inchangée. Le prompt du modèle ne change pas (sa ligne « Sauf erreur de ma part » reste le filet pour ce qui passe).
+- Suite : verif-classement-charly (38 phrases pièges qui doivent produire une question, dont « Cv ? », « Je t'ai pas
+  demandé quand je suis libre ? », « ok », « ?? », « et ? », « non pas ça », « tu es sûr ? », « merci », « lundi »,
+  « 14h » ; 30 demandes claires qui doivent passer ; le contexte ; les pistes de la question ; la langue ; le seuil ; la
+  place du classement dans charlySendMessage), enregistrée dans verifier.sh. Rejouée Chrome sur la page entière en mode
+  démo : « Cv ? », « lundi », consultation, créneaux puis contestation, « merci », « tu es sûr ? », « Marc », « ok » après
+  la question, hors sujet, annulation puis « non » (réponse attendue, lue avant le classement).
