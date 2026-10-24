@@ -12093,8 +12093,11 @@ function tcContexteDatePourIA(now) {
  */
 /** « M. Dubois », « Mme Lambert », « Me Durand » en tete du texte tape : la civilite, ou null (« m'appeler » n'en est pas une ; mission 56). */
 function tcCiviliteEnTete(brut) {
-  const m = String(brut || '').trim().match(/^(?:stp |svp )?(M\.|M|Mr\.?|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr\.?|Docteur|Me|Ma[iî]tre)(?=\s)\s+[A-Za-zÀ-ÿ]/);
-  return m ? m[1].replace(/^M$/i, 'M.') : null;
+  // Le nom qui suit commence par une majuscule et n'est pas un verbe a l'infinitif (« Me rappeler », « Me Faire couper » : le telephone met une majuscule en tete).
+  const m = String(brut || '').trim().match(/^(?:stp |svp )?(M\.|M|Mr\.?|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr\.?|Docteur|Me|Ma[iî]tre)(?=\s)\s+(?:(?:de|du|d['’]|le|la|van|von)\s+)?([A-ZÀ-Ý][A-Za-zÀ-ÿ-]*)/);
+  if (!m) return null;
+  if (/^(?:Me|M|Ma[iî]tre)$/i.test(m[1]) && (/(?:er|ir|re|oir)$/i.test(m[2]) || m[2].length < 3)) return null;
+  return m[1].replace(/^M$/i, 'M.');
 }
 
 function tcCreationLocale(texte, now, forcer) {
@@ -12131,6 +12134,9 @@ function tcCreationLocale(texte, now, forcer) {
   let titreFinal = titre;
   { const civ = (typeof tcCiviliteEnTete === 'function') ? tcCiviliteEnTete(brut) : null;
     if (civ && !/^(?:M\.?|Mr|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr|Docteur|Me|Ma[iî]tre)\b/i.test(titreFinal)) titreFinal = civ + ' ' + titreFinal;
+    // « Mme de Villiers mardi 10h » : la particule du nom reste dans le titre.
+    const mPart = civ ? String(brut).trim().match(/^(?:stp |svp )?(?:M\.|M|Mr\.?|Mme|Mlle|Monsieur|Madame|Mademoiselle|Dr\.?|Docteur|Me|Ma[iî]tre)\s+((?:de|du|d['’]|le|la|van|von)\s+)([A-ZÀ-Ý][A-Za-zÀ-ÿ-]+)/) : null;
+    if (mPart && titreFinal.indexOf(mPart[1].trim() + ' ' + mPart[2]) < 0 && titreFinal.indexOf(mPart[2]) > -1) titreFinal = titreFinal.replace(mPart[2], mPart[1].trim() + ' ' + mPart[2]);
     // « Paul doit m'appeler jeudi 14h » : un rendez-vous « Appel de Paul » (chef, mission 56).
     const mAppel = String(brut).trim().match(/^([A-ZÀ-Ý][A-Za-zÀ-ÿ-]+(?: [A-ZÀ-Ý][A-Za-zÀ-ÿ-]+)?) doit (?:m['’ ]appeler|me rappeler|me t[ée]l[ée]phoner)\b/);
     if (mAppel) titreFinal = 'Appel de ' + mAppel[1]; }
@@ -19182,7 +19188,13 @@ function tcClasserMessage(text, histoire) {
   //   (« je / mon ») : une question sur l'application, pas sur le partage (chef). Google / Outlook / iCloud : les parcours de synchro.
   {
     const parleAgenda = /\b(mon agenda|mes rendez vous|mes rdv|mon planning|mon calendrier)\b/.test(norm) && !/\b(google|outlook|icloud|apple)\b/.test(norm);
-    const tiers = tcClasseNomConnu(brut) || /\b(qui|quelqu un|les autres|tout le monde|mes contacts|mes clients|il|elle|ils|elles|son|sa|ses|leur)\b/.test(norm) || /^partage/.test(norm);
+    // Le tiers est le SUJET de voir / accès / partage (« Paul peut voir », « qui voit », « partage … avec Paul », « montre … à Paul »), jamais
+    // « mes rdv avec Hugo » ni « je peux voir » ; le « il » de « s'il » ne compte pas (examinateur, 3e passage).
+    const mSujet = norm.match(/^(?:est ce que |est ce qu )?(.+?) (?:peut|peuvent|peux|voit|voient|a acces|ont acces|aura acces|auront acces|verra|verront)\b/);
+    const sujetTiers = !!(mSujet && !/^(je|j|on|tu|nous|vous)$/.test(mSujet[1].trim()) && (/^(il|elle|ils|elles|qui|quelqu un|les autres|tout le monde|mes contacts|mes clients|un contact|une personne|les gens)$/.test(mSujet[1].trim()) || tcClasseContactEcrit(mSujet[1].trim())));
+    const partageAvec = /\b(partage|partager|partages|montre|montrer|donne acces|donner acces|ouvre|ouvrir|envoie|envoyer)\b[^?]*\b(a|avec|pour) (quelqu un|les autres|tout le monde|mes contacts|mes clients|lui|elle|eux|[a-z-]+)/.test(norm)
+      && (/\b(a|avec|pour) (quelqu un|les autres|tout le monde|mes contacts|mes clients|lui|elle|eux)\b/.test(norm) || !!tcClasseNomConnu(brut));
+    const tiers = sujetTiers || partageAvec || /^qui (voit|peut voir|a acces|verra)\b/.test(norm);
     if (parleAgenda && /\b(peut|peuvent|peux|voit|voient|voir|a acces|ont acces|acces|partage|partager|partages|montre|montrer)\b/.test(norm) && tiers
         && !/\b(je veux voir|montre moi|affiche|qu est ce que j ai|j ai quoi)\b/.test(norm)) {
       return pasSur('partage', 'Non. Personne ne voit ton agenda ; seul un créneau circule quand tu le proposes.');
@@ -20757,16 +20769,25 @@ function tcAjusterCartePendante(text, msg) {
 function tcDetecterRappelDate(text, now) {
   const brut = String(text || '').trim();
   const sans = tcSansAccents(brut).replace(/[’']/g, ' ').toLowerCase();
-  const m = sans.match(/^(?:stp |svp |charly )?(?:rappelle[- ]?moi|rapelle[- ]?moi|rappel[- ]moi|fais[- ]moi penser|n oublie pas de me rappeler|pense a me rappeler|mets[- ]moi un rappel|note[- ]moi un rappel)\s+(.+)$/);
+  const m = sans.match(/^(?:stp |svp |charly )?(?:rappelle[- ]?moi|rapelle[- ]?moi|rappel[- ]moi|me rappeler|me faire penser|fais[- ]moi penser|n oublie pas de me rappeler|pense a me rappeler|mets[- ]moi un rappel|note[- ]moi un rappel)\s+(.+)$/);
   if (!m) return null;
   if (/\b(chaque|tous les|toutes les|hebdo|la veille|avant chaque|dans une heure|dans \d+ ?(min|mn|minutes|heures?|h)|fin du mois|fin de mois)\b/.test(sans)) return null;
   if (sans.length !== brut.length) return null;
   let reste = brut.slice(brut.length - m[1].length).trim();
   // La date peut être en tête (« rappelle-moi le 5 novembre de payer l'URSSAF », « rappelle-moi mardi d'appeler le comptable ») : elle est coupée aussi.
-  const DATE_TETE = /^(?:le |ce |cette |la )?(?:\d{1,2}(?:er)? (?:janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)|\d{1,2}\/\d{1,2}|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres[- ]demain|aujourd hui|ce soir|ce matin|cet apres[- ]midi|semaine prochaine)(?: prochain| matin| soir| apres[- ]midi)?(?: (?:a|vers) \d{1,2} ?h(?: ?\d{2})?)?\s+/;
+  const DATE_TETE = /^(?:le |ce |cette |la )?(?:\d{1,2}(?:er)? (?:janvier|janv|fevrier|fevr|fev|mars|avril|avr|mai|juin|juillet|juil|aout|septembre|sept|octobre|oct|novembre|nov|decembre|dec)|\d{1,2}\/\d{1,2}|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres[- ]demain|aujourd hui|ce soir|ce matin|cet apres[- ]midi|semaine prochaine)(?: prochain| matin| soir| apres[- ]midi)?(?: (?:(?:a|vers) )?\d{1,2} ?h(?: ?\d{2})?)?(?:\s+|$)/;
   const dateTete = tcSansAccents(reste).replace(/[’']/g, ' ').toLowerCase().match(DATE_TETE);
   let dateDite = dateTete ? dateTete[0] : '';
   if (dateTete) reste = reste.slice(dateTete[0].length);
+  // « Me rappeler jeudi 14h », « rappelle-moi demain 9h » : un rappel pour moi, sans objet, à cette heure (chef) ; sans heure, le modèle.
+  if (!reste.trim()) {
+    const h0 = tcHeureDansTexte(dateDite);
+    const d0 = tcDateDemandee(dateDite, now);
+    if (!h0 || !d0 || d0.invalide || !d0.date) return null;
+    const hh0 = function (n) { return String(n).padStart(2, '0'); };
+    const deb0 = h0.h * 60 + (h0.m || 0), fin0 = Math.min(deb0 + 60, 23 * 60 + 59);
+    return { carte: 'Rappel, ' + tcDateEnLettres(d0.date) + ' à ' + h0.h + 'h' + (h0.m ? hh0(h0.m) : '') + ' : je te propose ceci.\n[AGENDA]\n' + tcISO(d0.date) + ' | ' + hh0(h0.h) + ':' + hh0(h0.m || 0) + '-' + hh0(Math.floor(fin0 / 60)) + ':' + hh0(fin0 % 60) + ' | Rappel | rdv\n[/AGENDA]' };
+  }
   // Un rappel, c'est « de + verbe » (« de payer », « d'appeler », « à rappeler ») : « mes rdv de demain », « ce que j'ai demain », « demain » seul partent au modèle (chef).
   const mVerbe = tcSansAccents(reste).replace(/[’']/g, ' ').toLowerCase().match(/^(?:de |d |a |pour |que je dois |que tu me rappelles de )/);
   if (!mVerbe) return null;

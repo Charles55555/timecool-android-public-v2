@@ -2773,3 +2773,7 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   ordinateur). ») ; rappel au client : « Mme de Villiers », « M. Le Goff » restent entiers (particule, « Le ») ; rappel daté : la date précédée de « de / du /
   pour » reste dans l'objet (« Rappel : vérifier mes rdv de demain », noté demain), un petit mot final tombe ; tcCiviliteEnTete lit la civilité dans le texte
   tapé (« M. », « Mme », « Me » + espace ; « m'appeler » n'en est pas une) ; « Paul doit m'appeler jeudi 14h » → « Appel de Paul » ; « Me Durand » gardé.
+- Quatrième passage (examinateur + chef) : partage : le tiers doit être le SUJET de voir / accès / partage (« Paul peut voir », « qui voit », « partage mon agenda
+  avec Paul », « montre mon agenda à Hugo ») ; « je peux voir mes rdv avec Hugo ? » = consultation, « s'il » n'est pas un tiers ; tcCiviliteEnTete : « Me » / « M »
+  seulement devant un nom en majuscule qui n'est pas un verbe (« Me rappeler », « Me Faire couper » ne sont pas des civilités) ; « Me rappeler jeudi 14h »,
+  « rappelle-moi demain 9h » = une carte « Rappel » à cette heure (sans heure, le modèle) ; « Mme de Villiers mardi 10h » garde la particule.
