@@ -12119,6 +12119,13 @@ function tcCreationLocale(texte, now, forcer) {
   if (!demande || demande.invalide || !demande.date) return '';
   const titre = tcTitreDepuisDemande(brut);
   if (!titre) return '';
+  // « note cafe avec Marc et Sophie jeudi 15h » : les prenoms de contacts gardent leur « avec » et leur « et » dans le titre (chef, mission 55).
+  let titreFinal = titre;
+  if (/\bavec\b/.test(t) && !/\bavec\b/i.test(titre) && typeof tcContactsParMots === 'function') {
+    const prenoms = [], objet = [];
+    titre.split(/\s+/).forEach(function (w) { let c = false; try { c = w.length >= 3 && tcContactsParMots([tcSansAccents(w)]).length > 0; } catch (e) { c = false; } (c ? prenoms : objet).push(w); });
+    if (prenoms.length && objet.length) titreFinal = objet.join(' ') + ' avec ' + (prenoms.length > 1 ? prenoms.slice(0, -1).join(', ') + ' et ' + prenoms[prenoms.length - 1] : prenoms[0]);
+  }
   // Une phrase longue (« …c'est pour mes dents de sagesse et il faut apporter la radio ») : le modele fait le tri.
   // « Cafe avec Marc et Sophie » (5 mots) est un titre complet (chef, mission 55) ; une phrase de plus de 12 mots part au modele.
   if (titre.split(/\s+/).length > 5 || t.split(/\s+/).filter(Boolean).length > 12) return '';
@@ -12141,8 +12148,8 @@ function tcCreationLocale(texte, now, forcer) {
   const hh = function (h) { return String(h).padStart(2, '0'); };
   const finH = plage ? Number(plage[3]) : Math.min(sh + 1, 23), finM = plage ? Number(plage[4] || 0) : sm;
   const creneau = hh(sh) + ':' + hh(sm) + '-' + hh(finH) + ':' + hh(finM);
-  return titre + ', ' + tcDateEnLettres(demande.date) + ' à ' + sh + 'h' + (sm ? hh(sm) : '') + ' : je te propose ceci.'
-    + '\n[AGENDA]\n' + tcISO(demande.date) + ' | ' + creneau + ' | ' + titre + ' | rdv\n[/AGENDA]';
+  return titreFinal + ', ' + tcDateEnLettres(demande.date) + ' à ' + sh + 'h' + (sm ? hh(sm) : '') + ' : je te propose ceci.'
+    + '\n[AGENDA]\n' + tcISO(demande.date) + ' | ' + creneau + ' | ' + titreFinal + ' | rdv\n[/AGENDA]';
 }
 
 function tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, now, nbJours) {
@@ -19138,8 +19145,12 @@ function tcClasserMessage(text, histoire) {
     const momentDit = mPris && (TC_CLASSE_VRAI_MOMENT.test(mPris[2]) || /(^|\s)(toute|jusqu|a partir)(\s|$)/.test(mPris[2]) || !!tcHeureDansTexte(brut.toLowerCase()));
     const contrainte = (typeof tcDetecterContrainte === 'function') ? tcDetecterContrainte(brut) : false;
     if (mPris && momentDit && !contrainte) {
-      const quand = String(brut).trim().replace(/^(je suis|jsuis|j suis|je serai|je me retrouve|je reste)\s+\S+\s*/i, '').replace(/[.!?]+$/, '').trim();
-      return pasSur('piece_manquante', 'Noté, ' + quand + ' tu n’es pas disponible. Je décale quelque chose ?', { moment: quand, contact: null, metier: null, titre: 'indisponible', texte: '', etape: 'suite', composable: false });
+      // Tout le groupe capté tombe (« pas dispo », « pas disponible », « coincée ») : il reste le moment.
+      const quand = String(brut).trim().replace(/^(je suis|jsuis|j suis|je serai|je me retrouve|je reste)\s+(pas\s+)?(coinc\S*|bloqu\S*|retenu\S*|pris\S*|scotch\S*|planqu\S*|occup\S*|dispo\S*|indisponible)\s*/i, '').replace(/[.!?]+$/, '').trim();
+      // Rien n'est bloqué tant qu'il n'a pas dit oui (chef) : « oui » note « Indisponible » ce jour-là (journée entière, ou la plage dite).
+      const avecHeure = !!tcHeureDansTexte(quand.toLowerCase()) || /\b(matin|midi|apr[èe]s[- ]midi|aprem|soir|soir[ée]e)\b/i.test(quand);
+      return pasSur('piece_manquante', 'Je n’ai rien bloqué. Tu veux que je note « Indisponible » ' + quand + ' dans ton agenda ?',
+        { moment: quand, contact: null, metier: null, titre: 'indisponible', texte: '', etape: 'suite', composable: false, surOui: (avecHeure ? 'note indisponible ' : 'indisponible ') + quand });
     }
     if (!contrainte && ((mPris && !momentDit && !/^(occupe|occupee|pas dispo|pas disponible|indisponible)$/.test(mPris[1]))
         || /^(je suis|jsuis|je vais etre|je serai) (dans|en plein dans) (les |des )?(bouchons|embouteillages)/.test(norm)
@@ -19172,7 +19183,10 @@ function tcClasserMessage(text, histoire) {
     const mFiche = norm.match(/^(.{2,30}?) a change (?:de |d )(numero|telephone|tel|portable|adresse|mail|email|nom|boite mail)\b/);
     if (mFiche && !/\b(je|j|moi|tu|charly|mon|ma)\b/.test(mFiche[1])) {
       const cF = tcClasseContactEcrit(mFiche[1]);
-      if (cF) return pasSur('piece_manquante', cF.name + ' a changé de ' + mFiche[2].replace(/^tel$/, 'téléphone').replace(/^numero$/, 'numéro') + ' : tu veux que je mette à jour sa fiche ?', { moment: null, contact: cF.name, metier: null, titre: 'fiche', texte: '', etape: 'suite', composable: false });
+      if (cF) {
+        const quoi = mFiche[2].replace(/^tel$/, 'téléphone').replace(/^numero$/, 'numéro').replace(/^boite mail$/, 'boîte mail');
+        return pasSur('piece_manquante', cF.name + ' a changé ' + (/^[aeiouyh]/.test(quoi) ? 'd’' : 'de ') + quoi + ' : tu veux que je mette à jour sa fiche ?', { moment: null, contact: cF.name, metier: null, titre: 'fiche', texte: '', etape: 'suite', composable: false });
+      }
     }
     const mChange = norm.match(/^(?:le |la |l |mon |ma |mes )?(.{2,30}?) (?:a change d heure|a change d horaire|a change de jour|a change de date|a change d heure et de jour|a ete decale|a ete deplace|a ete reporte|a ete avance|est decale|est reporte|est deplace|a bouge)( .*)?$/);
     if (mChange && !/\b(je|j|moi|tu|charly)\b/.test(mChange[1]) && !tcHeureDansTexte(brut.toLowerCase())) {
@@ -20128,11 +20142,11 @@ async function tcAjouterQuandMeme(text) {
 /* ─── Une journée entière (« anniversaire de Gaëlle le 12 novembre ») : notée sans heure, sans question ─── */
 /* Seuls les mots qui disent une journée (chef) : anniversaire, fête, férié, vacances, congé, pont, mariage, baptême, communion,
    « toute la journée ». Un « rdv » dans la phrase, un salon, un examen, un déplacement : un rendez-vous, on demande l'heure. */
-const TC_JOURNEE_ENTIERE = /\b(anniversaire|anniv|fete|ferie|vacances|conge|conges|pont|journee entiere|toute la journee|mariage|bapteme|communion)\b/;
+const TC_JOURNEE_ENTIERE = /\b(anniversaire|anniv|fete|ferie|vacances|conge|conges|pont|journee entiere|toute la journee|mariage|bapteme|communion|indisponible|indispo|absent|absente)\b/;
 function tcDetecterJourneeEntiere(text) {
   const sans = tcSansAccents(String(text || '')).replace(/[’']/g, ' ');
   if (/\b(rdv|rendez vous|rendez-vous)\b/.test(sans)) return null;
-  if (!/\b(ajoute|ajouter|note|noter|mets|met|mettre|cree|creer|planifie|bloque|inscris|enregistre|rappelle moi)\b/.test(sans) && !/^(l |le |la |les |mes |mon |ma )?(anniversaire|anniv|fete|vacances|conges?|pont)\b/.test(sans)) return null;
+  if (!/\b(ajoute|ajouter|note|noter|mets|met|mettre|cree|creer|planifie|bloque|inscris|enregistre|rappelle moi)\b/.test(sans) && !/^(l |le |la |les |mes |mon |ma )?(anniversaire|anniv|fete|vacances|conges?|pont|indisponible|indispo|absente?)\b/.test(sans)) return null;
   if (!TC_JOURNEE_ENTIERE.test(sans)) return null;
   if (tcHeureDansTexte(sans)) return null;
   if (/\b(matin|midi|apres midi|aprem|soir|soiree)\b/.test(sans)) return null;
@@ -20424,9 +20438,17 @@ function tcDetecterPlusieursCites(text) {
 /** Le questionnaire « rendez-vous à plusieurs » (mission 47) démarre ; ceux qui n'ont pas TimeCool sont nommés d'abord. */
 async function tcGererPlusieursCites(text, d) {
   tcPousserMessageUtilisateur(text);
+  const noms = d.sansCompte.map(function (c) { return c.name; });
+  const liste = noms.length > 1 ? noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1] : noms.join('');
+  const pluriel = noms.length > 1;
+  // Personne n'a TimeCool : pas de questionnaire (il n'aboutirait pas), Charly propose de leur écrire.
+  if (d.sansCompte.length === d.contacts.length) {
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: liste + (pluriel ? ' n’ont' : ' n’a') + ' pas TimeCool : je ne peux pas ' + (pluriel ? 'leur' : 'lui') + ' proposer un créneau d’ici. Tu veux que je ' + (pluriel ? 'leur' : 'lui') + ' écrive ?' });
+    renderCharlyChat();
+    return;
+  }
   if (d.sansCompte.length) {
-    const noms = d.sansCompte.map(function (c) { return c.name; }).join(', ');
-    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: noms + (d.sansCompte.length > 1 ? ' n’ont pas TimeCool : je ne peux pas les inviter d’ici.' : ' n’a pas TimeCool : je ne peux pas l’inviter d’ici.') + ' Pour les autres, on y va.' });
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: liste + (pluriel ? ' n’ont pas TimeCool : je ne peux pas les inviter d’ici.' : ' n’a pas TimeCool : je ne peux pas l’inviter d’ici.') + ' Pour les autres, on y va.' });
     renderCharlyChat();
   }
   await tcDemarrerRdvAPlusieurs(null);
@@ -20439,19 +20461,29 @@ async function tcPrevenirContactLibre(text, intent) {
   const contact = intent.destinataire;
   const prenom = String(contact.name || '').split(' ')[0];
   const moi = (typeof userAccount !== 'undefined' && userAccount) ? String(userAccount.firstname || userAccount.firstName || userAccount.prenom || '').trim() : '';
-  const de = moi ? ('de la part ' + (/^[aeiouyhàâäéèêëîïôöùûü]/i.test(moi) ? 'd’' : 'de ') + moi) : 'de la part de ton contact';
+  const demande = moi ? moi + ' me demande de te dire' : 'je suis chargé de te dire';
   // Le texte dicté est recopié tel quel (accents compris) ; « à lui / à elle » devient « à toi » puisque c'est lui qui lit.
   const recopie = function (s) {
     // (pas de « \b » devant « à » : l'accent n'est pas une lettre pour lui.)
-    return String(s || '').trim().replace(/[.!?\s]*$/, '').replace(/(^|\s)([àa]) (lui|elle)(?=\s|$|[,.!?])/gi, '$1$2 toi').replace(/(^|\s)(pour|avec|de|chez) (lui|elle)(?=\s|$|[,.!?])/gi, '$1$2 toi') + '.';
+    return String(s || '').trim().replace(/[.!?\s]*$/, '').replace(/(^|\s)([àa]) (lui|elle)(?=\s|$|[,.!?])/gi, '$1$2 toi').replace(/(^|\s)(pour|avec|de|chez) (lui|elle)(?=\s|$|[,.!?])/gi, '$1$2 toi');
   };
-  let corps;
-  if (intent.texte) corps = recopie(intent.texte);
-  else if (intent.type === 'retard') corps = intent.minutes ? 'j’aurai ' + intent.minutes + ' minutes de retard.' : 'j’aurai un peu de retard.';
-  else if (intent.type === 'annule') corps = 'je dois annuler.';
-  else corps = recopie(intent.texte);
-  const texte = 'Bonjour ' + prenom + ', ' + de + ' : ' + corps;
-  if (typeof tcConfirm === 'function' && !(await tcConfirm('Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »'))) {
+  // « dis à Sophie qu'elle est géniale » : « …me demande de te dire que tu es géniale. » (2e personne, chef) ; si le verbe n'est pas connu,
+  // la phrase brute est montrée entre guillemets et Charly demande « j'envoie ça tel quel ? ».
+  const VERBES_TU = { est: 'es', a: 'as', va: 'vas', sera: 'seras', aura: 'auras', peut: 'peux', doit: 'dois', fait: 'fais', vient: 'viens', arrive: 'arrives', part: 'pars', sait: 'sais', veut: 'veux', dit: 'dis', prend: 'prends', passe: 'passes', reste: 'restes', gere: 'gères', assure: 'assures', manque: 'manques', travaille: 'travailles' };
+  let corps = null, surete = true, deuxieme = false;
+  const brutTexte = String(intent.texte || '').trim();
+  const mIl = brutTexte.match(/^(?:qu['’]\s?|que\s+)?(il|elle)\s+(\S+)([\s\S]*)$/i);
+  if (mIl) {
+    const v = tcSansAccents(mIl[2].toLowerCase());
+    if (VERBES_TU[v]) { corps = 'tu ' + VERBES_TU[v] + (mIl[3].trim() ? ' ' + recopie(mIl[3]) : ''); deuxieme = true; }
+    else { surete = false; corps = brutTexte.replace(/[.!?\s]*$/, ''); }
+  } else if (brutTexte) corps = recopie(brutTexte);
+  else if (intent.type === 'retard') corps = intent.minutes ? 'j’aurai ' + intent.minutes + ' minutes de retard' : 'j’aurai un peu de retard';
+  else if (intent.type === 'annule') corps = 'je dois annuler';
+  else corps = '';
+  const texte = 'Bonjour ' + prenom + ', ' + demande + (deuxieme ? ' que ' + corps + '.' : (surete ? ' : ' + corps + '.' : ' : « ' + corps + ' ».'));
+  const question = surete ? 'Prévenir ' + contact.name + ' ?\n\n« ' + texte + ' »' : 'J’envoie ça tel quel à ' + contact.name + ' ?\n\n« ' + texte + ' »';
+  if (typeof tcConfirm === 'function' && !(await tcConfirm(question))) {
     charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne préviens personne.', nature: 'reponse' });
     renderCharlyChat();
     return;

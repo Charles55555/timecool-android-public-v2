@@ -2719,3 +2719,11 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
   « à » ; « non annule pas » garde son non ; tcDetecterChangementJourCarte ignore un jour précédé de « pas » ; « mets le rdv dentiste à jeudi 10h »
   (l'article) ne crée rien ; « retard de Marc au dentiste » n'est pas mon retard ; « comme tu veux » après une question précise est une réponse.
   Une vraie liste de mots de moment (TC_CLASSE_VRAI_MOMENT) remplace l'usage fautif de TC_CLASSE_MOTS_DE_MOMENT (qui contient « au », « non »).
+- Troisième passage (examinateur + chef) : « je suis pas dispo mardi » → « Je n'ai rien bloqué. Tu veux que je note « Indisponible » mardi dans
+  ton agenda ? » (le groupe « pas dispo » tombe en entier ; rien n'est bloqué sans « oui » ; « oui » = « indisponible mardi », journée entière
+  « Indisponible », mots ajoutés à TC_JOURNEE_ENTIERE ; avec une heure, « note indisponible de 14h à 16h ») ; « Paul a changé d'adresse / d'email »
+  avec l'élision ; aucun invité avec TimeCool (« propose un créneau à Marc et Sophie ») → « Marc Dupont et Sophie Anceau n'ont pas TimeCool : je ne
+  peux pas leur proposer un créneau d'ici. Tu veux que je leur écrive ? », sans questionnaire ; « note café avec Marc et Sophie jeudi 15h » → carte
+  « Café avec Marc et Sophie » (les prénoms de contacts gardent « avec » et « et » dans tcCreationLocale) ; messages aux contacts : « Bonjour Sophie,
+  Inès me demande de te dire : … » ; « dis à Sophie qu'elle est géniale » → « …de te dire que tu es géniale. » (il/elle + verbe connu → 2e personne) ;
+  verbe inconnu → la phrase brute entre guillemets et la confirmation « J'envoie ça tel quel à … ? ».
