@@ -18900,7 +18900,10 @@ function tcClasserMessage(text, histoire) {
       return pasSur('suite_proposition', tcClasseQuestionSuite(proposition), Object.assign({}, proposition, { etape: 'suite' }));
     }
     if (!reaction) return claire('complement');
-    return pasSur('reaction', tcClasseQuestionExemple());
+    // « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») : la même
+    // question, précise ; « non », « cv » : les deux exemples. La proposition reste gardée : « mardi 15h » ensuite passe avec elle.
+    if (accord && precedent.content) return pasSur('suite_proposition', String(precedent.content), proposition);
+    return pasSur('reaction', tcClasseQuestionExemple(), proposition);
   }
   // 6. Un acquiescement, une réaction ou un mot seul (« ok », « oui », « ?? », « et ? », « hein ») ; après ma question : les exemples.
   if (apresMaQuestion && reaction) return pasSur('reaction', tcClasseQuestionExemple());

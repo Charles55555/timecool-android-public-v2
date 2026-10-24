@@ -2452,3 +2452,6 @@ API avant la page). Dossier des fichiers en production : `/var/www/vhosts/timeco
 - Suite : verif-classement-charly refaite (40 pièges → question ; 7 informations qui ne sont pas des contestations ; niveau 2 ;
   32 demandes claires ; le fil : réponse au modèle, « oui » après la proposition, complément, « non »/« cv » ; suite après un
   résultat ; lieu du rendez-vous exécuté ; langue, seuil, nature).
+- (suite, 24/10) « oui » à une question qui demandait déjà la pièce (« Quel jour et à quelle heure, pour « Dermatologue » ? ») :
+  la même question précise, et la proposition reste gardée (aussi après les deux exemples) : « mardi 15h » ensuite passe, le
+  Dermatologue est dans l'historique.
