@@ -660,8 +660,12 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       ['Refuse Gaëlle, propose jeudi 10h à Hugo', 'Mets Hugo et Gaëlle ensemble jeudi 10h', 'Accepte Hugo et Gaëlle'].map((p) => p + '=' + JSON.stringify(D(p, RC.R5))).join(' | ') + ' || ' + ['Ajoute dentiste mardi 9h', 'Dis à Hugo que je viens vendredi 9h', 'Hugo a répondu ?', 'Accepte Hugo', 'Préviens Paul que j’aurai 10 minutes de retard', 'Fixe Hugo vendredi 9h pour le dossier Martin', 'rdv dentiste vendredi 9h', 'Déjeuner avec Hugo vendredi 12h', 'Refuse et bloque Hugo', 'Invite Hugo à dîner samedi 20h', 'Quand suis-je libre demain ?', 'Annule le kiné de jeudi'].map((p) => p + '=' + JSON.stringify(D(p, RC.R1))).join(' | '));
     // 3. La proposition part ; conflit, heure passée, fiche à ajouter.
     await essai('Fixe Hugo vendredi 9h, en personne', RC.R1);
-    verifie('« Fixe Hugo vendredi 9h, en personne » → /rdv/proposer-creneau 990001 vendredi 16 09:00 60 physique, et « C’est fait : rendez-vous avec Hugo Besnard … à 9h (en personne), inscrit chez vous deux. Hugo le voit dans sa messagerie. » (réponse)',
-      envois.join() === '/rdv/proposer-creneau 990001 ' + iso(1) + ' 09:00 60 physique' && dernier().nature === 'reponse' && dernier().content === 'C’est fait : rendez-vous avec Hugo Besnard ' + iso(1) + ' à 9h (en personne), inscrit chez vous deux. Hugo le voit dans sa messagerie.', envois.join() + ' | ' + dernier().content);
+    { const q = dernier().content, n = envois.length; await ctx.tcRepondreRecue('oui');
+      verifie('« Fixe Hugo vendredi 9h, en personne » → relecture d’abord (chef, 58 bis) : « Je propose vendredi 16 à 9h à Hugo (en personne) ? Réponds « oui » ou « non ». », rien ne part ; « oui » → /rdv/proposer-creneau 990001 vendredi 16 09:00 60 physique et « C’est fait : rendez-vous avec Hugo Besnard … à 9h (en personne), inscrit chez vous deux. Hugo le voit dans sa messagerie. » (réponse)',
+        q === 'Je propose ' + iso(1) + ' à 9h à Hugo (en personne) ? Réponds « oui » ou « non ».' && n === 0 && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(1) + ' 09:00 60 physique' && dernier().nature === 'reponse' && dernier().content === 'C’est fait : rendez-vous avec Hugo Besnard ' + iso(1) + ' à 9h (en personne), inscrit chez vous deux. Hugo le voit dans sa messagerie.', q + ' | ' + envois.join() + ' | ' + dernier().content); }
+    await essai('Fixe Hugo vendredi 9h, en personne', RC.R1);
+    { const r = await ctx.tcRepondreRecue('non');
+      verifie('« non » après « Je propose vendredi 16 à 9h à Hugo ? » → rien ne part, « D’accord, je ne propose rien à Hugo. … »', r === true && envois.length === 0 && /^D’accord, je ne propose rien à Hugo\./.test(dernier().content), dernier().content); }
     await essai('Propose-lui vendredi 15h', RC.R1);
     { const q = dernier().content; const n1 = envois.length;
       await ctx.tcRepondreRecue('oui');
@@ -671,8 +675,8 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     { const r = await ctx.tcRepondreRecue('non');
       verifie('« non » après la question → « D’accord, je ne propose rien à Hugo. Donne-moi un autre moment quand tu veux. », rien n’est parti', r === true && envois.length === 0 && dernier().content === 'D’accord, je ne propose rien à Hugo. Donne-moi un autre moment quand tu veux.', dernier().content); }
     await essai('Propose-lui vendredi 15h', RC.R1);
-    { const r = await ctx.tcRepondreRecue('plutôt lundi 10h');
-      verifie('« plutôt lundi 10h » après la question → le nouveau créneau part (lundi 19 10:00), la question tombe', r === true && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(4) + ' 10:00 60 physique', envois.join() + ' | ' + dernier().content); }
+    { const r = await ctx.tcRepondreRecue('plutôt lundi 10h'); const q = dernier().content; await ctx.tcRepondreRecue('oui');
+      verifie('« plutôt lundi 10h » après la question → la relecture du nouveau créneau (« Je propose lundi 19 à 10h à Hugo (en personne) ? ») puis « oui » → il part (lundi 19 10:00)', r === true && q === 'Je propose ' + iso(4) + ' à 10h à Hugo (en personne) ? Réponds « oui » ou « non ».' && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(4) + ' 10:00 60 physique', q + ' | ' + envois.join()); }
     await essai('Propose-lui vendredi 15h', RC.R1);
     { const r = await ctx.tcRepondreRecue('annule le kiné de jeudi');
       verifie('« annule le kiné de jeudi » après la question → la question tombe sans envoi et la phrase suit son chemin (false)', r === false && envois.length === 0 && ctx.tcRecueEnAttente() === null); }
@@ -680,11 +684,12 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('« Accepte Hugo aujourd’hui à 9h » (il est 10h) → « … à 9h, c’est déjà passé. Tu me donnes un autre moment pour Hugo ? », rien n’est parti', envois.length === 0 && /c’est déjà passé\. Tu me donnes un autre moment pour Hugo \?$/.test(dernier().content) && dernier().nature === 'question', dernier().content);
     ctx.contactsList = ctx.contactsList.filter((c) => c.name !== 'Lucie Marchand');
     await essai('Ajoute Lucie à mes contacts et propose-lui mardi 10h', RC.R6);
-    verifie('« Ajoute Lucie à mes contacts et propose-lui mardi 10h » (R6, demandeuse inconnue) → la fiche Lucie Marchand est créée (mail, référence), la proposition part (990005 mardi 20 10:00) et Charly le dit',
-      envois.join() === '/rdv/proposer-creneau 990005 ' + iso(5) + ' 10:00 60 physique' && ctx.contactsList.some((c) => c.name === 'Lucie Marchand' && c.referenceCompte === 'ZZTESTLUCIE1' && c.email === 'lucie.marchand@exemple-timecool.fr') && /^Lucie Marchand est dans tes contacts\. C’est fait : rendez-vous avec Lucie Marchand/.test(dernier().content), envois.join() + ' | ' + dernier().content);
+    { const q = dernier().content; await ctx.tcRepondreRecue('oui');
+      verifie('« Ajoute Lucie à mes contacts et propose-lui mardi 10h » (R6, demandeuse inconnue) → « Je propose mardi 20 à 10h à Lucie (en personne) ? » ; « oui » → la fiche Lucie Marchand est créée (mail, référence), la proposition part (990005 mardi 20 10:00) et Charly le dit',
+        q === 'Je propose ' + iso(5) + ' à 10h à Lucie (en personne) ? Réponds « oui » ou « non ».' && envois.join() === '/rdv/proposer-creneau 990005 ' + iso(5) + ' 10:00 60 physique' && ctx.contactsList.some((c) => c.name === 'Lucie Marchand' && c.referenceCompte === 'ZZTESTLUCIE1' && c.email === 'lucie.marchand@exemple-timecool.fr') && /^Lucie Marchand est dans tes contacts\. C’est fait : rendez-vous avec Lucie Marchand/.test(dernier().content), q + ' | ' + envois.join() + ' | ' + dernier().content); }
     ctx.contactsList = ctx.contactsList.filter((c) => c.name !== 'Lucie Marchand');
     ctx.TC_BACKEND.proposerCreneauRdv = async () => { throw new Error('rdv inconnu'); };
-    await essai('Fixe Hugo vendredi 9h', RC.R1);
+    await essai('Fixe Hugo vendredi 9h', RC.R1); await ctx.tcRepondreRecue('oui');
     verifie('le serveur refuse → « Je n’ai pas pu envoyer ce créneau à Hugo Besnard (rdv inconnu). Rien n’est inscrit : réessaie dans un instant, ou passe par la messagerie. » (réponse, jamais « c’est fait »)', dernier().content === 'Je n’ai pas pu envoyer ce créneau à Hugo Besnard (rdv inconnu). Rien n’est inscrit : réessaie dans un instant, ou passe par la messagerie.' && dernier().nature === 'reponse', dernier().content);
     ctx.TC_BACKEND.proposerCreneauRdv = async (rdv, date, debut, duree, type) => { envois.push('/rdv/proposer-creneau ' + rdv + ' ' + date + ' ' + debut + ' ' + duree + ' ' + type); return {}; };
     // 4. Une période sans heure : le premier créneau libre, puis la question.
@@ -761,7 +766,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       ctx.Date = DateDimanche;
       const s = ctx.tcPeriodeAgenda('cette semaine'), p = ctx.tcPeriodeAgenda('la semaine prochaine');
       ctx.Date = DateFixe;
-      verifie('un dimanche (25 octobre), « cette semaine » = du lundi 26 au dimanche 1er novembre (plus le seul dimanche) ; « la semaine prochaine » inchangée (lundi 26 au dimanche 1er)', s && iso2(s.debut) === '2026-10-26' && iso2(s.fin) === '2026-11-01' && p && iso2(p.debut) === '2026-10-26' && iso2(p.fin) === '2026-11-01', JSON.stringify([s, p])); }
+      verifie('un dimanche (25 octobre), « cette semaine » = du lundi 26 au dimanche 1er novembre (plus le seul dimanche), et le libellé dit les dates (« cette semaine (du lundi 26 octobre au dimanche 1er novembre) », chef 58 bis) ; « la semaine prochaine » inchangée (lundi 26 au dimanche 1er)', s && iso2(s.debut) === '2026-10-26' && iso2(s.fin) === '2026-11-01' && s.label === 'cette semaine (du lundi 26 octobre au dimanche 1er novembre)' && p && iso2(p.debut) === '2026-10-26' && iso2(p.fin) === '2026-11-01', JSON.stringify([s, p])); }
     verifie('« Mets Hugo et Gaëlle ensemble jeudi 10h » → un rendez-vous à plusieurs (tcDetecterRdvGroupe : 2 contacts) ; « Trouve un créneau pour Hugo cette semaine » sans demande en attente reste le chemin d’avant (groupe à un)', (ctx.tcDetecterRdvGroupe('Mets Hugo et Gaëlle ensemble jeudi 10h') || {}).contacts && ctx.tcDetecterRdvGroupe('Mets Hugo et Gaëlle ensemble jeudi 10h').contacts.length === 2 && !!ctx.tcDetecterRdvGroupe('Trouve un créneau pour Hugo cette semaine'), JSON.stringify(ctx.tcDetecterRdvGroupe('Mets Hugo et Gaëlle ensemble jeudi 10h')));
     verifie('charlySendMessage : le créneau pour une demande reçue et l’accord sur une invitation sont lus avant la réponse « messagerie » ; « Je lui propose ? » avec les attentes (après « J’envoie ? ») ; « non pas ça » sur une carte ; la création locale ne garde plus le même titre après « ajoute » ; dimanche ; contact du rendez-vous introuvable',
       csm.indexOf('tcDetecterCreneauPourRecue(text)') > -1 && csm.indexOf('tcDetecterCreneauPourRecue(text)') < csm.indexOf('tcDetecterAccordConvocation(text)') && csm.indexOf('tcDetecterAccordConvocation(text)') < csm.indexOf('tcDetecterDemandeRecue(text)')
@@ -775,13 +780,13 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       await essai('Trouve un créneau pour Hugo cette semaine', RC.R1);
       const r2 = await ctx.tcRepondreRecue('ok mais pas cette semaine'); const q2 = dernier().content; const n2 = envois.length; const encore = ctx.tcRecueEnAttente() !== null;
       await essai('Trouve un créneau pour Hugo cette semaine', RC.R1);
-      await ctx.tcRepondreRecue('non, plutôt jeudi 15h'); const r3 = envois.join();
-      verifie('(2e passage) « oui mais plutôt vendredi 15h » → le créneau d’origine ne part pas, vendredi 15h chevauche le Dentiste → la question du conflit ; « ok mais pas cette semaine » → « D’accord, pas celui-là. Quel jour et quelle heure pour Hugo ? » (rien n’est parti, la question reste) ; « non, plutôt jeudi 15h » → le nouveau créneau part (jeudi 15 15:00)',
-        /tu as déjà « Dentiste » \(15h à 16h\)/.test(r1) && r1.indexOf('/rdv/proposer-creneau') < 0 && r2 === true && q2 === 'D’accord, pas celui-là. Quel jour et quelle heure pour Hugo ?' && n2 === 0 && encore && r3 === '/rdv/proposer-creneau 990001 ' + iso(0) + ' 15:00 60 physique', r1 + ' || ' + q2 + ' || ' + r3); }
+      await ctx.tcRepondreRecue('non, plutôt jeudi 15h'); const r3 = dernier().content; await ctx.tcRepondreRecue('oui'); const e3 = envois.join();
+      verifie('(2e passage) « oui mais plutôt vendredi 15h » → le créneau d’origine ne part pas, vendredi 15h chevauche le Dentiste → la question du conflit ; « ok mais pas cette semaine » → « D’accord, pas celui-là. Quel jour et quelle heure pour Hugo ? » (rien n’est parti, la question reste) ; « non, plutôt jeudi 15h » → la relecture du nouveau créneau, « oui » → il part (jeudi 15 15:00)',
+        /tu as déjà « Dentiste » \(15h à 16h\)/.test(r1) && r1.indexOf('/rdv/proposer-creneau') < 0 && r2 === true && q2 === 'D’accord, pas celui-là. Quel jour et quelle heure pour Hugo ?' && n2 === 0 && encore && r3 === 'Je propose ' + iso(0) + ' à 15h à Hugo (en personne) ? Réponds « oui » ou « non ».' && e3 === '/rdv/proposer-creneau 990001 ' + iso(0) + ' 15:00 60 physique', r1 + ' || ' + q2 + ' || ' + r3 + ' || ' + e3); }
     { ctx.charlyIA.history = []; envois.length = 0; poser(RC.R1);
       await ctx.tcGererCreneauPourRecue('Trouve un créneau pour Hugo cette semaine', ctx.tcDetecterCreneauPourRecue('Trouve un créneau pour Hugo cette semaine'));
-      await ctx.tcRepondreRecue('jeudi 15h');
-      verifie('(2e passage) « jeudi 15h » seul après « Je lui propose ? » → le nouveau créneau part pour Hugo', envois.join() === '/rdv/proposer-creneau 990001 ' + iso(0) + ' 15:00 60 physique', envois.join()); }
+      await ctx.tcRepondreRecue('jeudi 15h'); const q = dernier().content; await ctx.tcRepondreRecue('oui');
+      verifie('(2e passage) « jeudi 15h » seul après « Je lui propose ? » → la relecture, puis « oui » → le nouveau créneau part pour Hugo', q === 'Je propose ' + iso(0) + ' à 15h à Hugo (en personne) ? Réponds « oui » ou « non ».' && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(0) + ' 15:00 60 physique', q + ' | ' + envois.join()); }
     { const RM = [{ reference: 'MD1', with: 'Marc Dupont', thread: [{ from: 'them', texte: 'Marc Dupont te demande un rendez-vous (en personne).', genre: 'demande_rdv', rdv: 990009, type: 'physique', traite: false }] }];
       verifie('(2e passage) avec une demande de Marc : « Cale un rendez-vous le 3 mars à 10h », « rdv le 3 mars 10h », « mardi 10h pour mars » ne visent pas Marc (un mois n’est pas un prénom à une lettre près) ; « Cale Marc le 3 mars à 10h » oui',
         D('Cale un rendez-vous le 3 mars à 10h', RM) === null && D('rdv le 3 mars 10h', RM) === null && D('mardi 10h pour mars', RM) === null && ((D('Cale Marc le 3 mars à 10h', RM) || {}).recue || {}).nom === 'Marc Dupont',
@@ -812,9 +817,9 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     { await essai('Fixe Hugo vendredi 9h et samedi 10h', RC.R1);
       const q = dernier().content, n = envois.length;
       await ctx.tcRepondreRecue('oui'); const q2 = dernier().content;
-      await ctx.tcRepondreRecue('samedi 10h');
-      verifie('(2e passage) « Fixe Hugo vendredi 9h et samedi 10h » → « Tu me donnes deux moments pour Hugo : lequel je lui propose ? Dis-moi le jour et l’heure. », rien ne part ; « oui » → « Lequel ? … » ; « samedi 10h » → la proposition part (samedi 17 10:00)',
-        q === 'Tu me donnes deux moments pour Hugo : lequel je lui propose ? Dis-moi le jour et l’heure.' && n === 0 && q2 === 'Lequel ? Donne-moi le jour et l’heure pour Hugo.' && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(2) + ' 10:00 60 physique', q + ' || ' + q2 + ' || ' + envois.join()); }
+      await ctx.tcRepondreRecue('samedi 10h'); const q3 = dernier().content; await ctx.tcRepondreRecue('oui');
+      verifie('(2e passage) « Fixe Hugo vendredi 9h et samedi 10h » → « Tu me donnes deux moments pour Hugo : lequel je lui propose ? Dis-moi le jour et l’heure. », rien ne part ; « oui » → « Lequel ? … » ; « samedi 10h » → la relecture, « oui » → la proposition part (samedi 17 10:00)',
+        q === 'Tu me donnes deux moments pour Hugo : lequel je lui propose ? Dis-moi le jour et l’heure.' && n === 0 && q2 === 'Lequel ? Donne-moi le jour et l’heure pour Hugo.' && q3 === 'Je propose ' + iso(2) + ' à 10h à Hugo (en personne) ? Réponds « oui » ou « non ».' && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(2) + ' 10:00 60 physique', q + ' || ' + q2 + ' || ' + q3 + ' || ' + envois.join()); }
     ctx.events = agenda().concat([ev('cafe', 'Café Hugo', 2, 10, 0, 11, 0)]);
     verifie('(2e passage) « Mets Hugo vendredi 9h », « Bouge Hugo à vendredi 9h », « Change Hugo pour vendredi 9h » quand « Café Hugo » existe samedi → rien ne part (le déplacement local garde la main) ; sans rendez-vous avec Hugo, « Mets Hugo vendredi 9h » reste une proposition',
       D('Mets Hugo vendredi 9h', RC.R1) === null && D('Bouge Hugo à vendredi 9h', RC.R1) === null && D('Change Hugo pour vendredi 9h', RC.R1) === null && (ctx.events = agenda(), !!D('Mets Hugo vendredi 9h', RC.R1)), JSON.stringify(D('Mets Hugo vendredi 9h', RC.R1)));
@@ -822,9 +827,9 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     ctx.events = agenda(); envois.length = 0;
     await essai('Trouve un créneau pour Hugo cette semaine', RC.R1);
     { await ctx.tcRepondreRecue('ok mais pas cette semaine'); const r = await ctx.tcRepondreRecue('ok'); const q = dernier().content; const n = envois.length;
-      await ctx.tcRepondreRecue('lundi 10h');
-      verifie('(3e passage) « ok mais pas cette semaine » puis « ok » → « Lequel ? Donne-moi le jour et l’heure pour Hugo. », le créneau refusé (jeudi 10h) ne part pas ; « lundi 10h » ensuite → part (lundi 19 10:00)',
-        r === true && q === 'Lequel ? Donne-moi le jour et l’heure pour Hugo.' && n === 0 && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(4) + ' 10:00 60 physique', q + ' | ' + envois.join()); }
+      await ctx.tcRepondreRecue('lundi 10h'); const q4 = dernier().content; await ctx.tcRepondreRecue('oui');
+      verifie('(3e passage) « ok mais pas cette semaine » puis « ok » → « Lequel ? Donne-moi le jour et l’heure pour Hugo. », le créneau refusé (jeudi 10h) ne part pas ; « lundi 10h » ensuite → la relecture, « oui » → part (lundi 19 10:00)',
+        r === true && q === 'Lequel ? Donne-moi le jour et l’heure pour Hugo.' && n === 0 && q4 === 'Je propose ' + iso(4) + ' à 10h à Hugo (en personne) ? Réponds « oui » ou « non ».' && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(4) + ' 10:00 60 physique', q + ' | ' + q4 + ' | ' + envois.join()); }
     await essai('Trouve un créneau pour Hugo cette semaine', RC.R1);
     { await ctx.tcRepondreRecue('non pas ce jour-là'); const r = await ctx.tcRepondreRecue('oui');
       verifie('(3e passage) « non pas ce jour-là » puis « oui » → « Lequel ? … », rien ne part', r === true && envois.length === 0 && dernier().content === 'Lequel ? Donne-moi le jour et l’heure pour Hugo.', dernier().content + ' | ' + envois.join()); }

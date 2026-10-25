@@ -13620,7 +13620,13 @@ function tcPeriodeAgenda(text) {
   }
   if (/cette semaine/.test(t)) {
     // Un dimanche, « cette semaine » est la semaine qui commence demain (chef, mission 58).
-    if (indexSemaineLundi(debutJour) === 6) { const lundi = ajouterJours(debutJour, 1); return { debut: lundi, fin: ajouterJours(lundi, 6), label: 'cette semaine' }; }
+    // Les dates sont dites (« du lundi 26 octobre au dimanche 1er novembre ») : annuler ou libérer la période les montre avant d'agir (chef, 58 bis).
+    if (indexSemaineLundi(debutJour) === 6) {
+      const lundi = ajouterJours(debutJour, 1), dim = ajouterJours(lundi, 6);
+      const J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      const jm = function (d) { return J[d.getDay()] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + M[d.getMonth()]; };
+      return { debut: lundi, fin: dim, label: 'cette semaine (du ' + jm(lundi) + ' au ' + jm(dim) + ')' };
+    }
     return { debut: debutJour, fin: ajouterJours(debutJour, 6 - indexSemaineLundi(debutJour)), label: 'cette semaine' };
   }
   if (/mois prochain/.test(t)) {
@@ -21585,7 +21591,10 @@ async function tcGererCreneauPourRecue(text, d) {
       renderCharlyChat();
       return;
     }
-    await tcEnvoyerCreneauRecue(recue, dateISO, debut, d.type, d.ajouterContact);
+    // Relecture avant l'envoi (chef, 58 bis) : une phrase dictée peut être mal lue ; rien ne part vers un contact sans « oui ». Le bouton de la messagerie reste direct.
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Je propose ' + tcFormaterDateHumaine(dateISO) + ' à ' + tcRecueHeure(debut) + ' à ' + prenom + (motType ? ' (' + motType + ')' : '') + ' ? Réponds « oui » ou « non ».',
+      _recueEnAttente: { genre: 'demande', recue: recue, dateISO: dateISO, debut: debut, type: d.type, ajouterContact: d.ajouterContact } });
+    renderCharlyChat();
     return;
   }
   const quand = (d.periode && d.periode.label) ? d.periode.label : (d.partie ? 'le ' + d.partie : 'dans les deux semaines qui viennent');
