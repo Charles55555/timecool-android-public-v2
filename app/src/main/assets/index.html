@@ -15159,6 +15159,8 @@ async function charlySendMessage() {
   if (typeof tcRepondreEnvoi === 'function' && await tcRepondreEnvoi(text)) return;
   // === « Je lui propose ? », « Je réponds présent ? » : oui → ça part, non → rien, un autre moment → le nouveau créneau (mission 58) ===
   if (typeof tcRepondreRecue === 'function' && await tcRepondreRecue(text)) return;
+  // === « Que veux-tu dire à Marie ? », « C’est qui, ta mère ? » : le nom, puis le texte relu avant l'envoi (mission 59) ===
+  if (typeof tcRepondreMessageSansTexte === 'function' && await tcRepondreMessageSansTexte(text, texteTape)) return;
 
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
   if (typeof tcQuestionTypeEnAttente === 'function') {
@@ -15310,9 +15312,13 @@ async function charlySendMessage() {
       }
       // Autre chose qu'un oui ou un non : une nouvelle demande. Ce qui attendait est abandonne, et on
       // le dit, sinon un « non » plus tard repondait a l'ancienne question (campagne 6, 11/10).
+      // Une phrase sociale ou une réaction (« Cv », « ok merci ») n'abandonne rien : seule une demande claire le fait (chef, mission 59).
+      const _pasUneDemande = reponse === null && typeof tcClasserMessage === 'function' && tcClasserMessage(text, charlyIA.history).classe !== 'claire';
+      if (!_pasUneDemande) {
       if (reponse === null && tcEstUneNouvelleDemande(text)) {
         if (conflit) conflit._resolu = true; else proposition._validated = true;
         tcAbandonnerAttente(conflit ? 'ajout' : 'proposition', conflit ? conflit.conflictData.msg : proposition);
+      }
       }
     }
   }
@@ -15356,6 +15362,12 @@ async function charlySendMessage() {
   if (typeof tcDetecterAccordConvocation === 'function') {
     const _accordConv = tcDetecterAccordConvocation(text);
     if (_accordConv) { await tcGererAccordConvocation(text, _accordConv); return; }
+  }
+  // === UN MESSAGE À ENVOYER SANS SON TEXTE (« tu peux envoyer un message à ma mère via ma messagerie ? », « écris à Paul ») : qui, quoi,
+  // relecture, envoi ; jamais « pas encore » (mission 59). « dis à Paul que j'arrive » garde le chemin de la mission 55. ===
+  if (typeof tcDetecterMessageSansTexte === 'function') {
+    const _sansTexte = tcDetecterMessageSansTexte(text);
+    if (_sansTexte) { await tcGererMessageSansTexte(text, _sansTexte); return; }
   }
   {
     const _recue = (typeof tcDetecterDemandeRecue === 'function') ? tcDetecterDemandeRecue(text) : null;
@@ -15573,7 +15585,7 @@ async function charlySendMessage() {
       reply: 'Pas encore : pour l’instant TimeCool envoie tes rendez-vous vers Google Agenda, il ne lit pas Google. Pour reprendre ton ancien agenda, importe-le : menu ☰ → Importer mon ancien agenda 😊' },
     { keys: ['google calendar','google agenda','agenda google','calendrier google','calendrier de google','importer agenda','importer mes rdv','synchroniser avec mon ancien agenda','synchroniser mon ancien agenda'],
       reply: 'Oui ! 😊 Ouvre le menu ☰ → Synchroniser avec mon ancien agenda → « Synchroniser mon agenda TimeCool avec mon agenda Google » : ce que tu crées ou modifies dans TimeCool apparaît aussi dans Google (un seul sens). Pour reprendre ton ancien agenda, importe-le d’abord : menu ☰ → Importer mon ancien agenda.' },
-    { keys: ['envoyer email','envoyer un email','envoyer mail','envoyer un mail','email pour moi','mail pour moi','envoie un mail','envoie un email','tu peux envoyer','envoyer des emails','envoyer des mails','email','e-mail'],
+    { keys: ['envoyer email','envoyer un email','envoyer mail','envoyer un mail','email pour moi','mail pour moi','envoie un mail','envoie un email','envoyer des emails','envoyer des mails','email','e-mail'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['payer','paiement','carte bleue','virement','régler','réglement'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
@@ -15581,7 +15593,10 @@ async function charlySendMessage() {
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['gps','navigation','waze'],
       reply: 'Le guidage GPS pas à pas n\'est pas encore disponible 🔜 Mais dis-moi « temps de trajet vers [adresse] » et je te donne une estimation avec le trafic en temps réel !' },
-    { keys: ['sms','texto','message','whatsapp','envoyer un message','envoie un sms','envoie un texto'],
+    // Un message : Charly sait le faire par la messagerie TimeCool (missions 55 et 59) ; jamais « pas encore ».
+    { keys: ['sms','texto','message','envoyer un message','envoie un sms','envoie un texto'],
+      reply: 'Oui, par la messagerie TimeCool : dis-moi à qui et quoi (par exemple « dis à Paul que j’arrive dans 10 minutes »), je te relis le message avant de l’envoyer.' },
+    { keys: ['whatsapp'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
     { keys: ['réveil','réveille','alarm','réveille-moi','réveille moi','me réveiller'],
       reply: 'Pas encore, mais ça arrive bientôt ! 🔜 Par contre je peux déjà créer tes RDV, déplacer tes rendez-vous, gérer tes rappels et organiser ta semaine et bien plus encore...' },
@@ -21754,6 +21769,190 @@ function tcQuestionApresRefusCarte(text) {
   if (/^(non |non non |mais non )?(pas (ca|celui la|celle la|ca du tout|comme ca|cette carte|ce creneau|cette heure|ce jour)|c est pas ca|ce n est pas ca)( non| du tout)?$/.test(norm)) return 'D’accord, je n’ajoute rien. Qu’est-ce que tu voulais ?';
   if (typeof TC_CLASSE_CONTESTATIONS !== 'undefined' && TC_CLASSE_CONTESTATIONS.indexOf(norm) > -1) return 'D’accord, je n’ajoute rien. Qu’est-ce que tu voulais ?';
   return null;
+}
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 59 (25/10, chef, capture de Charles) : un message à envoyer sans son texte, jamais « pas encore »
+
+   - « Tu peux envoyer un message à ma mère via ma messagerie sécurisée TimeCool ? », « écris à Paul », « envoie un mot à Hugo » : Charly
+     trouve le contact (« ma mère » : une fiche classée Famille ou nommée ainsi ; sinon il demande qui), demande « Que veux-tu lui dire ? »,
+     relit le texte (« J'envoie ? », mission 55 / 57), et « oui » l'envoie par la messagerie. Jamais « Pas encore, ça arrive bientôt ».
+   - « dis à Paul que j'arrive » (le texte est là) garde le chemin de la mission 55 : ce détecteur ne prend que la demande SANS texte.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Les liens de famille : le mot dit, la fiche classée Famille ou nommée ainsi. */
+const TC_MSG_LIENS = [
+  [/(^|\s)(ma mere|maman|ma maman|ma mere)(\s|$)/, 'ta mère', /(^|\s)(maman|mere|mère)(\s|$)/],
+  [/(^|\s)(mon pere|papa|mon papa)(\s|$)/, 'ton père', /(^|\s)(papa|pere|père)(\s|$)/],
+  [/(^|\s)(ma femme|mon epouse|ma cherie)(\s|$)/, 'ta femme', /(^|\s)(cherie|chérie|femme)(\s|$)/],
+  [/(^|\s)(mon mari|mon epoux|mon cheri)(\s|$)/, 'ton mari', /(^|\s)(cheri|chéri|mari)(\s|$)/],
+  [/(^|\s)(ma soeur|ma sœur)(\s|$)/, 'ta sœur', /(^|\s)(soeur|sœur)(\s|$)/],
+  [/(^|\s)(mon frere)(\s|$)/, 'ton frère', /(^|\s)(frere|frère)(\s|$)/],
+  [/(^|\s)(ma fille)(\s|$)/, 'ta fille', /(^|\s)(fille)(\s|$)/],
+  [/(^|\s)(mon fils)(\s|$)/, 'ton fils', /(^|\s)(fils)(\s|$)/],
+  [/(^|\s)(mamie|ma grand mere|ma grand-mere)(\s|$)/, 'ta grand-mère', /(^|\s)(mamie|grand-mere|grand mere)(\s|$)/],
+  [/(^|\s)(papy|papi|mon grand pere|mon grand-pere)(\s|$)/, 'ton grand-père', /(^|\s)(papy|papi|grand-pere|grand pere)(\s|$)/]
+];
+/* Ce qui peut entourer la demande sans rien dire du message : la messagerie, les contacts, la politesse. */
+const TC_MSG_ENTOURAGE = /(^|\s)(via|par|sur|dans|avec|grace a|depuis) (ma |la |ta |sa |notre )?(messagerie|messagerie securisee|messagerie timecool|messagerie securisee timecool|appli|application|app)( securisee)?( timecool| de timecool)?(?=\s|$)|(^|\s)qui (se trouve|est|figure) dans (ma messagerie|mes contacts|ma liste|mon repertoire|l appli|l application)(?=\s|$)|(^|\s)(qui est|qui se trouve) dans (ma |la )?messagerie(?=\s|$)|(^|\s)(stp|svp|merci|s il te plait|s il vous plait|charly|maintenant|tout de suite|rapidement|vite|aujourd hui|ce soir)(?=\s|$)/g;
+
+/**
+ * Une demande d'envoyer un message à quelqu'un, SANS le texte du message : { contact, lien, candidats } ou null.
+ * « Tu peux envoyer un message à ma mère via ma messagerie sécurisée TimeCool ? » → la fiche Famille ; « écris à Paul » → Paul.
+ * « dis à Paul que j'arrive », « envoie à Hugo que je suis en retard » (le texte est là) → null : le chemin de la mission 55.
+ */
+function tcDetecterMessageSansTexte(text) {
+  const brut = String(text || '').trim();
+  let norm = tcClasseNormaliser(brut);
+  if (!norm || norm.split(' ').length > 22) return null;
+  // Le texte d'un message (« que … », « qu'il … », « si … », « ceci : … », « lui dire que ») : pas ici.
+  if (/(^|\s)(que|qu|qu il|qu elle|quoi|si|ceci|cela|comme quoi|pour lui dire|pour dire|disant|en disant|pour qu)(\s|$)/.test(norm.replace(/^(est ce que|est ce qu)\s+/, ''))) return null;
+  // Le prélude : « tu peux », « est-ce que tu peux », « je veux », « j'aimerais », « peux-tu », « pourrais-tu ».
+  norm = norm.replace(/^(?:(?:charly|stp|svp|dis moi|alors|bon|allez)\s+)+/, '')
+    .replace(/^(?:est ce que |est ce qu )?(?:tu peux|tu pourrais|tu veux bien|tu sais|tu saurais|peux tu|pourrais tu|veux tu|je veux|je voudrais|j aimerais|je souhaite|je souhaiterais|il faut|il faudrait|faut|j ai besoin de|j aurais besoin de|je dois|j aimerais que tu|je veux que tu|je voudrais que tu)\s+/, '')
+    .replace(/^(?:m |me |nous )/, '').trim();
+  // Le verbe et l'objet : « envoyer un message », « écrire », « dire quelque chose », « envoyer un mot / un texto / un mail ».
+  const m = norm.match(/^(envoie[sz]?|envoyer|envoi|ecris|ecrire|ecrivez|transmets|transmettre|transmettez|passe[sz]?|passer|fais passer|faire passer|dis|dire|dites|previens|prevenir|prevenez|contacte[sz]?|contacter|laisse[sz]?|laisser|mets|mettre)\s+(?:(?:un|une|le|la|ce|cette|mon|ma|son|sa|petit|petite|court|courte|rapide|rapidement|vite|lui|leur)\s+)*(?:(message|mot|sms|texto|texte|mail|mel|email|e mail|courrier|courriel|ligne|note|petit mot|quelque chose|un truc|truc)\s+)?(?:(?:un|une|le|la|petit|petite)\s+)*(?:(a|au|aux|pour)\s+)?(.+)$/);
+  if (!m) return null;
+  const verbe = m[1], objet = m[2] || '';
+  // Sans « à » : seulement « préviens Hugo », « contacte Paul » (le nom suit le verbe) ; « envoie Hugo », « écris Paul » ne veulent rien dire.
+  if (!m[3] && !/^(previens|prevenir|prevenez|contacte|contactes|contactez|contacter)$/.test(verbe)) return null;
+  if (!m[3] && objet) return null;
+  // Sans objet (« écris à Paul », « envoie à Paul »), seuls « écrire », « envoyer », « dire » et « prévenir » valent un message ; « mets », « laisse », « passe » demandent l'objet.
+  if (!objet && !/^(envoie|envoies|envoyez|envoyer|envoi|ecris|ecrire|ecrivez|dis|dire|dites|previens|prevenir|prevenez)$/.test(verbe)) return null;
+  if (objet && /^(texte|ligne|note)$/.test(objet) && !/^(envoie|envoies|envoyez|envoyer|envoi|ecris|ecrire|ecrivez)$/.test(verbe)) return null;
+  // Le destinataire : ce qui reste après la messagerie, les contacts et la politesse.
+  let dest = (' ' + m[4] + ' ').replace(TC_MSG_ENTOURAGE, ' ').replace(/\s+/g, ' ').trim();
+  dest = dest.replace(/^(?:a |au |pour )/, '').trim();
+  if (!dest || dest.split(' ').length > 4) return null;
+  // Un lien de famille.
+  for (let i = 0; i < TC_MSG_LIENS.length; i++) {
+    const lien = TC_MSG_LIENS[i];
+    if (lien[0].test(' ' + dest + ' ')) {
+      const reste = (' ' + dest + ' ').replace(lien[0], ' ').replace(/\s+/g, ' ').trim();
+      if (reste) return null;
+      const candidats = tcContactsDuLien(lien[2]);
+      return { contact: candidats.length === 1 ? candidats[0] : null, lien: lien[1], candidats: candidats };
+    }
+  }
+  // Un contact nommé (« Paul », « Marie Dupont », « M. Dubois »).
+  const mots = dest.split(' ').filter(function (w) { return w.length >= 2 && !/^(m|mr|mme|mlle|dr|me|monsieur|madame)$/.test(w); });
+  if (!mots.length || typeof tcContactsParMots !== 'function') return null;
+  let trouves = [];
+  try { trouves = tcContactsParMots(mots); } catch (e) { trouves = []; }
+  if (trouves.length === 1) return { contact: trouves[0], lien: null, candidats: trouves };
+  if (trouves.length > 1 && trouves.length <= 4) return { contact: null, lien: null, candidats: trouves, nom: dest };
+  // Un nom écrit avec une majuscule mais sans fiche : Charly le dit et demande.
+  if (!trouves.length && typeof tcRecueNomPropre === 'function' && mots.some(function (w) { return tcRecueNomPropre(brut, w); })) return { contact: null, lien: null, candidats: [], nom: dest };
+  return null;
+}
+
+/** Les fiches classées Famille, ou dont le nom porte le lien (« Maman », « Mamie Jeanne »). */
+function tcContactsDuLien(reNom) {
+  const liste = Array.isArray(contactsList) ? contactsList : [];
+  const nommes = liste.filter(function (c) { return c && c.name && reNom.test(' ' + tcClasseNormaliser(c.name) + ' '); });
+  if (nommes.length) return nommes;
+  return liste.filter(function (c) { return c && Array.isArray(c.categories) && c.categories.indexOf('famille') > -1 && !c.blocked; });
+}
+
+/** « Que veux-tu dire à Marie ? » (ou « qui ? ») ; la réponse suivante est le texte, relu avant de partir. */
+async function tcGererMessageSansTexte(text, d) {
+  tcPousserMessageUtilisateur(text);
+  const noms = function (liste) { return liste.map(function (c) { return c.name; }).join(liste.length === 2 ? ' ou ' : ', ').replace(/, ([^,]*)$/, ' ou $1'); };
+  let contenu, attente;
+  if (d.contact) {
+    const prenom = String(d.contact.name || '').split(' ')[0];
+    contenu = 'Que veux-tu dire à ' + prenom + (d.lien ? ' (' + d.contact.name + ', ' + d.lien + ')' : '') + ' ? Je te relis le message avant de l’envoyer.';
+    attente = { etape: 'texte', contact: d.contact, lien: d.lien };
+  } else if (d.candidats && d.candidats.length > 1) {
+    contenu = (d.lien ? 'C’est qui, ' + d.lien + ' : ' : 'Lequel : ') + noms(d.candidats) + ' ?';
+    attente = { etape: 'qui', lien: d.lien, candidats: d.candidats };
+  } else {
+    contenu = d.lien
+      ? 'Je ne trouve pas ' + d.lien + ' dans tes contacts : dis-moi son nom, ou classe sa fiche dans « Ma famille ».'
+      : 'Je ne trouve pas « ' + (d.nom || '') + ' » dans tes contacts : vérifie le nom, ou ajoute la fiche.';
+    attente = { etape: 'qui', lien: d.lien };
+  }
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: contenu, _messageEnAttente: attente });
+  renderCharlyChat();
+}
+
+/** La question « Que veux-tu dire à … ? » ou « C’est qui ? » qui attend encore, parmi les derniers messages. */
+function tcMessageSansTexteEnAttente() {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  for (let i = h.length - 1, n = 0; i >= 0 && n < 3; i--, n++) {
+    const m = h[i];
+    if (m && m.role === 'assistant' && m._messageEnAttente) return m._messageEnAttente._resolu ? null : m;
+  }
+  return null;
+}
+
+/**
+ * La réponse à « C’est qui ? » (un nom → « Que veux-tu lui dire ? ») ou à « Que veux-tu dire à … ? » (le texte → relecture « J'envoie ? »
+ * par le chemin de la mission 55). « non », « laisse tomber » → rien ; une correction « non c'est Jeanne » → l'autre contact.
+ */
+async function tcRepondreMessageSansTexte(text, original) {
+  const m = tcMessageSansTexteEnAttente();
+  if (!m) return false;
+  const a = m._messageEnAttente;
+  // Le message relayé garde les mots tapés (« dimanche midi », pas « 12 heures ») : le texte d'origine quand la page l'a.
+  const brut = String((typeof original === 'string' && original.trim()) ? original : (text || '')).trim();
+  const norm = tcClasseNormaliser(brut);
+  if (!norm) return false;
+  const abandon = /^(non|nan|non merci|laisse|laisse tomber|rien|finalement rien|rien finalement|annule|oublie|stop|pas maintenant|plus tard|non rien|c est bon laisse)( stp| svp| merci)?$/.test(norm);
+  if (abandon) {
+    a._resolu = true;
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, je n’envoie rien.' });
+    renderCharlyChat();
+    return true;
+  }
+  const chercher = function (texte) {
+    const mots = tcClasseNormaliser(texte).split(' ').filter(function (w) { return w.length >= 3 && !/^(non|oui|c est|est|plutot|mais|pas|celui|celle|la|le|les|mon|ma|mes|contact|fiche|dans|mes|contacts|c|son|nom|appelle|s appelle|elle|il)$/.test(w); });
+    if (!mots.length || typeof tcContactsParMots !== 'function') return [];
+    let l = [];
+    try { l = tcContactsParMots(mots); } catch (e) { l = []; }
+    if (!l.length && mots.length > 1) { try { l = tcContactsParMots([mots[0]]); } catch (e) { l = []; } }
+    return l;
+  };
+  if (a.etape === 'qui' || /^(non|nan)(\s|$)/.test(norm)) {
+    // Un nom : la fiche ; parmi les candidats proposés d'abord.
+    let l = chercher(brut);
+    if (a.candidats && a.candidats.length) { const parmi = l.filter(function (c) { return a.candidats.indexOf(c) > -1; }); if (parmi.length) l = parmi; }
+    if (l.length === 1) {
+      a._resolu = true;
+      tcPousserMessageUtilisateur(text);
+      const prenom = String(l[0].name || '').split(' ')[0];
+      charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Que veux-tu dire à ' + prenom + ' ? Je te relis le message avant de l’envoyer.', _messageEnAttente: { etape: 'texte', contact: l[0], lien: a.lien } });
+      renderCharlyChat();
+      return true;
+    }
+    if (a.etape === 'qui') {
+      a._resolu = true;
+      if (l.length > 1) {
+        tcPousserMessageUtilisateur(text);
+        charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Lequel : ' + l.map(function (c) { return c.name; }).join(', ').replace(/, ([^,]*)$/, ' ou $1') + ' ?', _messageEnAttente: { etape: 'qui', lien: a.lien, candidats: l } });
+        renderCharlyChat();
+        return true;
+      }
+      // Un nom écrit (majuscule) sans fiche : on le dit ; toute autre phrase suit son chemin.
+      const motsNom = brut.split(/\s+/).filter(function (w) { return /^[A-ZÀ-Ý][a-zà-ÿ-]+$/.test(w); });
+      if (motsNom.length && norm.split(' ').length <= 4) {
+        tcPousserMessageUtilisateur(text);
+        charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Je ne trouve pas « ' + motsNom.join(' ') + ' » dans tes contacts : rien n’est envoyé. Ajoute la fiche, puis redemande-moi.' });
+        renderCharlyChat();
+        return true;
+      }
+      return false;
+    }
+  }
+  // Le texte du message : relu par le chemin de la mission 55 (« Bonjour X, Inès me demande de te dire : … » ; « J'envoie ? »).
+  a._resolu = true;
+  if (typeof tcPrevenirContactLibre === 'function') {
+    await tcPrevenirContactLibre(text, { type: 'message', minutes: null, destinataire: a.contact, texte: brut });
+    return true;
+  }
+  if (typeof tcProposerEnvoi === 'function') { tcPousserMessageUtilisateur(text); await tcProposerEnvoi(a.contact, brut, true); return true; }
+  return false;
 }
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
 function tcPhraseNonCompris(question) {
