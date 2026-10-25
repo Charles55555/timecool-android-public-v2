@@ -21347,8 +21347,10 @@ const TC_RECUE_PETITS = ('ok oui d accord daccord bon alors stp svp charly pour 
   + 'merci ca marche c est que je veux bien tu peux vers si possible sa demande trouve trouver cherche chercher repousse repousser reporte reporter decale decaler '
   + 'moment libre libres dispo disponible prochain prochaine semaine mois jour matin midi apres soir seulement mais avant partir jusqu jusqu heure heures h '
   + 'autre quand plus tot tard finalement passe passons change par telephone tel personne visio video appel presentiel vrai zoom teams ligne '
-  + 'lundi mardi mercredi jeudi vendredi samedi dimanche demain aujourd hui soiree matinee ').split(' ').filter(Boolean);
+  + 'lundi mardi mercredi jeudi vendredi samedi dimanche demain aujourd hui soiree matinee non sauf remets bouge modifie ').split(' ').filter(Boolean);
 const TC_RECUE_MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre', 'janv', 'fev', 'sept', 'oct', 'nov', 'dec'];
+/* Les mots du calendrier ne sont jamais un prénom « à une lettre près » (« mars » n'est pas Marc ; examen, mission 58). */
+const TC_RECUE_CALENDRIER = TC_RECUE_MOIS.concat(['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim', 'midi', 'matin', 'soir', 'noel', 'paques', 'ete', 'hiver', 'juillet', 'week', 'end']);
 
 /** Parmi les demandes reçues, celles dont la personne est nommée dans le texte normalisé (prénom ou nom, à une lettre près). */
 function tcRecuesNommees(norm, recues) {
@@ -21359,7 +21361,9 @@ function tcRecuesNommees(norm, recues) {
     const prenom = parts[0] || '';
     const touche = mots.filter(function (w) {
       if (w.length < 3 || TC_RECUE_PETITS.indexOf(w) > -1 || /^\d/.test(w)) return false;
-      return parts.some(function (p) { return p === w || (p === prenom && tcRecueMemeMot(p, w)); });
+      if (parts.indexOf(w) > -1) return true;
+      // À une lettre près : jamais un mot du calendrier (« mars » n'est pas Marc).
+      return !!prenom && TC_RECUE_CALENDRIER.indexOf(w) < 0 && tcRecueMemeMot(prenom, w);
     });
     if (touche.length) { trouvees.push(r); touche.forEach(function (w) { if (motsNom.indexOf(w) < 0) motsNom.push(w); }); }
   });
@@ -21439,11 +21443,15 @@ function tcDetecterCreneauPourRecue(text, recueForcee) {
   if (nommees.recues.length === 1) recue = nommees.recues[0];
   else if (!nommees.recues.length && recues.length === 1 && (recueForcee || /(^|\s)(lui|sa demande|la demande)(\s|$)/.test(sans))) recue = recues[0];
   if (!recue) return null;
-  // Un rendez-vous déjà pris avec cette personne et un verbe de déplacement : le déplacement local s'en occupe.
-  if (/(^|\s)(repousse|repousser|decale|decaler|deplace|deplacer|reporte|reporter|avance|avancer|bouge)(\s|$)/.test(sans) && tcRdvAvecPersonne(recue.nom).length) return null;
+  // Un rendez-vous déjà pris avec cette personne et un verbe de déplacement (« repousse », « mets », « bouge ») : le déplacement local s'en occupe, rien ne part.
+  if (/(^|\s)(repousse|repousser|decale|decaler|deplace|deplacer|reporte|reporter|avance|avancer|bouge|bouger|mets|remets|mettre|remettre|change|changer|modifie|modifier|passe)(\s|$)/.test(sans) && tcRdvAvecPersonne(recue.nom).length) return null;
   // Rien d'autre que la personne, le moment, le type et les petits mots.
   const reste = mots.filter(function (w) { return TC_RECUE_PETITS.indexOf(w) < 0 && nommees.mots.indexOf(w) < 0 && !/^\d{1,2}h\d{0,2}$/.test(w) && !/^\d{1,4}$/.test(w) && TC_RECUE_MOIS.indexOf(w) < 0 && !/^(week|end|apres-midi)$/.test(w); });
   if (reste.length) return null;
+  // Deux moments (« vendredi 9h et samedi 10h ») : Charly demande lequel, rien ne part (examen, mission 58).
+  { let joursCites = []; try { joursCites = (typeof tcJoursCites === 'function') ? tcJoursCites(brut, new Date()) : []; } catch (e) { joursCites = []; }
+    const heuresCitees = (sans.replace(/(^|\s)(apres|a partir de|des|pas avant|avant|jusqu a|pas apres) (\d{1,2}) ?h ?(\d{2})?(\s|$)/g, ' ').match(/(^|\s)(\d{1,2}h\d{0,2}|\d{1,2} heures?)(?=\s|$)/g) || []).length;
+    if (joursCites.length > 1 || heuresCitees > 1) return { recue: recue, deuxMoments: true, type: type || recue.type || 'physique', ajouterContact: ajouterContact }; }
   // Les bornes (« après 17h », « avant midi ») ne sont pas l'heure du rendez-vous.
   const borne = {};
   const mApres = sans.match(/(^|\s)(apres|a partir de|des|pas avant) (\d{1,2}) ?h ?(\d{2})?(\s|$)/);
@@ -21538,11 +21546,12 @@ async function tcGererCreneauPourRecue(text, d) {
     const ev = d.ev;
     const motType = tcRecueMotType(d.type);
     if (d.type) ev.type = d.type;
-    if (d.date && d.heure) {
-      const debut = d.heure.h * 60 + (d.heure.m || 0);
+    // Un jour seul : la même heure ce jour-là ; une heure seule : le même jour à cette heure ; les deux : les deux (examen, mission 58).
+    if (d.date || d.heure) {
+      const debut = d.heure ? d.heure.h * 60 + (d.heure.m || 0) : Number(ev.startH) * 60 + Number(ev.startM || 0);
       const duree = Math.max(15, (Number(ev.endH) * 60 + Number(ev.endM || 0)) - (Number(ev.startH) * 60 + Number(ev.startM || 0)));
       const fin = Math.min(debut + duree, 23 * 60 + 59);
-      const p = { date: tcISO(d.date), startH: Math.floor(debut / 60), startM: debut % 60, endH: Math.floor(fin / 60), endM: fin % 60 };
+      const p = { date: d.date ? tcISO(d.date) : ev.date, startH: Math.floor(debut / 60), startM: debut % 60, endH: Math.floor(fin / 60), endM: fin % 60 };
       if (p.date !== ev.date || p.startH !== Number(ev.startH) || p.startM !== Number(ev.startM || 0)) { tcExecuterDeplacement([{ ev: ev, p: p }]); renderCharlyChat(); return; }
     }
     try { if (typeof saveEventsToStorage === 'function') saveEventsToStorage(); } catch (e) {}
@@ -21553,6 +21562,12 @@ async function tcGererCreneauPourRecue(text, d) {
   const recue = d.recue;
   const prenom = String(recue.nom || '').split(' ')[0];
   const motType = tcRecueMotType(d.type);
+  if (d.deuxMoments) {
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Tu me donnes deux moments pour ' + prenom + ' : lequel je lui propose ? Dis-moi le jour et l’heure.',
+      _recueEnAttente: { genre: 'demande', recue: recue, dateISO: null, debut: null, type: d.type, ajouterContact: d.ajouterContact } });
+    renderCharlyChat();
+    return;
+  }
   if (d.date && d.heure) {
     const dateISO = tcISO(d.date);
     const debut = d.heure.h * 60 + (d.heure.m || 0);
@@ -21603,30 +21618,53 @@ async function tcRepondreRecue(text) {
   const m = tcRecueEnAttente();
   if (!m) return false;
   const a = m._recueEnAttente;
-  const norm = tcClasseNormaliser(text);
-  const ouiNon = tcReponseOuiNon(text);
-  const oui = ouiNon === true || /^(oui |ok )?(quand meme|vas y|propose|propose le|propose lui|envoie|envoie le|c est bon|d accord|je confirme|present)( stp| svp| merci)?$/.test(norm);
-  const non = ouiNon === false || /^(non |non merci |ok )?(pas (ca|celui la|celle la|maintenant|tout de suite)|un autre|autre chose|laisse|laisse tomber|on verra|plus tard|absent)( stp| svp| merci)?$/.test(norm);
-  a._resolu = true;
+  const brut = String(text || '').trim();
+  const norm = tcClasseNormaliser(brut);
+  const prenom = a.genre === 'demande' ? String(a.recue.nom || '').split(' ')[0] : '';
+  // Un oui NET seulement (comme pour « J'envoie ? ») : « oui mais … », « ok mais pas cette semaine » ne sont pas un oui (examen, mission 58).
+  const nu = norm.replace(/(^|\s)(stp|svp|merci|charly|allez|bien|alors|vite|maintenant|tout de suite|s il te plait)(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  const oui = /^(oui|ouais|ouep|yep|yes|ok|okay|d accord|daccord|carrement|parfait|c est bon|ca marche|go|vas y|envoie|envoie le|c est parti|banco|exact|affirmatif|volontiers|bien sur|quand meme|oui quand meme|propose|propose le|propose lui|je confirme|present|oui present)$/.test(nu) || /^(👍|✅|👌)$/.test(brut);
+  const non = /^(non|nan|non merci|annule|laisse|laisse tomber|stop|oublie|pas maintenant|pas tout de suite|plus tard|pas aujourd hui|une autre fois|on verra|surtout pas|pas ca|pas celui la|pas celle la|un autre|autre chose|non pas ca|non laisse)$/.test(nu);
   if (oui) {
     tcPousserMessageUtilisateur(text);
-    if (a.genre === 'convocation') await tcEnvoyerReponseConvocation(a);
-    else await tcEnvoyerCreneauRecue(a.recue, a.dateISO, a.debut, a.type, a.ajouterContact);
+    if (a.genre === 'convocation') { a._resolu = true; await tcEnvoyerReponseConvocation(a, 'present'); return true; }
+    // « Lequel ? » (deux moments) : le oui ne suffit pas, il faut le jour et l'heure ; la question reste.
+    if (!a.dateISO) { charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Lequel ? Donne-moi le jour et l’heure pour ' + prenom + '.' }); renderCharlyChat(); return true; }
+    a._resolu = true;
+    await tcEnvoyerCreneauRecue(a.recue, a.dateISO, a.debut, a.type, a.ajouterContact);
     return true;
   }
-  if (non && norm.split(' ').length <= 4) {
+  // « absent », « je ne viendrai pas » sur « Je réponds présent ? » : la réponse est donnée, elle part (remarque de l'examinateur).
+  if (a.genre === 'convocation' && /^(non )?(absent|absente|je serai absent|je serai absente|je ne viens pas|je viens pas|je ne viendrai pas|je viendrai pas|pas present|pas presente|je ne serai pas la|je serai pas la|non absent)$/.test(nu)) {
+    a._resolu = true;
+    tcPousserMessageUtilisateur(text);
+    await tcEnvoyerReponseConvocation(a, 'absent');
+    return true;
+  }
+  if (non) {
+    a._resolu = true;
     tcPousserMessageUtilisateur(text);
     charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: a.genre === 'convocation'
       ? 'D’accord, je ne réponds rien : tu pourras le faire dans la messagerie.'
-      : 'D’accord, je ne propose rien à ' + String(a.recue.nom || '').split(' ')[0] + '. Donne-moi un autre moment quand tu veux.' });
+      : 'D’accord, je ne propose rien à ' + prenom + '. Donne-moi un autre moment quand tu veux.' });
     renderCharlyChat();
     return true;
   }
-  // « plutôt jeudi 15h », « lundi 10h » : un autre créneau pour la même personne.
   if (a.genre === 'demande') {
-    const d = tcDetecterCreneauPourRecue(text, a.recue);
-    if (d && !d.mode) { await tcGererCreneauPourRecue(text, d); return true; }
+    // « plutôt jeudi 15h », « oui mais plutôt vendredi 15h », « non, plutôt jeudi 15h », « lundi 10h » : le nouveau créneau pour la même personne.
+    const reste = norm.replace(/^(?:(?:oui|ok|okay|d accord|daccord|non|non merci|nan|mais|plutot|ou plutot|alors|et|bon|sinon)\s+)+/, '').trim();
+    const d = tcDetecterCreneauPourRecue(reste || norm, a.recue);
+    if (d && !d.mode) { a._resolu = true; await tcGererCreneauPourRecue(text, d); return true; }
+    // « oui mais … », « non, plutôt … » sans moment lisible : Charly redemande, la question reste.
+    if (/^(oui|ok|okay|d accord|daccord|non|nan)(\s|$)/.test(norm) && /(^|\s)(mais|plutot|sauf|pas|sinon)(\s|$)/.test(norm) && norm.split(' ').length <= 10) {
+      tcPousserMessageUtilisateur(text);
+      charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'D’accord, pas celui-là. Quel jour et quelle heure pour ' + prenom + ' ?' });
+      renderCharlyChat();
+      return true;
+    }
   }
+  // Toute autre phrase : la question tombe, la phrase suit son chemin (jamais perdue).
+  a._resolu = true;
   return false;
 }
 
@@ -21645,6 +21683,20 @@ function tcDetecterAccordConvocation(text) {
   try {
     const dernier = (typeof tcClasseDernierMessageCharly === 'function') ? tcClasseDernierMessageCharly(charlyIA.history) : null;
     if (dernier && typeof tcClasseQuestionDuMessage === 'function' && tcClasseQuestionDuMessage(dernier) === 'precise') return null;
+    // « ok », « parfait », « oui » seuls : seulement si le dernier message de Charly parlait de cette invitation, ou sans aucun échange avant
+    // (« ok merci » après « C’est fait : Dentiste… » n'est pas une réponse à Gaëlle ; examen, mission 58). « je viens », « j'y serai » restent larges.
+    const vientLarge = /(je viens|j y serai|j y serais|je serai la|je serais la|je suis la|je serai present|je serai presente)/.test(norm);
+    if (accord && !mRetard && !vientLarge) {
+      const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+      let dernierCharly = null;
+      for (let i = h.length - 1; i >= 0; i--) { if (h[i] && h[i].role !== 'user') { dernierCharly = h[i]; break; } }
+      if (dernierCharly) {
+        const c = convs[0];
+        const texte = tcClasseNormaliser(String(dernierCharly.content || '').replace(/<[^>]+>/g, ' '));
+        const prenom = tcClasseNormaliser(c.nom).split(' ')[0];
+        if (!/(invitation|convocation|invite|convoque)/.test(texte) && !(c.titre && texte.indexOf(tcClasseNormaliser(c.titre)) > -1) && !(prenom && (' ' + texte + ' ').indexOf(' ' + prenom + ' ') > -1)) return null;
+      }
+    }
   } catch (e) {}
   let retard = null;
   if (mRetard) {
@@ -21665,10 +21717,11 @@ async function tcGererAccordConvocation(text, a) {
 }
 
 /** La réponse « présent » part au serveur ; Charly dit ce qui s'est passé, vrai dans les deux cas. */
-async function tcEnvoyerReponseConvocation(a) {
+async function tcEnvoyerReponseConvocation(a, statut) {
+  const present = statut !== 'absent';
   try {
     if (typeof TC_BACKEND === 'undefined' || !TC_BACKEND || typeof TC_BACKEND.repondreConvocation !== 'function') throw new Error('hors connexion');
-    await TC_BACKEND.repondreConvocation(a.id, 'present');
+    await TC_BACKEND.repondreConvocation(a.id, present ? 'present' : 'absent');
   } catch (e) {
     charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Je n’ai pas pu envoyer ta réponse à ' + a.nom + ' (' + ((e && e.message) || 'réseau') + ') : rien n’est parti. Réessaie dans un instant, ou réponds dans la messagerie.' });
     renderCharlyChat();
@@ -21676,7 +21729,7 @@ async function tcEnvoyerReponseConvocation(a) {
     return false;
   }
   try { if (typeof _tcConvocTraitees !== 'undefined' && _tcConvocTraitees) _tcConvocTraitees[a.id] = true; } catch (e) {}
-  charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'C’est envoyé à ' + a.nom + ' : présent au « ' + a.titre + ' »' + (a.quand ? ' (' + a.quand + ')' : '') + '.' + (a.retard ? ' Pour ton arrivée à ' + a.retard + ', écris-le-lui dans la messagerie.' : '') });
+  charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'C’est envoyé à ' + a.nom + ' : ' + (present ? 'présent' : 'absent') + ' au « ' + a.titre + ' »' + (a.quand ? ' (' + a.quand + ')' : '') + '.' + (present && a.retard ? ' Pour ton arrivée à ' + a.retard + ', écris-le-lui dans la messagerie.' : '') });
   renderCharlyChat();
   try { if (typeof tcSyncTour === 'function') tcSyncTour(); } catch (e) {}
   return true;
