@@ -21347,7 +21347,7 @@ const TC_RECUE_PETITS = ('ok oui d accord daccord bon alors stp svp charly pour 
   + 'merci ca marche c est que je veux bien tu peux vers si possible sa demande trouve trouver cherche chercher repousse repousser reporte reporter decale decaler '
   + 'moment libre libres dispo disponible prochain prochaine semaine mois jour matin midi apres soir seulement mais avant partir jusqu jusqu heure heures h '
   + 'autre quand plus tot tard finalement passe passons change par telephone tel personne visio video appel presentiel vrai zoom teams ligne '
-  + 'lundi mardi mercredi jeudi vendredi samedi dimanche demain aujourd hui soiree matinee non sauf remets bouge modifie ').split(' ').filter(Boolean);
+  + 'lundi mardi mercredi jeudi vendredi samedi dimanche demain aujourd hui soiree matinee sauf remets bouge modifie ').split(' ').filter(Boolean);
 const TC_RECUE_MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre', 'janv', 'fev', 'sept', 'oct', 'nov', 'dec'];
 /* Les mots du calendrier ne sont jamais un prénom « à une lettre près » (« mars » n'est pas Marc ; examen, mission 58). */
 const TC_RECUE_CALENDRIER = TC_RECUE_MOIS.concat(['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim', 'midi', 'matin', 'soir', 'noel', 'paques', 'ete', 'hiver', 'juillet', 'week', 'end']);
@@ -21657,8 +21657,11 @@ async function tcRepondreRecue(text) {
     if (d && !d.mode) { a._resolu = true; await tcGererCreneauPourRecue(text, d); return true; }
     // « oui mais … », « non, plutôt … » sans moment lisible : Charly redemande, la question reste.
     if (/^(oui|ok|okay|d accord|daccord|non|nan)(\s|$)/.test(norm) && /(^|\s)(mais|plutot|sauf|pas|sinon)(\s|$)/.test(norm) && norm.split(' ').length <= 10) {
+      // Le créneau refusé est oublié : « oui » ensuite ne l'envoie pas, il redemande « Lequel ? » (examen, mission 58, 2e passage).
+      a._resolu = true;
       tcPousserMessageUtilisateur(text);
-      charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'D’accord, pas celui-là. Quel jour et quelle heure pour ' + prenom + ' ?' });
+      charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'D’accord, pas celui-là. Quel jour et quelle heure pour ' + prenom + ' ?',
+        _recueEnAttente: { genre: 'demande', recue: a.recue, dateISO: null, debut: null, type: a.type, ajouterContact: a.ajouterContact } });
       renderCharlyChat();
       return true;
     }

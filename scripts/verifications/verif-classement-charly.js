@@ -818,6 +818,17 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     ctx.events = agenda().concat([ev('cafe', 'Café Hugo', 2, 10, 0, 11, 0)]);
     verifie('(2e passage) « Mets Hugo vendredi 9h », « Bouge Hugo à vendredi 9h », « Change Hugo pour vendredi 9h » quand « Café Hugo » existe samedi → rien ne part (le déplacement local garde la main) ; sans rendez-vous avec Hugo, « Mets Hugo vendredi 9h » reste une proposition',
       D('Mets Hugo vendredi 9h', RC.R1) === null && D('Bouge Hugo à vendredi 9h', RC.R1) === null && D('Change Hugo pour vendredi 9h', RC.R1) === null && (ctx.events = agenda(), !!D('Mets Hugo vendredi 9h', RC.R1)), JSON.stringify(D('Mets Hugo vendredi 9h', RC.R1)));
+    // 11. Troisième passage (examinateur) : le créneau refusé ne part plus sur « ok » ; « non » en dernier mot rend la main.
+    ctx.events = agenda(); envois.length = 0;
+    await essai('Trouve un créneau pour Hugo cette semaine', RC.R1);
+    { await ctx.tcRepondreRecue('ok mais pas cette semaine'); const r = await ctx.tcRepondreRecue('ok'); const q = dernier().content; const n = envois.length;
+      await ctx.tcRepondreRecue('lundi 10h');
+      verifie('(3e passage) « ok mais pas cette semaine » puis « ok » → « Lequel ? Donne-moi le jour et l’heure pour Hugo. », le créneau refusé (jeudi 10h) ne part pas ; « lundi 10h » ensuite → part (lundi 19 10:00)',
+        r === true && q === 'Lequel ? Donne-moi le jour et l’heure pour Hugo.' && n === 0 && envois.join() === '/rdv/proposer-creneau 990001 ' + iso(4) + ' 10:00 60 physique', q + ' | ' + envois.join()); }
+    await essai('Trouve un créneau pour Hugo cette semaine', RC.R1);
+    { await ctx.tcRepondreRecue('non pas ce jour-là'); const r = await ctx.tcRepondreRecue('oui');
+      verifie('(3e passage) « non pas ce jour-là » puis « oui » → « Lequel ? … », rien ne part', r === true && envois.length === 0 && dernier().content === 'Lequel ? Donne-moi le jour et l’heure pour Hugo.', dernier().content + ' | ' + envois.join()); }
+    verifie('(3e passage) « Fixe Hugo vendredi 9h non », « Hugo vendredi 9h non merci » rendent la main (null) ; « Fixe Hugo vendredi 9h » reste compris', D('Fixe Hugo vendredi 9h non', RC.R1) === null && D('Hugo vendredi 9h non merci', RC.R1) === null && !!D('Fixe Hugo vendredi 9h', RC.R1), JSON.stringify(D('Fixe Hugo vendredi 9h non', RC.R1)));
     ctx.events = agenda(); ctx.charlyIA.history = []; poser(null);
     verifie('pas de tiret long ni d assertion arrière dans le bloc 58', bloc.indexOf('tcDetecterCreneauPourRecue') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.indexOf('—') < 0);
   }
