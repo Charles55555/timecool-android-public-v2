@@ -2845,3 +2845,36 @@ Mission 58 bis (chef, 25/10) : personne + jour + heure (« Fixe Hugo vendredi 9h
 - « J’ai laissé tomber la proposition précédente. Je passe à ta nouvelle demande. » après « Cv » : la bulle ne sort plus que si le classement dit « claire » (une vraie nouvelle demande), jamais pour une phrase sociale ou une réaction.
 - Vérifié : `verif-classement-charly.js` section 16, les 21 suites Charly, `verifier.sh` ; cas rejoués dans Chrome sur la page complète (m1 à m8).
 Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je préviens quelqu'un ? » (retard_autre), « préviens Sophie » reste la réponse de la mission 51 (le détecteur se retire). Un mot qui n'est pas la fiche à côté du nom (« préviens Hugo de mon retard », « dis à Paul bonjour », « envoie un message à Paul demain », « écris à Paul et Hugo ») rend la main (jamais « je ne trouve pas » pour une fiche qui existe) ; une fiche bloquée aussi. Une fiche trouvée par la seule catégorie Famille est confirmée (« C'est qui, ta mère : Marie Dupont ? Réponds « oui », ou donne-moi son nom. ») ; une fiche nommée « Maman » est prise directement. Étape « texte » : abandon élargi (« finalement non », « rien du tout », « annule », « laisse ») ; « oui », « ok » seuls reposent la question ; une demande d'agenda claire (classement « claire » + un détecteur d'agenda) fait tomber le message (« D'accord, je laisse tomber le message pour Paul. Je passe à ta demande. ») et suit son chemin ; « non, dis-lui que X », « dis-lui que X » → le message X.
+
+## 26/10/2026 : mission 60, un réglage changé pour de vrai, jamais « c'est appliqué » sans rien faire ; les ratés du passage 15 (chef, capture de Charles)
+
+- Capture de Charles : « Quelles sont toutes les fréquences possibles ? » → le modèle inventait « 5 min, 15 min, 30 min, 1h, ou la veille », puis « La veille »
+  → « Noté, je règle tes rappels sur la veille. C'est appliqué ! 👍 » ; Paramètres > Notifications affichait toujours « 1 heure avant ». Cause : le filet de la
+  mission 57 (tcSansFaussesActions) ne connaissait que « fait, envoyé, bloqué, refusé, accepté » et les verbes de la messagerie ; « appliqué », « je règle »,
+  « noté » passaient, et rien dans la page ne savait changer un réglage depuis Charly.
+- Bloc 60 (devant tcPhraseNonCompris). tcDetecterReglage / tcGererReglage, avant le classement et le modèle : « quelles fréquences / quels délais possibles ? »
+  → la liste lue dans TC_DELAIS_RAPPEL (5, 10, 30 minutes, 1 heure, 2 heures avant, la veille, aucun rappel), l'actuel, « Lequel je mets ? » ; « mets mes rappels
+  la veille / 30 minutes avant » → tc_rappel_delai écrit comme tcAppliquerDelaiRappel (reprogrammation des rappels, synchro), RELU, puis « C'est fait : tes
+  rappels sont maintenant la veille. » ; une valeur que la page n'a pas (15 minutes) → rien ne change, la liste et « Lequel je mets ? » ; « désactive / active
+  mes rappels » → tcBasculerRappels (sur le site, sans l'application Android, Charly dit qu'il ne peut pas les activer d'ici) ; « coupe / remets les
+  sonneries » → tcBasculerSonneries ; « mes rappels aussi par mail » → tcDefinirRappelEmail ; « mets le thème sombre / clair / auto » → applyTheme ; « passe
+  l'application en anglais », « remets en français » → selectLanguageFromSettings (une langue non proposée : « TimeCool n'existe pas encore en … ») ;
+  « mes rappels sont activés ? » → l'état lu ; format des dates, fuseau, message d'absence, plage horaire, premier jour, mises à jour et sauvegarde
+  automatiques, mot de passe → « Je ne peux pas encore le faire d'ici : Paramètres > … ». Jamais : un rappel pour UN rendez-vous, « rappelle-moi de… »,
+  « traduis … en anglais », « mets mon téléphone en silencieux », une question qui n'ordonne rien. tcRepondreReglage : « Lequel je mets ? » → un délai le règle,
+  « oui » seul repose la liste, « non » ne change rien ; après une liste de rappels du modèle, « La veille » seul règle aussi pour de vrai.
+- tcSansFauxReglage (avant tcSansFaussesActions) : une réponse du modèle sans bloc qui affirme avoir réglé, appliqué, activé, désactivé, coupé, enregistré,
+  modifié un réglage (rappels, sonneries, thème, langue, format, fuseau, absence…) est remplacée par la vérité et le moyen de le faire ; « Noté ! » seul
+  sur un réglage aussi ; hors réglage, « c'est appliqué / activé / enregistré / mis à jour » sans rien de fait → « Je n'ai rien changé de moi-même … »
+  (sauf un déplacement, que la page exécute juste après). Jamais une question, une condition ni le chemin des Paramètres.
+- Passage 15 : la réponse de Hugo à MA demande (dernier mot de la conversation à lui, ni demande ni invitation) n'est plus « Tu n'as aucune demande en
+  attente » : « Hugo a répondu ? » → sa réponse citée ; « Accepte la proposition de Hugo », « Réponds non à Hugo », « propose-lui 17h », « propose-lui jeudi
+  midi » → sa réponse citée et la mienne relue (« Je lui réponds : « C'est d'accord pour mardi 27 octobre à 16h. » Puis je l'inscris dans ton agenda.
+  J'envoie ? ») ; « oui » → le message part (tcRepondreEnvoi) et le rendez-vous est inscrit, ou déplacé quand mon message parlait d'un rendez-vous
+  (« On garde le déjeuner de mercredi ? » / « On décale à vendredi même heure ? » → le déjeuner passe au vendredi qui suit, même heure) ; deux réponses sans
+  nom → « À qui je réponds ? ». « donne-moi le numéro de Hugo », « c'est quoi le mail de Gaëlle ? » → lu dans la fiche (tcDetecterCoordonnees), « Je ne
+  trouve pas X dans tes contacts » sinon ; jamais un numéro de semaine, des urgences ni un message à transmettre. Un lundi, « le dentiste de lundi »
+  (tcDeplacementLocal) est celui de lundi prochain quand aujourd'hui n'en a plus à venir (« d'aujourd'hui », « ce soir » gardent aujourd'hui) ;
+  « tu peux le mettre à onze heures » se lit 11h.
+- API inchangée. Suite : verif-classement-charly section 17 (38 réglages compris, 19 phrases qui gardent leur chemin, la capture rejouée, chaque réglage
+  relu, 10 réponses du modèle menteuses et 9 honnêtes, Hugo R3 / R4, numéro, lundi après-midi) ; section 15 : « Hugo a répondu ? » cite la réponse.

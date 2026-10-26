@@ -741,8 +741,8 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       gerer('Accepte la demande de Hugo', 'repondre', null).content === 'Tu n’as aucune demande en attente : rien à accepter, refuser ou bloquer pour le moment.' && dernier().nature === 'reponse' && !dernier()._proposition
       && gerer('Hugo a répondu ?', 'lire', null).content === 'Rien de nouveau dans la messagerie : aucune demande ni réponse en attente.' && dernier().nature === 'reponse'
       && gerer('Je serai présent au point projet', 'repondre', null).content === 'Tu n’as aucune demande en attente : rien à accepter, refuser ou bloquer pour le moment.', gerer('Hugo a répondu ?', 'lire', null).content);
-    verifie('R3 (Hugo a écrit) : « Hugo a répondu ? » → « Hugo Besnard t’a écrit. Les demandes reçues et les réponses se lisent dans la messagerie. Je t’y emmène ? » ; R5 : « Tu as 2 demandes de rendez-vous en attente : Hugo Besnard (en visio), Gaëlle Perrin (par téléphone). … » ; R2 : « Tu as une invitation de Gaëlle Perrin : « Point projet », jeudi 10h-11h. … »',
-      gerer('Hugo a répondu ?', 'lire', RC.R3).content === 'Hugo Besnard t’a écrit. Les demandes reçues et les réponses se lisent dans la messagerie. Je t’y emmène ?' && dernier().nature === 'question'
+    verifie('R3 (Hugo a répondu à MA demande, mission 60) : « Hugo a répondu ? » → sa réponse citée (réponse), plus jamais « Je t’y emmène ? » ; R5 : « Tu as 2 demandes de rendez-vous en attente : Hugo Besnard (en visio), Gaëlle Perrin (par téléphone). … » ; R2 : « Tu as une invitation de Gaëlle Perrin : « Point projet », jeudi 10h-11h. … »',
+      /^Hugo Besnard t’a répondu : « Je te propose mardi à 16h, ça te va \? »\. Pour lui répondre, dis-moi/.test(gerer('Hugo a répondu ?', 'lire', RC.R3).content) && dernier().nature === 'reponse'
       && /^Tu as 2 demandes de rendez-vous en attente : Hugo Besnard \(en visio\), Gaëlle Perrin \(par téléphone\)\. Les demandes reçues se répondent/.test(gerer('Refuse tout', 'repondre', RC.R5).content)
       && /^Tu as une invitation de Gaëlle Perrin : « Point projet », jeudi 10h-11h\. Les demandes reçues et les réponses se lisent/.test(gerer('Gaëlle m’a invité à quoi ?', 'lire', RC.R2).content),
       gerer('Hugo a répondu ?', 'lire', RC.R3).content + ' | ' + gerer('Refuse tout', 'repondre', RC.R5).content + ' | ' + gerer('Gaëlle m’a invité à quoi ?', 'lire', RC.R2).content);
@@ -916,6 +916,185 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       verifie('(2e passage) « non, dis-lui que je serai en retard » → le message « je serai en retard » (relu) ; « dis-lui que j’arrive à 15h » → « j’arrive à 15h » ; un texte simple reste tel quel', /« Bonjour Paul, Inès me demande de te dire : je serai en retard\. »/.test(n1.d) && /: j’arrive à 15h\. »/.test(n2.d) && /: je passe te voir dimanche midi\. »/.test(n3.d), n1.d + ' || ' + n2.d); }
     ctx.contactsList = ctx.contactsList.filter((c) => c.id !== 'b'); ctx.charlyIA.history = [];
     verifie('pas de tiret long ni d assertion arrière dans le bloc 59', bloc.indexOf('tcDetecterMessageSansTexte') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.indexOf('—') < 0); }
+
+  titre('17. Mission 60 : un réglage changé pour de vrai (jamais « c’est appliqué » sans rien faire), la réponse de Hugo à MA demande, le numéro d’un contact, « le dentiste de lundi » un lundi');
+  {
+    // Les réglages de la page (constantes et fonctions des Paramètres), sur une mémoire locale qu'on peut relire.
+    ['TC_RAPPELS_KEY', 'TC_RAPPEL_DELAI_KEY', 'TC_SONNERIES_KEY', 'TC_RAPPEL_EMAIL_CLE'].forEach((c) => { const src = extraireConst(c); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  constante introuvable : ' + c); } });
+    { const src = extraireConst('TC_DELAIS_RAPPEL', '\\];\\n'); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  constante introuvable : TC_DELAIS_RAPPEL'); } }
+    ['tcRappelsActifs', 'tcSonneriesActives', 'tcDelaiRappel', 'tcDelaiRappelTexte', 'tcBasculerRappels', 'tcBasculerSonneries', 'tcRappelEmail', 'tcDefinirRappelEmail', 'tcResoudreContact', 'tcClasserContacts', 'tcDeplacementLocal']
+      .forEach((n) => { const src = extraire(n); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+    const store = {};
+    const remettre = () => { Object.keys(store).forEach((k) => delete store[k]); Object.assign(store, { tc_rappels_actifs: '1', tc_rappel_delai: '60', tc_sonneries: '1', timecool_language: 'fr', tc_theme: 'light' }); };
+    ctx.localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } };
+    ctx.window = {}; ctx.tcProgrammerRappels = () => {}; ctx.renderSettings = () => {}; ctx.tcSyncTour = async () => {}; ctx.tcSyncBientot = () => {};
+    ctx.applyTheme = (t) => { ctx.currentTheme = t; store.tc_theme = t; };
+    ctx.currentTheme = 'light'; ctx.currentLanguage = 'fr';
+    ctx.SUPPORTED_LANGUAGES = [{ code: 'fr', active: true, label: 'Français' }, { code: 'en', active: true, label: 'English' }, { code: 'es', active: true, label: 'Español' }];
+    ctx.selectLanguageFromSettings = (code) => { store.timecool_language = code; };
+    const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
+    const R = (p) => { const d = ctx.tcDetecterReglage(p); return d ? d.quoi + (d.minutes !== undefined ? ':' + d.minutes : '') + (d.absent !== undefined ? ':absent' + d.absent : '') + (d.valeur !== undefined ? ':' + d.valeur : '') + (d.code ? ':' + d.code : '') : 'null'; };
+    const attendus = {
+      'Quelles sont toutes les fréquences possibles ?': 'options', 'Quels délais pour mes rappels ?': 'options', 'combien de temps avant tu peux me prévenir ?': 'options', 'c’est quoi les choix pour les rappels ?': 'options',
+      'Mets mes rappels la veille': 'delai:1440', 'règle le délai du rappel sur la veille': 'delai:1440', 'tu peux mettre mes rappels la veille ?': 'delai:1440', 'mes rappels la veille stp': 'delai:1440',
+      'Mets mes rappels 30 minutes avant': 'delai:30', 'mets mes rappels 2h avant': 'delai:120', 'je veux mes rappels une heure avant': 'delai:60', 'mets mes rappels 5 min avant pour tous mes rdv': 'delai:5', 'je ne veux aucun rappel avant mes rdv': 'delai:0',
+      'mets mes rappels 15 minutes avant': 'delai:absent15', 'mets mes rappels 3 jours avant': 'delai:absent4320',
+      'désactive mes rappels': 'actifs:false', 'plus de rappels': 'actifs:false', 'coupe mes notifications': 'actifs:false', 'active mes rappels': 'actifs:true', 'réactive mes notifications': 'actifs:true',
+      'coupe les sonneries': 'sonneries:false', 'mets mes rappels en silencieux': 'sonneries:false', 'remets les sonneries': 'sonneries:true',
+      'envoie-moi aussi mes rappels par mail': 'email:true', 'plus de rappels par email': 'email:false',
+      'mets le thème sombre': 'theme:dark', 'passe en mode nuit': 'theme:dark', 'mode clair': 'theme:light',
+      'passe l’application en anglais': 'langue:en', 'remets en français': 'langue:fr', 'change la langue en espagnol': 'langue:es', 'mets l’application en chinois': 'langue:zh',
+      'mes rappels sont activés ?': 'etat', 'c’est quoi mon délai de rappel ?': 'etat',
+      'change le format des dates': 'ailleurs', 'active mon message d’absence': 'ailleurs', 'change mon fuseau horaire': 'ailleurs', 'change mon mot de passe': 'ailleurs'
+    };
+    const faux = Object.keys(attendus).filter((p) => R(p) !== attendus[p]);
+    verifie('tcDetecterReglage : ' + Object.keys(attendus).length + ' demandes de réglage comprises (délai de la page ou absent, activer, sonneries, email, thème, langue, état, ailleurs)', !faux.length, faux.map((p) => p + ' → ' + R(p)).join(' | '));
+    const rien = ['Rappelle-moi de payer l’URSSAF le 5 novembre', 'mets un rappel la veille pour le dentiste', 'rdv dentiste mardi 15h', 'traduis bonjour en anglais', 'mets mon téléphone en silencieux', 'quel temps fera-t-il demain ?',
+      'Préviens Paul que j’aurai 10 minutes de retard', 'décale le dentiste de 30 minutes', 'annule mes rdv de demain', 'quels sont mes rdv demain ?', 'mets-moi un rdv la veille du mariage', 'le thème de la réunion c’est le budget',
+      'quelles sont mes disponibilités ?', 'ajoute dentiste lundi 10h avec rappel', 'tu parles anglais ?', 'dis à Hugo que c’est bon', 'quelle heure est-il ?', 'Quelles sont toutes les fréquences possibles pour la sauvegarde ?', 'mets le rappel du dentiste à 30 minutes'];
+    const pris = rien.filter((p) => R(p) !== 'null');
+    verifie('tcDetecterReglage ne prend rien d’autre : ' + rien.length + ' phrases (un rappel pour UN rendez-vous, « rappelle-moi de… », traduction, téléphone en silencieux, la veille d’un mariage, agenda, prévenir) gardent leur chemin', !pris.length, pris.map((p) => p + ' → ' + R(p)).join(' | '));
+
+    // La capture de Charles : « Quelles sont toutes les fréquences possibles ? » → « Oui » → « La veille ».
+    remettre(); ctx.charlyIA.history = [];
+    await ctx.tcGererReglage('Quelles sont toutes les fréquences possibles ?', ctx.tcDetecterReglage('Quelles sont toutes les fréquences possibles ?'));
+    const liste = dernier().content;
+    await ctx.tcRepondreReglage('Oui');
+    const lequel = dernier().content;
+    const pris2 = await ctx.tcRepondreReglage('La veille');
+    verifie('capture du 26/10 : « Quelles sont toutes les fréquences possibles ? » → les délais de la page (5, 10, 30 minutes, 1 heure, 2 heures avant, la veille, aucun rappel ; jamais « 15 min »), l’actuel, « Lequel je mets ? » ; « Oui » → « Lequel ? … » ; « La veille » → tc_rappel_delai = 1440 RELU et « C’est fait : tes rappels sont maintenant la veille. »',
+      liste === 'Pour tes rappels, je peux mettre : 5 minutes avant, 10 minutes avant, 30 minutes avant, 1 heure avant, 2 heures avant, la veille, ou aucun rappel. En ce moment : 1 heure avant. Lequel je mets ?'
+      && /^Lequel \? 5 minutes avant, .*la veille, ou aucun rappel\.$/.test(lequel) && pris2 === true && store.tc_rappel_delai === '1440' && dernier().content === 'C’est fait : tes rappels sont maintenant la veille.' && dernier().nature === 'action',
+      liste + ' | ' + lequel + ' | ' + store.tc_rappel_delai + ' | ' + dernier().content);
+    // La liste donnée par le modèle juste avant (sans question de Charly en attente) : « La veille » règle aussi pour de vrai.
+    remettre(); ctx.charlyIA.history = [{ role: 'user', content: 'Quelles sont toutes les fréquences possibles ?' }, { role: 'assistant', content: 'Pour tes rappels : 5 min, 15 min, 30 min, 1h, ou la veille.' }];
+    const pris3 = await ctx.tcRepondreReglage('La veille');
+    remettre(); ctx.charlyIA.history = [{ role: 'assistant', content: 'Tu as un rendez-vous demain à 10h.' }];
+    const pas = await ctx.tcRepondreReglage('La veille');
+    remettre(); ctx.charlyIA.history = [];
+    verifie('après une liste de rappels du modèle, « La veille » → réglé pour de vrai (1440) ; après une autre réponse, « La veille » garde son chemin ; sans rien avant, rien', pris3 === true && pas === false && (await ctx.tcRepondreReglage('La veille')) === false, String(pris3) + ' ' + String(pas));
+    // Chaque réglage, fait et relu.
+    const essai = async (p) => { remettre(); ctx.charlyIA.history = []; ctx.currentTheme = 'light'; await ctx.tcGererReglage(p, ctx.tcDetecterReglage(p)); return dernier().content; };
+    const c1 = await essai('Mets mes rappels 30 minutes avant'); const s1 = store.tc_rappel_delai;
+    const c2 = await essai('mets mes rappels 15 minutes avant'); const s2 = store.tc_rappel_delai;
+    const c3 = await essai('désactive mes rappels'); const s3 = store.tc_rappels_actifs;
+    const c4 = await essai('coupe les sonneries'); const s4 = store.tc_sonneries;
+    const c5 = await essai('mets le thème sombre'); const s5 = store.tc_theme;
+    const c6 = await essai('passe l’application en anglais'); const s6 = store.timecool_language;
+    const c7 = await essai('mets l’application en chinois'); const s7 = store.timecool_language;
+    const c8 = await essai('change le format des dates');
+    const c9 = await essai('active mes rappels');
+    const c10 = await essai('envoie-moi aussi mes rappels par mail'); const s10 = store.tc_rappel_email;
+    const c11 = await essai('mes rappels sont activés ?');
+    verifie('chaque réglage est fait, relu et dit : 30 minutes (30) ; 15 minutes → rien ne change, la liste et « Lequel je mets ? » ; désactiver (0) ; sonneries (0) ; thème sombre (dark) ; anglais (en) ; chinois → pas proposé, rien ne change ; format des dates → Paramètres ; activer déjà actif ; email (1) ; l’état lu',
+      c1 === 'C’est fait : tes rappels sont maintenant 30 minutes avant le rendez-vous.' && s1 === '30'
+      && /^Je ne peux pas mettre 15 minutes avant : les rappels se règlent sur 5 minutes avant, .*\. Lequel je mets \?$/.test(c2) && s2 === '60'
+      && c3 === 'C’est fait : tes rappels sont désactivés. Dis-moi « active mes rappels » pour les remettre.' && s3 === '0'
+      && c4 === 'C’est fait : sonneries coupées, tes rappels arrivent en silencieux.' && s4 === '0'
+      && c5 === 'C’est fait : l’application est en thème sombre.' && s5 === 'dark'
+      && c6 === 'C’est fait : l’application passe en anglais. Pour revenir, dis-moi « remets en français ».' && s6 === 'en'
+      && /^TimeCool n’existe pas encore en chinois/.test(c7) && s7 === 'fr'
+      && c8 === 'Le format des dates suit la langue de l’application, il ne se change pas à part : Paramètres > Langue & Région.'
+      && c9 === 'Tes rappels sont déjà activés (1 heure avant).'
+      && c10 === 'C’est fait : tu reçois aussi tes rappels par email.' && s10 === '1'
+      && c11 === 'Tes rappels sont activés, 1 heure avant, avec son et vibration. Dis-moi si tu veux changer quelque chose.',
+      [c1, s1, c2, s2, c3, s3, c4, s4, c5, s5, c6, s6, c7, s7, c8, c9, c10, s10, c11].join(' | '));
+    remettre(); store.tc_rappels_actifs = '0';
+    ctx.charlyIA.history = []; await ctx.tcGererReglage('active mes rappels', ctx.tcDetecterReglage('active mes rappels'));
+    verifie('« active mes rappels » sur le site (pas d’application Android) : la vérité, rien ne change (tc_rappels_actifs reste 0)', /^Les rappels sonnent sur le téléphone : ici, je ne peux pas les activer\./.test(dernier().content) && store.tc_rappels_actifs === '0', dernier().content);
+
+    // Le filet : une réponse du modèle qui dit avoir changé un réglage.
+    const F = (r, t) => ctx.tcSansFauxReglage(r, t || '');
+    const menteurs = [
+      ['Noté, je règle tes rappels sur "la veille" pour tes rendez-vous. C\'est appliqué ! 👍', /^Je n’ai rien changé à tes rappels\./],
+      ['C\'est fait ! Tes rappels sont maintenant réglés sur 15 minutes avant.', /^Je n’ai rien changé à tes rappels\./],
+      ['J\'ai activé le mode sombre 🌙', /^Je n’ai rien changé à l’affichage\./],
+      ['Tes notifications sont désactivées.', /^Je n’ai rien changé à tes rappels\./],
+      ['Parfait, j\'ai coupé les sonneries.', /^Je n’ai rien changé aux sonneries\./],
+      ['C\'est noté, la langue est maintenant l\'anglais.', /^Je n’ai rien changé à la langue\./],
+      ['Ton message d\'absence est activé du 1er au 5 novembre.', /^Je n’ai rien changé : ce réglage se fait dans les Paramètres/],
+      ['Noté !', null], ['C\'est appliqué !', /^Je n’ai rien changé de moi-même/], ['J\'ai bien enregistré ta préférence.', /^Je n’ai rien changé à tes réglages/]
+    ];
+    const ratés = menteurs.filter(([r, re]) => re ? !re.test(F(r)) : F(r) !== r);
+    verifie('tcSansFauxReglage : 9 réponses du modèle qui disent avoir réglé / appliqué / activé / coupé / enregistré → la vérité, avec le moyen de le faire (« Noté ! » seul, sans réglage, reste)', !ratés.length, ratés.map(([r]) => r + ' → ' + F(r)).join(' | '));
+    const vrais = ['Tu veux que je règle tes rappels sur la veille ?', 'Pour régler tes rappels, va dans Paramètres > Notifications.', 'Tu as un rendez-vous demain à 10h.', 'C\'est noté ! Quel créneau souhaites-tu pour vendredi après-midi ?',
+      'C\'est fait : rendez-vous ajouté.\n[AGENDA]\n2026-10-16 | 10:00-11:00 | Dentiste | rdv\n[/AGENDA]', 'Je te rappelle que tu as le dentiste demain.', 'Si tu veux, je peux activer tes rappels : dis-moi lequel.', 'Tes rappels se règlent dans Paramètres > Notifications > Délai du rappel.'];
+    const casses = vrais.filter((r) => F(r) !== r);
+    verifie('tcSansFauxReglage laisse ' + vrais.length + ' réponses honnêtes (questions, conditions, chemin des Paramètres, bloc [AGENDA], « je te rappelle que… »)', !casses.length, casses.map((r) => r + ' → ' + F(r)).join(' | '));
+    verifie('« Je décale ton rendez-vous à 11h, c’est modifié. » après « décale le dentiste à 11h » : la page exécute le déplacement juste après, la réponse reste', F('Je décale ton rendez-vous à 11h, c’est modifié.', 'décale le dentiste à 11h') === 'Je décale ton rendez-vous à 11h, c’est modifié.');
+    const csm60 = extraire('charlySendMessage') || '';
+    verifie('charlySendMessage : « Lequel je mets ? » lu avec les attentes ; le réglage et le numéro avant le créneau pour une demande reçue (donc avant le classement et le modèle) ; le filet avant tcSansFaussesActions',
+      csm60.indexOf('await tcRepondreReglage(text)') > csm60.indexOf('await tcRepondreMessageSansTexte(text, texteTape)') && csm60.indexOf('const _reglage = tcDetecterReglage(text);') > -1
+      && csm60.indexOf('const _reglage = tcDetecterReglage(text);') < csm60.indexOf('const _coord = tcDetecterCoordonnees(text);') && csm60.indexOf('const _coord = tcDetecterCoordonnees(text);') < csm60.indexOf('tcDetecterCreneauPourRecue(text);')
+      && csm60.indexOf('tcDetecterCreneauPourRecue(text);') < csm60.indexOf('const _classe = tcClasserMessage(text, charlyIA.history);')
+      && csm60.indexOf('reply = tcSansFauxReglage(reply, text);') > -1 && csm60.indexOf('reply = tcSansFauxReglage(reply, text);') < csm60.indexOf('reply = tcSansFaussesActions(reply);'));
+
+    // La réponse de Hugo à MA demande (passage 15 : #539, #541, #544, #548, #549).
+    ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c3', name: 'Paul Martin', phone: '06', referenceCompte: 'R3' },
+      { id: 'h', name: 'Hugo Besnard', phone: '06 11 22 33 44', email: 'hugo.besnard@exemple-timecool.fr', referenceCompte: 'HQ1' }, { id: 'g', name: 'Gaëlle Perrin', referenceCompte: 'GP1' }];
+    ctx.events = agenda().concat([ev('dej', 'Déjeuner avec Paul', 6, 12, 0, 13, 30, { contact: 'c3' })]);
+    const RR = {
+      R3: [{ reference: 'HQ1', with: 'Hugo Besnard', thread: [{ from: 'me', texte: 'Salut Hugo, on se voit la semaine prochaine ?' }, { from: 'them', texte: 'Je te propose mardi à 16h, ça te va ?' }] }],
+      R4: [{ reference: 'HQ1', with: 'Hugo Besnard', thread: [{ from: 'me', texte: 'On garde le déjeuner de mercredi ?' }, { from: 'them', texte: 'Désolé, je ne peux plus mercredi midi. On décale à vendredi même heure ?' }] }]
+    };
+    const poser = (rc) => { store.tc_conversations = JSON.stringify(rc || []); };
+    const envoyes = [];
+    ctx.tcTransmettrePrevenance = async (c, t) => { envoyes.push(c.name + ' : ' + t); return 'timecool'; };
+    ctx.tcDirePrevenance = () => {};
+    const repondre = (p, rc) => { poser(rc); ctx.charlyIA.history = []; ctx.tcGererDemandeRecue(p, ctx.tcDetecterDemandeRecue(p) || 'repondre'); return dernier(); };
+    const b1 = repondre('Accepte la proposition de Hugo', RR.R3);
+    envoyes.length = 0; await ctx.tcRepondreEnvoi('oui');
+    const cree = ctx.events.find((e) => e.title === 'Rendez-vous avec Hugo Besnard');
+    verifie('R3 « Accepte la proposition de Hugo » : sa réponse citée, la mienne relue (« Je lui réponds : « C’est d’accord pour 2026-10-20 à 16h. » Puis je l’inscris dans ton agenda. J’envoie ? ») ; « oui » → envoyé ET inscrit (mardi 16h-17h, fiche de Hugo)',
+      b1.content === 'Hugo Besnard t’a répondu : « Je te propose mardi à 16h, ça te va ? ». Je lui réponds : « C’est d’accord pour 2026-10-20 à 16h. » Puis je l’inscris dans ton agenda. J’envoie ? Réponds « oui » ou « non ».' && b1.nature === 'question'
+      && envoyes.join() === 'Hugo Besnard : C’est d’accord pour 2026-10-20 à 16h.' && cree && cree.date === '2026-10-20' && cree.startH === 16 && cree.endH === 17 && cree.contact === 'h', b1.content + ' | ' + envoyes.join() + ' | ' + JSON.stringify(cree || null));
+    ctx.events = ctx.events.filter((e) => e.title !== 'Rendez-vous avec Hugo Besnard');
+    const b2 = repondre('Réponds non à Hugo', RR.R3);
+    const b3 = repondre('Mardi 16h ça me va pas, propose-lui 17h', RR.R3);
+    const b4 = repondre('Non, propose-lui jeudi midi', RR.R4);
+    envoyes.length = 0; await ctx.tcRepondreEnvoi('non');
+    verifie('R3 « Réponds non à Hugo » → « Désolé, 2026-10-20 à 16h ne me va pas. » ; « Mardi 16h ça me va pas, propose-lui 17h » → « Je te propose plutôt 2026-10-20 à 17h, ça te va ? » ; R4 « Non, propose-lui jeudi midi » → « … jeudi à 12h … » ; « non » → rien ne part',
+      /Je lui réponds : « Désolé, 2026-10-20 à 16h ne me va pas\. » J’envoie \?/.test(b2.content) && /Je lui réponds : « Je te propose plutôt 2026-10-20 à 17h, ça te va \? » J’envoie \?/.test(b3.content)
+      && /Je lui réponds : « Je te propose plutôt 2026-10-15 à 12h, ça te va \? » J’envoie \?/.test(b4.content) && envoyes.length === 0 && dernier().content === 'D’accord, je n’envoie rien.',
+      b2.content + ' | ' + b3.content + ' | ' + b4.content);
+    const b5 = repondre('Accepte ce que propose Hugo', RR.R4);
+    envoyes.length = 0; await ctx.tcRepondreEnvoi('oui');
+    const dej = ctx.events.find((e) => e.id === 'dej');
+    verifie('R4 « Accepte ce que propose Hugo » (« On garde le déjeuner de mercredi ? » / « On décale à vendredi même heure ? ») → « C’est d’accord pour 2026-10-23 à 12h. » puis je déplace « Déjeuner avec Paul » ; « oui » → envoyé ET déplacé au vendredi qui suit, même heure',
+      /Je lui réponds : « C’est d’accord pour 2026-10-23 à 12h\. » Puis je déplace « Déjeuner avec Paul » à 2026-10-23 à 12h\. J’envoie \?/.test(b5.content) && envoyes.length === 1 && dej.date === '2026-10-23' && dej.startH === 12 && dej.endH === 13 && dej.endM === 30,
+      b5.content + ' | ' + JSON.stringify(dej));
+    poser(RR.R3.concat([{ reference: 'R3', with: 'Paul Martin', thread: [{ from: 'me', texte: 'Tu es libre jeudi ?' }, { from: 'them', texte: 'Oui, jeudi 18h ?' }] }]));
+    ctx.charlyIA.history = []; ctx.tcGererDemandeRecue('Accepte la proposition', 'repondre');
+    const deux = dernier().content;
+    verifie('deux réponses et aucun nom : les deux citées et « À qui je réponds ? », rien ne part', /^Hugo Besnard t’a répondu : « .* »\. Paul Martin t’a répondu : « Oui, jeudi 18h \? »\. À qui je réponds \?$/.test(deux) && !dernier()._envoiEnAttente, deux);
+    poser(null);
+
+    // Le numéro, le mail d'un contact (#247).
+    const C = (p) => { ctx.charlyIA.history = []; const d = ctx.tcDetecterCoordonnees(p); if (!d) return 'null'; ctx.tcGererCoordonnees(p, d); return dernier().content; };
+    verifie('« donne-moi le numéro de Hugo » → lu dans la fiche ; « c’est quoi le mail de Hugo ? » ; « Quel est le numéro de Gaëlle ? » (fiche sans numéro) ; « t’as le tel de Zorglub ? » → « Je ne trouve pas … » ; jamais « je ne peux pas accéder à tes contacts »',
+      C('donne-moi le numéro de Hugo') === 'Le numéro de Hugo Besnard : 06 11 22 33 44.' && C('c’est quoi le mail de Hugo ?') === 'L’email de Hugo Besnard : hugo.besnard@exemple-timecool.fr.'
+      && C('Quel est le numéro de Gaëlle ?') === 'Je n’ai pas de numéro dans la fiche de Gaëlle Perrin.' && C('t’as le tel de Zorglub ?') === 'Je ne trouve pas Zorglub dans tes contacts.',
+      [C('donne-moi le numéro de Hugo'), C('c’est quoi le mail de Hugo ?'), C('Quel est le numéro de Gaëlle ?'), C('t’as le tel de Zorglub ?')].join(' | '));
+    const pasCoord = ['quel est le numéro de semaine ?', 'donne-moi le numéro du rdv', 'appelle Hugo', 'dis à Hugo de m’envoyer son numéro', 'quel est le numéro des urgences ?', 'ajoute le numéro de Hugo'].filter((p) => ctx.tcDetecterCoordonnees(p));
+    verifie('tcDetecterCoordonnees ne prend rien d’autre (numéro de semaine, du rdv, appeler, un message, les urgences, ajouter)', !pasCoord.length, pasCoord.join(' | '));
+
+    // Un lundi après-midi, « le dentiste de lundi » (#263, #267, #352).
+    const garde = FIXE.getTime();
+    FIXE.setTime(new Date(2026, 9, 26, 15, 0, 0).getTime());
+    const evL = (id, title, d, h, hf, extra) => Object.assign({ id, title, date: d, startH: h, startM: 0, endH: hf, endM: 0, mode: 'user' }, extra || {});
+    ctx.events = [evL('dent', 'Dentiste', '2026-11-02', 10, 11), evL('reu', 'Réunion', '2026-10-27', 14, 15)];
+    const L = (p) => { const d = ctx.tcDeplacementLocal(p, new DateFixe()); return d && d.liste ? d.liste[0].ev.id + ' ' + d.liste[0].p.date + ' ' + d.liste[0].p.startH + 'h' + (d.liste[0].p.startM || '') : JSON.stringify(d); };
+    const l1 = L('Mets le dentiste de lundi à 11h'), l2 = L('Décale le dentiste de lundi à mardi 10h'), l3 = L('le dentiste de lundi tu peux le mettre à onze heures');
+    ctx.events.push(evL('dent2', 'Dentiste', '2026-10-26', 17, 18));
+    const l4 = L('Mets le dentiste de lundi à 18h');
+    ctx.events = [evL('dent', 'Dentiste', '2026-11-02', 10, 11), evL('dent0', 'Dentiste', '2026-10-26', 16, 17)];
+    const l5 = L('Mets le dentiste d’aujourd’hui à 18h');
+    FIXE.setTime(garde);
+    verifie('un lundi à 15h : « Mets le dentiste de lundi à 11h » → le dentiste de lundi prochain (2/11) à 11h ; « Décale le dentiste de lundi à mardi 10h » → mardi 3/11 10h ; « … tu peux le mettre à onze heures » → 2/11 11h ; un dentiste encore à venir aujourd’hui → celui d’aujourd’hui ; « d’aujourd’hui » reste aujourd’hui',
+      l1 === 'dent 2026-11-02 11h' && l2 === 'dent 2026-11-03 10h' && l3 === 'dent 2026-11-02 11h' && l4 === 'dent2 2026-10-26 18h' && l5 === 'dent0 2026-10-26 18h', [l1, l2, l3, l4, l5].join(' | '));
+    ctx.events = agenda(); ctx.charlyIA.history = []; ctx.localStorage = { getItem: () => null, setItem() {} };
+    ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }];
+  }
 
   titre('13. Mission 56 : pros, clients, rappels et invitations');
   ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', phone: '06', referenceCompte: 'R3' },
