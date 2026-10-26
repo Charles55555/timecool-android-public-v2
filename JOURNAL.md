@@ -2923,3 +2923,6 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   10h). Un verbe plus loin dans la phrase est l'objet (« demain je dois appeler Paul » → « Rappel : appeler Paul », demain). Les petits mots de tête
   tombent (« oui demain 9h », « c'est pour demain » → quoi ? ; « bah le loyer demain » → penser au loyer) ; « rdv dentiste mardi 15h » suit son
   chemin. « non, ça me va très bien » est un accord.
+- Quatrième passage (examinateur, 27/10, 1 point) : un moment devant l'infinitif, sans modal (« samedi 10h faire les courses », « demain
+  matin prendre mes médicaments ») → le rappel composé ; jamais après un article (« le loyer » reste un nom). Sinon, le moment dit en tête reste
+  dans la question (« vendredi je vais chez le médecin » → « Je te fais penser à quoi, vendredi ? »).

@@ -1238,6 +1238,13 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
         && !!(c4 && c4.allDay && c4.allDay.titre === 'Rappel : appeler Paul' && c4.allDay.date === iso(1)) && u5.question === 'Je te fais penser à quoi, demain 9h ?' && u6.question === 'Je te fais penser à quoi, demain ?'
         && u7.compose === 'Rappelle-moi de penser au loyer demain' && !u8.compose && u8.question !== TQ,
         JSON.stringify([u1.question, u3.compose, c3 && c3.carte, u2.question, u4.compose, c4, u5.question, u6.question, u7.compose, u8.classe])); }
+    // Examen, 4e passage : un moment devant l'infinitif, sans modal ; sinon le moment reste dans la question.
+    { const v1 = classer('samedi 10h faire les courses', apres('Rappelle-moi', q0)), v2 = classer('demain matin prendre mes médicaments', apres('Rappelle-moi', q0));
+      const cv1 = v1.compose ? ctx.tcDetecterRappelDate(v1.compose, new DateFixe()) : null;
+      const v3 = classer('vendredi je vais chez le médecin', apres('Rappelle-moi', q0));
+      verifie('(examen) « samedi 10h faire les courses » → « Rappelle-moi de faire les courses samedi 10h » (carte samedi 10h « Rappel : faire les courses ») ; « demain matin prendre mes médicaments » → composé ; « vendredi je vais chez le médecin » → « Je te fais penser à quoi, vendredi ? », le moment gardé',
+        v1.compose === 'Rappelle-moi de faire les courses samedi 10h' && !!(cv1 && cv1.carte && /\| 10:00-11:00 \| Rappel : faire les courses \| rdv/.test(cv1.carte)) && v2.compose === 'Rappelle-moi de prendre mes médicaments demain matin'
+        && v3.question === 'Je te fais penser à quoi, vendredi ?' && v3.proposition && v3.proposition.momentDit === 'vendredi', JSON.stringify([v1.compose, cv1 && cv1.carte, v2.compose, v3.question, v3.proposition])); }
     { const csmR = extraire('charlySendMessage') || '';
       verifie('un rappel daté avec une heure (« Rappelle-moi de payer le loyer demain à 9h », « … d’appeler le taxi ») échappe à la liste « Pas encore » (« payer », « taxi »), avant la carte du rappel',
         csmR.indexOf('const _unavailMatch = !_isChecklistMsg && !_rappelDit && _unavailable.find(') > -1 && csmR.indexOf('const _rappelDit = (typeof tcDetecterRappelDate === ') > -1 && csmR.indexOf('const _rappelDit') < csmR.indexOf('const _rappelHeure')); }

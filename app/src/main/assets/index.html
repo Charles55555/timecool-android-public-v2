@@ -22854,7 +22854,7 @@ function tcRappelSeulSuite(brut, proposition) {
   if (/^(rdv|rendez vous|rendez-vous|reunion)(\s|$)/i.test(tcClasseNormaliser(sansPrefixe))) return null;
   // Le verbe, en tête ou plus loin (« demain je dois appeler Paul », « vendredi il faut que je paie… ») : ce qui précède n'est qu'un moment.
   const mots = sansPrefixe.split(/\s+/);
-  const NON_VERBES = /^(septembre|octobre|novembre|decembre|notre|votre|autre|autres|entre|contre|soir|hier|premier|dernier|cher|chere|mer|fer|hiver|plaisir|loisir|avenir|livre|lettre|lettres|chambre|centre|ordre|nombre|membre|titre|pierre|alexandre|sandrine|claire|desir|sur|leur|leurs|pour|avoir|faire|etre)$/;
+  const NON_VERBES = /^(septembre|octobre|novembre|decembre|notre|votre|autre|autres|entre|contre|soir|hier|premier|dernier|cher|chere|mer|fer|hiver|plaisir|loisir|avenir|livre|lettre|lettres|chambre|centre|ordre|nombre|membre|titre|pierre|alexandre|sandrine|claire|desir|sur|leur|leurs|pour)$/;
   const MODAUX = /^(je|j|dois|devrai|devrais|il|faut|que|qu|vais|veux|voudrais|aller|me|pour|de|d|a|à|doit|faudra|on)$/;
   let iVerbe = -1;
   for (let i = 0; i < mots.length && i < 8; i++) {
@@ -22862,7 +22862,13 @@ function tcRappelSeulSuite(brut, proposition) {
     if (/^[a-z-]{3,}(er|ir|re|oir)$/.test(w) && !NON_VERBES.test(w)) { iVerbe = i; break; }
     if (!MODAUX.test(w) && !tcRappelMomentSeul(w) && !/^(le|la|les|ce|cet|cette|prochain|prochaine|matin|soir|midi|semaine|apres|h|heure|heures)$/.test(w) && !/^\d/.test(w)) break;
   }
-  const avecVerbe = iVerbe > -1 && (iVerbe === 0 || /(^|\s)(dois|devrai|devrais|faut|faudra|vais|veux|voudrais|doit|pour|de|d)$/.test(tcClasseNormaliser(mots.slice(0, iVerbe).join(' '))));
+  // Avant le verbe, la boucle n'a laissé passer que des mots de moment ou des modaux (« samedi 10h faire les courses », examen, mission 61).
+  // Jamais après un article (« le loyer » est un nom), et il faut au moins un vrai moment ou un modal devant.
+  const devant = mots.slice(0, Math.max(iVerbe, 0)).map(function (m) { return tcClasseNormaliser(m); });
+  const avecVerbe = iVerbe > -1 && (iVerbe === 0 || (!/^(le|la|les|l|ce|cet|cette|mon|ma|mes|ton|ta|un|une|des|du|au|aux)$/.test(devant[devant.length - 1] || '')
+    && devant.some(function (w) { return tcRappelMomentSeul(w) || /^\d/.test(w) || /^(dois|devrai|devrais|faut|faudra|vais|veux|voudrais|doit|pour|de|d)$/.test(w); })));
+  // Le moment dit en tête (« samedi 10h », « vendredi ») : gardé si Charly doit redemander quoi.
+  const momentTete = tcRappelMomentDeTete(mots);
   let action = '', momentDevant = '';
   if (avecVerbe) {
     action = [mots[iVerbe].replace(/^[dlj]['’]/i, '')].concat(mots.slice(iVerbe + 1)).join(' ');
@@ -22877,7 +22883,8 @@ function tcRappelSeulSuite(brut, proposition) {
   if (sansDate(candidat)) return { compose: momentGarde ? candidat : 'Rappelle-moi ' + texte };
   const r = typeof tcDetecterRappelDate === 'function' ? tcDetecterRappelDate(candidat, new Date()) : null;
   if (r && !titreVide(titreDe(r))) return { compose: candidat };
-  if (r || momentGarde) return { question: 'Je te fais penser à quoi' + (momentGarde ? ', ' + momentGarde : '') + ' ?', proposition: Object.assign({}, proposition) };
+  const momentQ = momentGarde || momentTete;
+  if (r || momentQ) return { question: 'Je te fais penser à quoi' + (momentQ ? ', ' + momentQ : '') + ' ?', proposition: Object.assign({}, proposition, momentQ ? { momentDit: momentQ } : {}) };
   // Un objet sans jour (« payer le loyer », « d'appeler Hugo à 9h », « le loyer ») : le jour, ensuite.
   let reste = action;
   const h = tcHeureDansTexte(reste.toLowerCase());
@@ -22888,6 +22895,19 @@ function tcRappelSeulSuite(brut, proposition) {
   }
   if (!reste || titreVide('Rappel : ' + reste) || reste.split(/\s+/).length > (avecVerbe ? 8 : 7)) return null;
   return { question: tcRappelQuestionJour(reste, heure), proposition: Object.assign({}, proposition, { objet: reste, heure: heure }) };
+}
+
+/** Les premiers mots qui disent un moment (« samedi 10h », « demain matin »), ou ''. */
+function tcRappelMomentDeTete(mots) {
+  let n = 0;
+  for (let i = 0; i < mots.length; i++) {
+    const w = tcClasseNormaliser(mots[i]);
+    if (tcRappelMomentSeul(w) || /^(le|la|ce|cet|cette|prochain|prochaine|matin|soir|midi|apres|a|à|vers|h|heure|heures|\d.*)$/.test(w)) n = i + 1; else break;
+  }
+  let tete = mots.slice(0, n);
+  while (tete.length && !tcRappelMomentSeul(tcClasseNormaliser(tete[tete.length - 1])) && !/^(matin|soir|midi|prochain|prochaine|\d.*)$/.test(tcClasseNormaliser(tete[tete.length - 1]))) tete.pop();
+  const t = tete.join(' ');
+  return t && tcRappelMomentSeul(tcClasseNormaliser(t)) ? t : '';
 }
 
 /** Un nouveau moment remplace l'ancien ; un jour seul garde l'heure d'avant (« demain à 9h » + « vendredi » → « vendredi à 9h »), une heure seule garde le jour. */
