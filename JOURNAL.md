@@ -244,6 +244,7 @@ préférence de notification par contact ; fuseaux horaires (plus tard, validé 
 
 - **Veille du 05/10** : rien d'alarmant. Disque 14 %, certificats valides 50 jours et plus, SSH calme, copie IONOS ok le 05/10 à 03h29 UTC (toujours du lundi au vendredi seulement). 4 mises à jour système en attente, et redémarrage demandé depuis le 01/10 : à faire à un moment calme, par root, après avoir prévu la relance de la session serveur.
 - **Veille du 19/10** : copie IONOS réussie le lundi 19/10 à 05h29 (heure de Paris), TimeCool répond, aucune nouvelle panne depuis celle du 06/10. Disque 14 %, certificats 36 et 39 jours (renouvellement automatique). Seule alerte : redémarrage demandé depuis 13 jours (trois nouveaux noyaux Linux et libc6 en attente) — à faire par root à un moment calme, puis relancer la session serveur.
+- **Veille du 26/10** : copie IONOS réussie le lundi 26/10 à 04h29 (heure d'hiver de Paris), TimeCool répond, aucune nouvelle panne. Certificats 32 et 89 jours. Redémarrage demandé depuis 20 jours (toujours en attente d'un soir choisi par Charles). Connexion Claude du serveur : expire le mercredi 28/10 à 15h41, Charles prévenu le 26/10.
 
 - **SSH saturé le 03/10 vers 03h30 UTC, réglé par la session du PC** :
   212.112.98.73 faisait de la force brute en tenant 100+ connexions non
