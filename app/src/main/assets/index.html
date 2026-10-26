@@ -22073,7 +22073,7 @@ const TC_REGLAGE_LANGUES = { anglais: 'en', allemand: 'de', espagnol: 'es', ital
 /* Les réglages que Charly ne change pas lui-même : où les trouver. */
 const TC_REGLAGES_AILLEURS = [
   [/(^|\s)(format (des |de |d )?dates?|dates? (au|en) format|jj mm( aaaa)?)(?=\s|$)/, 'Le format des dates suit la langue de l’application, il ne se change pas à part : Paramètres > Langue & Région.'],
-  [/(^|\s)(fuseau( horaire)?|fuseaux horaires|timezone|heure (anglaise|britannique|americaine|allemande|espagnole|italienne|marocaine|tunisienne|japonaise|australienne|bresilienne|francaise|locale|de paris|de londres|de new york|de tokyo)|^((stp|svp|charly) )?(mets|met|mettre|passe|passer|regle|regler|bascule|basculer|change|changer|cale|caler)( moi| nous)?( l application| l appli| l app| timecool| mon agenda| l agenda| mon telephone| tout)? (a|sur|en) l heure (de|d) (?!la|le |l |mon |ma |mes |ton |ta |son |sa |ce |cet |cette |midi|minuit|\d)[a-z]+)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Fuseau horaire.'],
+  [/(^|\s)(fuseau( horaire)?|fuseaux horaires|timezone|heure (anglaise|britannique|americaine|allemande|espagnole|italienne|marocaine|tunisienne|japonaise|australienne|bresilienne|francaise|locale|de paris|de londres|de new york|de tokyo)|^((stp|svp|charly) )?(mets|met|mettre|passe|passer|regle|regler|bascule|basculer|change|changer|cale|caler)( moi| nous)?( l application| l appli| l app| timecool| mon agenda| l agenda| mon telephone| tout)? (a|sur|en) l heure (de|d) (?!la|le |l |mon |ma |mes |ton |ta |son |sa |ce |cet |cette |midi|minuit|pointe |pointe$|\d)[a-z]+)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Fuseau horaire.'],
   [/(^|\s)(message d absence|messages d absence|repondeur|reponse automatique|reponses automatiques|absence automatique)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Message d’absence.'],
   [/(^|\s)(plage horaire|heures? de (ma |la )?journee|debut de (ma |la )?journee|fin de (ma |la )?journee)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Plage horaire de ma journée.'],
   [/(^|\s)(premier jour de (la )?semaine|la semaine commence|semaine commencer?|commencer la semaine)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Premier jour de la semaine.'],
@@ -22822,30 +22822,63 @@ function tcRappelSeulSuite(brut, proposition) {
   if (/^(rappelle|rapelle|fais moi|mets|met|ajoute|annule|decale|deplace|supprime|efface|propose|invite|previens|envoie|ecris|dis a|cherche|trouve|montre|affiche|qu est|quel|quelle|quels|quelles|quand est|est ce|c est quoi|comment|pourquoi|j ai quoi)(\s|$)/.test(norm)) return null;
   const objet = proposition && proposition.objet ? proposition.objet : null;
   const heureGardee = proposition && proposition.heure ? proposition.heure : '';
+  const momentGarde = proposition && proposition.momentDit ? proposition.momentDit : '';
+  // « demain à 9h » seul : le moment est gardé, Charly demande quoi (examen, mission 61).
+  if (!objet && !momentGarde && tcRappelMomentSeul(norm)) {
+    return { question: 'Je te fais penser à quoi, ' + texte + ' ?', proposition: Object.assign({}, proposition, { momentDit: texte }) };
+  }
+  // Sans verbe (« le loyer demain 9h », « pour le loyer », « Hugo demain 9h ») : « penser au loyer », « penser à Hugo ».
+  const sansPrefixe = texte.replace(/^(?:de |d['’]|à |a |pour )/i, '').trim();
+  const avecVerbe = /^[a-zà-ÿ-]{3,}(?:er|ir|re|oir)(\s|$)/i.test(sansPrefixe);
+  // « je sais pas », « c'est pour demain », « rien » : pas un objet de rappel.
+  if (!avecVerbe && /^(je|j|tu|il|elle|on|nous|vous|ils|elles|c est|c|ca|ce|cela|rien|aucune|aucun|si|bah|euh)(\s|$)/.test(tcClasseNormaliser(sansPrefixe))) return null;
+  const action = objet ? null : (avecVerbe ? (/^(?:de |d['’])/i.test(texte) ? texte : 'de ' + sansPrefixe) : 'de penser ' + tcRappelPenserA(sansPrefixe));
   const candidat = objet
     ? 'Rappelle-moi de ' + objet + ' ' + texte + (heureGardee && !tcHeureDansTexte(texte.toLowerCase()) ? ' ' + heureGardee : '')
-    : 'Rappelle-moi ' + (/^(?:de |d['’]|à |a |pour )/i.test(texte) ? texte : 'de ' + texte);
+    : 'Rappelle-moi ' + action + (momentGarde ? ' ' + momentGarde : '');
   const sans = tcClasseNormaliser(candidat);
   // Une récurrence, « dans une heure » : la phrase entière va au modèle (comme tapée d'un coup).
   if (/(^|\s)(chaque|tous les|toutes les|hebdo|avant chaque|dans une heure|dans \d+|fin du mois|fin de mois)(\s|$)/.test(sans)) return { compose: objet ? candidat : 'Rappelle-moi ' + texte };
   if (typeof tcDetecterRappelDate === 'function' && tcDetecterRappelDate(candidat, new Date())) return { compose: candidat };
-  if (objet) {
-    return { question: 'Quel jour je te fais penser à « ' + objet + ' » (par exemple « demain à 9h ») ?', proposition: Object.assign({}, proposition) };
+  if (objet || momentGarde) {
+    if (!objet) return null;
+    return { question: tcRappelQuestionJour(objet, heureGardee), proposition: Object.assign({}, proposition) };
   }
-  // Un objet sans jour (« payer le loyer », « d'appeler Hugo à 9h ») : le jour, ensuite.
-  let reste = texte.replace(/^(?:de |d['’]|à |a |pour )/i, '').trim();
-  if (!/^[a-zà-ÿ-]{3,}(?:er|ir|re|oir)(\s|$)/i.test(reste)) return null;
+  // Un objet sans jour (« payer le loyer », « d'appeler Hugo à 9h », « le loyer ») : le jour, ensuite.
+  let reste = sansPrefixe;
+  if (/^(je|j|tu|il|elle|on|nous|vous|ils|elles|c est|c|ca|ce|cela|rien|aucune|aucun)(\s|$)/i.test(tcClasseNormaliser(reste))) return null;
   const h = tcHeureDansTexte(reste.toLowerCase());
   let heure = '';
   if (h) {
     const mH = reste.match(/\s*(?:à|a|vers)?\s*\d{1,2}\s?(?:h|heures?|:)\s?(?:\d{2})?\s*$/i);
     if (mH) { heure = 'à ' + h.h + 'h' + (h.m ? String(h.m).padStart(2, '0') : ''); reste = reste.slice(0, mH.index).trim(); }
   }
-  if (!reste || reste.split(/\s+/).length > 8) return null;
-  return {
-    question: 'Quel jour je te fais penser à « ' + reste + ' » (par exemple « demain' + (heure ? '' : ' à 9h') + ' ») ?',
-    proposition: Object.assign({}, proposition, { objet: reste, heure: heure })
-  };
+  if (!reste || reste.split(/\s+/).length > (avecVerbe ? 8 : 5)) return null;
+  const quoi = avecVerbe ? reste : 'penser ' + tcRappelPenserA(reste);
+  return { question: tcRappelQuestionJour(quoi, heure), proposition: Object.assign({}, proposition, { objet: quoi, heure: heure }) };
+}
+
+/** « Quel jour je te fais penser à « payer le loyer » … ? », ou « Quel jour je te fais penser au loyer … ? » pour un objet sans verbe. */
+function tcRappelQuestionJour(objet, heure) {
+  const exemple = ' (par exemple « demain' + (heure ? '' : ' à 9h') + ' »)';
+  return /^penser /.test(objet) ? 'Quel jour je te fais ' + objet + exemple + ' ?' : 'Quel jour je te fais penser à « ' + objet + ' »' + exemple + ' ?';
+}
+
+/** « le loyer » → « au loyer », « les impôts » → « aux impôts », « Hugo », « la banque » → « à Hugo », « à la banque ». */
+function tcRappelPenserA(x) {
+  const t = String(x || '').trim();
+  if (/^le /i.test(t)) return 'au ' + t.slice(3);
+  if (/^les /i.test(t)) return 'aux ' + t.slice(4);
+  if (/^(à|a|au|aux) /i.test(t)) return t.replace(/^a /i, 'à ');
+  return 'à ' + t;
+}
+
+/** « demain à 9h », « à 9h demain », « lundi », « ce soir » : un moment, rien d'autre (texte normalisé). */
+function tcRappelMomentSeul(norm) {
+  const mots = String(norm || '').split(' ').filter(Boolean);
+  if (!mots.length || mots.length > 7) return false;
+  const MOMENT = /^(demain|apres|aujourd|hui|ce|cet|cette|soir|matin|midi|minuit|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|prochain|prochaine|semaine|le|la|a|vers|des|h|heure|heures|er|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|\d+h?\d*|\d+)$/;
+  return mots.every(function (w) { return MOMENT.test(w); }) && mots.some(function (w) { return /^(demain|aujourd|soir|matin|midi|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|\d+h?\d*)$/.test(w); });
 }
 
 /* ─── 2. « comment j'ajoute un contact » : le chemin ─── */
@@ -22859,6 +22892,10 @@ function tcAideContact(norm) {
   const m = n.match(new RegExp(debut + '(?:comment|comment est ce que|comment est ce qu|comment faire pour|comment on fait pour|comment je fais pour|comment il faut faire pour|je fais comment pour|on fait comment pour|ou est ce que|ou|par ou|tu peux m expliquer comment|explique moi comment|tu peux me dire comment|dis moi comment|c est ou pour)\\s+(?:je |j |on |tu |il faut |faut il |peut on |puis je |est ce que je |est ce qu on )?(?:peux |peut |dois |doit )?(ajoute|ajouter|ajoutes|rajoute|rajouter|cree|creer|enregistre|enregistrer|mets|mettre|met|importe|importer|recupere|recuperer|rentre|rentrer|saisis|saisir)\\s+' + objet + fin))
     || n.match(new RegExp(debut + '(?:je veux|je voudrais|j aimerais|il faut que j|je dois|je cherche a|je n arrive pas a|j arrive pas a|aide moi a)\\s+(ajouter|rajouter|creer|enregistrer|importer|recuperer|mettre|rentrer|saisir)\\s+' + objet + fin))
     || n.match(new RegExp(debut + '(ajoute|ajouter|cree|creer|nouveau)\\s+(?:un |une )?(?:nouveau )?(contact)(?:\\s+(?:stp|svp|s il te plait|charly))*$'));
+  // « où sont mes contacts », « comment je vois mes contacts » : la page (examen, mission 61).
+  if (!m && new RegExp(debut + '(?:ou sont|ou est|ou trouver|ou je trouve|ou on trouve|ou je vois|ou voir|comment je vois|comment voir|comment je trouve|comment trouver|ou est la liste de|ou se trouvent)\\s+(?:mes contacts|la liste de mes contacts|mon repertoire|mes fiches contacts)(?:\\s+(?:stp|svp|s il te plait|charly))*$').test(n)) {
+    return 'Tes contacts sont dans Menu ☰ > Mes contacts : tu peux y chercher un nom, en ajouter un avec le bouton vert « + Ajouter », ou importer ceux de ton téléphone.';
+  }
   if (!m) return null;
   // « ajoute le numéro de Hugo » n'est pas ici (un nom suit) ; « comment j'importe mes contacts » : l'import d'abord.
   const importer = /^(importe|importer|recupere|recuperer)$/.test(m[1]) || m[2] === 'repertoire';
@@ -22902,6 +22939,18 @@ async function tcRetirerDuGroupe(text) {
   const nomDe = function (x) { return x.c ? x.c.name : 'un invité'; };
   const enLettres = function (l) { const n = l.map(nomDe); return n.length <= 1 ? n.join('') : n.slice(0, -1).join(', ') + ' et ' + n[n.length - 1]; };
   const dire = function (contenu, nature) { charlyIA.history.push({ role: 'assistant', nature: nature || 'reponse', content: contenu }); renderCharlyChat(); };
+  // « sans Hugo » quand deux Hugo sont invités : lequel, rien ne change (examen, mission 61).
+  const homonymes = membres.filter(function (x) {
+    if (!x.c || vises.indexOf(x) > -1) return false;
+    const p = tcClasseNormaliser(x.c.name).split(' ')[0] || '';
+    return p.length >= 3 && dit.indexOf(' ' + p + ' ') > -1 && membres.filter(function (y) { return y.c && tcClasseNormaliser(y.c.name).split(' ')[0] === p; }).length > 1;
+  });
+  if (homonymes.length > 1 && !vises.some(function (x) { return homonymes.some(function (y) { return tcClasseNormaliser(y.c.name).split(' ')[0] === tcClasseNormaliser(x.c.name).split(' ')[0]; }); })) {
+    tcPousserMessageUtilisateur(text);
+    const noms = homonymes.map(nomDe);
+    dire('Lequel : ' + noms.slice(0, -1).join(', ') + ' ou ' + noms[noms.length - 1] + ' ? Dis-moi par exemple « ' + (mRetire ? 'sans ' : 'juste avec ') + noms[0] + ' ».', 'question');
+    return true;
+  }
   if (!vises.length) {
     // « sans Paul » alors que Paul n'est pas invité : dit tel quel ; « pas en visio », « pas jeudi » gardent leur chemin.
     const autre = mRetire && typeof tcClasseContactEcrit === 'function' ? tcClasseContactEcrit((mRetire[1] || '').trim()) : null;
@@ -22938,11 +22987,11 @@ async function tcRetirerDuGroupe(text) {
 
 /* ─── 4. « non c'est parfait » à la réponse de Hugo ─── */
 
-/** « non c'est parfait », « non non c'est bon », « je ne dis pas non », « pas de souci » : un accord malgré le « non » (texte normalisé). */
+/** « non c'est parfait », « non non, ça me va », « je ne dis pas non » (jamais « non c'est bon », « non ça va » : souvent un refus poli), « pas de souci » : un accord malgré le « non » (texte normalisé). */
 function tcReponsePositiveMalgreNon(norm) {
   const n = String(norm || '').trim();
   const QUEUE = '(?:\\s+(?:comme ca|merci|pour moi|pour [a-z]+|stp|svp))*$';
-  return new RegExp('^(?:non|nan|ah non|mais non)(?:\\s+non)*\\s+(?:c est |c etait |ca |tout est |)(?:parfait|tres bien|bien|super|top|nickel|genial|impeccable|ok|bon|tout bon|cool|me va|ca me va|va tres bien|va bien|ca va)' + QUEUE).test(n)
+  return new RegExp('^(?:non|nan|ah non|mais non)(?:\\s+non)*\\s+(?:c est |c etait |ca |tout est |)(?:parfait|tres bien|super|nickel|genial|impeccable|me va|ca me va|va tres bien)' + QUEUE).test(n)
     || new RegExp('^(?:je ne dis pas non|je dis pas non|pourquoi pas|c est pas de refus|ce n est pas de refus|pas de souci|pas de soucis|pas de probleme|aucun souci|aucun probleme|sans souci|sans probleme|ca ne me derange pas|ca me derange pas)' + QUEUE).test(n);
 }
 

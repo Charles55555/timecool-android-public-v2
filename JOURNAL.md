@@ -2912,3 +2912,9 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   « non c'est parfait », « je ne dis pas non » sont un accord. Un rappel daté avec une heure (« Rappelle-moi de payer le loyer demain à
   9h », « … d'appeler le taxi demain 9h ») ne tombe plus dans la liste « Pas encore » (les mots « payer », « taxi »). Suite : verif-classement-charly,
   section 18.
+- Deuxième passage (examinateur, 27/10, 3 points) : après « Je te fais penser à quoi, et quand ? », une réponse sans verbe (« le loyer demain
+  9h », « pour le loyer… », « Hugo demain 9h ») → « Rappel : penser au loyer » / « penser à Hugo » ; un moment seul (« demain à 9h ») → « Je te
+  fais penser à quoi, demain à 9h ? », le moment gardé ; « le loyer » seul → « Quel jour je te fais penser au loyer ? » ; « je sais pas » n'est
+  pas un objet. Deux Hugo invités : « sans Hugo » → « Lequel : Hugo Besnard ou Hugo Martin ? », rien ne change. « non c'est bon », « non ça
+  va » restent un refus (souvent un refus poli) ; seuls « non c'est parfait / super / génial / nickel / impeccable / très bien / ça me va » sont un
+  accord. En plus : « où sont mes contacts ? » → Menu ☰ > Mes contacts ; « mets-moi à l'heure de pointe » n'est plus le fuseau.
