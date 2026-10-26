@@ -2878,3 +2878,15 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   « tu peux le mettre à onze heures » se lit 11h.
 - API inchangée. Suite : verif-classement-charly section 17 (38 réglages compris, 19 phrases qui gardent leur chemin, la capture rejouée, chaque réglage
   relu, 10 réponses du modèle menteuses et 9 honnêtes, Hugo R3 / R4, numéro, lundi après-midi) ; section 15 : « Hugo a répondu ? » cite la réponse.
+- Deuxième passage (examinateur, 26/10, 5 points) : une plainte (« j'ai plus de rappels », « pourquoi j'ai plus de notifications ? », « je reçois plus de
+  rappels », « les rappels ne marchent plus ») n'est jamais un ordre : Charly dit l'état, rien ne change ; un jour, une période, une personne, la
+  messagerie (« supprime mes rappels de demain », « coupe mes rappels pendant les vacances », « plus de notifications de Paul », « arrête les
+  notifications de la messagerie ») et « je veux plus de rappels » (ambigu) gardent leur chemin ; seul un ordre net coupe ou active. Sans « Lequel je
+  mets ? », un délai seul (« la veille », « 30 minutes », jamais « 30 minutes plus tard ») ne règle tous les rappels que juste après une bulle qui
+  listait les délais de tous les rappels (au moins trois, sans « ce rendez-vous », durée ni heure). tcSansFauxReglage : un état décrit (« tes rappels
+  sont activés 1 heure avant », « le mode sombre est activé le soir ») n'est plus une action (« sont maintenant / désormais … » l'est) ; seules les
+  phrases qui mentent sont retirées, le reste de la réponse est gardé et la vérité ajoutée dessous (pour les rappels, avec les délais de la page).
+  Réponse à Hugo : « oui mais pas cette semaine », « ok mais pas mardi » → « Quel autre moment je lui propose ? », un moment refusé n'est jamais la
+  proposition ; « Réponds à Hugo que je suis malade » → ce texte, relu. Numéro d'un contact : le nom tel que tapé (« Hélène »), « ma mère » par le
+  lien de famille de la mission 59 (fiche nommée ainsi, sinon la famille, dite comme telle), « Marc et Paul » chacun. « mets mes rappels 1h avant et
+  la veille » → « Je ne peux en mettre qu'un seul… Lequel je mets ? ». Suite : section 17, sondes de l'examinateur reprises en vérifications.

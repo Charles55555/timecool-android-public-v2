@@ -1009,10 +1009,10 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       ['Noté, je règle tes rappels sur "la veille" pour tes rendez-vous. C\'est appliqué ! 👍', /^Je n’ai rien changé à tes rappels\./],
       ['C\'est fait ! Tes rappels sont maintenant réglés sur 15 minutes avant.', /^Je n’ai rien changé à tes rappels\./],
       ['J\'ai activé le mode sombre 🌙', /^Je n’ai rien changé à l’affichage\./],
-      ['Tes notifications sont désactivées.', /^Je n’ai rien changé à tes rappels\./],
+      ['Tes notifications sont maintenant désactivées.', /^Je n’ai rien changé à tes rappels\./],
       ['Parfait, j\'ai coupé les sonneries.', /^Je n’ai rien changé aux sonneries\./],
       ['C\'est noté, la langue est maintenant l\'anglais.', /^Je n’ai rien changé à la langue\./],
-      ['Ton message d\'absence est activé du 1er au 5 novembre.', /^Je n’ai rien changé : ce réglage se fait dans les Paramètres/],
+      ['J\'ai activé ton message d\'absence du 1er au 5 novembre.', /^Je n’ai rien changé : ce réglage se fait dans les Paramètres/],
       ['Noté !', null], ['C\'est appliqué !', /^Je n’ai rien changé de moi-même/], ['J\'ai bien enregistré ta préférence.', /^Je n’ai rien changé à tes réglages/]
     ];
     const ratés = menteurs.filter(([r, re]) => re ? !re.test(F(r)) : F(r) !== r);
@@ -1073,10 +1073,63 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const C = (p) => { ctx.charlyIA.history = []; const d = ctx.tcDetecterCoordonnees(p); if (!d) return 'null'; ctx.tcGererCoordonnees(p, d); return dernier().content; };
     verifie('« donne-moi le numéro de Hugo » → lu dans la fiche ; « c’est quoi le mail de Hugo ? » ; « Quel est le numéro de Gaëlle ? » (fiche sans numéro) ; « t’as le tel de Zorglub ? » → « Je ne trouve pas … » ; jamais « je ne peux pas accéder à tes contacts »',
       C('donne-moi le numéro de Hugo') === 'Le numéro de Hugo Besnard : 06 11 22 33 44.' && C('c’est quoi le mail de Hugo ?') === 'L’email de Hugo Besnard : hugo.besnard@exemple-timecool.fr.'
-      && C('Quel est le numéro de Gaëlle ?') === 'Je n’ai pas de numéro dans la fiche de Gaëlle Perrin.' && C('t’as le tel de Zorglub ?') === 'Je ne trouve pas Zorglub dans tes contacts.',
+      && C('Quel est le numéro de Gaëlle ?') === 'Je n’ai pas de numéro dans la fiche de Gaëlle Perrin.' && C('t’as le tel de Zorglub ?') === 'Je ne trouve pas « Zorglub » dans tes contacts.',
       [C('donne-moi le numéro de Hugo'), C('c’est quoi le mail de Hugo ?'), C('Quel est le numéro de Gaëlle ?'), C('t’as le tel de Zorglub ?')].join(' | '));
     const pasCoord = ['quel est le numéro de semaine ?', 'donne-moi le numéro du rdv', 'appelle Hugo', 'dis à Hugo de m’envoyer son numéro', 'quel est le numéro des urgences ?', 'ajoute le numéro de Hugo'].filter((p) => ctx.tcDetecterCoordonnees(p));
     verifie('tcDetecterCoordonnees ne prend rien d’autre (numéro de semaine, du rdv, appeler, un message, les urgences, ajouter)', !pasCoord.length, pasCoord.join(' | '));
+
+    // Deuxième passage (examinateur, 5 points).
+    // 1. Une plainte, un jour, une personne, la messagerie, une période : jamais la bascule de tous les rappels.
+    { const plaintes = { 'j’ai plus de rappels': 'etat', 'je n’ai plus de rappels depuis hier': 'etat', 'pourquoi j’ai plus de notifications ?': 'etat', 'je reçois plus de rappels': 'etat',
+        'les rappels ne marchent plus': 'etat', 'mes rappels sonnent pas': 'etat', 'j’ai trop de notifications': 'etat', 'je veux plus de rappels': 'null', 'supprime mes rappels de demain': 'null',
+        'coupe mes rappels pendant les vacances': 'null', 'plus de notifications de Paul': 'null', 'arrête les notifications de la messagerie': 'null', 'désactive le rappel du dentiste': 'null',
+        'je ne veux plus de rappels': 'actifs:false', 'tu peux couper mes rappels ?': 'actifs:false' };
+      const mal = Object.keys(plaintes).filter((p) => R(p) !== plaintes[p]);
+      verifie('2e passage, point 1 : « j’ai plus de rappels », « pourquoi j’ai plus de notifications ? »… → l’état, rien ne change ; « supprime mes rappels de demain », « plus de notifications de Paul », « pendant les vacances », la messagerie, « je veux plus de rappels » → rien ; « je ne veux plus de rappels » coupe', !mal.length, mal.map((p) => p + ' → ' + R(p)).join(' | '));
+      remettre(); ctx.charlyIA.history = []; await ctx.tcGererReglage('j’ai plus de rappels', ctx.tcDetecterReglage('j’ai plus de rappels'));
+      verifie('« j’ai plus de rappels » : tc_rappels_actifs reste 1, Charly dit l’état', store.tc_rappels_actifs === '1' && /^Tes rappels sont activés/.test(dernier().content), dernier().content); }
+    // 2. Sans « Lequel je mets ? », un délai seul ne règle tout que juste après une liste des délais de TOUS les rappels.
+    { const hist = [
+        [[{ role: 'user', content: 'ajoute dentiste demain 10h' }, { role: 'assistant', content: 'Dentiste ajouté demain à 10h. Tu veux un rappel pour ce rendez-vous : la veille ou 1 heure avant ?' }], 'La veille'],
+        [[{ role: 'user', content: 'ajoute réunion jeudi' }, { role: 'assistant', content: 'À quelle heure, et combien de temps ? (ton rappel sera envoyé 1 heure avant)' }], '2 heures'],
+        [[{ role: 'user', content: 'mon rdv dentiste ?' }, { role: 'assistant', content: 'Dentiste demain 10h, rappel 1 heure avant.' }], '30 minutes plus tard'],
+        [[{ role: 'assistant', content: 'Tes rappels sont activés, 1 heure avant.' }], '10 minutes'],
+        [[{ role: 'assistant', content: 'Tes rappels sont activés, 1 heure avant.' }], 'j’ai 10 minutes de retard']];
+      const pris = [];
+      for (const [h, p] of hist) { remettre(); ctx.charlyIA.history = h.slice(); if ((await ctx.tcRepondreReglage(p)) !== false || store.tc_rappel_delai !== '60') pris.push(p); }
+      remettre(); ctx.charlyIA.history = [{ role: 'assistant', content: ctx.tcSansFauxReglage('Noté, je règle tes rappels sur la veille. C\'est appliqué !', '') }];
+      const apresFilet = await ctx.tcRepondreReglage('La veille');
+      verifie('2e passage, point 2 : après une question sur UN rendez-vous, une durée, un décalage, un état → le délai de tous les rappels ne bouge pas ; après la vérité du filet (qui liste les délais), « La veille » règle pour de vrai', !pris.length && apresFilet === true && store.tc_rappel_delai === '1440', pris.join(' | ') + ' / ' + store.tc_rappel_delai); }
+    // 3. Un état décrit n'est pas une action ; seule la phrase qui ment part, le reste de la réponse reste.
+    { const etats = ['Tu as 3 rendez-vous demain. Tes rappels sont activés 1 heure avant chacun.', 'Oui, tes rappels sont activés : tu seras prévenu 1 heure avant.', 'Ton rappel pour l’URSSAF est programmé le 5 novembre à 9h.',
+        'Le mode sombre est activé automatiquement le soir.', 'La réunion a été modifiée par Paul hier.', 'Hugo a accepté, c’est confirmé.', 'C’est noté, je te le rappellerai demain.', 'Ta réservation est enregistrée chez le coiffeur.',
+        'J’ai changé d’avis, voici une meilleure idée : mardi 10h.', 'Je passe en revue ton agenda : tu es libre jeudi.', 'Je te mets en relation avec le support.', 'Je change de sujet : as-tu pensé à l’anniversaire de Marc ?',
+        'Tes notifications sont gérées par ton téléphone : regarde dans ses réglages.', 'C’est bon, tu es libre demain après-midi.', 'Noté ! Tu as rendez-vous avec Paul demain.'];
+      const touches = etats.filter((r) => F(r, 'question') !== r);
+      const mixte = F('Tu as 3 rendez-vous demain. J’ai activé tes rappels la veille.', 'quoi demain ?');
+      verifie('2e passage, point 3 : 15 réponses vraies (états décrits, rendez-vous, « c’est confirmé ») restent ; « Tu as 3 rendez-vous demain. J’ai activé tes rappels la veille. » garde la première phrase et remplace seulement la seconde',
+        !touches.length && /^Tu as 3 rendez-vous demain\.\nJe n’ai rien changé à tes rappels\./.test(mixte) && mixte.indexOf('J’ai activé') < 0, touches.join(' | ') + ' / ' + mixte); }
+    // 4. « oui mais pas cette semaine », « ok mais pas mardi » : jamais l'accord ni le jour refusé ; « Réponds à Hugo que je suis malade » : ce texte.
+    { const D4 = (p) => { poser(RR.R3); ctx.charlyIA.history = []; ctx.tcGererDemandeRecue(p, 'repondre'); return dernier(); };
+      const a = D4('oui mais pas cette semaine'), b = D4('ok mais pas mardi'), c = D4('Réponds à Hugo que je suis malade'), d = D4('Accepte mais à 17h'), e = D4('oui pour Hugo mais plutôt mercredi');
+      verifie('2e passage, point 4 : « oui mais pas cette semaine », « ok mais pas mardi » → « Quel autre moment je lui propose ? », rien à envoyer ; « Réponds à Hugo que je suis malade » → « Je suis malade. » relu ; « Accepte mais à 17h » → 17h ; « mais plutôt mercredi » → mercredi',
+        /Quel autre moment je lui propose \?/.test(a.content) && !a._envoiEnAttente && /Quel autre moment je lui propose \?/.test(b.content) && !b._envoiEnAttente
+        && c._envoiEnAttente && c._envoiEnAttente.texte === 'Je suis malade.' && d._envoiEnAttente && d._envoiEnAttente.texte === 'Je te propose plutôt 2026-10-20 à 17h, ça te va ?'
+        && e._envoiEnAttente && e._envoiEnAttente.texte === 'Je te propose plutôt 2026-10-21, ça te va ?', [a.content, b.content, c.content, d.content, e.content].join(' | '));
+      poser(null); }
+    // 5. Le nom tel que tapé ; « ma mère » par le lien de famille ; « Marc et Paul » chacun.
+    { const garde = ctx.contactsList;
+      ctx.contactsList = [{ id: 'h', name: 'Hugo Besnard', phone: '06 11' }, { id: 'm', name: 'Marie Dupont', phone: '06 22', categories: ['famille'] }, { id: 'z', name: 'Zoé Lefèvre', phone: '06 33' }, { id: 'p', name: 'Paul Martin', email: 'paul@exemple-timecool.fr' }];
+      const r1 = C('le numéro de Hélène'), r2 = C('le numéro de ma mère'), r3 = C('le mail de Marc et Paul'), r4 = C('tu as le numéro du plombier ?'), r5 = C('donne-moi le numéro de Zoé');
+      ctx.contactsList.push({ id: 'mm', name: 'Maman', phone: '06 44' });
+      const r6 = C('le numéro de ma mère');
+      ctx.contactsList = garde;
+      verifie('2e passage, point 5 : « Hélène » gardé tel que tapé ; « ma mère » → la famille (Marie Dupont, à confirmer), puis la fiche « Maman » directement ; « Marc et Paul » → chacun ; « du plombier » → « plombier »',
+        r1 === 'Je ne trouve pas « Hélène » dans tes contacts.' && r2 === 'Je ne sais pas qui est ta mère dans tes contacts. Dans ta famille, j’ai :\n• Le numéro de Marie Dupont : 06 22.'
+        && r3 === 'Je ne trouve pas Marc dans tes contacts.\nL’email de Paul Martin : paul@exemple-timecool.fr.' && r4 === 'Je ne trouve pas « plombier » dans tes contacts.' && r5 === 'Le numéro de Zoé Lefèvre : 06 33.'
+        && r6 === 'Le numéro de Maman : 06 44.', [r1, r2, r3, r4, r5, r6].join(' | ')); }
+    { remettre(); ctx.charlyIA.history = []; await ctx.tcGererReglage('mets mes rappels 1h avant et la veille', ctx.tcDetecterReglage('mets mes rappels 1h avant et la veille'));
+      verifie('« mets mes rappels 1h avant et la veille » → « Je ne peux en mettre qu’un seul … Lequel je mets ? », rien ne change', /^Je ne peux en mettre qu’un seul pour tous tes rappels : .*Lequel je mets \?$/.test(dernier().content) && store.tc_rappel_delai === '60', dernier().content); }
 
     // Un lundi après-midi, « le dentiste de lundi » (#263, #267, #352).
     const garde = FIXE.getTime();

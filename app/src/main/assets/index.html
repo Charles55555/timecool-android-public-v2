@@ -22132,13 +22132,23 @@ function tcDetecterReglage(text) {
   const verbe = TC_REGLAGE_VERBE.test(norm);
   // Une demande d action, même en question (« tu peux mettre mes rappels la veille ? ») ; « mes rappels sont activés ? » n en est pas une.
   const imperatif = /^(stp |svp |charly )?(mets|met|remets|regle|passe|change|modifie|configure|fixe|programme|active|reactive|desactive|coupe|enleve|retire|arrete|supprime|bascule|allume|rallume|eteins)(\s|$)/.test(norm)
-    || /(^|\s)(je veux|je ne veux|je voudrais|j aimerais|tu peux|peux tu|tu pourrais|pourrais tu|plus de|je ne veux plus|je veux plus)(\s|$)/.test(norm);
+    || /^(stp |svp |charly )?plus (de |d )(rappels?|notifications?|notifs?|alertes?|sonneries?|son|mail|email)(\s|$)/.test(norm)
+    || /(^|\s)(je veux|je ne veux|je voudrais|j aimerais|tu peux|peux tu|tu pourrais|pourrais tu|je ne veux plus)(\s|$)/.test(norm);
   const ordre = imperatif || !question;
   // Un rappel pour UN rendez-vous (« mets un rappel la veille pour le dentiste », « le rappel du rdv de jeudi ») n'est pas le réglage.
   const unRdv = / (un|une|ce|cette) (rappel|alerte) /.test(n) || / pour (le|la|l|mon|ma|ce|cette|mes) (?!rdv |rendez vous |rendez-vous )/.test(n) || / (du|de mon|de ma|de ce) (rdv|rendez vous|dentiste|medecin|kine|reunion) /.test(n);
   const rappels = / (mes|les|tous mes|tous les|toutes mes|toutes les) (rappels|notifications|notifs|alertes) /.test(n) || / (le |du |des )?delais? (du |des |de |d )?(rappels?|notifications?) /.test(n)
     || / rappels? (par defaut|avant (mes |les |chaque )?(rdv|rendez vous)) /.test(n) || / previens moi .*(avant|de) (mes|tous mes|chaque|les) (rdv|rendez vous) /.test(n)
     || / (rappels|notifications|notifs) /.test(n);
+  // Un constat ou une plainte (« j'ai plus de rappels », « pourquoi j'ai plus de notifications ? », « je reçois plus de rappels ») n'est jamais un ordre :
+  // Charly dit l'état des réglages, il ne coupe rien (examen, mission 60).
+  const constat = /^(j ai|j avais|j en ai|je n ai|je n avais|je ne recois|je recois|je recevais|je ne vois|je vois|pourquoi|depuis|il n y a|y a plus|y a pas|on dirait|mes rappels ne|mes notifications ne|les rappels ne|les notifications ne|ca ne|c est normal|tu ne m|tu m as)(\s|$)/.test(norm)
+    || / (j ai plus|je n ai plus|je recois plus|je ne recois plus|je recois pas|je ne recois pas|marchent plus|marche plus|fonctionnent plus|sonnent plus|sonne plus|arrivent plus|n arrivent|sonnent pas|sonne pas|marchent pas|marche pas|fonctionnent pas|ne sonnent|ne marchent|trop de) /.test(n);
+  if (constat) return (!unRdv && / (rappels?|notifications?|notifs?|alertes?|sonneries?) /.test(n)) ? { quoi: 'etat' } : null;
+  // Un jour, une période, une personne, la messagerie (« supprime mes rappels de demain », « plus de notifications de Paul », « coupe mes rappels pendant
+  // les vacances », « arrête les notifications de la messagerie ») : pas le réglage de tous les rappels (examen, mission 60).
+  const portee = / (demain|apres demain|aujourd hui|ce soir|ce matin|cet apres midi|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|cette semaine|semaine prochaine|ce week end|week end|pendant|vacances|conges|jusqu|a partir|messagerie|messages|conversations?|groupe|groupes) /.test(n)
+    || / (rappels?|notifications?|notifs?|alertes?|sonneries?) (de|d|du|des) (?!mes |tous |toutes |rdv |rendez )/.test(n);
   // La question des valeurs possibles (« Quelles sont toutes les fréquences possibles ? », « quels délais pour les rappels ? »).
   if (question && !/ (sauvegardes?|recurren\w*|repet\w*|tous les jours|chaque semaine|rdv recurrent) /.test(n)) {
     const motsOptions = / (frequences?|delais|delais? possibles?|choix|options?|possibilites?|valeurs?) /.test(n);
@@ -22149,7 +22159,7 @@ function tcDetecterReglage(text) {
       && / (comment|quel|quels|quelle|c est quoi|actuel|actuellement|en ce moment|sont|est|marchent|fonctionnent) /.test(n)) return { quoi: 'etat' };
   }
   // Les sonneries (« coupe les sonneries », « mets mes rappels en silencieux », « remets le son des rappels »).
-  if ((/ (sonneries?) /.test(n) || / (le |les )?sons? (des|de mes|de les) (rappels|notifications|notifs|alertes) /.test(n) || (/ silencieux /.test(n) && (rappels || / (rappel|notification|timecool|charly) /.test(n))) || /^(coupe|enleve|remets|active|desactive) le son$/.test(norm)) && !unRdv && ordre) {
+  if ((/ (sonneries?) /.test(n) || / (le |les )?sons? (des|de mes|de les) (rappels|notifications|notifs|alertes) /.test(n) || (/ silencieux /.test(n) && (rappels || / (rappel|notification|timecool|charly) /.test(n))) || /^(coupe|enleve|remets|active|desactive) le son$/.test(norm)) && !unRdv && !portee && ordre) {
     const off = / (coupe|couper|desactive|desactiver|enleve|enlever|arrete|arreter|retire|retirer|supprime|supprimer|silencieux|sans son|sans sonnerie|plus de son|plus de sonnerie|plus de sonneries|mute|eteins|stop) /.test(n);
     const on = / (active|activer|reactive|remets|remettre|rallume|allume|avec le son|avec son|mets le son|remets le son) /.test(n);
     if (off !== on) return { quoi: 'sonneries', valeur: on };
@@ -22161,16 +22171,22 @@ function tcDetecterReglage(text) {
     if (ordre && (verbe || / aussi /.test(n))) return { quoi: 'email', valeur: !off };
   }
   // Le délai (« mets mes rappels la veille », « règle le délai du rappel sur 30 minutes », « mes rappels 2h avant »).
-  if (rappels && !unRdv) {
+  if (rappels && !unRdv && !portee) {
     const minutes = tcReglageDelaiLu(norm);
     if (minutes !== null && (imperatif || (!question && (verbe || /^(mes |les )?(rappels|notifications) /.test(norm))))) {
+      // « 1h avant et la veille » : deux délais, la page n'en garde qu'un ; Charly le dit et demande (examen, mission 60).
+      const parts = norm.split(' et ').map(tcReglageDelaiLu).filter(function (x) { return x !== null; });
+      if (parts.length > 1 && parts.some(function (x) { return x !== parts[0]; })) return { quoi: 'delai', deux: parts };
       const existe = (typeof TC_DELAIS_RAPPEL !== 'undefined' ? TC_DELAIS_RAPPEL : []).some(function (d) { return d.minutes === minutes; });
       return existe ? { quoi: 'delai', minutes: minutes } : { quoi: 'delai', absent: minutes };
     }
     // Activer / désactiver (« désactive mes rappels », « plus de rappels », « réactive mes notifications »).
     if (ordre) {
-      if (/ (desactive|desactiver|desactives|coupe|couper|arrete|arreter|enleve|enlever|retire|retirer|supprime|supprimer|stop|eteins|plus de|je ne veux plus|je veux plus|ne veux plus) /.test(n)) return { quoi: 'actifs', valeur: false };
-      if (/ (active|activer|actives|reactive|reactiver|remets|remettre|rallume|allume|mets en route|je veux) /.test(n)) return { quoi: 'actifs', valeur: true };
+      // Un ordre net : le verbe en tête (« désactive mes rappels »), « plus de rappels » seul, « je ne veux plus de rappels », « tu peux couper… ».
+      // « je veux plus de rappels » (en vouloir plus ?) reste ambigu : rien ici.
+      if (/^(stp |svp |charly )?(desactive|desactiver|coupe|couper|arrete|arreter|enleve|enlever|retire|retirer|supprime|supprimer|stop|eteins)(\s|$)/.test(norm) || /^(stp |svp )?plus (de |d )/.test(norm)
+        || / (je ne veux plus|ne veux plus aucun|je veux plus aucun|(tu peux|peux tu|tu pourrais|pourrais tu) (desactiver|couper|arreter|enlever|supprimer|retirer|eteindre)) /.test(n)) return { quoi: 'actifs', valeur: false };
+      if (/^(stp |svp |charly )?(active|activer|reactive|reactiver|remets|remettre|rallume|allume)(\s|$)/.test(norm) || / (tu peux|peux tu|tu pourrais|pourrais tu) (activer|reactiver|remettre|rallumer) /.test(n)) return { quoi: 'actifs', valeur: true };
     }
   }
   // Le thème (« mets le thème sombre », « passe en mode nuit », « mode clair »).
@@ -22246,6 +22262,10 @@ async function tcGererReglage(text, d, sansBulle) {
     return;
   }
   if (d.quoi === 'delai') {
+    if (d.deux) {
+      dire('Je ne peux en mettre qu’un seul pour tous tes rappels : ' + liste + '. Lequel je mets ?', 'question', { quoi: 'delai' });
+      return;
+    }
     if (d.absent !== undefined) {
       dire('Je ne peux pas mettre ' + (d.absent >= 1440 && d.absent % 1440 === 0 ? (d.absent / 1440) + ' jours avant' : d.absent >= 60 && d.absent % 60 === 0 ? (d.absent / 60) + ' heures avant' : d.absent + ' minutes avant') + ' : les rappels se règlent sur ' + liste + '. Lequel je mets ?', 'question', { quoi: 'delai' });
       return;
@@ -22334,16 +22354,36 @@ function tcReglageEnAttente() {
  * La réponse à « Lequel je mets ? » (ou à une liste de délais donnée juste avant par le modèle) : un délai de la page → réglé pour de vrai ;
  * « oui » seul → la liste reposée ; « non », « laisse » → rien ne change ; autre chose → la question tombe, le message suit son chemin.
  */
+/** Un délai dit seul (« la veille », « mets 30 minutes », « plutôt 1 heure avant stp ») : ses minutes, ou null (« 30 minutes plus tard », une phrase). */
+function tcReglageDelaiSeul(norm) {
+  const reste = String(norm || '').replace(/^((oui|ok|alors|plutot|mets|met|mets moi|mets les|mets le|je veux|je prends|prends|va pour|disons|pour|le|la|les|sur) )+/, '')
+    .replace(/( (stp|svp|merci|alors|s il te plait|charly))+$/, '').trim();
+  if (!/^(la veille|veille|aucun rappel|aucun|pas de rappel|\d{1,3} ?(min|mn|mins|minute|minutes|h|heure|heures)|une heure|un heure|deux heures|une demi heure|un quart d heure|cinq minutes|dix minutes|trente minutes|1 jour|un jour)( avant)?( le rdv| le rendez vous| mes rdv| mes rendez vous)?$/.test(reste)) return null;
+  return tcReglageDelaiLu(reste);
+}
+
+/** La dernière bulle de Charly listait-elle les délais de TOUS les rappels (la capture du 26/10), et pas ceux d'un rendez-vous ? */
+function tcReglageListeDuModele() {
+  const h = (typeof charlyIA !== 'undefined' && Array.isArray(charlyIA.history)) ? charlyIA.history : [];
+  // (la phrase tapée n'est pas encore dans l'historique : la dernière bulle est celle de Charly, ou rien.)
+  const m = h.length ? h[h.length - 1] : null;
+  if (!m || m.role === 'user') return false;
+  const n = ' ' + tcClasseNormaliser(String(m.content || '')) + ' ';
+  if (!/ (rappels|notifications) /.test(n)) return false;
+  if (/ (ce rendez vous|ce rdv|cette reunion|pour le|pour la|pour ton|pour ta|pour ce|pour cette|sera envoye|combien de temps|a quelle heure|quelle heure|duree|demain|aujourd hui) /.test(n)) return false;
+  const valeurs = n.match(/ (la veille|\d{1,3} ?(min|mn|minutes?|h|heures?)|une heure|deux heures|une demi heure)(?= )/g) || [];
+  return valeurs.length >= 3;
+}
+
 async function tcRepondreReglage(text) {
   const m = tcReglageEnAttente();
   const norm = tcClasseNormaliser(text);
   if (!norm) return false;
-  const court = norm.split(' ').length <= 6;
-  const minutes = court ? tcReglageDelaiLu(norm) : null;
+  const minutes = tcReglageDelaiSeul(norm);
   if (!m) {
-    // Le modèle a parlé des rappels juste avant (capture du 26/10 : « La veille » après sa liste) : un délai seul se règle pour de vrai.
-    if (minutes === null || !tcReglageContexteRappel() || norm.split(' ').length > 4) return false;
-    if (/(^|\s)(rdv|rendez|dentiste|reunion|ajoute|cree|note|annule|decale|deplace)(\s|$)/.test(norm)) return false;
+    // Le modèle venait de lister les délais de tous les rappels (capture du 26/10 : « La veille » après sa liste) : un délai seul se règle pour de vrai.
+    // Jamais après une question sur UN rendez-vous, une durée ou un décalage (examen, mission 60).
+    if (minutes === null || !tcReglageListeDuModele()) return false;
     const existe = (typeof TC_DELAIS_RAPPEL !== 'undefined' ? TC_DELAIS_RAPPEL : []).some(function (d) { return d.minutes === minutes; });
     await tcGererReglage(text, existe ? { quoi: 'delai', minutes: minutes } : { quoi: 'delai', absent: minutes });
     return true;
@@ -22374,50 +22414,59 @@ async function tcRepondreReglage(text) {
 
 /* ─── 2. Le filet : jamais « c'est appliqué » sans rien changer ─── */
 
-/* Les réglages dont le modèle pourrait dire qu'il les a changés : le mot, et la vérité à dire à la place. */
+/* Les réglages dont le modèle pourrait dire qu'il les a changés : le mot, et la vérité à dire à la place (une fonction : lue au moment de répondre). */
 const TC_FAUX_REGLAGES = [
-  [/(^|\s)(rappels?|notifications?|notifs?|alertes?)(?=\s|$)/, 'Je n’ai rien changé à tes rappels. Dis-moi par exemple « mets mes rappels la veille » ou « désactive mes rappels », et je le fais pour de vrai (ou Paramètres > Notifications).'],
-  [/(^|\s)(sonneries?|silencieux|vibrations?)(?=\s|$)/, 'Je n’ai rien changé aux sonneries. Dis-moi « coupe les sonneries » ou « remets les sonneries », et je le fais pour de vrai (ou Paramètres > Notifications > Sonneries).'],
-  [/(^|\s)(theme|mode sombre|mode clair|mode nuit|dark mode)(?=\s|$)/, 'Je n’ai rien changé à l’affichage. Dis-moi « mets le thème sombre » ou « mets le thème clair », et je le fais pour de vrai (ou Paramètres > Affichage > Thème).'],
-  [/(^|\s)(langue|anglais|espagnol|allemand|italien|english)(?=\s|$)/, 'Je n’ai rien changé à la langue. Dis-moi par exemple « passe l’application en anglais », et je le fais pour de vrai (ou Paramètres > Langue & Région).'],
-  [/(^|\s)(format (des |de )?dates?|fuseau( horaire)?|message d absence|repondeur|plage horaire|premier jour de la semaine|mises? a jour automatiques?|sauvegardes? automatiques?|mot de passe)(?=\s|$)/, 'Je n’ai rien changé : ce réglage se fait dans les Paramètres, je ne peux pas encore le faire d’ici.'],
-  [/(^|\s)(reglages?|parametres?|preferences?)(?=\s|$)/, 'Je n’ai rien changé à tes réglages : dis-moi lequel (rappels, sonneries, thème, langue), et je le fais pour de vrai ou je te dis où le faire.']
+  [/(^|\s)(rappels?|notifications?|notifs?|alertes?)(?=\s|$)/, function () { return 'Je n’ai rien changé à tes rappels. Je peux les mettre ' + tcReglageListeDelais() + ' : dis-moi lequel, ou « désactive mes rappels », et je le fais pour de vrai.'; }],
+  [/(^|\s)(sonneries?|silencieux|vibrations?)(?=\s|$)/, function () { return 'Je n’ai rien changé aux sonneries. Dis-moi « coupe les sonneries » ou « remets les sonneries », et je le fais pour de vrai (ou Paramètres > Notifications > Sonneries).'; }],
+  [/(^|\s)(theme|mode sombre|mode clair|mode nuit|dark mode)(?=\s|$)/, function () { return 'Je n’ai rien changé à l’affichage. Dis-moi « mets le thème sombre » ou « mets le thème clair », et je le fais pour de vrai (ou Paramètres > Affichage > Thème).'; }],
+  [/(^|\s)(langue|anglais|espagnol|allemand|italien|english)(?=\s|$)/, function () { return 'Je n’ai rien changé à la langue. Dis-moi par exemple « passe l’application en anglais », et je le fais pour de vrai (ou Paramètres > Langue & Région).'; }],
+  [/(^|\s)(format (des |de )?dates?|fuseau( horaire)?|message d absence|repondeur|plage horaire|premier jour de la semaine|mises? a jour automatiques?|sauvegardes? automatiques?|mot de passe)(?=\s|$)/, function () { return 'Je n’ai rien changé : ce réglage se fait dans les Paramètres, je ne peux pas encore le faire d’ici.'; }],
+  [/(^|\s)(reglages?|parametres?|preferences?)(?=\s|$)/, function () { return 'Je n’ai rien changé à tes réglages : dis-moi lequel (rappels, sonneries, thème, langue), et je le fais pour de vrai ou je te dis où le faire.'; }]
 ];
 
 /**
- * Une réponse du modèle, sans bloc, qui affirme avoir changé un réglage (« Noté, je règle tes rappels sur la veille. C'est appliqué ! »,
- * « J'ai activé le mode sombre », « Tes notifications sont désactivées ») : rien n'a été fait par le code, elle est remplacée par la vérité.
- * Jamais une question, une condition (« si tu veux que je règle… »), ni une phrase qui décrit sans affirmer d'action.
- * Hors réglage, « c'est appliqué / activé / enregistré / modifié / mis à jour » sans rien de fait est aussi remplacé (sauf un déplacement,
- * que la page exécute juste après la réponse).
+ * Une réponse du modèle, sans bloc, qui AFFIRME avoir changé un réglage (« Noté, je règle tes rappels sur la veille. C'est appliqué ! », « J'ai activé
+ * le mode sombre », « Tes notifications sont maintenant désactivées ») alors que le code n'a rien fait : seules les phrases qui mentent sont retirées,
+ * le reste de la réponse est gardé, et la vérité (avec le moyen de le faire) est ajoutée. Un état décrit (« tes rappels sont activés 1 heure avant »,
+ * « le mode sombre est activé le soir ») n'est pas une action ; une question, une condition (« si tu veux que je règle… ») non plus.
+ * Hors réglage, « c'est appliqué / activé / enregistré / mis à jour » sans rien de fait est aussi retiré (sauf un déplacement, que la page exécute
+ * juste après la réponse).
  */
 function tcSansFauxReglage(reply, text) {
   const r = String(reply || '');
   if (!r || /\[AGENDA\]/.test(r)) return reply;
-  const phrases = r.replace(/([.!?])\s+/g, '$1\n').split(/\n+/).filter(Boolean);
-  const FORT = /(^|\s)(c est (fait|applique|appliquee|regle|reglee|active|activee|desactive|desactivee|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|mise a jour|programme|programmee|configure|configuree|en place|coupe|coupee|pris en compte)|je (te |t |l |les |la |le )?(regle|applique|active|desactive|enregistre|modifie|change|programme|configure|coupe|passe|mets|bascule)|j ai (bien )?(regle|applique|active|desactive|enregistre|modifie|change|mis|programme|configure|coupe|passe|bascule)|(est|sont) (maintenant |desormais |bien )?(regle|reglee|reglees|reges|regles|applique|appliquee|appliques|active|activee|actives|activees|desactive|desactivee|desactives|desactivees|enregistre|enregistree|enregistres|modifie|modifiee|modifies|configure|configuree|configures|programme|programmes|coupe|coupee|coupes|coupees|en place|en silencieux)|(a|ont) (bien )?ete (regle|reglee|regles|applique|appliquee|active|activee|actives|desactive|desactivee|desactives|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|configure|programme|coupe|coupees))(?=\s|$)/;
+  const phrases = r.replace(/([.!?])\s+/g, '$1\n').split(/\n+/).filter(function (p) { return p.trim(); });
+  const FORT = /(^|\s)(c est (fait|applique|appliquee|regle|reglee|active|activee|desactive|desactivee|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|mise a jour|programme|programmee|configure|configuree|en place|coupe|coupee|pris en compte)|je (te |t |l |les |la |le )?(regle|applique|active|desactive|enregistre|modifie|change|programme|configure|coupe|bascule)|j ai (bien )?(regle|applique|active|desactive|enregistre|modifie|change|mis|programme|configure|coupe|passe|bascule)|(est|sont) (maintenant|desormais) (bien )?(regle|reglee|reglees|regles|applique|appliquee|appliques|active|activee|actives|activees|desactive|desactivee|desactives|desactivees|enregistre|enregistree|enregistres|modifie|modifiee|modifies|configure|configuree|configures|programme|programmes|coupe|coupee|coupes|coupees|en place|en silencieux|sur|a|en)|(a|ont) (bien )?ete (regle|reglee|regles|applique|appliquee|active|activee|actives|desactive|desactivee|desactives|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|configure|programme|coupe|coupees))(?=\s|$)/;
   const FAIBLE = /(^|\s)(c est note|note|bien note|c est bon|c est ok|parfait c est bon)(?=\s|$)/;
   const CONDITION = /(^|\s)(si tu|si c|si besoin|que je|veux tu|tu veux|souhaites tu|tu souhaites|dois je|faut il|une fois que|des que|quand tu|lorsque|tu peux|pour (regler|activer|desactiver|changer|modifier|couper)|il suffit|va dans|vas dans|depuis les parametres|dans les parametres|dans parametres)(?=\s|$)/;
-  const normR = tcClasseNormaliser(r);
-  const sujet = TC_FAUX_REGLAGES.find(function (s) { return s[0].test(normR); });
-  const sansQuestion = !/\?/.test(r);
-  const affirme = phrases.some(function (p) {
-    if (/\?/.test(p)) return false;
-    const np = tcClasseNormaliser(p);
-    if (CONDITION.test(np)) return false;
-    if (FORT.test(np)) return true;
-    // « Noté ! », « C'est bon » seuls : une action affirmée seulement quand la phrase parle du réglage, ou que toute la réponse n'est que ça.
-    return FAIBLE.test(np) && sujet && (sujet[0].test(np) || sansQuestion);
-  });
-  if (!affirme) return reply;
-  if (sujet) return sujet[1];
-  // Hors réglage : un déplacement est exécuté par la page juste après (tcTraiterDeplacement) ; une affirmation forte seule reste un mensonge.
-  try { if (typeof tcEstDeplacement === 'function' && tcEstDeplacement(text || '')) return reply; } catch (e) {}
-  const forteHors = phrases.some(function (p) {
-    const np = tcClasseNormaliser(p);
-    return !/\?/.test(p) && !CONDITION.test(np) && /(^|\s)(c est (applique|appliquee|active|activee|desactive|desactivee|enregistre|enregistree|mis a jour|mise a jour|configure|configuree|en place|pris en compte)|j ai (bien )?(applique|active|desactive|enregistre|configure|mis a jour))(?=\s|$)/.test(np);
-  });
-  return forteHors ? 'Je n’ai rien changé de moi-même : je ne sais pas faire ça d’ici. Dis-moi précisément ce que tu veux (un rendez-vous, un rappel, un réglage), et je le fais ou je te dis où le faire.' : reply;
+  const sujetDe = function (np) { return TC_FAUX_REGLAGES.find(function (s) { return s[0].test(np); }) || null; };
+  const sujetReponse = sujetDe(tcClasseNormaliser(r));
+  const ouverte = function (p, np) { return !/\?/.test(p) && !CONDITION.test(np); };
+  // Les phrases qui affirment un réglage fait : une affirmation forte dans une réponse qui parle d'un réglage.
+  const fortes = sujetReponse ? phrases.filter(function (p) { const np = tcClasseNormaliser(p); return ouverte(p, np) && FORT.test(np); }) : [];
+  // « Noté ! », « C'est bon » : un mensonge seulement s'ils parlent eux-mêmes du réglage, ou s'ils accompagnent une affirmation forte.
+  const faibles = sujetReponse ? phrases.filter(function (p) { const np = tcClasseNormaliser(p); return ouverte(p, np) && !FORT.test(np) && FAIBLE.test(np) && (sujetDe(np) || fortes.length); }) : [];
+  let menteuses = fortes.concat(faibles);
+  let verite = '';
+  if (menteuses.length) {
+    const sujet = menteuses.map(function (p) { return sujetDe(tcClasseNormaliser(p)); }).find(Boolean) || sujetReponse;
+    verite = sujet[1]();
+  } else {
+    // Hors réglage : un déplacement est exécuté par la page juste après (tcTraiterDeplacement) ; une affirmation forte reste un mensonge.
+    try { if (typeof tcEstDeplacement === 'function' && tcEstDeplacement(text || '')) return reply; } catch (e) {}
+    menteuses = phrases.filter(function (p) {
+      const np = tcClasseNormaliser(p);
+      return ouverte(p, np) && /(^|\s)(c est (applique|appliquee|active|activee|desactive|desactivee|enregistre|enregistree|mis a jour|mise a jour|configure|configuree|en place|pris en compte)|j ai (bien )?(applique|active|desactive|enregistre|configure|mis a jour))(?=\s|$)/.test(np);
+    });
+    if (!menteuses.length) return reply;
+    verite = 'Je n’ai rien changé de moi-même : je ne sais pas faire ça d’ici. Dis-moi précisément ce que tu veux (un rendez-vous, un rappel, un réglage), et je le fais ou je te dis où le faire.';
+  }
+  // Seules les phrases qui mentent partent ; le reste (« Tu as 3 rendez-vous demain. ») est gardé.
+  let reste = r;
+  menteuses.forEach(function (p) { reste = reste.replace(p, ' '); });
+  reste = reste.replace(/[ \t]{2,}/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!/[a-zà-ÿ0-9]/i.test(reste)) reste = '';
+  return reste ? reste + '\n' + verite : verite;
 }
 
 /* ─── 3. La réponse de quelqu'un à MA demande (passage 15) ─── */
@@ -22531,10 +22580,27 @@ function tcRepondreAReponse(text, type, reponses) {
     while (tcISO(d) <= evRef.date) d.setDate(d.getDate() + 7);
     lui.date = tcISO(d);
   }
+  // Un moment refusé (« pas cette semaine », « pas mardi », « sauf demain ») n'est jamais la proposition (examen, mission 60).
+  const NIE = /(^|\s)(pas|non pas|sauf|plutot pas|surtout pas)\s+(le |la |ce |cette )?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres demain|aujourd hui|ce soir|ce matin|cette semaine|la semaine prochaine|semaine prochaine|ce week end|week end|midi|matin|soir|apres midi|\d{1,2} ?h(\d{2})?)(\s+\d{1,2} ?h(\d{2})?)?(?=\s|$)/g;
+  const nie = norm.search(NIE) > -1;
+  const ouiMais = /^(oui|ok|okay|ouais|d accord|daccord|ca marche|c est bon) (mais|sauf)(\s|$)/.test(norm) || /(^|\s)mais (pas|plutot pas|non)(\s|$)/.test(norm);
   const coupe = norm.match(/(?:^|\s)(?:propose lui|propose|proposes|plutot|a la place|demande lui|mais)(?:\s|$)(.*)$/);
-  const moi = coupe ? tcMomentDuTexte(coupe[1]) : { date: null, debut: null };
+  const moi = coupe ? tcMomentDuTexte(coupe[1].replace(NIE, ' ')) : { date: null, debut: null };
+  const nouveauMoment = !!coupe && (!!moi.date || moi.debut !== null);
   let message = null, apres = null, suite = '';
-  if (coupe && (moi.date || moi.debut !== null)) {
+  // « Réponds à Hugo que je suis malade », « dis-lui que c'est bon pour moi » : le texte donné est le message (examen, mission 60).
+  const mQue = String(text || '').match(/(?:r[ée]ponds?|dis|[ée]cris)(?:[- ]lui)?(?:\s+[àa]\s+[^\s,]+)?\s*,?\s+(?:que\s+|qu['’]\s*)(.+)$/i);
+  if (mQue && mQue[1].trim().length > 1) {
+    const t = mQue[1].trim().replace(/\s*[.!]*$/, '');
+    message = t.charAt(0).toUpperCase() + t.slice(1) + (/[?]$/.test(t) ? '' : '.');
+  } else if ((ouiMais || nie) && !nouveauMoment) {
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: cite(r) + ' D’accord, pas ce moment-là. Quel autre moment je lui propose ? (par exemple « propose-lui jeudi 10h »)' });
+    renderCharlyChat();
+    return true;
+  }
+  if (message) {
+    // (le texte dicté part tel quel, relu ci-dessous)
+  } else if (nouveauMoment) {
     const date = moi.date || lui.date;
     const debut = moi.debut !== null ? moi.debut : (moi.date ? null : lui.debut);
     message = 'Je te propose plutôt ' + tcMomentEnMots(date, debut) + ', ça te va ?';
@@ -22608,25 +22674,49 @@ function tcDetecterCoordonnees(text) {
   if (!nom || /(^|\s)(rdv|rendez|vous|semaine|agenda|reunion|telephone|compte|charly|timecool|l application|appli|support|assistance|urgence|urgences|police|pompiers|samu|ma banque|la banque|la mairie|la poste)(\s|$)/.test(nom)) return null;
   if (nom.split(' ').length > 3) return null;
   const champ = /mail|courriel/.test(m[1]) ? 'email' : (/coordonnees/.test(m[1]) ? 'tout' : 'phone');
-  return { champ: champ, nom: nom };
+  // Le nom tel qu'il a été tapé (« Hélène », pas « Helene ») : les derniers mots de la phrase, sans la politesse ni « d' ».
+  const motsBruts = String(text || '').trim().replace(/[?!.…\s]+$/, '').replace(/(\s+(stp|svp|s['’]il te pla[iî]t|merci|charly))+$/i, '').split(/\s+/);
+  const affiche = motsBruts.slice(-nom.split(' ').length).join(' ').replace(/^(d|l)['’]/i, '');
+  return { champ: champ, nom: nom, affiche: affiche || nom };
 }
 
 /** La réponse, lue dans la fiche (jamais « je ne peux pas accéder à tes contacts »). */
 function tcGererCoordonnees(text, d) {
   tcPousserMessageUtilisateur(text);
-  let trouves = [];
-  try { trouves = tcContactsParMots(typeof tcMotsUtiles === 'function' ? tcMotsUtiles(d.nom) : d.nom.split(' ')); } catch (e) { trouves = []; }
-  try { if (typeof tcClasserContacts === 'function') trouves = tcClasserContacts(trouves); } catch (e) {}
-  if (!Array.isArray(trouves)) trouves = [];
-  const nomAffiche = d.nom.split(' ').map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
   const dire = function (contenu) { charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: contenu }); renderCharlyChat(); };
-  if (!trouves.length) { dire('Je ne trouve pas ' + nomAffiche + ' dans tes contacts.'); return; }
+  const chercher = function (nom) {
+    let t = [];
+    try { t = tcContactsParMots(typeof tcMotsUtiles === 'function' ? tcMotsUtiles(nom) : nom.split(' ')); } catch (e) { t = []; }
+    try { if (typeof tcClasserContacts === 'function') t = tcClasserContacts(t); } catch (e) {}
+    return Array.isArray(t) ? t : [];
+  };
   const ligne = function (c) {
     const tel = String(c.phone || '').trim(), mail = String(c.email || '').trim();
     if (d.champ === 'email') return mail ? 'L’email de ' + c.name + ' : ' + mail + '.' : 'Je n’ai pas d’email dans la fiche de ' + c.name + (tel ? ' ; son numéro : ' + tel + '.' : '.');
     if (d.champ === 'tout') return (tel || mail) ? c.name + ' : ' + [tel ? 'téléphone ' + tel : '', mail ? 'email ' + mail : ''].filter(Boolean).join(', ') + '.' : 'Je n’ai ni numéro ni email dans la fiche de ' + c.name + '.';
     return tel ? 'Le numéro de ' + c.name + ' : ' + tel + '.' : 'Je n’ai pas de numéro dans la fiche de ' + c.name + (mail ? ' ; son email : ' + mail + '.' : '.');
   };
+  // « ma mère », « mon père » : le lien de famille de la mission 59 (la fiche nommée ainsi, sinon la catégorie Famille, dite comme telle).
+  const lien = (typeof TC_MSG_LIENS !== 'undefined') ? TC_MSG_LIENS.find(function (l) { return l[0].test(' ' + d.nom + ' ') && d.nom.split(' ').length <= 3; }) : null;
+  if (lien && typeof tcContactsDuLien === 'function') {
+    const res = tcContactsDuLien(lien[2]);
+    if (!res.liste.length) { dire('Je ne trouve pas ' + lien[1] + ' dans tes contacts : dis-moi son nom, ou classe sa fiche dans « Ma famille ».'); return; }
+    if (res.parNom && res.liste.length === 1) { dire(ligne(res.liste[0])); return; }
+    dire('Je ne sais pas qui est ' + lien[1] + ' dans tes contacts. ' + 'Dans ta famille, j’ai :\n• ' + res.liste.slice(0, 5).map(ligne).join('\n• '));
+    return;
+  }
+  // « le mail de Marc et Paul » : chacun.
+  const noms = d.nom.split(' et ').map(function (x) { return x.trim(); }).filter(Boolean);
+  const affiches = String(d.affiche || d.nom).split(/\s+et\s+/i);
+  if (noms.length > 1) {
+    dire(noms.map(function (nom, i) {
+      const t = chercher(nom);
+      return t.length ? t.slice(0, 3).map(ligne).join(' ') : 'Je ne trouve pas ' + (affiches[i] || nom) + ' dans tes contacts.';
+    }).join('\n'));
+    return;
+  }
+  const trouves = chercher(d.nom);
+  if (!trouves.length) { dire('Je ne trouve pas « ' + (d.affiche || d.nom) + ' » dans tes contacts.'); return; }
   if (trouves.length === 1) { dire(ligne(trouves[0])); return; }
   dire('Tu as ' + trouves.length + ' contacts à ce nom :\n' + trouves.slice(0, 5).map(function (c) { return '• ' + ligne(c); }).join('\n'));
 }
