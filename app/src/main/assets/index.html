@@ -22068,7 +22068,7 @@ const TC_REGLAGES_AILLEURS = [
   [/(^|\s)(mot de passe|mdp)(?=\s|$)/, 'Je ne peux pas le faire d’ici : Paramètres > Compte & sécurité > Modifier mon mot de passe.']
 ];
 
-const TC_REGLAGE_VERBE = /(^|\s)(mets|met|mettre|remets|remet|remettre|regle|regler|regles|passe|passer|change|changer|changes|modifie|modifier|configure|configurer|fixe|fixer|programme|programmer|active|activer|actives|reactive|reactiver|desactive|desactiver|desactives|coupe|couper|enleve|enlever|retire|retirer|arrete|arreter|supprime|supprimer|bascule|basculer|allume|rallume|eteins|je veux|je voudrais|j aimerais|je prefere|tu peux|peux tu|fais|fait|plus de|sans|stop)(?=\s|$)/;
+const TC_REGLAGE_VERBE = /(^|\s)(mets|met|mettre|remets|remet|remettre|regle|regler|regles|passe|passer|change|changer|changes|modifie|modifier|configure|configurer|fixe|fixer|programme|programmer|active|activer|actives|reactive|reactiver|desactive|desactiver|desactives|coupe|couper|enleve|enlever|retire|retirer|arrete|arreter|supprime|supprimer|bascule|basculer|allume|rallume|eteins|je veux|je voudrais|j aimerais|je prefere|je prefererais|ce serait mieux|ce serait bien|plutot|tu peux|peux tu|fais|fait|plus de|sans|stop)(?=\s|$)/;
 
 /** Le délai de rappel dit dans un texte normalisé, en minutes (0 = aucun rappel), ou null. */
 function tcReglageDelaiLu(norm) {
@@ -22136,7 +22136,7 @@ function tcDetecterReglage(text) {
     || /(^|\s)(je veux|je ne veux|je voudrais|j aimerais|tu peux|peux tu|tu pourrais|pourrais tu|je ne veux plus)(\s|$)/.test(norm);
   const ordre = imperatif || !question;
   // Un rappel pour UN rendez-vous (« mets un rappel la veille pour le dentiste », « le rappel du rdv de jeudi ») n'est pas le réglage.
-  const unRdv = / (un|une|ce|cette) (rappel|alerte) /.test(n) || / pour (le|la|l|mon|ma|ce|cette|mes) (?!rdv |rendez vous |rendez-vous )/.test(n) || / (du|de mon|de ma|de ce) (rdv|rendez vous|dentiste|medecin|kine|reunion) /.test(n);
+  const unRdv = / (un|une|ce|cette) (rappel|alerte) /.test(n) || / pour (le|la|l|mon|ma|ce|cette|mes) (?!rdv |rendez vous |rendez-vous |rappels |notifications |notifs |alertes |travail |boulot |pro |perso )/.test(n) || / (du|de mon|de ma|de ce) (rdv|rendez vous|dentiste|medecin|kine|reunion) /.test(n);
   const rappels = / (mes|les|tous mes|tous les|toutes mes|toutes les) (rappels|notifications|notifs|alertes) /.test(n) || / (le |du |des )?delais? (du |des |de |d )?(rappels?|notifications?) /.test(n)
     || / rappels? (par defaut|avant (mes |les |chaque )?(rdv|rendez vous)) /.test(n) || / previens moi .*(avant|de) (mes|tous mes|chaque|les) (rdv|rendez vous) /.test(n)
     || / (rappels|notifications|notifs) /.test(n);
@@ -22149,9 +22149,14 @@ function tcDetecterReglage(text) {
   // les vacances », « arrête les notifications de la messagerie ») : pas le réglage de tous les rappels (examen, mission 60).
   const portee = / (demain|apres demain|aujourd hui|ce soir|ce matin|cet apres midi|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|cette semaine|semaine prochaine|ce week end|week end|pendant|vacances|conges|jusqu|a partir|messagerie|messages|conversations?|groupe|groupes) /.test(n)
     || / (rappels?|notifications?|notifs?|alertes?|sonneries?) (de|d|du|des) (?!mes |tous |toutes |rdv |rendez )/.test(n);
+  // Une partie des rendez-vous (« la veille pour les rdv pro », « sauf le dentiste », « seulement pour le travail ») : la page n'a qu'un délai pour tous.
+  const partie = / (sauf|excepte|hormis|a part|seulement|uniquement|que pour|juste pour) /.test(n) || / pour (les|mes) (rdv|rendez vous) (?!$)\S/.test(n)
+    || / pour (le|la|l|les|mon|ma|mes) (travail|boulot|pro|perso|professionnels?|personnels?|famille|medecin|medecins|clients?|reunions?) /.test(n) || / (rdv|rendez vous) (pro|perso|professionnels?|personnels?|medicaux|de travail) /.test(n);
   // La question des valeurs possibles (« Quelles sont toutes les fréquences possibles ? », « quels délais pour les rappels ? »).
   if (question && !/ (sauvegardes?|recurren\w*|repet\w*|tous les jours|chaque semaine|rdv recurrent) /.test(n)) {
-    const motsOptions = / (frequences?|delais|delais? possibles?|choix|options?|possibilites?|valeurs?) /.test(n);
+    // (« quelles options pour le restaurant ? », « … pour mon abonnement ? » : un autre sujet, jamais les délais de rappel.)
+    const autreSujet = / pour (le|la|l|les|mon|ma|mes|un|une|ce|cette) (?!rappels? |notifications? |notifs? |alertes? )/.test(n);
+    const motsOptions = !autreSujet && / (frequences?|delais|delais? possibles?|choix|options?|possibilites?|valeurs?) /.test(n);
     if (motsOptions && (rappels || / (rappel|frequences?|delais?) /.test(n) || tcReglageContexteRappel()) && tcReglageDelaiLu(norm) === null) return { quoi: 'options' };
     if (/ combien de temps avant /.test(n) && / (previen|previens|prevenir|rappel|rappels|notif) /.test(n)) return { quoi: 'options' };
     // Le réglage en place (« mes rappels sont activés ? », « c'est quoi mon délai de rappel ? ») : lu dans la page, jamais deviné.
@@ -22174,6 +22179,7 @@ function tcDetecterReglage(text) {
   if (rappels && !unRdv && !portee) {
     const minutes = tcReglageDelaiLu(norm);
     if (minutes !== null && (imperatif || (!question && (verbe || /^(mes |les )?(rappels|notifications) /.test(norm))))) {
+      if (partie) return { quoi: 'delai', partie: minutes };
       // « 1h avant et la veille » : deux délais, la page n'en garde qu'un ; Charly le dit et demande (examen, mission 60).
       const parts = norm.split(' et ').map(tcReglageDelaiLu).filter(function (x) { return x !== null; });
       if (parts.length > 1 && parts.some(function (x) { return x !== parts[0]; })) return { quoi: 'delai', deux: parts };
@@ -22262,6 +22268,10 @@ async function tcGererReglage(text, d, sansBulle) {
     return;
   }
   if (d.quoi === 'delai') {
+    if (d.partie !== undefined) {
+      dire('Je ne peux régler qu’un seul délai, le même pour tous tes rappels (en ce moment : ' + tcDelaiRappelTexte().toLowerCase() + '). Si tu le veux pour tous, dis-moi « mets mes rappels ' + (d.partie === 1440 ? 'la veille' : tcReglageDelaiPhrase(d.partie).replace(/ le rendez-vous$/, '')) + ' ».');
+      return;
+    }
     if (d.deux) {
       dire('Je ne peux en mettre qu’un seul pour tous tes rappels : ' + liste + '. Lequel je mets ?', 'question', { quoi: 'delai' });
       return;
@@ -22436,7 +22446,7 @@ function tcSansFauxReglage(reply, text) {
   const r = String(reply || '');
   if (!r || /\[AGENDA\]/.test(r)) return reply;
   const phrases = r.replace(/([.!?])\s+/g, '$1\n').split(/\n+/).filter(function (p) { return p.trim(); });
-  const FORT = /(^|\s)(c est (fait|applique|appliquee|regle|reglee|active|activee|desactive|desactivee|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|mise a jour|programme|programmee|configure|configuree|en place|coupe|coupee|pris en compte)|je (te |t |l |les |la |le )?(regle|applique|active|desactive|enregistre|modifie|change|programme|configure|coupe|bascule)|j ai (bien )?(regle|applique|active|desactive|enregistre|modifie|change|mis|programme|configure|coupe|passe|bascule)|(est|sont) (maintenant|desormais) (bien )?(regle|reglee|reglees|regles|applique|appliquee|appliques|active|activee|actives|activees|desactive|desactivee|desactives|desactivees|enregistre|enregistree|enregistres|modifie|modifiee|modifies|configure|configuree|configures|programme|programmes|coupe|coupee|coupes|coupees|en place|en silencieux|sur|a|en)|(a|ont) (bien )?ete (regle|reglee|regles|applique|appliquee|active|activee|actives|desactive|desactivee|desactives|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|configure|programme|coupe|coupees))(?=\s|$)/;
+  const FORT = /(^|\s)(c est (fait|applique|appliquee|regle|reglee|active|activee|desactive|desactivee|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|mise a jour|programme|programmee|configure|configuree|en place|coupe|coupee|pris en compte)|je (te |t |l |les |la |le )?(regle|applique|active|desactive|enregistre|modifie|change|programme|configure|coupe|bascule)|j ai (bien )?(regle|applique|active|desactive|enregistre|modifie|change|mis|programme|configure|coupe|passe|bascule)|(est|sont) (maintenant|desormais) (bien )?(regle|reglee|reglees|regles|applique|appliquee|appliques|active|activee|actives|activees|desactive|desactivee|desactives|desactivees|enregistre|enregistree|enregistres|modifie|modifiee|modifies|configure|configuree|configures|programme|programmes|coupe|coupee|coupes|coupees|en place|en silencieux|sur|a|en)|(est|sont) (bien )?(regle|reglee|regles|reglees|programme|programmee|programmes|programmees|configure|configuree|configures|mis|mise|mises|passe|passes|passees) (sur|a|pour) (la veille|\d+|une|un|deux|cinq|dix|trente)|(a|ont) (bien )?ete (regle|reglee|regles|applique|appliquee|active|activee|actives|desactive|desactivee|desactives|enregistre|enregistree|modifie|modifiee|change|changee|mis a jour|configure|programme|coupe|coupees))(?=\s|$)/;
   const FAIBLE = /(^|\s)(c est note|note|bien note|c est bon|c est ok|parfait c est bon)(?=\s|$)/;
   const CONDITION = /(^|\s)(si tu|si c|si besoin|que je|veux tu|tu veux|souhaites tu|tu souhaites|dois je|faut il|une fois que|des que|quand tu|lorsque|tu peux|pour (regler|activer|desactiver|changer|modifier|couper)|il suffit|va dans|vas dans|depuis les parametres|dans les parametres|dans parametres)(?=\s|$)/;
   const sujetDe = function (np) { return TC_FAUX_REGLAGES.find(function (s) { return s[0].test(np); }) || null; };
@@ -22583,8 +22593,11 @@ function tcRepondreAReponse(text, type, reponses) {
   // Un moment refusé (« pas cette semaine », « pas mardi », « sauf demain ») n'est jamais la proposition (examen, mission 60).
   const NIE = /(^|\s)(pas|non pas|sauf|plutot pas|surtout pas)\s+(le |la |ce |cette )?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres demain|aujourd hui|ce soir|ce matin|cette semaine|la semaine prochaine|semaine prochaine|ce week end|week end|midi|matin|soir|apres midi|\d{1,2} ?h(\d{2})?)(\s+\d{1,2} ?h(\d{2})?)?(?=\s|$)/g;
   const nie = norm.search(NIE) > -1;
-  const ouiMais = /^(oui|ok|okay|ouais|d accord|daccord|ca marche|c est bon) (mais|sauf)(\s|$)/.test(norm) || /(^|\s)mais (pas|plutot pas|non)(\s|$)/.test(norm);
-  const coupe = norm.match(/(?:^|\s)(?:propose lui|propose|proposes|plutot|a la place|demande lui|mais)(?:\s|$)(.*)$/);
+  // « oui mais pas… », « ok sauf… » : une réserve sur le moment ; « oui, mais préviens-le que… » reste un oui (examen, mission 60).
+  const ouiMais = /^(oui|ok|okay|ouais|d accord|daccord|ca marche|c est bon) (mais (pas|plutot pas|non|jamais)|sauf)(\s|$)/.test(norm) || /(^|\s)mais (pas|plutot pas|non)(\s|$)/.test(norm);
+  // « mardi non, jeudi oui » : le moment après le « non » est la proposition.
+  const nonOui = norm.match(/(?:^|\s)non (.+?) oui$/);
+  const coupe = norm.match(/(?:^|\s)(?:propose lui|propose|proposes|plutot|a la place|demande lui|mais)(?:\s|$)(.*)$/) || (nonOui ? [nonOui[0], nonOui[1]] : null);
   const moi = coupe ? tcMomentDuTexte(coupe[1].replace(NIE, ' ')) : { date: null, debut: null };
   const nouveauMoment = !!coupe && (!!moi.date || moi.debut !== null);
   let message = null, apres = null, suite = '';
@@ -22604,7 +22617,9 @@ function tcRepondreAReponse(text, type, reponses) {
     const date = moi.date || lui.date;
     const debut = moi.debut !== null ? moi.debut : (moi.date ? null : lui.debut);
     message = 'Je te propose plutôt ' + tcMomentEnMots(date, debut) + ', ça te va ?';
-  } else if (/(^|\s)(refuse|refuser|decline|non|nan|pas possible|me va pas|ne me va pas|m arrange pas|ne m arrange pas|je ne peux pas|je peux pas|impossible|reponds non|dis non|dis lui non)(?=\s|$)/.test(norm)) {
+  } else if (/(^|\s)(refuse|refuser|decline|non|nan|pas possible|me va pas|ne me va pas|m arrange pas|ne m arrange pas|je ne peux pas|je peux pas|impossible|reponds non|dis non|dis lui non)(?=\s|$)/.test(norm)
+    // « accepte pas », « n'accepte pas », « valide pas », « pas d'accord » : un refus, jamais l'accord (examen, mission 60).
+    || /(^|\s)(n accepte|accepte pas|accepte rien|n accepte rien|valide pas|ne valide|confirme pas|ne confirme|pas d accord|pas ok|ne prends pas|prends pas)(?=\s|$)/.test(norm)) {
     const quand = tcMomentEnMots(lui.date, lui.debut);
     message = quand ? 'Désolé, ' + quand + ' ne me va pas.' : 'Désolé, ça ne me va pas.';
   } else if (/(^|\s)(accepte|accepter|accepte la|ok|oui|d accord|daccord|c est bon|ca me va|ca marche|parfait|valide|confirme|va pour|reponds oui|dis oui|dis lui oui|note|inscris|note le|prends)(?=\s|$)/.test(norm)) {
@@ -22666,7 +22681,8 @@ function tcApresReponseEnvoyee(apres) {
 
 /** « donne-moi le numéro de Hugo », « c'est quoi le mail de Gaëlle ? » : { champ, nom } ; null sinon. */
 function tcDetecterCoordonnees(text) {
-  const norm = tcClasseNormaliser(text);
+  // « sœur », « cœur » : les ligatures deviennent « oe » avant de normaliser (sinon « ma sœur » perdait une lettre ; examen, mission 60).
+  const norm = tcClasseNormaliser(String(text || '').replace(/œ/g, 'oe').replace(/Œ/g, 'Oe').replace(/æ/g, 'ae'));
   if (!norm || norm.split(' ').length > 14) return null;
   const m = norm.match(/^(?:(?:donne moi|donne|redonne moi|tu peux me donner|peux tu me donner|tu pourrais me donner|tu as|t as|tu aurais|as tu|c est quoi|quel est|quelle est|quels sont|envoie moi|affiche|affiche moi|montre moi|montre|rappelle moi|j ai besoin du|j ai besoin de|il me faut|je veux|je voudrais|j aimerais avoir|j aimerais|retrouve moi|retrouve|cherche moi|cherche|trouve moi|trouve) )?(?:le |la |l |son |sa |les |ses |ton |un )?(numero de telephone|numero de portable|numero de tel|numero|num|telephone|tel|portable|mobile|adresse mail|adresse e mail|adresse email|mail|e mail|email|courriel|coordonnees) (?:de |d |du )(.+?)(?: stp| svp| s il te plait| merci| charly)*$/);
   if (!m) return null;

@@ -2890,3 +2890,10 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   proposition ; « Réponds à Hugo que je suis malade » → ce texte, relu. Numéro d'un contact : le nom tel que tapé (« Hélène »), « ma mère » par le
   lien de famille de la mission 59 (fiche nommée ainsi, sinon la famille, dite comme telle), « Marc et Paul » chacun. « mets mes rappels 1h avant et
   la veille » → « Je ne peux en mettre qu'un seul… Lequel je mets ? ». Suite : section 17, sondes de l'examinateur reprises en vérifications.
+- Troisième passage (examinateur, 26/10, 4 points) : réponse à Hugo : « accepte pas », « n'accepte pas », « valide pas », « pas d'accord » → un refus,
+  jamais l'accord ; « mardi non, jeudi oui » → jeudi proposé ; « oui, mais préviens-le que… » reste un oui (la réserve ne compte que pour « mais pas /
+  non / sauf »). Délai : une partie des rendez-vous (« la veille pour les rdv pro », « sauf le dentiste », « seulement pour le travail ») → « Je ne
+  peux régler qu'un seul délai, le même pour tous tes rappels … », rien ne change ; « je préfère / ce serait mieux / je voudrais la veille pour mes
+  rappels » → réglé. Filet : « sont réglés / programmés sur + un délai » est une action affirmée (« Noté ! Tes rappels sont réglés sur la veille. »
+  → la vérité), « Tes rappels sont activés » seul reste un état. « quelles options pour le restaurant / mon abonnement ? » ne donne plus les délais.
+  Numéro : « ma sœur » (ligature œ) passe par le lien de famille.

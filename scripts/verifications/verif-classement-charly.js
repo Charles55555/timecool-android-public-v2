@@ -1131,6 +1131,37 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     { remettre(); ctx.charlyIA.history = []; await ctx.tcGererReglage('mets mes rappels 1h avant et la veille', ctx.tcDetecterReglage('mets mes rappels 1h avant et la veille'));
       verifie('« mets mes rappels 1h avant et la veille » → « Je ne peux en mettre qu’un seul … Lequel je mets ? », rien ne change', /^Je ne peux en mettre qu’un seul pour tous tes rappels : .*Lequel je mets \?$/.test(dernier().content) && store.tc_rappel_delai === '60', dernier().content); }
 
+    // Troisième passage (examinateur, 4 points).
+    { // 1. « accepte pas », « n’accepte pas » : un refus ; « mardi non, jeudi oui » : jeudi ; « oui, mais préviens-le que je serai en retard » : un oui.
+      const D5 = (p) => { poser(RR.R3); ctx.charlyIA.history = []; ctx.tcGererDemandeRecue(p, 'repondre'); return dernier(); };
+      const a = D5('accepte pas'), b = D5('n’accepte pas'), c = D5('mardi non, jeudi oui'), e = D5('oui, mais préviens-le que je serai en retard');
+      verifie('3e passage, point 1 : « accepte pas », « n’accepte pas » → « Désolé, 2026-10-20 à 16h ne me va pas. » ; « mardi non, jeudi oui » → jeudi proposé ; « oui, mais préviens-le… » reste un accord',
+        a._envoiEnAttente && a._envoiEnAttente.texte === 'Désolé, 2026-10-20 à 16h ne me va pas.' && b._envoiEnAttente && b._envoiEnAttente.texte === 'Désolé, 2026-10-20 à 16h ne me va pas.'
+        && c._envoiEnAttente && /^Je te propose plutôt 2026-10-(15|22), ça te va \?$/.test(c._envoiEnAttente.texte) && e._envoiEnAttente && /^C’est d’accord pour 2026-10-20 à 16h\.$/.test(e._envoiEnAttente.texte),
+        [a.content, b.content, c.content, e.content].join(' | '));
+      poser(null);
+      // 2. Une partie des rendez-vous : pas de réglage global.
+      const partie = ['mets mes rappels la veille pour les rdv pro', 'mets mes rappels la veille sauf le dentiste', 'mets mes rappels 30 minutes avant seulement pour le travail', 'mets mes rappels la veille pour mes rdv perso'];
+      const mal = partie.filter((p) => R(p) !== 'delai');
+      remettre(); ctx.charlyIA.history = []; await ctx.tcGererReglage(partie[0], ctx.tcDetecterReglage(partie[0]));
+      verifie('3e passage, point 2 : « la veille pour les rdv pro », « sauf le dentiste », « seulement pour le travail » → « Je ne peux régler qu’un seul délai, le même pour tous tes rappels … », rien ne change ; « pour tous mes rdv » reste global',
+        !mal.length && ctx.tcDetecterReglage(partie[1]).partie === 1440 && /^Je ne peux régler qu’un seul délai, le même pour tous tes rappels \(en ce moment : 1 heure avant\)\. Si tu le veux pour tous, dis-moi « mets mes rappels la veille »\.$/.test(dernier().content)
+        && store.tc_rappel_delai === '60' && R('mets mes rappels 5 min avant pour tous mes rdv') === 'delai:5', mal.join(' | ') + ' / ' + dernier().content);
+      // 3. « je préfère la veille pour mes rappels » → réglé ; « Noté ! Tes rappels sont réglés sur la veille. » → la vérité ; « Tes rappels sont activés » seul reste.
+      remettre(); ctx.charlyIA.history = []; await ctx.tcGererReglage('je préfère la veille pour mes rappels', ctx.tcDetecterReglage('je préfère la veille pour mes rappels'));
+      const f1 = F('Noté ! Tes rappels sont réglés sur la veille.'), f2 = F('Tes rappels sont programmés à 30 minutes avant.'), f3 = F('Tes rappels sont activés.');
+      verifie('3e passage, point 3 : « je préfère la veille pour mes rappels » → 1440 relu ; « ce serait mieux la veille pour mes rappels » aussi ; « Noté ! Tes rappels sont réglés sur la veille. » et « … programmés à 30 minutes » → la vérité ; « Tes rappels sont activés. » reste',
+        store.tc_rappel_delai === '1440' && R('ce serait mieux la veille pour mes rappels') === 'delai:1440' && /^Je n’ai rien changé à tes rappels\./.test(f1) && /^Je n’ai rien changé à tes rappels\./.test(f2) && f3 === 'Tes rappels sont activés.',
+        [store.tc_rappel_delai, R('ce serait mieux la veille pour mes rappels'), f1, f2, f3].join(' | '));
+      verifie('après une bulle sur les rappels, « quelles options pour le restaurant ? » et « … pour mon abonnement ? » ne donnent pas les délais', (ctx.charlyIA.history = [{ role: 'assistant', content: 'Tes rappels sont activés, 1 heure avant.' }], R('quelles options pour le restaurant ?') === 'null' && R('quelles options pour mon abonnement ?') === 'null'));
+      // 4. « ma sœur » : la ligature, le lien de famille.
+      const garde = ctx.contactsList;
+      ctx.contactsList = [{ id: 'm', name: 'Marie Dupont', phone: '06 22', categories: ['famille'] }];
+      const s1 = C('le numéro de ma sœur');
+      ctx.contactsList = garde;
+      verifie('3e passage, point 4 : « le numéro de ma sœur » → par la famille (« Je ne sais pas qui est ta sœur … Marie Dupont »), jamais « de ma sœur »', /^Je ne sais pas qui est ta sœur dans tes contacts\. Dans ta famille, j’ai :\n• Le numéro de Marie Dupont : 06 22\.$/.test(s1), s1);
+      ctx.charlyIA.history = []; }
+
     // Un lundi après-midi, « le dentiste de lundi » (#263, #267, #352).
     const garde = FIXE.getTime();
     FIXE.setTime(new Date(2026, 9, 26, 15, 0, 0).getTime());
