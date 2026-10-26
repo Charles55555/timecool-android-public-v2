@@ -15668,7 +15668,9 @@ async function charlySendMessage() {
 
   const _textForCheck = text.toLowerCase();
   const _isChecklistMsg = text.includes('vie quotidienne') || text.includes('Voici ce que j');
-  const _unavailMatch = !_isChecklistMsg && _unavailable.find(u => u.keys.some(k => tcContientMot(_textForCheck, k)));
+  // Un rappel daté (« rappelle-moi de payer le loyer demain à 9h », « … d'appeler le taxi ») n'est jamais « pas encore » (mission 61).
+  const _rappelDit = (typeof tcDetecterRappelDate === 'function') ? tcDetecterRappelDate(text, new Date()) : null;
+  const _unavailMatch = !_isChecklistMsg && !_rappelDit && _unavailable.find(u => u.keys.some(k => tcContientMot(_textForCheck, k)));
   if (_unavailMatch) {
     charlyIA.history.push({role:'user', content:tcBulleTapee(text), _corrige: text});
     inp.value = ''; inp.style.height = 'auto';

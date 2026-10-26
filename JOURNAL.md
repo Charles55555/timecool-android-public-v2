@@ -2909,4 +2909,6 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   (« D'accord, sans Hugo Besnard : le rendez-vous est maintenant avec Gaëlle Perrin uniquement. ») puis repose la question du type, ou relance la
   recherche des créneaux ; « juste avec Gaëlle », « retire Hugo » aussi ; « pas en visio », « sans lui » gardent leur chemin. « mets-moi à
   l'heure de Londres » (#612) → « Je ne peux pas encore le faire d'ici : Paramètres > Affichage > Fuseau horaire. ». À la réponse de Hugo,
-  « non c'est parfait », « je ne dis pas non » sont un accord. Suite : verif-classement-charly, section 18.
+  « non c'est parfait », « je ne dis pas non » sont un accord. Un rappel daté avec une heure (« Rappelle-moi de payer le loyer demain à
+  9h », « … d'appeler le taxi demain 9h ») ne tombe plus dans la liste « Pas encore » (les mots « payer », « taxi »). Suite : verif-classement-charly,
+  section 18.

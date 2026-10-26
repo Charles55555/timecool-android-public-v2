@@ -1212,6 +1212,9 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       && s5.question === 'Quel jour je te fais penser à « appeler le plombier » (par exemple « demain ») ?' && s6.compose === 'Rappelle-moi de appeler le plombier vendredi à 9h' && !!(c6 && c6.carte && /2026-10-16 \| 09:00-10:00 \| Rappel : appeler le plombier/.test(c6.carte)),
       JSON.stringify([s3.question, s4.compose, s5.question, s6.compose, c6 && c6.carte]));
     const s7 = classer('laisse tomber', apres('Rappelle-moi', q0)), s8 = classer('annule le golf', apres('Rappelle-moi', q0)), s9 = classer('chaque lundi faire le planning', apres('Rappelle-moi', q0));
+    { const csmR = extraire('charlySendMessage') || '';
+      verifie('un rappel daté avec une heure (« Rappelle-moi de payer le loyer demain à 9h », « … d’appeler le taxi ») échappe à la liste « Pas encore » (« payer », « taxi »), avant la carte du rappel',
+        csmR.indexOf('const _unavailMatch = !_isChecklistMsg && !_rappelDit && _unavailable.find(') > -1 && csmR.indexOf('const _rappelDit = (typeof tcDetecterRappelDate === ') > -1 && csmR.indexOf('const _rappelDit') < csmR.indexOf('const _rappelHeure')); }
     verifie('après la question : « laisse tomber » ne crée rien ; « annule le golf » part seul (sans « rappelle-moi ») ; « chaque lundi faire le planning » → la phrase entière au modèle',
       !s7.compose && !(s8.compose || '').startsWith('Rappelle') && s9.compose === 'Rappelle-moi chaque lundi faire le planning',JSON.stringify([s7.classe, s7.compose, s8.classe, s8.compose, s9.compose]));
 
