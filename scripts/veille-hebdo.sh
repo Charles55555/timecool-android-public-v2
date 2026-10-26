@@ -54,7 +54,7 @@ pannes=$(grep -c 'Panne' "$HOME/.timecool-sentinelle/historique.log" 2>/dev/null
 noter "pannes signalées par la sentinelle (total) : $pannes"
 
 resume=$(printf '%s ; ' "${points[@]}"); resume=${resume% ; }
-message="[VEILLE HEBDO $(TZ=Europe/Paris date '+%d/%m')] $alertes alerte(s) : $resume. Vérifie aussi la copie IONOS de la semaine et la file des e-mails (via la session du PC), corrige ce qui peut l'être, et ne préviens Charles par notification que s'il y a quelque chose d'important."
+message="[VEILLE HEBDO $(TZ=Europe/Paris date '+%d/%m')] $alertes alerte(s) : $resume. Vérifie aussi la copie IONOS de la semaine et la file des e-mails (via la session du PC), corrige ce qui peut l'être (jamais de git push : le journal se commit sans pousser), et ne préviens Charles par notification que s'il y a quelque chose d'important."
 
 if [ "$ESSAI" = 1 ]; then echo "$message"; exit 0; fi
 if tmux has-session -t "$SESSION" 2>/dev/null; then
