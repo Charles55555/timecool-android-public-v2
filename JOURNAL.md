@@ -2918,3 +2918,8 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   pas un objet. Deux Hugo invités : « sans Hugo » → « Lequel : Hugo Besnard ou Hugo Martin ? », rien ne change. « non c'est bon », « non ça
   va » restent un refus (souvent un refus poli) ; seuls « non c'est parfait / super / génial / nickel / impeccable / très bien / ça me va » sont un
   accord. En plus : « où sont mes contacts ? » → Menu ☰ > Mes contacts ; « mets-moi à l'heure de pointe » n'est plus le fuseau.
+- Troisième passage (examinateur, 27/10, 1 point) : jamais un rappel « Rappel : penser » au titre vide (sinon la question). Un moment
+  remplace le moment gardé (« demain à 9h » puis « vendredi plutôt » → « Je te fais penser à quoi, vendredi à 9h ? » ; « à 10h » → demain à
+  10h). Un verbe plus loin dans la phrase est l'objet (« demain je dois appeler Paul » → « Rappel : appeler Paul », demain). Les petits mots de tête
+  tombent (« oui demain 9h », « c'est pour demain » → quoi ? ; « bah le loyer demain » → penser au loyer) ; « rdv dentiste mardi 15h » suit son
+  chemin. « non, ça me va très bien » est un accord.

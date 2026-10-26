@@ -1068,7 +1068,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const deux = dernier().content;
     verifie('deux réponses et aucun nom : les deux citées et « À qui je réponds ? », rien ne part', /^Hugo Besnard t’a répondu : « .* »\. Paul Martin t’a répondu : « Oui, jeudi 18h \? »\. À qui je réponds \?$/.test(deux) && !dernier()._envoiEnAttente, deux);
     // Mission 61 : « non c'est parfait », « je ne dis pas non » à la réponse de Hugo sont un accord ; « non, ça ne me va pas » reste un refus.
-    { const acc = ['Non c’est parfait', 'je ne dis pas non', 'non non, ça me va', 'non c’est parfait pour Hugo'].map((p) => repondre(p, RR.R3).content), ref = ['non, ça ne me va pas', 'non c’est bon', 'non ça va', 'non c’est bon pour moi', 'non non c’est bon'].map((p) => repondre(p, RR.R3).content);
+    { const acc = ['Non c’est parfait', 'je ne dis pas non', 'non non, ça me va', 'non c’est parfait pour Hugo', 'non, ça me va très bien'].map((p) => repondre(p, RR.R3).content), ref = ['non, ça ne me va pas', 'non c’est bon', 'non ça va', 'non c’est bon pour moi', 'non non c’est bon'].map((p) => repondre(p, RR.R3).content);
       verifie('(mission 61) « Non c’est parfait », « je ne dis pas non », « non non, ça me va » → « C’est d’accord pour 2026-10-20 à 16h. » ; « non, ça ne me va pas », « non c’est bon », « non ça va » (souvent un refus poli) → le refus',
         acc.every((c) => /Je lui réponds : « C’est d’accord pour 2026-10-20 à 16h\. »/.test(c)) && ref.every((c) => /Je lui réponds : « Désolé, /.test(c)), acc.concat(ref).join(' | ')); }
     poser(null);
@@ -1224,6 +1224,20 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
         && t4.question === 'Je te fais penser à quoi, demain à 9h ?' && t5.compose === 'Rappelle-moi de penser au loyer demain à 9h' && !!(c5 && c5.carte && /Rappel : penser au loyer \| rdv/.test(c5.carte))
         && t6.question === 'Je te fais penser à quoi, à 9h demain ?' && t7.question === 'Quel jour je te fais penser au loyer (par exemple « demain à 9h ») ?' && t8.compose === 'Rappelle-moi de penser au loyer vendredi' && !t9.compose && t9.classe !== 'piece_manquante',
         JSON.stringify([t1.compose, t2.compose, c3 && c3.carte, t4.question, t5.compose, t6.question, t7.question, t8.compose, t9.classe, t9.compose])); }
+    // Examen, 3e passage : jamais un rappel « Rappel : penser » ; un moment remplace le moment gardé ; un verbe plus loin dans la phrase.
+    { const m0 = classer('demain à 9h', apres('Rappelle-moi', q0));
+      const u1 = classer('vendredi plutôt', apres('demain à 9h', m0)), u2 = classer('à 10h', apres('demain à 9h', m0));
+      const u3 = u1.proposition ? classer('le loyer', apres('vendredi plutôt', u1)) : {};
+      const c3 = u3.compose ? ctx.tcDetecterRappelDate(u3.compose, new DateFixe()) : null;
+      const u4 = classer('demain je dois appeler Paul', apres('Rappelle-moi', q0));
+      const c4 = u4.compose ? ctx.tcDetecterRappelDate(u4.compose, new DateFixe()) : null;
+      const u5 = classer('oui demain 9h', apres('Rappelle-moi', q0)), u6 = classer('c’est pour demain', apres('Rappelle-moi', q0)), u7 = classer('bah le loyer demain', apres('Rappelle-moi', q0));
+      const u8 = classer('rdv dentiste mardi 15h', apres('Rappelle-moi', q0));
+      verifie('(examen) après « Je te fais penser à quoi, demain à 9h ? » : « vendredi plutôt » → « …, vendredi à 9h ? » puis « le loyer » → vendredi 9h « Rappel : penser au loyer » ; « à 10h » → « …, demain à 10h ? » ; « demain je dois appeler Paul » → « Rappel : appeler Paul » demain ; « oui demain 9h », « c’est pour demain » → quoi ? ; « bah le loyer demain » → penser au loyer ; « rdv dentiste mardi 15h » suit son chemin',
+        u1.question === 'Je te fais penser à quoi, vendredi à 9h ?' && !!(c3 && c3.carte && /2026-10-16 \| 09:00-10:00 \| Rappel : penser au loyer \| rdv/.test(c3.carte)) && u2.question === 'Je te fais penser à quoi, demain à 10h ?'
+        && !!(c4 && c4.allDay && c4.allDay.titre === 'Rappel : appeler Paul' && c4.allDay.date === iso(1)) && u5.question === 'Je te fais penser à quoi, demain 9h ?' && u6.question === 'Je te fais penser à quoi, demain ?'
+        && u7.compose === 'Rappelle-moi de penser au loyer demain' && !u8.compose && u8.question !== TQ,
+        JSON.stringify([u1.question, u3.compose, c3 && c3.carte, u2.question, u4.compose, c4, u5.question, u6.question, u7.compose, u8.classe])); }
     { const csmR = extraire('charlySendMessage') || '';
       verifie('un rappel daté avec une heure (« Rappelle-moi de payer le loyer demain à 9h », « … d’appeler le taxi ») échappe à la liste « Pas encore » (« payer », « taxi »), avant la carte du rappel',
         csmR.indexOf('const _unavailMatch = !_isChecklistMsg && !_rappelDit && _unavailable.find(') > -1 && csmR.indexOf('const _rappelDit = (typeof tcDetecterRappelDate === ') > -1 && csmR.indexOf('const _rappelDit') < csmR.indexOf('const _rappelHeure')); }

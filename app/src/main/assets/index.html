@@ -22813,49 +22813,93 @@ function tcRappelSeul(norm, precedent) {
  * { question, proposition } (il manque le moment), ou null (une autre demande, un « non » : le message garde son chemin).
  */
 function tcRappelSeulSuite(brut, proposition) {
-  const texte = String(brut || '').trim().replace(/[.!…\s]+$/, '');
+  const brutPropre = String(brut || '').trim().replace(/[.!…\s]+$/, '');
+  const norm0 = tcClasseNormaliser(brutPropre);
+  if (!norm0) return null;
+  if (/^(non|nan|laisse|laisse tomber|oublie|oublie ca|annule|stop|rien|pas maintenant|plus tard|ok|oui|ouais|d accord|merci|bof|non merci)$/.test(norm0)) return null;
+  // Une nouvelle demande part seule.
+  if (/^(rappelle|rapelle|fais moi|mets|met|ajoute|annule|decale|deplace|supprime|efface|propose|invite|previens|envoie|ecris|dis a|cherche|trouve|montre|affiche|qu est|quel|quelle|quels|quelles|quand est|est ce|c est quoi|comment|pourquoi|j ai quoi)(\s|$)/.test(norm0)) return null;
+  // Les petits mots de tête (« bah », « euh », « oui », « c'est pour ») tombent (examen, mission 61).
+  const texte = brutPropre.replace(/^(?:(?:bah|ben|euh|heu|oui|ouais|alors|ok|bon|c['’]est pour|c['’]est)[\s,]+)+/i, '').trim();
   const norm = tcClasseNormaliser(texte);
   if (!norm) return null;
-  const mots = norm.split(' ');
-  if (mots.length <= 3 && /^(non|nan|laisse|laisse tomber|oublie|annule|stop|rien|pas maintenant|plus tard|ok|oui|d accord|merci|bof)(\s|$)/.test(norm)) return null;
-  // Une nouvelle demande part seule.
-  if (/^(rappelle|rapelle|fais moi|mets|met|ajoute|annule|decale|deplace|supprime|efface|propose|invite|previens|envoie|ecris|dis a|cherche|trouve|montre|affiche|qu est|quel|quelle|quels|quelles|quand est|est ce|c est quoi|comment|pourquoi|j ai quoi)(\s|$)/.test(norm)) return null;
   const objet = proposition && proposition.objet ? proposition.objet : null;
   const heureGardee = proposition && proposition.heure ? proposition.heure : '';
   const momentGarde = proposition && proposition.momentDit ? proposition.momentDit : '';
-  // « demain à 9h » seul : le moment est gardé, Charly demande quoi (examen, mission 61).
-  if (!objet && !momentGarde && tcRappelMomentSeul(norm)) {
-    return { question: 'Je te fais penser à quoi, ' + texte + ' ?', proposition: Object.assign({}, proposition, { momentDit: texte }) };
+  const sansDate = function (cand) { return /(^|\s)(chaque|tous les|toutes les|hebdo|avant chaque|dans une heure|dans \d+|fin du mois|fin de mois)(\s|$)/.test(tcClasseNormaliser(cand)); };
+  // Le titre que le rappel aurait : jamais vide (« Rappel : penser ») ; sinon, la question (examen, mission 61).
+  const titreDe = function (r) {
+    if (!r) return '';
+    if (r.allDay) return String(r.allDay.titre || '');
+    const m = String(r.carte || '').match(/\|\s*(Rappel[^|\n]*?)\s*\|/);
+    return m ? m[1] : '';
+  };
+  const titreVide = function (t) { return !t || /^Rappel(\s*:\s*(penser(\s+(a|à|au|aux))?)?)?\s*$/i.test(t); };
+  // Un moment seul (« demain à 9h », « vendredi plutôt », « à 10h ») : gardé (ou remplacé), Charly demande quoi.
+  const texteMoment = texte.replace(/(^|\s)(plutôt|plutot|finalement|en fait|non|mais)(?=[\s,]|$)/gi, ' ').replace(/[,;]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!objet && texteMoment && tcRappelMomentSeul(tcClasseNormaliser(texteMoment))) {
+    const moment = momentGarde ? tcRappelFusionMoment(momentGarde, texteMoment) : texteMoment;
+    return { question: 'Je te fais penser à quoi, ' + moment + ' ?', proposition: Object.assign({}, proposition, { momentDit: moment }) };
   }
-  // Sans verbe (« le loyer demain 9h », « pour le loyer », « Hugo demain 9h ») : « penser au loyer », « penser à Hugo ».
-  const sansPrefixe = texte.replace(/^(?:de |d['’]|à |a |pour )/i, '').trim();
-  const avecVerbe = /^[a-zà-ÿ-]{3,}(?:er|ir|re|oir)(\s|$)/i.test(sansPrefixe);
-  // « je sais pas », « c'est pour demain », « rien » : pas un objet de rappel.
-  if (!avecVerbe && /^(je|j|tu|il|elle|on|nous|vous|ils|elles|c est|c|ca|ce|cela|rien|aucune|aucun|si|bah|euh)(\s|$)/.test(tcClasseNormaliser(sansPrefixe))) return null;
-  const action = objet ? null : (avecVerbe ? (/^(?:de |d['’])/i.test(texte) ? texte : 'de ' + sansPrefixe) : 'de penser ' + tcRappelPenserA(sansPrefixe));
-  const candidat = objet
-    ? 'Rappelle-moi de ' + objet + ' ' + texte + (heureGardee && !tcHeureDansTexte(texte.toLowerCase()) ? ' ' + heureGardee : '')
-    : 'Rappelle-moi ' + action + (momentGarde ? ' ' + momentGarde : '');
-  const sans = tcClasseNormaliser(candidat);
-  // Une récurrence, « dans une heure » : la phrase entière va au modèle (comme tapée d'un coup).
-  if (/(^|\s)(chaque|tous les|toutes les|hebdo|avant chaque|dans une heure|dans \d+|fin du mois|fin de mois)(\s|$)/.test(sans)) return { compose: objet ? candidat : 'Rappelle-moi ' + texte };
-  if (typeof tcDetecterRappelDate === 'function' && tcDetecterRappelDate(candidat, new Date())) return { compose: candidat };
-  if (objet || momentGarde) {
-    if (!objet) return null;
+  // L'objet déjà dit (« payer le loyer ») : la réponse est le moment.
+  if (objet) {
+    const cand = 'Rappelle-moi de ' + objet + ' ' + texte + (heureGardee && !tcHeureDansTexte(texte.toLowerCase()) ? ' ' + heureGardee : '');
+    if (sansDate(cand)) return { compose: cand };
+    const r = typeof tcDetecterRappelDate === 'function' ? tcDetecterRappelDate(cand, new Date()) : null;
+    if (r && !titreVide(titreDe(r))) return { compose: cand };
     return { question: tcRappelQuestionJour(objet, heureGardee), proposition: Object.assign({}, proposition) };
   }
+  const sansPrefixe = texte.replace(/^(?:de |d['’]|à |a |pour )/i, '').trim();
+  // « rdv dentiste mardi 15h » : un rendez-vous, pas un rappel ; il suit son chemin.
+  if (/^(rdv|rendez vous|rendez-vous|reunion)(\s|$)/i.test(tcClasseNormaliser(sansPrefixe))) return null;
+  // Le verbe, en tête ou plus loin (« demain je dois appeler Paul », « vendredi il faut que je paie… ») : ce qui précède n'est qu'un moment.
+  const mots = sansPrefixe.split(/\s+/);
+  const NON_VERBES = /^(septembre|octobre|novembre|decembre|notre|votre|autre|autres|entre|contre|soir|hier|premier|dernier|cher|chere|mer|fer|hiver|plaisir|loisir|avenir|livre|lettre|lettres|chambre|centre|ordre|nombre|membre|titre|pierre|alexandre|sandrine|claire|desir|sur|leur|leurs|pour|avoir|faire|etre)$/;
+  const MODAUX = /^(je|j|dois|devrai|devrais|il|faut|que|qu|vais|veux|voudrais|aller|me|pour|de|d|a|à|doit|faudra|on)$/;
+  let iVerbe = -1;
+  for (let i = 0; i < mots.length && i < 8; i++) {
+    const w = tcClasseNormaliser(mots[i].replace(/^[dlj]['’]/i, ''));
+    if (/^[a-z-]{3,}(er|ir|re|oir)$/.test(w) && !NON_VERBES.test(w)) { iVerbe = i; break; }
+    if (!MODAUX.test(w) && !tcRappelMomentSeul(w) && !/^(le|la|les|ce|cet|cette|prochain|prochaine|matin|soir|midi|semaine|apres|h|heure|heures)$/.test(w) && !/^\d/.test(w)) break;
+  }
+  const avecVerbe = iVerbe > -1 && (iVerbe === 0 || /(^|\s)(dois|devrai|devrais|faut|faudra|vais|veux|voudrais|doit|pour|de|d)$/.test(tcClasseNormaliser(mots.slice(0, iVerbe).join(' '))));
+  let action = '', momentDevant = '';
+  if (avecVerbe) {
+    action = [mots[iVerbe].replace(/^[dlj]['’]/i, '')].concat(mots.slice(iVerbe + 1)).join(' ');
+    momentDevant = mots.slice(0, iVerbe).filter(function (m) { return !MODAUX.test(tcClasseNormaliser(m)); }).join(' ');
+  } else {
+    // « je sais pas », « il pleut » : pas un objet de rappel.
+    if (/^(je|j|tu|il|elle|on|nous|vous|ils|elles|ca|ce|cela|rien|aucune|aucun|si)(\s|$)/.test(tcClasseNormaliser(sansPrefixe))) return null;
+    action = 'penser ' + tcRappelPenserA(sansPrefixe);
+  }
+  const candidat = 'Rappelle-moi ' + (/^[aeiouyhàâéèêîôû]/i.test(action) ? 'd’' : 'de ') + action + (momentDevant ? ' ' + momentDevant : '') + (momentGarde ? ' ' + momentGarde : '');
+  // Une récurrence, « dans une heure » : la phrase entière va au modèle (comme tapée d'un coup).
+  if (sansDate(candidat)) return { compose: momentGarde ? candidat : 'Rappelle-moi ' + texte };
+  const r = typeof tcDetecterRappelDate === 'function' ? tcDetecterRappelDate(candidat, new Date()) : null;
+  if (r && !titreVide(titreDe(r))) return { compose: candidat };
+  if (r || momentGarde) return { question: 'Je te fais penser à quoi' + (momentGarde ? ', ' + momentGarde : '') + ' ?', proposition: Object.assign({}, proposition) };
   // Un objet sans jour (« payer le loyer », « d'appeler Hugo à 9h », « le loyer ») : le jour, ensuite.
-  let reste = sansPrefixe;
-  if (/^(je|j|tu|il|elle|on|nous|vous|ils|elles|c est|c|ca|ce|cela|rien|aucune|aucun)(\s|$)/i.test(tcClasseNormaliser(reste))) return null;
+  let reste = action;
   const h = tcHeureDansTexte(reste.toLowerCase());
   let heure = '';
   if (h) {
     const mH = reste.match(/\s*(?:à|a|vers)?\s*\d{1,2}\s?(?:h|heures?|:)\s?(?:\d{2})?\s*$/i);
     if (mH) { heure = 'à ' + h.h + 'h' + (h.m ? String(h.m).padStart(2, '0') : ''); reste = reste.slice(0, mH.index).trim(); }
   }
-  if (!reste || reste.split(/\s+/).length > (avecVerbe ? 8 : 5)) return null;
-  const quoi = avecVerbe ? reste : 'penser ' + tcRappelPenserA(reste);
-  return { question: tcRappelQuestionJour(quoi, heure), proposition: Object.assign({}, proposition, { objet: quoi, heure: heure }) };
+  if (!reste || titreVide('Rappel : ' + reste) || reste.split(/\s+/).length > (avecVerbe ? 8 : 7)) return null;
+  return { question: tcRappelQuestionJour(reste, heure), proposition: Object.assign({}, proposition, { objet: reste, heure: heure }) };
+}
+
+/** Un nouveau moment remplace l'ancien ; un jour seul garde l'heure d'avant (« demain à 9h » + « vendredi » → « vendredi à 9h »), une heure seule garde le jour. */
+function tcRappelFusionMoment(ancien, nouveau) {
+  const HEURE = /(?:à|a|vers)?\s*\d{1,2}\s?(?:h|heures?|:)\s?(?:\d{2})?/i;
+  const heureNouvelle = !!tcHeureDansTexte(String(nouveau).toLowerCase());
+  const jourNouveau = String(nouveau).replace(HEURE, '').trim();
+  const heureAncienne = String(ancien).match(HEURE);
+  const jourAncien = String(ancien).replace(HEURE, '').replace(/\s+/g, ' ').trim();
+  if (!jourNouveau && heureNouvelle) return (jourAncien ? jourAncien + ' ' : '') + String(nouveau).trim();
+  if (jourNouveau && !heureNouvelle && heureAncienne) return jourNouveau + ' ' + heureAncienne[0].trim();
+  return String(nouveau).trim();
 }
 
 /** « Quel jour je te fais penser à « payer le loyer » … ? », ou « Quel jour je te fais penser au loyer … ? » pour un objet sans verbe. */
@@ -22990,7 +23034,7 @@ async function tcRetirerDuGroupe(text) {
 /** « non c'est parfait », « non non, ça me va », « je ne dis pas non » (jamais « non c'est bon », « non ça va » : souvent un refus poli), « pas de souci » : un accord malgré le « non » (texte normalisé). */
 function tcReponsePositiveMalgreNon(norm) {
   const n = String(norm || '').trim();
-  const QUEUE = '(?:\\s+(?:comme ca|merci|pour moi|pour [a-z]+|stp|svp))*$';
+  const QUEUE = '(?:\\s+(?:comme ca|merci|pour moi|pour [a-z]+|stp|svp|tres bien|bien|parfaitement))*$';
   return new RegExp('^(?:non|nan|ah non|mais non)(?:\\s+non)*\\s+(?:c est |c etait |ca |tout est |)(?:parfait|tres bien|super|nickel|genial|impeccable|me va|ca me va|va tres bien)' + QUEUE).test(n)
     || new RegExp('^(?:je ne dis pas non|je dis pas non|pourquoi pas|c est pas de refus|ce n est pas de refus|pas de souci|pas de soucis|pas de probleme|aucun souci|aucun probleme|sans souci|sans probleme|ca ne me derange pas|ca me derange pas)' + QUEUE).test(n);
 }
