@@ -1067,6 +1067,10 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     ctx.charlyIA.history = []; ctx.tcGererDemandeRecue('Accepte la proposition', 'repondre');
     const deux = dernier().content;
     verifie('deux réponses et aucun nom : les deux citées et « À qui je réponds ? », rien ne part', /^Hugo Besnard t’a répondu : « .* »\. Paul Martin t’a répondu : « Oui, jeudi 18h \? »\. À qui je réponds \?$/.test(deux) && !dernier()._envoiEnAttente, deux);
+    // Mission 61 : « non c'est parfait », « je ne dis pas non » à la réponse de Hugo sont un accord ; « non, ça ne me va pas » reste un refus.
+    { const p1 = repondre('Non c’est parfait', RR.R3).content, p2 = repondre('je ne dis pas non', RR.R3).content, p3 = repondre('non non c’est bon pour Hugo', RR.R3).content, p4 = repondre('non, ça ne me va pas', RR.R3).content;
+      verifie('(mission 61) « Non c’est parfait », « je ne dis pas non », « non non c’est bon pour Hugo » → « C’est d’accord pour 2026-10-20 à 16h. » ; « non, ça ne me va pas » → le refus',
+        [p1, p2, p3].every((c) => /Je lui réponds : « C’est d’accord pour 2026-10-20 à 16h\. »/.test(c)) && /Je lui réponds : « Désolé, /.test(p4), [p1, p2, p3, p4].join(' | ')); }
     poser(null);
 
     // Le numéro, le mail d'un contact (#247).
@@ -1177,6 +1181,96 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('un lundi à 15h : « Mets le dentiste de lundi à 11h » → le dentiste de lundi prochain (2/11) à 11h ; « Décale le dentiste de lundi à mardi 10h » → mardi 3/11 10h ; « … tu peux le mettre à onze heures » → 2/11 11h ; un dentiste encore à venir aujourd’hui → celui d’aujourd’hui ; « d’aujourd’hui » reste aujourd’hui',
       l1 === 'dent 2026-11-02 11h' && l2 === 'dent 2026-11-03 10h' && l3 === 'dent 2026-11-02 11h' && l4 === 'dent2 2026-10-26 18h' && l5 === 'dent0 2026-10-26 18h', [l1, l2, l3, l4, l5].join(' | '));
     ctx.events = agenda(); ctx.charlyIA.history = []; ctx.localStorage = { getItem: () => null, setItem() {} };
+    ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }];
+  }
+
+  titre('18. Mission 61 : « Rappelle-moi » seul, « comment j’ajoute un contact », « sans Hugo », « l’heure de Londres »');
+  {
+    const TQ = vm.runInContext('TC_RAPPEL_SEUL_QUESTION', ctx);
+    // 1. « Rappelle-moi » seul (#134, #448) : une question, jamais un rappel à l'heure qu'il est.
+    const seuls = ['Rappelle-moi', 'rappelle moi', 'Rappelle-moi stp', 'Fais-moi penser', 'Mets-moi un rappel', 'tu peux me rappeler ?', 'un rappel', 'Charly, rappelle-moi !', 'ajoute un rappel'];
+    const malLus = seuls.filter((p) => { const r = classer(p); return !(r.classe === 'piece_manquante' && r.question === TQ && estQuestion(r)); });
+    verifie('« Rappelle-moi » seul et ses variantes (' + seuls.length + ') → « ' + TQ + ' » (une question, rien n’est créé)', !malLus.length, malLus.map((p) => p + ' → ' + classer(p).classe + ' ' + classer(p).question).join(' | '));
+    const autres = ['Rappelle-moi de payer l’URSSAF le 5 novembre', 'Rappelle-moi demain 9h', 'rappelle Paul', 'rappelle-moi le numéro de Paul'];
+    const pris = autres.filter((p) => classer(p).question === TQ);
+    verifie('« rappelle-moi de payer… », « rappelle-moi demain 9h », « rappelle Paul », « rappelle-moi le numéro de Paul » gardent leur chemin ; « rappel » après une question de Charly (un titre) aussi', !pris.length && classer('rappel', [{ role: 'assistant', content: 'Comment j’appelle ce rendez-vous ?' }]).question !== TQ, pris.join(' | '));
+    // 2. La réponse à la question : le rappel daté de la mission 56, lu avec la question.
+    const apres = (texte, r) => [{ role: 'user', content: texte }, { role: 'assistant', content: r.question, nature: 'question', _classement: r.classe, _proposition: r.proposition || null, _texte: texte }];
+    const q0 = classer('Rappelle-moi');
+    const s1 = classer('payer le loyer demain à 9h', apres('Rappelle-moi', q0)), s2 = classer('d’appeler Hugo lundi', apres('Rappelle-moi', q0));
+    const c1 = s1.compose ? ctx.tcDetecterRappelDate(s1.compose, new DateFixe()) : null, c2 = s2.compose ? ctx.tcDetecterRappelDate(s2.compose, new DateFixe()) : null;
+    verifie('« Rappelle-moi » → « payer le loyer demain à 9h » → « Rappelle-moi de payer le loyer demain à 9h » (carte demain 9h « Rappel : payer le loyer ») ; « d’appeler Hugo lundi » → journée de lundi « Rappel : appeler Hugo »',
+      s1.classe === 'claire' && s1.compose === 'Rappelle-moi de payer le loyer demain à 9h' && !!(c1 && c1.carte && /2026-10-16 \| 09:00-10:00 \| Rappel : payer le loyer \| rdv/.test(c1.carte))
+      && s2.compose === 'Rappelle-moi d’appeler Hugo lundi' && !!(c2 && c2.allDay && c2.allDay.date === iso(4) && c2.allDay.titre === 'Rappel : appeler Hugo'), JSON.stringify([s1.compose, c1 && c1.carte, s2.compose, c2]));
+    const s3 = classer('payer le loyer', apres('Rappelle-moi', q0));
+    const s4 = s3.proposition ? classer('demain 9h', apres('payer le loyer', s3)) : {};
+    const s5 = classer('appeler le plombier à 9h', apres('Rappelle-moi', q0));
+    const s6 = s5.proposition ? classer('vendredi', apres('appeler le plombier à 9h', s5)) : {};
+    const c6 = s6.compose ? ctx.tcDetecterRappelDate(s6.compose, new DateFixe()) : null;
+    verifie('sans jour : « payer le loyer » → « Quel jour je te fais penser à « payer le loyer » … ? » puis « demain 9h » → le rappel complet ; « appeler le plombier à 9h » puis « vendredi » → vendredi 9h (l’heure gardée)',
+      s3.question === 'Quel jour je te fais penser à « payer le loyer » (par exemple « demain à 9h ») ?' && estQuestion(s3) && s4.compose === 'Rappelle-moi de payer le loyer demain 9h'
+      && s5.question === 'Quel jour je te fais penser à « appeler le plombier » (par exemple « demain ») ?' && s6.compose === 'Rappelle-moi de appeler le plombier vendredi à 9h' && !!(c6 && c6.carte && /2026-10-16 \| 09:00-10:00 \| Rappel : appeler le plombier/.test(c6.carte)),
+      JSON.stringify([s3.question, s4.compose, s5.question, s6.compose, c6 && c6.carte]));
+    const s7 = classer('laisse tomber', apres('Rappelle-moi', q0)), s8 = classer('annule le golf', apres('Rappelle-moi', q0)), s9 = classer('chaque lundi faire le planning', apres('Rappelle-moi', q0));
+    verifie('après la question : « laisse tomber » ne crée rien ; « annule le golf » part seul (sans « rappelle-moi ») ; « chaque lundi faire le planning » → la phrase entière au modèle',
+      !s7.compose && !(s8.compose || '').startsWith('Rappelle') && s9.compose === 'Rappelle-moi chaque lundi faire le planning',JSON.stringify([s7.classe, s7.compose, s8.classe, s8.compose, s9.compose]));
+
+    // 3. « comment j'ajoute un contact » (#243) : le vrai chemin.
+    const aide = ['comment j’ajoute un contact', 'Comment ajouter un contact ?', 'comment je fais pour créer un nouveau contact', 'je veux ajouter un contact', 'ajoute un contact', 'où j’ajoute un contact ?', 'Comment on ajoute des contacts dans l’appli ?'];
+    const sansChemin = aide.filter((p) => { const r = classer(p); return !(r.classe === 'aide' && r.nature === 'reponse' && /^Menu ☰ > Mes contacts, puis le bouton vert « \+ Ajouter » en haut de la page/.test(r.question)); });
+    const imp = classer('comment j’importe mes contacts ?');
+    verifie('« comment j’ajoute un contact » et ses variantes (' + aide.length + ') → « Menu ☰ > Mes contacts, puis le bouton vert « + Ajouter » … » (une réponse) ; « comment j’importe mes contacts ? » → « … « 📱 Importer mes contacts » … »',
+      !sansChemin.length && imp.classe === 'aide' && /^Menu ☰ > Mes contacts, puis le bouton « 📱 Importer mes contacts »/.test(imp.question), sansChemin.map((p) => p + ' → ' + classer(p).classe).join(' | ') + ' | ' + imp.question);
+    verifie('le chemin dit existe dans la page : « Mes contacts » au menu, « + Ajouter » et « Importer mes contacts » en haut de la page Contacts, « Enregistrer » au formulaire',
+      page.indexOf("{id:'contacts', icon:'👥', label:'Mes contacts'}") > -1 && page.indexOf('onclick="addContactManually()"') > -1 && page.indexOf('+ Ajouter</button>') > -1 && page.indexOf(' Importer mes contacts</button>') > -1 && page.indexOf('>Enregistrer') > -1);
+    const pasAide = ['ajoute le numéro de Hugo', 'comment ajouter un rdv', 'ajoute Paul à mes contacts', 'comment j’ajoute un rendez-vous avec Paul'].filter((p) => classer(p).classe === 'aide');
+    verifie('« ajoute le numéro de Hugo », « comment ajouter un rdv », « ajoute Paul à mes contacts » ne sont pas l’aide', !pasAide.length, pasAide.join(' | '));
+
+    // 4. « sans Hugo » (#493).
+    ctx.contactsList = [{ id: 'h', name: 'Hugo Besnard', referenceCompte: 'R1' }, { id: 'g', name: 'Gaëlle Perrin', referenceCompte: 'R2' }, { id: 'p', name: 'Paul Martin', referenceCompte: 'R3' }];
+    const appels = [];
+    ctx.tcProposerRdvGroupe = async (refs, duree, preambule, type) => { appels.push(refs.join(',') + ' ' + duree + ' ' + type + ' ' + preambule); };
+    const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
+    const question = (refs) => { ctx.charlyIA.history = [{ role: 'user', content: 'propose un rendez-vous à Hugo et Gaëlle jeudi après-midi' }, { role: 'assistant', content: 'Par téléphone, en personne ou en visio ?', _questionType: { id: 'q1', references: refs, duree: 1, etat: 'choix' } }]; return ctx.charlyIA.history[1]; };
+    let q = question(['R1', 'R2']);
+    const g1 = await ctx.tcRetirerDuGroupe('sans Hugo');
+    verifie('« propose un rendez-vous à Hugo et Gaëlle jeudi après-midi » → « Par téléphone… ? » → « sans Hugo » : Hugo retiré, relu (« D’accord, sans Hugo Besnard : le rendez-vous est maintenant avec Gaëlle Perrin uniquement. ») et la même question, pour Gaëlle seule ; l’ancienne question est close',
+      g1 === true && q._questionType.etat === 'retire' && dernier().content === 'D’accord, sans Hugo Besnard : le rendez-vous est maintenant avec Gaëlle Perrin uniquement. Par téléphone, en personne ou en visio ?'
+      && dernier().nature === 'question' && dernier()._questionType.references.join() === 'R2' && dernier()._questionType.etat === 'choix' && /^D’accord, sans Hugo/.test(dernier()._questionType.preambule), dernier().content);
+    question(['R1', 'R2']); appels.length = 0;
+    const g2 = await ctx.tcRetirerDuGroupe('sans Hugo, en visio');
+    question(['R1', 'R2', 'R3']);
+    const g3 = await ctx.tcRetirerDuGroupe('juste avec Gaëlle');
+    const g3c = dernier().content;
+    ctx.charlyIA.history = [{ role: 'assistant', content: 'Rendez-vous à plusieurs', _groupe: { id: 'g1', references: ['R1', 'R2', 'R3'], duree: 2, etat: 'choix', type: 'telephone', creneaux: [] } }];
+    const g4 = await ctx.tcRetirerDuGroupe('retire Hugo');
+    verifie('« sans Hugo, en visio » → la recherche part pour Gaëlle, en visio, avec la relecture ; « juste avec Gaëlle » (Hugo, Gaëlle, Paul) → Gaëlle seule ; sur la carte des créneaux, « retire Hugo » → la recherche repart pour Gaëlle et Paul (2 h, par téléphone)',
+      g2 === true && appels[0] === 'R2 1 visio D’accord, sans Hugo Besnard : le rendez-vous est maintenant avec Gaëlle Perrin uniquement.'
+      && g3 === true && /^D’accord, sans Hugo Besnard et Paul Martin : le rendez-vous est maintenant avec Gaëlle Perrin uniquement\./.test(g3c)
+      && g4 === true && appels[1] === 'R2,R3 2 telephone D’accord, sans Hugo Besnard : le rendez-vous est maintenant avec Gaëlle Perrin et Paul Martin.', JSON.stringify(appels) + ' | ' + g3c);
+    question(['R1', 'R2']);
+    const n1 = await ctx.tcRetirerDuGroupe('pas en visio'), n2 = await ctx.tcRetirerDuGroupe('pas jeudi'), n3 = await ctx.tcRetirerDuGroupe('sans lui');
+    const n4 = await ctx.tcRetirerDuGroupe('sans Paul'); const n4c = dernier().content;
+    question(['R1', 'R2']);
+    const n5 = await ctx.tcRetirerDuGroupe('sans Hugo et Gaëlle'); const n5c = dernier().content;
+    ctx.charlyIA.history = [{ role: 'assistant', content: 'Tu as un rendez-vous demain.' }];
+    const n6 = await ctx.tcRetirerDuGroupe('sans Hugo');
+    verifie('« pas en visio », « pas jeudi », « sans lui » gardent leur chemin ; « sans Paul » (pas invité) → « Paul Martin ne fait pas partie de ce rendez-vous… » ; « sans Hugo et Gaëlle » → « Il ne reste personne… » ; sans rendez-vous à plusieurs ouvert, rien',
+      n1 === false && n2 === false && n3 === false && n4 === true && n4c === 'Paul Martin ne fait pas partie de ce rendez-vous : il est avec Hugo Besnard et Gaëlle Perrin.' && n5 === true && /^Il ne reste personne/.test(n5c) && n6 === false, [n1, n2, n3, n4c, n5c, n6].join(' | '));
+    const qt = extraire('tcRendreQuestionType') || '';
+    const csm61 = extraire('charlySendMessage') || '';
+    verifie('la question du type affiche la relecture d’abord ; « sans Hugo » est lu avant la réponse tapée au type',
+      qt.indexOf("(q.preambule ? escapeHTMLSafe(q.preambule) + '<br>' : '') + 'Par téléphone") > -1 && csm61.indexOf('await tcRetirerDuGroupe(text)') > -1 && csm61.indexOf('await tcRetirerDuGroupe(text)') < csm61.indexOf('const _qt = tcQuestionTypeEnAttente();'));
+
+    // 5. « mets-moi à l'heure de Londres » (#612) : le chemin du fuseau.
+    const RF = (p) => { const d = ctx.tcDetecterReglage(p); return d ? d.quoi + ' ' + (d.phrase || '') : 'null'; };
+    const fus = ['mets-moi à l’heure de Londres', 'passe à l’heure de New York', 'mets l’application à l’heure de Tokyo', 'passe à l’heure anglaise', 'change mon fuseau horaire'];
+    const sansFus = fus.filter((p) => RF(p) !== 'ailleurs Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Fuseau horaire.');
+    const pasFus = ['quelle heure est-il à Londres ?', 'mets le dentiste à l’heure de Paul', 'mets mon rdv à l’heure de midi', 'mets-moi à l’heure de la réunion', 'décale le dentiste à l’heure de Londres'].filter((p) => RF(p) !== 'null');
+    verifie('« mets-moi à l’heure de Londres », « passe à l’heure anglaise »… (' + fus.length + ') → « Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Fuseau horaire. » ; « quelle heure est-il à Londres ? », « mets le dentiste à l’heure de Paul »… gardent leur chemin',
+      !sansFus.length && !pasFus.length, sansFus.map((p) => p + ' → ' + RF(p)).concat(pasFus.map((p) => p + ' → ' + RF(p))).join(' | '));
+    verifie('pas de tiret long ni d assertion arrière dans le bloc 61', bloc.indexOf('MISSION 61') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.indexOf('—') < 0);
+    ctx.charlyIA.history = [];
     ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }];
   }
 

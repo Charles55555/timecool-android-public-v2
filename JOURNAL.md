@@ -2897,3 +2897,16 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   rappels » → réglé. Filet : « sont réglés / programmés sur + un délai » est une action affirmée (« Noté ! Tes rappels sont réglés sur la veille. »
   → la vérité), « Tes rappels sont activés » seul reste un état. « quelles options pour le restaurant / mon abonnement ? » ne donne plus les délais.
   Numéro : « ma sœur » (ligature œ) passe par le lien de famille.
+
+### 27/10/2026 : mission 61, les ratés du passage 16 (CODEUR)
+
+- Mission 61 (chef, 27/10, passage 16 à 98,5 %) : « Rappelle-moi » seul → « Je te fais penser à quoi, et quand (par exemple « payer le loyer demain
+  à 9h ») ? », jamais un rappel inventé à l'heure qu'il est (#134, #448 : le modèle décidait seul, d'où le retour du raté). La réponse se lit avec
+  la question : « payer le loyer demain à 9h » → le rappel daté de la mission 56 ; sans jour (« payer le loyer ») → « Quel jour je te fais penser
+  à « payer le loyer » ? », l'heure dite est gardée ; une récurrence part entière au modèle ; « laisse tomber » ou une autre demande suivent leur
+  chemin. « comment j'ajoute un contact » (#243) → « Menu ☰ > Mes contacts, puis le bouton vert « + Ajouter » … » (l'import si on parle
+  d'importer). « sans Hugo » après « propose un rdv à Hugo et Gaëlle jeudi après-midi » (#493) → Hugo sort de la proposition, Charly relit
+  (« D'accord, sans Hugo Besnard : le rendez-vous est maintenant avec Gaëlle Perrin uniquement. ») puis repose la question du type, ou relance la
+  recherche des créneaux ; « juste avec Gaëlle », « retire Hugo » aussi ; « pas en visio », « sans lui » gardent leur chemin. « mets-moi à
+  l'heure de Londres » (#612) → « Je ne peux pas encore le faire d'ici : Paramètres > Affichage > Fuseau horaire. ». À la réponse de Hugo,
+  « non c'est parfait », « je ne dis pas non » sont un accord. Suite : verif-classement-charly, section 18.

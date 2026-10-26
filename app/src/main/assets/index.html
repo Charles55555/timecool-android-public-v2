@@ -15164,6 +15164,8 @@ async function charlySendMessage() {
   // === « Lequel je mets ? » (délai des rappels) : la valeur de la page, réglée pour de vrai (mission 60) ===
   if (typeof tcRepondreReglage === 'function' && await tcRepondreReglage(text)) return;
 
+  // === « sans Hugo », « juste avec Gaëlle » : la personne sort du rendez-vous à plusieurs, Charly relit qui reste (mission 61) ===
+  if (typeof tcRetirerDuGroupe === 'function' && await tcRetirerDuGroupe(text)) return;
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
   if (typeof tcQuestionTypeEnAttente === 'function') {
     const _qt = tcQuestionTypeEnAttente();
@@ -19212,7 +19214,7 @@ function tcClasserMessage(text, histoire) {
   const pasSur = function (classe, question, proposition, indices) {
     // Une réponse (pas une question de clarification) : l'au revoir, « pas de retard », le hors agenda, et les petites phrases
     // sociales (acquiescement, remerciement, salutation, social : mission 51, décision du chef).
-    const nature = (['au_revoir', 'retard_annule', 'hors_agenda', 'social', 'acquiescement', 'remerciement', 'salutation', 'compte', 'partage', 'retard_client', 'conseil'].indexOf(classe) > -1) ? 'reponse' : 'question';
+    const nature = (['au_revoir', 'retard_annule', 'hors_agenda', 'social', 'acquiescement', 'remerciement', 'salutation', 'compte', 'partage', 'retard_client', 'conseil', 'aide'].indexOf(classe) > -1) ? 'reponse' : 'question';
     return { classe: classe, question: question, proposition: proposition || null, indices: indices || null, raison: null, nature: nature };
   };
   // Dans une autre langue, le classement français n'a pas de sens : le modèle garde la main (sa consigne dit de demander).
@@ -19257,6 +19259,10 @@ function tcClasserMessage(text, histoire) {
   if (/^(on remet ca|on remet ça|on remet a plus tard|on remettra ca|remettons ca|a remettre|on le remet|on la remet|c est a remettre)( a plus tard)?$/.test(norm)) {
     return pasSur('piece_manquante', 'Quel rendez-vous veux-tu remettre, et à quand ?', { moment: null, contact: null, metier: null, titre: 'remettre', texte: 'décale', etape: 'suite' });
   }
+  // 2c ter (mission 61). « Rappelle-moi » seul : de quoi et quand, jamais un rappel inventé à l'heure qu'il est ; « comment j'ajoute un
+  //     contact » : le vrai chemin dans l'application, jamais « je ne peux pas ».
+  if (typeof tcRappelSeul === 'function' && tcRappelSeul(norm, precedent)) return pasSur('piece_manquante', TC_RAPPEL_SEUL_QUESTION, { moment: null, contact: null, metier: null, titre: 'rappel seul', texte: '', objet: null, heure: '', etape: 'suite', composable: false });
+  if (typeof tcAideContact === 'function') { const aide = tcAideContact(norm); if (aide) return pasSur('aide', aide); }
   {
     const mRappel = norm.match(/^(?:stp |svp )?(?:rappelle|rappeler|rappelle moi de rappeler|recontacte|recontacter|rappelle le|rappelle la|rappelle a) (\S+(?: \S+)?)$/);
     if (mRappel && !/^(moi|me|toi|le|la|les|lui|ca|ça|de|que)$/.test(mRappel[1]) && !tcHeureDansTexte(brut.toLowerCase())) {
@@ -19517,6 +19523,12 @@ function tcClasserMessage(text, histoire) {
   //    « oui mardi 15h ») passe, le modèle a l'historique ; « non » ou une réaction : la question avec deux exemples.
   if (proposition) {
     // « Tu veux dire : annuler ton rendez-vous avec Paul, ou autre chose ? » → « oui » : la demande sous-entendue part (mission 55).
+    // « Je te fais penser à quoi, et quand ? » → « payer le loyer demain à 9h » : le rappel daté, lu avec la question (mission 61).
+    if (proposition.titre === 'rappel seul' && typeof tcRappelSeulSuite === 'function') {
+      const suiteRappel = tcRappelSeulSuite(brut, proposition);
+      if (suiteRappel && suiteRappel.compose) return Object.assign(claire('complement'), { compose: suiteRappel.compose });
+      if (suiteRappel && suiteRappel.question) return pasSur('piece_manquante', suiteRappel.question, suiteRappel.proposition);
+    }
     if (proposition.surOui && accord) return Object.assign(claire('complement'), { compose: proposition.surOui });
     if (proposition.surOui && ouiNon === false) return pasSur('acquiescement', 'D’accord, je ne touche à rien : qu’est-ce que tu voulais dire ?');
     // « « Dentiste » est avec Marc Dupont : je le passe à Sophie Anceau ? » → « oui » : la correction s'applique (mission 52).
@@ -22059,7 +22071,7 @@ const TC_REGLAGE_LANGUES = { anglais: 'en', allemand: 'de', espagnol: 'es', ital
 /* Les réglages que Charly ne change pas lui-même : où les trouver. */
 const TC_REGLAGES_AILLEURS = [
   [/(^|\s)(format (des |de |d )?dates?|dates? (au|en) format|jj mm( aaaa)?)(?=\s|$)/, 'Le format des dates suit la langue de l’application, il ne se change pas à part : Paramètres > Langue & Région.'],
-  [/(^|\s)(fuseau( horaire)?|fuseaux horaires|timezone)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Fuseau horaire.'],
+  [/(^|\s)(fuseau( horaire)?|fuseaux horaires|timezone|heure (anglaise|britannique|americaine|allemande|espagnole|italienne|marocaine|tunisienne|japonaise|australienne|bresilienne|francaise|locale|de paris|de londres|de new york|de tokyo)|^((stp|svp|charly) )?(mets|met|mettre|passe|passer|regle|regler|bascule|basculer|change|changer|cale|caler)( moi| nous)?( l application| l appli| l app| timecool| mon agenda| l agenda| mon telephone| tout)? (a|sur|en) l heure (de|d) (?!la|le |l |mon |ma |mes |ton |ta |son |sa |ce |cet |cette |midi|minuit|\d)[a-z]+)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Fuseau horaire.'],
   [/(^|\s)(message d absence|messages d absence|repondeur|reponse automatique|reponses automatiques|absence automatique)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Message d’absence.'],
   [/(^|\s)(plage horaire|heures? de (ma |la )?journee|debut de (ma |la )?journee|fin de (ma |la )?journee)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Plage horaire de ma journée.'],
   [/(^|\s)(premier jour de (la )?semaine|la semaine commence|semaine commencer?|commencer la semaine)(?=\s|$)/, 'Je ne peux pas encore le faire d’ici : Paramètres > Affichage > Premier jour de la semaine.'],
@@ -22556,8 +22568,10 @@ function tcContactDeReponse(r) {
  */
 function tcRepondreAReponse(text, type, reponses) {
   if (!Array.isArray(reponses) || !reponses.length) return false;
-  const norm = tcClasseNormaliser(text);
-  const motsTexte = norm.split(' ');
+  const norm0 = tcClasseNormaliser(text);
+  // « non c'est parfait », « je ne dis pas non » : un accord, jamais un refus (mission 61).
+  const norm = (typeof tcReponsePositiveMalgreNon === 'function' && tcReponsePositiveMalgreNon(norm0)) ? 'oui' : norm0;
+  const motsTexte = norm0.split(' ');
   const calendrier = (typeof TC_RECUE_CALENDRIER !== 'undefined') ? TC_RECUE_CALENDRIER : [];
   const nommees = reponses.filter(function (r) {
     return tcClasseNormaliser(r.nom).split(' ').some(function (w) {
@@ -22763,6 +22777,171 @@ function tcDepartsSemaineProchaine(text, ref, departs, candidats) {
   const d = new Date(r.getFullYear(), r.getMonth(), r.getDate() + 7);
   const suivant = tcISO(d);
   return departs.map(function (j) { return j === jour0 ? suivant : j; });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 61 (27/10, chef, ratés du passage 16)
+
+   - « Rappelle-moi » seul : Charly demande de quoi et quand, jamais un rappel inventé à l'heure qu'il est. La réponse (« payer le loyer
+     demain à 9h ») se lit avec la question : le rappel daté de la mission 56.
+   - « comment j'ajoute un contact » : le vrai chemin dans l'application (Menu ☰ > Mes contacts, bouton « + Ajouter »).
+   - « propose un rdv à Hugo et Gaëlle jeudi après-midi » puis « sans Hugo » : Hugo sort de la proposition, Charly relit qui reste.
+   - « mets-moi à l'heure de Londres » : la réponse honnête donne le chemin Paramètres > Affichage > Fuseau horaire (réglage plus bas).
+   - À la réponse de Hugo, « non c'est parfait », « je ne dis pas non » : un accord, jamais un refus.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── 1. « Rappelle-moi » seul ─── */
+
+const TC_RAPPEL_SEUL_QUESTION = 'Je te fais penser à quoi, et quand (par exemple « payer le loyer demain à 9h ») ?';
+
+/** « Rappelle-moi », « fais-moi penser », « mets-moi un rappel » sans rien d'autre (texte normalisé) : vrai / faux. */
+function tcRappelSeul(norm, precedent) {
+  const n = String(norm || '').trim();
+  if (!n) return false;
+  const verbes = /^(?:(?:stp|svp|charly|dis|dis moi|hey|eh|alors|ok|bon)\s+)*(?:rappelle moi|rapelle moi|rappel moi|rappelles moi|rappele moi|tu peux me rappeler|tu pourras me rappeler|tu pourrais me rappeler|peux tu me rappeler|tu me rappelles|tu me rappelleras|fais moi penser|fait moi penser|fais moi un rappel|mets moi un rappel|met moi un rappel|ajoute un rappel|ajoute moi un rappel|cree un rappel|cree moi un rappel|note un rappel|mets un rappel|programme un rappel|programme moi un rappel|me rappeler|pense a me rappeler|n oublie pas de me rappeler|j ai besoin d un rappel|je veux un rappel|je voudrais un rappel)(?:\s+(?:stp|svp|s il te plait|charly|merci|steuplait))*$/;
+  if (verbes.test(n)) return true;
+  // « rappel », « un rappel » seuls : seulement hors d'une question de Charly (sinon c'est peut-être un titre qu'il attend).
+  const nom = /^(?:un |nouveau |un nouveau )?rappel(?:\s+(?:stp|svp|s il te plait|charly))*$/.test(n);
+  const questionAvant = !!(precedent && precedent.role === 'assistant' && /\?\s*$/.test(String(precedent.content || '').trim()));
+  return nom && !questionAvant;
+}
+
+/**
+ * La réponse à « Je te fais penser à quoi, et quand ? » : { compose } (la phrase complète, qui suit le chemin du rappel daté),
+ * { question, proposition } (il manque le moment), ou null (une autre demande, un « non » : le message garde son chemin).
+ */
+function tcRappelSeulSuite(brut, proposition) {
+  const texte = String(brut || '').trim().replace(/[.!…\s]+$/, '');
+  const norm = tcClasseNormaliser(texte);
+  if (!norm) return null;
+  const mots = norm.split(' ');
+  if (mots.length <= 3 && /^(non|nan|laisse|laisse tomber|oublie|annule|stop|rien|pas maintenant|plus tard|ok|oui|d accord|merci|bof)(\s|$)/.test(norm)) return null;
+  // Une nouvelle demande part seule.
+  if (/^(rappelle|rapelle|fais moi|mets|met|ajoute|annule|decale|deplace|supprime|efface|propose|invite|previens|envoie|ecris|dis a|cherche|trouve|montre|affiche|qu est|quel|quelle|quels|quelles|quand est|est ce|c est quoi|comment|pourquoi|j ai quoi)(\s|$)/.test(norm)) return null;
+  const objet = proposition && proposition.objet ? proposition.objet : null;
+  const heureGardee = proposition && proposition.heure ? proposition.heure : '';
+  const candidat = objet
+    ? 'Rappelle-moi de ' + objet + ' ' + texte + (heureGardee && !tcHeureDansTexte(texte.toLowerCase()) ? ' ' + heureGardee : '')
+    : 'Rappelle-moi ' + (/^(?:de |d['’]|à |a |pour )/i.test(texte) ? texte : 'de ' + texte);
+  const sans = tcClasseNormaliser(candidat);
+  // Une récurrence, « dans une heure » : la phrase entière va au modèle (comme tapée d'un coup).
+  if (/(^|\s)(chaque|tous les|toutes les|hebdo|avant chaque|dans une heure|dans \d+|fin du mois|fin de mois)(\s|$)/.test(sans)) return { compose: objet ? candidat : 'Rappelle-moi ' + texte };
+  if (typeof tcDetecterRappelDate === 'function' && tcDetecterRappelDate(candidat, new Date())) return { compose: candidat };
+  if (objet) {
+    return { question: 'Quel jour je te fais penser à « ' + objet + ' » (par exemple « demain à 9h ») ?', proposition: Object.assign({}, proposition) };
+  }
+  // Un objet sans jour (« payer le loyer », « d'appeler Hugo à 9h ») : le jour, ensuite.
+  let reste = texte.replace(/^(?:de |d['’]|à |a |pour )/i, '').trim();
+  if (!/^[a-zà-ÿ-]{3,}(?:er|ir|re|oir)(\s|$)/i.test(reste)) return null;
+  const h = tcHeureDansTexte(reste.toLowerCase());
+  let heure = '';
+  if (h) {
+    const mH = reste.match(/\s*(?:à|a|vers)?\s*\d{1,2}\s?(?:h|heures?|:)\s?(?:\d{2})?\s*$/i);
+    if (mH) { heure = 'à ' + h.h + 'h' + (h.m ? String(h.m).padStart(2, '0') : ''); reste = reste.slice(0, mH.index).trim(); }
+  }
+  if (!reste || reste.split(/\s+/).length > 8) return null;
+  return {
+    question: 'Quel jour je te fais penser à « ' + reste + ' » (par exemple « demain' + (heure ? '' : ' à 9h') + ' ») ?',
+    proposition: Object.assign({}, proposition, { objet: reste, heure: heure })
+  };
+}
+
+/* ─── 2. « comment j'ajoute un contact » : le chemin ─── */
+
+/** La réponse (le vrai chemin dans l'application), ou null. */
+function tcAideContact(norm) {
+  const n = String(norm || '').trim();
+  const fin = '(?:\\s+(?:dans|sur|a|de)\\s+(?:l appli|l application|l app|timecool|mes contacts|mon repertoire|mon telephone|mon tel|mon portable|ma liste))?(?:\\s+(?:stp|svp|s il te plait|charly|merci))*$';
+  const objet = '(?:un |une |des |mes |les |de nouveaux |un nouveau |une nouvelle |nouveau |tous mes |mes nouveaux )?(contact|contacts|nouveau contact|fiche contact|numero|numeros|repertoire)';
+  const debut = '^(?:(?:et|mais|dis moi|dis|charly|stp|svp|alors|bon|ok)\\s+)*';
+  const m = n.match(new RegExp(debut + '(?:comment|comment est ce que|comment est ce qu|comment faire pour|comment on fait pour|comment je fais pour|comment il faut faire pour|je fais comment pour|on fait comment pour|ou est ce que|ou|par ou|tu peux m expliquer comment|explique moi comment|tu peux me dire comment|dis moi comment|c est ou pour)\\s+(?:je |j |on |tu |il faut |faut il |peut on |puis je |est ce que je |est ce qu on )?(?:peux |peut |dois |doit )?(ajoute|ajouter|ajoutes|rajoute|rajouter|cree|creer|enregistre|enregistrer|mets|mettre|met|importe|importer|recupere|recuperer|rentre|rentrer|saisis|saisir)\\s+' + objet + fin))
+    || n.match(new RegExp(debut + '(?:je veux|je voudrais|j aimerais|il faut que j|je dois|je cherche a|je n arrive pas a|j arrive pas a|aide moi a)\\s+(ajouter|rajouter|creer|enregistrer|importer|recuperer|mettre|rentrer|saisir)\\s+' + objet + fin))
+    || n.match(new RegExp(debut + '(ajoute|ajouter|cree|creer|nouveau)\\s+(?:un |une )?(?:nouveau )?(contact)(?:\\s+(?:stp|svp|s il te plait|charly))*$'));
+  if (!m) return null;
+  // « ajoute le numéro de Hugo » n'est pas ici (un nom suit) ; « comment j'importe mes contacts » : l'import d'abord.
+  const importer = /^(importe|importer|recupere|recuperer)$/.test(m[1]) || m[2] === 'repertoire';
+  if (importer) return 'Menu ☰ > Mes contacts, puis le bouton « 📱 Importer mes contacts » en haut de la page (depuis l’application sur ton téléphone). Pour en ajouter un seul : le bouton vert « + Ajouter », juste à côté.';
+  return 'Menu ☰ > Mes contacts, puis le bouton vert « + Ajouter » en haut de la page : tu remplis le prénom, le nom et le mobile, puis « Enregistrer ». Pour reprendre d’un coup ceux de ton téléphone : le bouton « 📱 Importer mes contacts », juste à côté.';
+}
+
+/* ─── 3. « sans Hugo » dans un rendez-vous à plusieurs ─── */
+
+/**
+ * La question « Par téléphone, en personne ou en visio ? » ou la carte des créneaux encore ouverte : « sans Hugo », « retire Hugo »,
+ * « juste avec Gaëlle » retirent la personne et Charly relit qui reste. Vrai si le message est traité.
+ */
+async function tcRetirerDuGroupe(text) {
+  const h = (typeof charlyIA !== 'undefined' && Array.isArray(charlyIA.history)) ? charlyIA.history : [];
+  let m = null;
+  for (let i = h.length - 1, k = 0; i >= 0 && k < 4; i--, k++) {
+    const x = h[i];
+    if (x && x.role === 'assistant' && (x._questionType || x._groupe)) { m = x; break; }
+  }
+  if (!m) return false;
+  const q = m._questionType || m._groupe;
+  if (!q || q.etat !== 'choix' || !Array.isArray(q.references)) return false;
+  const norm = tcClasseNormaliser(text);
+  const QUEUE = '(?:\\s+(?:finalement|stp|svp|s il te plait|en fait|alors|du coup|merci))*$';
+  const mRetire = norm.match(new RegExp('^(?:(?:non|ah non|finalement|en fait|plutot|ok|d accord|mais|et|bon)\\s+)*(?:sans|pas|enleve|enlever|retire|retirer|vire|virer|supprime|oublie|exclus|exclure|enleve moi|retire moi)\\s+(.+?)' + QUEUE));
+  const mGarde = !mRetire && norm.match(new RegExp('^(?:(?:non|finalement|en fait|plutot|ok|bon)\\s+)*(?:juste|seulement|uniquement|que|rien qu)\\s+(?:avec\\s+)?(.+?)' + QUEUE));
+  if (!mRetire && !mGarde) return false;
+  const dit = ' ' + (mRetire || mGarde)[1] + ' ';
+  const liste = (typeof contactsList !== 'undefined' && Array.isArray(contactsList)) ? contactsList : [];
+  const membres = q.references.map(function (ref) { return { ref: ref, c: liste.find(function (c) { return c && c.referenceCompte === ref; }) || null }; });
+  const cite = function (x) {
+    if (!x.c) return false;
+    const mots = tcClasseNormaliser(x.c.name).split(' ').filter(Boolean);
+    const prenom = mots[0] || '';
+    const memePrenom = membres.filter(function (y) { return y.c && tcClasseNormaliser(y.c.name).split(' ')[0] === prenom; }).length;
+    if (mots.length >= 2 && mots.every(function (w) { return dit.indexOf(' ' + w + ' ') > -1; })) return true;
+    return prenom.length >= 3 && memePrenom === 1 && dit.indexOf(' ' + prenom + ' ') > -1;
+  };
+  const vises = membres.filter(cite);
+  const nomDe = function (x) { return x.c ? x.c.name : 'un invité'; };
+  const enLettres = function (l) { const n = l.map(nomDe); return n.length <= 1 ? n.join('') : n.slice(0, -1).join(', ') + ' et ' + n[n.length - 1]; };
+  const dire = function (contenu, nature) { charlyIA.history.push({ role: 'assistant', nature: nature || 'reponse', content: contenu }); renderCharlyChat(); };
+  if (!vises.length) {
+    // « sans Paul » alors que Paul n'est pas invité : dit tel quel ; « pas en visio », « pas jeudi » gardent leur chemin.
+    const autre = mRetire && typeof tcClasseContactEcrit === 'function' ? tcClasseContactEcrit((mRetire[1] || '').trim()) : null;
+    if (!autre) return false;
+    tcPousserMessageUtilisateur(text);
+    dire(autre.name + ' ne fait pas partie de ce rendez-vous : il est avec ' + enLettres(membres) + '.');
+    return true;
+  }
+  const restent = mRetire ? membres.filter(function (x) { return vises.indexOf(x) < 0; }) : vises;
+  const retires = membres.filter(function (x) { return restent.indexOf(x) < 0; });
+  tcPousserMessageUtilisateur(text);
+  q.etat = 'retire';
+  if (!restent.length) {
+    dire('Il ne reste personne : je laisse tomber ce rendez-vous. Avec qui veux-tu le prendre ?', 'question');
+    return true;
+  }
+  if (!retires.length) {
+    q.etat = 'choix';
+    dire('C’est déjà avec ' + enLettres(restent) + ' uniquement.');
+    return true;
+  }
+  const relu = 'D’accord, sans ' + enLettres(retires) + ' : le rendez-vous est maintenant avec ' + enLettres(restent) + (restent.length === 1 ? ' uniquement.' : '.');
+  const refs = restent.map(function (x) { return x.ref; });
+  const type = m._groupe ? m._groupe.type : (typeof tcTypeDansTexte === 'function' ? tcTypeDansTexte(text) : '');
+  if (type && typeof tcProposerRdvGroupe === 'function') {
+    await tcProposerRdvGroupe(refs, q.duree, relu, type);
+    return true;
+  }
+  charlyIA.history.push({ role: 'assistant', content: relu + ' Par téléphone, en personne ou en visio ?', nature: 'question',
+    _questionType: { id: 'q' + Date.now(), references: refs, duree: q.duree, etat: 'choix', preambule: relu } });
+  renderCharlyChat();
+  return true;
+}
+
+/* ─── 4. « non c'est parfait » à la réponse de Hugo ─── */
+
+/** « non c'est parfait », « non non c'est bon », « je ne dis pas non », « pas de souci » : un accord malgré le « non » (texte normalisé). */
+function tcReponsePositiveMalgreNon(norm) {
+  const n = String(norm || '').trim();
+  const QUEUE = '(?:\\s+(?:comme ca|merci|pour moi|pour [a-z]+|stp|svp))*$';
+  return new RegExp('^(?:non|nan|ah non|mais non)(?:\\s+non)*\\s+(?:c est |c etait |ca |tout est |)(?:parfait|tres bien|bien|super|top|nickel|genial|impeccable|ok|bon|tout bon|cool|me va|ca me va|va tres bien|va bien|ca va)' + QUEUE).test(n)
+    || new RegExp('^(?:je ne dis pas non|je dis pas non|pourquoi pas|c est pas de refus|ce n est pas de refus|pas de souci|pas de soucis|pas de probleme|aucun souci|aucun probleme|sans souci|sans probleme|ca ne me derange pas|ca me derange pas)' + QUEUE).test(n);
 }
 
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
@@ -27558,7 +27737,7 @@ function tcRendreQuestionType(m) {
       + 'style="flex:1 1 auto; padding:10px 8px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:20px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;'
       + (q.type === x.id ? ' background:#1a73e8; color:#fff;' : '') + '">' + x.icone + ' ' + x.libelle + '</button>';
   }).join('');
-  return tcBulleCharly('Par téléphone, en personne ou en visio ?<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">' + boutons + '</div>');
+  return tcBulleCharly((q.preambule ? escapeHTMLSafe(q.preambule) + '<br>' : '') + 'Par téléphone, en personne ou en visio ?<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">' + boutons + '</div>');
 }
 
 /** Une pastille est touchee : la recherche du creneau commun part avec ce type. */
