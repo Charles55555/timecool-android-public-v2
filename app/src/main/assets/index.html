@@ -23411,7 +23411,8 @@ function tcRdvNommesExactement(sujet) {
     const texte = e.title + (c && c.name ? ' ' + c.name : '');
     return mots.every(function (w) { return tcTitreContient(texte, [w]); });
   });
-  return liste.length ? liste : null;
+  // Aucun n'a tous les mots (« la réunion client » quand seule « Réunion équipe » existe) : une liste vide, jamais un autre rendez-vous.
+  return liste;
 }
 
 /** La relecture « Tu veux que je décale « X » ? Avant… Après… Réponds « oui » ou « non ». », et le déplacement mis en attente. */
@@ -23438,7 +23439,9 @@ async function tcRepondreChangementAnnonce(text) {
   const c = tcChangementAnnonce(text);
   if (!c || typeof tcDeplacementLocal !== 'function') return false;
   // Un nom précis (« la réunion client ») ne vise que ce rendez-vous, jamais « Lequel ? » avec « Réunion équipe » (examen, mission 63).
-  const d = tcDeplacementLocal(c.synthese, new Date(), tcRdvNommesExactement(c.sujet) || undefined);
+  const exacts = tcRdvNommesExactement(c.sujet);
+  if (exacts && !exacts.length) return false;
+  const d = tcDeplacementLocal(c.synthese, new Date(), exacts || undefined);
   if (!d) return false;
   // « passé à 10h » alors que 10h est déjà passé aujourd'hui : quelqu'un est venu, rien à déplacer.
   if (c.passer && d.liste) {
@@ -23458,9 +23461,12 @@ async function tcRepondreChangementAnnonce(text) {
  * mission 63). Autre chose (« oui mais », une nouvelle demande) : faux, le message suit son chemin.
  */
 async function tcRepondreRelectureDeplacement(text, attente) {
-  const oui = tcReponseOuiNon(text);
+  // « d’accord », « ça marche », « parfait », « c’est bon » : un oui, comme « ok » (examen, mission 63).
+  const ACCORD = /^(d accord|daccord|ca marche|ca me va|parfait|c est bon|c est parfait|c est ok|nickel|top|super|entendu|bien sur|carrement|volontiers|je valide|valide|go pour moi|ok pour moi)(\s|$)/;
+  let oui = tcReponseOuiNon(text);
+  if (oui === null && ACCORD.test(tcClasseNormaliser(text))) oui = true;
   if (oui === null) return false;
-  const POLI = /^(?:(?:oui|ouais|ok|okay|d accord|daccord|vas y|go|yes|confirme|je confirme|c est ca|exact|non|no|nan|stp|svp|s il te plait|merci|charly|c est bon|parfait|super|top|nickel|bien sur|carrement|volontiers|avec plaisir)(?:\s+|$))*/;
+  const POLI = /^(?:(?:oui|ouais|ok|okay|d accord|daccord|vas y|go|yes|confirme|je confirme|c est ca|exact|non|no|nan|stp|svp|s il te plait|merci|charly|c est bon|parfait|super|top|nickel|bien sur|carrement|volontiers|avec plaisir|ca marche|ca me va|c est parfait|c est ok|entendu|je valide|valide|go pour moi|ok pour moi|pour moi)(?:\s+|$))*/;
   const reste = tcClasseNormaliser(text).replace(POLI, '').trim();
   if (!reste) {
     tcPousserMessageUtilisateur(text);

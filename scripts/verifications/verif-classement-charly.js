@@ -1471,6 +1471,14 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     }
     verifie('(examen) « oui mais à 16h », « non plutôt 16h », « oui mais plutôt jeudi », « ok mais à 10h30 » → une nouvelle relecture à cette place, rien ne bouge ; « oui mais », « oui mais je préfère annuler », « oui et préviens Hugo à 16h » → rien ne bouge, le message suit son chemin ; « ok vas-y », « oui stp », « ouais », « oui merci Charly » → déplacé à 15h',
       !ratesR.length, ratesR.join(' | '));
+    // Examen, 2e passage : « d’accord », « ça marche », « parfait », « c’est bon » seuls sont un oui.
+    const ratesA = [];
+    for (const rep of ['d’accord', 'daccord', 'ça marche', 'parfait', 'c’est bon', 'ok pour moi', 'entendu !']) {
+      await annonce('La réunion est passée à 15h');
+      const r = await ctx.tcRepondreDeplacement(rep);
+      if (!(r === true && place('reunion') === '2026-10-20 15:0-16:0' && !attente())) ratesA.push(rep + ' → ' + r + ' ' + place('reunion'));
+    }
+    verifie('(examen) « d’accord », « daccord », « ça marche », « parfait », « c’est bon », « ok pour moi », « entendu ! » après la relecture → déplacé à 15h', !ratesA.length, ratesA.join(' | '));
     // (2) oui / ok en tête est une acceptation : la carte reste (sinon Charly redemanderait sans fin) ; « quand tu veux » aussi.
     const acceptes = ['oui comme tu veux', 'ok peu importe', 'oui je te laisse choisir', 'oui n’importe', 'oui quand tu veux', 'quand tu veux', 'ouais peu importe'].filter((t) => ctx.tcSansCarteApresReponseVague(rep176, t) !== rep176);
     verifie('(examen) « oui comme tu veux », « ok peu importe », « oui je te laisse choisir », « oui n’importe », « quand tu veux » : une acceptation, la carte reste', !acceptes.length, acceptes.join(' | '));
@@ -1497,6 +1505,10 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       verifie('(examen) « la réunion client est passée à 11h » → « Réunion client » 11h-12h ; « la réunion d’équipe est décalée à demain 10h » → « Réunion équipe » demain 10h ; « la réunion est passée à 16h » (deux réunions) → « Lequel ? »',
         r1 === true && id1 === 'client' && a1 === '2026-10-21 11:0-12:0' && r2 === true && id2 === 'reunion' && a2 === '2026-10-16 10:0-11:0' && r3 === true && /Lequel veux-tu déplacer \?$/.test(c3) && !attente(),
         [r1, id1, a1, r2, id2, a2, r3, c3].join(' | '));
+      // Examen, 2e passage : un nom précis introuvable ne vise jamais un autre rendez-vous.
+      ctx.events = avecReunion(); ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null;', ctx);
+      const r4 = await ctx.tcRepondreChangementAnnonce('la réunion client est passée à 11h');
+      verifie('(examen) seule « Réunion équipe » existe : « la réunion client est passée à 11h » → rien ici (le modèle), jamais « Réunion équipe » à 11h', r4 === false && !attente() && ctx.charlyIA.history.length === 0, r4 + ' ' + (dernier().content || ''));
       ctx.events = avecReunion();
       const dl = (t) => { const d = ctx.tcDeplacementLocal(t, new DateFixe()); return d && d.liste ? d.liste[0].p.date + ' ' + d.liste[0].p.startH : 'null'; };
       verifie('(examen) tapé, « décale la réunion à demain 10h » → demain (jamais la semaine d’après) ; « décale la réunion de mardi à jeudi » → le jeudi qui suit (22)',

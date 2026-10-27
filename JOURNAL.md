@@ -2976,3 +2976,6 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   personne ou ce qui se livre (plombier, ma fille, la livraison, un contact), ni « vers 10h », ni une heure déjà passée aujourd'hui. Un nom
   précis (« la réunion client ») ne vise que ce rendez-vous (tcRdvNommesExactement, liste donnée à tcDeplacementLocal). Et « décale la
   réunion à demain 10h » va à demain (avant : la semaine d'après, règle des jours nommés).
+- Deuxième passage (examinateur, 27/10, 2 points) : « d'accord », « ça marche », « parfait », « c'est bon » seuls après la relecture sont
+  un oui (déplacé) ; un nom précis introuvable (« la réunion client » quand seule « Réunion équipe » existe) ne vise plus un autre
+  rendez-vous : rien ici, le modèle répond.
