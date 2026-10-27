@@ -1319,6 +1319,69 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }];
   }
 
+  titre('19. Mission 62 : une durée n’est pas une heure, le mode d’une demande reçue, les restes du rappel seul');
+  {
+    // 1. « bloque 1h pour le devis de M. Garcia mercredi 16h » (#405) : l'heure est 16h, la durée 1h.
+    const H = (t) => { const h = ctx.tcHeureDansTexte(ctx.tcSansAccents(t)); return h ? h.h + 'h' + (h.m || '') : 'null'; };
+    verifie('« bloque 1h pour le devis de M. Garcia mercredi 16h » → 16h ; « réserve-moi 1h30 vendredi à 9h » → 9h ; « pendant 2 heures jeudi 15h » → 15h ; seules, « bloque 1h demain », « dans 2h », « rdv demain 10h », « de 14h à 16h » ne changent pas',
+      H('bloque 1h pour le devis de M. Garcia mercredi 16h') === '16h' && H('réserve-moi 1h30 vendredi à 9h') === '9h' && H('pendant 2 heures jeudi 15h') === '15h'
+      && H('bloque 1h demain') === '1h' && H('dans 2h') === '2h' && H('rdv demain 10h') === '10h' && H('de 14h à 16h') === '14h',
+      ['bloque 1h pour le devis de M. Garcia mercredi 16h', 'réserve-moi 1h30 vendredi à 9h', 'pendant 2 heures jeudi 15h', 'bloque 1h demain', 'dans 2h', 'rdv demain 10h', 'de 14h à 16h'].map(H).join(' '));
+    verifie('la durée demandée : « bloque 1h30 pour le devis mercredi 16h » → 90 min, « bloque 2h … 16h » → 120 ; sans heure de début ou sans durée → 0',
+      ctx.tcDureeDemandee('bloque 1h30 pour le devis mercredi 16h') === 90 && ctx.tcDureeDemandee('bloque 2h pour le devis mercredi 16h') === 120
+      && ctx.tcDureeDemandee('bloque 2h demain') === 0 && ctx.tcDureeDemandee('rdv mercredi 16h') === 0 && ctx.tcDureeDemandee('de 14h à 16h') === 0);
+    verifie('le modèle qui dit « à 16h, tu as … le déjeuner de 12h à 13h. Je te propose donc … 15h-16h » annonce un autre créneau ; « 16h est libre, je te propose : » non',
+      ctx.tcAnnonceAutreCreneau('Mercredi 28 octobre 2026 à 16h, tu as une rencontre avec Paul pour le déjeuner de 12h à 13h. Je te propose donc de bloquer le créneau suivant : 15h-16h pour le devis de M. Garcia. Ça te convient ?')
+      && !ctx.tcAnnonceAutreCreneau('16h est libre, je te propose ce créneau :'));
+
+    // 2. « C'est en visio ou en vrai avec Hugo ? » (#514) : le mode de la demande reçue, puis des rendez-vous.
+    ctx.contactsList = [{ id: 'h', name: 'Hugo Besnard', phone: '06', referenceCompte: 'HQ1' }, { id: 'g', name: 'Gaëlle Perrin', phone: '06', referenceCompte: 'GP1' }, { id: 'p', name: 'Paul Martin', phone: '06' }];
+    const R1 = [{ reference: 'HQ1', with: 'Hugo Besnard', thread: [{ from: 'them', texte: 'Hugo Besnard te demande un rendez-vous (en personne).', genre: 'demande_rdv', rdv: 990001, type: 'physique', traite: false }] }];
+    const R5 = [{ reference: 'HQ1', with: 'Hugo Besnard', thread: [{ from: 'them', texte: 'Hugo Besnard te demande un rendez-vous (en visio).', genre: 'demande_rdv', rdv: 990003, type: 'visio', traite: false }] }];
+    const poser = (rc) => { ctx.localStorage = { getItem: (k) => (k === 'tc_conversations' && rc) ? JSON.stringify(rc) : null, setItem() {} }; };
+    const M = (t, rc, evs) => { poser(rc); ctx.events = evs || agenda(); ctx.charlyIA.history = []; const r = ctx.tcRepondreModeRdv(t); const d = ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {}; return r ? d.content : 'false'; };
+    const m1 = M('C’est en visio ou en vrai avec Hugo ?', R1), m2 = M('le rdv avec Hugo c’est en visio ?', R5), m3 = M('Hugo, c’est par téléphone ou en personne ?', R1);
+    verifie('« C’est en visio ou en vrai avec Hugo ? » (demande reçue en personne) → « La demande de rendez-vous de Hugo Besnard est en personne. Elle attend ta réponse dans la messagerie. » ; en visio → « … est en visio. » ; « Hugo, c’est par téléphone ou en personne ? » → la même lecture',
+      m1 === 'La demande de rendez-vous de Hugo Besnard est en personne. Elle attend ta réponse dans la messagerie.' && m2 === 'La demande de rendez-vous de Hugo Besnard est en visio. Elle attend ta réponse dans la messagerie.' && m3 === m1, [m1, m2, m3].join(' | '));
+    const visio = agenda().concat([ev('hv', 'Point avec Hugo', 2, 11, 0, 12, 0, { contact: 'h', type: 'visio' })]);
+    const sansType = agenda().concat([ev('hp', 'Café Hugo', 3, 9, 0, 10, 0)]);
+    const m4 = M('C’est en visio ou en vrai avec Hugo ?', null, visio), m5 = M('mon rendez-vous avec Hugo, c’est en personne ?', null, sansType), m6 = M('C’est en visio ou en vrai avec Hugo ?', null, agenda());
+    const m7 = M('Comment se passe le rendez-vous avec Hugo ?', R1, visio);
+    verifie('sans demande : le rendez-vous à venir avec Hugo → « Ton rendez-vous « Point avec Hugo », … : en visio. » ; sans type noté → « aucun mode noté, donc en personne » ; rien avec Hugo → « Je ne vois ni demande reçue ni rendez-vous à venir avec Hugo Besnard … » ; demande ET rendez-vous → les deux',
+      /^Ton rendez-vous « Point avec Hugo », .+ \(11h à 12h\) : en visio\.$/.test(m4) && /^Ton rendez-vous « Café Hugo », .+ : aucun mode noté, donc en personne\.$/.test(m5)
+      && m6 === 'Je ne vois ni demande reçue ni rendez-vous à venir avec Hugo Besnard : il n’y a pas de mode à lire.'
+      && /^La demande de rendez-vous de Hugo Besnard est en personne\. .+ Ton rendez-vous déjà prévu, « Point avec Hugo », .+ : en visio\.$/.test(m7), [m4, m5, m6, m7].join(' | '));
+    const pas = ['propose à Hugo un rdv en visio ?', 'passe le rdv avec Hugo en visio', 'Rdv avec Hugo en visio jeudi 10h', 'c’est en visio ?', 'En vrai, c’est quand mon rdv avec Hugo ?', 'comment ça se passe avec Hugo ?',
+      'tu peux demander à Hugo si c’est en visio ?', 'Demande à Hugo si c’est en visio', 'on fait ça en visio avec Hugo jeudi 10h ?', 'appelle Hugo'].filter((t) => M(t, R1) !== 'false');
+    verifie('pas une question de mode : « propose à Hugo un rdv en visio ? », « passe le rdv avec Hugo en visio », « c’est en visio ? » (personne), « En vrai, c’est quand… », « comment ça se passe avec Hugo ? », « demande à Hugo si… », « appelle Hugo »', !pas.length, pas.join(' | '));
+    { poser(R1); ctx.events = agenda(); ctx.charlyIA.history = [{ role: 'assistant', content: 'Par téléphone, en personne ou en visio ?', _questionType: { id: 'q', references: ['HQ1'], duree: 1, etat: 'choix' } }];
+      verifie('« Par téléphone, en personne ou en visio ? » en attente : « en visio avec Hugo ? » est sa réponse, pas une question de mode', ctx.tcRepondreModeRdv('en visio ou en vrai avec Hugo ?') === false); }
+    const csm62 = extraire('charlySendMessage') || '';
+    verifie('charlySendMessage : la question du mode passe après « sans Hugo », avant la réponse tapée au type et avant le classement',
+      csm62.indexOf('tcRepondreModeRdv(text)') > csm62.indexOf('await tcRetirerDuGroupe(text)') && csm62.indexOf('tcRepondreModeRdv(text)') < csm62.indexOf('const _qt = tcQuestionTypeEnAttente();')
+      && csm62.indexOf('tcRepondreModeRdv(text)') < csm62.indexOf('const _classe = tcClasserMessage(text, charlyIA.history);'));
+
+    // 3. Les restes du rappel seul (examen, mission 61).
+    const q0 = classer('Rappelle-moi');
+    const apres = (texte, r) => [{ role: 'user', content: texte }, { role: 'assistant', content: r.question, nature: 'question', _classement: r.classe, _proposition: r.proposition || null, _texte: texte }];
+    const w1 = classer('demain la facture', apres('Rappelle-moi', q0));
+    const cw1 = w1.compose ? ctx.tcDetecterRappelDate(w1.compose, new DateFixe()) : null;
+    const w2 = classer('à 18h prendre le train', apres('Rappelle-moi', q0));
+    const w3 = w2.proposition ? classer('demain', apres('à 18h prendre le train', w2)) : {};
+    const cw3 = w3.compose ? ctx.tcDetecterRappelDate(w3.compose, new DateFixe()) : null;
+    const w4 = classer('2 heures avant le match', apres('Rappelle-moi', q0)), w5 = classer('la veille du rdv', apres('Rappelle-moi', q0));
+    const w6 = classer('vendredi je vais chez le médecin', apres('Rappelle-moi', q0)), w7 = classer('demain je sais pas', apres('Rappelle-moi', q0));
+    verifie('« demain la facture » → « Rappelle-moi de penser à la facture demain » (journée de demain « Rappel : penser à la facture ») ; « à 18h prendre le train » → « Quel jour je te fais penser à « prendre le train » (par exemple « demain ») ? » puis « demain » → demain 18h ; « 2 heures avant le match », « la veille du rdv » → la phrase entière au modèle ; « vendredi je vais chez le médecin », « demain je sais pas » ne changent pas',
+      w1.compose === 'Rappelle-moi de penser à la facture demain' && !!(cw1 && cw1.allDay && cw1.allDay.date === iso(1) && cw1.allDay.titre === 'Rappel : penser à la facture')
+      && w2.question === 'Quel jour je te fais penser à « prendre le train » (par exemple « demain ») ?' && w3.compose === 'Rappelle-moi de prendre le train demain à 18h' && !!(cw3 && cw3.carte && /\| 18:00-19:00 \| Rappel : prendre le train \| rdv/.test(cw3.carte))
+      && w4.compose === 'Rappelle-moi 2 heures avant le match' && w5.compose === 'Rappelle-moi la veille du rdv'
+      && w6.question === 'Je te fais penser à quoi, vendredi ?' && w7.question === 'Je te fais penser à quoi, demain ?',
+      JSON.stringify([w1.compose, cw1, w2.question, w3.compose, cw3 && cw3.carte, w4.compose || w4.question, w5.compose || w5.question, w6.question, w7.question || w7.classe]));
+    verifie('pas de tiret long ni d assertion arrière dans le bloc 62', bloc.indexOf('MISSION 62') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.indexOf('—') < 0);
+    poser(null); ctx.events = agenda(); ctx.charlyIA.history = [];
+    ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }];
+  }
+
   titre('13. Mission 56 : pros, clients, rappels et invitations');
   ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', phone: '06', referenceCompte: 'R3' },
     { id: 'h', name: 'Hugo Besnard', phone: '06', referenceCompte: 'HQ1' }, { id: 'g', name: 'Gaëlle Perrin', phone: '06', referenceCompte: 'GP1' }];

@@ -2926,3 +2926,20 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 - Quatrième passage (examinateur, 27/10, 1 point) : un moment devant l'infinitif, sans modal (« samedi 10h faire les courses », « demain
   matin prendre mes médicaments ») → le rappel composé ; jamais après un article (« le loyer » reste un nom). Sinon, le moment dit en tête reste
   dans la question (« vendredi je vais chez le médecin » → « Je te fais penser à quoi, vendredi ? »).
+
+## 27/10/2026 : mission 62, les ratés du passage 17 (CODEUR)
+
+- #405 « bloque 1h pour le devis de M. Garcia mercredi 16h » : la page lisait « 1h » comme l'heure (tcHeureDansTexte prenait la première).
+  Une heure qui suit « bloque », « réserve », « pendant », « prévois »… est une durée quand une autre heure suit (tcEstUneDuree) :
+  l'heure est 16h, la durée 1h (tcDureeDemandee, qui fixe aussi la fin du bloc proposé et la vérification de chevauchement).
+- Un conflit ne vient que de l'agenda : « à 16h, tu as … le déjeuner de 12h à 13h. Je te propose 15h » est lu comme un conflit annoncé
+  (tcAnnonceAutreCreneau, seulement si la demande a une heure) ; et un bloc du modèle qui accompagne un conflit annoncé tombe quand le
+  créneau demandé est libre (tcBlocAvecFauxConflit). Dans les deux cas, tcIgnorerFauxConflit vérifie le chevauchement réel : libre → la
+  page propose le créneau demandé ; pris → la phrase de conflit de la page, avec le vrai rendez-vous.
+- #514 « C'est en visio ou en vrai avec Hugo ? » : tcRepondreModeRdv lit le mode de la demande reçue (messagerie) puis des rendez-vous à
+  venir avec la personne (« aucun mode noté, donc en personne ») ; rien trouvé → il le dit. Jamais pour une demande (« propose-lui en
+  visio », « passe-le en visio »), un « en vrai » qui veut dire « franchement », « comment ça se passe avec Hugo ? », ni quand la question
+  « Par téléphone, en personne ou en visio ? » attend sa réponse.
+- Restes de la 61 : « demain la facture » → « penser à la facture » demain ; « à 18h prendre le train » → « Quel jour je te fais penser à
+  « prendre le train » … ? » (l'heure gardée) ; « 2 heures avant le match », « la veille du rdv » → la phrase entière au modèle.
+- Suites : verif-classement-charly (section 19), verif-charly-conflits (section 3b). Sonde Chrome sur la page : tous les cas bons.

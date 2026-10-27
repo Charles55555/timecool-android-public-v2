@@ -12192,7 +12192,10 @@ function tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, now, nbJours) {
   }
   const ref = now ? new Date(now) : new Date();
   const base = demande ? demande.date : new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
-  const creneau = String(sh).padStart(2, '0') + ':' + String(sm).padStart(2, '0') + '-' + String(eh).padStart(2, '0') + ':' + String(sm).padStart(2, '0');
+  // « bloque 2h pour le devis mercredi 16h » : le bloc dure ce qui est demandé (mission 62).
+  const dureeB = (typeof tcDureeDemandee === 'function' && tcDureeDemandee(lastUserText)) || 0;
+  const finB = dureeB ? Math.min(23 * 60 + 59, sh * 60 + sm + dureeB) : 0;
+  const creneau = String(sh).padStart(2, '0') + ':' + String(sm).padStart(2, '0') + '-' + (finB ? String(Math.floor(finB / 60)).padStart(2, '0') + ':' + String(finB % 60).padStart(2, '0') : String(eh).padStart(2, '0') + ':' + String(sm).padStart(2, '0'));
   const lignes = [];
   for (let i = 0; i < (nbJours || 1); i++) {
     const d = new Date(base); d.setDate(d.getDate() + i);
@@ -12264,8 +12267,13 @@ function tcAnnonceUnConflit(reply) {
  * deplacement/annulation, qui ont leurs propres regles).
  */
 function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
-  const r = String(reply || '');
-  if (/\[AGENDA\]/.test(r) || !tcAnnonceUnConflit(r)) return null;
+  let r = String(reply || '');
+  // Le modèle annonce un conflit et met une autre heure dans son bloc alors que le créneau demandé est libre : seul l'agenda dit
+  // s'il y a conflit, son bloc tombe (mission 62).
+  if (/\[AGENDA\]/.test(r) && typeof tcBlocAvecFauxConflit === 'function' && tcBlocAvecFauxConflit(r, texte, now, events, mode)) r = r.replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/, ' ').trim();
+  // « À 16h, tu as le déjeuner de 12h à 13h. Je te propose 15h » (une heure demandée) : un conflit annoncé aussi (mission 62).
+  const autreCreneau = typeof tcAnnonceAutreCreneau === 'function' && tcAnnonceAutreCreneau(r) && !!tcHeureDansTexte(tcSansAccents(texte));
+  if (/\[AGENDA\]/.test(r) || !(tcAnnonceUnConflit(r) || autreCreneau)) return null;
   const t = tcSansAccents(texte);
   if (/\b(deplac|decal|repouss|report|avanc|boug|chang|modif|remplac|annul|supprim|efface)/.test(t)) return null;
   // Deux demandes (« dentiste demain 10h et coach jeudi 14h ») : le conflit peut porter sur la seconde, on ne touche a rien.
@@ -12291,7 +12299,8 @@ function tcIgnorerFauxConflit(reply, texte, now, events, mode) {
       : quand + ' est libre dans ton agenda.';
     return 'Je ne vois pas ce rendez-vous dans ton agenda. ' + etat.charAt(0).toUpperCase() + etat.slice(1) + ' À quelle heure ?';
   }
-  const debut = heure.h * 60 + (heure.m || 0), fin = debut + 60;
+  // La durée demandée compte (« bloque 2h … 16h » chevauche ce qui commence à 17h), mission 62.
+  const debut = heure.h * 60 + (heure.m || 0), fin = debut + ((typeof tcDureeDemandee === 'function' && tcDureeDemandee(texte)) || 60);
   const occupe = duJour.some(function (e) {
     return !e.allDay && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
   });
@@ -14087,8 +14096,12 @@ function detecterSuppressionRdv(text) {
  */
 function tcHeureDansTexte(t) {
   // « heures » avant « h » : « 11 heures 30 » gardait « 11 h » et perdait les minutes (mission 52).
-  const m = String(t).toLowerCase().match(/\b([01]?\d|2[0-3])\s*(?:heures?|h|:)\s*([0-5]\d)?(?![0-9])/);
+  const s = String(t).toLowerCase();
+  const re = /\b([01]?\d|2[0-3])\s*(?:heures?|h|:)\s*([0-5]\d)?(?![0-9])/g;
+  let m = re.exec(s);
   if (!m) return null;
+  // « bloque 1h pour le devis de M. Garcia mercredi 16h » : « 1h » est une durée, l'heure est la suivante (mission 62).
+  if (typeof tcEstUneDuree === 'function' && tcEstUneDuree(s, m.index)) { const suite = re.exec(s); if (suite) m = suite; }
   return { h: Number(m[1]), m: m[2] ? Number(m[2]) : null };
 }
 
@@ -15166,6 +15179,8 @@ async function charlySendMessage() {
 
   // === « sans Hugo », « juste avec Gaëlle » : la personne sort du rendez-vous à plusieurs, Charly relit qui reste (mission 61) ===
   if (typeof tcRetirerDuGroupe === 'function' && await tcRetirerDuGroupe(text)) return;
+  // === « C'est en visio ou en vrai avec Hugo ? » : le mode de la demande reçue ou du rendez-vous, lu dans la page (mission 62) ===
+  if (typeof tcRepondreModeRdv === 'function' && tcRepondreModeRdv(text)) return;
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
   if (typeof tcQuestionTypeEnAttente === 'function') {
     const _qt = tcQuestionTypeEnAttente();
@@ -22826,7 +22841,7 @@ function tcRappelSeulSuite(brut, proposition) {
   const objet = proposition && proposition.objet ? proposition.objet : null;
   const heureGardee = proposition && proposition.heure ? proposition.heure : '';
   const momentGarde = proposition && proposition.momentDit ? proposition.momentDit : '';
-  const sansDate = function (cand) { return /(^|\s)(chaque|tous les|toutes les|hebdo|avant chaque|dans une heure|dans \d+|fin du mois|fin de mois)(\s|$)/.test(tcClasseNormaliser(cand)); };
+  const sansDate = function (cand) { return /(^|\s)(chaque|tous les|toutes les|hebdo|avant chaque|dans une heure|dans \d+|fin du mois|fin de mois|(\d+|une|deux|trois|quatre|cinq|dix|quinze|trente) (heures?|h|minutes?|min|jours?|semaines?) (avant|apres)|la veille|l avant veille)(\s|$)/.test(tcClasseNormaliser(cand)); };
   // Le titre que le rappel aurait : jamais vide (« Rappel : penser ») ; sinon, la question (examen, mission 61).
   const titreDe = function (r) {
     if (!r) return '';
@@ -22876,13 +22891,27 @@ function tcRappelSeulSuite(brut, proposition) {
   } else {
     // « je sais pas », « il pleut » : pas un objet de rappel.
     if (/^(je|j|tu|il|elle|on|nous|vous|ils|elles|ca|ce|cela|rien|aucune|aucun|si)(\s|$)/.test(tcClasseNormaliser(sansPrefixe))) return null;
-    action = 'penser ' + tcRappelPenserA(sansPrefixe);
+    // « demain la facture » : le moment en tête, l'objet ensuite (« penser à la facture demain »), mission 62.
+    const nTete = momentTete ? momentTete.split(/\s+/).length : 0;
+    const resteObjet = nTete ? mots.slice(nTete).join(' ').trim() : '';
+    if (resteObjet && !momentGarde && !/^(je|j|tu|il|elle|on|nous|vous|ils|elles|ca|ce|cela|rien|aucune|aucun|si|que|qu|a|vers|h|heure|heures|et|ou|puis)(\s|$)/.test(tcClasseNormaliser(resteObjet))) {
+      action = 'penser ' + tcRappelPenserA(resteObjet);
+      momentDevant = momentTete;
+    } else action = 'penser ' + tcRappelPenserA(sansPrefixe);
   }
   const candidat = 'Rappelle-moi ' + (/^[aeiouyhàâéèêîôû]/i.test(action) ? 'd’' : 'de ') + action + (momentDevant ? ' ' + momentDevant : '') + (momentGarde ? ' ' + momentGarde : '');
   // Une récurrence, « dans une heure » : la phrase entière va au modèle (comme tapée d'un coup).
   if (sansDate(candidat)) return { compose: momentGarde ? candidat : 'Rappelle-moi ' + texte };
   const r = typeof tcDetecterRappelDate === 'function' ? tcDetecterRappelDate(candidat, new Date()) : null;
   if (r && !titreVide(titreDe(r))) return { compose: candidat };
+  // « à 18h prendre le train » : l'action est dite, seule l'heure est là ; Charly demande le jour, pas « à quoi » (mission 62).
+  if (avecVerbe && !momentGarde && momentDevant && tcHeureDansTexte(momentDevant.toLowerCase())
+    && !/(^|\s)(demain|apres|aujourd|soir|matin|midi|minuit|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|prochain|prochaine|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)(\s|$)/.test(tcClasseNormaliser(momentDevant))
+    && action && !titreVide('Rappel : ' + action) && action.split(/\s+/).length <= 8) {
+    const hD = tcHeureDansTexte(momentDevant.toLowerCase());
+    const heureD = 'à ' + hD.h + 'h' + (hD.m ? String(hD.m).padStart(2, '0') : '');
+    return { question: tcRappelQuestionJour(action, heureD), proposition: Object.assign({}, proposition, { objet: action, heure: heureD }) };
+  }
   const momentQ = momentGarde || momentTete;
   if (r || momentQ) return { question: 'Je te fais penser à quoi' + (momentQ ? ', ' + momentQ : '') + ' ?', proposition: Object.assign({}, proposition, momentQ ? { momentDit: momentQ } : {}) };
   // Un objet sans jour (« payer le loyer », « d'appeler Hugo à 9h », « le loyer ») : le jour, ensuite.
@@ -22907,6 +22936,7 @@ function tcRappelMomentDeTete(mots) {
   let tete = mots.slice(0, n);
   while (tete.length && !tcRappelMomentSeul(tcClasseNormaliser(tete[tete.length - 1])) && !/^(matin|soir|midi|prochain|prochaine|\d.*)$/.test(tcClasseNormaliser(tete[tete.length - 1]))) tete.pop();
   const t = tete.join(' ');
+  if (/^\d+$/.test(t)) return '';   // « 2 heures avant le match » : une durée, pas un moment (mission 62)
   return t && tcRappelMomentSeul(tcClasseNormaliser(t)) ? t : '';
 }
 
@@ -23057,6 +23087,143 @@ function tcReponsePositiveMalgreNon(norm) {
   const QUEUE = '(?:\\s+(?:comme ca|merci|pour moi|pour [a-z]+|stp|svp|tres bien|bien|parfaitement))*$';
   return new RegExp('^(?:non|nan|ah non|mais non)(?:\\s+non)*\\s+(?:c est |c etait |ca |tout est |)(?:parfait|tres bien|super|nickel|genial|impeccable|me va|ca me va|va tres bien)' + QUEUE).test(n)
     || new RegExp('^(?:je ne dis pas non|je dis pas non|pourquoi pas|c est pas de refus|ce n est pas de refus|pas de souci|pas de soucis|pas de probleme|aucun souci|aucun probleme|sans souci|sans probleme|ca ne me derange pas|ca me derange pas)' + QUEUE).test(n);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 62 (27/10, chef, ratés du passage 17)
+
+   - « bloque 1h pour le devis de M. Garcia mercredi 16h » : « 1h » est une durée, l'heure est 16h. Un conflit ne vient que de
+     l'agenda (chevauchement réel des heures) : le modèle qui cite un rendez-vous d'une autre heure et propose ailleurs est
+     ignoré, la page propose le créneau demandé.
+   - « C'est en visio ou en vrai avec Hugo ? » : la page lit le mode de la demande reçue, ou du rendez-vous, et répond.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── 1. Une durée n'est pas une heure, un conflit vient de l'agenda ─── */
+
+/** Le nombre d'heures à la position idx de s (texte en minuscules) suit-il « bloque », « réserve », « pendant »… ? */
+function tcEstUneDuree(s, idx) {
+  const avant = String(s).slice(Math.max(0, idx - 40), idx);
+  return /(^|[^a-zà-ÿ])(bloque|bloquer|bloques|bloquez|r[eé]serve|r[eé]server|r[eé]serves|pr[eé]vois|pr[eé]voir|garde|garder|gardes|pendant|durant|dure|dur[eé]e de|dur[eé]e|compte|compter|comptes)(?:[- ](?:moi|nous|me))?(?: (?:une?|environ|au moins))?\s*$/.test(avant);
+}
+
+/** Les heures citées (« 10h », « 10h30 », « 10:30 », « 10 heures »), dans l'ordre : [{ h, m, index }]. */
+function tcHeuresCitees(t) {
+  const s = String(t).toLowerCase();
+  const re = /\b([01]?\d|2[0-3])\s*(?:heures?|h|:)\s*([0-5]\d)?(?![0-9])/g;
+  const out = [];
+  let m;
+  while ((m = re.exec(s))) out.push({ h: Number(m[1]), m: m[2] ? Number(m[2]) : null, index: m.index });
+  return out;
+}
+
+/** « bloque 1h30 pour le devis mercredi 16h » → 90 (minutes) ; 0 sans durée suivie d'une heure de début. */
+function tcDureeDemandee(t) {
+  const s = String(t).toLowerCase();
+  const heures = tcHeuresCitees(s);
+  if (heures.length < 2 || !tcEstUneDuree(s, heures[0].index)) return 0;
+  return heures[0].h * 60 + (heures[0].m || 0);
+}
+
+/** Le modèle dit que la personne est prise (« à 16h, tu as … ») et propose une autre heure (« je te propose 15h ») : vrai / faux. */
+function tcAnnonceAutreCreneau(reply) {
+  const r = tcSansAccents(reply).replace(/[’']/g, ' ');
+  return /(^|\s)(tu as|il y a|tu es pris|tu es prise|pas disponible|indisponible|pas libre)(\s|$)/.test(r)
+    && /(^|\s)(je te propose|je propose|je te suggere|plutot|a la place|creneau suivant|un autre creneau|decaler)(\s|$)/.test(r);
+}
+
+/**
+ * Le modèle annonce un conflit (« tu as déjà… », « je te propose plutôt… ») avec un bloc, alors que le créneau demandé est libre
+ * dans l'agenda : vrai (le bloc du modèle est à retirer, la page propose le créneau demandé). Faux sinon (vrai conflit, autre jour, déplacement).
+ */
+function tcBlocAvecFauxConflit(reply, texte, now, events, mode) {
+  const r = String(reply || '');
+  const bloc = r.match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
+  if (!bloc || (typeof tcEstDeplacement === 'function' && tcEstDeplacement(texte))) return false;
+  const lignes = bloc[1].split('\n').filter(function (l) { return l.trim(); });
+  if (lignes.length !== 1) return false;
+  const m = lignes[0].match(/^\s*(\d{4}-\d{2}-\d{2})\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|/);
+  if (!m) return false;
+  const prose = r.replace(bloc[0], ' ');
+  if (!tcAnnonceUnConflit(prose) && !tcAnnonceAutreCreneau(prose)) return false;
+  const heure = tcHeureDansTexte(tcSansAccents(texte));
+  const demande = tcDateDemandee(texte, now);
+  if (!heure || !demande || demande.invalide || tcISO(demande.date) !== m[1]) return false;
+  const debut = heure.h * 60 + (heure.m || 0);
+  const fin = debut + (tcDureeDemandee(texte) || 60);
+  const evMode = mode === 'pro' ? 'pro' : 'user';
+  return !(Array.isArray(events) ? events : []).some(function (e) {
+    return e && e.mode === evMode && tcEvenementCouvre(e, m[1]) && !e.allDay
+      && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
+  });
+}
+
+/* ─── 2. « C'est en visio ou en vrai avec Hugo ? » : le mode, lu dans la page ─── */
+
+/** Le mode dit en mots (« en personne », « en visio », « par téléphone »), ou ''. */
+function tcModeEnMots(type) {
+  const t = (typeof TC_TYPES_RDV !== 'undefined' ? TC_TYPES_RDV : []).find(function (x) { return x.id === type; });
+  return t ? t.mot : '';
+}
+
+/**
+ * Une question sur le mode d'un rendez-vous ou d'une demande reçue, avec une personne nommée : Charly répond avec ce que la
+ * page sait (la demande reçue, puis les rendez-vous à venir). true si la réponse est donnée ; false sinon (le message suit son chemin).
+ */
+function tcRepondreModeRdv(text) {
+  const brut = String(text || '').trim();
+  if (!brut || brut.length > 120) return false;
+  if (typeof tcQuestionTypeEnAttente === 'function' && tcQuestionTypeEnAttente()) return false;
+  const norm = tcClasseNormaliser(brut);
+  const MODES = /(^|\s)(visio|en visio|visioconference|video|en vrai|en personne|presentiel|en presentiel|physique|physiquement|sur place|par telephone|au telephone|telephone|a distance|en ligne|zoom|teams)(?=\s|$)/;
+  const COMMENT = /(^|\s)(comment (ca )?se passe|ca se passe comment|se passe comment|se fait comment|comment se fait|de quel type|quel type|quel mode|sous quelle forme)(\s|$)/;
+  // « comment ça se passe avec Hugo ? » est une conversation : il faut un rendez-vous ou une demande nommés.
+  const comment = COMMENT.test(norm) && /(^|\s)(rdv|rendez vous|demande|reunion|rencontre)(\s|$)/.test(norm);
+  const mode = norm.match(MODES);
+  if (!mode && !comment) return false;
+  // « en vrai » seul est souvent « franchement » : il faut un choix (« en visio ou en vrai »).
+  if (mode && !comment && /^\s*en vrai$/.test(mode[0]) && !/(^|\s)ou (en |par |au )?(visio|vrai|personne|presentiel|telephone|distance)(\s|$)/.test(norm)) return false;
+  // Une question, pas une demande (« propose-lui en visio », « passe-le en visio », « appelle Hugo »).
+  if (!/\?/.test(brut) && !/^(est ce|comment|c est|ce sera)(\s|$)/.test(norm)) return false;
+  const sansComment = norm.replace(COMMENT, ' ');
+  if (/(^|\s)(propose|proposer|proposes|mets|met|change|changer|passe|passer|passons|decale|decaler|deplace|deplacer|demande a|demande lui|demander a|dis|dis lui|ecris|envoie|envoyer|previens|invite|inviter|cree|creer|ajoute|ajouter|bloque|annule|annuler|accepte|accepter|refuse|refuser|prends|prendre|fixe|organise|planifie|appelle|appeler|rappelle|peux tu|tu peux|pourrais tu|tu pourrais|veux tu|voudrais|faut il)(\s|$)/.test(sansComment)) return false;
+  if (!comment && !/(^|\s)(c est|ce sera|ca sera|ca se passe|est ce|il est|elle est|on se voit|on se retrouve|sera|c etait|se fait)(\s|$)/.test(norm)
+    && !/(^|\s)ou (en |par |au )?(visio|vrai|personne|presentiel|telephone|distance)(\s|$)/.test(norm)) return false;
+  // La personne : un mot qui nomme un contact, une demande reçue ou un rendez-vous.
+  const petits = (typeof TC_RECUE_PETITS !== 'undefined' ? TC_RECUE_PETITS : []).concat(['est', 'sera', 'etait', 'quel', 'quelle', 'type', 'mode', 'forme', 'sous', 'comment', 'se', 'passe', 'mon', 'ton', 'distance', 'physique', 'physiquement', 'place', 'sur', 'visioconference', 'presentiel', 'reunion', 'rencontre', 'fait']);
+  const mots = norm.split(' ').filter(function (w) { return w.length >= 3 && petits.indexOf(w) < 0 && !/^\d/.test(w); });
+  if (!mots.length || mots.length > 3) return false;
+  const recues = (typeof tcDemandesRecues === 'function') ? tcDemandesRecues().filter(function (r) { return r.genre === 'demande'; }) : [];
+  const nommees = recues.length && typeof tcRecuesNommees === 'function' ? tcRecuesNommees(norm, recues).recues : [];
+  const rdvs = [];
+  mots.forEach(function (w) {
+    const contacts = (typeof tcContactsParMots === 'function') ? tcContactsParMots([w]) : [];
+    const noms = contacts.length ? contacts.map(function (c) { return c.name; }) : [w];
+    noms.forEach(function (nom) { tcRdvAvecPersonne(nom).forEach(function (e) { if (rdvs.indexOf(e) < 0) rdvs.push(e); }); });
+  });
+  const contactNomme = mots.some(function (w) { return (typeof tcContactsParMots === 'function') && tcContactsParMots([w]).length > 0; });
+  if (!nommees.length && !rdvs.length && !contactNomme) return false;
+  const phrases = [];
+  nommees.forEach(function (r) {
+    const enMots = tcModeEnMots(r.type);
+    phrases.push(enMots
+      ? 'La demande de rendez-vous de ' + r.nom + ' est ' + enMots + '. Elle attend ta réponse dans la messagerie.'
+      : r.nom + ' n’a pas précisé le mode de sa demande de rendez-vous : sans précision, c’est en personne. Elle attend ta réponse dans la messagerie.');
+  });
+  const ligne = function (e) {
+    const enMots = tcModeEnMots(tcTypeRdvValide(e.type));
+    return '« ' + e.title + ' », ' + tcFormaterDateHumaine(e.date).toLowerCase() + ' (' + tcFormaterHeure(e) + ') : '
+      + (enMots || 'aucun mode noté, donc en personne');
+  };
+  if (rdvs.length === 1) phrases.push((nommees.length ? 'Ton rendez-vous déjà prévu, ' : 'Ton rendez-vous ') + ligne(rdvs[0]) + '.');
+  else if (rdvs.length > 1) phrases.push('Tes rendez-vous à venir : ' + rdvs.slice(0, 4).map(ligne).join(' ; ') + (rdvs.length > 4 ? ' ; et ' + (rdvs.length - 4) + ' autre(s)' : '') + '.');
+  if (!phrases.length) {
+    const qui = mots.map(function (w) { const c = tcContactsParMots([w]); return c.length === 1 ? c[0].name : ''; }).filter(Boolean)[0] || '';
+    phrases.push('Je ne vois ni demande reçue ni rendez-vous à venir' + (qui ? ' avec ' + qui : '') + ' : il n’y a pas de mode à lire.');
+  }
+  tcPousserMessageUtilisateur(text);
+  charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: phrases.join(' ') });
+  renderCharlyChat();
+  return true;
 }
 
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
