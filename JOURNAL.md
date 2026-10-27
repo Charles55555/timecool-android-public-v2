@@ -3009,3 +3009,15 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   poser une question ou qu'une réponse est attendue, ni après « vendredi midi » ; « café Martin » avec deux Martin : rien de la page.
   Aussi : une journée libre est proposée sur trois heures (9h-12h) ; les blocs à catégorie accentuée (« santé ») restent lus, une fin
   coupée « temps_li » tombe, « Pas de [AGENDA] ici » ne change pas.
+
+## 27/10/2026 — Mission 65 (chef, ratés du passage 20)
+
+- « Le client de 14h m'a posé un lapin » (#434) : une heure citée filtre toujours les rendez-vous proposés. Rien à 14h aujourd'hui (ou le
+  jour cité) : « Je ne vois pas de rendez-vous à 14h aujourd'hui. De quel rendez-vous parles-tu ? », rien n'attend ; un seul : le retrait
+  avec oui/non ; plusieurs : « Lequel ? » entre eux seulement. L'aide figée du modèle remplacée par « Lequel ? » suit la même règle.
+- « super, non merci », « ok non merci », « parfait non » : un refus, jamais un oui (proposition après « n'importe », relecture d'un
+  déplacement, oui/non tapé).
+- « Demande à Hugo quand il est dispo » (#463) : Hugo a TimeCool, la page cherche vos créneaux communs (« Hugo a TimeCool : je regarde
+  vos créneaux communs, sans lui écrire. ») ; un contact sans TimeCool garde le message relu.
+- « je suis triste » (#223) : « … mais je suis là. Si tu veux alléger ta journée, je peux décaler ou annuler un rendez-vous. »
+- Suite : verif-classement-charly, section 22.

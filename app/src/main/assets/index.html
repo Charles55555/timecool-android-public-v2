@@ -14121,7 +14121,8 @@ function tcHeureDansTexte(t) {
 /** « oui » → true, « non » → false, autre chose → null. */
 function tcReponseOuiNon(text) {
   const t = tcSansAccents(text).replace(/[!.?,]/g, ' ').trim();
-  if (/^(oui|ouais|ok|okay|d'accord|daccord|vas-y|vas y|go|yes|confirme|je confirme|c'est ca|exact)(\s|$)/.test(t)) return true;
+  // « ok non merci », « oui non » : le « non » l'emporte (mission 65).
+  if (/^(oui|ouais|ok|okay|d'accord|daccord|vas-y|vas y|go|yes|confirme|je confirme|c'est ca|exact)(\s|$)/.test(t)) return !/(^|\s)(non|nan)(\s|$)/.test(t);
   if (/^(non|no|nan|annule pas|laisse|laisse tomber|stop)(\s|$)/.test(t)) return false;
   return null;
 }
@@ -14134,7 +14135,7 @@ function tcReponseOuiNon(text) {
  */
 function tcReponseValidation(text) {
   const t = tcSansAccents(text).replace(/[!.?,'’]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (/^(valide|valider|validez|valide[sz]?(-| )?(le|la|les|moi|tout)|ajoute(-| )?(le|la|les|tout)|ajoute[sz]? quand meme|valide[sz]? quand meme|quand meme|c est bon|c est ok|parfait|nickel|ok pour moi|confirme[sz]?)(\s|$)/.test(t)) return 'oui';
+  if (/^(valide|valider|validez|valide[sz]?(-| )?(le|la|les|moi|tout)|ajoute(-| )?(le|la|les|tout)|ajoute[sz]? quand meme|valide[sz]? quand meme|quand meme|c est bon|c est ok|parfait|nickel|ok pour moi|confirme[sz]?)(\s|$)/.test(t)) return /(^|\s)(non|nan)(\s|$)/.test(t) ? 'non' : 'oui';
   if (/^(n ajoute (pas|rien)|ajoute (pas|rien)|pas maintenant|laisse|laisse tomber|annule l ajout|abandonne)(\s|$)/.test(t)) return 'non';
   // « annule », « stop », « on oublie » seuls : la proposition en attente tombe (mission 55).
   if (/^(annule|annule ca|annule cela|annule tout|annule stp|stop|arrete|on oublie|oublie|non annule)$/.test(t)) return 'non';
@@ -15209,6 +15210,10 @@ async function charlySendMessage() {
   if (typeof tcRepondreReponseVague === 'function' && await tcRepondreReponseVague(text, _attenteVague)) return;
   if (typeof tcDecalerToutUnJour === 'function' && tcDecalerToutUnJour(text)) return;
   if (typeof tcMemeHeureSansContexte === 'function' && tcMemeHeureSansContexte(text)) return;
+  // « Le client de 14h m'a posé un lapin » : le rendez-vous de cette heure, ou « je ne vois pas de rendez-vous à 14h » ;
+  // « demande à Hugo quand il est dispo » : vos créneaux communs (mission 65).
+  if (typeof tcAbsentALHeureM65 === 'function' && tcAbsentALHeureM65(text)) return;
+  if (typeof tcDemanderDispoContactM65 === 'function' && await tcDemanderDispoContactM65(text)) return;
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
   if (typeof tcQuestionTypeEnAttente === 'function') {
     const _qt = tcQuestionTypeEnAttente();
@@ -15810,7 +15815,7 @@ async function charlySendMessage() {
     }
 
     // L'aide figée (« Pour le supprimer, écris-moi par exemple… ») ne sort jamais : « Lequel ? » avec les prochains rendez-vous (mission 52).
-    reply = tcRemplacerAideFigee(reply);
+    reply = tcRemplacerAideFigee(reply, text);
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId, nature: tcNatureReponse(reply)});
     // Un déplacement compris s'exécute (ou pose sa seule question),
@@ -19763,8 +19768,8 @@ function tcCorrigerAbreviations(texte) {
 const TC_SOCIAL_SUITE = ' Je peux t’aider pour un rendez-vous ?';
 const TC_CLASSE_SOCIAL = [
   // « je suis triste », « je suis fatigué », « ça va pas » : un mot gentil, une réponse courte sans question (chef, mission 58).
-  [/^(je suis|jsuis|j suis|je me sens|chui|chuis|moi je suis) (triste|fatigue|fatiguee|creve|crevee|deprime|deprimee|epuise|epuisee|pas bien|mal|stresse|stressee|seul|seule|perdu|perdue|a bout|malheureux|malheureuse|angoisse|angoissee|inquiet|inquiete|au bout du rouleau|hs|naze|nerveux|nerveuse|triste aujourd hui|pas en forme|a plat)( aujourd hui| ce soir| en ce moment| la| ce matin)?$/, 'Je suis désolé que ça n’aille pas. Je ne suis qu’un agenda, mais je suis là : si tu veux alléger ta journée, dis-moi quel rendez-vous décaler ou annuler.'],
-  [/^(ca va pas|ca ne va pas|ca va pas fort|ca va pas trop|ca ne va pas fort|c est dur|c est dur en ce moment|j en ai marre|je n en peux plus|j en peux plus|journee pourrie|sale journee|mauvaise journee)$/, 'Je suis désolé que ça n’aille pas. Je ne suis qu’un agenda, mais je suis là : si tu veux alléger ta journée, dis-moi quel rendez-vous décaler ou annuler.'],
+  [/^(je suis|jsuis|j suis|je me sens|chui|chuis|moi je suis) (triste|fatigue|fatiguee|creve|crevee|deprime|deprimee|epuise|epuisee|pas bien|mal|stresse|stressee|seul|seule|perdu|perdue|a bout|malheureux|malheureuse|angoisse|angoissee|inquiet|inquiete|au bout du rouleau|hs|naze|nerveux|nerveuse|triste aujourd hui|pas en forme|a plat)( aujourd hui| ce soir| en ce moment| la| ce matin)?$/, 'Je suis désolé que ça n’aille pas. Je ne suis qu’un agenda, mais je suis là. Si tu veux alléger ta journée, je peux décaler ou annuler un rendez-vous.'],
+  [/^(ca va pas|ca ne va pas|ca va pas fort|ca va pas trop|ca ne va pas fort|c est dur|c est dur en ce moment|j en ai marre|je n en peux plus|j en peux plus|journee pourrie|sale journee|mauvaise journee)$/, 'Je suis désolé que ça n’aille pas. Je ne suis qu’un agenda, mais je suis là. Si tu veux alléger ta journée, je peux décaler ou annuler un rendez-vous.'],
   [/^(tkt|t inquiete|tinquiete|t inquiete pas|pas de souci|pas de soucis|pas grave|no stress|c est pas grave|y a pas de mal|aucun souci|aucun probleme)$/, 'Merci 😊' + TC_SOCIAL_SUITE],
   [/^(mdr|lol|ptdr|xd|haha|hahaha|hihi|ahah|trop drole|excellent ca|mort de rire)$/, '😄' + TC_SOCIAL_SUITE],
   // « osef », « peu importe », « comme tu veux » : un haussement d'épaules (mission 55).
@@ -20174,9 +20179,12 @@ function tcLigneLequel(e, i) {
  * Le modèle a répondu par son aide figée (« Pour le supprimer, écris-moi par exemple… ») : la page répond à sa place par « Lequel ? »
  * avec les prochains rendez-vous (et garde le choix), ou la confirmation s'il n'y en a qu'un, ou « rien à annuler ».
  */
-function tcRemplacerAideFigee(reply) {
+function tcRemplacerAideFigee(reply, text) {
   const r = String(reply || '');
   if (!/Pour le (supprimer|retirer|annuler|rappeler), (écris|ecris)-moi/.test(r)) return reply;
+  // « le client de 14h » : seulement les rendez-vous de 14h ; aucun : Charly le dit et demande (mission 65).
+  const parHeure = (text && typeof tcAideFigeeParHeureM65 === 'function') ? tcAideFigeeParHeureM65(text) : null;
+  if (parHeure) return parHeure;
   const liste = tcProchainsRdv(3);
   if (!liste.length) return 'Je ne vois aucun rendez-vous à venir dans ton agenda : rien à annuler.';
   if (liste.length === 1) {
@@ -23488,6 +23496,7 @@ async function tcRepondreRelectureDeplacement(text, attente) {
   let oui = tcReponseOuiNon(text);
   if (oui === null && ACCORD.test(tcClasseNormaliser(text))) oui = true;
   if (oui === null) return false;
+  if (oui && typeof tcNonApresAccordM65 === 'function' && tcNonApresAccordM65(text)) oui = false;
   const POLI = /^(?:(?:oui|ouais|ok|okay|d accord|daccord|vas y|go|yes|confirme|je confirme|c est ca|exact|non|no|nan|stp|svp|s il te plait|merci|charly|c est bon|parfait|super|top|nickel|bien sur|carrement|volontiers|avec plaisir|ca marche|ca me va|c est parfait|c est ok|entendu|je valide|valide|go pour moi|ok pour moi|pour moi)(?:\s+|$))*/;
   const reste = tcClasseNormaliser(text).replace(POLI, '').trim();
   if (!reste) {
@@ -23601,6 +23610,8 @@ async function tcRepondrePropositionVague(text, attente) {
   let oui = tcReponseOuiNon(text);
   if (oui === null && TC_ACCORD_M64.test(norm)) oui = true;
   if (oui === null) return false;
+  // « super, non merci » : un refus (mission 65).
+  if (oui && typeof tcNonApresAccordM65 === 'function' && tcNonApresAccordM65(text)) oui = false;
   if (norm.replace(TC_POLI_M64, '').trim()) return false;
   tcPousserMessageUtilisateur(text);
   if (!oui) {
@@ -23808,6 +23819,138 @@ function tcFermerBlocsAgenda(reply) {
   return (avant ? avant + '\n' : '') + '[AGENDA]\n' + lignes.join('\n') + '\n[/AGENDA]' + (apres.length ? '\n' + apres.join(' ') : '');
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 65 (27/10, chef, ratés du passage 20)
+
+   1. « Le client de 14h m'a posé un lapin » : une heure citée filtre toujours les rendez-vous proposés. Rien à 14h aujourd'hui :
+      Charly le dit et demande, sans proposer d'annuler autre chose (#434).
+   2. « super, non merci » ne vaut jamais oui.
+   3. « Demande à Hugo quand il est dispo » : Hugo a TimeCool, la page cherche vos créneaux communs (#463) ; « je suis triste » :
+      un mot gentil, sans question (#223).
+   ═══════════════════════════════════════════════════════════════ */
+/** « 14h », « 14h30 » : l'heure dite, en lettres courtes. */
+function tcHeureDiteM65(h) {
+  return h.h + 'h' + (h.m ? String(h.m).padStart(2, '0') : '');
+}
+
+/** « aujourd’hui », « demain », « lundi 2 novembre » : le jour dit, pour une phrase. */
+function tcJourDitM65(date) {
+  const now = new Date();
+  const dem = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  if (date === tcISO(now)) return 'aujourd’hui';
+  if (date === tcISO(dem)) return 'demain';
+  const t = String(tcFormaterDateHumaine(date));
+  return t.charAt(0).toLowerCase() + t.slice(1);
+}
+
+/**
+ * Les rendez-vous qui commencent à l'heure citée (« de 14h », « de 14h30 »), le jour cité ou aujourd'hui. null si la phrase ne cite
+ * pas d'heure, ou cite plusieurs jours. { heure, date, liste }.
+ */
+function tcRdvALHeureCiteeM65(text, toutAVenir) {
+  const brut = String(text || '');
+  let h = null;
+  try { h = tcHeureDansTexte(tcSansAccents(brut).toLowerCase()); } catch (e) { h = null; }
+  if (!h || !(h.h >= 0 && h.h <= 23)) return null;
+  const now = new Date();
+  let jours = [];
+  try { jours = tcJoursCites(brut, now, false) || []; } catch (e) { jours = []; }
+  if (jours.length > 1) return null;
+  const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  const aHeure = function (e) { return Number(e.startH) === h.h && (h.m === null || h.m === undefined || Number(e.startM || 0) === h.m); };
+  const date = jours.length ? jours[0] : tcISO(now);
+  let liste = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && e.title && !e.allDay && e.date === date && aHeure(e); });
+  // « annule le rdv de 14h » sans jour, rien aujourd'hui : les prochains rendez-vous de 14h (jamais un autre horaire).
+  if (!liste.length && !jours.length && toutAVenir) {
+    liste = (typeof tcProchainsRdv === 'function' ? tcProchainsRdv(200) : []).filter(function (e) { return !e.allDay && aHeure(e); });
+  }
+  return { heure: h, date: date, jourDit: jours.length > 0, liste: liste.sort(tcComparerEvenements) };
+}
+
+/** « Je ne vois pas de rendez-vous à 14h aujourd’hui. De quel rendez-vous parles-tu ? » */
+function tcPasDeRdvALHeureM65(r, toutAVenir) {
+  const ou = (!r.jourDit && toutAVenir) ? 'dans ton agenda à venir' : tcJourDitM65(r.date);
+  return 'Je ne vois pas de rendez-vous à ' + tcHeureDiteM65(r.heure) + ' ' + ou + '. De quel rendez-vous parles-tu ?';
+}
+
+/**
+ * « Le client de 14h m'a posé un lapin », « mon rdv de 10h n'est pas venu », « la patiente de 9h30 a annulé » : un absent à une heure
+ * dite, sans contact nommé. Le rendez-vous de cette heure (aujourd'hui, ou le jour cité) est proposé au retrait avec oui/non ;
+ * plusieurs : « Lequel ? » parmi eux ; aucun : Charly le dit et demande, sans rien proposer d'autre (passage 20, #434). true si pris.
+ */
+function tcAbsentALHeureM65(text) {
+  try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64()) return false; } catch (e) { return false; }
+  const norm = tcClasseNormaliser(text);
+  if (!norm || norm.split(' ').length > 14) return false;
+  if (!/(^| )(pose|posee|posent|poser) un lapin( |$)|(^| )n est pas venue?( |$)|(^| )est pas venue?( |$)|(^| )(ne )?(vient|viendra) pas( |$)|(^| )(a|ont) annule( |$)|(^| )s est (desiste|desistee|decommande|decommandee)( |$)|(^| )se desiste( |$)/.test(norm)) return false;
+  if (/(^| )(decale|decaler|deplace|deplacer|reporte|reporter|avance|avancer|repousse|repousser|previens|prevenir|ajoute|ajouter)( |$)/.test(norm)) return false;
+  // Un contact nommé (« Paul de 14h m'a posé un lapin ») : le chemin des contacts.
+  try {
+    const mots = norm.split(' ').filter(function (w) { return w.length >= 3 && !/^(client|cliente|patient|patiente|clients|rdv|rendez|vous|mon|mes|les|des|pose|posee|posent|poser|lapin|est|pas|venu|venue|vient|viendra|annule|ont|desiste|desistee|decommande|decommandee|aujourd|hui|ce|matin|soir|apres|midi|elle|lui|qui|car|parce|que)$/.test(w) && !/^\d/.test(w) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(w) < 0; });
+    if (mots.length && typeof tcContactsParMots === 'function' && tcContactsParMots(mots).length) return false;
+  } catch (e) { return false; }
+  const r = tcRdvALHeureCiteeM65(text, false);
+  if (!r) return false;
+  tcPousserMessageUtilisateur(text);
+  if (!r.liste.length) {
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: tcPasDeRdvALHeureM65(r, false) });
+  } else if (r.liste.length === 1) {
+    const ev = r.liste[0];
+    _tcSuppressionEnAttente = [ev];
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Je retire « ' + ev.title + ' » de ton agenda ?\n• ' + ev.title + ' : ' + tcFormaterDateHumaine(ev.date) + ' ' + tcFormaterHeure(ev) + '\nRéponds « oui » ou « non ».' });
+  } else {
+    _tcSuppressionChoix = r.liste.slice(0, 3);
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Lequel ?\n' + _tcSuppressionChoix.map(tcLigneLequel).join('\n') + '\nDis-moi son numéro, son heure ou son nom.' });
+  }
+  renderCharlyChat();
+  return true;
+}
+
+/**
+ * L'aide figée du modèle remplacée par « Lequel ? » : avec une heure citée, seulement les rendez-vous de cette heure ; aucun :
+ * « Je ne vois pas de rendez-vous à 14h … De quel rendez-vous parles-tu ? ». null si la phrase ne cite pas d'heure.
+ */
+function tcAideFigeeParHeureM65(text) {
+  const r = tcRdvALHeureCiteeM65(text, true);
+  if (!r) return null;
+  if (!r.liste.length) return tcPasDeRdvALHeureM65(r, true);
+  if (r.liste.length === 1) {
+    _tcSuppressionEnAttente = [r.liste[0]];
+    return 'Tu veux annuler ce rendez-vous ?\n• ' + r.liste[0].title + ' : ' + tcFormaterDateHumaine(r.liste[0].date) + ' ' + tcFormaterHeure(r.liste[0]) + '\nRéponds « oui » ou « non ».';
+  }
+  _tcSuppressionChoix = r.liste.slice(0, 3);
+  return 'Lequel ?\n' + _tcSuppressionChoix.map(tcLigneLequel).join('\n') + '\nDis-moi son numéro, son heure ou son nom.';
+}
+
+/** « super, non merci », « ok non », « parfait nan » : un « non » dit après le mot d'accord, c'est un refus. */
+function tcNonApresAccordM65(text) {
+  return /(^| )(non|nan)( |$)/.test(tcClasseNormaliser(text));
+}
+
+/**
+ * « Demande à Hugo quand il est dispo », « demande à Gaëlle quand elle est libre » : le contact a TimeCool, ses disponibilités se
+ * consultent ; la page cherche vos créneaux communs (même chemin que « trouve-nous un créneau avec Hugo »), sans lui écrire (#463).
+ * Un contact sans TimeCool : le message habituel. true si pris.
+ */
+async function tcDemanderDispoContactM65(text) {
+  try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64()) return false; } catch (e) { return false; }
+  const norm = tcClasseNormaliser(text);
+  const m = norm.match(/^(?:stp |svp |charly )?(?:demande|demandes|demander|demandez) (?:a|au) ([a-z][a-z-]+(?: [a-z][a-z-]+)?) quand (?:il|elle) (?:est|sera|serait) (?:dispo|disponible|libre)(?: stp| svp| s il te plait)?$/);
+  if (!m || typeof tcContactsParMots !== 'function' || typeof tcGererRdvGroupe !== 'function') return false;
+  let c = [];
+  try { c = tcContactsParMots(m[1].split(' ')); } catch (e) { c = []; }
+  if (c.length !== 1 || !c[0].referenceCompte || c[0].isTimeCool === false) return false;
+  const prenom = String(c[0].name || '').split(' ')[0];
+  await tcGererRdvGroupe(text, { contacts: [c[0]], duree: 1 });
+  // La question « Par téléphone, en personne ou en visio ? » dit d'abord ce que fait Charly.
+  const q = charlyIA.history[charlyIA.history.length - 1];
+  if (q && q._questionType) {
+    q._questionType.preambule = prenom + ' a TimeCool : je regarde vos créneaux communs, sans lui écrire.';
+    q.content = q._questionType.preambule + '\n' + q.content;
+    renderCharlyChat();
+  }
+  return true;
+}
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
 function tcPhraseNonCompris(question) {
   return 'Sauf erreur de ma part, je n\'ai pas bien compris ta demande. ' + question;

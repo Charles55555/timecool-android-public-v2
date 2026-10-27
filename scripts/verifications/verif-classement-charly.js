@@ -412,7 +412,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
   { const r = ctx.tcRemplacerAideFigee('Pour le supprimer, écris-moi par exemple : supprime le rdv de lundi 26 octobre à 10h. Ou touche le rendez-vous dans ton agenda, puis 🗑️ Supprimer.');
     verifie('tcRemplacerAideFigee : « Lequel ? » numéroté avec les trois prochains, le choix gardé, nature question', /^Lequel \?\n1\. Dentiste : .*\n2\. Partie de golf : .*\n3\. Déjeuner avec Sophie : .*\nDis-moi son numéro, son heure ou son nom\.$/.test(r) && vm.runInContext('_tcSuppressionChoix', ctx).length === 3 && ctx.tcNatureReponse(r) === 'question', r);
     verifie('une autre réponse du modèle n est pas touchée', ctx.tcRemplacerAideFigee('Tu as un rendez-vous demain à 15h.') === 'Tu as un rendez-vous demain à 15h.'); }
-  verifie('charlySendMessage applique tcRemplacerAideFigee à la réponse du modèle avant de l afficher', /reply = tcRemplacerAideFigee\(reply\);\s+const tempId = 'msg_' \+ Date\.now\(\);/.test(csm));
+  verifie('charlySendMessage applique tcRemplacerAideFigee à la réponse du modèle avant de l afficher', /reply = tcRemplacerAideFigee\(reply(, text)?\);\s+const tempId = 'msg_' \+ Date\.now\(\);/.test(csm));
   verifie('« Mets Paul de côté » n’est plus une annulation sans cible (le classement demande ce qu’il veut dire, mission 55) ; « rdv annulé », « Je vais pas y aller », « j’y vais pas » non plus (annulation douteuse, mission 53)', !ctx.tcDetecterSuppressionSansCible('Mets Paul de côté') && ['rdv annulé', 'Je vais pas y aller', 'j’y vais pas'].every((p) => !ctx.tcDetecterSuppressionSansCible(p)), ['rdv annulé', 'Je vais pas y aller', 'j’y vais pas', 'Mets Paul de côté'].map((p) => ctx.tcDetecterSuppressionSansCible(p)).join(' '));
   verifie('« je peux plus aller au dentiste lundi » → information d annulation ciblée (« dentiste lundi »)', ctx.tcDetecterInfoAnnulation('je peux plus aller au dentiste lundi') === 'dentiste lundi' && ctx.tcDetecterInfoAnnulation('je ne pourrai pas venir au rdv de mardi') === 'mardi');
   ctx.charlyIA.history = []; vm.runInContext('_tcSuppressionEnAttente = null;', ctx);
@@ -1740,6 +1740,116 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       JSON.stringify(fS) + ' | ' + JSON.stringify(fC));
     verifie('pas de tiret long ni d assertion arrière dans le bloc 64', bloc.indexOf('MISSION 64') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.slice(bloc.indexOf('MISSION 64')).indexOf('—') < 0);
     delete ctx.validateAgendaProposal;
+    remise(agenda());
+  }
+
+  titre('22. Mission 65 : une heure citée filtre les rendez-vous proposés, « super, non merci », « demande à Hugo quand il est dispo », « je suis triste »');
+  {
+    ['tcRemplacerAideFigee', 'tcReponseOuiNon', 'tcReponseValidation'].forEach((n) => {
+      if (typeof ctx[n] === 'function') return;
+      const src = extraire(n); if (src) vm.runInContext(src, ctx); else verifie(n + ' existe', false);
+    });
+    const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
+    const etat = () => vm.runInContext('JSON.stringify([(_tcSuppressionEnAttente || []).map(function (e) { return e.id; }), (_tcSuppressionChoix || []).map(function (e) { return e.id; })])', ctx);
+    const remise = (evs) => { ctx.events = evs; ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null; _tcCreneauVagueEnAttente = null; var _tcDeplacementPeriode = null; _tcSuppressionEnAttente = null; _tcSuppressionChoix = null;', ctx); };
+
+    // 1. « Le client de 14h m’a posé un lapin » (#434) : rien à 14h aujourd’hui → Charly le dit et demande, rien n’attend.
+    remise(agenda());
+    const a1 = ctx.tcAbsentALHeureM65('Le client de 14h m’a posé un lapin');
+    const c1 = dernier().content, n1 = dernier().nature, e1 = etat();
+    verifie('#434 « Le client de 14h m’a posé un lapin », rien à 14h aujourd’hui (le golf de 14h est dans 4 jours) → « Je ne vois pas de rendez-vous à 14h aujourd’hui. De quel rendez-vous parles-tu ? », aucune annulation proposée',
+      a1 === true && c1 === 'Je ne vois pas de rendez-vous à 14h aujourd’hui. De quel rendez-vous parles-tu ?' && n1 === 'question' && e1 === '[[],[]]', [a1, c1, n1, e1].join(' | '));
+    remise(agenda().concat([ev('cli', 'Client Durand', 0, 14, 0, 15, 0), ev('autre', 'Kiné', 0, 16, 0, 17, 0)]));
+    const a2 = ctx.tcAbsentALHeureM65('Le client de 14h m’a posé un lapin');
+    const c2 = dernier().content, e2 = etat();
+    remise(agenda().concat([ev('cli', 'Client Durand', 0, 14, 0, 15, 0), ev('cli2', 'Client Leroy', 0, 14, 0, 14, 30), ev('autre', 'Kiné', 0, 16, 0, 17, 0)]));
+    const a3 = ctx.tcAbsentALHeureM65('la patiente de 14h n’est pas venue');
+    const c3 = dernier().content, e3 = etat();
+    verifie('un rendez-vous à 14h aujourd’hui → « Je retire « Client Durand » … ? » oui/non ; deux → « Lequel ? » entre ces deux seulement (jamais le Kiné de 16h)',
+      a2 === true && /^Je retire « Client Durand » de ton agenda \?/.test(c2) && /Réponds « oui » ou « non »\.$/.test(c2) && e2 === '[["cli"],[]]'
+      && a3 === true && /^Lequel \?\n1\. Client Durand/.test(c3) && c3.indexOf('Kiné') < 0 && e3 === '[[],["cli","cli2"]]', [c2, e2, c3, e3].join(' | '));
+    remise(agenda());
+    const a4 = ctx.tcAbsentALHeureM65('le patient de 15h ne viendra pas demain');
+    const c4 = dernier().content, e4 = etat();
+    verifie('« le patient de 15h ne viendra pas demain » → le Dentiste de demain 15h, oui/non', a4 === true && /^Je retire « Dentiste »/.test(c4) && e4 === '[["dentiste"],[]]', c4 + ' | ' + e4);
+    const nonPris = [];
+    for (const p of ['Paul me pose un lapin', 'Marc de 14h m’a posé un lapin', 'le client m’a posé un lapin', 'décale le client de 14h, il ne viendra pas', 'je ne viendrai pas à 14h', 'la réunion est passée à 15h']) {
+      remise(agenda());
+      if (ctx.tcAbsentALHeureM65(p) !== false || ctx.charlyIA.history.length) nonPris.push(p);
+    }
+    remise(agenda());
+    vm.runInContext('_tcSuppressionEnAttente = [events[0]];', ctx);
+    if (ctx.tcAbsentALHeureM65('Le client de 14h m’a posé un lapin') !== false) nonPris.push('(réponse attendue)');
+    verifie('pas pris : sans heure, un contact nommé (« Paul », « Marc de 14h »), un déplacement, « je ne viendrai pas », une réponse attendue', nonPris.length === 0, nonPris.join(' / '));
+
+    // 2. L’aide figée du modèle : une heure citée filtre toujours la liste « Lequel ? ».
+    const AIDE = 'Pour le supprimer, écris-moi par exemple « annule le dentiste de lundi ».';
+    remise(agenda());
+    const f1 = ctx.tcRemplacerAideFigee(AIDE, 'enlève le truc de 16h');
+    remise(agenda());
+    const f2 = ctx.tcRemplacerAideFigee(AIDE, 'enlève le truc de 14h');
+    const e5 = etat();
+    remise(agenda());
+    const f3 = ctx.tcRemplacerAideFigee(AIDE, 'enlève le truc');
+    remise(agenda());
+    const f4 = ctx.tcRemplacerAideFigee('Bonjour', 'enlève le truc de 14h');
+    verifie('aide figée + « de 16h » (rien à 16h) → « Je ne vois pas de rendez-vous à 16h dans ton agenda à venir. De quel rendez-vous parles-tu ? » ; « de 14h » → le golf seul, oui/non ; sans heure → « Lequel ? » comme avant ; une autre réponse ne change pas',
+      f1 === 'Je ne vois pas de rendez-vous à 16h dans ton agenda à venir. De quel rendez-vous parles-tu ?' && /^Tu veux annuler ce rendez-vous \?\n• Partie de golf/.test(f2) && e5 === '[["golf"],[]]'
+      && /^Lequel \?\n1\. Dentiste/.test(f3) && f4 === 'Bonjour', [f1, f2, e5, f3, f4].join(' | '));
+    verifie('charlySendMessage passe la phrase à tcRemplacerAideFigee, et lit « lapin à 14h » et « demande à Hugo quand il est dispo » après les crochets 64, avant le classement et la prévenance',
+      (page.match(/reply = tcRemplacerAideFigee\(reply, text\);/g) || []).length === 1 && (page.match(/tcRemplacerAideFigee\(reply\)/g) || []).length === 0
+      && csm.indexOf('tcMemeHeureSansContexte(text)) return;') < csm.indexOf('tcAbsentALHeureM65(text)) return;')
+      && csm.indexOf('tcAbsentALHeureM65(text)) return;') < csm.indexOf('await tcDemanderDispoContactM65(text)) return;')
+      && csm.indexOf('await tcDemanderDispoContactM65(text)) return;') < iClasse && iClasse < iPrev);
+
+    // 3. « super, non merci » : jamais un oui.
+    verifie('tcReponseOuiNon : « ok non merci », « oui non » → non ; « oui », « ok merci » → oui ; tcReponseValidation : « parfait non merci » → non, « parfait » → oui',
+      ctx.tcReponseOuiNon('ok non merci') === false && ctx.tcReponseOuiNon('oui non') === false && ctx.tcReponseOuiNon('oui') === true && ctx.tcReponseOuiNon('ok merci') === true
+      && ctx.tcReponseValidation('parfait non merci') === 'non' && ctx.tcReponseValidation('parfait') === 'oui',
+      [ctx.tcReponseOuiNon('ok non merci'), ctx.tcReponseOuiNon('oui non'), ctx.tcReponseValidation('parfait non merci')].join(' '));
+    let ajouts = 0;
+    ctx.validateAgendaProposal = () => { ajouts++; };
+    const creneau = [{ date: '2026-10-16', startH: 9, startM: 0, endH: 12, endM: 0, title: 'Mon temps libre' }];
+    remise(agenda());
+    const s1 = await ctx.tcRepondrePropositionVague('super, non merci', creneau);
+    const sc1 = dernier().content, aj1 = ajouts;
+    remise(agenda());
+    const s2 = await ctx.tcRepondrePropositionVague('super merci', creneau);
+    const aj2 = ajouts;
+    verifie('après « n’importe » : « super, non merci » → « D’accord, je n’ajoute rien. », rien n’est ajouté ; « super merci » ajoute toujours',
+      s1 === true && sc1 === 'D’accord, je n’ajoute rien.' && aj1 === 0 && s2 === true && aj2 === 1, [s1, sc1, aj1, s2, aj2].join(' | '));
+    delete ctx.validateAgendaProposal;
+    let deplaces = 0;
+    const exec0 = ctx.tcExecuterDeplacement;
+    ctx.tcExecuterDeplacement = () => { deplaces++; };
+    remise(agenda());
+    const r1 = await ctx.tcRepondreRelectureDeplacement('super, non merci', { liste: [{ ev: ctx.events[0], p: { date: '2026-10-16', startH: 16, startM: 0, endH: 17, endM: 0 } }] });
+    const rc1 = dernier().content;
+    ctx.tcExecuterDeplacement = exec0;
+    verifie('relecture d’un déplacement : « super, non merci » → « D’accord, je ne change rien. », rien ne bouge', r1 === true && rc1 === 'D’accord, je ne change rien.' && deplaces === 0, [r1, rc1, deplaces].join(' | '));
+
+    // 4. « Demande à Paul quand il est dispo » : Paul a TimeCool → vos créneaux communs ; Marc (sans TimeCool) → le message habituel.
+    const groupe0 = ctx.tcGererRdvGroupe;
+    let groupes = [];
+    ctx.tcGererRdvGroupe = async (t, i) => { groupes.push(i.contacts.map((c) => c.name).join('+') + ' ' + i.duree); ctx.tcPousserMessageUtilisateur(t); ctx.charlyIA.history.push({ role: 'assistant', content: 'Par téléphone, en personne ou en visio ?', _questionType: { id: 'q1', etat: 'choix' } }); };
+    remise(agenda());
+    const d1 = await ctx.tcDemanderDispoContactM65('Demande à Paul quand il est dispo');
+    const dc1 = dernier().content, dq1 = (dernier()._questionType || {}).preambule;
+    const dispoNon = [];
+    for (const p of ['Demande à Marc quand il est dispo', 'Demande à Paul s’il est libre jeudi', 'Demande à Paul quand il est dispo pour le dîner', 'demande à Paul']) {
+      remise(agenda());
+      if (await ctx.tcDemanderDispoContactM65(p) !== false) dispoNon.push(p);
+    }
+    ctx.tcGererRdvGroupe = groupe0;
+    verifie('#463 « Demande à Paul quand il est dispo » (Paul a TimeCool) → la recherche des créneaux communs, « Paul a TimeCool : je regarde vos créneaux communs, sans lui écrire. » puis « Par téléphone, en personne ou en visio ? » ; Marc sans TimeCool, « s’il est libre jeudi », une autre suite : le chemin habituel',
+      d1 === true && groupes.join(',') === 'Paul Martin 1' && dc1 === 'Paul a TimeCool : je regarde vos créneaux communs, sans lui écrire.\nPar téléphone, en personne ou en visio ?' && dq1 === 'Paul a TimeCool : je regarde vos créneaux communs, sans lui écrire.' && dispoNon.length === 0,
+      [d1, groupes.join(','), dc1, dispoNon.join(' / ')].join(' | '));
+
+    // 5. « je suis triste » (#223) : un mot gentil, sans « dis-moi quel… » (lu comme une question).
+    verifie('#223 « je suis triste », « ça va pas » : « … mais je suis là. Si tu veux alléger ta journée, je peux décaler ou annuler un rendez-vous. », plus de « dis-moi quel rendez-vous »',
+      (page.match(/mais je suis là\. Si tu veux alléger ta journée, je peux décaler ou annuler un rendez-vous\.'/g) || []).length === 2 && page.indexOf('dis-moi quel rendez-vous décaler ou annuler') < 0);
+    const b65 = bloc.indexOf('MISSION 65') > -1 ? bloc.slice(bloc.indexOf('MISSION 65')) : '';
+    verifie('pas de tiret long ni d assertion arrière dans le bloc 65', b65.length > 1000 && !/\(\?<[=!]/.test(b65) && b65.indexOf('—') < 0);
     remise(agenda());
   }
 
