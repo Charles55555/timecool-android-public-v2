@@ -2979,3 +2979,26 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 - Deuxième passage (examinateur, 27/10, 2 points) : « d'accord », « ça marche », « parfait », « c'est bon » seuls après la relecture sont
   un oui (déplacé) ; un nom précis introuvable (« la réunion client » quand seule « Réunion équipe » existe) ne vise plus un autre
   rendez-vous : rien ici, le modèle répond.
+
+## 27/10/2026 : mission 64, les ratés du passage 19 (CODEUR)
+
+- #321 « La réunion est passée à 15h » : quand plusieurs rendez-vous à venir portent le même nom (la réunion de chaque mardi), la page
+  prend le plus proche qui n'est pas fini (celui du jour s'il est encore à venir), jamais celui de la semaine d'après
+  (tcRdvAnnoncePlusProche). Noms différents : toujours « Lequel ? ». Remarque : la batterie ne pose la « Réunion équipe » qu'au mardi
+  SUIVANT (prochain(2) commence à demain) ; un mardi à 4h, il n'y a donc pas de réunion du jour dans l'agenda de test.
+- #176 « n'importe » juste après « Voici ce qui est libre » : la page propose le premier créneau (« Je te propose « Mon temps libre »
+  mercredi 28 octobre, de 9h à 12h. Je l'ajoute à ton agenda ? Réponds « oui » ou « non ». »), sans le modèle ; « oui » ajoute la carte,
+  « non » ne change rien. tcGererDemandeCreneau garde les créneaux affichés avec le message (_creneaux). La proposition relue du modèle
+  (mission 63) attend aussi son « oui ».
+- #49 « déj gaëlle ven 12h30 » : un repas (déjeuner, dîner, café, apéro, brunch, verre…) suivi d'un contact connu, un jour et une heure est
+  une création simple proposée par la page : carte « Déjeuner avec Gaëlle » vendredi 12h30. Un rendez-vous déjà prévu avec ce contact :
+  la garde habituelle (déplacement possible) décide.
+- #96 « décale tout lundi » : la liste du jour et « Vers quand je le(s) décale ? » ; la réponse (« mardi », « mardi 9h ») mène à la
+  relecture « Tu veux que je décale ces 2 rendez-vous ? » (avant, après), rien ne bouge avant « oui ». Avec une heure, une partie du jour
+  ou une destination : le chemin habituel.
+- #140 « Même heure la semaine prochaine » (ou « pareil demain ») sans rendez-vous dans les derniers messages : « Quel rendez-vous veux-tu
+  noter à la même heure la semaine prochaine ? », aucune carte.
+- #425 « Pause déjeuner tous les jours de 12h à 13h30 » : des blocs [AGENDA] non fermés (ou plusieurs blocs) sont réunis en un seul bloc
+  fermé juste après le modèle (tcFermerBlocsAgenda) ; une dernière ligne coupée tombe. Sans ligne complète, le texte seul, et le filet
+  « j'ajoute sans bloc » fabrique la carte depuis la demande.
+- Suite : verif-classement-charly (section 21).

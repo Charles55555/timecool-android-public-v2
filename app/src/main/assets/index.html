@@ -12106,7 +12106,9 @@ function tcCreationLocale(texte, now, forcer) {
   const t = tcSansAccents(brut).replace(/[’']/g, ' ');
   // « réserve » : une reservation de restaurant ou d hotel n est pas une creation locale (examen de la mission 19).
   // « Mme Lambert brushing samedi 10h », « M. Dubois vendredi 9h » : un client nomme en tete vaut une demande de rendez-vous (pros, mission 56).
-  if (!/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|doit m appeler|doit me rappeler|doit me telephoner|doit m ecrire)\b/.test(t)
+  // « déj gaëlle ven 12h30 », « dîner avec Paul jeudi 20h » : un repas avec un contact connu est un rendez-vous (chef, mission 64).
+  const _repasContact = (typeof tcRepasAvecContact === 'function') ? tcRepasAvecContact(brut) : null;
+  if (!_repasContact && !/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|doit m appeler|doit me rappeler|doit me telephoner|doit m ecrire)\b/.test(t)
       && !((typeof tcCiviliteEnTete === 'function' && tcCiviliteEnTete(brut)) && !/\b(a|ont|est|m a|m ont) (appele|telephone|ecrit|envoye|annule|confirme|demande|dit|rappele|passe|laisse)\b/.test(t))) return '';
   if (/\b(restaurant|resto|hotel|table|billets?|train|vol|avion)\b/.test(t)) return '';
   if (/\b(annule[rsz]?|annulation|supprime[rsz]?|efface[rsz]?|enleve[rsz]?|retire[rsz]?)\b/.test(t)) return '';
@@ -12145,6 +12147,8 @@ function tcCreationLocale(texte, now, forcer) {
     titre.split(/\s+/).forEach(function (w) { let c = false; try { c = w.length >= 3 && tcContactsParMots([tcSansAccents(w)]).length > 0; } catch (e) { c = false; } (c ? prenoms : objet).push(w); });
     if (prenoms.length && objet.length) titreFinal = objet.join(' ') + ' avec ' + (prenoms.length > 1 ? prenoms.slice(0, -1).join(', ') + ' et ' + prenoms[prenoms.length - 1] : prenoms[0]);
   }
+  // « déjeuner gaëlle » : « Déjeuner avec Gaëlle », le prénom tel qu'il est dans les contacts (mission 64).
+  if (_repasContact && !/\bavec\b/i.test(titreFinal) && titre.split(/\s+/).length <= 2) titreFinal = _repasContact.repas + ' avec ' + _repasContact.prenom;
   // Une phrase longue (« …c'est pour mes dents de sagesse et il faut apporter la radio ») : le modele fait le tri.
   // « Cafe avec Marc et Sophie » (5 mots) est un titre complet (chef, mission 55) ; une phrase de plus de 12 mots part au modele.
   if (titre.split(/\s+/).length > 5 || t.split(/\s+/).filter(Boolean).length > 12) return '';
@@ -12154,7 +12158,7 @@ function tcCreationLocale(texte, now, forcer) {
   // (« mets le rdv dentiste a jeudi 10h », avec l'article, designe un rendez-vous existant : la garde reste.)
   // « Ajoute dentiste mardi 9h », « crée coach lundi 9h » : un verbe de création en tête ne déplace jamais, c'est un nouveau rendez-vous (chef, mission 58).
   const verbeCreation = /^\s*(?:stp |svp |charly )?(?:ajoute[sz]?|ajouter|rajoute[sz]?|cree[sz]?|creer|planifie[sz]?|programme[sz]?|inscris|enregistre[sz]?)(?:[- ]moi)? /.test(t);
-  if (!forcer && !verbeCreation && (!/\b(rdv|rendez|reunion|seance|consultation)\b/.test(t) || /\b(le|la|l|mon|ma|ce|cette) (rdv|rendez|reunion|seance|consultation)\b/.test(t)) && typeof events !== 'undefined' && Array.isArray(events)) {
+  if (!forcer && !verbeCreation && !(_repasContact && !_repasContact.dejaPrevu) && (!/\b(rdv|rendez|reunion|seance|consultation)\b/.test(t) || /\b(le|la|l|mon|ma|ce|cette) (rdv|rendez|reunion|seance|consultation)\b/.test(t)) && typeof events !== 'undefined' && Array.isArray(events)) {
     const motsT = tcSansAccents(titre).split(/[^a-z0-9]+/).filter(function (w) {
       if (w.length < 4 || /^(avec|chez|pour|sans|dans|vers)$/.test(w)) return false;
       try { if (typeof tcContactsParMots === 'function' && tcContactsParMots([w]).length) return false; } catch (e) {}
@@ -13917,7 +13921,8 @@ async function tcGererDemandeCreneau(text, intent) {
     reponse += '\n\n(Je pars d\'une journée de 9h à 18h : tu n\'as pas encore ouvert de plages '
       + 'dans Mes disponibilités.)';
   }
-  charlyIA.history.push({ role: 'assistant', content: reponse });
+  // Les créneaux affichés, gardés avec le message : « n'importe » juste après propose le premier (mission 64).
+  charlyIA.history.push({ role: 'assistant', content: reponse, _creneaux: r.creneaux.map(function (c) { return { date: c.date, debut: c.debut, fin: c.fin }; }) });
   renderCharlyChat();
 }
 
@@ -15196,6 +15201,11 @@ async function charlySendMessage() {
   if (typeof tcRepondreModeRdv === 'function' && tcRepondreModeRdv(text)) return;
   // « La réunion est passée à 15h » : le rendez-vous existant, déplacé après relecture (mission 63).
   if (typeof tcRepondreChangementAnnonce === 'function' && await tcRepondreChangementAnnonce(text)) return;
+  // « n'importe » après les créneaux libres : la page propose, « oui » ajoute ; « décale tout lundi » : la liste et « vers quand ? » ;
+  // « même heure la semaine prochaine » sans rien avant : la question (mission 64).
+  if (typeof tcRepondreReponseVague === 'function' && await tcRepondreReponseVague(text)) return;
+  if (typeof tcDecalerToutUnJour === 'function' && tcDecalerToutUnJour(text)) return;
+  if (typeof tcMemeHeureSansContexte === 'function' && tcMemeHeureSansContexte(text)) return;
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
   if (typeof tcQuestionTypeEnAttente === 'function') {
     const _qt = tcQuestionTypeEnAttente();
@@ -15747,6 +15757,8 @@ async function charlySendMessage() {
       ];
       reply = await callOpenAI(messages);
     }
+    // Des blocs [AGENDA] non fermés : un seul bloc fermé, jamais « j'ajoute » sans carte (mission 64).
+    if (typeof tcFermerBlocsAgenda === 'function') reply = tcFermerBlocsAgenda(reply);
     // Auto-génération d'agenda si Charly dit "vais ajouter" sans bloc [AGENDA]
     const hasAgendaBlock = reply.includes('[AGENDA]');
     const charlyAnnounces = reply.toLowerCase().includes('vais ajouter') || 
@@ -18772,6 +18784,7 @@ async function charlyProcessMessage() {
       ];
       reply = await callOpenAI(messages);
     }
+    if (typeof tcFermerBlocsAgenda === 'function') reply = tcFermerBlocsAgenda(reply);
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId, nature: tcNatureReponse(reply)});
     renderCharlyChat();
@@ -23349,6 +23362,8 @@ function tcSansCarteApresReponseVague(reply, texte) {
     return (p.title ? '« ' + p.title + ' » ' : '') + jour.charAt(0).toLowerCase() + jour.slice(1) + ', de ' + hh(p.startH, p.startM) + ' à ' + hh(p.endH, p.endM);
   };
   if (!props.length) return 'Je ne note rien pour l’instant : dis-moi quel créneau tu veux, et pour quoi.';
+  // « oui » ajoute ces créneaux, « non » ne change rien (mission 64).
+  _tcCreneauVagueEnAttente = props;
   if (props.length === 1) return 'Je te propose ' + ligne(props[0]) + '. Je l’ajoute à ton agenda ? Réponds « oui » ou « non ».';
   return 'Je te propose :\n' + props.map(function (p) { return '• ' + ligne(p); }).join('\n') + '\nJe les ajoute à ton agenda ? Réponds « oui » ou « non ».';
 }
@@ -23431,7 +23446,9 @@ function tcRelireDeplacement(liste) {
     return '« ' + x.ev.title + ' » ?\n• Avant : ' + quand(x.ev.date, x.ev) + '\n• Après : ' + quand(x.p.date, x.p)
       + (deja.length ? '\n• À cette heure-là, tu as déjà ' + deja.map(function (e) { return '« ' + e.title + ' » (' + hh(e.startH, e.startM) + ' à ' + hh(e.endH, e.endM) + ')'; }).join(' et ') + '.' : '');
   });
-  charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Tu veux que je décale ' + lignes.join('\n') + '\nRéponds « oui » ou « non ».' });
+  // Plusieurs rendez-vous (« décale tout lundi ») : le nombre d'abord, puis chacun (mission 64).
+  const entete = liste.length > 1 ? 'Tu veux que je décale ces ' + liste.length + ' rendez-vous ?\n' + lignes.map(function (l) { return l.replace(' ?\n', ' :\n'); }).join('\n') : 'Tu veux que je décale ' + lignes[0];
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: entete + '\nRéponds « oui » ou « non ».' });
 }
 
 /** Le rendez-vous et sa nouvelle place, relus (oui / non). Vrai si traité. */
@@ -23441,7 +23458,9 @@ async function tcRepondreChangementAnnonce(text) {
   // Un nom précis (« la réunion client ») ne vise que ce rendez-vous, jamais « Lequel ? » avec « Réunion équipe » (examen, mission 63).
   const exacts = tcRdvNommesExactement(c.sujet);
   if (exacts && !exacts.length) return false;
-  const d = tcDeplacementLocal(c.synthese, new Date(), exacts || undefined);
+  // Plusieurs « Réunion équipe » à venir : la plus proche (celle du jour si elle n'est pas finie), jamais celle d'après (mission 64).
+  const proche = (typeof tcRdvAnnoncePlusProche === 'function') ? tcRdvAnnoncePlusProche(c, text, exacts) : null;
+  const d = tcDeplacementLocal(c.synthese, new Date(), proche || exacts || undefined);
   if (!d) return false;
   // « passé à 10h » alors que 10h est déjà passé aujourd'hui : quelqu'un est venu, rien à déplacer.
   if (c.passer && d.liste) {
@@ -23503,6 +23522,257 @@ async function tcRepondreRelectureDeplacement(text, attente) {
   renderCharlyChat();
   return true;
 }
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 64 (27/10, chef, ratés du passage 19)
+
+   1. « La réunion est passée à 15h » : quand plusieurs rendez-vous à venir portent le même nom, le plus proche (celui du jour s'il
+      n'est pas fini), jamais celui de la semaine suivante.
+   2. « n'importe » après « Voici ce qui est libre » : la page propose le premier créneau et demande « oui » ou « non » ; « oui »
+      l'ajoute, « non » ne change rien.
+   3. « déj gaëlle ven 12h30 » : un repas avec un contact connu, un jour et une heure est une création simple, proposée par la page.
+   4. « décale tout lundi » : la liste du jour et « vers quand ? », puis la relecture (« oui » ou « non ») avant que rien ne bouge.
+   5. « Même heure la semaine prochaine » sans rien avant : Charly demande de quel rendez-vous il s'agit, il ne crée rien.
+   6. Des blocs [AGENDA] non fermés ou multiples sont réunis en un seul bloc fermé : jamais « j'ajoute » sans carte lisible.
+   ═══════════════════════════════════════════════════════════════ */
+
+/** « 9h », « 12h30 » : l'heure courte d'une relecture. */
+function tcHeureM64(h, m) {
+  return Number(h) + 'h' + (Number(m) ? String(m).padStart(2, '0') : '');
+}
+
+/** « lundi 2 novembre » : la date humaine, en minuscule au début (elle suit toujours un mot). */
+function tcJourM64(date) {
+  const j = String(tcFormaterDateHumaine(date) || date);
+  return j.charAt(0).toLowerCase() + j.slice(1);
+}
+
+/* ─── 1. Le plus proche des rendez-vous du même nom ─── */
+
+/**
+ * « La réunion est passée à 15h » sans jour de départ, et plusieurs rendez-vous à venir du même nom (la réunion de chaque mardi) :
+ * le plus proche qui n'est pas fini, seul. Null sinon (le choix habituel, ou « Lequel ? » quand les noms diffèrent).
+ */
+function tcRdvAnnoncePlusProche(c, text, exacts) {
+  if (!c || !c.sujet) return null;
+  const now = new Date();
+  if (typeof tcJoursCites === 'function' && tcJoursCites(String(text || ''), now, true).length) return null;
+  const JOURS = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|semaine|prochain|prochaine)$/;
+  const mots = tcMotsDeRdv(c.sujet).filter(function (w) { return !JOURS.test(w); });
+  if (!mots.length) return null;
+  const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const minute = now.getHours() * 60 + now.getMinutes();
+  const base = Array.isArray(exacts) ? exacts : (Array.isArray(events) ? events : []);
+  // Ceux d'aujourd'hui et après (comme tcDeplacementLocal), puis ceux qui ne sont pas finis.
+  const tous = base.filter(function (e) {
+    if (!e || e.mode !== evMode || !e.title || e.allDay || e.date < auj) return false;
+    if (Array.isArray(exacts)) return true;
+    const ct = (typeof tcContactDuRdv === 'function') ? tcContactDuRdv(e) : null;
+    return tcTitreContient(e.title, mots) || !!(ct && ct.name && tcTitreContient(ct.name, mots));
+  });
+  if (tous.length < 2) return null;
+  const nom = function (e) { return tcSansAccents(String(e.title)).trim(); };
+  if (!tous.every(function (e) { return nom(e) === nom(tous[0]); })) return null;
+  const avenir = tous.filter(function (e) { return e.date > auj || Number(e.endH) * 60 + Number(e.endM || 0) > minute; });
+  return avenir.length ? [avenir.sort(tcComparerEvenements)[0]] : null;
+}
+
+/* ─── 2. « n'importe » : la page propose, « oui » ajoute ─── */
+
+/** Le créneau proposé après une réponse vague, en attente de « oui » ou « non » (liste de propositions). */
+let _tcCreneauVagueEnAttente = null;
+
+/** « oui » : la carte est ajoutée ; « non » : rien. Autre chose : la proposition tombe et le message suit son chemin. */
+async function tcRepondrePropositionVague(text) {
+  const attente = _tcCreneauVagueEnAttente;
+  if (!attente) return false;
+  _tcCreneauVagueEnAttente = null;
+  // « oui à 10h », « non jeudi » : une autre demande, le chemin habituel.
+  if (/\d/.test(String(text || ''))) return false;
+  const oui = tcReponseOuiNon(text);
+  if (oui === null) return false;
+  tcPousserMessageUtilisateur(text);
+  if (!oui) {
+    charlyIA.history.push({ role: 'assistant', content: 'D’accord, je n’ajoute rien.', nature: 'reponse' });
+    renderCharlyChat();
+    return true;
+  }
+  const hhmm = function (h, m) { return String(Number(h)).padStart(2, '0') + ':' + String(Number(m || 0)).padStart(2, '0'); };
+  const lignes = attente.map(function (p) {
+    return p.date + ' | ' + hhmm(p.startH, p.startM) + '-' + hhmm(p.endH, p.endM) + ' | ' + p.title + ' | ' + (p.category || 'temps_libre');
+  });
+  const msg = { role: 'assistant', content: 'Je l’ajoute.\n[AGENDA]\n' + lignes.join('\n') + '\n[/AGENDA]', tempId: 'vague_' + Date.now(), nature: 'action' };
+  charlyIA.history.push(msg);
+  renderCharlyChat();
+  if (typeof validateAgendaProposal === 'function') validateAgendaProposal(msg.tempId);
+  return true;
+}
+
+/**
+ * « n'importe », « peu importe », « choisis » juste après « Voici ce qui est libre » : le premier créneau de la liste, proposé par la
+ * page (« Je te propose … Je l’ajoute à ton agenda ? Réponds « oui » ou « non ». »), sans le modèle (passage 19, #176).
+ */
+function tcProposerApresReponseVague(text) {
+  if (typeof tcEstReponseVague !== 'function' || !tcEstReponseVague(text)) return false;
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  const m = h[h.length - 1];
+  if (!m || m.role !== 'assistant' || !Array.isArray(m._creneaux) || !m._creneaux.length) return false;
+  const c = m._creneaux[0];
+  if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(String(c.date || '')) || !(Number(c.fin) > Number(c.debut))) return false;
+  const p = { date: c.date, startH: Math.floor(c.debut / 60), startM: c.debut % 60, endH: Math.floor(c.fin / 60), endM: c.fin % 60, title: 'Mon temps libre', category: 'temps_libre' };
+  tcPousserMessageUtilisateur(text);
+  _tcCreneauVagueEnAttente = [p];
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Je te propose « Mon temps libre » ' + tcJourM64(p.date) + ', de '
+    + tcHeureM64(p.startH, p.startM) + ' à ' + tcHeureM64(p.endH, p.endM) + '. Je l’ajoute à ton agenda ? Réponds « oui » ou « non ».' });
+  renderCharlyChat();
+  return true;
+}
+
+/** La réponse à la proposition, ou la proposition après une réponse vague. Vrai si traité. */
+async function tcRepondreReponseVague(text) {
+  if (await tcRepondrePropositionVague(text)) return true;
+  return tcProposerApresReponseVague(text);
+}
+
+/* ─── 3. « déj gaëlle ven 12h30 » ─── */
+
+/**
+ * « déjeuner gaëlle vendredi 12h30 », « dîner avec Paul jeudi 20h », « café Hugo demain 10h » : un repas en tête, suivi d'un contact
+ * connu. Rend { repas, prenom, contact, dejaPrevu } ou null. dejaPrevu : un rendez-vous à venir avec ce contact existe déjà (alors
+ * « déjeuner avec Paul mercredi 12h » peut viser le rendez-vous existant, la garde habituelle décide).
+ */
+function tcRepasAvecContact(brut) {
+  const t = tcSansAccents(String(brut || '')).toLowerCase().replace(/[’']/g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = t.match(/^(?:(?:un|une|le|mon)\s+)?(petit dejeuner|dejeuner|diner|brunch|cafe|apero|gouter|verre)(?:\s+avec)?\s+([a-z]+)(?:\s|$)/);
+  if (!m) return null;
+  const contacts = (typeof contactsList !== 'undefined' && Array.isArray(contactsList)) ? contactsList : [];
+  const c = contacts.find(function (x) { return x && x.name && tcSansAccents(String(x.name)).toLowerCase().split(/[^a-z0-9]+/).indexOf(m[2]) > -1; });
+  if (!c) return null;
+  const REPAS = { 'petit dejeuner': 'Petit-déjeuner', dejeuner: 'Déjeuner', diner: 'Dîner', brunch: 'Brunch', cafe: 'Café', apero: 'Apéro', gouter: 'Goûter', verre: 'Verre' };
+  const now = new Date();
+  const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dejaPrevu = (Array.isArray(events) ? events : []).some(function (e) {
+    return e && e.title && e.date >= auj && (e.contact === c.id || tcSansAccents(String(e.title)).toLowerCase().split(/[^a-z0-9]+/).indexOf(m[2]) > -1);
+  });
+  return { repas: REPAS[m[1]], prenom: String(c.name).trim().split(/\s+/)[0], contact: c, dejaPrevu: dejaPrevu };
+}
+
+/* ─── 4. « décale tout lundi » ─── */
+
+/**
+ * « décale tout lundi », « déplace tous mes rdv de demain », « reporte ma journée de vendredi » : sans destination, la liste du jour
+ * et « vers quand ? » ; la réponse mène à la relecture (tcRepondreDeplacementPeriode, attente.relire), rien ne bouge avant « oui ».
+ * Avec une heure, une partie du jour ou une destination : faux, le chemin habituel.
+ */
+function tcDecalerToutUnJour(text) {
+  const t = tcClasseNormaliser(text);
+  const m = t.match(/^(?:(?:charly|stp|svp)\s+)?(?:decale|deplace|reporte|repousse|bouge|decaler|deplacer|reporter|repousser|bouger)\s+(?:moi\s+)?(?:(?:tout|tous|toutes)(?:\s+(?:mes|les)\s+(?:rdv|rendez vous|rendezvous))?|(?:mes|les)\s+(?:rdv|rendez vous)|tout mon (?:planning|programme|agenda)|toute ma journee|ma journee)\s+(?:de\s+|du\s+|d\s+)?(.+?)(?:\s+(?:stp|svp|merci|charly))*$/);
+  if (!m) return false;
+  const rest = m[1].trim();
+  if (tcHeureDansTexte(rest)) return false;
+  const MOMENT = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres|aujourd|hui|prochain|prochaine|ce|cette|le|\d{1,2}|1er|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)$/;
+  if (rest.split(' ').some(function (w) { return w && !MOMENT.test(w); })) return false;
+  const now = new Date();
+  const jours = tcJoursCites(rest, now, false);
+  if (jours.length !== 1) return false;
+  const jour = jours[0];
+  const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const minute = now.getHours() * 60 + now.getMinutes();
+  const touches = (Array.isArray(events) ? events : []).filter(function (e) {
+    return e && e.mode === evMode && e.title && !e.allDay && e.date === jour && (e.date > auj || Number(e.endH) * 60 + Number(e.endM || 0) > minute);
+  }).sort(tcComparerEvenements);
+  tcPousserMessageUtilisateur(text);
+  if (!touches.length) {
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Tu n’as aucun rendez-vous ' + tcJourM64(jour) + ' : rien à décaler.' });
+  } else {
+    _tcDeplacementPeriode = { touches: touches, essais: 2, relire: true };
+    const un = touches.length === 1;
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Tu as ' + touches.length + ' rendez-vous ' + tcJourM64(jour) + ' :\n'
+      + touches.map(function (e) { return '• « ' + e.title + ' » ' + tcHeureM64(e.startH, e.startM) + ' à ' + tcHeureM64(e.endH, e.endM); }).join('\n')
+      + '\nVers quand je ' + (un ? 'le' : 'les') + ' décale ? Dis-moi un jour et une heure (ex : jeudi 15h, ou demain même heure).' });
+  }
+  renderCharlyChat();
+  return true;
+}
+
+/**
+ * La relecture de « décale tout lundi » puis « mardi » : un jour nommé avant le rendez-vous (« mardi », dit un mardi, pour le lundi
+ * d'après) est celui qui suit le rendez-vous, comme tcDeplacementLocal ; « demain », « aujourd'hui » et une date restent tels quels.
+ */
+function tcRelireDeplacementPeriode(liste, text) {
+  const t = tcSansAccents(String(text || '')).toLowerCase().replace(/[’']/g, ' ');
+  const nomme = /(^|\s)(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(\s|$)/.test(t) && !/(^|\s)(demain|aujourd|ce soir|ce matin)(\s|$)/.test(t)
+    && !/\d{1,2}\s*(\/|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)/.test(t);
+  if (nomme) {
+    liste.forEach(function (x) {
+      if (x.p.date >= x.ev.date) return;
+      const d = new Date(x.p.date + 'T12:00:00');
+      while (tcISO(d) <= x.ev.date) d.setDate(d.getDate() + 7);
+      x.p.date = tcISO(d);
+    });
+  }
+  tcRelireDeplacement(liste);
+}
+
+/* ─── 5. « Même heure la semaine prochaine », sans rien avant ─── */
+
+/**
+ * « Même heure la semaine prochaine », « pareil demain », « rebelote jeudi » sans rendez-vous dans les derniers messages : Charly
+ * demande lequel, il ne crée rien (passage 19, #140). Avec un rendez-vous juste avant : faux, le modèle lit la suite.
+ */
+function tcMemeHeureSansContexte(text) {
+  // Une réponse à « Vers quand ? » (« même heure jeudi ») n'est pas une nouvelle demande.
+  if (typeof _tcDeplacementPeriode !== 'undefined' && _tcDeplacementPeriode) return false;
+  const t = tcClasseNormaliser(text);
+  const m = t.match(/^(?:(?:et|bon|alors|ok|euh|du coup)\s+)?(?:a\s+la\s+|la\s+)?(meme heure|meme horaire|meme chose|pareil|rebelote|idem|on remet ca|la meme)(?:\s+(la semaine prochaine|semaine prochaine|la semaine d apres|la semaine suivante|demain|apres demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?:\s+(?:prochain|prochaine))?)?(?:\s+(?:stp|svp|charly|aussi|alors))*$/);
+  if (!m) return false;
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  const contexte = h.slice(-4).some(function (x) { return x && /\[AGENDA\]|\d{1,2}\s?h(?![a-z])|\d{1,2}:\d{2}/i.test(String(x.content || '')); });
+  if (contexte) return false;
+  const QUAND = { 'la semaine prochaine': 'la semaine prochaine', 'semaine prochaine': 'la semaine prochaine', 'la semaine d apres': 'la semaine d’après', 'la semaine suivante': 'la semaine suivante', 'apres demain': 'après-demain' };
+  const quand = m[2] ? ' ' + (QUAND[m[2]] || m[2]) : '';
+  tcPousserMessageUtilisateur(text);
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: /^meme h/.test(m[1])
+    ? 'Quel rendez-vous veux-tu noter à la même heure' + quand + ' ?'
+    : 'Qu’est-ce que tu veux refaire' + quand + ' ?' });
+  renderCharlyChat();
+  return true;
+}
+
+/* ─── 6. Les blocs [AGENDA] non fermés ─── */
+
+/**
+ * « [AGENDA] 2026-10-28 | 12:00-13:30 | Pause déjeuner | temps_libre [AGENDA] 2026-10-29 | … » sans [/AGENDA], ou plusieurs blocs :
+ * toutes les lignes complètes dans un seul bloc fermé (la page n'en lit qu'un). Une dernière ligne coupée (réponse tronquée) tombe.
+ * Sans aucune ligne complète : le texte seul (le filet « j'ajoute sans bloc » prend la suite).
+ */
+function tcFermerBlocsAgenda(reply) {
+  const r = String(reply || '');
+  const ouverts = (r.match(/\[AGENDA\]/g) || []).length, fermes = (r.match(/\[\/AGENDA\]/g) || []).length;
+  if (!ouverts || (ouverts === 1 && fermes === 1)) return reply;
+  const i0 = r.indexOf('[AGENDA]');
+  const avant = r.slice(0, i0).trim();
+  const morceaux = r.slice(i0).split(/\[\/?AGENDA\]|\n/);
+  const LIGNE = /^\d{4}-\d{2}-\d{2}(?:\s*>\s*\d{4}-\d{2}-\d{2})?\s*\|\s*\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\s*\|\s*[^|]+?\s*\|\s*[a-z_]+(?:\s*\|.*)?$/i;
+  const CONNUE = /\|\s*(travail|sport|famille|sante|repas|pause|trajet|preparation|administratif|loisir|temps_libre|perso|rdv|medecin|amis|personnel|green)\s*(?:\|.*)?$/i;
+  const lignes = [], apres = [];
+  morceaux.forEach(function (x, i) {
+    const s = x.trim();
+    if (!s) return;
+    if (LIGNE.test(s)) {
+      // Le dernier morceau, sans rien derrière : gardé seulement si sa catégorie est entière (sinon la réponse a été coupée).
+      if (i === morceaux.length - 1 && !CONNUE.test(s)) return;
+      lignes.push(s);
+      return;
+    }
+    if (/^\d{4}-\d/.test(s)) return;
+    apres.push(s);
+  });
+  if (!lignes.length) return (avant + (apres.length ? ' ' + apres.join(' ') : '')).trim();
+  return (avant ? avant + '\n' : '') + '[AGENDA]\n' + lignes.join('\n') + '\n[/AGENDA]' + (apres.length ? '\n' + apres.join(' ') : '');
+}
+
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
 function tcPhraseNonCompris(question) {
   return 'Sauf erreur de ma part, je n\'ai pas bien compris ta demande. ' + question;
@@ -23832,6 +24102,8 @@ async function tcRepondreDeplacementPeriode(text) {
       if ((o.startH * 60 + o.startM) < (x.p.endH * 60 + x.p.endM) && (o.endH * 60 + o.endM) > (x.p.startH * 60 + x.p.startM)) genes.push(o);
     });
   });
+  // « décale tout lundi » : la relecture (avant, après, ce qui chevauche), rien ne bouge avant « oui » (mission 64).
+  if (attente.relire && typeof tcRelireDeplacementPeriode === 'function') { tcRelireDeplacementPeriode(liste, text); renderCharlyChat(); return true; }
   tcAppliquerDeplacement(liste);
   if (genes.length) {
     charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + genes.map(_tcLigneRdv).join(' ; ') + '.' });
@@ -30838,6 +31110,7 @@ function tcViderDonneesDuCompte() {
   }
   if (typeof _tcSuppressionEnAttente !== 'undefined') _tcSuppressionEnAttente = null;
   if (typeof _tcDeplacementEnAttente !== 'undefined') _tcDeplacementEnAttente = null;
+  if (typeof _tcCreneauVagueEnAttente !== 'undefined') _tcCreneauVagueEnAttente = null;
   if (typeof _tcQuestionnaire !== 'undefined') _tcQuestionnaire = null;
   if (typeof _isolatedCalendarId !== 'undefined') _isolatedCalendarId = null;
   if (typeof loadCustomCalendars === 'function') loadCustomCalendars(); // stockage vide : « Mon agenda » seul
