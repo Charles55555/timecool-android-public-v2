@@ -41,7 +41,7 @@ vm.createContext(ctx);
 ['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHeureDansTexte', 'tcMotsDeRdv', 'tcTitreContient', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcBlocAgendaDepuisAnnonce',
   'tcPlusieursDatesOuRelatif', 'tcCorrigerPropositionsCharly', 'tcAgendaSnapshotPourIA', 'tcJoursCites', 'tcAnnonceUnConflit', 'tcIgnorerFauxConflit',
   'tcQuestionJourManquant', 'tcQuestionRdvDuJour', 'tcDeplacementHorsJour', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'tcHeureCourte', 'tcPlagesLibresDuJour', 'tcPhraseConflitLocale', 'tcVerbeConjugue', 'tcEstDeplacement',
-  'tcEstUneDuree', 'tcDureeForte', 'tcHeuresCitees', 'tcDureeDemandee', 'tcAnnonceAutreCreneau', 'tcBlocAvecFauxConflit']
+  'tcEstUneDuree', 'tcDureeForte', 'tcDebutAvantJusqua', 'tcHeuresCitees', 'tcDureeDemandee', 'tcAnnonceAutreCreneau', 'tcBlocAvecFauxConflit']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
@@ -136,10 +136,18 @@ titre('3b. Mission 62 : un conflit ne vient que de l agenda, une duree n est pas
   // Examen, 1er passage : une plage ou un choix n'est jamais une duree, ni plus de 8 h.
   const HD = (t) => { const h = ctx.tcHeureDansTexte(t); return (h ? h.h + 'h' + (h.m || '') : 'null') + '/' + ctx.tcDureeDemandee(t); };
   const plages = [['bloque 14h à 16h lundi', '14h/120'], ['bloque 14h-16h lundi', '14h/120'], ['réserve 10h-11h mardi', '10h/60'], ['bloque 9h et 14h lundi', '9h/0'],
-    ['réserve 10h pour le dentiste, ou 11h', '10h/0'], ['bloque 10h demain jusqu’à 12h', '10h/0'], ['bloque 12h pour Paul lundi 9h', '12h/0'], ['bloque 1h30 pour le devis mercredi 16h', '16h/90'], ['pendant 1h30 à 9h vendredi', '9h/90']];
+    ['réserve 10h pour le dentiste, ou 11h', '10h/0'], ['bloque 10h demain jusqu’à 12h', '10h/0'], ['bloque 12h pour Paul lundi 9h', '12h/0'], ['bloque 1h30 pour le devis mercredi 16h', '16h/90'], ['pendant 1h30 à 9h vendredi', '9h/90'],
+    ['bloque 1h à 16h lundi', '16h/60'], ['réserve 1h30 à 9h lundi', '9h/90'], ['bloque 2h jusqu’à 18h lundi', '16h/120'], ['bloque 8h à 10h lundi', '8h/120'], ['bloque 1h lundi à 16h', '16h/60']];
   const malLues = plages.filter(([t, a]) => HD(t) !== a);
   verifie('(examen) « bloque 14h à 16h », « 14h-16h », « 10h-11h », « 9h et 14h », « 10h …, ou 11h », « 10h demain jusqu’à 12h », « bloque 12h pour Paul lundi 9h » : la premiere heure (une plage dure ce qu elle dit, le reste aucune duree) ; « bloque 1h30 … 16h » → 16h, 90 min', !malLues.length, malLues.map(([t]) => t + ' → ' + HD(t)).join(' | '));
+  // Examen, 2e passage : « bloque 1h à 16h » est la forme la plus naturelle de #405.
+  const BL = (t) => (ctx.tcBlocAgendaDepuisAnnonce(t, '', NOW, 1).match(/\| (\d{2}:\d{2}-\d{2}:\d{2}) \| ([^|]+) \|/) || []).slice(1).join(' ').trim();
+  const blocs = [['bloque 1h à 16h lundi pour le devis', '16:00-17:00'], ['réserve 1h30 à 9h lundi', '09:00-10:30'], ['bloque 2h jusqu’à 18h lundi', '16:00-18:00'], ['bloque 8h à 10h lundi', '08:00-10:00']];
+  const blocsKo = blocs.filter(([t, a]) => BL(t).indexOf(a) !== 0 || /jusqu/i.test(BL(t)));
+  verifie('(examen) blocs : « bloque 1h à 16h » → 16:00-17:00, « réserve 1h30 à 9h » → 09:00-10:30, « bloque 2h jusqu’à 18h » → 16:00-18:00 (jamais le titre « Jusqu »), « bloque 8h à 10h » → 08:00-10:00 (une plage)', !blocsKo.length, blocs.map(([t]) => t + ' → ' + BL(t)).join(' | '));
   ctx.events = AGENDA.map((e) => Object.assign({}, e));
+  const z1 = FC('Lundi à 1h, tu as déjà l’atelier, je te propose 17h.', 'bloque 1h à 16h lundi');
+  verifie('(examen) « bloque 1h à 16h lundi » avec Zorglub lundi 15h-16h : 16h est libre, la page propose 16h-17h', !!z1 && /lundi 12 octobre 2026 à 16h/.test(z1) && /2026-10-12 \| 16:00-17:00 \|/.test(z1), z1);
   const z = FC('Lundi tu as déjà quelque chose, je te propose 17h.', 'bloque 14h-16h lundi');
   verifie('(examen) « bloque 14h-16h lundi » avec Zorglub lundi 15h-16h : le conflit de 15h reste vu (jamais « libre … à 16h »)', !z || !/libre/.test(z), z);
   ctx.events = [ev('dj', '2026-10-14', 12, 0, 13, 0, 'Déjeuner avec Paul')];

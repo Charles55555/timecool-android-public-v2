@@ -12023,7 +12023,7 @@ function tcDateDemandee(texte, now) {
  * « rdv aujourd hui 10h avec le plombier » → « Plombier ». Vide si la demande ne dit vraiment rien.
  */
 function tcTitreDepuisDemande(texte) {
-  const VIDES = /^(rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|change[sz]?|changer|modifie[sz]?|modifier|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
+  const VIDES = /^(jusqu|jusque|rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|change[sz]?|changer|modifie[sz]?|modifier|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
   // Les apostrophes separent les mots : « aujourd'hui », « m'ajouter », « s'il te plait » (apostrophe droite ou typographique).
   const mots = String(texte || '').replace(/[’']/g, ' ').split(/\s+/).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); });
   const utile = mots.map(function (w) {
@@ -14101,7 +14101,15 @@ function tcHeureDansTexte(t) {
   let m = re.exec(s);
   if (!m) return null;
   // « bloque 1h pour le devis de M. Garcia mercredi 16h » : « 1h » est une durée, l'heure est la suivante (mission 62).
-  if (typeof tcEstUneDuree === 'function' && tcEstUneDuree(s, m.index, re.lastIndex)) { const suite = re.exec(s); if (suite) m = suite; }
+  if (typeof tcEstUneDuree === 'function' && tcEstUneDuree(s, m.index, re.lastIndex)) {
+    const premiere = m, finPremiere = re.lastIndex, suite = re.exec(s);
+    if (suite) {
+      // « bloque 2h jusqu'à 18h » : l'heure de début est 16h.
+      const debut = (typeof tcDebutAvantJusqua === 'function') ? tcDebutAvantJusqua(s, premiere, finPremiere, suite) : null;
+      if (debut) return debut;
+      m = suite;
+    }
+  }
   return { h: Number(m[1]), m: m[2] ? Number(m[2]) : null };
 }
 
@@ -23112,9 +23120,14 @@ function tcReponsePositiveMalgreNon(norm) {
 function tcEstUneDuree(s, idx, fin) {
   const texte = String(s);
   const nombre = texte.slice(idx).match(/^(\d{1,2})\s*(?:heures?|h|:)\s*(\d{2})?/);
-  if (!nombre || Number(nombre[1]) * 60 + Number(nombre[2] || 0) > 8 * 60) return false;
+  const minutes = nombre ? Number(nombre[1]) * 60 + Number(nombre[2] || 0) : 0;
+  if (!nombre || minutes > 8 * 60) return false;
   // « pendant 1h30 à 9h » : après « pendant », « dure », c'est toujours une durée ; après « bloque », « 14h à 16h » est une plage.
-  if (typeof fin === 'number' && !tcDureeForte(texte, idx) && /^\s*(-|–|à|a|au|jusqu|et|ou)(\s|$|\d|['’])/.test(texte.slice(fin))) return false;
+  if (typeof fin === 'number' && !tcDureeForte(texte, idx) && /^\s*(-|–|à|a|au|jusqu|et|ou)(\s|$|\d|['’])/.test(texte.slice(fin))) {
+    // « bloque 1h à 16h », « réserve 1h30 à 9h », « bloque 2h jusqu'à 18h » : 6 h au plus devant une heure plus grande, une durée (examen, mission 62).
+    const suite = texte.slice(fin).match(/^\s*(?:à|a|jusqu['’ ]?(?:à|a)?)\s*(\d{1,2})\s*(?:heures?|h|:)\s*(\d{2})?/);
+    if (!(suite && minutes <= 6 * 60 && Number(suite[1]) * 60 + Number(suite[2] || 0) > minutes)) return false;
+  }
   const avant = texte.slice(Math.max(0, idx - 40), idx);
   return /(^|[^a-zà-ÿ])(bloque|bloquer|bloques|bloquez|r[eé]serve|r[eé]server|r[eé]serves|pr[eé]vois|pr[eé]voir|garde|garder|gardes|pendant|durant|dure|dur[eé]e de|dur[eé]e|compte|compter|comptes)(?:[- ](?:moi|nous|me))?(?: (?:une?|environ|au moins))?\s*$/.test(avant);
 }
@@ -23139,13 +23152,20 @@ function tcDureeDemandee(t) {
   const s = String(t).toLowerCase();
   const heures = tcHeuresCitees(s);
   if (heures.length < 2) return 0;
+  if (tcEstUneDuree(s, heures[0].index, heures[0].fin)) return heures[0].h * 60 + (heures[0].m || 0);
   // « bloque 14h-16h lundi », « de 14h à 16h » : la plage entière compte (examen, mission 62).
-  if (!tcDureeForte(s, heures[0].index) && /^\s*(-|–|à|a|au|jusqu['’ ]?(à|a)?)\s*$/.test(s.slice(heures[0].fin, heures[1].index))) {
+  if (/^\s*(-|–|à|a|au|jusqu['’ ]?(à|a)?)\s*$/.test(s.slice(heures[0].fin, heures[1].index))) {
     const ecart = heures[1].h * 60 + (heures[1].m || 0) - (heures[0].h * 60 + (heures[0].m || 0));
     return ecart > 0 ? ecart : 0;
   }
-  if (!tcEstUneDuree(s, heures[0].index, heures[0].fin)) return 0;
-  return heures[0].h * 60 + (heures[0].m || 0);
+  return 0;
+}
+
+/** « bloque 2h jusqu'à 18h » : le début (16h), quand la durée est suivie de « jusqu'à » et d'une heure ; null sinon. */
+function tcDebutAvantJusqua(s, premiere, finPremiere, suite) {
+  if (!/^\s*jusqu['’ ]?(à|a)?\s*$/.test(String(s).slice(finPremiere, suite.index))) return null;
+  const debut = Number(suite[1]) * 60 + (suite[2] ? Number(suite[2]) : 0) - (Number(premiere[1]) * 60 + (premiere[2] ? Number(premiere[2]) : 0));
+  return debut >= 0 ? { h: Math.floor(debut / 60), m: debut % 60 ? debut % 60 : null } : null;
 }
 
 /** Le modèle dit que la personne est prise (« à 16h, tu as … ») et propose une autre heure (« je te propose 15h ») : vrai / faux. */
