@@ -1451,6 +1451,57 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const ratesN = [];
     for (const t of ['La réunion est passée à 15h ?', 'Le train est passé à 15h', 'La réunion est passée', 'la réunion est à 15h', 'elle est passée à 15h', 'Hugo est passé à 15h', 'la réunion est passée à la trappe']) { if (await annonce(t)) ratesN.push(t + ' → ' + dernier().content); }
     verifie('une question, un rendez-vous absent (« le train »), « la réunion est passée », « la réunion est à 15h », « elle / Hugo est passé à 15h » : rien ici (le chemin habituel, puis le modèle)', !ratesN.length && ctx.charlyIA.history.length === 0, ratesN.join(' | '));
+    // Examen, 1er passage. (1) « oui mais à 16h » ne déplace pas à 15h : la relecture recommence à 16h.
+    const relu = () => { const a = attente(); return a && a.confirmer && a.liste.length === 1 ? a.liste[0].p.date + ' ' + a.liste[0].p.startH + ':' + a.liste[0].p.startM + '-' + a.liste[0].p.endH + ':' + a.liste[0].p.endM : 'rien'; };
+    const ratesR = [];
+    for (const [rep, attendu] of [['oui mais à 16h', '2026-10-20 16:0-17:0'], ['non plutôt 16h', '2026-10-20 16:0-17:0'], ['oui mais plutôt jeudi', '2026-10-22 15:0-16:0'], ['ok mais à 10h30', '2026-10-20 10:30-11:30']]) {
+      await annonce('La réunion est passée à 15h');
+      const r = await ctx.tcRepondreDeplacement(rep);
+      if (!(r === true && relu() === attendu && place('reunion') === '2026-10-20 14:0-15:0' && /^Tu veux que je décale « Réunion équipe » \?/.test(dernier().content))) ratesR.push(rep + ' → ' + r + ' ' + relu() + ' ' + place('reunion'));
+    }
+    for (const rep of ['oui mais', 'oui mais je préfère annuler', 'oui et préviens Hugo à 16h']) {
+      await annonce('La réunion est passée à 15h');
+      const r = await ctx.tcRepondreDeplacement(rep);
+      if (!(r === false && place('reunion') === '2026-10-20 14:0-15:0' && !attente())) ratesR.push(rep + ' → ' + r + ' ' + place('reunion'));
+    }
+    for (const rep of ['ok vas-y', 'oui stp', 'ouais', 'oui merci Charly']) {
+      await annonce('La réunion est passée à 15h');
+      const r = await ctx.tcRepondreDeplacement(rep);
+      if (!(r === true && place('reunion') === '2026-10-20 15:0-16:0')) ratesR.push(rep + ' → ' + r + ' ' + place('reunion'));
+    }
+    verifie('(examen) « oui mais à 16h », « non plutôt 16h », « oui mais plutôt jeudi », « ok mais à 10h30 » → une nouvelle relecture à cette place, rien ne bouge ; « oui mais », « oui mais je préfère annuler », « oui et préviens Hugo à 16h » → rien ne bouge, le message suit son chemin ; « ok vas-y », « oui stp », « ouais », « oui merci Charly » → déplacé à 15h',
+      !ratesR.length, ratesR.join(' | '));
+    // (2) oui / ok en tête est une acceptation : la carte reste (sinon Charly redemanderait sans fin) ; « quand tu veux » aussi.
+    const acceptes = ['oui comme tu veux', 'ok peu importe', 'oui je te laisse choisir', 'oui n’importe', 'oui quand tu veux', 'quand tu veux', 'ouais peu importe'].filter((t) => ctx.tcSansCarteApresReponseVague(rep176, t) !== rep176);
+    verifie('(examen) « oui comme tu veux », « ok peu importe », « oui je te laisse choisir », « oui n’importe », « quand tu veux » : une acceptation, la carte reste', !acceptes.length, acceptes.join(' | '));
+    // (3) « passer » au sens de « venir » : une personne, « vers », une heure déjà passée.
+    {
+      const sauf = ctx.events;
+      const avecVenues = () => avecReunion().concat([ev('plombier', 'Plombier', 1, 14, 0, 15, 0), ev('fille', 'Anniversaire de ma fille', 2, 16, 0, 18, 0), ev('livraison', 'Livraison canapé', 1, 9, 0, 12, 0), ev('point', 'Point budget', 0, 15, 0, 16, 0)]);
+      const venue = async (t) => { ctx.events = avecVenues(); ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null;', ctx); return ctx.tcRepondreChangementAnnonce(t); };
+      const ratesP = [];
+      for (const t of ['le plombier est passé à 10h', 'le plombier est passé vers 10h', 'ma fille est passée à 15h', 'la livraison est passée à 10h', 'la réunion est passée vers 16h', 'le point est passé à 9h']) { if (await venue(t)) ratesP.push(t + ' → ' + dernier().content); }
+      const okP = [];
+      for (const [t, id] of [['le point est décalé à 9h', 'point'], ['le plombier est décalé à 10h', 'plombier'], ['la livraison a été repoussée à 15h', 'livraison'], ['le point est passé à 17h', 'point']]) { const r = await venue(t); const a = attente(); if (!(r === true && a && a.liste[0].ev.id === id)) okP.push(t + ' → ' + r); }
+      verifie('(examen) « le plombier est passé à 10h / vers 10h », « ma fille est passée à 15h », « la livraison est passée à 10h », « la réunion est passée vers 16h », « le point est passé à 9h » (9h déjà passé aujourd’hui) : rien ; « décalé », « repoussé », « le point est passé à 17h » : la relecture',
+        !ratesP.length && !okP.length, ratesP.concat(okP).join(' | '));
+      ctx.events = sauf;
+    }
+    // (4) Un nom précis vise ce seul rendez-vous, jamais « Lequel ? ».
+    {
+      const deuxReunions = () => avecReunion().concat([ev('client', 'Réunion client', 6, 10, 0, 11, 0)]);
+      const nomme = async (t) => { ctx.events = deuxReunions(); ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null;', ctx); return ctx.tcRepondreChangementAnnonce(t); };
+      const r1 = await nomme('la réunion client est passée à 11h'), a1 = relu(), id1 = attente() && attente().liste[0].ev.id;
+      const r2 = await nomme('la réunion d’équipe est décalée à demain 10h'), a2 = relu(), id2 = attente() && attente().liste[0].ev.id;
+      const r3 = await nomme('la réunion est passée à 16h'), c3 = dernier().content;
+      verifie('(examen) « la réunion client est passée à 11h » → « Réunion client » 11h-12h ; « la réunion d’équipe est décalée à demain 10h » → « Réunion équipe » demain 10h ; « la réunion est passée à 16h » (deux réunions) → « Lequel ? »',
+        r1 === true && id1 === 'client' && a1 === '2026-10-21 11:0-12:0' && r2 === true && id2 === 'reunion' && a2 === '2026-10-16 10:0-11:0' && r3 === true && /Lequel veux-tu déplacer \?$/.test(c3) && !attente(),
+        [r1, id1, a1, r2, id2, a2, r3, c3].join(' | '));
+      ctx.events = avecReunion();
+      const dl = (t) => { const d = ctx.tcDeplacementLocal(t, new DateFixe()); return d && d.liste ? d.liste[0].p.date + ' ' + d.liste[0].p.startH : 'null'; };
+      verifie('(examen) tapé, « décale la réunion à demain 10h » → demain (jamais la semaine d’après) ; « décale la réunion de mardi à jeudi » → le jeudi qui suit (22)',
+        dl('décale la réunion à demain 10h') === '2026-10-16 10' && dl('décale la réunion de mardi à jeudi') === '2026-10-22 14', [dl('décale la réunion à demain 10h'), dl('décale la réunion de mardi à jeudi')].join(' | '));
+    }
     verifie('charlySendMessage : « la réunion est passée à 15h » est lu juste après la question du mode, avant les réponses attendues et le classement',
       csm63.indexOf('await tcRepondreChangementAnnonce(text)) return;') > csm63.indexOf('tcRepondreModeRdv(text)) return;') && csm63.indexOf('await tcRepondreChangementAnnonce(text)) return;') < csm63.indexOf('if (_tcDeplacementEnAttente) {')
       && csm63.indexOf('await tcRepondreChangementAnnonce(text)) return;') < csm63.indexOf('const _classe = tcClasserMessage(text, charlyIA.history);'));

@@ -14749,16 +14749,10 @@ function tcReponsePrevenir(text) {
 /** Réponse à « les prévenir, ou c'est déjà vu ? » : on déplace, puis on prévient si demandé. */
 async function tcRepondreDeplacement(text) {
   const attente = _tcDeplacementEnAttente;
-  // « La réunion est passée à 15h » : rien ne bouge avant « oui » (mission 63).
+  // « La réunion est passée à 15h » : rien ne bouge avant « oui » ; « oui mais à 16h » relit à 16h (mission 63).
   if (attente && attente.confirmer) {
-    const oui = tcReponseOuiNon(text);
     _tcDeplacementEnAttente = null;
-    if (oui === null) return false;
-    tcPousserMessageUtilisateur(text);
-    if (oui) tcExecuterDeplacement(attente.liste);
-    else charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne change rien.', nature: 'reponse' });
-    renderCharlyChat();
-    return true;
+    return typeof tcRepondreRelectureDeplacement === 'function' ? await tcRepondreRelectureDeplacement(text, attente) : false;
   }
   const choix = tcReponsePrevenir(text);
   _tcDeplacementEnAttente = null;
@@ -20028,7 +20022,7 @@ async function tcGererSuppressionSansCible(text, sansBulle) {
  * « reporte la réunion de mardi à la semaine prochaine même heure ». Rend { liste: [{ ev, p }] } quand UN rendez-vous existant
  * et sa nouvelle place sont sûrs, { question } quand plusieurs rendez-vous conviennent, null sinon (le chemin habituel continue).
  */
-function tcDeplacementLocal(text, now) {
+function tcDeplacementLocal(text, now, seuls) {
   const ref = now ? new Date(now) : new Date();
   // « tu peux le mettre à onze heures » : l'heure en lettres se lit en chiffres (mission 60).
   let _texteHeures = String(text || '');
@@ -20036,7 +20030,7 @@ function tcDeplacementLocal(text, now) {
   const sans = tcSansAccents(_texteHeures).replace(/[’']/g, ' ');
   const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
   const jour0 = tcISO(new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()));
-  let candidats = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && e.title && e.date >= jour0 && !e.allDay; });
+  let candidats = (Array.isArray(seuls) ? seuls : Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && e.title && e.date >= jour0 && !e.allDay; });
   if (!candidats.length) return null;
   // Le jour de départ (« de mardi », « de lundi ») : les rendez-vous de ce jour.
   const base = candidats.slice();
@@ -20084,7 +20078,7 @@ function tcDeplacementLocal(text, now) {
     const d = new Date(ev.date + 'T12:00:00'); d.setDate(d.getDate() + 1); dateCible = tcISO(d);
   }
   // « la réunion de mardi à jeudi » : le jeudi qui suit le mardi, jamais un jour déjà passé par rapport au rendez-vous (sauf « avance »).
-  if (dateCible && dateCible < ev.date && !/\b(avance|avancer|plus tot|avant)\b/.test(sans)) {
+  if (dateCible && dateCible < ev.date && !/\b(avance|avancer|plus tot|avant)\b/.test(sans) && !/\b(demain|aujourd hui|ce soir|ce matin|cet apres midi)\b/.test(sans)) {
     const d = new Date(dateCible + 'T12:00:00');
     while (tcISO(d) <= ev.date) d.setDate(d.getDate() + 7);
     dateCible = tcISO(d);
@@ -23332,7 +23326,7 @@ function tcRepondreModeRdv(text) {
    ═══════════════════════════════════════════════════════════════ */
 
 /* ─── 1. Une réponse vague ─── */
-const TC_REPONSE_VAGUE = /^(?:(?:bah|ben|euh|heu|bof|oh|ah|alors|ok|oui|ouais|bon|mais|franchement)\s+)*(?:n importe(?: quand| lequel| laquelle| quel| quelle| ou| comment| quel creneau| quelle heure| quel jour)?|peu importe|peu m importe|comme tu veux|comme tu (?:le )?sens|comme tu preferes|comme ca t arrange|c est (?:toi qui vois|comme tu veux|egal|pareil)|a toi de (?:voir|choisir|decider)|tu choisis|tu decides|choisis(?: toi| pour moi)?|decide(?: toi| pour moi)?|je te laisse (?:choisir|decider|voir)|au choix|(?:ca )?m est (?:bien )?egal|egal|osef|je m en (?:fiche|fous|moque)|m en fous|ce que tu veux|quand tu veux|celui que tu veux|celle que tu veux|l un ou l autre|tout me va|tout me convient|ce qui t arrange|le mieux pour toi|je sais pas|je ne sais pas|j en sais rien|aucune idee|whatever)(?:\s+(?:charly|stp|svp|merci))*$/;
+const TC_REPONSE_VAGUE = /^(?:(?:bah|ben|euh|heu|bof|oh|ah|alors|bon|mais|franchement)\s+)*(?:n importe(?: quand| lequel| laquelle| quel| quelle| ou| comment| quel creneau| quelle heure| quel jour)?|peu importe|peu m importe|comme tu veux|comme tu (?:le )?sens|comme tu preferes|comme ca t arrange|c est (?:toi qui vois|comme tu veux|egal|pareil)|a toi de (?:voir|choisir|decider)|tu choisis|tu decides|choisis(?: toi| pour moi)?|decide(?: toi| pour moi)?|je te laisse (?:choisir|decider|voir)|au choix|(?:ca )?m est (?:bien )?egal|egal|osef|je m en (?:fiche|fous|moque)|m en fous|ce que tu veux|celui que tu veux|celle que tu veux|l un ou l autre|tout me va|tout me convient|ce qui t arrange|le mieux pour toi|je sais pas|je ne sais pas|j en sais rien|aucune idee|whatever)(?:\s+(?:charly|stp|svp|merci))*$/;
 
 /** « n'importe », « peu importe », « comme tu veux », « à toi de voir » : une réponse qui ne choisit rien. */
 function tcEstReponseVague(texte) {
@@ -23374,40 +23368,60 @@ function tcChangementAnnonce(text) {
   const ADV = '(?:(?:finalement|maintenant|desormais|plutot)\\s+)?';
   const CIBLE = '((?:de\\s+\\S+(?:\\s+\\S+)?\\s+)?(?:a|au|pour|vers)\\s+.+)$';
   const VERBE = '(?:(?:est|sont|a|ont|a ete|ont ete|vient d etre|viennent d etre|sera|seront|va etre|vont etre)\\s+)?' + ADV
-    + '(?:passee?s?|decalee?s?|deplacee?s?|repoussee?s?|reportee?s?|avancee?s?|changee?s?|bougee?s?|reprogrammee?s?|passent|bougent)\\s+' + ADV;
+    + '(passee?s?|decalee?s?|deplacee?s?|repoussee?s?|reportee?s?|avancee?s?|changee?s?|bougee?s?|reprogrammee?s?|passent|bougent)\\s+' + ADV;
   // Sans verbe de changement, seulement avec « finalement / maintenant / désormais / plutôt » (« la réunion est finalement à 16h »).
-  const ETAT = '(?:est|sont|sera|seront|aura lieu|auront lieu|se fera|se feront|commence|commencera)\\s+(?:finalement|maintenant|desormais|plutot)\\s+';
+  const ETAT = '(?:est|sont|sera|seront|aura lieu|auront lieu|se fera|se feront|commence|commencera)\\s+(?:finalement|maintenant|desormais|plutot)\\s+()';
   const m = s.match(new RegExp(TETE + SUJET + VERBE + CIBLE)) || s.match(new RegExp(TETE + SUJET + ETAT + CIBLE));
   if (!m) return null;
-  const sujet = m[2].trim(), cible = m[3].trim();
+  const sujet = m[2].trim(), verbe = m[3] || '', cible = m[4].trim();
   // Le sujet est un rendez-vous, pas une personne ni un pronom (« elle est passée à 15h » ne passe pas ici).
   if (/^(il|elle|ils|elles|on|ca|ce|cela|tout|rien)(\s|$)/.test(sujet)) return null;
+  // « passer » veut aussi dire « venir » : « le plombier est passé à 10h », « ma fille est passée vers 15h » (examen, mission 63).
+  // Pour ce verbe seulement : jamais « vers », jamais une personne ni ce qui se livre ; « décalé », « repoussé »… restent clairs.
+  const passer = /^pass/.test(verbe);
+  if (passer) {
+    if (/^vers(\s|$)/.test(cible)) return null;
+    const premier = sujet.split(' ')[0];
+    if (TC_SUJETS_QUI_PASSENT.test(premier)) return null;
+    const contacts = (typeof contactsList !== 'undefined' && Array.isArray(contactsList)) ? contactsList : [];
+    if (contacts.some(function (c) { return c && c.name && tcSansAccents(String(c.name)).split(/[^a-z0-9]+/).indexOf(premier) > -1; })) return null;
+  }
   // La cible dit une heure, un jour ou « la semaine prochaine ».
   const ref = new Date();
   const aHeure = !!tcHeureDansTexte(cible);
   const aJour = (typeof tcJoursCites === 'function' && tcJoursCites(cible, ref, false).length > 0) || /(semaine prochaine|semaine d apres|semaine suivante|lendemain|jour d apres|jour suivant)/.test(cible);
   if (!aHeure && !aJour) return null;
-  return { synthese: 'décale ' + m[1] + ' ' + sujet + ' ' + cible };
+  return { synthese: 'décale ' + m[1] + ' ' + sujet + ' ' + cible, sujet: sujet, passer: passer };
 }
 
-/** Le rendez-vous et sa nouvelle place, relus : « Tu veux que je décale « Réunion équipe » ? Avant… Après… », oui / non. Vrai si traité. */
-async function tcRepondreChangementAnnonce(text) {
-  const c = tcChangementAnnonce(text);
-  if (!c || typeof tcDeplacementLocal !== 'function') return false;
-  const d = tcDeplacementLocal(c.synthese, new Date());
-  if (!d) return false;
-  tcPousserMessageUtilisateur(text);
-  if (d.question) {
-    charlyIA.history.push({ role: 'assistant', content: d.question, nature: 'question' });
-    renderCharlyChat();
-    return true;
-  }
+/* Les personnes (et ce qui se livre) qui « passent » chez quelqu'un : « le plombier est passé à 10h » n'est pas un déplacement. */
+const TC_SUJETS_QUI_PASSENT = /^(fille|fils|mere|pere|maman|papa|femme|mari|epouse|epoux|frere|soeur|copain|copine|ami|amie|amis|cousin|cousine|oncle|tante|grand|grands|enfant|enfants|bebe|gamins|nounou|voisin|voisine|voisins|plombier|facteur|factrice|livreur|livreuse|technicien|technicienne|electricien|artisan|ouvrier|ouvriers|peintre|serrurier|chauffagiste|jardinier|medecin|docteur|infirmier|infirmiere|aide|client|cliente|clients|patron|patronne|chef|collegue|collegues|invite|invites|livraison|colis|courrier|coursier|commande|camion|bus|train|metro|tram|avion)$/;
+
+/** Les rendez-vous à venir dont le titre (ou le contact) contient TOUS les mots du sujet : « la réunion client » n'est pas « Réunion équipe ». */
+function tcRdvNommesExactement(sujet) {
+  const JOURS = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|semaine|prochain|prochaine)$/;
+  const mots = tcMotsDeRdv(sujet).filter(function (w) { return !JOURS.test(w); });
+  if (mots.length < 2) return null;
+  const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  const now = new Date();
+  const jour0 = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const liste = (Array.isArray(events) ? events : []).filter(function (e) {
+    if (!e || e.mode !== evMode || !e.title || e.allDay || e.date < jour0) return false;
+    const c = (typeof tcContactDuRdv === 'function') ? tcContactDuRdv(e) : null;
+    const texte = e.title + (c && c.name ? ' ' + c.name : '');
+    return mots.every(function (w) { return tcTitreContient(texte, [w]); });
+  });
+  return liste.length ? liste : null;
+}
+
+/** La relecture « Tu veux que je décale « X » ? Avant… Après… Réponds « oui » ou « non ». », et le déplacement mis en attente. */
+function tcRelireDeplacement(liste) {
   const hh = function (h, m) { return Number(h) + 'h' + (Number(m) ? String(m).padStart(2, '0') : ''); };
   const quand = function (date, x) { return tcFormaterDateHumaine(date) + ', ' + hh(x.startH, x.startM) + ' à ' + hh(x.endH, x.endM); };
-  _tcDeplacementEnAttente = { liste: d.liste, contacts: [], anciens: [], confirmer: true };
+  _tcDeplacementEnAttente = { liste: liste, contacts: [], anciens: [], confirmer: true };
   // Un rendez-vous déjà à la nouvelle place se dit dans la relecture (l'agenda seul le dit, jamais le modèle).
   const minutes = function (h, m) { return Number(h) * 60 + Number(m || 0); };
-  const lignes = d.liste.map(function (x) {
+  const lignes = liste.map(function (x) {
     const debut = minutes(x.p.startH, x.p.startM), fin = minutes(x.p.endH, x.p.endM);
     const deja = (Array.isArray(events) ? events : []).filter(function (e) {
       return e && e !== x.ev && e.id !== x.ev.id && e.mode === x.ev.mode && e.date === x.p.date && !e.allDay && e.title
@@ -23417,10 +23431,72 @@ async function tcRepondreChangementAnnonce(text) {
       + (deja.length ? '\n• À cette heure-là, tu as déjà ' + deja.map(function (e) { return '« ' + e.title + ' » (' + hh(e.startH, e.startM) + ' à ' + hh(e.endH, e.endM) + ')'; }).join(' et ') + '.' : '');
   });
   charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Tu veux que je décale ' + lignes.join('\n') + '\nRéponds « oui » ou « non ».' });
+}
+
+/** Le rendez-vous et sa nouvelle place, relus (oui / non). Vrai si traité. */
+async function tcRepondreChangementAnnonce(text) {
+  const c = tcChangementAnnonce(text);
+  if (!c || typeof tcDeplacementLocal !== 'function') return false;
+  // Un nom précis (« la réunion client ») ne vise que ce rendez-vous, jamais « Lequel ? » avec « Réunion équipe » (examen, mission 63).
+  const d = tcDeplacementLocal(c.synthese, new Date(), tcRdvNommesExactement(c.sujet) || undefined);
+  if (!d) return false;
+  // « passé à 10h » alors que 10h est déjà passé aujourd'hui : quelqu'un est venu, rien à déplacer.
+  if (c.passer && d.liste) {
+    const now = new Date(), auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+    if (d.liste.some(function (x) { return x.p.date < auj || (x.p.date === auj && Number(x.p.startH) * 60 + Number(x.p.startM || 0) <= now.getHours() * 60 + now.getMinutes()); })) return false;
+  }
+  tcPousserMessageUtilisateur(text);
+  if (d.question) charlyIA.history.push({ role: 'assistant', content: d.question, nature: 'question' });
+  else tcRelireDeplacement(d.liste);
   renderCharlyChat();
   return true;
 }
 
+/**
+ * La réponse à la relecture. « oui », « ok », « vas-y » : le déplacement (et « prévenir ? » s'il y a un contact) ; « non » : rien ne
+ * change. « oui mais à 16h », « non plutôt 16h », « oui mais jeudi » : une nouvelle relecture à cette place, rien ne bouge (examen,
+ * mission 63). Autre chose (« oui mais », une nouvelle demande) : faux, le message suit son chemin.
+ */
+async function tcRepondreRelectureDeplacement(text, attente) {
+  const oui = tcReponseOuiNon(text);
+  if (oui === null) return false;
+  const POLI = /^(?:(?:oui|ouais|ok|okay|d accord|daccord|vas y|go|yes|confirme|je confirme|c est ca|exact|non|no|nan|stp|svp|s il te plait|merci|charly|c est bon|parfait|super|top|nickel|bien sur|carrement|volontiers|avec plaisir)(?:\s+|$))*/;
+  const reste = tcClasseNormaliser(text).replace(POLI, '').trim();
+  if (!reste) {
+    tcPousserMessageUtilisateur(text);
+    if (oui) tcExecuterDeplacement(attente.liste);
+    else charlyIA.history.push({ role: 'assistant', content: 'D’accord, je ne change rien.', nature: 'reponse' });
+    renderCharlyChat();
+    return true;
+  }
+  // Une autre place dite après le oui ou le non : la relecture recommence avec elle, pour un seul rendez-vous.
+  if (attente.liste.length !== 1) return false;
+  const x = attente.liste[0];
+  const cible = reste.replace(/^(?:(?:mais|plutot|plutôt|par contre|en fait|finalement|alors|plus|a la place)\s+)+/, '');
+  const ref = new Date();
+  const jours = (typeof tcJoursCites === 'function') ? tcJoursCites(cible, ref, false) : [];
+  const h = tcHeureDansTexte(cible);
+  if (jours.length > 1 || (!h && !jours.length)) return false;
+  // Rien d'autre que le moment (« mais à 16h », « plutôt jeudi 10h ») : sinon c'est une autre demande.
+  const autres = cible.split(' ').filter(function (w) { return w && !/^(a|au|le|la|vers|pour|de|h|heure|heures|et|demi|quart|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres|aujourd|hui|matin|soir|midi|prochain|prochaine|semaine|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|er|\d.*)$/.test(w); });
+  if (autres.length) return false;
+  const debutAvant = Number(x.ev.startH) * 60 + Number(x.ev.startM || 0);
+  const duree = Math.max(15, Number(x.ev.endH) * 60 + Number(x.ev.endM || 0) - debutAvant);
+  const debut = h ? h.h * 60 + (h.m || 0) : Number(x.p.startH) * 60 + Number(x.p.startM || 0);
+  const fin = Math.min(debut + duree, 23 * 60 + 59);
+  // « plutôt jeudi » : le jeudi qui suit le rendez-vous, comme tcDeplacementLocal (« demain » reste demain).
+  let date = jours[0] || x.p.date;
+  if (jours[0] && date < x.ev.date && !/(^|\s)(demain|aujourd|avance|avant)(\s|$)/.test(cible)) {
+    const dd = new Date(date + 'T12:00:00');
+    while (tcISO(dd) <= x.ev.date) dd.setDate(dd.getDate() + 7);
+    date = tcISO(dd);
+  }
+  const p = { date: date, startH: Math.floor(debut / 60), startM: debut % 60, endH: Math.floor(fin / 60), endM: fin % 60 };
+  tcPousserMessageUtilisateur(text);
+  tcRelireDeplacement([{ ev: x.ev, p: p }]);
+  renderCharlyChat();
+  return true;
+}
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
 function tcPhraseNonCompris(question) {
   return 'Sauf erreur de ma part, je n\'ai pas bien compris ta demande. ' + question;

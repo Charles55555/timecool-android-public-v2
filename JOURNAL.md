@@ -2970,3 +2970,9 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   « Rappel : payer le loyer » (plus « penser à payer… ») ; « réserve la salle 14h 16h » → 14h, durée 2 h (plus 14h16 : des minutes ne
   sont jamais suivies de « h »).
 - Suite : verif-classement-charly (section 20).
+- Premier passage (examinateur, 27/10, 4 points) : « oui mais à 16h », « non plutôt 16h », « oui mais plutôt jeudi » après la relecture
+  relisent à la nouvelle place (tcRepondreRelectureDeplacement), rien ne bouge ; « oui mais », une autre demande → le chemin habituel.
+  « oui / ok / ouais » en tête et « quand tu veux » sont une acceptation (la carte reste). « passer » au sens de « venir » : jamais pour une
+  personne ou ce qui se livre (plombier, ma fille, la livraison, un contact), ni « vers 10h », ni une heure déjà passée aujourd'hui. Un nom
+  précis (« la réunion client ») ne vise que ce rendez-vous (tcRdvNommesExactement, liste donnée à tcDeplacementLocal). Et « décale la
+  réunion à demain 10h » va à demain (avant : la semaine d'après, règle des jours nommés).
