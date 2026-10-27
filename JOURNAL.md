@@ -2954,3 +2954,19 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   « jusqu » n'est plus un titre. « bloque 8h à 10h », « 14h à 16h », « 14h-16h » restent des plages.
 - Troisième passage (examinateur, 27/10, 1 point) : le seuil passe de 6 h à 4 h, « bloque 6h à 7h demain » et « bloque 5h à 6h » sont des
   créneaux du matin (6h-7h, 5h-6h), « bloque 4h à 18h » reste une durée.
+
+## 27/10/2026 : mission 63, les ratés du passage 18 (CODEUR)
+
+- #176 « n'importe » (après « quand suis-je libre demain ? ») : le modèle répondait « Je bloque donc demain de 9h à 12h » avec un bloc
+  « Mon temps libre ». Après une réponse vague (« n'importe », « peu importe », « comme tu veux », « à toi de voir », « choisis »…), le bloc
+  du modèle ne part plus en carte : tcSansCarteApresReponseVague le remplace par « Je te propose « Mon temps libre » mardi 28 octobre, de
+  9h à 12h. Je l'ajoute à ton agenda ? Réponds « oui » ou « non ». ». Rien n'est créé avant la réponse.
+- #321 « La réunion est passée à 15h » : la page relie la phrase au rendez-vous existant (tcChangementAnnonce, puis tcDeplacementLocal) et
+  relit : « Tu veux que je décale « Réunion équipe » ? Avant : mardi 3 novembre, 14h à 15h. Après : 15h à 16h. Réponds « oui » ou « non ». »
+  (et « À cette heure-là, tu as déjà … » si la nouvelle place est prise). « oui » déplace (avec la question « prévenir ? » s'il y a un
+  contact), « non » ne change rien. Formes lues : « est passée / a été décalée / est repoussée / passe à … », « est finalement à 16h ».
+  Jamais pour une question, un rendez-vous absent (« le train est passé à 15h »), ni « la réunion est passée » sans heure ni jour.
+- Restes de la 62 : « le 1er novembre la facture », « le 1er la facture » → rappel le 1er novembre ; « le 3 novembre payer le loyer » →
+  « Rappel : payer le loyer » (plus « penser à payer… ») ; « réserve la salle 14h 16h » → 14h, durée 2 h (plus 14h16 : des minutes ne
+  sont jamais suivies de « h »).
+- Suite : verif-classement-charly (section 20).

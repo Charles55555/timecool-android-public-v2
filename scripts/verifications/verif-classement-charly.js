@@ -1398,6 +1398,80 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }];
   }
 
+  titre('20. Mission 63 : une réponse vague ne crée rien, « la réunion est passée à 15h », les restes de la 62');
+  {
+    ['tcDeplacementLocal', 'tcDepartsSemaineProchaine', 'tcRepondreDeplacement', 'tcReponsePrevenir', 'tcNatureReponse', 'tcHeuresEnLettres', 'tcDetecterRappelDate'].forEach((n) => {
+      if (typeof ctx[n] === 'function') return;
+      const src = extraire(n); if (src) vm.runInContext(src, ctx); else if (n !== 'tcHeuresEnLettres') verifie(n + ' existe', false);
+    });
+    // 1. « n'importe » après « quand suis-je libre demain ? » (#176, passage 18).
+    const rep176 = 'Je bloque donc demain de 9h à 12h pour toi. [AGENDA] 2026-10-16 | 09:00-12:00 | Mon temps libre | temps_libre [/AGENDA] Tu souhaites planifier quelque chose pendant ce créneau ?';
+    const P176 = 'Je te propose « Mon temps libre » 2026-10-16, de 9h à 12h. Je l’ajoute à ton agenda ? Réponds « oui » ou « non ».';
+    const vagues = ["n'importe", 'peu importe', 'Comme tu veux !', 'à toi de voir', 'bah n’importe quand', 'choisis', 'je te laisse choisir', 'ça m’est égal'];
+    const ratesV = vagues.filter((t) => ctx.tcSansCarteApresReponseVague(rep176, t) !== P176);
+    verifie('#176 « n’importe », « peu importe », « comme tu veux », « à toi de voir »… → « Je te propose « Mon temps libre » …, de 9h à 12h. Je l’ajoute à ton agenda ? Réponds « oui » ou « non ». » (aucun bloc, nature question)',
+      !ratesV.length && ctx.tcNatureReponse(P176) === 'question' && !(ctx.extractAgendaProposals(P176) || []).length, ratesV.map((t) => t + ' → ' + ctx.tcSansCarteApresReponseVague(rep176, t)).join(' | '));
+    const nonVagues = ['demain 10h', 'les deux', 'oui', "n'importe quoi", 'mets-le à 10h', 'le premier'].filter((t) => ctx.tcSansCarteApresReponseVague(rep176, t) !== rep176);
+    verifie('« demain 10h », « les deux », « oui », « n’importe quoi », « mets-le à 10h », « le premier » : la carte reste', !nonVagues.length, nonVagues.join(' | '));
+    const deux = ctx.tcSansCarteApresReponseVague('Voici. [AGENDA]\n2026-10-16 | 09:00-10:00 | Sport | perso\n2026-10-17 | 14:30-15:00 | Lecture | perso\n[/AGENDA]', 'peu importe');
+    verifie('deux blocs → la liste des deux et « Je les ajoute à ton agenda ? » ; un texte sans bloc ne change pas',
+      deux === 'Je te propose :\n• « Sport » 2026-10-16, de 9h à 10h\n• « Lecture » 2026-10-17, de 14h30 à 15h\nJe les ajoute à ton agenda ? Réponds « oui » ou « non ».' && ctx.tcSansCarteApresReponseVague('Tu es libre de 9h à 12h.', 'peu importe') === 'Tu es libre de 9h à 12h.', deux);
+    const csm63 = extraire('charlySendMessage') || '';
+    verifie('charlySendMessage : la réponse vague est lue juste avant tcSansCarteApresQuestion, après la fausse action, avant les autres garde-fous',
+      csm63.indexOf("reply = tcSansFaussesActions(reply);\n    // « n'importe », « peu importe », « comme tu veux » : Charly propose et demande, rien n'est créé (mission 63).\n    if (typeof tcSansCarteApresReponseVague === 'function') reply = tcSansCarteApresReponseVague(reply, text);\n    reply = tcSansCarteApresQuestion(reply, text);\n") > -1);
+
+    // 2. « La réunion est passée à 15h » (#321, passage 18) : la relecture, puis « oui » déplace, « non » ne change rien.
+    const avecReunion = () => agenda().concat([ev('reunion', 'Réunion équipe', 5, 14, 0, 15, 0)]);
+    const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
+    const attente = () => vm.runInContext('_tcDeplacementEnAttente', ctx);
+    const annonce = async (t) => { ctx.events = avecReunion(); ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null;', ctx); return ctx.tcRepondreChangementAnnonce(t); };
+    const place = (id) => { const e = ctx.events.find((x) => x.id === id); return e.date + ' ' + e.startH + ':' + e.startM + '-' + e.endH + ':' + e.endM; };
+    let ok1 = await annonce('La réunion est passée à 15h');
+    const q321 = dernier();
+    verifie('#321 « La réunion est passée à 15h » → « Tu veux que je décale « Réunion équipe » ? Avant : mardi 14h à 15h, Après : 15h à 16h. Réponds « oui » ou « non ». », rien ne bouge avant la réponse',
+      ok1 === true && q321.content === 'Tu veux que je décale « Réunion équipe » ?\n• Avant : 2026-10-20, 14h à 15h\n• Après : 2026-10-20, 15h à 16h\nRéponds « oui » ou « non ».' && q321.nature === 'question'
+      && place('reunion') === '2026-10-20 14:0-15:0' && attente() && attente().confirmer === true, JSON.stringify(q321.content));
+    const okOui = await ctx.tcRepondreDeplacement('oui');
+    verifie('« oui » → « Réunion équipe » mardi 15h-16h, « C’est fait » ; plus rien n’attend', okOui === true && place('reunion') === '2026-10-20 15:0-16:0' && /C'est fait, rendez-vous déplacé/.test(dernier().content) && !attente(), place('reunion'));
+    await annonce('La réunion est passée à 15h');
+    const okNon = await ctx.tcRepondreDeplacement('non');
+    verifie('« non » → « D’accord, je ne change rien. », la réunion reste à 14h', okNon === true && dernier().content === 'D’accord, je ne change rien.' && place('reunion') === '2026-10-20 14:0-15:0' && !attente(), dernier().content);
+    await annonce('La réunion est passée à 15h');
+    const okAutre = await ctx.tcRepondreDeplacement('rdv coiffeur jeudi 10h');
+    verifie('une autre demande à la place de oui / non : rien ne bouge, le message suit son chemin (la page dit qu’elle laisse tomber)', okAutre === false && place('reunion') === '2026-10-20 14:0-15:0' && !attente());
+    const formes = [['la réunion de mardi a été décalée à 16h30', 'reunion', '2026-10-20 16:30-17:30'], ['Le golf est repoussé à mardi', 'golf', '2026-10-20 14:0-16:0'], ['Bon, la réunion est finalement à 16h', 'reunion', '2026-10-20 16:0-17:0'], ['la réunion passe à 9h', 'reunion', '2026-10-20 9:0-10:0']];
+    const ratesF = [];
+    for (const [t, id, attendu] of formes) { const r = await annonce(t); const a = attente(); if (!(r === true && a && a.confirmer && a.liste[0].ev.id === id && (a.liste[0].p.date + ' ' + a.liste[0].p.startH + ':' + a.liste[0].p.startM + '-' + a.liste[0].p.endH + ':' + a.liste[0].p.endM) === attendu)) ratesF.push(t + ' → ' + r + ' ' + JSON.stringify(dernier().content)); }
+    verifie('« la réunion de mardi a été décalée à 16h30 », « le golf est repoussé à mardi », « la réunion est finalement à 16h », « la réunion passe à 9h » → la même relecture', !ratesF.length, ratesF.join(' | '));
+    await annonce('Le golf est repoussé à mardi');
+    verifie('la nouvelle place chevauche un autre rendez-vous : la relecture le dit (« À cette heure-là, tu as déjà « Réunion équipe » (14h à 15h). »)', /\n• À cette heure-là, tu as déjà « Réunion équipe » \(14h à 15h\)\.\nRéponds/.test(dernier().content), dernier().content);
+    await annonce('le dentiste passe à 17h');
+    await ctx.tcRepondreDeplacement('oui');
+    verifie('un rendez-vous avec un contact : après « oui », la question habituelle « Veux-tu que je prévienne Marc Dupont… ? »', /^Je déplace :\n• « Dentiste » : 2026-10-16 17h à 18h\n\nVeux-tu que je prévienne Marc Dupont/.test(dernier().content) && attente() && !attente().confirmer, dernier().content);
+    const ratesN = [];
+    for (const t of ['La réunion est passée à 15h ?', 'Le train est passé à 15h', 'La réunion est passée', 'la réunion est à 15h', 'elle est passée à 15h', 'Hugo est passé à 15h', 'la réunion est passée à la trappe']) { if (await annonce(t)) ratesN.push(t + ' → ' + dernier().content); }
+    verifie('une question, un rendez-vous absent (« le train »), « la réunion est passée », « la réunion est à 15h », « elle / Hugo est passé à 15h » : rien ici (le chemin habituel, puis le modèle)', !ratesN.length && ctx.charlyIA.history.length === 0, ratesN.join(' | '));
+    verifie('charlySendMessage : « la réunion est passée à 15h » est lu juste après la question du mode, avant les réponses attendues et le classement',
+      csm63.indexOf('await tcRepondreChangementAnnonce(text)) return;') > csm63.indexOf('tcRepondreModeRdv(text)) return;') && csm63.indexOf('await tcRepondreChangementAnnonce(text)) return;') < csm63.indexOf('if (_tcDeplacementEnAttente) {')
+      && csm63.indexOf('await tcRepondreChangementAnnonce(text)) return;') < csm63.indexOf('const _classe = tcClasserMessage(text, charlyIA.history);'));
+    ctx.events = agenda(); ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null;', ctx);
+
+    // 3. Les restes de la 62.
+    const q0 = classer('Rappelle-moi');
+    const apres = (texte, r) => [{ role: 'user', content: texte }, { role: 'assistant', content: r.question, nature: 'question', _classement: r.classe, _proposition: r.proposition || null, _texte: texte }];
+    const T = (p) => { const x = classer(p, apres('Rappelle-moi', q0)); const r = x.compose ? ctx.tcDetecterRappelDate(x.compose, new DateFixe()) : null; return r ? (r.allDay ? r.allDay.titre + ' ' + r.allDay.date : r.carte) : 'aucun : ' + (x.question || x.classe); };
+    verifie('« le 1er novembre la facture », « le 1er la facture » → « Rappel : penser à la facture » le 1er novembre ; « le 3 novembre payer le loyer », « le 1er novembre payer le loyer » → « Rappel : payer le loyer » (jamais « penser à payer… ») ; « demain payer le loyer » ne change pas',
+      T('le 1er novembre la facture') === 'Rappel : penser à la facture 2026-11-01' && T('le 1er la facture') === 'Rappel : penser à la facture 2026-11-01'
+      && T('le 3 novembre payer le loyer') === 'Rappel : payer le loyer 2026-11-03' && T('le 1er novembre payer le loyer') === 'Rappel : payer le loyer 2026-11-01' && T('demain payer le loyer') === 'Rappel : payer le loyer 2026-10-16',
+      ['le 1er novembre la facture', 'le 1er la facture', 'le 3 novembre payer le loyer', 'le 1er novembre payer le loyer', 'demain payer le loyer'].map(T).join(' | '));
+    const H63 = (t) => { const h = ctx.tcHeureDansTexte(t.toLowerCase()); return h ? h.h + 'h' + (h.m === null ? '' : h.m) : 'null'; };
+    verifie('« réserve la salle 14h 16h » → 14h (jamais 14h16), durée 120 ; « 14h30 », « 14 h 30 », « 14:30 », « 9h 30 minutes » gardent leurs minutes',
+      H63('réserve la salle 14h 16h') === '14h' && ctx.tcDureeDemandee('réserve la salle 14h 16h') === 120 && H63('rdv 14h30') === '14h30' && H63('rdv 14 h 30') === '14h30' && H63('rdv à 14:30') === '14h30' && H63('rdv 9h 30 minutes') === '9h30'
+      && ctx.tcDureeDemandee('rdv 14h30') === 0 && ctx.tcHeuresCitees('salle 14h 16h').length === 2,
+      ['réserve la salle 14h 16h', 'rdv 14h30', 'rdv 14 h 30', 'rdv à 14:30', 'rdv 9h 30 minutes'].map(H63).join(' ') + ' / ' + ctx.tcDureeDemandee('réserve la salle 14h 16h'));
+    verifie('pas de tiret long ni d assertion arrière dans le bloc 63', bloc.indexOf('MISSION 63') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.slice(bloc.indexOf('MISSION 63')).indexOf('—') < 0);
+  }
+
   titre('13. Mission 56 : pros, clients, rappels et invitations');
   ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', phone: '06', referenceCompte: 'R3' },
     { id: 'h', name: 'Hugo Besnard', phone: '06', referenceCompte: 'HQ1' }, { id: 'g', name: 'Gaëlle Perrin', phone: '06', referenceCompte: 'GP1' }];
