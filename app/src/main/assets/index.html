@@ -23124,9 +23124,9 @@ function tcEstUneDuree(s, idx, fin) {
   if (!nombre || minutes > 8 * 60) return false;
   // « pendant 1h30 à 9h » : après « pendant », « dure », c'est toujours une durée ; après « bloque », « 14h à 16h » est une plage.
   if (typeof fin === 'number' && !tcDureeForte(texte, idx) && /^\s*(-|–|à|a|au|jusqu|et|ou)(\s|$|\d|['’])/.test(texte.slice(fin))) {
-    // « bloque 1h à 16h », « réserve 1h30 à 9h », « bloque 2h jusqu'à 18h » : 6 h au plus devant une heure plus grande, une durée (examen, mission 62).
+    // « bloque 1h à 16h », « réserve 1h30 à 9h », « bloque 2h jusqu'à 18h » : 4 h au plus devant une heure plus grande, une durée (examen, mission 62).
     const suite = texte.slice(fin).match(/^\s*(?:à|a|jusqu['’ ]?(?:à|a)?)\s*(\d{1,2})\s*(?:heures?|h|:)\s*(\d{2})?/);
-    if (!(suite && minutes <= 6 * 60 && Number(suite[1]) * 60 + Number(suite[2] || 0) > minutes)) return false;
+    if (!(suite && minutes <= 4 * 60 && Number(suite[1]) * 60 + Number(suite[2] || 0) > minutes)) return false;
   }
   const avant = texte.slice(Math.max(0, idx - 40), idx);
   return /(^|[^a-zà-ÿ])(bloque|bloquer|bloques|bloquez|r[eé]serve|r[eé]server|r[eé]serves|pr[eé]vois|pr[eé]voir|garde|garder|gardes|pendant|durant|dure|dur[eé]e de|dur[eé]e|compte|compter|comptes)(?:[- ](?:moi|nous|me))?(?: (?:une?|environ|au moins))?\s*$/.test(avant);

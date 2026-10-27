@@ -137,7 +137,7 @@ titre('3b. Mission 62 : un conflit ne vient que de l agenda, une duree n est pas
   const HD = (t) => { const h = ctx.tcHeureDansTexte(t); return (h ? h.h + 'h' + (h.m || '') : 'null') + '/' + ctx.tcDureeDemandee(t); };
   const plages = [['bloque 14h à 16h lundi', '14h/120'], ['bloque 14h-16h lundi', '14h/120'], ['réserve 10h-11h mardi', '10h/60'], ['bloque 9h et 14h lundi', '9h/0'],
     ['réserve 10h pour le dentiste, ou 11h', '10h/0'], ['bloque 10h demain jusqu’à 12h', '10h/0'], ['bloque 12h pour Paul lundi 9h', '12h/0'], ['bloque 1h30 pour le devis mercredi 16h', '16h/90'], ['pendant 1h30 à 9h vendredi', '9h/90'],
-    ['bloque 1h à 16h lundi', '16h/60'], ['réserve 1h30 à 9h lundi', '9h/90'], ['bloque 2h jusqu’à 18h lundi', '16h/120'], ['bloque 8h à 10h lundi', '8h/120'], ['bloque 1h lundi à 16h', '16h/60']];
+    ['bloque 1h à 16h lundi', '16h/60'], ['réserve 1h30 à 9h lundi', '9h/90'], ['bloque 2h jusqu’à 18h lundi', '16h/120'], ['bloque 8h à 10h lundi', '8h/120'], ['bloque 1h lundi à 16h', '16h/60'], ['bloque 6h à 7h demain', '6h/60'], ['bloque 5h à 6h lundi', '5h/60'], ['bloque 4h à 18h lundi', '18h/240']];
   const malLues = plages.filter(([t, a]) => HD(t) !== a);
   verifie('(examen) « bloque 14h à 16h », « 14h-16h », « 10h-11h », « 9h et 14h », « 10h …, ou 11h », « 10h demain jusqu’à 12h », « bloque 12h pour Paul lundi 9h » : la premiere heure (une plage dure ce qu elle dit, le reste aucune duree) ; « bloque 1h30 … 16h » → 16h, 90 min', !malLues.length, malLues.map(([t]) => t + ' → ' + HD(t)).join(' | '));
   // Examen, 2e passage : « bloque 1h à 16h » est la forme la plus naturelle de #405.

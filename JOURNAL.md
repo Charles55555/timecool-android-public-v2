@@ -2949,6 +2949,8 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   un nom complet ne désigne que cette personne (« Hugo Martin »), un nom partagé (« Martin », deux Hugo) → « Lequel : … ? » ; dispo,
   « je peux », lien, « a Teams », une heure citée ne sont pas des questions de mode. Rappel : « le 3 novembre la facture », « le 3 la
   facture » → « Rappel : penser à la facture » le 3 novembre.
-- Deuxième passage (examinateur, 27/10, 1 point) : « bloque 1h à 16h », « réserve 1h30 à 9h » (6 h au plus devant une heure plus grande,
+- Deuxième passage (examinateur, 27/10, 1 point) : « bloque 1h à 16h », « réserve 1h30 à 9h » (4 h au plus devant une heure plus grande,
   après bloque/réserve/prévois/garde) sont une durée : 16h-17h, 9h-10h30 ; « bloque 2h jusqu'à 18h » → 16h-18h (tcDebutAvantJusqua),
   « jusqu » n'est plus un titre. « bloque 8h à 10h », « 14h à 16h », « 14h-16h » restent des plages.
+- Troisième passage (examinateur, 27/10, 1 point) : le seuil passe de 6 h à 4 h, « bloque 6h à 7h demain » et « bloque 5h à 6h » sont des
+  créneaux du matin (6h-7h, 5h-6h), « bloque 4h à 18h » reste une durée.
