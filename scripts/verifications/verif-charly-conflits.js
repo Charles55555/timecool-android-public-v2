@@ -41,7 +41,7 @@ vm.createContext(ctx);
 ['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcEvenementFin', 'tcEvenementCouvre', 'tcHeureDansTexte', 'tcMotsDeRdv', 'tcTitreContient', 'tcDateEnLettres', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcBlocAgendaDepuisAnnonce',
   'tcPlusieursDatesOuRelatif', 'tcCorrigerPropositionsCharly', 'tcAgendaSnapshotPourIA', 'tcJoursCites', 'tcAnnonceUnConflit', 'tcIgnorerFauxConflit',
   'tcQuestionJourManquant', 'tcQuestionRdvDuJour', 'tcDeplacementHorsJour', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'tcHeureCourte', 'tcPlagesLibresDuJour', 'tcPhraseConflitLocale', 'tcVerbeConjugue', 'tcEstDeplacement',
-  'tcEstUneDuree', 'tcHeuresCitees', 'tcDureeDemandee', 'tcAnnonceAutreCreneau', 'tcBlocAvecFauxConflit']
+  'tcEstUneDuree', 'tcDureeForte', 'tcHeuresCitees', 'tcDureeDemandee', 'tcAnnonceAutreCreneau', 'tcBlocAvecFauxConflit']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
@@ -122,7 +122,7 @@ titre('3b. Mission 62 : un conflit ne vient que de l agenda, une duree n est pas
   verifie('#405 : « à 16h, tu as … le déjeuner de 12h à 13h. Je te propose donc … 15h-16h » → la page propose mercredi 16h-17h (libre), titre du devis', !!f1 && /^Ce créneau est libre dans ton agenda : mercredi 14 octobre 2026 à 16h\./.test(f1) && /2026-10-14 \| 16:00-17:00 \| Devis Garcia \| rdv/.test(f1) && !/15h|déjeuner/.test(f1), f1);
   const f2 = FC('Tu as déjà le déjeuner avec Paul. Je te propose plutôt :\n[AGENDA]\n2026-10-14 | 15:00-16:00 | Devis Garcia | rdv\n[/AGENDA]', T);
   const f3 = FC('Tu as déjà quelque chose ce jour-là, je l’ajoute quand même :\n[AGENDA]\n2026-10-14 | 16:00-17:00 | Devis Garcia | rdv\n[/AGENDA]', T);
-  verifie('le meme faux conflit avec un bloc (15h, ou 16h) : le bloc du modele tombe, la page propose 16h-17h', !!f2 && /2026-10-14 \| 16:00-17:00 \| Devis Garcia \| rdv/.test(f2) && !/15:00/.test(f2) && !!f3 && /^Ce créneau est libre/.test(f3), [f2, f3].join(' || '));
+  verifie('le meme faux conflit avec un bloc a 15h : le bloc du modele tombe, la page propose 16h-17h ; un bloc a 16h (l heure demandee) garde la reponse du modele', !!f2 && /2026-10-14 \| 16:00-17:00 \| Devis Garcia \| rdv/.test(f2) && !/15:00/.test(f2) && f3 === null, [f2, f3].join(' || '));
   const f4 = FC('Tu as déjà quelque chose, je te propose 19h.', 'bloque 2h pour le devis mercredi 16h');
   verifie('« bloque 2h … 16h » chevauche la Revue de 17h : vrai conflit, la page cite la Revue', !!f4 && /tu as déjà « Revue » \(17h-18h\)/.test(f4), f4);
   const f5 = FC('Tu as déjà quelque chose, je te propose 19h.', 'bloque 2h pour le devis mercredi 14h');
@@ -133,6 +133,18 @@ titre('3b. Mission 62 : un conflit ne vient que de l agenda, une duree n est pas
     FC('Mercredi tu as le déjeuner avec Paul, je te propose 14h ?', 'ajoute le devis mercredi') === null && FC('16h est libre, je te propose ce créneau.', T) === null);
   verifie('« bloque 1h demain » garde 1h (pas d autre heure) ; « réserve-moi 1h30 vendredi à 9h » → 9h, 90 min',
     ctx.tcHeureDansTexte('bloque 1h demain').h === 1 && ctx.tcHeureDansTexte('réserve-moi 1h30 vendredi à 9h').h === 9 && ctx.tcDureeDemandee('réserve-moi 1h30 vendredi à 9h') === 90);
+  // Examen, 1er passage : une plage ou un choix n'est jamais une duree, ni plus de 8 h.
+  const HD = (t) => { const h = ctx.tcHeureDansTexte(t); return (h ? h.h + 'h' + (h.m || '') : 'null') + '/' + ctx.tcDureeDemandee(t); };
+  const plages = [['bloque 14h à 16h lundi', '14h/120'], ['bloque 14h-16h lundi', '14h/120'], ['réserve 10h-11h mardi', '10h/60'], ['bloque 9h et 14h lundi', '9h/0'],
+    ['réserve 10h pour le dentiste, ou 11h', '10h/0'], ['bloque 10h demain jusqu’à 12h', '10h/0'], ['bloque 12h pour Paul lundi 9h', '12h/0'], ['bloque 1h30 pour le devis mercredi 16h', '16h/90'], ['pendant 1h30 à 9h vendredi', '9h/90']];
+  const malLues = plages.filter(([t, a]) => HD(t) !== a);
+  verifie('(examen) « bloque 14h à 16h », « 14h-16h », « 10h-11h », « 9h et 14h », « 10h …, ou 11h », « 10h demain jusqu’à 12h », « bloque 12h pour Paul lundi 9h » : la premiere heure (une plage dure ce qu elle dit, le reste aucune duree) ; « bloque 1h30 … 16h » → 16h, 90 min', !malLues.length, malLues.map(([t]) => t + ' → ' + HD(t)).join(' | '));
+  ctx.events = AGENDA.map((e) => Object.assign({}, e));
+  const z = FC('Lundi tu as déjà quelque chose, je te propose 17h.', 'bloque 14h-16h lundi');
+  verifie('(examen) « bloque 14h-16h lundi » avec Zorglub lundi 15h-16h : le conflit de 15h reste vu (jamais « libre … à 16h »)', !z || !/libre/.test(z), z);
+  ctx.events = [ev('dj', '2026-10-14', 12, 0, 13, 0, 'Déjeuner avec Paul')];
+  const f7 = FC('Il y a un bouchon prévu, je te propose de partir plus tôt :\n[AGENDA]\n2026-10-14 | 13:00-14:00 | Rdv Paul | rdv\n[/AGENDA]', 'rdv Paul mercredi 13h');
+  verifie('(examen) un bloc a l heure demandee garde la reponse du modele (sa remarque, son titre)', f7 === null, f7);
   ctx.events = AGENDA.map((e) => Object.assign({}, e));
 }
 

@@ -2943,3 +2943,9 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 - Restes de la 61 : « demain la facture » → « penser à la facture » demain ; « à 18h prendre le train » → « Quel jour je te fais penser à
   « prendre le train » … ? » (l'heure gardée) ; « 2 heures avant le match », « la veille du rdv » → la phrase entière au modèle.
 - Suites : verif-classement-charly (section 19), verif-charly-conflits (section 3b). Sonde Chrome sur la page : tous les cas bons.
+- Premier passage (examinateur, 27/10, 4 points) : une plage (« bloque 14h-16h », « 14h à 16h », « 10h-11h ») ou un choix (« 9h et 14h »,
+  « 10h ou 11h ») n'est jamais une durée, ni une heure de plus de 8 h ; la plage compte entière pour le chevauchement et le bloc ; après
+  « pendant », « dure », c'est toujours une durée (« pendant 1h30 à 9h »). Un bloc du modèle à l'heure demandée garde sa réponse. Mode :
+  un nom complet ne désigne que cette personne (« Hugo Martin »), un nom partagé (« Martin », deux Hugo) → « Lequel : … ? » ; dispo,
+  « je peux », lien, « a Teams », une heure citée ne sont pas des questions de mode. Rappel : « le 3 novembre la facture », « le 3 la
+  facture » → « Rappel : penser à la facture » le 3 novembre.

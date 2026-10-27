@@ -1327,9 +1327,9 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       H('bloque 1h pour le devis de M. Garcia mercredi 16h') === '16h' && H('réserve-moi 1h30 vendredi à 9h') === '9h' && H('pendant 2 heures jeudi 15h') === '15h'
       && H('bloque 1h demain') === '1h' && H('dans 2h') === '2h' && H('rdv demain 10h') === '10h' && H('de 14h à 16h') === '14h',
       ['bloque 1h pour le devis de M. Garcia mercredi 16h', 'réserve-moi 1h30 vendredi à 9h', 'pendant 2 heures jeudi 15h', 'bloque 1h demain', 'dans 2h', 'rdv demain 10h', 'de 14h à 16h'].map(H).join(' '));
-    verifie('la durée demandée : « bloque 1h30 pour le devis mercredi 16h » → 90 min, « bloque 2h … 16h » → 120 ; sans heure de début ou sans durée → 0',
+    verifie('la durée demandée : « bloque 1h30 pour le devis mercredi 16h » → 90 min, « bloque 2h … 16h » → 120 ; sans heure de début ou sans durée → 0 ; « de 14h à 16h » → 120 (la plage)',
       ctx.tcDureeDemandee('bloque 1h30 pour le devis mercredi 16h') === 90 && ctx.tcDureeDemandee('bloque 2h pour le devis mercredi 16h') === 120
-      && ctx.tcDureeDemandee('bloque 2h demain') === 0 && ctx.tcDureeDemandee('rdv mercredi 16h') === 0 && ctx.tcDureeDemandee('de 14h à 16h') === 0);
+      && ctx.tcDureeDemandee('bloque 2h demain') === 0 && ctx.tcDureeDemandee('rdv mercredi 16h') === 0 && ctx.tcDureeDemandee('de 14h à 16h') === 120);
     verifie('le modèle qui dit « à 16h, tu as … le déjeuner de 12h à 13h. Je te propose donc … 15h-16h » annonce un autre créneau ; « 16h est libre, je te propose : » non',
       ctx.tcAnnonceAutreCreneau('Mercredi 28 octobre 2026 à 16h, tu as une rencontre avec Paul pour le déjeuner de 12h à 13h. Je te propose donc de bloquer le créneau suivant : 15h-16h pour le devis de M. Garcia. Ça te convient ?')
       && !ctx.tcAnnonceAutreCreneau('16h est libre, je te propose ce créneau :'));
@@ -1356,6 +1356,16 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('pas une question de mode : « propose à Hugo un rdv en visio ? », « passe le rdv avec Hugo en visio », « c’est en visio ? » (personne), « En vrai, c’est quand… », « comment ça se passe avec Hugo ? », « demande à Hugo si… », « appelle Hugo »', !pas.length, pas.join(' | '));
     { poser(R1); ctx.events = agenda(); ctx.charlyIA.history = [{ role: 'assistant', content: 'Par téléphone, en personne ou en visio ?', _questionType: { id: 'q', references: ['HQ1'], duree: 1, etat: 'choix' } }];
       verifie('« Par téléphone, en personne ou en visio ? » en attente : « en visio avec Hugo ? » est sa réponse, pas une question de mode', ctx.tcRepondreModeRdv('en visio ou en vrai avec Hugo ?') === false); }
+    // Examen, 1er passage : un nom complet ne désigne que cette personne ; un nom de famille partagé → lequel ; pas une question de mode.
+    { const avecMartin = [{ id: 'h', name: 'Hugo Besnard', phone: '06', referenceCompte: 'HQ1' }, { id: 'hm', name: 'Hugo Martin', phone: '06' }, { id: 'p', name: 'Paul Martin', phone: '06' }];
+      ctx.contactsList = avecMartin;
+      const evs = agenda().concat([ev('hmv', 'Point Hugo', 2, 11, 0, 12, 0, { contact: 'hm', type: 'visio' }), ev('pc', 'Café Paul', 3, 9, 0, 10, 0, { contact: 'p', type: 'visio' })]);
+      const n1 = M('C’est en visio avec Hugo Martin ?', R5, evs), n2 = M('C’est en visio ou en vrai avec Martin ?', R5, evs), n3 = M('c’est en visio, Paul et Hugo ?', R5, evs);
+      verifie('(examen) « C’est en visio avec Hugo Martin ? » → le seul rendez-vous de Hugo Martin (ni la demande de Hugo Besnard, ni Café Paul) ; « … avec Martin ? » → « Lequel : Hugo Martin ou Paul Martin ? … »',
+        /^Ton rendez-vous « Point Hugo », .+ : en visio\.$/.test(n1) && /^Lequel : Hugo Martin ou Paul Martin \?/.test(n2) && /^Lequel : Hugo Besnard ou Hugo Martin \?/.test(n3), [n1, n2, n3].join(' | '));
+      const pasMode = ['Est-ce que Hugo est dispo en visio demain ?', 'Est-ce que je peux faire le rdv avec Hugo en visio ?', 'Est-ce que Paul a Teams ?', 'c’est quoi le lien visio avec Paul ?', 'est-ce que la visio avec Paul est à 9h ?'].filter((t) => M(t, R5, evs) !== 'false');
+      verifie('(examen) disponibilité, possibilité, outil, lien, heure : pas une question de mode', !pasMode.length, pasMode.join(' | '));
+      ctx.contactsList = [{ id: 'h', name: 'Hugo Besnard', phone: '06', referenceCompte: 'HQ1' }, { id: 'g', name: 'Gaëlle Perrin', phone: '06', referenceCompte: 'GP1' }, { id: 'p', name: 'Paul Martin', phone: '06' }]; }
     const csm62 = extraire('charlySendMessage') || '';
     verifie('charlySendMessage : la question du mode passe après « sans Hugo », avant la réponse tapée au type et avant le classement',
       csm62.indexOf('tcRepondreModeRdv(text)') > csm62.indexOf('await tcRetirerDuGroupe(text)') && csm62.indexOf('tcRepondreModeRdv(text)') < csm62.indexOf('const _qt = tcQuestionTypeEnAttente();')
@@ -1377,6 +1387,12 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       && w4.compose === 'Rappelle-moi 2 heures avant le match' && w5.compose === 'Rappelle-moi la veille du rdv'
       && w6.question === 'Je te fais penser à quoi, vendredi ?' && w7.question === 'Je te fais penser à quoi, demain ?',
       JSON.stringify([w1.compose, cw1, w2.question, w3.compose, cw3 && cw3.carte, w4.compose || w4.question, w5.compose || w5.question, w6.question, w7.question || w7.classe]));
+    // Examen, 1er passage : une date en chiffres en tête (« le 3 novembre la facture ») reste le moment entier.
+    { const x1 = classer('le 3 novembre la facture', apres('Rappelle-moi', q0)), x2 = classer('jeudi 5 novembre la facture', apres('Rappelle-moi', q0)), x3 = classer('le 3 la facture', apres('Rappelle-moi', q0));
+      const T = (x) => { const r = x.compose ? ctx.tcDetecterRappelDate(x.compose, new DateFixe()) : null; return r ? (r.allDay ? r.allDay.titre + ' ' + r.allDay.date : r.carte) : 'aucun'; };
+      verifie('(examen) « le 3 novembre la facture », « jeudi 5 novembre la facture », « le 3 la facture » → « Rappel : penser à la facture » le 3 ou le 5 novembre (jamais « penser à novembre… » ni « … le 3 » dans le titre)',
+        T(x1) === 'Rappel : penser à la facture 2026-11-03' && T(x2) === 'Rappel : penser à la facture 2026-11-05' && T(x3) === 'Rappel : penser à la facture 2026-11-03',
+        JSON.stringify([x1.compose, T(x1), x2.compose, T(x2), x3.compose, T(x3)])); }
     verifie('pas de tiret long ni d assertion arrière dans le bloc 62', bloc.indexOf('MISSION 62') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.indexOf('—') < 0);
     poser(null); ctx.events = agenda(); ctx.charlyIA.history = [];
     ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', referenceCompte: 'R3' }];
