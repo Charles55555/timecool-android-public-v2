@@ -3021,3 +3021,8 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   vos créneaux communs, sans lui écrire. ») ; un contact sans TimeCool garde le message relu.
 - « je suis triste » (#223) : « … mais je suis là. Si tu veux alléger ta journée, je peux décaler ou annuler un rendez-vous. »
 - Suite : verif-classement-charly, section 22.
+- Examen, 1er passage (3 points) : « le client de 14h » ne prend jamais une question, une négation (« ne m'a pas posé un lapin »), une
+  autre heure (« avant 14h », « mais à 15h »), deux heures (« de 14h et 16h »), une 2e demande (« …, mets le dentiste à la place »),
+  « hier », ni un rendez-vous ou contact nommé ; « de 14h » veut dire 14h00 ; une durée (« le rdv d'1h ») ou la nuit (« de 2h ») ne
+  sont pas une heure. L'aide figée : un rendez-vous ou un contact nommé l'emporte (« avec Sophie, je suis pris à 14h » → Sophie), une
+  période non lue (« la semaine prochaine à 14h ») garde la liste d'avant. « Demande à Hugo quand il est dispo en visio » est pris aussi.

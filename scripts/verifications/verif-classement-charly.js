@@ -1802,6 +1802,28 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       && csm.indexOf('tcAbsentALHeureM65(text)) return;') < csm.indexOf('await tcDemanderDispoContactM65(text)) return;')
       && csm.indexOf('await tcDemanderDispoContactM65(text)) return;') < iClasse && iClasse < iPrev);
 
+    // Examen (1er passage, 3 points) : faux positifs, deux heures, 14h = 14h00, période non lue, durée, nom cité.
+    const jourEx = () => agenda().concat([ev('c14', 'Client Durand', 0, 14, 0, 15, 0), ev('c1430', 'Kiné', 0, 14, 30, 15, 30), ev('c16', 'Coiffeur', 0, 16, 0, 17, 0)]);
+    const pasPris = [];
+    for (const p of ['le client de 14h ne m’a pas posé un lapin', 'est-ce que le client de 14h a annulé ?', 'le cours de 14h a annulé ?', 'le plombier ne viendra pas avant 14h',
+      'il vient pas à 14h mais à 15h', 'le client de 14h a annulé, mets le dentiste à la place', 'le client de 14h n’est pas venu, note-le', 'les clients de 14h et 16h ont annulé',
+      'le client de 2h m’a posé un lapin', 'le client de 14h a annulé hier', 'si le client de 14h ne vient pas, préviens-moi', 'le coiffeur de 16h a annulé']) {
+      remise(jourEx());
+      if (ctx.tcAbsentALHeureM65(p) !== false || ctx.charlyIA.history.length) pasPris.push(p);
+    }
+    verifie('(examen) jamais pris : négation, question, « avant 14h », « mais à 15h », une 2e demande, deux heures, « 2h » la nuit, « hier », un rendez-vous nommé (« le coiffeur de 16h », chemin habituel)', pasPris.length === 0, pasPris.join(' / '));
+    remise(jourEx());
+    const x1 = ctx.tcAbsentALHeureM65('Le client de 14h m’a posé un lapin');
+    const xe1 = etat();
+    remise(jourEx());
+    const x2 = ctx.tcAbsentALHeureM65('mon rdv de 14h30 a annulé');
+    const xe2 = etat();
+    verifie('(examen) « de 14h » = 14h00 : le Client Durand seul, jamais le Kiné de 14h30 ; « de 14h30 » → le Kiné', x1 === true && xe1 === '[["c14"],[]]' && x2 === true && xe2 === '[["c1430"],[]]', xe1 + ' | ' + xe2);
+    const F = (p) => { remise(jourEx()); const r = ctx.tcRemplacerAideFigee(AIDE, p); return r + ' ' + etat(); };
+    const fx1 = F('annule mes rdv de la semaine prochaine à 14h'), fx2 = F('annule le rdv d’1h avec le coiffeur'), fx3 = F('annule le rdv avec Sophie, je suis pris à 14h'), fx4 = F('annule le rdv de 14h'), fx5 = F('annule la réunion de 2h');
+    verifie('(examen) aide figée : « la semaine prochaine à 14h » → la liste d’avant (rien d’aujourd’hui filtré) ; « le rdv d’1h avec le coiffeur » → le Coiffeur ; « avec Sophie, je suis pris à 14h » → le déjeuner avec Sophie ; « de 14h » → le Client Durand seul ; « de 2h » → la liste d’avant',
+      /^Lequel \?\n1\. Client Durand[^]*\n2\. Kiné/.test(fx1) && /• Coiffeur/.test(fx2) && /\["c16"\]/.test(fx2) && /• Déjeuner avec Sophie/.test(fx3) && /\["dejeuner"\]/.test(fx3)
+      && /• Client Durand/.test(fx4) && /\[\["c14"\],\[\]\]$/.test(fx4) && /^Lequel \?\n1\. Client Durand[^]*\n3\. Coiffeur/.test(fx5), [fx1, fx2, fx3, fx4, fx5].join(' || '));
     // 3. « super, non merci » : jamais un oui.
     verifie('tcReponseOuiNon : « ok non merci », « oui non » → non ; « oui », « ok merci » → oui ; tcReponseValidation : « parfait non merci » → non, « parfait » → oui',
       ctx.tcReponseOuiNon('ok non merci') === false && ctx.tcReponseOuiNon('oui non') === false && ctx.tcReponseOuiNon('oui') === true && ctx.tcReponseOuiNon('ok merci') === true

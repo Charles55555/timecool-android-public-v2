@@ -23844,20 +23844,31 @@ function tcJourDitM65(date) {
 }
 
 /**
- * Les rendez-vous qui commencent à l'heure citée (« de 14h », « de 14h30 »), le jour cité ou aujourd'hui. null si la phrase ne cite
- * pas d'heure, ou cite plusieurs jours. { heure, date, liste }.
+ * Les rendez-vous qui commencent à l'heure citée (« de 14h » = 14h00, « de 14h30 »), le jour cité ou aujourd'hui. null quand la phrase
+ * ne cite pas d'heure, en cite plusieurs, cite plusieurs jours ou une période que la page ne lit pas (« la semaine prochaine »), dit une
+ * durée (« le rdv d'1h ») ou une heure de nuit sans « du matin » (« le client de 2h »). { heure, date, jourDit, liste }.
  */
 function tcRdvALHeureCiteeM65(text, toutAVenir) {
   const brut = String(text || '');
+  const sans = tcSansAccents(brut).toLowerCase();
+  const norm = tcClasseNormaliser(brut);
   let h = null;
-  try { h = tcHeureDansTexte(tcSansAccents(brut).toLowerCase()); } catch (e) { h = null; }
+  try { h = tcHeureDansTexte(sans); } catch (e) { h = null; }
   if (!h || !(h.h >= 0 && h.h <= 23)) return null;
+  // Deux heures (« de 14h et 16h », « 14h ou 15h ») : jamais une seule des deux en silence (examen, mission 65).
+  if ((norm.match(/(^| )\d{1,2} ?(h|heures?)( |\d|$)/g) || []).length > 1) return null;
+  // Une durée (« le rdv d'1h », « pendant 2h ») ou la nuit sans « du matin » (« le client de 2h ») : pas une heure de rendez-vous.
+  if (/(^| )(d|pendant|duree|dure|durant) \d{1,2} ?(h|heures?)( |$)/.test(norm)) return null;
+  if (h.h < 7 && !/(^| )(du matin|matin)( |$)/.test(norm)) return null;
   const now = new Date();
   let jours = [];
   try { jours = tcJoursCites(brut, now, false) || []; } catch (e) { jours = []; }
   if (jours.length > 1) return null;
+  // Une période citée que la page ne ramène pas à un jour : rien (le chemin d'avant).
+  if (!jours.length && /(^| )(semaine|mois|week|weekend|prochain|prochaine|suivant|suivante|jours|soir|matin|midi|apres midi)( |$)/.test(norm) && !/(^| )(ce soir|ce matin|cet apres midi|ce midi)( |$)/.test(norm)) return null;
   const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
-  const aHeure = function (e) { return Number(e.startH) === h.h && (h.m === null || h.m === undefined || Number(e.startM || 0) === h.m); };
+  const minutes = (h.m === null || h.m === undefined) ? 0 : h.m;
+  const aHeure = function (e) { return Number(e.startH) === h.h && Number(e.startM || 0) === minutes; };
   const date = jours.length ? jours[0] : tcISO(now);
   let liste = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === evMode && e.title && !e.allDay && e.date === date && aHeure(e); });
   // « annule le rdv de 14h » sans jour, rien aujourd'hui : les prochains rendez-vous de 14h (jamais un autre horaire).
@@ -23865,6 +23876,22 @@ function tcRdvALHeureCiteeM65(text, toutAVenir) {
     liste = (typeof tcProchainsRdv === 'function' ? tcProchainsRdv(200) : []).filter(function (e) { return !e.allDay && aHeure(e); });
   }
   return { heure: h, date: date, jourDit: jours.length > 0, liste: liste.sort(tcComparerEvenements) };
+}
+
+/** Les rendez-vous à venir dont le titre ou le contact est cité (« le coiffeur », « Sophie ») ; [] si la phrase n'en nomme aucun. */
+function tcRdvNommesM65(text) {
+  const mots = (typeof tcMotsDeRdv === 'function' ? tcMotsDeRdv(text) : []).filter(function (w) {
+    return !/^(client|cliente|clients|patient|patiente|patients|rendez|vous|annule|annuler|supprime|supprimer|efface|effacer|enleve|enlever|retire|retirer|pose|posee|lapin|venu|venue|vient|viendra|desiste|truc|chose|machin|semaine|prochain|prochaine|aujourd|demain|heure|heures|pris|prise|occupe|occupee)$/.test(w) && !/^\d/.test(w);
+  });
+  if (!mots.length || typeof tcTitreContient !== 'function') return [];
+  const nomContact = function (e) {
+    if (!e.contact || !Array.isArray(contactsList)) return '';
+    const c = contactsList.filter(function (x) { return x && x.id === e.contact; })[0];
+    return c ? String(c.name || '') : '';
+  };
+  return (typeof tcProchainsRdv === 'function' ? tcProchainsRdv(200) : []).filter(function (e) {
+    return tcTitreContient(e.title, mots) || (nomContact(e) && tcTitreContient(nomContact(e), mots));
+  });
 }
 
 /** « Je ne vois pas de rendez-vous à 14h aujourd’hui. De quel rendez-vous parles-tu ? » */
@@ -23875,21 +23902,29 @@ function tcPasDeRdvALHeureM65(r, toutAVenir) {
 
 /**
  * « Le client de 14h m'a posé un lapin », « mon rdv de 10h n'est pas venu », « la patiente de 9h30 a annulé » : un absent à une heure
- * dite, sans contact nommé. Le rendez-vous de cette heure (aujourd'hui, ou le jour cité) est proposé au retrait avec oui/non ;
- * plusieurs : « Lequel ? » parmi eux ; aucun : Charly le dit et demande, sans rien proposer d'autre (passage 20, #434). true si pris.
+ * dite, sans contact ni rendez-vous nommé. Le rendez-vous de cette heure (aujourd'hui, ou le jour cité) est proposé au retrait avec
+ * oui/non ; plusieurs : « Lequel ? » parmi eux ; aucun : Charly le dit et demande, sans rien proposer d'autre (passage 20, #434).
+ * Jamais une question (« est-ce que le client de 14h a annulé ? »), une négation (« ne m'a pas posé de lapin »), une autre heure
+ * (« pas avant 14h », « mais à 15h ») ni une phrase qui porte une autre demande (« …, mets le dentiste à la place ») : examen. true si pris.
  */
 function tcAbsentALHeureM65(text) {
   try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64()) return false; } catch (e) { return false; }
-  const norm = tcClasseNormaliser(text);
-  if (!norm || norm.split(' ').length > 14) return false;
-  if (!/(^| )(pose|posee|posent|poser) un lapin( |$)|(^| )n est pas venue?( |$)|(^| )est pas venue?( |$)|(^| )(ne )?(vient|viendra) pas( |$)|(^| )(a|ont) annule( |$)|(^| )s est (desiste|desistee|decommande|decommandee)( |$)|(^| )se desiste( |$)/.test(norm)) return false;
-  if (/(^| )(decale|decaler|deplace|deplacer|reporte|reporter|avance|avancer|repousse|repousser|previens|prevenir|ajoute|ajouter)( |$)/.test(norm)) return false;
-  // Un contact nommé (« Paul de 14h m'a posé un lapin ») : le chemin des contacts.
+  const brut = String(text || '').trim();
+  const norm = tcClasseNormaliser(brut);
+  if (!norm || norm.split(' ').length > 12) return false;
+  // Une question, une autre demande dans la même phrase (virgule, point, « et », « puis »).
+  if (/[?,;:]/.test(brut) || /[.!]\s*\S/.test(brut) || /(^| )(est ce que|est ce qu|et|puis|ensuite|aussi|mais)( |$)/.test(norm)) return false;
+  if (!/(^| )(m a|a|ont|me|nous a|m ont) (pose|posee|posent) un lapin$|(^| )n est pas venue?$|(^| )est pas venue?$|(^| )ne (vient|viendra) pas$|(^| )(vient|viendra) pas$|(^| )(a|ont) annule$|(^| )s est (desiste|desistee|decommande|decommandee)$|(^| )se desiste$/.test(norm.replace(/( (aujourd hui|ce matin|ce soir|cet apres midi|finalement|stp|svp|demain))+$/, ''))) return false;
+  // « ne m'a pas posé de lapin », « n'a pas annulé » : une négation devant le verbe.
+  if (/(^| )(pas|jamais|plus) (pose|annule)( |$)|(^| )n a pas( |$)|(^| )ne m a pas( |$)|(^| )n ont pas( |$)/.test(norm)) return false;
+  if (/(^| )(avant|apres|vers|plutot|jusqu|partir|decale|decaler|deplace|deplacer|reporte|reporter|avance|avancer|repousse|repousser|previens|prevenir|ajoute|ajouter|mets|note|remplace)( |$)/.test(norm)) return false;
+  // Un contact ou un rendez-vous nommé (« Paul de 14h », « le kiné de 14h ») : les chemins habituels.
   try {
-    const mots = norm.split(' ').filter(function (w) { return w.length >= 3 && !/^(client|cliente|patient|patiente|clients|rdv|rendez|vous|mon|mes|les|des|pose|posee|posent|poser|lapin|est|pas|venu|venue|vient|viendra|annule|ont|desiste|desistee|decommande|decommandee|aujourd|hui|ce|matin|soir|apres|midi|elle|lui|qui|car|parce|que)$/.test(w) && !/^\d/.test(w) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(w) < 0; });
+    const mots = norm.split(' ').filter(function (w) { return w.length >= 3 && !/^(client|cliente|patient|patiente|clients|rdv|rendez|vous|mon|mes|les|des|pose|posee|posent|poser|lapin|est|pas|venu|venue|vient|viendra|annule|ont|desiste|desistee|decommande|decommandee|aujourd|hui|matin|soir|apres|midi|elle|lui|qui|nous)$/.test(w) && !/^\d/.test(w) && TC_CLASSE_MOTS_DE_MOMENT.indexOf(w) < 0; });
     if (mots.length && typeof tcContactsParMots === 'function' && tcContactsParMots(mots).length) return false;
+    if (tcRdvNommesM65(brut).length) return false;
   } catch (e) { return false; }
-  const r = tcRdvALHeureCiteeM65(text, false);
+  const r = tcRdvALHeureCiteeM65(brut, false);
   if (!r) return false;
   tcPousserMessageUtilisateur(text);
   if (!r.liste.length) {
@@ -23906,20 +23941,31 @@ function tcAbsentALHeureM65(text) {
   return true;
 }
 
+/** « Tu veux annuler ce rendez-vous ? » (un) ou « Lequel ? » (plusieurs), avec l'attente qui va avec. */
+function tcLequelM65(liste) {
+  if (liste.length === 1) {
+    _tcSuppressionEnAttente = [liste[0]];
+    return 'Tu veux annuler ce rendez-vous ?\n• ' + liste[0].title + ' : ' + tcFormaterDateHumaine(liste[0].date) + ' ' + tcFormaterHeure(liste[0]) + '\nRéponds « oui » ou « non ».';
+  }
+  _tcSuppressionChoix = liste.slice(0, 3);
+  return 'Lequel ?\n' + _tcSuppressionChoix.map(tcLigneLequel).join('\n') + '\nDis-moi son numéro, son heure ou son nom.';
+}
+
 /**
- * L'aide figée du modèle remplacée par « Lequel ? » : avec une heure citée, seulement les rendez-vous de cette heure ; aucun :
- * « Je ne vois pas de rendez-vous à 14h … De quel rendez-vous parles-tu ? ». null si la phrase ne cite pas d'heure.
+ * L'aide figée du modèle remplacée par « Lequel ? » : un rendez-vous ou un contact nommé l'emporte (avec l'heure s'ils s'accordent) ;
+ * sinon, avec une heure citée, seulement les rendez-vous de cette heure ; aucun : « Je ne vois pas de rendez-vous à 14h … De quel
+ * rendez-vous parles-tu ? ». null sinon (la liste d'avant).
  */
 function tcAideFigeeParHeureM65(text) {
+  const nommes = tcRdvNommesM65(text);
   const r = tcRdvALHeureCiteeM65(text, true);
+  if (nommes.length) {
+    const ensemble = r ? nommes.filter(function (e) { return r.liste.indexOf(e) > -1; }) : [];
+    return tcLequelM65(ensemble.length ? ensemble : nommes);
+  }
   if (!r) return null;
   if (!r.liste.length) return tcPasDeRdvALHeureM65(r, true);
-  if (r.liste.length === 1) {
-    _tcSuppressionEnAttente = [r.liste[0]];
-    return 'Tu veux annuler ce rendez-vous ?\n• ' + r.liste[0].title + ' : ' + tcFormaterDateHumaine(r.liste[0].date) + ' ' + tcFormaterHeure(r.liste[0]) + '\nRéponds « oui » ou « non ».';
-  }
-  _tcSuppressionChoix = r.liste.slice(0, 3);
-  return 'Lequel ?\n' + _tcSuppressionChoix.map(tcLigneLequel).join('\n') + '\nDis-moi son numéro, son heure ou son nom.';
+  return tcLequelM65(r.liste);
 }
 
 /** « super, non merci », « ok non », « parfait nan » : un « non » dit après le mot d'accord, c'est un refus. */
@@ -23935,7 +23981,7 @@ function tcNonApresAccordM65(text) {
 async function tcDemanderDispoContactM65(text) {
   try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64()) return false; } catch (e) { return false; }
   const norm = tcClasseNormaliser(text);
-  const m = norm.match(/^(?:stp |svp |charly )?(?:demande|demandes|demander|demandez) (?:a|au) ([a-z][a-z-]+(?: [a-z][a-z-]+)?) quand (?:il|elle) (?:est|sera|serait) (?:dispo|disponible|libre)(?: stp| svp| s il te plait)?$/);
+  const m = norm.match(/^(?:stp |svp |charly )?(?:demande|demandes|demander|demandez) (?:a|au) ([a-z][a-z-]+(?: [a-z][a-z-]+)?) quand (?:il|elle) (?:est|sera|serait) (?:dispo|disponible|libre)(?: en visio| en personne| par telephone| au telephone| par tel)?(?: stp| svp| s il te plait)?$/);
   if (!m || typeof tcContactsParMots !== 'function' || typeof tcGererRdvGroupe !== 'function') return false;
   let c = [];
   try { c = tcContactsParMots(m[1].split(' ')); } catch (e) { c = []; }
