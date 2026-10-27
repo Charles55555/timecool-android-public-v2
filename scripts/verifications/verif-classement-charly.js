@@ -1546,7 +1546,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
     const attente = () => vm.runInContext('_tcDeplacementEnAttente', ctx);
     const relu = () => { const a = attente(); return a && a.confirmer ? a.liste.map((x) => x.ev.id + ' ' + x.p.date + ' ' + x.p.startH + ':' + x.p.startM + '-' + x.p.endH + ':' + x.p.endM).join(', ') : 'rien'; };
-    const remise = (evs) => { ctx.events = evs; ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null; _tcCreneauVagueEnAttente = null; var _tcDeplacementPeriode = null;', ctx); };
+    const remise = (evs) => { ctx.events = evs; ctx.charlyIA.history = []; vm.runInContext('_tcDeplacementEnAttente = null; _tcCreneauVagueEnAttente = null; var _tcDeplacementPeriode = null; _tcSuppressionEnAttente = null; _tcSuppressionChoix = null;', ctx); };
 
     // 1. « La réunion est passée à 15h » : la plus proche des réunions du même nom (passage 19, joué un mardi à 4h).
     remise(agenda().concat([ev('r1', 'Réunion équipe', 0, 14, 0, 15, 0), ev('r2', 'Réunion équipe', 7, 14, 0, 15, 0)]));
@@ -1568,31 +1568,33 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('une seule réunion : la même relecture qu’à la mission 63', relu() === 'reunion 2026-10-20 15:0-16:0', relu());
 
     // 2. « n’importe » après « Voici ce qui est libre » (#176) : la proposition de la page, puis « oui » ajoute, « non » rien.
+    // Comme charlySendMessage : la proposition attendue est lue et vidée en tête de chaque message.
+    const envoyer = async (t) => { const a = vm.runInContext('_tcCreneauVagueEnAttente', ctx); vm.runInContext('_tcCreneauVagueEnAttente = null;', ctx); return ctx.tcRepondreReponseVague(t, a); };
     const libres = () => { remise(agenda()); ctx.charlyIA.history = [{ role: 'user', content: 'quand suis-je libre demain ?' }, { role: 'assistant', content: 'Voici ce qui est libre demain :\n• 2026-10-16 de 9h à 12h\n• 2026-10-16 de 16h à 18h\n\nDis-moi lequel te va, et avec qui, je le note.', _creneaux: [{ date: '2026-10-16', debut: 540, fin: 720 }, { date: '2026-10-16', debut: 960, fin: 1080 }] }]; };
     const P64 = 'Je te propose « Mon temps libre » 2026-10-16, de 9h à 12h. Je l’ajoute à ton agenda ? Réponds « oui » ou « non ».';
     const ratesV = [];
     for (const t of ["n'importe", 'peu importe', 'comme tu veux', 'choisis', 'bah n’importe quand']) {
       libres();
-      const r = await ctx.tcRepondreReponseVague(t);
+      const r = await envoyer(t);
       if (!(r === true && dernier().content === P64 && dernier().nature === 'question' && !(ctx.extractAgendaProposals(dernier().content) || []).length)) ratesV.push(t + ' → ' + r + ' ' + dernier().content);
     }
     verifie('#176 « n’importe », « peu importe », « comme tu veux »… juste après les créneaux libres → « ' + P64 + ' » (aucune carte, nature question)', !ratesV.length, ratesV.join(' | '));
-    libres(); await ctx.tcRepondreReponseVague("n'importe");
+    libres(); await envoyer("n'importe");
     let valide = null; ctx.validateAgendaProposal = (id) => { valide = id; };
-    const rOui = await ctx.tcRepondreReponseVague('oui');
+    const rOui = await envoyer('oui');
     const carte = dernier();
     verifie('puis « oui » → la carte « 2026-10-16 | 09:00-12:00 | Mon temps libre | temps_libre » est ajoutée (validateAgendaProposal), plus rien n’attend',
       rOui === true && valide === carte.tempId && /\[AGENDA\]\n2026-10-16 \| 09:00-12:00 \| Mon temps libre \| temps_libre\n\[\/AGENDA\]/.test(carte.content) && vm.runInContext('_tcCreneauVagueEnAttente', ctx) === null, carte.content);
-    libres(); await ctx.tcRepondreReponseVague("n'importe"); valide = null;
-    const rNon = await ctx.tcRepondreReponseVague('non');
+    libres(); await envoyer("n'importe"); valide = null;
+    const rNon = await envoyer('non');
     verifie('« non » → « D’accord, je n’ajoute rien. », rien n’est ajouté', rNon === true && dernier().content === 'D’accord, je n’ajoute rien.' && valide === null);
-    libres(); await ctx.tcRepondreReponseVague("n'importe");
-    const rAutre = await ctx.tcRepondreReponseVague('oui à 10h');
+    libres(); await envoyer("n'importe");
+    const rAutre = await envoyer('oui à 10h');
     verifie('« oui à 10h » après la proposition : une autre demande, le chemin habituel (faux), la proposition tombe', rAutre === false && vm.runInContext('_tcCreneauVagueEnAttente', ctx) === null);
     const negV = [];
-    libres(); if (await ctx.tcRepondreReponseVague('demain 10h')) negV.push('demain 10h');
-    remise(agenda()); if (await ctx.tcRepondreReponseVague("n'importe")) negV.push('sans créneaux avant');
-    libres(); ctx.charlyIA.history.push({ role: 'user', content: 'ok' }, { role: 'assistant', content: 'D’accord, tu veux autre chose ?' }); if (await ctx.tcRepondreReponseVague('peu importe')) negV.push('créneaux plus loin');
+    libres(); if (await envoyer('demain 10h')) negV.push('demain 10h');
+    remise(agenda()); if (await envoyer("n'importe")) negV.push('sans créneaux avant');
+    libres(); ctx.charlyIA.history.push({ role: 'user', content: 'ok' }, { role: 'assistant', content: 'D’accord, tu veux autre chose ?' }); if (await envoyer('peu importe')) negV.push('créneaux plus loin');
     verifie('une vraie réponse (« demain 10h »), rien avant, ou des créneaux qui ne sont pas le dernier message : faux, le chemin habituel', !negV.length, negV.join(' | '));
     remise(agenda());
     ctx.tcSansCarteApresReponseVague('Je bloque. [AGENDA] 2026-10-16 | 09:00-12:00 | Mon temps libre | temps_libre [/AGENDA]', 'peu importe');
@@ -1683,10 +1685,59 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('les blocs sont fermés juste après le modèle, avant tout garde-fou (charlySendMessage) et dans charlyProcessMessage',
       csm.indexOf("reply = await callOpenAI(messages);\n    }\n    // Des blocs [AGENDA] non fermés : un seul bloc fermé, jamais « j'ajoute » sans carte (mission 64).\n    if (typeof tcFermerBlocsAgenda === 'function') reply = tcFermerBlocsAgenda(reply);\n    // Auto-génération d'agenda") > -1
       && pm.indexOf("reply = await callOpenAI(messages);\n    }\n    if (typeof tcFermerBlocsAgenda === 'function') reply = tcFermerBlocsAgenda(reply);") > -1);
-    const i64 = csm.indexOf('await tcRepondreReponseVague(text)) return;');
+    const i64 = csm.indexOf('await tcRepondreReponseVague(text, _attenteVague)) return;');
     verifie('charlySendMessage : « n’importe », « décale tout lundi », « même heure… » sont lus juste après « la réunion est passée à 15h », avant les réponses attendues et le classement',
       i64 > csm.indexOf('await tcRepondreChangementAnnonce(text)) return;') && i64 < csm.indexOf('tcDecalerToutUnJour(text)) return;') && csm.indexOf('tcDecalerToutUnJour(text)) return;') < csm.indexOf('tcMemeHeureSansContexte(text)) return;')
       && csm.indexOf('tcMemeHeureSansContexte(text)) return;') < csm.indexOf('if (_tcDeplacementPeriode) {') && csm.indexOf('tcMemeHeureSansContexte(text)) return;') < csm.indexOf('const _classe = tcClasserMessage(text, charlyIA.history);'));
+    // Examen, 1er passage. (1) La proposition vague ne vaut que pour le message qui la suit.
+    libres(); await envoyer('peu importe'); valide = null;
+    await envoyer('la réunion est passée à 15h');
+    const rApres = await envoyer('oui');
+    verifie('(examen) « peu importe », puis un autre message, puis « oui » : la proposition est tombée, rien n’est ajouté ; charlySendMessage la lit et la vide en tête',
+      rApres === false && valide === null && vm.runInContext('_tcCreneauVagueEnAttente', ctx) === null
+      && /const _attenteVague = \(typeof _tcCreneauVagueEnAttente !== 'undefined'\) \? _tcCreneauVagueEnAttente : null;\n  if \(_attenteVague\) _tcCreneauVagueEnAttente = null;/.test(csm)
+      && csm.indexOf('const _attenteVague') < csm.indexOf('if (_tcTrajetEtapes) {'));
+    // (2) La logique de la relecture 63 : un oui seul ajoute, un reste suit son chemin.
+    const ratesO = [];
+    for (const rep of ['d’accord', 'ça marche', 'ok', 'oui stp', 'parfait']) { libres(); await envoyer("n'importe"); valide = null; const r = await envoyer(rep); if (!(r === true && valide)) ratesO.push(rep + ' → ' + r); }
+    for (const rep of ['oui mais l’après-midi', 'oui mais plutôt demain', 'oui et préviens Paul', 'non mais demain']) { libres(); await envoyer("n'importe"); valide = null; const r = await envoyer(rep); if (!(r === false && valide === null)) ratesO.push(rep + ' → ' + r); }
+    libres(); await envoyer("n'importe"); valide = null;
+    const rNm = await envoyer('non merci');
+    verifie('(examen) « d’accord », « ça marche », « ok », « oui stp » → ajouté ; « oui mais l’après-midi », « oui et préviens Paul » → faux, rien ; « non merci » → rien',
+      !ratesO.length && rNm === true && valide === null && dernier().content === 'D’accord, je n’ajoute rien.', ratesO.join(' | '));
+    remise(agenda()); ctx.charlyIA.history = [{ role: 'assistant', content: 'Voici ce qui est libre demain :\n• 2026-10-16 de 9h à 18h', _creneaux: [{ date: '2026-10-16', debut: 540, fin: 1080 }] }];
+    await envoyer('peu importe');
+    libres(); await envoyer('peu importe');
+    verifie('(sonde Chrome) la liste des créneaux est marquée répondue (_validated) : « oui mais l’après-midi » ne la valide plus par « proposition qui attend »',
+      ctx.charlyIA.history[1]._validated === true && ctx.tcPropositionEnAttente() === null);
+    remise(agenda()); ctx.charlyIA.history = [{ role: 'assistant', content: 'Voici ce qui est libre demain :\n• 2026-10-16 de 9h à 18h', _creneaux: [{ date: '2026-10-16', debut: 540, fin: 1080 }] }];
+    await envoyer('peu importe');
+    verifie('(examen) une journée entière libre (9h-18h) → trois heures proposées, 9h à 12h', /, de 9h à 12h\. Je l’ajoute/.test(dernier().content), dernier().content);
+    // (3) « pareil » en réponse à une question de Charly, ou avec un moment dit avant (« vendredi midi »).
+    const ratesP = [];
+    for (const [q, rep] of [['Par téléphone, en personne ou en visio ?', 'pareil'], ['Quelle durée pour ce rendez-vous ?', 'la même'], ['Je te rappelle la veille ou une heure avant ?', 'pareil']]) {
+      remise(agenda()); ctx.charlyIA.history = [{ role: 'user', content: 'rdv' }, { role: 'assistant', content: q, nature: 'question' }];
+      if (ctx.tcMemeHeureSansContexte(rep)) ratesP.push(q + ' / ' + rep);
+    }
+    remise(agenda()); ctx.charlyIA.history = [{ role: 'user', content: 'déjeuner avec Paul vendredi midi' }, { role: 'assistant', content: 'C’est noté.' }];
+    if (ctx.tcMemeHeureSansContexte('pareil demain')) ratesP.push('vendredi midi / pareil demain');
+    remise(agenda()); vm.runInContext('_tcDeplacementEnAttente = { liste: [], confirmer: true };', ctx);
+    if (ctx.tcMemeHeureSansContexte('même heure la semaine prochaine')) ratesP.push('déplacement en attente');
+    remise(agenda());
+    verifie('(examen) « pareil », « la même » après une question de Charly, après « vendredi midi », ou avec une réponse attendue : faux, jamais « Qu’est-ce que tu veux refaire ? »', !ratesP.length, ratesP.join(' | '));
+    // (4) Un nom porté par deux contacts.
+    ctx.contactsList = contacts0.concat([{ id: 'hm', name: 'Hugo Martin', phone: '06' }]);
+    const cMartin = ctx.tcCreationLocale('café Martin demain 10h', new DateFixe());
+    const cPaul = ctx.tcCreationLocale('café Paul demain 10h', new DateFixe());
+    ctx.contactsList = contacts0;
+    verifie('(examen) « café Martin demain 10h » avec Paul Martin et Hugo Martin → rien de la page (le modèle demande lequel) ; « café Paul demain 10h » → « Café avec Paul »',
+      cMartin === '' && /\| Café avec Paul \| rdv/.test(cPaul), cMartin + ' | ' + cPaul);
+    // Remarques : catégorie accentuée, ligne coupée « temps_li », « Pas de [AGENDA] ici ».
+    const fS = ctx.tcFermerBlocsAgenda('Ok\n[AGENDA]\n2026-10-20 | 10:00-11:00 | Dentiste | santé\n[/AGENDA]\n[AGENDA]\n2026-10-21 | 10:00-11:00 | Kiné | santé\n[/AGENDA]');
+    const fC = ctx.tcFermerBlocsAgenda('Ok [AGENDA] 2026-10-20 | 10:00-11:00 | Pause | pause [AGENDA] 2026-10-21 | 10:00-11:00 | Pause | temps_li');
+    verifie('(examen) « santé » : deux blocs → un bloc de 2 lignes ; « | Pause | temps_li » en fin coupée tombe ; « Pas de [AGENDA] ici » ne change pas',
+      (ctx.extractAgendaProposals(fS) || []).length === 2 && (ctx.extractAgendaProposals(fC) || []).length === 1 && fC.indexOf('temps_li') < 0 && ctx.tcFermerBlocsAgenda('Pas de [AGENDA] ici') === 'Pas de [AGENDA] ici',
+      JSON.stringify(fS) + ' | ' + JSON.stringify(fC));
     verifie('pas de tiret long ni d assertion arrière dans le bloc 64', bloc.indexOf('MISSION 64') > -1 && !/\(\?<[=!]/.test(bloc) && bloc.slice(bloc.indexOf('MISSION 64')).indexOf('—') < 0);
     delete ctx.validateAgendaProposal;
     remise(agenda());

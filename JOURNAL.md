@@ -3002,3 +3002,10 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   fermé juste après le modèle (tcFermerBlocsAgenda) ; une dernière ligne coupée tombe. Sans ligne complète, le texte seul, et le filet
   « j'ajoute sans bloc » fabrique la carte depuis la demande.
 - Suite : verif-classement-charly (section 21).
+- Premier passage (examinateur, 27/10, 4 points) : la proposition après « n'importe » ne vaut que pour le message qui la suit (lue et
+  vidée en tête de charlySendMessage : « peu importe », « la réunion est passée à 15h », « oui » décale la réunion, n'ajoute plus le
+  créneau) ; sa réponse suit la logique de la relecture 63 (« d'accord », « ok », « oui stp » ajoutent ; « oui mais l'après-midi », « oui
+  et préviens Paul » suivent le chemin habituel ; « non merci » : rien) ; « pareil », « la même » ne sont jamais pris quand Charly vient de
+  poser une question ou qu'une réponse est attendue, ni après « vendredi midi » ; « café Martin » avec deux Martin : rien de la page.
+  Aussi : une journée libre est proposée sur trois heures (9h-12h) ; les blocs à catégorie accentuée (« santé ») restent lus, une fin
+  coupée « temps_li » tombe, « Pas de [AGENDA] ici » ne change pas.

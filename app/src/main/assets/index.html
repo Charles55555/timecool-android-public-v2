@@ -15161,6 +15161,9 @@ async function charlySendMessage() {
     showToast('⚠️ Charly IA est désactivé. Active-le dans Configuration IA.');
     return;
   }
+  // La proposition après « n'importe » n'attend que ce message-ci : tout autre chemin la fait tomber (examen, mission 64).
+  const _attenteVague = (typeof _tcCreneauVagueEnAttente !== 'undefined') ? _tcCreneauVagueEnAttente : null;
+  if (_attenteVague) _tcCreneauVagueEnAttente = null;
 
   // === RÉPONSE À UNE QUESTION DU FLUX DE CALCUL DE TRAJET EN COURS ===
   // Priorité absolue, avant même la vérification de clé API du fournisseur
@@ -15203,7 +15206,7 @@ async function charlySendMessage() {
   if (typeof tcRepondreChangementAnnonce === 'function' && await tcRepondreChangementAnnonce(text)) return;
   // « n'importe » après les créneaux libres : la page propose, « oui » ajoute ; « décale tout lundi » : la liste et « vers quand ? » ;
   // « même heure la semaine prochaine » sans rien avant : la question (mission 64).
-  if (typeof tcRepondreReponseVague === 'function' && await tcRepondreReponseVague(text)) return;
+  if (typeof tcRepondreReponseVague === 'function' && await tcRepondreReponseVague(text, _attenteVague)) return;
   if (typeof tcDecalerToutUnJour === 'function' && tcDecalerToutUnJour(text)) return;
   if (typeof tcMemeHeureSansContexte === 'function' && tcMemeHeureSansContexte(text)) return;
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
@@ -23582,15 +23585,23 @@ function tcRdvAnnoncePlusProche(c, text, exacts) {
 /** Le créneau proposé après une réponse vague, en attente de « oui » ou « non » (liste de propositions). */
 let _tcCreneauVagueEnAttente = null;
 
-/** « oui » : la carte est ajoutée ; « non » : rien. Autre chose : la proposition tombe et le message suit son chemin. */
-async function tcRepondrePropositionVague(text) {
-  const attente = _tcCreneauVagueEnAttente;
-  if (!attente) return false;
-  _tcCreneauVagueEnAttente = null;
-  // « oui à 10h », « non jeudi » : une autre demande, le chemin habituel.
-  if (/\d/.test(String(text || ''))) return false;
-  const oui = tcReponseOuiNon(text);
+/* « d’accord », « ça marche », « parfait » : un oui (comme la relecture de la mission 63). */
+const TC_ACCORD_M64 = /^(d accord|daccord|ca marche|ca me va|parfait|c est bon|c est parfait|c est ok|nickel|top|super|entendu|bien sur|carrement|volontiers|je valide|valide|go pour moi|ok pour moi)(\s|$)/;
+/* Les mots qui ne disent rien de plus qu'un oui ou un non (« oui stp », « non merci », « ok vas-y »). */
+const TC_POLI_M64 = /^(?:(?:oui|ouais|ok|okay|d accord|daccord|vas y|go|yes|confirme|je confirme|c est ca|exact|non|no|nan|stp|svp|s il te plait|merci|charly|c est bon|parfait|super|top|nickel|bien sur|carrement|volontiers|avec plaisir|ca marche|ca me va|c est parfait|c est ok|entendu|je valide|valide|go pour moi|ok pour moi|pour moi)(?:\s+|$))*/;
+
+/**
+ * « oui », « ok », « d’accord » seuls : la carte est ajoutée ; « non », « non merci » : rien. Un reste après le oui ou le non (« oui mais
+ * l’après-midi », « oui et préviens Paul », « oui à 10h ») : faux, le message suit son chemin habituel (examen, mission 64).
+ * `attente` : la proposition lue (et vidée) en tête de charlySendMessage ; elle ne vaut que pour le message qui la suit.
+ */
+async function tcRepondrePropositionVague(text, attente) {
+  if (!Array.isArray(attente) || !attente.length) return false;
+  const norm = tcClasseNormaliser(text);
+  let oui = tcReponseOuiNon(text);
+  if (oui === null && TC_ACCORD_M64.test(norm)) oui = true;
   if (oui === null) return false;
+  if (norm.replace(TC_POLI_M64, '').trim()) return false;
   tcPousserMessageUtilisateur(text);
   if (!oui) {
     charlyIA.history.push({ role: 'assistant', content: 'D’accord, je n’ajoute rien.', nature: 'reponse' });
@@ -23619,8 +23630,13 @@ function tcProposerApresReponseVague(text) {
   if (!m || m.role !== 'assistant' || !Array.isArray(m._creneaux) || !m._creneaux.length) return false;
   const c = m._creneaux[0];
   if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(String(c.date || '')) || !(Number(c.fin) > Number(c.debut))) return false;
-  const p = { date: c.date, startH: Math.floor(c.debut / 60), startM: c.debut % 60, endH: Math.floor(c.fin / 60), endM: c.fin % 60, title: 'Mon temps libre', category: 'temps_libre' };
+  // Une journée entière libre (9h-18h) : trois heures au plus, comme le #176 d'origine (9h-12h ; examen, mission 64).
+  const fin = Math.min(Number(c.fin), Number(c.debut) + 180);
+  const p = { date: c.date, startH: Math.floor(c.debut / 60), startM: c.debut % 60, endH: Math.floor(fin / 60), endM: fin % 60, title: 'Mon temps libre', category: 'temps_libre' };
   tcPousserMessageUtilisateur(text);
+  // La liste des créneaux a reçu sa réponse : « oui mais l'après-midi » ne la valide plus par le chemin « proposition qui attend »
+  // (sonde Chrome : « Rendez-vous » 9h était ajouté ; même marque que « non » sur une carte).
+  m._validated = true;
   _tcCreneauVagueEnAttente = [p];
   charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'Je te propose « Mon temps libre » ' + tcJourM64(p.date) + ', de '
     + tcHeureM64(p.startH, p.startM) + ' à ' + tcHeureM64(p.endH, p.endM) + '. Je l’ajoute à ton agenda ? Réponds « oui » ou « non ».' });
@@ -23629,8 +23645,8 @@ function tcProposerApresReponseVague(text) {
 }
 
 /** La réponse à la proposition, ou la proposition après une réponse vague. Vrai si traité. */
-async function tcRepondreReponseVague(text) {
-  if (await tcRepondrePropositionVague(text)) return true;
+async function tcRepondreReponseVague(text, attente) {
+  if (await tcRepondrePropositionVague(text, attente)) return true;
   return tcProposerApresReponseVague(text);
 }
 
@@ -23646,8 +23662,10 @@ function tcRepasAvecContact(brut) {
   const m = t.match(/^(?:(?:un|une|le|mon)\s+)?(petit dejeuner|dejeuner|diner|brunch|cafe|apero|gouter|verre)(?:\s+avec)?\s+([a-z]+)(?:\s|$)/);
   if (!m) return null;
   const contacts = (typeof contactsList !== 'undefined' && Array.isArray(contactsList)) ? contactsList : [];
-  const c = contacts.find(function (x) { return x && x.name && tcSansAccents(String(x.name)).toLowerCase().split(/[^a-z0-9]+/).indexOf(m[2]) > -1; });
-  if (!c) return null;
+  // « café Martin » avec Paul Martin et Hugo Martin : plusieurs contacts, rien ici (le modèle demande lequel ; examen, mission 64).
+  const trouves = contacts.filter(function (x) { return x && x.name && tcSansAccents(String(x.name)).toLowerCase().split(/[^a-z0-9]+/).indexOf(m[2]) > -1; });
+  if (trouves.length !== 1) return null;
+  const c = trouves[0];
   const REPAS = { 'petit dejeuner': 'Petit-déjeuner', dejeuner: 'Déjeuner', diner: 'Dîner', brunch: 'Brunch', cafe: 'Café', apero: 'Apéro', gouter: 'Goûter', verre: 'Verre' };
   const now = new Date();
   const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
@@ -23717,18 +23735,31 @@ function tcRelireDeplacementPeriode(liste, text) {
 
 /* ─── 5. « Même heure la semaine prochaine », sans rien avant ─── */
 
+/** Une réponse est-elle attendue (vers quand, type, questionnaire, déplacement, annulation, conflit, carte proposée) ? */
+function tcUneReponseAttendueM64() {
+  const vrai = function (f) { try { return !!f(); } catch (e) { return false; } };
+  return vrai(function () { return _tcDeplacementPeriode; }) || vrai(function () { return _tcQuestionnaire; })
+    || vrai(function () { return _tcDeplacementEnAttente; }) || vrai(function () { return _tcSuppressionEnAttente; }) || vrai(function () { return _tcSuppressionChoix; })
+    || vrai(function () { return typeof tcQuestionTypeEnAttente === 'function' && tcQuestionTypeEnAttente(); })
+    || vrai(function () { return typeof tcConflitEnAttente === 'function' && tcConflitEnAttente(); })
+    || vrai(function () { return typeof tcPropositionEnAttente === 'function' && tcPropositionEnAttente(); });
+}
+
 /**
  * « Même heure la semaine prochaine », « pareil demain », « rebelote jeudi » sans rendez-vous dans les derniers messages : Charly
  * demande lequel, il ne crée rien (passage 19, #140). Avec un rendez-vous juste avant : faux, le modèle lit la suite.
  */
 function tcMemeHeureSansContexte(text) {
-  // Une réponse à « Vers quand ? » (« même heure jeudi ») n'est pas une nouvelle demande.
-  if (typeof _tcDeplacementPeriode !== 'undefined' && _tcDeplacementPeriode) return false;
   const t = tcClasseNormaliser(text);
   const m = t.match(/^(?:(?:et|bon|alors|ok|euh|du coup)\s+)?(?:a\s+la\s+|la\s+)?(meme heure|meme horaire|meme chose|pareil|rebelote|idem|on remet ca|la meme)(?:\s+(la semaine prochaine|semaine prochaine|la semaine d apres|la semaine suivante|demain|apres demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?:\s+(?:prochain|prochaine))?)?(?:\s+(?:stp|svp|charly|aussi|alors))*$/);
   if (!m) return false;
+  // Une question de Charly ou une réponse attendue (« Par téléphone, en personne ou en visio ? » → « pareil ») : jamais ici (examen, mission 64).
+  if (tcUneReponseAttendueM64()) return false;
   const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
-  const contexte = h.slice(-4).some(function (x) { return x && /\[AGENDA\]|\d{1,2}\s?h(?![a-z])|\d{1,2}:\d{2}/i.test(String(x.content || '')); });
+  const derniere = h.filter(function (x) { return x && x.role !== 'user'; }).slice(-1)[0];
+  if (derniere && (derniere.nature === 'question' || /\?\s*$/.test(String(derniere.content || '').replace(/<[^>]+>/g, ' ').trim()))) return false;
+  // Un moment dit juste avant (« 15h », « 15:00 », « vendredi midi », « demain soir ») : le modèle lit la suite.
+  const contexte = h.slice(-4).some(function (x) { return x && /\[AGENDA\]|\d{1,2}\s?h(?![a-z])|\d{1,2}:\d{2}|(^|[^a-z])(midi|minuit|matin|soir|apres-midi|aprem|après-midi)([^a-z]|$)/i.test(String(x.content || '')); });
   if (contexte) return false;
   const QUAND = { 'la semaine prochaine': 'la semaine prochaine', 'semaine prochaine': 'la semaine prochaine', 'la semaine d apres': 'la semaine d’après', 'la semaine suivante': 'la semaine suivante', 'apres demain': 'après-demain' };
   const quand = m[2] ? ' ' + (QUAND[m[2]] || m[2]) : '';
@@ -23754,15 +23785,19 @@ function tcFermerBlocsAgenda(reply) {
   const i0 = r.indexOf('[AGENDA]');
   const avant = r.slice(0, i0).trim();
   const morceaux = r.slice(i0).split(/\[\/?AGENDA\]|\n/);
-  const LIGNE = /^\d{4}-\d{2}-\d{2}(?:\s*>\s*\d{4}-\d{2}-\d{2})?\s*\|\s*\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\s*\|\s*[^|]+?\s*\|\s*[a-z_]+(?:\s*\|.*)?$/i;
-  const CONNUE = /\|\s*(travail|sport|famille|sante|repas|pause|trajet|preparation|administratif|loisir|temps_libre|perso|rdv|medecin|amis|personnel|green)\s*(?:\|.*)?$/i;
+  // La catégorie peut porter un accent (« santé ») : la ligne reste lue (examen, mission 64).
+  const LIGNE = /^\d{4}-\d{2}-\d{2}(?:\s*>\s*\d{4}-\d{2}-\d{2})?\s*\|\s*\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\s*\|\s*[^|]+?\s*\|\s*[a-zà-ÿ_]+(?:\s*\|.*)?$/i;
+  const CONNUE = /^(travail|sport|famille|sante|repas|pause|trajet|preparation|administratif|loisir|temps_libre|perso|rdv|medecin|amis|personnel|green)$/;
+  // Rien qui ressemble à une ligne de rendez-vous (« Pas de [AGENDA] ici ») : la réponse ne change pas.
+  if (!morceaux.some(function (x) { return /^\s*\d{4}-\d/.test(x); })) return reply;
   const lignes = [], apres = [];
   morceaux.forEach(function (x, i) {
     const s = x.trim();
     if (!s) return;
     if (LIGNE.test(s)) {
-      // Le dernier morceau, sans rien derrière : gardé seulement si sa catégorie est entière (sinon la réponse a été coupée).
-      if (i === morceaux.length - 1 && !CONNUE.test(s)) return;
+      // Le dernier morceau, sans rien derrière : gardé seulement si son 4e champ (la catégorie) est un mot entier connu (sinon la
+      // réponse a été coupée : « | Pause | temps_li »).
+      if (i === morceaux.length - 1 && !CONNUE.test(tcSansAccents(String(s.split('|')[3] || '')).trim().toLowerCase())) return;
       lignes.push(s);
       return;
     }
