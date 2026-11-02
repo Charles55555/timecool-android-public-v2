@@ -42,6 +42,36 @@ verifie('purge : les deux modes', purge.includes('--compter)') && purge.includes
 verifie('purge : la sauvegarde est vérifiée avant le premier effacement', purge.indexOf('gzip -t') > 0 && purge.indexOf('gzip -t') < purge.indexOf('START TRANSACTION'));
 verifie('purge : syntaxe', cp.spawnSync('bash', ['-n', path.join(D, '../purger-comptes-test.sh')]).status === 0);
 
+// 3 bis. La liste à garder : un faux mysql note chaque requête de la purge.
+function purger(mode, liste) {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-'));
+  const journal = path.join(d, 'sql.log');
+  fs.writeFileSync(path.join(d, 'mysql'), '#!/bin/bash\nfor x in "$@"; do q="$x"; done\nprintf "%s\\n--\\n" "$q" >> ' + journal + '\ncase "$q" in *"SELECT id"*) printf "1\\n2\\n";; *"GROUP BY"*) ;; *) echo 5;; esac\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(d, 'mysqldump'), '#!/bin/bash\nfor i in 1 2 3 4 5; do echo "INSERT INTO \\`comptes\\` VALUES ($i);"; done\n', { mode: 0o755 });
+  const g = path.join(d, 'garder.txt');
+  fs.writeFileSync(g, liste);
+  const r = cp.spawnSync('bash', [path.join(D, '../purger-comptes-test.sh'), mode], { encoding: 'utf8', env: Object.assign({}, process.env, { PATH: d + ':' + process.env.PATH, HOME: d, TC_PURGE_GARDER: g, TC_DOCUMENTS: path.join(d, 'rien') }) });
+  return { code: r.status, sortie: r.stdout, sql: fs.existsSync(journal) ? fs.readFileSync(journal, 'utf8') : '' };
+}
+const LISTE = '# essais\nInes.Garnier@exemple-timecool.fr  # batterie\nhugo.besnard@exemple-timecool.fr\n';
+const e = purger('--effacer', LISTE);
+verifie('purge : passe avec une liste', e.code === 0, e.sortie);
+const blocs = e.sql.split('\n--\n').filter((b) => b.includes('DELETE'));
+verifie('purge : au moins un paquet', blocs.length > 0);
+for (const b of blocs) {
+  const deletes = b.split(';').filter((x) => x.includes('FROM comptes') || x.includes('JOIN comptes'));
+  verifie('purge : les adresses gardées sont exclues de chaque DELETE', deletes.length === 3 && deletes.every((x) => x.includes("'ines.garnier@exemple-timecool.fr', 'hugo.besnard@exemple-timecool.fr'") && x.includes('NOT IN')), b);
+}
+verifie('purge : la sélection des comptes les exclut aussi', /SELECT id FROM comptes WHERE .*NOT IN \('ines/.test(e.sql));
+const c = purger('--compter', LISTE);
+verifie('purge : le comptage affiche les gardés, à part des vrais comptes', /gardés \(TESTEURS, liste de 2\)/.test(c.sortie) && /vrais comptes \(hors @exemple-timecool\.fr\)/.test(c.sortie));
+const vide = purger('--effacer', '# rien\n');
+verifie('purge : liste vide, rien n est effacé', vide.code === 2 && !vide.sql.includes('DELETE'), vide.sortie);
+for (const l of ['charles@exemple.fr\n', "x'@exemple-timecool.fr\n", 'a@b@exemple-timecool.fr\n']) {
+  const r = purger('--effacer', l);
+  verifie('purge : adresse refusée ' + l.trim(), r.code === 2 && !r.sql.includes('DELETE'), r.sortie);
+}
+
 // 4. Le nettoyage en fin de passage, sur un faux serveur.
 const scenarios = {
   'fin normale': { corps: '', code: 0 },

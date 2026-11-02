@@ -1,0 +1,11 @@
+# Comptes fixes des TESTEURS, encore utilisés : purger-comptes-test.sh ne les vise jamais.
+# Une adresse par ligne. Liste donnée par TESTEURS, via le chef de projet (02/11/2026).
+armelle.vasseur@exemple-timecool.fr
+basile.cortot@exemple-timecool.fr
+clemence.ravaud@exemple-timecool.fr
+damien.lefort@exemple-timecool.fr
+estelle.morin@exemple-timecool.fr
+fanny.roux@exemple-timecool.fr
+gaelle.perrin@exemple-timecool.fr
+hugo.besnard@exemple-timecool.fr
+ines.garnier@exemple-timecool.fr
