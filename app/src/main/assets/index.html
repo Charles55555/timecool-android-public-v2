@@ -1814,7 +1814,7 @@ if (window.pdfjsLib) {
   <div class="conv-header">
     <button class="back-btn" onclick="tcRetour()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
-    <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">🔒 Assistant intelligent</div></div>
+    <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">🔒 Votre Assistant Intelligent</div></div>
     <button onclick="resetCharlyChat()" title="Nouvelle conversation" style="background:transparent; border:none; cursor:pointer; padding:8px; color:var(--text-sec);">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
     </button>
@@ -14030,7 +14030,7 @@ async function tcGererConsultationAgenda(text, intent) {
     // lundi » repondu par un samedi etait pire qu'une question.
     if (!tcPeriodeCoherente(text, intent.periode)) {
       charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('De quel jour parles-tu exactement ? (par exemple « lundi 5 octobre »)') });
-      tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+      tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
       renderCharlyChat();
       return;
     }
@@ -14047,7 +14047,7 @@ async function tcGererConsultationAgenda(text, intent) {
   }
 
   charlyIA.history.push({role: 'assistant', content: reply});
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
   renderCharlyChat();
 }
 
@@ -14281,7 +14281,7 @@ async function tcGererSuppressionRdv(text) {
     || (ceJour ? (function () { const n = new Date(); const j = new Date(n.getFullYear(), n.getMonth(), n.getDate()); return { debut: j, fin: j, label: 'aujourd’hui' }; })() : null);
   if (periode && !tcPeriodeCoherente(text, periode)) {
     charlyIA.history.push({ role: 'assistant', content: tcPhraseNonCompris('De quel jour parles-tu exactement ? (par exemple « lundi 5 octobre »)') });
-    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
     renderCharlyChat();
     return;
   }
@@ -14429,10 +14429,10 @@ async function tcGererSuppressionRdv(text) {
       `;
       lastMsg.appendChild(actionsDiv);
     }, 100);
-    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
     return;
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
   renderCharlyChat();
 }
 
@@ -14932,7 +14932,7 @@ async function tcGererRechercheProfessionnel(text, profession, lieu) {
   } catch (err) {
     charlyIA.history.push({role:'system_info', content: '❌ Erreur recherche Places : ' + err.message.substring(0,150)});
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
   renderCharlyChat();
 }
 
@@ -14965,7 +14965,7 @@ async function tcGererDemandeTrajet(text, destination) {
   } catch (err) {
     charlyIA.history.push({role:'system_info', content: '❌ Erreur trajet : ' + err.message.substring(0,150)});
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
   renderCharlyChat();
 }
 
@@ -15066,7 +15066,7 @@ async function tcFinaliserCalculTrajet(depart, arrivee, heureRdv) {
   } catch (err) {
     charlyIA.history.push({role: 'system_info', content: '❌ Erreur trajet : ' + err.message.substring(0, 150)});
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
   renderCharlyChat();
 }
 
@@ -15134,7 +15134,7 @@ async function tcGererRechercheWeb(text, requete) {
   } catch (err) {
     charlyIA.history.push({role:'system_info', content: '❌ Erreur recherche web : ' + err.message.substring(0,150)});
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
   renderCharlyChat();
 }
 
@@ -15854,7 +15854,7 @@ async function charlySendMessage() {
     renderCharlyChat();
     showToast('❌ Erreur API : ' + err.message.substring(0,60));
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
 }
 
 // ═══ APPEL API OPENAI ═══
@@ -16664,7 +16664,7 @@ function stopCharlyMic() {
     btn.style.background = 'var(--g-blue)';
     btn.style.animation = '';
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
 }
 
 // ═══ Override navigate pour les nouvelles pages ═══
@@ -18708,7 +18708,7 @@ async function handleCharlyFileSelected(event, sourceType) {
           role: 'system_info',
           content: '⚠️ Ce PDF semble être une image scannée. Lecture des images bientôt disponible — peux-tu me donner les détails du RDV manuellement ?'
         });
-        tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+        tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
         renderCharlyChat();
         return;
       }
@@ -18718,7 +18718,7 @@ async function handleCharlyFileSelected(event, sourceType) {
         role: 'system_info',
         content: '📷 La lecture automatique des photos sera disponible bientôt. Pour ce RDV, peux-tu me donner les infos manuellement (date, heure, lieu) ?'
       });
-      tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+      tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
       renderCharlyChat();
       return;
     } else if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
@@ -18754,7 +18754,7 @@ Analyse ce texte et :
       role: 'system_info',
       content: `❌ Erreur lecture fichier : ${err.message.substring(0,100)}`
     });
-    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
     renderCharlyChat();
   }
 }
@@ -18778,12 +18778,12 @@ async function extractTextFromPDF(file) {
 async function charlyProcessMessage() {
   if (!charlyIA.config.enabled) {
     showToast('⚠️ Charly IA désactivé');
-    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
     return;
   }
   if (!charlyIA.config.demoMode && !charlyIA.config.apiKey) {
     showToast('⚠️ Aucune clé API. Configure-la dans Configuration IA.');
-    tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+    tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
     return;
   }
 
@@ -18812,7 +18812,7 @@ async function charlyProcessMessage() {
     charlyIA.history.push({role:'system_info', content:`❌ Erreur : ${err.message.substring(0,120)}`});
     renderCharlyChat();
   }
-  tcDefinirStatutCharly('🔒 Assistant intelligent', false);
+  tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
 }
 
 // ═══════════════════════════════════════════════════════════
