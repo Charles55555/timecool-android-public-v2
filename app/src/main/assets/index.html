@@ -24021,13 +24021,15 @@ async function tcDemanderDispoContactM65(text) {
    ═══════════════════════════════════════════════════════════════ */
 
 /** Les mots qui ne nomment jamais une fiche : un rendez-vous, un moment, un lieu, une chose, un petit mot de liaison. */
-const TC_FICHE_PAS_UN_NOM = /(^| )(rdv|rendez|vous|semaine|mois|agenda|reunion|reunions|telephone|compte|charly|timecool|appli|application|support|assistance|urgence|urgences|police|pompiers|samu|banque|mairie|poste|creneau|creneaux|moment|place|date|heure|heures|horaire|horaires|temps|trajet|itineraire|restaurant|restaurants|resto|restos|hotel|hotels|pharmacie|adresse|numero|mail|email|contact|contacts|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|invite|invitee|idee|solution|truc|chose|quelqu|quelque|personne|president|presidente|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|hier|matin|soir|midi|prochain|prochaine|a|au|aux|pour|avec|sur|en|vers|chez|dans|qui|que|quand|comment|pourquoi|et|ou|ce|ca|cela|il|elle|ils|elles|moi|toi|lui|nous|je|tu|on|oui|non|ok|merci|bonjour|salut|bon|rien|pardon|quoi|hein|oublie|tant|pis|peu|importe|finalement|stop|gens|monde|doublon|doublons)( |$)/;
+const TC_FICHE_PAS_UN_NOM = /(^| )(rdv|rendez|vous|semaine|mois|agenda|reunion|reunions|telephone|compte|charly|timecool|appli|application|support|assistance|urgence|urgences|police|pompiers|samu|banque|mairie|poste|creneau|creneaux|moment|place|date|heure|heures|horaire|horaires|temps|trajet|itineraire|restaurant|restaurants|resto|restos|hotel|hotels|pharmacie|adresse|numero|mail|email|contact|contacts|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|invite|invitee|idee|solution|truc|chose|quelqu|quelque|personne|president|presidente|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|hier|matin|soir|midi|prochain|prochaine|a|au|aux|pour|avec|sur|en|vers|chez|dans|qui|que|quand|comment|pourquoi|et|ou|ce|ca|cela|il|elle|ils|elles|moi|toi|lui|nous|je|tu|on|oui|non|ok|merci|bonjour|salut|bon|rien|pardon|quoi|hein|oublie|tant|pis|peu|importe|finalement|stop|gens|monde|doublon|doublons|paie|lecture)( |$)/;
 /** Un nom qui commence ainsi désigne une chose (« un restaurant », « cette semaine »), pas une fiche. « le », « la » restent : « le docteur Martin ». */
 const TC_FICHE_DETERMINANT = /^(un|une|des|du|de|d|les|ce|cet|cette|ces|mes|tes|ses|son|sa|ton|ta|notre|votre|leur|leurs|tout|toute|tous|toutes)( |$)/;
 /** Une quantité ou une question, jamais un nom : « j'ai combien de personnes dans mes contacts ? ». */
 const TC_FICHE_QUANTITE = /^(combien|beaucoup|plein|plusieurs|quoi|quel|quels|quelle|quelles|qui|peu|assez|trop|aucun|aucune)( |$)/;
 /** Après « j'ai », une phrase au passé : « j'ai ajouté Zoé dans mes contacts » ne cherche personne. */
 const TC_FICHE_PASSE = /^(ajoute|ajoutee|mis|mise|mets|rentre|rentree|entre|enregistre|note|notee|importe|supprime|retire|efface|enleve|perdu|trouve|garde|cherche|vu|change|modifie|classe|bloque)( |$)/;
+/** « mon ami Hugo », « ma collègue Zoé » : ce mot décrit la personne, il ne la nomme pas. */
+const TC_FICHE_RELATION = /^(?:mon|ma|notre) (?:ami|amie|copain|copine|pote|collegue|voisin|voisine|cousin|cousine|oncle|tante|patron|patronne|chef|associe|associee) (.+)$/;
 /** La réponse au bouton qui renonce. */
 const TC_FICHE_RENONCE = /^(rien|finalement rien|finalement non|finalement|c est bon|c est tout|ca ira|oublie|oublie ca|on oublie|laisse|laisse tomber|tant pis|peu importe|pas grave|personne|aucun|aucune|plus tard|je sais pas|je ne sais pas|sais pas|annule|stop)$/;
 
@@ -24066,11 +24068,11 @@ function tcDetecterFicheContact(text) {
   let n = tcClasseNormaliser(brut);
   if (!n || n.split(' ').length > 12) return null;
   n = n.replace(/^((stp|svp|charly|s il te plait|tu peux|tu pourrais|peux tu|pourrais tu|est ce que tu peux|est ce que tu pourrais) )+/, '').replace(/( (stp|svp|s il te plait|merci|charly|vite|rapidement|maintenant|tout de suite))+$/, '');
-  let nom = null, fort = false, personne = false;
+  let nom = null, fort = false, personne = false, laFiche = false;
   const dansContacts = / (dans|parmi) (mes|les|tes) contacts$| (dans|sur) (mon|le|ton) (carnet( d adresses?)?|repertoire)$/;
   const fiche = n.match(/^(?:(?:trouve|retrouve|cherche|montre|affiche|ouvre|donne)(?: moi| me)? |ou est |je cherche |je veux |je voudrais )?la fiche (?:de|d) (.+)$/);
   const partie = n.match(/^(?:est ce que |est ce qu )?(.+?) fait partie de mes contacts$/);
-  if (fiche) { nom = fiche[1]; fort = true; }
+  if (fiche) { nom = fiche[1]; laFiche = true; personne = true; }
   else if (partie) { nom = partie[1]; fort = true; }
   else if (dansContacts.test(n)) {
     const r = n.replace(dansContacts, '');
@@ -24090,9 +24092,11 @@ function tcDetecterFicheContact(text) {
     else return null;
   }
   if (TC_FICHE_QUANTITE.test(nom)) return null;
+  const relation = nom.match(TC_FICHE_RELATION);
+  if (relation) nom = relation[1];
   // « des médecins », « les clients » : un pluriel n'est jamais proposé à l'ajout ; « le président » non plus, sauf si le carnet le connaît.
   let certain = true;
-  if (fort) {
+  if (fort || laFiche) {
     if (/^(des|les|mes) /.test(nom)) certain = false;
     nom = nom.replace(/^(un|une|des|les|mes|du|de|d|le|la|l) /, '');
   } else {
@@ -24155,16 +24159,8 @@ function tcGererFicheContact(text, d) {
     renderCharlyChat();
     return true;
   }
-  let fiches = tcClasserContacts(tcContactsParMots(tcMotsUtiles(d.nom)));
+  const fiches = tcClasserContacts(tcContactsParMots(tcMotsUtiles(d.nom)));
   if (!fiches.length && !d.propose) return false;
-  // Un mot en trop (« mon ami Hugo ») ne fait jamais dire qu'une fiche existante n'existe pas : un mot du nom qui la trouve suffit.
-  if (!fiches.length) {
-    const vues = [];
-    tcMotsUtiles(d.nom).filter(function (w) { return w.length >= 3; }).forEach(function (w) {
-      tcContactsParMots([w]).forEach(function (c) { if (vues.indexOf(c) < 0) vues.push(c); });
-    });
-    fiches = tcClasserContacts(vues);
-  }
   tcPousserMessageUtilisateur(text);
   if (fiches.length) tcPousserFiches(fiches);
   else tcPousserFicheAbsente(d.affiche);
@@ -24181,7 +24177,8 @@ function tcRepondreFicheContact(text) {
   const dire = function (contenu) { charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: contenu }); renderCharlyChat(); };
   const norm = tcClasseNormaliser(text);
   if (a.etape === 'ajouter') {
-    const v = /^ajoute( moi)?$/.test(norm) ? 'oui' : tcReponseValidation(text);
+    const court = norm.split(' ').length <= 2 || !tcRessembleAUneDemande(text);
+    const v = /^ajoute( moi| le| la| les| tout)?$/.test(norm) ? 'oui' : (court ? tcReponseValidation(text) : null);
     if (v !== 'oui' && v !== 'non') return false;
     tcPousserMessageUtilisateur(text);
     if (v === 'non') { dire('D’accord, je n’ajoute rien.'); return true; }
