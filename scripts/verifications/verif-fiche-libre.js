@@ -132,6 +132,15 @@ verifie('ces phrases gardent le chemin habituel : ni « Dame », ni « Ajouter L
 verifie('« Mon comptable tu peux me le retrouver dans mes contacts » reste une recherche', dire('Mon comptable tu peux me le retrouver dans mes contacts').pris);
 verifie('« Le Gall » garde sa fiche : après un titre et en nom complet', dire('Dr Le Gall tu peux me le retrouver dans mes contacts', [{ id: 'lg', name: 'Dr Le Gall' }]).ids === 'lg' && dire('Anne Le Gall tu peux la retrouver dans mes contacts', [{ id: 'al', name: 'Anne Le Gall' }]).ids === 'al');
 
+console.log('\n-- 3 quinquies. Examen 4 --');
+const livres = () => carnet().concat([{ id: 'lg', name: 'Dr Le Gall' }, { id: 'lf', name: 'Jean La Fontaine' }]);
+for (const [p, id] of [['Le Gall tu peux me le retrouver dans mes contacts', 'lg'], ['La Fontaine tu peux la retrouver dans mes contacts', 'lf'], ['Le plombier je le cherche dans mes contacts', 'pl'], ['j’ai pas retrouvé Dr Sellam dans mes contacts', 's'], ['j’ai pas retrouvé Hugo dans mes contacts', 'h'], ['Le Hugo tu peux me le retrouver dans mes contacts', 'h']]) {
+  const r = dire(p, livres());
+  verifie(p + ' → la carte', r.pris && r.ids === id, r.ids + ' ' + r.c);
+}
+const inconnus = ['La dame de la banque tu peux me la retrouver dans mes contacts', 'Le comptable tu peux me le retrouver dans mes contacts'].filter((p) => dire(p, livres()).pris);
+verifie('le carnet ne les connaît pas : le chemin habituel', inconnus.length === 0, inconnus.join(' / '));
+
 console.log('\n-- 4. La page --');
 verifie('la phrase libre passe juste après la mission 66, avant le modèle', /if \(_fiche && tcGererFicheContact\(text, _fiche\)\) return;\s+\/\/[^\n]*\s+const _ficheLibre = tcDetecterFicheLibre\(text\);\s+if \(_ficheLibre && tcGererFicheLibre\(text, _ficheLibre\)\) return;/.test(page));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);

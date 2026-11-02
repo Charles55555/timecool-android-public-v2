@@ -24031,7 +24031,7 @@ const TC_FICHE_DETERMINANT = /^(un|une|des|du|de|d|les|ce|cet|cette|ces|mes|tes|
 /** Une quantité ou une question, jamais un nom : « j'ai combien de personnes dans mes contacts ? ». */
 const TC_FICHE_QUANTITE = /^(combien|beaucoup|plein|plusieurs|quoi|quel|quels|quelle|quelles|qui|peu|assez|trop|aucun|aucune)( |$)/;
 /** Après « j'ai », une phrase au passé : « j'ai ajouté Zoé dans mes contacts » ne cherche personne. */
-const TC_FICHE_PASSE = /^(ajoute|ajoutee|mis|mise|mets|rentre|rentree|entre|enregistre|note|notee|importe|supprime|retire|efface|enleve|perdu|trouve|garde|cherche|vu|change|modifie|classe|bloque)( |$)/;
+const TC_FICHE_PASSE = /^(retrouve|recherche|ajoute|ajoutee|mis|mise|mets|rentre|rentree|entre|enregistre|note|notee|importe|supprime|retire|efface|enleve|perdu|trouve|garde|cherche|vu|change|modifie|classe|bloque)( |$)/;
 /** « mon ami Hugo », « ma collègue Zoé » : ce mot décrit la personne, il ne la nomme pas. */
 const TC_FICHE_LIENS = 'ami|amie|copain|copine|pote|collegue|voisin|voisine|cousin|cousine|oncle|tante|patron|patronne|chef|associe|associee|client|cliente|patient|patiente';
 const TC_FICHE_RELATION = new RegExp('^(?:mon|ma|notre|le|la|l) (?:' + TC_FICHE_LIENS + ') (.+)$');
@@ -24474,11 +24474,11 @@ function tcFicheLibreAvant(brut, bouts, v) {
         const nom = lien ? tcFicheLibreSuite(brut, part.slice(0, e), d + 2) : null;
         if (nom) noms.push(nom); else if (d === 0 || TC_FICHE_LIBRE_REPRISE.test(part[d - 1].n)) relation = tcFicheLibreRelation(part, d);
       } else if (d < e) {
-        if (d > 0 && /^(le|la|l|ce|cet|cette|un|une)$/.test(part[d - 1].n)) return null;
+        const article = d > 0 && /^(le|la|l|ce|cet|cette|un|une)$/.test(part[d - 1].n);
         let f = d;
         while (f < e && !tcFicheLibreOutil(part[f].n)) f++;
         const nom = f > d ? tcFicheLibreNom(brut, part.slice(d, f), null) : null;
-        if (!nom) return null;
+        if (!nom || (article && !tcContactsParMots(nom.mots).length)) return null;
         noms.push(nom);
       }
     }
