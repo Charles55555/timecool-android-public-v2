@@ -24015,14 +24015,14 @@ async function tcDemanderDispoContactM65(text) {
    - « retrouve Hugo », « cherche-moi Gaëlle », « qui est Hugo ? », « est-ce que j'ai Hugo dans mes contacts ? » : une carte par fiche (nom,
      téléphone, email, catégories, bouton « Ouvrir la fiche »), 5 au plus, puis « Lequel ? ».
    - Une fiche absente : « Je ne trouve pas « X » dans tes contacts. Tu veux l'ajouter ? », bouton « Ajouter X » (formulaire pré-rempli).
-     Le bouton seulement si la phrase porte un mot de contact (« contacts », « fiche », « ami », « collègue », « client », « patient », « mon », « ma »)
-     ou répond au bouton de raccourci. « retrouve Paris » : « Je ne trouve pas « Paris » dans tes contacts. », sans bouton. « cherche X », « trouve X »,
+     Le bouton seulement si la phrase porte un mot de contact (« contacts », « fiche », « ami », « collègue », « client », « patient »), « mon » ou « ma »
+     suivi d'une relation ou d'un métier (« mon patron », « mon plombier »), ou répond au bouton de raccourci. « cherche mon chat » : sans bouton. « retrouve Paris » : « Je ne trouve pas « Paris » dans tes contacts. », sans bouton. « cherche X », « trouve X »,
      « qui est X ? » sans fiche : le chemin habituel. « Marie Dupont » avec une seule Marie : « J'ai Marie Martin. C'est cette personne ? » (chef, 02/11).
    - Le bouton « 👤 Retrouver un contact » : « De qui veux-tu la fiche ? Dis-moi son nom. »
    ═══════════════════════════════════════════════════════════════ */
 
 /** Les mots qui ne nomment jamais une fiche : un rendez-vous, un moment, un lieu, une chose, un petit mot de liaison. */
-const TC_FICHE_PAS_UN_NOM = /(^| )(rdv|rendez|vous|semaine|mois|agenda|reunion|reunions|telephone|compte|charly|timecool|appli|application|support|assistance|urgence|urgences|police|pompiers|samu|banque|mairie|poste|creneau|creneaux|moment|place|date|heure|heures|horaire|horaires|temps|trajet|itineraire|restaurant|restaurants|resto|restos|hotel|hotels|pharmacie|adresse|numero|mail|email|contact|contacts|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|invite|invitee|idee|solution|truc|chose|quelqu|quelque|personne|president|presidente|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|hier|matin|soir|midi|prochain|prochaine|a|au|aux|pour|avec|sur|en|vers|chez|dans|qui|que|quand|comment|pourquoi|et|ou|ce|ca|cela|il|elle|ils|elles|moi|toi|lui|nous|je|tu|on|oui|non|ok|merci|bonjour|salut|bon|rien|pardon|quoi|hein|oublie|tant|pis|peu|importe|finalement|stop|gens|monde|doublon|doublons|paie|lecture|voiture|cle|cles|portefeuille|sac|lunettes|ordinateur|document|dossier|facture|billet|message|photo|suivant|suivante|precedent|precedente|dernier|derniere|premier|premiere|fiche)( |$)/;
+const TC_FICHE_PAS_UN_NOM = /(^| )(rdv|rendez|vous|semaine|mois|agenda|reunion|reunions|telephone|compte|charly|timecool|appli|application|support|assistance|urgence|urgences|police|pompiers|samu|banque|mairie|poste|creneau|creneaux|moment|place|date|heure|heures|horaire|horaires|temps|trajet|itineraire|restaurant|restaurants|resto|restos|hotel|hotels|pharmacie|adresse|numero|mail|email|contact|contacts|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|invite|invitee|idee|solution|truc|chose|quelqu|quelque|personne|president|presidente|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|hier|matin|soir|midi|prochain|prochaine|a|au|aux|pour|avec|sur|en|vers|chez|dans|qui|que|quand|comment|pourquoi|et|ou|ce|ca|cela|il|elle|ils|elles|moi|toi|lui|nous|je|tu|on|oui|non|ok|merci|bonjour|salut|bon|rien|pardon|quoi|hein|oublie|tant|pis|peu|importe|finalement|stop|gens|monde|doublon|doublons|paie|lecture|suivant|suivante|precedent|precedente|dernier|derniere|premier|premiere|fiche)( |$)/;
 /** Un nom qui commence ainsi désigne une chose (« un restaurant », « cette semaine »), pas une fiche. « le », « la » restent : « le docteur Martin ». */
 const TC_FICHE_DETERMINANT = /^(un|une|des|du|de|d|les|ce|cet|cette|ces|mes|tes|ses|son|sa|ton|ta|notre|votre|leur|leurs|tout|toute|tous|toutes)( |$)/;
 /** Une quantité ou une question, jamais un nom : « j'ai combien de personnes dans mes contacts ? ». */
@@ -24030,9 +24030,11 @@ const TC_FICHE_QUANTITE = /^(combien|beaucoup|plein|plusieurs|quoi|quel|quels|qu
 /** Après « j'ai », une phrase au passé : « j'ai ajouté Zoé dans mes contacts » ne cherche personne. */
 const TC_FICHE_PASSE = /^(ajoute|ajoutee|mis|mise|mets|rentre|rentree|entre|enregistre|note|notee|importe|supprime|retire|efface|enleve|perdu|trouve|garde|cherche|vu|change|modifie|classe|bloque)( |$)/;
 /** « mon ami Hugo », « ma collègue Zoé » : ce mot décrit la personne, il ne la nomme pas. */
-const TC_FICHE_RELATION = /^(?:mon|ma|notre|le|la|l) (?:ami|amie|copain|copine|pote|collegue|voisin|voisine|cousin|cousine|oncle|tante|patron|patronne|chef|associe|associee|client|cliente|patient|patiente) (.+)$/;
+const TC_FICHE_LIENS = 'ami|amie|copain|copine|pote|collegue|voisin|voisine|cousin|cousine|oncle|tante|patron|patronne|chef|associe|associee|client|cliente|patient|patiente';
+const TC_FICHE_RELATION = new RegExp('^(?:mon|ma|notre|le|la|l) (?:' + TC_FICHE_LIENS + ') (.+)$');
+const TC_FICHE_UN_LIEN = new RegExp('^(?:' + TC_FICHE_LIENS + ')$');
 /** Les mots qui disent qu'on parle d'un contact : eux seuls font apparaître « Ajouter X » (règle du chef). */
-const TC_FICHE_MOT_CONTACT = / (contact|contacts|fiche|ami|amie|collegue|client|cliente|patient|patiente|mon|ma) /;
+const TC_FICHE_MOT_CONTACT = / (contact|contacts|fiche|ami|amie|collegue|client|cliente|patient|patiente) /;
 /** Une fiche qui n'est pas celle d'une personne : jamais une recherche de contact. */
 const TC_FICHE_DE_CHOSE = /(^| )(paie|poste|lecture|travail|renseignements?|frais|salaire|produit|technique)( |$)/;
 /** La réponse au bouton qui renonce. */
@@ -24073,7 +24075,7 @@ function tcDetecterFicheContact(text) {
   let n = tcClasseNormaliser(brut);
   if (!n || n.split(' ').length > 12) return null;
   n = n.replace(/^((stp|svp|charly|s il te plait|tu peux|tu pourrais|peux tu|pourrais tu|est ce que tu peux|est ce que tu pourrais) )+/, '').replace(/( (stp|svp|s il te plait|merci|charly|vite|rapidement|maintenant|tout de suite))+$/, '');
-  let nom = null, fort = false, personne = false, laFiche = false;
+  let nom = null, fort = false, personne = false, laFiche = false, estQui = false;
   const dansContacts = / (dans|parmi) (mes|les|tes) contacts$| (dans|sur) (mon|le|ton) (carnet( d adresses?)?|repertoire)$/;
   const fiche = n.match(/^(?:(?:trouve|retrouve|cherche|montre|affiche|ouvre|donne)(?: moi| me)? |ou est |je cherche |je veux |je voudrais )?la fiche (?:de|d) (.+)$/);
   const partie = n.match(/^(?:est ce que |est ce qu )?(.+?) fait partie de mes contacts$/);
@@ -24095,7 +24097,7 @@ function tcDetecterFicheContact(text) {
     const m = n.match(/^(?:je cherche |je recherche |je veux |je voudrais |j aimerais |me )?(retrouve|trouve|cherche|recherche|retrouver|trouver|chercher|rechercher)(?: moi| me)? (.+)$/);
     const q = m ? null : n.match(/^qui est (.+)$/);
     if (m) { nom = m[2]; personne = /^retrouve/.test(m[1]); }
-    else if (q) nom = q[1];
+    else if (q) { nom = q[1]; estQui = true; }
     else if (/^(je cherche|je recherche) /.test(n)) { nom = n.replace(/^(je cherche|je recherche) /, ''); }
     else return null;
   }
@@ -24115,8 +24117,12 @@ function tcDetecterFicheContact(text) {
   const affiche = tcFicheNomTape(brut, nom);
   const possible = certain && tcFicheNomPossible(nom);
   const metier = TC_PROFESSIONS.some(function (p) { return tcSansAccents(p) === tcSansAccents(nom); });
-  const propose = possible && TC_FICHE_MOT_CONTACT.test(' ' + n + ' ');
-  return { nom: nom, affiche: affiche, possible: possible, propose: propose, simple: possible && personne && !metier };
+  // « mon patron », « mon plombier » : une personne. « mon chat », « ma carte bleue » : pas de bouton, Charly dit seulement qu'il ne le trouve pas.
+  const apresMon = nom.match(/^(?:mon|ma) (\S+)/);
+  const monPersonne = !!apresMon && (TC_FICHE_UN_LIEN.test(apresMon[1]) || TC_PROFESSIONS.some(function (p) { return tcSansAccents(p) === apresMon[1]; }));
+  const monObjet = !!apresMon && !monPersonne;
+  const propose = possible && !monObjet && (monPersonne || TC_FICHE_MOT_CONTACT.test(' ' + n + ' '));
+  return { nom: nom, affiche: affiche, possible: possible, propose: propose, simple: possible && !metier && !estQui && (personne || monObjet) };
 }
 
 /** Les catégories de la fiche, avec leurs libellés de la page Contacts (« Même en temps libre » n'en est pas une). */
