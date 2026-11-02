@@ -41,7 +41,7 @@ function fauxService() {
 async function enLocal(jeton, id) {
   const f = fauxService();
   await new Promise((ok2) => f.serveur.listen(8097, '127.0.0.1', ok2));
-  const cher = { model: 'm', max_tokens: 100, messages: [{ role: 'user', content: 'é"\\' }], system: [{ type: 'text', text: 'x', cache_control: { type: 'ephemeral' } }], vide: {} };
+  const cher = { model: 'claude-sonnet-5', max_tokens: 100, messages: [{ role: 'user', content: 'é"\\' }], system: [{ type: 'text', text: 'x', cache_control: { type: 'ephemeral' } }], vide: {} };
   const brut = JSON.stringify(cher);
 
   await appel('POST', '/cles-api', { service: 'anthropic', valeur: 'cle-propre-une' }, jeton);
@@ -63,7 +63,7 @@ async function enLocal(jeton, id) {
   f.repondre({ code: 200, corps: '{"salut":1}' });
 
   await appel('POST', '/cles-api', { service: 'openai', valeur: 'cle-oa' }, jeton);
-  await appel('POST', '/relais/openai', { model: 'm', max_tokens: 5, messages: [] }, jeton);
+  await appel('POST', '/relais/openai', { model: 'gpt-4o-mini', max_tokens: 5, messages: [] }, jeton);
   verifie('OpenAI : la clé en Bearer', f.derniere().h.authorization === 'Bearer cle-oa' && f.derniere().url === '/api.openai.com/v1/chat/completions');
 
   await appel('POST', '/cles-api', { service: 'gmaps', valeur: 'cle-g' }, jeton);
@@ -76,6 +76,21 @@ async function enLocal(jeton, id) {
   await appel('POST', '/relais/google/recherche', { q: 'dentiste é' }, jeton);
   verifie('Recherche : en GET, la clé hors de l adresse', f.derniere().methode === 'GET' && f.derniere().url.indexOf('cle-g') < 0 && f.derniere().h['x-goog-api-key'] === 'cle-g');
   verifie('Recherche : la question et le moteur par défaut', /q=dentiste/.test(f.derniere().url) && /cx=b5384d87b75fc4d3e/.test(f.derniere().url), f.derniere().url);
+
+  const dejaRecues = f.recues.length;
+  r = await appel('POST', '/relais/anthropic', { model: 'claude-mythos', max_tokens: 5, messages: [] }, jeton);
+  verifie('modèle hors liste : 400', r.code === 400 && r.d.erreur === 'modele_refuse', r.code + ' ' + r.texte);
+  r = await appel('POST', '/relais/openai', { model: 'claude-sonnet-5', max_tokens: 5, messages: [] }, jeton);
+  verifie('modèle de l autre service : 400', r.code === 400 && r.d.erreur === 'modele_refuse', r.code);
+  r = await appel('POST', '/relais/anthropic', { max_tokens: 5, messages: [] }, jeton);
+  verifie('sans modèle : 400', r.code === 400 && r.d.erreur === 'modele_refuse', r.code);
+  r = await appel('POST', '/relais/anthropic', { model: 'claude-sonnet-5', max_tokens: 5, messages: [{ role: 'user', content: 'x'.repeat(200001) }] }, jeton);
+  verifie('demande trop longue : 413 et une phrase', r.code === 413 && r.d.erreur === 'requete_trop_longue', r.code);
+  r = await appel('POST', '/relais/google/itineraire', { origin: 'x'.repeat(8001) }, jeton);
+  verifie('itinéraire trop long : 413', r.code === 413, r.code);
+  verifie('rien de tout cela ne part au service', f.recues.length === dejaRecues);
+  r = await appel('POST', '/relais/anthropic', { model: 'claude-haiku-4-5', max_tokens: 5, messages: [{ role: 'user', content: 'x'.repeat(150000) }] }, jeton);
+  verifie('une longue conversation passe', r.code === 200, r.code);
 
   r = await appel('POST', '/relais/tester', { service: 'anthropic', valeur: 'cle-essai' }, jeton);
   verifie('Tester : la clé saisie part au service', r.code === 200 && r.d.statut === 200 && f.derniere().h['x-api-key'] === 'cle-essai');
@@ -105,14 +120,14 @@ async function enLocal(jeton, id) {
   r = await appel('POST', '/relais/google/traduction', { q: ['x'] }, jeton);
   // Pas de clé de traduction pour ce compte : celle de l administrateur est illisible avec le coffre local.
   verifie('clé illisible : une phrase, pas de détail', r.code === 500 && r.d.erreur === 'cle_illisible', r.code + ' ' + r.texte);
-  r = await appel('POST', '/relais/openai', { model: 'm', max_tokens: 5, messages: [] }, jeton);
+  r = await appel('POST', '/relais/openai', { model: 'gpt-4o-mini', max_tokens: 5, messages: [] }, jeton);
   verifie('service muet : 504 et une phrase', r.code === 504 && r.d.erreur === 'service_injoignable', r.code + ' ' + r.texte);
 
   sql(`UPDATE comptes SET bloque_le = NOW() WHERE id = ${id}`);
-  r = await appel('POST', '/relais/openai', { model: 'm', max_tokens: 5, messages: [] }, jeton);
+  r = await appel('POST', '/relais/openai', { model: 'gpt-4o-mini', max_tokens: 5, messages: [] }, jeton);
   verifie('compte bloqué : 403', r.code === 403 && r.d.erreur === 'compte_suspendu', r.code);
   sql(`UPDATE comptes SET bloque_le = NULL, cloture_le = NOW() WHERE id = ${id}`);
-  r = await appel('POST', '/relais/openai', { model: 'm', max_tokens: 5, messages: [] }, jeton);
+  r = await appel('POST', '/relais/openai', { model: 'gpt-4o-mini', max_tokens: 5, messages: [] }, jeton);
   verifie('compte clôturé : 403', r.code === 403 && r.d.erreur === 'compte_cloture', r.code);
   sql(`UPDATE comptes SET cloture_le = NULL WHERE id = ${id}`);
 }

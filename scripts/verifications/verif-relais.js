@@ -76,6 +76,16 @@ verifie('le nettoyage n affiche aucune clé', !/echo[^;]*(\$clair|valeur_chiffre
 ['service n est', 'demandes d un coup'].forEach((p) => verifie('plus de phrase sans apostrophe : ' + p, api.indexOf(p) < 0));
 verifie('GET /admin/relais : apostrophe', routePhp('GET /admin/relais').indexOf("à l'administrateur") > -1);
 
+// Les modèles du serveur sont ceux que la page propose, ni plus ni moins.
+const modeles = (id) => [...page.slice(page.indexOf('id="' + id + '"'), page.indexOf('</select>', page.indexOf('id="' + id + '"'))).matchAll(/<option value="([^"]+)"/g)].map((m) => m[1]);
+const serveur = (nom) => (new RegExp("'" + nom + "'\\s*=> \\[([^\\]]+)\\]").exec(api.slice(api.indexOf('const RELAIS_MODELES'))) || [, ''])[1].match(/[a-z0-9.-]{5,}/g) || [];
+verifie('Claude : la liste du serveur suit la page', modeles('aiClaudeModel').length === 3 && JSON.stringify(modeles('aiClaudeModel')) === JSON.stringify(serveur('anthropic')), serveur('anthropic').join());
+verifie('OpenAI : la liste du serveur suit la page', modeles('aiModel').length === 3 && JSON.stringify(modeles('aiModel')) === JSON.stringify(serveur('openai')), serveur('openai').join());
+verifie('le modèle par défaut de chaque service est permis', serveur('anthropic').includes('claude-sonnet-5') && serveur('openai').includes('gpt-4o-mini'));
+verifie('le relais contrôle le modèle', /in_array\(\$d\['model'\] \?\? null, RELAIS_MODELES\[\$fonction\], true\)/.test(api));
+verifie('plus aucune limite de 7 Mo', api.indexOf('7000000') < 0);
+verifie('Charly : 200 Ko au plus', /'charly'\s*=> 200000/.test(api));
+
 // ── tcRelais, dans la page ───────────────────────────────
 async function essaisRelais() {
   let vu = null, rep = null, jeton = 'j'.repeat(64);

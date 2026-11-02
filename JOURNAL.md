@@ -3083,3 +3083,4 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 - Glissé : `purger-comptes-test.sh` lit une dernière ligne sans retour et sauvegarde la nouvelle table.
 - Suites : `verif-relais` (statique et page), `verif-relais-e2e` (en local, faux service sur le port 8097 ; en production, vraie traduction et vraie recherche pour un compte neuf). Le chemin de la clé de l'administrateur n'est vérifiable qu'en production : le coffre local ne lit pas les vraies clés.
 - Examen de la mission 71 : apostrophes rétablies dans les refus du serveur ; un lot de traduction s arrête aussi à 20 000 caractères.
+- Demande du chef, mission 71 : liste de modèles côté serveur (ceux de Configuration IA, 400 sinon). Taille par groupe : Charly 200 Ko (125 Ko mesurés au plus, aucune photo ne part), traduction 64 Ko, lieux et itinéraire 8 Ko, recherche 2 Ko.

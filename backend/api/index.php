@@ -322,7 +322,25 @@ const RELAIS_LIMITES = [
 const RELAIS_FACTEUR_TEST = 20;
 
 const RELAIS_JETONS_MAX = 8000;
-const RELAIS_CORPS_MAX = 7000000;
+
+/** Les modèles que l'application propose dans Configuration IA : le téléphone ne choisit rien d'autre. */
+const RELAIS_MODELES = [
+    'anthropic' => ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5'],
+    'openai'    => ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
+];
+
+/**
+ * Taille d'une demande, en octets. Charly n'envoie que du texte : photos et PDF scannés ne partent pas, un fichier
+ * importé est coupé à 4 000 caractères. Mesuré le 02/11 : 65 Ko pour un message, 125 Ko avec 50 échanges, un agenda
+ * chargé et 5 fichiers. Traduction : un lot fait au plus 20 000 caractères.
+ */
+const RELAIS_CORPS_MAX = [
+    'charly'     => 200000,
+    'lieux'      => 8000,
+    'itineraire' => 8000,
+    'recherche'  => 2000,
+    'traduction' => 64000,
+];
 const RELAIS_CSE_CX_DEFAUT = 'b5384d87b75fc4d3e';
 
 function relaisEstCompteTest(array $compte): bool
@@ -462,14 +480,17 @@ function relais(string $fonction): never
     $compte = relaisCompte();
     $def = RELAIS[$fonction];
     $brut = file_get_contents('php://input') ?: '';
-    if (strlen($brut) > RELAIS_CORPS_MAX) {
-        Rep::erreur(413, 'requete_trop_longue', 'Cette demande est trop longue.');
+    if (strlen($brut) > RELAIS_CORPS_MAX[$def['groupe']]) {
+        Rep::erreur(413, 'requete_trop_longue', 'Cette demande est trop longue. Essaie avec un message plus court.');
     }
     $d = json_decode($brut, true);
     if (!is_array($d)) {
         Rep::erreur(400, 'requete_invalide', 'Demande illisible.');
     }
     if ($def['groupe'] === 'charly') {
+        if (!in_array($d['model'] ?? null, RELAIS_MODELES[$fonction], true)) {
+            Rep::erreur(400, 'modele_refuse', "Ce modèle n'est pas disponible. Choisis-en un autre dans Configuration IA.");
+        }
         $jetons = $d['max_tokens'] ?? null;
         if (!is_int($jetons) || $jetons < 1 || $jetons > RELAIS_JETONS_MAX) {
             Rep::erreur(400, 'requete_invalide', 'Demande invalide.');
