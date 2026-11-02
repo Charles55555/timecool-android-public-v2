@@ -3050,3 +3050,11 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 
 - Mission 67 (commit 67d087a) : sous « Charly IA », le sous-titre devient « 🔒 Votre Assistant Intelligent », 18 occurrences de index.html (texte de départ et remises en place après une action). Une ligne de 320 à 500 px. Les autres « assistant intelligent » (accueil, consignes, aide) ne sont pas le sous-titre et restent.
 - Mission 68 : verif-journal-periode était rouge depuis le 1er novembre (dates d'octobre en dur). Horloge figée retirée (d2cb60c) : les dates de la liste sont relatives à l'horloge ; le calcul de début de période est vérifié sur des jours donnés, dont un cas à cheval sur l'année. Aucun changement d'écran. Essayée à 9 dates (fins de mois, 1er janvier, 29 février).
+
+## 02/11/2026 - Mission 69 (CODEUR) : retrouver un contact, le nom placé n'importe où
+
+- Cas de Charles : « La Banane Dr Sellam tu peux me retrouver dans mes contacts en fait ce contact là » partait au modèle, qui demandait « rendez-vous ou vérifier ? ». Nouvelle détection juste après celle de la mission 66 : verbe de recherche + mot de contact, où qu'ils soient. Ce qui reste sans les mots-outils est le nom ; un titre (Dr, Mme…) ouvre le nom et ce qui le précède est ignoré.
+- Une fiche : la carte. Plusieurs : la liste. Aucune : « Je n'ai trouvé personne qui s'appelle X dans tes contacts. » et le bouton « 👤 Retrouver un contact ».
+- Décision : le dernier mot seul ne remplace pas la personne cherchée (règle de la mission 66) : « J'ai : … C'est cette personne ? », sans titre. Avec un titre, « Dr Sellam » est cherché tel quel.
+- Rendez-vous, créneau, action sur un contact, liste de contacts, fiche de paie / poste / présence : le chemin habituel. Les contacts n'ont pas de champ société : la recherche porte sur le nom.
+- Suite verif-fiche-libre, 14 phrases TESTEURS (charly-14-phrases-fiche-libre-02-11-2026.json).

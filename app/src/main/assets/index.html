@@ -15428,6 +15428,9 @@ async function charlySendMessage() {
   if (typeof tcDetecterFicheContact === 'function') {
     const _fiche = tcDetecterFicheContact(text);
     if (_fiche && tcGererFicheContact(text, _fiche)) return;
+    // « La Banane Dr Sellam tu peux me retrouver dans mes contacts » : le nom est n'importe où dans la phrase (mission 69).
+    const _ficheLibre = tcDetecterFicheLibre(text);
+    if (_ficheLibre && tcGererFicheLibre(text, _ficheLibre)) return;
   }
   if (typeof tcDetecterCreneauPourRecue === 'function') {
     const _recueCreneau = tcDetecterCreneauPourRecue(text);
@@ -24036,7 +24039,7 @@ const TC_FICHE_UN_LIEN = new RegExp('^(?:' + TC_FICHE_LIENS + ')$');
 /** Les mots qui disent qu'on parle d'un contact : eux seuls font apparaître « Ajouter X » (règle du chef). */
 const TC_FICHE_MOT_CONTACT = / (contact|contacts|fiche|ami|amie|collegue|client|cliente|patient|patiente) /;
 /** Une fiche qui n'est pas celle d'une personne : jamais une recherche de contact. */
-const TC_FICHE_DE_CHOSE = /(^| )(paie|poste|lecture|travail|renseignements?|frais|salaire|produit|technique)( |$)/;
+const TC_FICHE_DE_CHOSE = /(^| )(paie|poste|lecture|presence|travail|renseignements?|frais|salaire|produit|technique)( |$)/;
 /** La réponse au bouton qui renonce. */
 const TC_FICHE_RENONCE = /^(rien|finalement rien|finalement non|finalement|c est bon|c est tout|ca ira|oublie|oublie ca|on oublie|laisse|laisse tomber|tant pis|peu importe|pas grave|personne|aucun|aucune|plus tard|je sais pas|je ne sais pas|sais pas|annule|stop)$/;
 
@@ -24313,6 +24316,9 @@ function tcRendreFiches(m) {
     return tcBulleCharly(escapeHTMLSafe(m.content)
       + '<div><button onclick="tcFicheAjouter(' + escapeHTMLSafe(JSON.stringify(f.ajouter)) + ')" style="' + bouton + '">Ajouter <span data-notranslate>' + escapeHTMLSafe(f.ajouter) + '</span></button></div>');
   }
+  if (f.retrouver) {
+    return tcBulleCharly(escapeHTMLSafe(m.content) + '<div><button onclick="charlyQuickAction(\'contact\')" style="' + bouton + '">👤 Retrouver un contact</button></div>');
+  }
   const liste = (f.ids || []).map(function (id) { return (Array.isArray(contactsList) ? contactsList : []).find(function (c) { return c && c.id === id; }); }).filter(Boolean);
   if (!liste.length) return tcBulleCharly(escapeHTMLSafe(m.content).replace(/\n/g, '<br>'));
   const ligne = function (texte) { return '<div data-notranslate style="font-size:13px; color:var(--text-sec); word-break:break-word;">' + escapeHTMLSafe(texte) + '</div>'; };
@@ -24325,6 +24331,108 @@ function tcRendreFiches(m) {
       + '<button onclick="tcOuvrirFicheContact(' + escapeHTMLSafe(JSON.stringify(c.id)) + ')" style="' + bouton + '">Ouvrir la fiche</button></div>';
   }).join('');
   return tcBulleCharly((f.intro ? escapeHTMLSafe(f.intro) : '') + cartes + (f.fin ? '<div style="margin-top:8px;">' + escapeHTMLSafe(f.fin) + '</div>' : ''));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 69 (02/11, chef, validée par Charles) : retrouver un contact, le nom placé n'importe où dans la phrase
+
+   - « La Banane Dr Sellam tu peux me retrouver dans mes contacts en fait ce contact là » : verbe de recherche + mot de contact, où qu'ils soient.
+   - Les noms possibles sont ce qui reste une fois retirés les mots-outils. Un titre (Dr, Mme…) ouvre le nom : ce qui le précède est ignoré.
+   - Une fiche : la carte de la mission 66. Plusieurs : la liste. Aucune : « Je n'ai trouvé personne qui s'appelle X dans tes contacts. » et le bouton.
+   - Dernier mot seul : prénom et nom ne correspondent pas ensemble, Charly montre la fiche et demande (règle de la mission 66).
+   - Un rendez-vous, un créneau, une action sur un contact : le chemin habituel.
+   ═══════════════════════════════════════════════════════════════ */
+
+const TC_FICHE_LIBRE_VERBE = /(^| )(retrouve|retrouves|retrouver|trouve|trouves|trouver|cherche|cherches|chercher|recherche|recherches|rechercher|affiche|affiches|afficher|montre|montres|montrer)( |$)/;
+/** Une phrase qui parle d'un rendez-vous ou qui demande d'agir sur un contact n'est pas une recherche de fiche. */
+const TC_FICHE_LIBRE_AUTRE = /(^| )(rdv|rendez|creneau|creneaux|dispo|dispos|disponible|disponibles|disponibilite|disponibilites|libre|libres|reunion|reunions|agenda|planning|annule|annuler|decale|decaler|deplace|deplacer|ajoute|ajouter|supprime|supprimer|efface|effacer|enleve|enlever|retire|retirer|envoie|envoyer|ecris|ecrire|appelle|appeler|previens|prevenir|invite|inviter|partage|partager|importe|importer|exporte|exporter|bloque|bloquer|debloque|debloquer|classe|classer|modifie|modifier|change|changer|fusionne|fusionner|combien|doublon|doublons|tous|toutes|recent|recents|nouveau|nouveaux)( |$)/;
+const TC_FICHE_LIBRE_TITRES = /^(dr|docteur|doc|mme|madame|monsieur|mr|mlle|mademoiselle|pr|professeur|maitre)$/;
+const TC_FICHE_LIBRE_OUTILS = new RegExp('^(?:' + TC_FICHE_LIENS + '|retrouve|retrouves|retrouver|trouve|trouves|trouver|cherche|cherches|chercher|recherche|recherches|rechercher|affiche|affiches|afficher|montre|montres|montrer|'
+  + 'tu|peux|peut|pourrais|pourrait|me|m|moi|te|t|toi|le|la|les|l|un|une|des|du|de|d|ce|cet|cette|ces|ca|cela|ici|dans|parmi|sur|en|fait|mes|tes|ses|mon|ma|ton|ta|son|sa|notre|votre|nos|vos|'
+  + 'je|j|ai|as|voudrais|veux|aimerais|besoin|stp|svp|s|il|plait|merci|charly|bonjour|salut|oui|non|alors|donc|bon|bien|ah|oh|euh|pardon|excuse|est|que|qu|qui|ou|et|au|aux|pour|avec|chez|vite|rapidement|'
+  + 'maintenant|tout|suite|encore|deja|aussi|juste|appelle|nom|prenom|personne|carnet|adresse|adresses|repertoire|liste|contact|contacts|fiche|etre|y|a|elle|lui|on|nous|vous|pas|ne|n|sais|plus|c|peux|please|'
+  + 'stp|vraiment|svp|ouvre|ouvrir|donne|donner|retrouvez|cherchez|trouvez|gars|type|mec|dame|monsieur)$');
+
+/** Les noms possibles de la phrase, dans l'ordre : { affiche, mots, fort }. fort : écrit avec une majuscule ou un titre. */
+function tcFicheLibreGroupes(brut) {
+  const re = /[^\s'’?!.,;:()«»"]+/g;
+  const bouts = [];
+  let x;
+  while ((x = re.exec(brut))) bouts.push({ brut: x[0], n: tcClasseNormaliser(x[0]) });
+  const outil = function (b) {
+    return !b || b.n.split(' ').every(function (w) { return TC_FICHE_LIBRE_OUTILS.test(w) || !tcFicheNomPossible(w); });
+  };
+  const groupes = [];
+  let g = null;
+  bouts.forEach(function (b, i) {
+    const suivant = bouts[i + 1];
+    // « Me » et « M » ne sont des titres qu'avec leur majuscule et devant un nom : « Me retrouver » n'en est pas un.
+    const titre = (TC_FICHE_LIBRE_TITRES.test(b.n) || ((b.brut === 'Me' || b.brut === 'M') && suivant && /^[A-ZÀ-Ý]/.test(suivant.brut))) && !outil(suivant);
+    if (titre) { g = { affiche: b.brut, mots: [], fort: true, titre: true }; groupes.push(g); return; }
+    if (outil(b)) { g = null; return; }
+    const majuscule = /^[A-ZÀ-Ý]/.test(b.brut);
+    if (!g) { g = { affiche: b.brut, mots: [], fort: majuscule, titre: false }; groupes.push(g); } else { g.affiche += ' ' + b.brut; g.fort = g.fort || majuscule; }
+    g.mots.push(b.n);
+  });
+  const vrais = groupes.filter(function (y) { return y.mots.length && y.mots.length <= 3; });
+  const titres = vrais.filter(function (y) { return y.titre; });
+  if (titres.length) return titres;
+  const forts = vrais.filter(function (y) { return y.fort; });
+  return forts.length ? forts : vrais;
+}
+
+/** Une recherche de fiche dont le nom est n'importe où : { groupes, relation, net } ; null sinon. net : la phrase dit « contact » ou « fiche ». */
+function tcDetecterFicheLibre(text) {
+  const brut = String(text || '').replace(/œ/g, 'oe').replace(/Œ/g, 'Oe').replace(/æ/g, 'ae');
+  const n = tcClasseNormaliser(brut);
+  if (!n || n.split(' ').length > 30 || /\d/.test(n)) return null;
+  if (!TC_FICHE_LIBRE_VERBE.test(n) || TC_FICHE_LIBRE_AUTRE.test(n.replace(/ s appelle /g, ' '))) return null;
+  const i = (' ' + n + ' ').indexOf(' fiche ');
+  if (i > -1 && TC_FICHE_DE_CHOSE.test(n.slice(i))) return null;
+  const mon = n.match(/(?:^| )(?:mon|ma) (\S+)/);
+  const monPersonne = !!mon && (TC_FICHE_UN_LIEN.test(mon[1]) || TC_PROFESSIONS.some(function (p) { return tcSansAccents(p) === mon[1]; }));
+  if (!monPersonne && !TC_FICHE_MOT_CONTACT.test(' ' + n + ' ')) return null;
+  const groupes = tcFicheLibreGroupes(brut);
+  if (!groupes.length && !monPersonne) return null;
+  return { groupes: groupes, relation: monPersonne ? mon[1] : '', net: / (contact|contacts|fiche) /.test(' ' + n + ' ') };
+}
+
+/** Répond à cette recherche ; false quand rien n'est sûr (le chemin habituel). */
+function tcGererFicheLibre(text, d) {
+  if (!d.groupes.length) return tcGererFicheContact(text, { nom: 'mon ' + d.relation, affiche: d.relation, possible: true, propose: true, simple: false });
+  const trouves = [];
+  d.groupes.forEach(function (g) {
+    tcContactsParMots(g.mots).forEach(function (c) { if (trouves.indexOf(c) < 0) trouves.push(c); });
+  });
+  if (trouves.length) {
+    tcPousserMessageUtilisateur(text);
+    tcPousserFiches(tcClasserContacts(trouves));
+    renderCharlyChat();
+    return true;
+  }
+  const noms = d.groupes.map(function (g) { return tcFicheNomJoli(g.affiche); });
+  // Le dernier mot seul : prénom et nom ne correspondent pas ensemble, Charly montre et demande.
+  for (let i = 0; i < d.groupes.length; i++) {
+    const mots = d.groupes[i].mots;
+    const dernier = mots[mots.length - 1];
+    if (mots.length < 2 || dernier.length < 3) continue;
+    const proches = tcClasserContacts(tcContactsParMots([dernier]));
+    if (!proches.length) continue;
+    tcPousserMessageUtilisateur(text);
+    const intro = 'Je ne trouve pas « ' + noms[i] + ' » dans tes contacts. J’ai :';
+    if (proches.length === 1) {
+      const m = tcPousserFiches(proches, intro, 'C’est cette personne ?');
+      m._ficheAttente = { etape: 'proche', id: proches[0].id, nom: noms[i], ajouter: false };
+    } else tcPousserFiches(proches, intro);
+    renderCharlyChat();
+    return true;
+  }
+  if (!d.net && !d.groupes.some(function (g) { return g.fort; })) return false;
+  if (d.groupes.length > 1 && !d.groupes.every(function (g) { return g.fort; })) return false;
+  tcPousserMessageUtilisateur(text);
+  charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Je n’ai trouvé personne qui s’appelle ' + noms.join(' ou ') + ' dans tes contacts.', _fiches: { retrouver: true, ids: [] } });
+  renderCharlyChat();
+  return true;
 }
 
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
