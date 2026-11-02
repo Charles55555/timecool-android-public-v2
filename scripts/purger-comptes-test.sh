@@ -65,9 +65,9 @@ case "$mode" in
   --compter)
     compter "Comptes de test :"
     echo "  documents : $(sql "SELECT COUNT(*) FROM documents WHERE compte_id IN (SELECT id FROM comptes WHERE $COND)")"
-    echo "  fiches de vrais comptes liées à un compte de test (le lien sera retiré, la fiche reste) : $(sql "SELECT COUNT(*) FROM contacts WHERE compte_lie_id IN (SELECT id FROM comptes WHERE $COND) AND compte_id NOT IN (SELECT id FROM comptes WHERE $COND)")"
-    echo "  rendez-vous de vrais comptes avec un invité de test (l'invité sera retiré, le rendez-vous reste) : $(sql "SELECT COUNT(*) FROM rdv WHERE invite_compte_id IN (SELECT id FROM comptes WHERE $COND) AND organisateur_id NOT IN (SELECT id FROM comptes WHERE $COND)")"
-    echo "  rendez-vous organisés par un compte de test avec un vrai invité (ils partent avec lui) : $(sql "SELECT COUNT(*) FROM rdv WHERE organisateur_id IN (SELECT id FROM comptes WHERE $COND) AND invite_compte_id IS NOT NULL AND invite_compte_id NOT IN (SELECT id FROM comptes WHERE $COND)")"
+    echo "  fiches de comptes restants liées à un compte de test (le lien sera retiré, la fiche reste) : $(sql "SELECT COUNT(*) FROM contacts WHERE compte_lie_id IN (SELECT id FROM comptes WHERE $COND) AND compte_id NOT IN (SELECT id FROM comptes WHERE $COND)")"
+    echo "  rendez-vous de comptes restants avec un invité de test (l'invité sera retiré, le rendez-vous reste) : $(sql "SELECT COUNT(*) FROM rdv WHERE invite_compte_id IN (SELECT id FROM comptes WHERE $COND) AND organisateur_id NOT IN (SELECT id FROM comptes WHERE $COND)")"
+    echo "  rendez-vous organisés par un compte de test avec un invité restant (ils partent avec lui) : $(sql "SELECT COUNT(*) FROM rdv WHERE organisateur_id IN (SELECT id FROM comptes WHERE $COND) AND invite_compte_id IS NOT NULL AND invite_compte_id NOT IN (SELECT id FROM comptes WHERE $COND)")"
     echo "  comptes de test administrateurs : $(sql "SELECT COUNT(*) FROM comptes WHERE $COND AND admin = 1")"
     exit 0
     ;;
