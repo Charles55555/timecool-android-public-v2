@@ -50,8 +50,8 @@ attendues.forEach(([phrase, role]) => {
 // ── Le code, lui, envoie bien l'en-tete qui rend l'appel possible ──
 console.log('\n── Coherence avec le code ──');
 const nb = (html.match(/anthropic-dangerous-direct-browser-access/g) || []).length;
-verifie('l en-tete d acces direct est envoye (appel + test)', nb === 2, nb + ' fois');
-verifie('la cle n est jugee que sur un 401', /resp\.status === 401/.test(html));
+verifie('plus aucun acces direct depuis le navigateur (mission 71)', nb === 0, nb + ' fois');
+verifie('la cle n est jugee que sur un 401', /essai\.statut === 401/.test(html));
 
 // ── Le plafond de jetons ───────────────────────────────────────────
 console.log('\n── Plafond de jetons ──');

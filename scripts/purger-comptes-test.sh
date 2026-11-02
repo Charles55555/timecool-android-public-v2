@@ -13,7 +13,7 @@ umask 077
 DOMAINE='@exemple-timecool.fr'
 DOCUMENTS=${TC_DOCUMENTS:-/var/www/vhosts/timecool.fr/private/documents}
 SAUVEGARDES=~/sauvegardes-base
-TABLES="comptes cles_api appairages elements convocation_reponses google_agenda google_agenda_liens rappels_envoyes rdv commentaires contacts documents sessions rapports_techniques groupes cles_publiques groupe_membres rdv_creneaux rdv_liens convocations verifications"
+TABLES="comptes cles_api appairages elements convocation_reponses google_agenda google_agenda_liens rappels_envoyes rdv commentaires contacts documents sessions rapports_techniques groupes cles_publiques groupe_membres rdv_creneaux rdv_liens convocations verifications relais_compteurs"
 PAQUET=500
 
 sql() { mysql --no-defaults -u claudecode -N -B timecool_prod -e "$1"; }
@@ -23,7 +23,7 @@ GARDER=${TC_PURGE_GARDER:-$(dirname "$(readlink -f "$0")")/comptes-test-a-garder
 [ -f "$GARDER" ] || { echo "Liste des comptes à garder introuvable : $GARDER"; exit 2; }
 gardes=''
 nb_gardes=0
-while read -r ligne; do
+while read -r ligne || [ -n "$ligne" ]; do
   ligne=${ligne%%#*}
   ligne=$(printf '%s' "$ligne" | tr -d '[:space:]' | tr 'A-Z' 'a-z')
   [ -n "$ligne" ] || continue

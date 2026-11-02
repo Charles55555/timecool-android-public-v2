@@ -42,7 +42,8 @@ case "${1:-etat}" in
     grep -qx "backend/private" .gitignore 2>/dev/null || grep -qx "backend/private/" .gitignore 2>/dev/null || { echo "backend/private" >> .gitignore; echo ".gitignore : backend/private ajoute"; }
     git check-ignore -q backend/private && echo "backend/private ignore par git" || { echo "ATTENTION : backend/private PAS ignore"; }
     if [ -f $PIDF ] && kill -0 "$(cat $PIDF)" 2>/dev/null; then echo "deja en route (pid $(cat $PIDF))"; exit 0; fi
-    nohup $PHP -S 127.0.0.1:$PORT backend/api/index.php > ~/api-locale.log 2>&1 &
+    # Les relais visent ici le faux service de verif-relais-e2e, jamais les vrais services.
+    TC_RELAIS_FAUX=http://127.0.0.1:8097 nohup $PHP -S 127.0.0.1:$PORT backend/api/index.php > ~/api-locale.log 2>&1 &
     echo $! > $PIDF
     sleep 1
     echo "fumee : HTTP $(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' http://127.0.0.1:$PORT/connexion -d '{}')  (attendu 400/401, pas 500)"

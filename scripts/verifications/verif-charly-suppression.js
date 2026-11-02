@@ -113,7 +113,7 @@ function contexte() {
   verifie('la réponse à « lequel ? » et le « oui » passent avant le modèle',
     page.indexOf('if (reponse) tcConfirmerSuppressionRdv();') > -1
     && page.indexOf('if (_tcSuppressionChoix) {') > -1
-    && page.indexOf('if (_tcSuppressionEnAttente) {') < page.indexOf('let activeKey = tcCleActiveCharly()'));
+    && page.indexOf('if (_tcSuppressionEnAttente) {') < page.indexOf('if (!charlyIA.config.demoMode && !tcCharlyPret())'));
 
   // Décalage : le bon rendez-vous, jamais le premier venu
   const c2 = contexte();

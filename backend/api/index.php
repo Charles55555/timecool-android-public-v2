@@ -291,54 +291,257 @@ function emailHabille(string $titre, string $corpsHtml): string
 }
 
 
-/**
- * Compte dont les cles servent de modele aux comptes neufs.
- *
- * Fixe ici et non dans config.php : ce fichier-la n'est pas deployable
- * par l'agent, et une constante manquante en production casserait
- * l'inscription entiere.
+/*
+ * Mission 71 : aucune clé de l'administrateur ne sort du serveur. Le téléphone appelle ces relais avec sa session,
+ * le serveur ajoute la clé (celle du compte, sinon celle de l'administrateur, relue en base à chaque appel), appelle
+ * le service et renvoie sa réponse telle quelle. L'application n'utilise pas le mode streaming.
  */
-const CLES_COMPTE_MODELE = 53;
+const RELAIS = [
+    'anthropic'          => ['cle' => 'anthropic', 'groupe' => 'charly', 'url' => 'https://api.anthropic.com/v1/messages'],
+    'openai'             => ['cle' => 'openai', 'groupe' => 'charly', 'url' => 'https://api.openai.com/v1/chat/completions'],
+    'google/suggestions' => ['cle' => 'gmaps', 'groupe' => 'lieux', 'url' => 'https://places.googleapis.com/v1/places:autocomplete'],
+    'google/lieux'       => ['cle' => 'gmaps', 'groupe' => 'lieux', 'url' => 'https://places.googleapis.com/v1/places:searchText',
+        'masque' => 'places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.internationalPhoneNumber'],
+    'google/itineraire'  => ['cle' => 'gmaps', 'groupe' => 'itineraire', 'url' => 'https://routes.googleapis.com/directions/v2:computeRoutes',
+        'masque' => 'routes.duration,routes.staticDuration,routes.distanceMeters'],
+    'google/recherche'   => ['cle' => 'gmaps', 'groupe' => 'recherche', 'url' => 'https://www.googleapis.com/customsearch/v1'],
+    'google/traduction'  => ['cle' => 'google_translate', 'groupe' => 'traduction', 'url' => 'https://translation.googleapis.com/language/translate/v2'],
+];
 
-/**
- * Depose dans un compte neuf les cles du compte modele.
- *
- * Sans cela, le nouvel inscrit ouvre une application qui ne repond pas :
- * Charly IA a besoin d'une cle pour parler, et la page Configuration IA
- * n'affiche que des « non configuree ». Personne ne doit avoir a
- * configurer une application avant de pouvoir l'utiliser.
- *
- * Le texte chiffre est recopie tel quel : le coffre utilise une cle
- * globale au serveur, les valeurs ne repassent donc jamais en clair.
- *
- * Un echec ici ne fait jamais echouer l'inscription : mieux vaut un
- * compte cree sans cles -- rattrapable a la main -- qu'un inscrit
- * renvoye vers une erreur alors que son compte existe deja en base.
- *
- * A revoir avant l'ouverture au public : ces cles sont payantes, et
- * cette regle les donne a quiconque cree un compte.
- */
-function clesDuModele(int $compteId): void
+/** Par groupe : appels par minute, appels par jour, pour un usage humain. */
+const RELAIS_LIMITES = [
+    'charly'     => [30, 500],
+    'lieux'      => [60, 1000],
+    'itineraire' => [20, 200],
+    'recherche'  => [20, 200],
+    'traduction' => [120, 3000],
+    'test'       => [10, 50],
+];
+
+/** Les comptes de test rejouent la batterie Charly : 690 phrases à la suite. */
+const RELAIS_FACTEUR_TEST = 20;
+
+const RELAIS_JETONS_MAX = 8000;
+const RELAIS_CORPS_MAX = 7000000;
+const RELAIS_CSE_CX_DEFAUT = 'b5384d87b75fc4d3e';
+
+function relaisEstCompteTest(array $compte): bool
 {
-    if ($compteId === CLES_COMPTE_MODELE) {
-        return;
-    }
-    try {
-        Db::req(
-            'INSERT INTO cles_api (compte_id, service, valeur_chiffree, indice)
-             SELECT ?, service, valeur_chiffree, indice
-               FROM cles_api
-              WHERE compte_id = ?
-             ON DUPLICATE KEY UPDATE valeur_chiffree = VALUES(valeur_chiffree),
-                                     indice          = VALUES(indice)',
-            [$compteId, CLES_COMPTE_MODELE]
-        );
-    } catch (Throwable $e) {
-        error_log('cles du modele non deposees pour le compte '
-            . $compteId . ' : ' . $e->getMessage());
-    }
+    return str_ends_with(strtolower((string) ($compte['email'] ?? '')), '@exemple-timecool.fr');
 }
 
+/** La clé (chiffrée) la plus récente de l'administrateur pour ce service, ou null. */
+function cleAdministrateur(string $service): ?string
+{
+    $ligne = Db::un(
+        'SELECT k.valeur_chiffree
+           FROM cles_api k
+           JOIN comptes c ON c.id = k.compte_id
+          WHERE c.admin = 1 AND c.cloture_le IS NULL AND k.service = ?
+          ORDER BY k.maj_le DESC
+          LIMIT 1',
+        [$service]
+    );
+    return $ligne === null ? null : $ligne['valeur_chiffree'];
+}
+
+/** La clé à utiliser pour ce compte : la sienne, sinon celle de l'administrateur. Relue à chaque appel, jamais gardée. */
+function cleDuService(int $compteId, string $service): ?string
+{
+    $ligne = Db::un('SELECT valeur_chiffree FROM cles_api WHERE compte_id = ? AND service = ?', [$compteId, $service]);
+    $chiffree = $ligne === null ? cleAdministrateur($service) : $ligne['valeur_chiffree'];
+    if ($chiffree === null) {
+        return null;
+    }
+    $clair = Coffre::dechiffrer($chiffree);
+    if ($clair === null || $clair === '') {
+        error_log('relais : cle illisible, service ' . $service . ', compte ' . $compteId);
+        Rep::erreur(500, 'cle_illisible', 'Ce service n est pas disponible pour le moment.');
+    }
+    return $clair;
+}
+
+/** Le compte du relais. Bloqué ou clôturé : 403. */
+function relaisCompte(): array
+{
+    $entete = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if ($entete === '' && function_exists('apache_request_headers')) {
+        $h = apache_request_headers();
+        $entete = $h['Authorization'] ?? $h['authorization'] ?? '';
+    }
+    if (preg_match('/^Bearer\s+([0-9a-f]{64})$/i', $entete, $m)) {
+        $clos = Db::un(
+            'SELECT c.id FROM sessions s JOIN comptes c ON c.id = s.compte_id
+              WHERE s.jeton_hash = ? AND s.revoque_le IS NULL AND s.expire_le > NOW() AND c.cloture_le IS NOT NULL',
+            [Jeton::hacher(strtolower($m[1]))]
+        );
+        if ($clos !== null) {
+            Rep::erreur(403, 'compte_cloture', 'Ce compte a été clôturé.');
+        }
+    }
+    $compte = Auth::compte();
+    if (($compte['bloque_le'] ?? null) !== null) {
+        Rep::erreur(403, 'compte_suspendu', 'Votre compte a été suspendu. Écrivez à contact@timecool.fr.');
+    }
+    return $compte;
+}
+
+/** Compte l'appel et refuse (429) au-delà de la limite. Un refus reste dans le cumul et dans le journal du serveur. */
+function relaisCompter(array $compte, string $service, string $groupe): void
+{
+    [$parMinute, $parJour] = RELAIS_LIMITES[$groupe];
+    if (relaisEstCompteTest($compte)) {
+        $parMinute *= RELAIS_FACTEUR_TEST;
+        $parJour *= RELAIS_FACTEUR_TEST;
+    }
+    $id = (int) $compte['id'];
+    $jour = date('Y-m-d');
+    $minute = date('Y-m-d H:i:00');
+    Db::req(
+        'INSERT INTO relais_compteurs (compte_id, service, jour, minute, n_minute, n_jour)
+         VALUES (?, ?, ?, ?, 1, 1)
+         ON DUPLICATE KEY UPDATE n_minute = IF(minute = VALUES(minute), n_minute + 1, 1),
+                                 minute = VALUES(minute),
+                                 n_jour = n_jour + 1',
+        [$id, $service, $jour, $minute]
+    );
+    $n = Db::un(
+        'SELECT n_minute, n_jour FROM relais_compteurs WHERE compte_id = ? AND service = ? AND jour = ?',
+        [$id, $service, $jour]
+    );
+    $tropMinute = (int) $n['n_minute'] > $parMinute;
+    $tropJour = (int) $n['n_jour'] > $parJour;
+    if (!$tropMinute && !$tropJour) {
+        return;
+    }
+    Db::req('UPDATE relais_compteurs SET refus = refus + 1 WHERE compte_id = ? AND service = ? AND jour = ?', [$id, $service, $jour]);
+    error_log('relais : limite atteinte, compte ' . $id . ', ' . $service . ', ' . $n['n_minute'] . ' par minute, ' . $n['n_jour'] . ' par jour');
+    Rep::erreur(429, 'limite_atteinte', $tropJour
+        ? 'La limite du jour est atteinte. Réessaie demain.'
+        : 'Beaucoup de demandes d un coup. Réessaie dans une minute.');
+}
+
+/** L'adresse du service, ou celle d'un faux service pour les essais locaux (variable absente en production). */
+function relaisAdresse(string $url): string
+{
+    $faux = getenv('TC_RELAIS_FAUX');
+    return is_string($faux) && $faux !== '' ? rtrim($faux, '/') . '/' . preg_replace('#^https://#', '', $url) : $url;
+}
+
+/** Appelle le service. Rend [code HTTP, corps, type] ; s'il ne répond pas, 504 avec une phrase claire. */
+function relaisAppeler(string $url, array $entetes, ?string $corps, int $delai): array
+{
+    $ch = curl_init(relaisAdresse($url));
+    $options = [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => $entetes,
+        CURLOPT_TIMEOUT        => $delai,
+        CURLOPT_CONNECTTIMEOUT => 5,
+    ];
+    if ($corps !== null) {
+        $options[CURLOPT_POST] = true;
+        $options[CURLOPT_POSTFIELDS] = $corps;
+    }
+    curl_setopt_array($ch, $options);
+    $reponse = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $type = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    $errno = curl_errno($ch);
+    curl_close($ch);
+    if ($reponse === false || $code === 0) {
+        // Le numéro seul : le message de curl peut citer l'adresse.
+        error_log('relais : service sans reponse, curl ' . $errno);
+        Rep::erreur(504, 'service_injoignable', 'Le service ne répond pas pour le moment. Réessaie dans un instant.');
+    }
+    return [$code, (string) $reponse, $type];
+}
+
+/** Un relais : la requête du téléphone, la clé du serveur, la réponse du service telle quelle. */
+function relais(string $fonction): never
+{
+    $compte = relaisCompte();
+    $def = RELAIS[$fonction];
+    $brut = file_get_contents('php://input') ?: '';
+    if (strlen($brut) > RELAIS_CORPS_MAX) {
+        Rep::erreur(413, 'requete_trop_longue', 'Cette demande est trop longue.');
+    }
+    $d = json_decode($brut, true);
+    if (!is_array($d)) {
+        Rep::erreur(400, 'requete_invalide', 'Demande illisible.');
+    }
+    if ($def['groupe'] === 'charly') {
+        $jetons = $d['max_tokens'] ?? null;
+        if (!is_int($jetons) || $jetons < 1 || $jetons > RELAIS_JETONS_MAX) {
+            Rep::erreur(400, 'requete_invalide', 'Demande invalide.');
+        }
+    }
+
+    $url = $def['url'];
+    if ($fonction === 'google/recherche') {
+        $q = $d['q'] ?? null;
+        if (!is_string($q) || trim($q) === '' || mb_strlen($q) > 500) {
+            Rep::erreur(400, 'requete_invalide', 'Demande invalide.');
+        }
+        $cx = cleDuService((int) $compte['id'], 'google_cse_cx') ?? RELAIS_CSE_CX_DEFAUT;
+        $url .= '?' . http_build_query(['cx' => $cx, 'q' => $q, 'num' => 5, 'hl' => 'fr']);
+        $brut = null;
+    }
+
+    $cle = cleDuService((int) $compte['id'], $def['cle']);
+    if ($cle === null) {
+        Rep::erreur(503, 'service_indisponible', 'Ce service n est pas disponible pour le moment.');
+    }
+    relaisCompter($compte, $fonction, $def['groupe']);
+
+    $entetes = ['Content-Type: application/json'];
+    if ($fonction === 'anthropic') {
+        $entetes[] = 'x-api-key: ' . $cle;
+        $entetes[] = 'anthropic-version: 2023-06-01';
+    } elseif ($fonction === 'openai') {
+        $entetes[] = 'Authorization: Bearer ' . $cle;
+    } else {
+        $entetes[] = 'X-Goog-Api-Key: ' . $cle;
+        if (isset($def['masque'])) {
+            $entetes[] = 'X-Goog-FieldMask: ' . $def['masque'];
+        }
+    }
+    [$code, $corps, $type] = relaisAppeler($url, $entetes, $brut, $def['groupe'] === 'charly' ? 55 : 15);
+    http_response_code($code);
+    if ($type !== '') {
+        header('Content-Type: ' . $type);
+    }
+    echo $corps;
+    exit;
+}
+
+/** « Tester » de la page Configuration IA : la clé saisie, envoyée au service sans être enregistrée. */
+function relaisTester(): never
+{
+    $compte = relaisCompte();
+    $service = Entree::corps()['service'] ?? '';
+    $valeur = Entree::corps()['valeur'] ?? null;
+    if (!in_array($service, ['anthropic', 'openai'], true)) {
+        Rep::erreur(400, 'service_invalide', 'Service invalide.');
+    }
+    if (!is_string($valeur) || trim($valeur) === '' || strlen($valeur) > 500) {
+        Rep::erreur(400, 'valeur_invalide', 'Clé absente ou trop longue.');
+    }
+    $valeur = trim($valeur);
+    if (preg_match('/[\r\n]/', $valeur)) {
+        Rep::erreur(400, 'valeur_invalide', 'Clé invalide.');
+    }
+    relaisCompter($compte, 'tester', 'test');
+    if ($service === 'anthropic') {
+        [$code, $corps] = relaisAppeler(RELAIS['anthropic']['url'],
+            ['Content-Type: application/json', 'x-api-key: ' . $valeur, 'anthropic-version: 2023-06-01'],
+            json_encode(['model' => 'claude-haiku-4-5', 'max_tokens' => 10, 'messages' => [['role' => 'user', 'content' => 'Dis juste OK']]]),
+            20);
+    } else {
+        [$code, $corps] = relaisAppeler('https://api.openai.com/v1/models', ['Authorization: Bearer ' . $valeur], null, 20);
+    }
+    $d = json_decode($corps, true);
+    Rep::ok(['statut' => $code, 'detail' => is_array($d) ? ($d['error']['message'] ?? null) : null]);
+}
 
 function elementsPoser(array $ecritures): void
 {
@@ -2699,8 +2902,7 @@ switch ($route) {
 
         $id = (int) Db::pdo()->lastInsertId();
 
-        // Le compte doit etre utilisable des la premiere seconde.
-        clesDuModele($id);
+        // Utilisable des la premiere seconde : les relais prennent la cle de l administrateur, rien n est copie (mission 71).
 
         // La preuve est consommée : elle ne peut pas servir à créer un
         // second compte. Absente quand la vérification est suspendue —
@@ -5055,8 +5257,8 @@ switch ($route) {
 
         Rep::ok(['cles' => $siennes]);
 
-    // Valeur en clair d'une seule clé, pour que l'application puisse
-    // appeler le service concerné.
+    // La clé PROPRE du compte, et elle seule (mission 71). Celle de l'administrateur ne sort jamais :
+    // les services passent par les relais. Un service hérité se dit « herite », sans valeur.
     case 'GET /cles-api/valeur':
         $compte = Auth::compte();
         $service = $_GET['service'] ?? '';
@@ -5067,33 +5269,10 @@ switch ($route) {
             'SELECT valeur_chiffree FROM cles_api WHERE compte_id = ? AND service = ?',
             [$compte['id'], $service]
         );
-
-        /*
-         * À défaut, la clé du compte administrateur.
-         *
-         * Les services d'intelligence artificielle, de cartographie et
-         * d'envoi de SMS sont fournis PAR TimeCool : un nouvel
-         * utilisateur n'a aucune clé à lui, et sans ce recours il se
-         * retrouverait avec un assistant muet.
-         *
-         * Seule la valeur sort d'ici, jamais l'identité du compte qui la
-         * porte, et uniquement pour un service demandé nommément.
-         */
-        $herite = false;
         if ($ligne === null) {
-            $ligne = Db::un(
-                'SELECT k.valeur_chiffree
-                   FROM cles_api k
-                   JOIN comptes c ON c.id = k.compte_id
-                  WHERE c.admin = 1 AND c.cloture_le IS NULL AND k.service = ?
-                  ORDER BY k.maj_le DESC
-                  LIMIT 1',
-                [$service]
-            );
-            $herite = $ligne !== null;
-        }
-
-        if ($ligne === null) {
+            if (cleAdministrateur($service) !== null) {
+                Rep::ok(['service' => $service, 'herite' => true]);
+            }
             Rep::erreur(404, 'cle_absente', 'Aucune clé enregistrée pour ce service.');
         }
         $clair = Coffre::dechiffrer($ligne['valeur_chiffree']);
@@ -5103,7 +5282,44 @@ switch ($route) {
             Rep::erreur(500, 'cle_illisible',
                 'Clé enregistrée illisible. Ressaisissez-la.');
         }
-        Rep::ok(['service' => $service, 'valeur' => $clair, 'herite' => $herite]);
+        Rep::ok(['service' => $service, 'valeur' => $clair, 'herite' => false]);
+
+    case 'POST /relais/anthropic':
+    case 'POST /relais/openai':
+    case 'POST /relais/google/suggestions':
+    case 'POST /relais/google/lieux':
+    case 'POST /relais/google/itineraire':
+    case 'POST /relais/google/recherche':
+    case 'POST /relais/google/traduction':
+        relais(substr($chemin, strlen('/relais/')));
+
+    case 'POST /relais/tester':
+        relaisTester();
+
+    // Le cumul des relais : aujourd'hui par compte, et les 7 derniers jours par service.
+    case 'GET /admin/relais':
+        $moi = Auth::compte();
+        if ((int) ($moi['admin'] ?? 0) !== 1) {
+            Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
+        }
+        Rep::ok([
+            'aujourdhui' => Db::tous(
+                'SELECT c.reference, c.email, r.service, r.n_jour, r.refus
+                   FROM relais_compteurs r JOIN comptes c ON c.id = r.compte_id
+                  WHERE r.jour = CURDATE()
+                  ORDER BY r.n_jour DESC
+                  LIMIT 200',
+                []
+            ),
+            'semaine' => Db::tous(
+                'SELECT jour, service, SUM(n_jour) AS appels, SUM(refus) AS refus, COUNT(*) AS comptes
+                   FROM relais_compteurs
+                  WHERE jour >= CURDATE() - INTERVAL 7 DAY
+                  GROUP BY jour, service
+                  ORDER BY jour DESC, appels DESC',
+                []
+            ),
+        ]);
 
     case 'POST /cles-api':
         $compte = Auth::compte();
@@ -5116,6 +5332,17 @@ switch ($route) {
             Rep::erreur(400, 'valeur_invalide', 'Clé absente ou trop longue.');
         }
         $valeur = trim($valeur);
+
+        // Une ancienne application renvoie la clé héritée qu'elle a gardée : elle ne devient pas une clé du compte (mission 71).
+        if ((int) ($compte['admin'] ?? 0) !== 1) {
+            $delAdmin = cleAdministrateur($service);
+            if ($delAdmin !== null) {
+                $clairAdmin = Coffre::dechiffrer($delAdmin);
+                if ($clairAdmin !== null && hash_equals($clairAdmin, $valeur)) {
+                    Rep::ok(['service' => $service, 'indice' => substr($valeur, -4)], 201);
+                }
+            }
+        }
 
         Db::req(
             'INSERT INTO cles_api (compte_id, service, valeur_chiffree, indice)

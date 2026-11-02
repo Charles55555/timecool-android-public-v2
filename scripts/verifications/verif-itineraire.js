@@ -8,6 +8,7 @@ const fs = require('fs');
 const vm = require('vm');
 
 const page = fs.readFileSync(process.argv[2], 'utf8');
+const api = fs.readFileSync(require('path').join(__dirname, '../../backend/api/index.php'), 'utf8');
 
 let ko = 0;
 function verifie(libelle, condition, detail) {
@@ -102,29 +103,25 @@ titre('L appel part vers une API qui accepte les navigateurs');
   }) };
   const ctx = {
     console, Math, JSON, String, parseFloat, RegExp,
-    tcCleGoogle: () => 'CLE-TEST',
+    tcGooglePret: () => true,
     tcObtenirPosition: async () => ({ lat: 48.88, lng: 2.27 }),
-    fetch: async (url, init) => { demande = { url, init }; return reponse; }
+    tcRelais: async (fonction, corps) => { demande = { fonction, corps }; return reponse; }
   };
   vm.createContext(ctx);
   vm.runInContext(extraire('tcEstimerTrajet'), ctx);
 
   return ctx.tcEstimerTrajet('88 boulevard Victor Hugo, Neuilly').then((r) => {
-    verifie('c est l API Routes qui est appelee',
-      demande && demande.url.indexOf('routes.googleapis.com') > -1,
-      demande ? demande.url : 'aucun appel');
+    verifie('c est le relais de l API Routes qui est appele',
+      demande && demande.fonction === 'google/itineraire',
+      demande ? demande.fonction : 'aucun appel');
     verifie('et plus l ancienne, que le navigateur bloque',
       page.indexOf('maps/api/directions/json') === -1,
       'Directions ne renvoie aucun en-tete CORS : l appel echouait toujours');
-    verifie('la cle voyage dans l en-tete, pas dans l adresse',
-      demande.init.headers['X-Goog-Api-Key'] === 'CLE-TEST'
-      && demande.url.indexOf('CLE-TEST') === -1,
-      'une cle dans l URL se retrouve dans les journaux de tout le monde');
-    verifie('le masque de champs est fourni',
-      !!demande.init.headers['X-Goog-FieldMask'],
+    verifie('le masque de champs est fourni par le serveur',
+      api.indexOf("'masque' => 'routes.duration,routes.staticDuration,routes.distanceMeters'") > -1,
       'sans lui Google refuse la requete');
 
-    const corps = JSON.parse(demande.init.body);
+    const corps = demande.corps;
     verifie('la position part en coordonnees',
       corps.origin.location.latLng.latitude === 48.88);
     verifie('la destination part en adresse',

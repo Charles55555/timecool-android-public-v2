@@ -52,8 +52,8 @@ let reponse = { ok: true, json: async () => ({ suggestions: [
 const minuteries = [];
 const ctx = {
   console,
-  localStorage: { getItem: () => JSON.stringify({ gmaps: cle }) },
-  fetch: async (url, o) => { trace.fetchs.push({ url, body: JSON.parse(o.body), cle: o.headers['X-Goog-Api-Key'] }); return reponse; },
+  TC_BACKEND: { estConnecte: () => !!cle },
+  tcRelais: async (fonction, corps) => { trace.fetchs.push({ fonction, body: corps }); return reponse; },
   escapeHTMLSafe: (t) => String(t),
   setTimeout: (f, ms) => { const id = minuteries.length + 1; minuteries.push({ id, f, ms, actif: true }); return id; },
   clearTimeout: (id) => { const m = minuteries.find((x) => x.id === id); if (m) m.actif = false; },
@@ -63,7 +63,7 @@ const ctx = {
   _tcTrajetEtapes: null
 };
 vm.createContext(ctx);
-['tcCleGoogle', 'tcSuggestionsLieu', 'tcJetonSession', 'tcAutocompleterLieu'].forEach((n) => {
+['tcGooglePret', 'tcSuggestionsLieu', 'tcJetonSession', 'tcAutocompleterLieu'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
@@ -72,8 +72,8 @@ const tick = async () => { const a = minuteries.filter((m) => m.actif); minuteri
 (async () => {
   titre('L appel a Google');
   let props = await ctx.tcSuggestionsLieu('12 rue de la paix', 'jeton-x');
-  verifie('un appel, avec la cle, la saisie, le francais et le jeton de session', trace.fetchs.length === 1 && trace.fetchs[0].cle === 'AIza-test' && trace.fetchs[0].body.input === '12 rue de la paix' && trace.fetchs[0].body.languageCode === 'fr' && trace.fetchs[0].body.sessionToken === 'jeton-x', JSON.stringify(trace.fetchs[0]));
-  verifie('a l adresse d autocompletion de Places', /places\.googleapis\.com\/v1\/places:autocomplete/.test(trace.fetchs[0].url));
+  verifie('un appel, avec la saisie, le francais et le jeton de session', trace.fetchs.length === 1 && trace.fetchs[0].body.input === '12 rue de la paix' && trace.fetchs[0].body.languageCode === 'fr' && trace.fetchs[0].body.sessionToken === 'jeton-x', JSON.stringify(trace.fetchs[0]));
+  verifie('par le relais d autocompletion', trace.fetchs[0].fonction === 'google/suggestions');
   verifie('cinq propositions au plus, texte complet + principal + secondaire', props.length === 5 && props[0].texte === '12 Rue de la Paix, 75002 Paris, France' && props[0].principal === '12 Rue de la Paix' && props[0].secondaire === '75002 Paris, France' && props[1].principal === 'Cabinet Dr Martin', JSON.stringify(props[0]));
   verifie('sans format detaille : le texte sert de principal', props[2].principal === 'A' && props[2].secondaire === '');
   trace.fetchs = [];
@@ -81,7 +81,7 @@ const tick = async () => { const a = minuteries.filter((m) => m.actif); minuteri
   verifie('moins de 3 lettres : aucun appel', trace.fetchs.length === 0 && props.length === 0);
   cle = '';
   props = await ctx.tcSuggestionsLieu('12 rue', 'j');
-  verifie('sans cle Google : aucun appel, rien', trace.fetchs.length === 0 && props.length === 0);
+  verifie('sans session : aucun appel, rien', trace.fetchs.length === 0 && props.length === 0);
   cle = 'AIza-test';
   reponse = { ok: false, status: 403, json: async () => ({}) };
   props = await ctx.tcSuggestionsLieu('12 rue', 'j');

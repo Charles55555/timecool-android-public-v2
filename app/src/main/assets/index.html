@@ -3637,8 +3637,8 @@ function tcLireTiroirCles() {
 
 function tcEcrireTiroirCles(cles) {
   try { localStorage.setItem('timecool_api_keys', JSON.stringify(cles)); } catch(e) {}
-  if (cles.openai) charlyIA.config.apiKey = cles.openai;
-  if (cles.anthropic) charlyIA.config.anthropicKey = cles.anthropic;
+  charlyIA.config.apiKey = cles.openai || '';
+  charlyIA.config.anthropicKey = cles.anthropic || '';
 }
 
 /** Envoie au serveur les clés présentes localement. Silencieux si hors ligne. */
@@ -3663,9 +3663,9 @@ async function tcPousserClesVersServeur() {
  * Le serveur fait autorité : c'est ce qui permet de retrouver ses clés
  * après une réinstallation ou sur un nouvel appareil.
  */
-/** La cle du fournisseur choisi, ou '' : c est elle qui dit si Charly peut repondre. */
-function tcCleActiveCharly() {
-  return (charlyIA.config.provider === 'anthropic' ? charlyIA.config.anthropicKey : charlyIA.config.apiKey) || '';
+/** Charly passe par le relais du serveur (mission 71) : il faut une session, plus aucune cle sur l appareil. */
+function tcCharlyPret() {
+  return TC_BACKEND.estConnecte();
 }
 
 async function tcRecupererClesDuServeur() {
@@ -3678,7 +3678,13 @@ async function tcRecupererClesDuServeur() {
   }
   const cles = tcLireTiroirCles();
   let recuperees = 0;
+  let retirees = 0;
   for (const entree of liste) {
+    // Une clé héritée reste sur le serveur : celle qu'une version précédente a laissée ici s'en va (mission 71).
+    if (entree.herite) {
+      if (cles[entree.service]) { delete cles[entree.service]; retirees++; }
+      continue;
+    }
     if (cles[entree.service]) continue; // déjà en local, on n'écrase pas
     try {
       const valeur = await TC_BACKEND.lireCleApi(entree.service);
@@ -3687,6 +3693,7 @@ async function tcRecupererClesDuServeur() {
       console.warn('Lecture de la clé ' + entree.service + ' :', e.code || e.message);
     }
   }
+  if (retirees > 0 && recuperees === 0) tcEcrireTiroirCles(cles);
   if (recuperees > 0) {
     tcEcrireTiroirCles(cles);
     showToast('🔑 ' + recuperees + ' clé' + (recuperees > 1 ? 's' : '') + ' récupérée' + (recuperees > 1 ? 's' : '') + ' depuis ton compte');
@@ -6588,7 +6595,7 @@ async function doSearch() {
 
   let resultats;
   try {
-    if (!tcCleGoogle()) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+    if (!tcGooglePret()) throw new Error('Connecte-toi pour utiliser cette recherche.');
     const position = await tcObtenirPosition();
     resultats = await tcRecherchePlaces(q, { position, limite: 3 });
   } catch (err) {
@@ -10559,10 +10566,8 @@ async function testApiKey(id) {
     if (!key) { showToast("⚠️ Saisis d'abord la clé OpenAI"); return; }
     showToast('🔌 Test OpenAI en cours...');
     try {
-      const resp = await fetch('https://api.openai.com/v1/models', {
-        headers: { 'Authorization': 'Bearer ' + key }
-      });
-      if (resp.ok) {
+      const essai = await TC_BACKEND.testerCleApi('openai', key);
+      if (essai.statut === 200) {
         const ind = document.getElementById('indicator_openai');
         if (ind) { ind.style.background = '#e8f5e9'; ind.style.color = '#1b5e20'; ind.textContent = '✅ Connexion OK'; }
         // Auto-save la clé si le test réussit
@@ -10570,7 +10575,7 @@ async function testApiKey(id) {
         saveCharlyIAConfig();
         showToast('✅ OpenAI connecté avec succès !');
       } else {
-        showToast('❌ Clé OpenAI invalide (erreur ' + resp.status + ')');
+        showToast('❌ Clé OpenAI invalide (erreur ' + essai.statut + ')');
       }
     } catch(e) {
       showToast('❌ Erreur réseau : ' + e.message.substring(0,60));
@@ -10582,21 +10587,8 @@ async function testApiKey(id) {
     showToast('🔌 Test Anthropic en cours...');
     try {
       // Test minimal : on envoie un message très court à Claude
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5',
-          max_tokens: 10,
-          messages: [{ role: 'user', content: 'Dis juste OK' }]
-        })
-      });
-      if (resp.ok) {
+      const essai = await TC_BACKEND.testerCleApi('anthropic', key);
+      if (essai.statut === 200) {
         const ind = document.getElementById('indicator_anthropic');
         if (ind) { ind.style.background = '#e8f5e9'; ind.style.color = '#1b5e20'; ind.textContent = '✅ Connexion OK'; }
         charlyIA.config.anthropicKey = key;
@@ -10606,9 +10598,8 @@ async function testApiKey(id) {
         /* Seul un 401 met la cle en cause. Un modele inconnu, un credit
            epuise ou une limite de debit renvoient autre chose : accuser
            la cle ferait chercher au mauvais endroit une cle qui marche. */
-        const err = await resp.json().catch(() => ({}));
-        const detail = (err.error && err.error.message) || ('erreur ' + resp.status);
-        showToast(resp.status === 401
+        const detail = essai.detail || ('erreur ' + essai.statut);
+        showToast(essai.statut === 401
           ? '❌ Clé Anthropic refusée : ' + detail
           : '❌ Anthropic : ' + detail);
       }
@@ -10827,8 +10818,8 @@ async function resetCharlyStats() {
 }
 
 async function testCharlyConnection() {
-  if (!charlyIA.config.apiKey) {
-    showToast('⚠️ Saisis d\'abord ta clé API');
+  if (!tcCharlyPret()) {
+    showToast('⚠️ Connecte-toi d\'abord à ton compte');
     return;
   }
   showToast('🔌 Test en cours…');
@@ -14901,7 +14892,7 @@ async function tcGererRechercheProfessionnel(text, profession, lieu) {
   tcPousserMessageUtilisateur(text);
   tcDefinirStatutCharly('📍 Recherche de « ' + profession + (lieu ? ' à ' + lieu : '') + ' » en cours…', true);
   try {
-    if (!tcCleGoogle()) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+    if (!tcGooglePret()) throw new Error('Connecte-toi pour utiliser cette recherche.');
     // Une ville donnée en toutes lettres prime toujours sur la
     // géolocalisation : elle part directement dans la requête Places
     // (qui sait très bien situer "dentiste à Neuilly-sur-Seine" sans
@@ -15301,14 +15292,7 @@ async function charlySendMessage() {
     tcAbandonnerAttente('annulation');
   }
 
-  let activeKey = tcCleActiveCharly();
-  if (!charlyIA.config.demoMode && !activeKey && TC_BACKEND.estConnecte()) {
-    // Juste apres une connexion, les cles du compte ne sont pas encore la : on les rapporte avant le premier
-    // message, au lieu d envoyer l utilisateur dans « Configuration IA » (campagne 10, 12/10).
-    try { await tcRecupererClesDuServeur(); } catch (e) {}
-    activeKey = tcCleActiveCharly();
-  }
-  if (!charlyIA.config.demoMode && !activeKey) {
+  if (!charlyIA.config.demoMode && !tcCharlyPret()) {
     showToast('⚠️ Charly n’est pas encore prêt sur cet appareil. Réessaie dans un instant.');
     return;
   }
@@ -15877,15 +15861,7 @@ async function callAI(messages) {
 }
 
 async function callOpenAIDirectly(messages) {
-  const key = charlyIA.config.apiKey;
-  if (!key) throw new Error('Clé OpenAI manquante — configure-la dans Configuration IA');
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + key
-    },
-    body: JSON.stringify({
+  const res = await tcRelais('openai', {
       model: charlyIA.config.model || 'gpt-4o-mini',
       // Le decoupage stable/volatil est propre au cache d'Anthropic :
       // ici les deux morceaux redeviennent un seul texte.
@@ -15896,7 +15872,6 @@ async function callOpenAIDirectly(messages) {
       }),
       max_tokens: TC_IA_JETONS_MAX,
       temperature: 0.7
-    })
   });
   if (!res.ok) {
     let errMsg = 'HTTP ' + res.status;
@@ -15951,25 +15926,14 @@ function tcNoterUsageIA(usage) {
 }
 
 async function callAnthropic(messages) {
-  const key = charlyIA.config.anthropicKey;
-  if (!key) throw new Error('Clé Anthropic manquante — configure-la dans Configuration IA');
   // Séparer le system prompt des messages user/assistant
   const systemMsg = messages.find(m => m.role === 'system');
   const userMessages = messages.filter(m => m.role !== 'system');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: charlyIA.config.claudeModel || 'claude-sonnet-5',
-      max_tokens: TC_IA_JETONS_MAX,
-      system: tcSystemeAnthropic(systemMsg),
-      messages: userMessages
-    })
+  const res = await tcRelais('anthropic', {
+    model: charlyIA.config.claudeModel || 'claude-sonnet-5',
+    max_tokens: TC_IA_JETONS_MAX,
+    system: tcSystemeAnthropic(systemMsg),
+    messages: userMessages
   });
   if (!res.ok) {
     let errMsg = 'HTTP ' + res.status;
@@ -16026,12 +15990,9 @@ async function callAnthropic(messages) {
 // ═══════════════════════════════════════════════════════════
 // ═══ INTÉGRATIONS GOOGLE — Places, Directions, Custom Search ═══
 // ═══════════════════════════════════════════════════════════
-// Les trois API sont couvertes par la même clé « Google Maps Platform »
-// (apiKeys.gmaps, admin > Configuration IA > Priorité 4) — c'est ainsi
-// qu'elle a été créée côté Google Cloud Console, rattachée aux trois API.
-// Seul l'identifiant du moteur Custom Search (cx) est propre au
-// troisième service et vit dans son propre champ admin ; à défaut de
-// saisie il retombe sur le moteur fourni au lancement de la fonction.
+// Les trois API passent par le relais du serveur (mission 71), qui détient la clé
+// « Google Maps Platform », le moteur de recherche et les masques de champs.
+// Le moteur par défaut ne sert plus ici que d'exemple dans Configuration IA.
 const TC_CSE_CX_PAR_DEFAUT = 'b5384d87b75fc4d3e';
 
 /**
@@ -16041,14 +16002,12 @@ const TC_CSE_CX_PAR_DEFAUT = 'b5384d87b75fc4d3e';
  * fait facturer la saisie entière, pas chaque lettre.
  */
 async function tcSuggestionsLieu(saisie, jeton) {
-  const cle = tcCleGoogle();
   const texte = String(saisie || '').trim();
-  if (!cle || texte.length < 3) return [];
-  const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': cle },
-    body: JSON.stringify({ input: texte, languageCode: 'fr', regionCode: 'FR', sessionToken: jeton })
-  });
+  if (!tcGooglePret() || texte.length < 3) return [];
+  let res;
+  try {
+    res = await tcRelais('google/suggestions', { input: texte, languageCode: 'fr', regionCode: 'FR', sessionToken: jeton });
+  } catch (e) { return []; }
   if (!res.ok) return [];
   const data = await res.json();
   return (Array.isArray(data.suggestions) ? data.suggestions : []).map(function (sg) {
@@ -16135,16 +16094,8 @@ window.addEventListener('load', function () {
   });
 });
 
-function tcCleGoogle() {
-  let apiKeys = {};
-  try { apiKeys = JSON.parse(localStorage.getItem('timecool_api_keys') || '{}'); } catch(e) {}
-  return (apiKeys.gmaps || '').trim();
-}
-
-function tcCseCx() {
-  let apiKeys = {};
-  try { apiKeys = JSON.parse(localStorage.getItem('timecool_api_keys') || '{}'); } catch(e) {}
-  return (apiKeys.google_cse_cx || '').trim() || TC_CSE_CX_PAR_DEFAUT;
+function tcGooglePret() {
+  return TC_BACKEND.estConnecte();
 }
 
 /**
@@ -16192,8 +16143,7 @@ function tcObtenirPosition(timeoutMs) {
  */
 async function tcRecherchePlaces(requete, opts) {
   opts = opts || {};
-  const cle = tcCleGoogle();
-  if (!cle) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+  if (!tcGooglePret()) throw new Error('Connecte-toi pour utiliser cette recherche.');
   const limite = opts.limite || 3;
 
   const body = {
@@ -16209,15 +16159,7 @@ async function tcRecherchePlaces(requete, opts) {
     body.rankPreference = 'DISTANCE';
   }
 
-  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': cle,
-      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.internationalPhoneNumber'
-    },
-    body: JSON.stringify(body)
-  });
+  const res = await tcRelais('google/lieux', body);
 
   if (!res.ok) {
     let msg = 'HTTP ' + res.status;
@@ -16247,8 +16189,7 @@ async function tcRecherchePlaces(requete, opts) {
  */
 async function tcEstimerTrajet(destination, opts) {
   opts = opts || {};
-  const cle = tcCleGoogle();
-  if (!cle) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
+  if (!tcGooglePret()) throw new Error('Connecte-toi pour utiliser cette recherche.');
 
   // Routes attend un objet, pas une chaine : des coordonnees quand on
   // les a, une adresse sinon.
@@ -16278,17 +16219,7 @@ async function tcEstimerTrajet(destination, opts) {
     units: 'METRIC'
   };
 
-  const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': cle,
-      // Sans masque, Google refuse la requete : il faut dire ce qu'on lit.
-      // Sans masque, Google refuse la requete : il faut dire ce qu'on lit.
-      'X-Goog-FieldMask': 'routes.duration,routes.staticDuration,routes.distanceMeters'
-    },
-    body: JSON.stringify(corps)
-  });
+  const res = await tcRelais('google/itineraire', corps);
 
   if (!res.ok) {
     let msg = 'HTTP ' + res.status;
@@ -16329,12 +16260,9 @@ async function tcEstimerTrajet(destination, opts) {
  * le dire à l'utilisateur — jamais improviser une réponse à sa place.
  */
 async function tcRechercheWeb(requete) {
-  const cle = tcCleGoogle();
-  if (!cle) throw new Error('Clé Google Maps Platform manquante — configure-la dans Configuration IA.');
-  const cx = tcCseCx();
+  if (!tcGooglePret()) throw new Error('Connecte-toi pour utiliser cette recherche.');
 
-  const params = new URLSearchParams({ key: cle, cx: cx, q: requete, num: '5', hl: 'fr' });
-  const res = await fetch('https://www.googleapis.com/customsearch/v1?' + params.toString());
+  const res = await tcRelais('google/recherche', { q: requete });
   if (!res.ok) {
     let msg = 'HTTP ' + res.status;
     try { const j = await res.json(); msg = (j.error && j.error.message) || msg; } catch(e) {}
@@ -18784,8 +18712,8 @@ async function charlyProcessMessage() {
     tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
     return;
   }
-  if (!charlyIA.config.demoMode && !charlyIA.config.apiKey) {
-    showToast('⚠️ Aucune clé API. Configure-la dans Configuration IA.');
+  if (!charlyIA.config.demoMode && !tcCharlyPret()) {
+    showToast('⚠️ Charly n’est pas encore prêt sur cet appareil. Réessaie dans un instant.');
     tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
     return;
   }
@@ -29657,6 +29585,51 @@ function tcPoserJeton(jeton) {
   } catch (e) { /* stockage indisponible : session non persistée */ }
 }
 
+/* Le temps d'attente d'un relais : Charly peut réfléchir bien plus longtemps qu'un appel ordinaire. */
+const TC_DELAI_RELAIS_MS = 62000;
+
+/**
+ * Appelle un service externe par le relais du serveur (mission 71) : le serveur ajoute la clé,
+ * le téléphone n'en voit aucune. Rend la réponse du service telle quelle ; un refus du serveur
+ * lui-même (limite, compte suspendu, service muet) lève une erreur avec sa phrase.
+ */
+async function tcRelais(fonction, corps) {
+  const j = tcJeton();
+  if (!j) throw new Error('Connecte-toi pour utiliser ce service.');
+  const ctrl = new AbortController();
+  const minuteur = setTimeout(function () { ctrl.abort(); }, TC_DELAI_RELAIS_MS);
+  const chemin = '/relais/' + fonction;
+  const _tcDebut = Date.now();
+  let reponse;
+  try {
+    reponse = await fetch(TC_API + chemin, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + j },
+      body: JSON.stringify(corps),
+      signal: ctrl.signal
+    });
+  } catch (e) {
+    const expire = (e && e.name === 'AbortError');
+    tcNoterRequete('POST', chemin, expire ? 'delai_depasse' : 'reseau', Date.now() - _tcDebut);
+    const err = new Error(expire ? 'Le service ne répond pas pour le moment. Réessaie dans un instant.' : 'Serveur injoignable');
+    err.code = expire ? 'delai_depasse' : 'reseau';
+    throw err;
+  } finally {
+    clearTimeout(minuteur);
+  }
+  tcNoterRequete('POST', chemin, reponse.status, Date.now() - _tcDebut);
+  if (!reponse.ok) {
+    let d = null;
+    try { d = await reponse.clone().json(); } catch (e) {}
+    if (d && d.ok === false && d.erreur) {
+      const err = new Error(d.message || ('HTTP ' + reponse.status));
+      err.code = d.erreur;
+      throw err;
+    }
+  }
+  return reponse;
+}
+
 /**
  * Appel HTTP unique de l'API.
  * Lève une Error portant le code d'erreur applicatif, pour que les
@@ -30099,7 +30072,7 @@ const TC_BACKEND = {
     return (await tcAppel('GET', '/cles-api')).cles;
   },
 
-  /** Valeur en clair d'une clé. Retourne null si aucune n'est enregistrée. */
+  /** La clé propre du compte (jamais une clé héritée), ou null s'il n'en a pas. */
   async lireCleApi(service) {
     try {
       const d = await tcAppel('GET', '/cles-api/valeur?service=' + encodeURIComponent(service));
@@ -30114,6 +30087,11 @@ const TC_BACKEND = {
   async enregistrerCleApi(service, valeur) {
     const d = await tcAppel('POST', '/cles-api', { service: service, valeur: valeur });
     return d.indice;
+  },
+
+  /** Le serveur essaie la clé saisie auprès du service, sans l'enregistrer. */
+  async testerCleApi(service, valeur) {
+    return await tcAppel('POST', '/relais/tester', { service: service, valeur: valeur });
   },
 
   async supprimerCleApi(service) {
@@ -31632,10 +31610,9 @@ const TC_SYNC_DEJA_SYNCHRONISE = [
    * « réglage » les transportait EN CLAIR, ce qui annulait ce
    * chiffrement : elles étaient lisibles telles quelles dans la base.
    *
-   * Rien n'est perdu : tcRecupererClesDuServeur() les rapporte à chaque
-   * revalidation de session, et un nouveau compte hérite de celles de
-   * l'administrateur par la même route — c'est ce qui fait marcher
-   * l'assistant dès la première ouverture.
+   * Rien n'est perdu : tcRecupererClesDuServeur() rapporte les clés du
+   * compte à chaque revalidation de session. Un compte sans clé passe par
+   * les relais du serveur, dès la première ouverture.
    *
    * Cette exclusion efface aussi les valeurs déjà stockées : absente du
    * bloc, la clé est annoncée disparue au tour suivant, et le serveur
@@ -34534,32 +34511,46 @@ async function translateText(text, targetLang) {
   var cacheKey = targetLang + ':' + text;
   if (TC_TRANSLATE_CACHE[cacheKey]) return TC_TRANSLATE_CACHE[cacheKey];
 
-  var apiKey = '';
-  try {
-    // Tiroir unique : espace admin (Configuration IA)
-    var ak = JSON.parse(localStorage.getItem('timecool_api_keys') || '{}');
-    apiKey = ak.google_translate || '';
-  } catch(e) {}
+  if (!TC_BACKEND.estConnecte()) return text;
 
-  if (!apiKey) return text;
+  var translated = await tcTraduireParLot(text, targetLang);
+  if (translated === null) return text;
+  TC_TRANSLATE_CACHE[cacheKey] = translated;
+  try { localStorage.setItem(TC_TRANSLATE_KEY, JSON.stringify(TC_TRANSLATE_CACHE)); } catch(e) {}
+  return translated;
+}
 
+/* Une page entière demande des centaines de textes d'un coup : ils partent par lots de 100
+   (mission 71). Une requête par texte occuperait tout le serveur à travers le relais. */
+var TC_TRADUCTION_LOT = 100;
+var _tcFilesTraduction = {};
+
+function tcTraduireParLot(text, targetLang) {
+  var file = _tcFilesTraduction[targetLang] || (_tcFilesTraduction[targetLang] = { attente: [], minuteur: null });
+  return new Promise(function (resoudre) {
+    file.attente.push({ texte: text, resoudre: resoudre });
+    if (file.minuteur === null) {
+      file.minuteur = setTimeout(function () { tcEnvoyerLotTraduction(targetLang); }, 20);
+    }
+  });
+}
+
+async function tcEnvoyerLotTraduction(targetLang) {
+  var file = _tcFilesTraduction[targetLang];
+  var lot = file.attente.splice(0, TC_TRADUCTION_LOT);
+  file.minuteur = file.attente.length
+    ? setTimeout(function () { tcEnvoyerLotTraduction(targetLang); }, 0)
+    : null;
   try {
-    var resp = await fetch(
-      'https://translation.googleapis.com/language/translate/v2',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey },
-        body: JSON.stringify({ q: text, source: 'fr', target: targetLang, format: 'text' })
-      }
-    );
+    var resp = await tcRelais('google/traduction', {
+      q: lot.map(function (l) { return l.texte; }), source: 'fr', target: targetLang, format: 'text'
+    });
     var data = await resp.json();
-    var translated = data.data && data.data.translations && data.data.translations[0]
-      ? data.data.translations[0].translatedText
-      : text;
-    TC_TRANSLATE_CACHE[cacheKey] = translated;
-    try { localStorage.setItem(TC_TRANSLATE_KEY, JSON.stringify(TC_TRANSLATE_CACHE)); } catch(e) {}
-    return translated;
-  } catch(e) { return text; }
+    var liste = (data.data && data.data.translations) || [];
+    lot.forEach(function (l, i) { l.resoudre((liste[i] && liste[i].translatedText) || null); });
+  } catch (e) {
+    lot.forEach(function (l) { l.resoudre(null); });
+  }
 }
 
 /* Zones dont le contenu ne doit JAMAIS partir en traduction :
@@ -34607,13 +34598,8 @@ async function translatePageWithGoogle(targetLang, silent) {
     return;
   }
 
-  var _k = '';
-  try {
-    var _ak = JSON.parse(localStorage.getItem('timecool_api_keys') || '{}');
-    _k = _ak.google_translate || '';
-  } catch(e) {}
-  if (!_k) {
-    if (!silent) showToast('⚠️ Clé Google Translate absente — renseigne-la dans Configuration IA');
+  if (!TC_BACKEND.estConnecte()) {
+    if (!silent) showToast('⚠️ Connecte-toi pour traduire TimeCool');
     return;
   }
 

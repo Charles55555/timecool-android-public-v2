@@ -39,7 +39,7 @@ const ctx = {
 vm.createContext(ctx);
 ['const TC_JAMAIS_TRANSFERE = \\[[^\\]]*\\];', 'const TC_EVENTS_KEY = [^;]*;', 'const TC_TASKS_KEY = [^;]*;', 'const TC_SYNC_VERSION_KEY = [^;]*;', 'const TC_SYNC_EMPREINTES_KEY = [^;]*;', 'const TC_COMPTE_LOCAL_KEY = [^;]*;', 'const TC_CALENDARS_KEY = [^;]*;']
   .forEach((re) => { const m = page.match(new RegExp(re)); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  introuvable : ' + re); } });
-['tcCleTransferable', 'tcViderDonneesDuCompte', 'tcCleActiveCharly', 'loadCustomCalendars', 'saveCustomCalendars']
+['tcCleTransferable', 'tcViderDonneesDuCompte', 'tcCharlyPret', 'loadCustomCalendars', 'saveCustomCalendars']
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
@@ -101,11 +101,11 @@ titre('2. Les textes : la deconnexion fait le menage ; la connexion rapporte les
 const logout = fonction(page, 'logoutUser') || '';
 verifie('logoutUser appelle tcViderDonneesDuCompte() apres avoir oublie le mot de passe, et retire le marqueur de compte', /tcOublierMotDePasse\(\);[\s\S]*?tcViderDonneesDuCompte\(\);[\s\S]*?localStorage\.removeItem\(TC_COMPTE_LOCAL_KEY\)[\s\S]*?showAuthFlow\('auth-welcome'\)/.test(logout));
 const csm = fonction(page, 'charlySendMessage') || '';
-verifie('charlySendMessage : sans cle et avec une session, les cles sont rapportees (await) avant de juger', /let activeKey = tcCleActiveCharly\(\);\s+if \(!charlyIA\.config\.demoMode && !activeKey && TC_BACKEND\.estConnecte\(\)\) \{[\s\S]*?await tcRecupererClesDuServeur\(\);[\s\S]*?activeKey = tcCleActiveCharly\(\);/.test(csm));
+verifie('charlySendMessage : avec une session, Charly repond, aucune cle n est attendue sur l appareil (mission 71)', csm.indexOf('!tcCharlyPret()') > -1 && csm.indexOf('activeKey') < 0);
 verifie('charlySendMessage n ouvre plus jamais la page Configuration IA, ni ne parle de « clé API »', csm.indexOf("navigate('aiconfig')") < 0 && csm.indexOf('Aucune clé API') < 0);
 const splash = fonction(page, 'showWelcomeSplash') || '';
 verifie('showWelcomeSplash demande les cles du compte des la connexion', /tcRecupererClesDuServeur\(\);/.test(splash));
-verifie('tcCleActiveCharly suit le fournisseur choisi', (ctx.charlyIA.config.provider = 'anthropic', ctx.charlyIA.config.anthropicKey = 'ak', ctx.tcCleActiveCharly() === 'ak') && (ctx.charlyIA.config.provider = 'openai', ctx.tcCleActiveCharly() === ''));
+verifie('tcCharlyPret suit la session', (ctx.TC_BACKEND.estConnecte = () => true, ctx.tcCharlyPret() === true) && (ctx.TC_BACKEND.estConnecte = () => false, ctx.tcCharlyPret() === false));
 
 console.log('');
 console.log(ko + ' anomalie(s).');
