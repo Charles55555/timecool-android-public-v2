@@ -1877,7 +1877,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
 
   titre('23. Mission 66 : Charly retrouve un contact (carte, « Ouvrir la fiche », « Ajouter X », bouton)');
   {
-    ['tcMotsUtiles', 'tcContactsParMots', 'tcClasserContacts', 'tcDernierRdvParContact', 'tcDesignationSansPetitMot', 'tcBulleCharly', 'tcReponseOuiNon', 'tcRessembleAUneDemande', 'tcContactsDuLien', 'tcFormulaireContact', 'charlyQuickAction', 'renderChatMessage'].forEach((n) => {
+    ['tcMotsUtiles', 'tcContactsParMots', 'tcClasserContacts', 'tcDernierRdvParContact', 'tcDesignationSansPetitMot', 'tcBulleCharly', 'tcReponseOuiNon', 'tcReponseValidation', 'tcRessembleAUneDemande', 'tcContactsDuLien', 'tcFormulaireContact', 'charlyQuickAction', 'renderChatMessage'].forEach((n) => {
       if (typeof ctx[n] === 'function' || n === 'tcFormulaireContact' || n === 'charlyQuickAction' || n === 'renderChatMessage') return;
       const src = extraire(n); if (src) vm.runInContext(src, ctx); else verifie(n + ' existe', false);
     });
@@ -1893,7 +1893,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const contacts0 = ctx.contactsList, events0 = ctx.events;
     ctx.events = [];
     const carnet = () => [{ id: 'h', name: 'Hugo Besnard', phone: '0655507777', email: 'hugo@exemple.fr', categories: ['travail', 'personnel'] }, { id: 'g', name: 'Gaëlle Perrin', phone: '0655509999' },
-      { id: 'p1', name: 'Paul Fictif', email: 'paul@exemple.fr' }, { id: 'p2', name: 'Paul Martin', phone: '0611' }, { id: 'd', name: 'Jean-Marc Dentiste', phone: '0622' }, { id: 'm', name: 'Maman', phone: '0633', categories: ['famille'] }];
+      { id: 'p1', name: 'Paul Fictif', email: 'paul@exemple.fr' }, { id: 'p2', name: 'Paul Martin', phone: '0611' }, { id: 'd', name: 'Jean-Luc Dentiste', phone: '0622' }, { id: 'm', name: 'Maman', phone: '0633', categories: ['famille'] }];
     const fiches = (p) => { ctx.contactsList = carnet(); ctx.charlyIA.history = []; const d = ctx.tcDetecterFicheContact(p); const pris = !!d && ctx.tcGererFicheContact(p, d); const der = ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {}; return { pris, ids: pris ? (der._fiches ? der._fiches.ids : null) : null, der }; };
 
     // 1. Les phrases de la mission.
@@ -1909,11 +1909,45 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     // 2. Les pièges : la main reste au chemin habituel, rien n'est poussé.
     const pieges = [];
     for (const p of ['trouve-moi un restaurant', 'trouve-moi un dentiste', 'cherche mon rendez-vous de lundi', 'retrouve mon rendez-vous de lundi', 'qui est le président ?', 'qui est libre jeudi ?', 'cherche un créneau jeudi', 'trouve un créneau avec Hugo',
-      'retrouve Hugo à 15h', 'retrouve Hugo jeudi', 'trouve-moi 2 heures de libre cette semaine', 'qui est-ce ?', 'qui est Macron ?', 'retrouve macron', 'cherche pharmacie', 'Cherche Pharmacie', 'Cherche Dentiste Durand au centre ville', 'bonjour', 'le numéro de Hugo', 'trouve moi le numéro de Hugo', 'cherche le mail de Gaëlle']) {
+      'retrouve Hugo à 15h', 'retrouve Hugo jeudi', 'trouve-moi 2 heures de libre cette semaine', 'qui est-ce ?', 'retrouve macron', 'cherche pharmacie', 'Cherche Pharmacie', 'Cherche Dentiste Durand au centre ville', 'bonjour', 'le numéro de Hugo', 'trouve moi le numéro de Hugo', 'cherche le mail de Gaëlle']) {
       const r = fiches(p);
       if (r.pris || ctx.charlyIA.history.length) pieges.push(p);
     }
-    verifie('jamais de carte : un lieu, un rendez-vous, une chose, un moment, un nom inconnu sans majuscule, « qui est Macron ? »', pieges.length === 0, pieges.join(' / '));
+    verifie('jamais de carte : un lieu, un rendez-vous, une chose, un moment, un nom inconnu sans majuscule', pieges.length === 0, pieges.join(' / '));
+
+    // Examen : le nom entier, un mot en trop, les phrases qui ne parlent pas d'une personne, les fiches au nom de lieu, la décision du chef.
+    const absents = [];
+    for (const n of ['Marie', 'Marc', 'Laura', 'Sarah', 'Sandra', 'Mathieu', 'Monique', 'Tania']) {
+      const c = fiches('retrouve ' + n).der.content;
+      if (c !== 'Je ne trouve pas « ' + n + ' » dans tes contacts. Tu veux l’ajouter ?') absents.push(c);
+    }
+    verifie('(examen) le nom reste entier : Marie, Marc, Laura, Sarah, Sandra, Mathieu, Monique, Tania ; « mon dentiste » et « l’ostéopathe » perdent leur petit mot', absents.length === 0 && ctx.tcDesignationSansPetitMot('mon dentiste') === 'dentiste' && ctx.tcDesignationSansPetitMot('l’ostéopathe') === 'ostéopathe' && ctx.tcDesignationSansPetitMot('Marie') === 'Marie', absents.join(' / '));
+    const enTrop = [];
+    for (const p of ['est-ce que j’ai bien Hugo dans mes contacts ?', 'j’ai encore Hugo dans mes contacts ?', 'j’ai déjà Hugo dans mes contacts ?', 'j’ai toujours Hugo dans mes contacts ?', 'j’ai pas Hugo dans mes contacts ?', 'retrouve Hugo vite', 'Retrouve-moi Hugo maintenant', 'Retrouve Hugo rapidement', 'j’ai mon ami Hugo dans mes contacts ?', 'Hugo est bien dans mes contacts ?',
+      'je cherche Hugo', 'je veux retrouver Hugo', 'trouve-moi la fiche de Hugo', 'montre-moi la fiche de Hugo', 'où est la fiche de Hugo ?', 'la fiche de Hugo']) {
+      const r = fiches(p);
+      if (!r.pris || !r.ids || r.ids.join() !== 'h') enTrop.push(p + ' → ' + r.der.content);
+    }
+    verifie('(examen) un mot en trop ne fait jamais dire qu’une fiche existante n’existe pas ; « je cherche Hugo », « la fiche de Hugo »', enTrop.length === 0, enTrop.join(' / '));
+    const pasPersonne = [];
+    for (const p of ['j’ai combien de personnes dans mes contacts ?', 'j’ai combien de clients dans mes contacts ?', 'j’ai beaucoup de monde dans mes contacts ?', 'est-ce que j’ai des doublons dans mes contacts ?', 'est-ce que j’ai des médecins dans mes contacts ?', 'il y a des gens dans mes contacts ?', 'j’ai quoi dans mes contacts ?', 'j’ai ajouté Zoé dans mes contacts', 'j’ai mis Hugo dans mes contacts',
+      'Cherche Google', 'Trouve Garage', 'Cherche Zoé', 'cherche-moi Zoé', 'trouve-moi Zoé', 'retrouve zoé', 'qui est zoé ?']) {
+      const r = fiches(p);
+      if (r.pris || ctx.charlyIA.history.length) pasPersonne.push(p);
+    }
+    verifie('(examen, chef) jamais « Ajouter X » : une quantité, un pluriel, une phrase au passé, un simple « cherche X » ou « trouve X » sans fiche, un nom sans majuscule', pasPersonne.length === 0, pasPersonne.join(' / '));
+    const pPers = ['retrouve-moi Zoé', 'qui est Zoé ?', 'la fiche de Zoé', 'j’ai Zoé dans mes contacts ?'].filter((p) => fiches(p).der.content !== 'Je ne trouve pas « Zoé » dans tes contacts. Tu veux l’ajouter ?');
+    verifie('(chef) « retrouve-moi X », « qui est X ? », « la fiche de X », « j’ai X dans mes contacts ? » proposent l’ajout', pPers.length === 0, pPers.join(' / '));
+    const carnet0 = carnet;
+    const lieux = [];
+    for (const [p, id] of [['retrouve le docteur Martin', 'dm'], ['qui est le docteur Martin ?', 'dm'], ['retrouve pharmacie Durand', 'pd'], ['retrouve Banque Populaire', 'bp']]) {
+      ctx.contactsList = carnet0().concat([{ id: 'dm', name: 'Docteur Martin' }, { id: 'pd', name: 'Pharmacie Durand' }, { id: 'bp', name: 'Banque Populaire' }]); ctx.charlyIA.history = [];
+      const d = ctx.tcDetecterFicheContact(p);
+      const pris = !!d && ctx.tcGererFicheContact(p, d);
+      const der = ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
+      if (!pris || !der._fiches || der._fiches.ids.join() !== id) lieux.push(p);
+    }
+    verifie('(examen) le carnet est lu d’abord : « le docteur Martin », « pharmacie Durand », « Banque Populaire »', lieux.length === 0, lieux.join(' / '));
 
     // 3. La carte : les champs absents n'apparaissent pas, les catégories sont celles de la page (« personnel » n'en est pas une).
     const r1 = fiches('retrouve Hugo');
@@ -1980,6 +2014,25 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const b1 = nomRep('Gaëlle'), b2 = nomRep('c’est Hugo'), b3 = nomRep('zoé durand'), b4 = nomRep('annule mon rdv de demain'), b5 = nomRep('non'), b6 = nomRep('demain');
     verifie('« De qui veux-tu la fiche ? Dis-moi son nom. » puis le nom → la carte ; un inconnu → « Tu veux l’ajouter ? » ; une autre demande ou « demain » suit le chemin habituel ; « non » : on laisse',
       b1.q === 'De qui veux-tu la fiche ? Dis-moi son nom.' && b1.pris && b1.c === 'Gaëlle Perrin : 0655509999' && b2.c.indexOf('Hugo Besnard') === 0 && /« Zoé Durand »/.test(b3.c) && b4.pris === false && b4.n === 2 && b5.c === 'D’accord, on laisse ça.' && b6.pris === false, [b1.c, b2.c, b3.c, b4.pris, b5.c, b6.pris].join(' | '));
+
+    const ren = ['rien', 'c’est bon', 'oublie', 'tant pis', 'peu importe', 'finalement rien'].filter((p) => nomRep(p).c !== 'D’accord, on laisse ça.');
+    const flou = ['pardon', 'quoi ?', 'rien du tout merci beaucoup Charly'].filter((p) => nomRep(p).pris !== false);
+    const m1 = nomRep('hugo@exemple.fr'), m2 = nomRep('06 55 50 77 77'), m3 = nomRep('inconnu@exemple.fr');
+    verifie('(examen) au bouton : renoncer → « D’accord, on laisse ça. » ; « pardon », « quoi ? » : le chemin habituel ; un email ou un numéro cherche la fiche par ce champ', ren.length === 0 && flou.length === 0 && m1.c.indexOf('Hugo Besnard') === 0 && m2.c.indexOf('Hugo Besnard') === 0 && m3.pris === false, [ren.join(','), flou.join(','), m1.c, m2.c, m3.pris].join(' | '));
+    let ouvert2b = 0;
+    const form1 = ctx.tcFormulaireContact;
+    ctx.tcFormulaireContact = () => { ouvert2b++; };
+    const aj = ['ajoute-la', 'ajoute', 'ajoute-le'].filter((p) => { fiches('retrouve Zoé'); return !ctx.tcRepondreFicheContact(p); });
+    ctx.tcFormulaireContact = form1;
+    verifie('(examen) « ajoute-la », « ajoute » valent oui', aj.length === 0 && ouvert2b === 3, aj.join(','));
+    fiches('retrouve Paul');
+    ctx.contactsList = ctx.contactsList.filter((c) => c.id !== 'p1');
+    const sup1 = ctx.tcRepondreFicheContact('2'), supC = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
+    fiches('retrouve Paul');
+    ctx.contactsList = ctx.contactsList.filter((c) => c.id !== 'p1');
+    const sup2 = ctx.tcRepondreFicheContact('1'), supD = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
+    const num = choix('le numéro 2');
+    verifie('(examen) « Lequel ? » : le numéro est celui de l’écran, même si une autre fiche a été supprimée ; la fiche supprimée le dit ; « le numéro 2 » est compris', sup1 && supC.indexOf('Paul Martin') === 0 && sup2 && supD === 'Cette fiche n’existe plus.' && num.ids === 'p2', [supC, supD, num.ids].join(' | '));
 
     // 8. Le branchement.
     const icoord = csm.indexOf('if (_coord) { tcGererCoordonnees(text, _coord); return; }');
