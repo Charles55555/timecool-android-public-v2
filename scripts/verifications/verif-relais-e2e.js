@@ -7,7 +7,7 @@ const cp = require('child_process');
 const API = process.env.TC_API || 'https://api.timecool.fr';
 const LOCAL = /^http:\/\/127\.0\.0\.1/.test(API);
 
-let ko = 0, ok = 0;
+let ko = 0, ok = 0, avertissement = '';
 const verifie = (l, c, d) => { if (c) ok++; else { ko++; console.log('  KO ' + l + ' ' + (d || '')); } };
 
 async function appel(methode, chemin, corps, jeton, brut) {
@@ -136,9 +136,10 @@ async function enProduction(jeton) {
   let r = await appel('POST', '/relais/google/traduction', { q: ['Merci beaucoup'], source: 'fr', target: 'en', format: 'text' }, jeton);
   verifie('un compte neuf traduit, sans aucune clé', r.code === 200 && /thank/i.test(r.texte), r.code + ' ' + r.texte.slice(0, 120));
   r = await appel('POST', '/relais/google/recherche', { q: 'timecool' }, jeton);
-  // L'API de recherche n'est pas activée dans le projet Google : le relais a transmis, Google refuse. Ce n'est pas un défaut du relais.
+  // Le relais a transmis et Google refuse l'accès à cette API : la suite cite sa réponse, sans en deviner la cause.
   if (r.code === 403 && /Custom Search JSON API/.test(r.texte)) {
-    console.log('  ATTENTION recherche web : API Custom Search non activée dans le projet Google, le relais a bien transmis.');
+    avertissement = 'recherche web, refus de Google : ' + String((r.d && r.d.error && r.d.error.message) || r.texte).slice(0, 120);
+    console.log('  ATTENTION ' + avertissement);
   } else {
     verifie('et cherche sur le web', r.code === 200, r.code + ' ' + r.texte.slice(0, 120));
   }
@@ -179,6 +180,6 @@ async function enProduction(jeton) {
     await enProduction(jeton);
   }
   void moi;
-  console.log(ko ? ko + ' anomalie(s).' : ok + ' vérifications, aucune anomalie.');
+  console.log((ko ? ko + ' anomalie(s).' : ok + ' vérifications, aucune anomalie.') + (avertissement ? ' ATTENTION ' + avertissement : ''));
   process.exit(ko ? 1 : 0);
 })().catch((x) => { console.log('  KO ' + x.stack); process.exit(1); });
