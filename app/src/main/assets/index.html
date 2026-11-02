@@ -24337,27 +24337,28 @@ function tcRendreFiches(m) {
    MISSION 69 (02/11, chef, validée par Charles) : retrouver un contact, le nom placé n'importe où dans la phrase
 
    - « La Banane Dr Sellam tu peux me retrouver dans mes contacts en fait ce contact là » : verbe de recherche + mot de contact.
-   - Le nom se reconnaît à sa place, pas à ce qui reste dans la phrase : avant le verbe et séparé de lui (« Hugo tu peux me le retrouver », « Hugo, montre-moi
-     sa fiche » ; « Hugo cherche un client » : Hugo cherche, ce n'est pas une recherche), juste avant « dans mes contacts », après « la fiche de », après
-     « qui s'appelle », après un titre. Un titre (Dr, Mme…) ouvre le nom : ce qui le précède est ignoré, et un contact qui porte ce titre passe devant.
+   - Le nom se reconnaît à sa place, pas à ce qui reste dans la phrase. Le nom complet d'un contact écrit dans la phrase gagne sur toute autre lecture.
+     Avant le verbe, sans titre, le nom doit être repris : « Hugo tu peux me le retrouver », « Hugo, montre-moi sa fiche », « Hugo retrouve-le » ; « Hugo cherche
+     un client » ne le reprend pas : Hugo cherche, ce n'est pas une recherche. Après le verbe : juste avant « dans mes contacts », après « la fiche de », « le contact de »,
+     « qui s'appelle ». Un titre (Dr, Mme…) ouvre le nom : ce qui le précède est ignoré, et un contact qui porte ce titre passe devant.
    - Une fiche : la carte de la mission 66. Plusieurs : la liste. Aucune : « Je n'ai trouvé personne qui s'appelle X dans tes contacts. » et le bouton.
    - Dernier mot seul : prénom et nom ne correspondent pas ensemble, Charly montre la fiche et demande (règle de la mission 66).
-   - Un rendez-vous, un créneau, une action sur un contact, une négation : le chemin habituel.
+   - Un rendez-vous, un créneau, une action sur un contact, l'ordre de ne pas chercher : le chemin habituel. « je ne trouve pas Hugo dans mes contacts » est une recherche.
    ═══════════════════════════════════════════════════════════════ */
 
 const TC_FICHE_LIBRE_VERBE = /^(retrouve|retrouves|retrouver|trouve|trouves|trouver|cherche|cherches|chercher|recherche|recherches|rechercher|affiche|affiches|afficher|montre|montres|montrer)$/;
 /** Une phrase qui parle d'un rendez-vous ou qui demande d'agir sur un contact n'est pas une recherche de fiche. */
 const TC_FICHE_LIBRE_AUTRE = /(^| )(rdv|rendez|creneau|creneaux|dispo|dispos|disponible|disponibles|disponibilite|disponibilites|libre|libres|reunion|reunions|agenda|planning|annule|annuler|decale|decaler|deplace|deplacer|ajoute|ajouter|supprime|supprimer|efface|effacer|enleve|enlever|retire|retirer|envoie|envoyer|ecris|ecrire|appelle|appeler|previens|prevenir|invite|inviter|partage|partager|importe|importer|exporte|exporter|bloque|bloquer|debloque|debloquer|classe|classer|modifie|modifier|change|changer|fusionne|fusionner|combien|doublon|doublons|tous|toutes|recent|recents|nouveau|nouveaux)( |$)/;
-const TC_FICHE_LIBRE_NEGATION = /(^| )(ne|n|pas|jamais|plus)( |$)/;
 const TC_FICHE_LIBRE_TITRES = /^(dr|docteur|doc|mme|madame|monsieur|mr|mlle|mademoiselle|pr|professeur|maitre)$/;
-/** Ce qui peut séparer le nom du verbe sans que le nom soit le sujet : « Hugo tu peux me le retrouver ». */
-const TC_FICHE_LIBRE_LIAISON = /^(tu|peux|pourrais|est|ce|que|je|j|veux|voudrais|aimerais|le|la|l|les|me|m|moi|stp|svp|charly|s|il|te|plait|en|fait|alors|bon|sa|son)$/;
-const TC_FICHE_LIBRE_PRONOM = /^(le|la|l|les|me|m|moi)$/;
+/** Ce qui peut séparer le nom du verbe : « Hugo je n'arrive pas à le retrouver ». */
+const TC_FICHE_LIBRE_LIAISON = /^(tu|peux|pourrais|est|ce|que|je|j|veux|voudrais|aimerais|le|la|l|les|me|m|moi|stp|svp|charly|s|il|te|plait|en|fait|alors|sa|son|ne|n|pas|plus|arrive|a)$/;
+const TC_FICHE_LIBRE_REPRISE = /^(le|la|l|les)$/;
 const TC_FICHE_LIBRE_PARTICULE = /^(le|la|l|de|du|des|d|van|von)$/;
 const TC_FICHE_LIBRE_OUTILS = new RegExp('^(?:' + TC_FICHE_LIENS + '|retrouve|retrouves|retrouver|trouve|trouves|trouver|cherche|cherches|chercher|recherche|recherches|rechercher|affiche|affiches|afficher|montre|montres|montrer|'
   + 'tu|peux|peut|pourrais|pourrait|me|m|moi|te|t|toi|le|la|les|l|un|une|des|du|de|d|ce|cet|cette|ces|ca|cela|ici|dans|parmi|sur|en|fait|mes|tes|ses|mon|ma|ton|ta|son|sa|notre|votre|nos|vos|'
   + 'je|j|ai|as|voudrais|veux|aimerais|besoin|stp|svp|s|il|plait|merci|charly|bonjour|salut|oui|non|alors|donc|bon|bien|ah|oh|euh|pardon|excuse|est|que|qu|qui|ou|et|au|aux|pour|avec|chez|vite|rapidement|'
-  + 'maintenant|tout|suite|encore|deja|aussi|juste|appelle|nom|prenom|personne|carnet|adresse|adresses|repertoire|liste|contact|contacts|fiche|etre|y|a|elle|lui|on|nous|vous|c|vraiment|ouvre|ouvrir|donne|donner)$');
+  + 'maintenant|tout|suite|encore|deja|aussi|juste|appelle|nom|prenom|personne|carnet|adresse|adresses|repertoire|liste|contact|contacts|fiche|etre|y|a|elle|lui|on|nous|vous|c|vraiment|ouvre|ouvrir|donne|donner|'
+  + 'ne|n|pas|plus|jamais|arrive|super|parfait|allez|ensuite|apres|accord|daccord|dis|ecoute|regarde|aide|ok|okay|bravo|genial|nickel|tiens|bref|voila|puis|enfin|sinon|hop|attends|bah|ben|cool|top|tres)$');
 
 /** Les mots de la phrase, sans la ponctuation et les tirets ; virgule : une ponctuation les sépare du mot d'avant. */
 function tcFicheLibreMots(brut) {
@@ -24379,22 +24380,27 @@ function tcFicheLibreOutil(w) { return TC_FICHE_LIBRE_OUTILS.test(w) || !tcFiche
 function tcFicheLibreTitre(bouts, i) {
   const b = bouts[i], s = bouts[i + 1];
   if (!b || !s) return false;
-  if (TC_FICHE_LIBRE_TITRES.test(b.n)) return !tcFicheLibreOutil(s.n) || TC_FICHE_LIBRE_PARTICULE.test(s.n);
+  if (TC_FICHE_LIBRE_TITRES.test(b.n)) return !TC_FICHE_LIBRE_LIAISON.test(s.n) || TC_FICHE_LIBRE_PARTICULE.test(s.n) || /^[A-ZÀ-Ý]/.test(s.brut);
   return (b.brut === 'Me' || b.brut === 'M') && /^[A-ZÀ-Ý]/.test(s.brut) && !tcFicheLibreOutil(s.n);
 }
 
-/** Un nom à partir de ces mots : { mots, affiche, titre }. */
+/** Un nom à partir de ces mots : { mots, affiche, titre, sur }. Après un titre, tout mot peut être un nom (« Maître Personne »). */
 function tcFicheLibreNom(brut, liste, titre) {
-  const noms = liste.filter(function (b) { return !titre || b !== titre; });
+  const noms = titre ? liste.slice(1) : liste;
   const mots = tcMotsUtiles(noms.map(function (b) { return b.n; }).join(' '));
-  if (!mots.length || mots.length > 3 || mots.some(function (w) { return tcFicheLibreOutil(w); })) return null;
+  if (!mots.length || mots.length > 3 || (!titre && mots.some(function (w) { return tcFicheLibreOutil(w); }))) return null;
   return { mots: mots, affiche: brut.slice(liste[0].debut, liste[liste.length - 1].fin), titre: titre ? titre.n : '' };
 }
 
-/** Le nom qui suit un titre : ses mots, particules comprises (« Dr Le Gall »). */
+/** Le nom qui suit un titre : ses mots, particules comprises (« Dr Le Gall »), jusqu'au premier mot qui n'en est pas. */
 function tcFicheLibreApresTitre(brut, bouts, i, limite) {
   let j = i + 1;
-  while (j < limite && (!tcFicheLibreOutil(bouts[j].n) || (TC_FICHE_LIBRE_PARTICULE.test(bouts[j].n) && bouts[j + 1] && !tcFicheLibreOutil(bouts[j + 1].n)))) j++;
+  while (j < limite) {
+    const b = bouts[j];
+    const particule = TC_FICHE_LIBRE_PARTICULE.test(b.n) && bouts[j + 1] && !TC_FICHE_LIBRE_LIAISON.test(bouts[j + 1].n) && !tcFicheLibreOutil(bouts[j + 1].n);
+    if (!particule && (j > i + 1 || TC_FICHE_LIBRE_LIAISON.test(b.n)) && tcFicheLibreOutil(b.n)) break;
+    j++;
+  }
   return { nom: tcFicheLibreNom(brut, bouts.slice(i, j), bouts[i]), fin: j };
 }
 
@@ -24406,43 +24412,77 @@ function tcFicheLibreSuite(brut, bouts, i) {
 }
 
 /** « mon plombier », « ma sœur » : { nom, affiche, personne }. */
-function tcFicheLibreRelation(brut, bouts, i) {
+function tcFicheLibreRelation(bouts, i) {
   const s = bouts[i + 1];
   if (!s) return null;
   const personne = TC_FICHE_UN_LIEN.test(s.n) || TC_PROFESSIONS.some(function (p) { return tcSansAccents(p) === s.n; });
   return { nom: bouts[i].n + ' ' + s.n, affiche: s.brut, personne: personne };
 }
 
-/** Les noms placés avant le verbe : { noms, relation, liaison } ; null si le nom est le sujet du verbe (« Hugo cherche un client »). */
+/** Les contacts dont le nom complet (deux mots au moins) est écrit dans ces mots. */
+function tcFicheLibreExacts(bouts) {
+  const texte = ' ' + bouts.map(function (b) { return b.n; }).join(' ') + ' ';
+  return (Array.isArray(contactsList) ? contactsList : []).filter(function (c) {
+    const nom = c && tcClasseNormaliser(c.name);
+    return !!nom && nom.indexOf(' ') > -1 && texte.indexOf(' ' + nom + ' ') > -1;
+  }).map(function (c) { return { contact: c, mots: [], affiche: c.name, titre: '' }; });
+}
+
+/** La phrase reprend-elle celui qu'on vient de nommer ? « mes contacts », « un contact » ne reprennent personne. */
+function tcFicheLibreRepris(brut, bouts, fin, v) {
+  for (let i = fin; i < v; i++) if (TC_FICHE_LIBRE_REPRISE.test(bouts[i].n)) return true;
+  const a = bouts[v + 1], b = bouts[v + 2];
+  if (a && TC_FICHE_LIBRE_REPRISE.test(a.n) && brut.slice(bouts[v].fin, a.debut) === '-') return true;
+  const dit = ' ' + bouts.slice(v + 1).map(function (x) { return x.n; }).join(' ') + ' ';
+  if (/ (sa|son) (fiche|contact) | ce contact /.test(dit)) return true;
+  const dansContacts = / (dans|parmi) (mes|tes|les) contacts /.test(dit);
+  return dansContacts && (bouts.slice(fin, v).some(function (x) { return /^(me|m|moi)$/.test(x.n); }) || (!!a && /^(me|moi)$/.test(a.n)) || !!b && b.n === 'moi');
+}
+
+/** Les noms placés avant le verbe : { noms, relation, repris } ; null s'il n'y en a pas de sûr. */
 function tcFicheLibreAvant(brut, bouts, v) {
   let fin = v;
-  let pronom = false;
-  while (fin > 0 && TC_FICHE_LIBRE_LIAISON.test(bouts[fin - 1].n)) { fin--; if (TC_FICHE_LIBRE_PRONOM.test(bouts[fin].n)) pronom = true; }
-  // « où puis-je trouver… », « comment retrouver… » : une question, pas un nom.
+  while (fin > 0 && TC_FICHE_LIBRE_LIAISON.test(bouts[fin - 1].n)) fin--;
   if (fin === 0 || /^(ou|comment|quand|pourquoi|quel|quelle|puis|si)$/.test(bouts[0].n)) return null;
-  const apres = bouts[v + 1];
-  const imperatif = !!apres && /^(moi|me)$/.test(apres.n);
-  if (fin === v && !bouts[v].virgule && !imperatif) return null;
+  const repris = tcFicheLibreRepris(brut, bouts, fin, v);
   const noms = [];
   let relation = null;
   let i = 0;
   while (i < fin) {
     let j = i;
     while (j < fin && !/^(et|ou)$/.test(bouts[j].n) && !(j > i && bouts[j].virgule)) j++;
+    const part = bouts.slice(i, j);
+    const exacts = tcFicheLibreExacts(part);
+    let e = part.findIndex(function (b) { return /^(dans|parmi)$/.test(b.n); });
+    if (e < 0) e = part.length;
     let t = -1;
-    for (let k = i; k < j; k++) if (tcFicheLibreTitre(bouts, k)) t = k;
-    let d = i;
-    while (d < j && !/^(mon|ma)$/.test(bouts[d].n) && TC_FICHE_LIBRE_OUTILS.test(bouts[d].n)) d++;
-    let m = -1;
-    for (let k = d; k < j; k++) if (/^(mon|ma)$/.test(bouts[k].n)) { m = k; break; }
-    let nom = null;
-    if (t > -1) nom = tcFicheLibreNom(brut, bouts.slice(t, j), bouts[t]);
-    else if (m === d && m > -1) relation = tcFicheLibreRelation(brut, bouts, m);
-    else if (d < (m > -1 ? m : j)) { nom = tcFicheLibreNom(brut, bouts.slice(d, m > -1 ? m : j), null); if (!nom) return null; }
-    if (nom) noms.push(nom);
-    i = j + 1;
+    for (let k = 0; k < e; k++) if (tcFicheLibreTitre(part, k)) t = k;
+    if (exacts.length) exacts.forEach(function (x) { noms.push(x); });
+    else if (t > -1) { const r = tcFicheLibreApresTitre(brut, part, t, e); if (r.nom) noms.push(r.nom); }
+    else if (!repris) return null;
+    else {
+      // « j'ai perdu mes contacts, retrouve-les » : une phrase, pas un nom.
+      if (part.slice(0, e).some(function (b) { return /^(mes|contacts)$/.test(b.n); }) && !/^(mon|ma)$/.test(part[0].n)) return null;
+      if (/^(je|j|tu|on|il|elle)$/.test(part[0].n)) return null;
+      let d = 0;
+      while (d < e && !/^(mon|ma|mes|les|des|contact|contacts)$/.test(part[d].n) && TC_FICHE_LIBRE_OUTILS.test(part[d].n)) d++;
+      if (d < e && /^(mes|les|des|contact|contacts)$/.test(part[d].n)) return null;
+      if (d < e && /^(mon|ma)$/.test(part[d].n)) {
+        // « Mon ami Hugo » : le lien décrit la personne ; « mon plombier » seul la désigne.
+        const lien = part[d + 1] && TC_FICHE_UN_LIEN.test(part[d + 1].n);
+        const nom = lien ? tcFicheLibreSuite(brut, part.slice(0, e), d + 2) : null;
+        if (nom) noms.push(nom); else if (d === 0 || TC_FICHE_LIBRE_REPRISE.test(part[d - 1].n)) relation = tcFicheLibreRelation(part, d);
+      } else if (d < e) {
+        let f = d;
+        while (f < e && !tcFicheLibreOutil(part[f].n)) f++;
+        const nom = f > d ? tcFicheLibreNom(brut, part.slice(d, f), null) : null;
+        if (!nom) return null;
+        noms.push(nom);
+      }
+    }
+    i = (j < fin && /^(et|ou)$/.test(bouts[j].n)) ? j + 1 : j;
   }
-  return (noms.length || relation) ? { noms: noms, relation: relation, pronom: pronom } : null;
+  return (noms.length || relation) ? { noms: noms, relation: relation, repris: repris } : null;
 }
 
 /** Les noms placés après le verbe : à des places qui les annoncent, jamais un mot quelconque. */
@@ -24457,9 +24497,12 @@ function tcFicheLibreApres(brut, bouts, v) {
     }
   }
   if (noms.length) return { noms: noms, relation: null };
-  const pris = function (nom) { if (nom) noms.push(nom); return !!nom; };
+  const pris = function (nom, sur) { if (nom) { nom.sur = !!sur; noms.push(nom); } return !!nom; };
   let j = v + 1;
-  if (bouts[j] && /^(moi|me)$/.test(bouts[j].n)) j++;
+  while (bouts[j] && /^(moi|me|pas|plus)$/.test(bouts[j].n)) j++;
+  // « dans mes contacts retrouve Hugo ».
+  const avantDit = ' ' + bouts.slice(0, v).map(function (b) { return b.n; }).join(' ') + ' ';
+  if (/ (dans|parmi) (mes|tes|les) contacts /.test(avantDit) && j < bouts.length && pris(tcFicheLibreSuite(brut, bouts, j))) return { noms: noms, relation: null };
   // « retrouve Hugo dans mes contacts », « retrouve Hugo et Paul dans mes contacts en fait ».
   const d = bouts.findIndex(function (b, i) {
     return i > j && /^(dans|parmi|sur)$/.test(b.n) && bouts.slice(i + 1, i + 3).some(function (x) { return /^(contacts|carnet|repertoire)$/.test(x.n); });
@@ -24467,14 +24510,20 @@ function tcFicheLibreApres(brut, bouts, v) {
   if (d > -1) {
     let k = j;
     while (k < d && /^(le|la|l)$/.test(bouts[k].n)) k++;
+    if (k < d && /^(mon|ma)$/.test(bouts[k].n)) return { noms: [], relation: tcFicheLibreRelation(bouts, k) };
     while (k < d) {
       let e = k;
       while (e < d && !/^(et|ou)$/.test(bouts[e].n)) e++;
-      // « les médecins », « mes amis » : pas un nom.
-      const pasNom = bouts.slice(k, e).some(function (b) { return tcFicheLibreOutil(b.n) && !/^(de|du|d|le|la|l)$/.test(b.n); });
-      const nom = pasNom ? null : tcFicheLibreNom(brut, bouts.slice(k, e), null);
-      if (!nom) { noms.length = 0; break; }
-      noms.push(nom);
+      const part = bouts.slice(k, e);
+      const exacts = tcFicheLibreExacts(part);
+      if (exacts.length) exacts.forEach(function (x) { noms.push(x); });
+      else {
+        // « les médecins », « mes amis » : pas un nom.
+        const pasNom = part.some(function (b) { return tcFicheLibreOutil(b.n) && !/^(de|du|d|le|la|l)$/.test(b.n); });
+        const nom = pasNom ? null : tcFicheLibreNom(brut, part, null);
+        if (!nom) { noms.length = 0; break; }
+        noms.push(nom);
+      }
       k = e + 1;
     }
     if (noms.length) return { noms: noms, relation: null };
@@ -24482,15 +24531,17 @@ function tcFicheLibreApres(brut, bouts, v) {
   for (let i = j; i < bouts.length; i++) {
     const b = bouts[i], s = bouts[i + 1];
     if (!s) break;
-    if (b.n === 'fiche' && /^(de|d)$/.test(s.n)) {
+    if (/^(fiche|contact)$/.test(b.n) && /^(de|d)$/.test(s.n)) {
       let k = i + 2;
-      if (bouts[k] && /^(mon|ma)$/.test(bouts[k].n)) { relation = tcFicheLibreRelation(brut, bouts, k); break; }
+      if (bouts[k] && /^(mon|ma)$/.test(bouts[k].n)) { relation = tcFicheLibreRelation(bouts, k); break; }
       while (bouts[k] && /^(le|la|l)$/.test(bouts[k].n)) k++;
       if (pris(tcFicheLibreSuite(brut, bouts, k))) break;
     }
-    if (b.n === 'contact' && /^[A-ZÀ-Ý]/.test(s.brut) && pris(tcFicheLibreSuite(brut, bouts, i + 1))) break;
+    if (b.n === 'fiche' && s.n === 'contact') continue;
+    // « retrouve le contact hugo » en dictée : sans fiche à ce nom, le chemin habituel (« mon contact préféré »).
+    if (b.n === 'contact' && !tcFicheLibreOutil(s.n)) { if (pris(tcFicheLibreSuite(brut, bouts, i + 1), !/^[A-ZÀ-Ý]/.test(s.brut))) break; }
     if (b.n === 'appelle' && pris(tcFicheLibreSuite(brut, bouts, i + 1))) break;
-    if (b.n === 'contacts' && i >= 2 && /^(dans|parmi)$/.test(bouts[i - 2].n) && i - 2 === j && pris(tcFicheLibreSuite(brut, bouts, i + 1))) break;
+    if (b.n === 'contacts' && i >= 2 && /^(dans|parmi)$/.test(bouts[i - 2].n) && i - 2 === j && pris(tcFicheLibreSuite(brut, bouts, i + 1), true)) break;
   }
   return (noms.length || relation) ? { noms: noms, relation: relation } : null;
 }
@@ -24499,11 +24550,15 @@ function tcFicheLibreApres(brut, bouts, v) {
 function tcDetecterFicheLibre(text) {
   const brut = String(text || '').replace(/œ/g, 'oe').replace(/Œ/g, 'Oe').replace(/æ/g, 'ae');
   const n = tcClasseNormaliser(brut);
-  if (!n || n.split(' ').length > 30 || /\d/.test(n) || TC_FICHE_LIBRE_NEGATION.test(n)) return null;
+  if (!n || n.split(' ').length > 30 || /\d/.test(n)) return null;
   const bouts = tcFicheLibreMots(brut);
   // « trouvé », « trouvée » : ce qui s'est passé, pas ce qui est demandé.
   const v = bouts.findIndex(function (b) { return TC_FICHE_LIBRE_VERBE.test(b.n) && !/[éÉ]e?s?$/.test(b.brut); });
   if (v < 0) return null;
+  // « ne cherche pas Hugo » : un ordre de ne pas faire. « je ne trouve pas Hugo » : une recherche.
+  for (let i = v - 1; i >= 0 && i >= v - 2; i--) {
+    if (/^(ne|n)$/.test(bouts[i].n) && !(bouts[i - 1] && /^(je|j)$/.test(bouts[i - 1].n))) return null;
+  }
   const i = (' ' + n + ' ').indexOf(' fiche ');
   if (i > -1 && TC_FICHE_DE_CHOSE.test(n.slice(i))) return null;
   // « Lucie Classe » : un mot du nom d'un contact cité dans la phrase ne compte pas comme une demande.
@@ -24514,15 +24569,12 @@ function tcDetecterFicheLibre(text) {
   });
   if (TC_FICHE_LIBRE_AUTRE.test(reste)) return null;
   const net = / (contact|contacts|fiche) /.test(' ' + n + ' ');
+  const apres = net ? tcFicheLibreApres(brut, bouts, v) : null;
+  // « Hugo, retrouve le contact de Paul » : le nom annoncé après le verbe gagne.
+  if (apres && apres.noms.length && !apres.noms.every(function (g) { return g.sur; })) return apres;
   const avant = tcFicheLibreAvant(brut, bouts, v);
-  if (avant) {
-    // « client », « ami », « mon plombier » suffisent seulement si la phrase reprend la personne : « Hugo mon client tu peux me le retrouver ».
-    const proche = avant.pronom && (TC_FICHE_MOT_CONTACT.test(' ' + n + ' ') || (avant.relation && avant.relation.personne) || / (?:mon|ma) /.test(' ' + n + ' '));
-    if (net || proche) return avant;
-    return null;
-  }
-  if (!net) return null;
-  return tcFicheLibreApres(brut, bouts, v);
+  if (avant && (net || (avant.repris && (avant.relation ? avant.relation.personne : (TC_FICHE_MOT_CONTACT.test(' ' + n + ' ') || / (?:mon|ma) /.test(' ' + n + ' ')))))) return avant;
+  return apres;
 }
 
 /** « Dr Sellam » : le contact qui porte ce titre passe devant Paul Sellam. */
@@ -24543,7 +24595,7 @@ function tcGererFicheLibre(text, d) {
   }
   const trouves = [], absents = [];
   d.noms.forEach(function (g) {
-    const f = tcFicheLibreParTitre(tcContactsParMots(g.mots), g.titre);
+    const f = g.contact ? [g.contact] : tcFicheLibreParTitre(tcContactsParMots(g.mots), g.titre);
     if (!f.length) absents.push(g);
     f.forEach(function (c) { if (trouves.indexOf(c) < 0) trouves.push(c); });
   });
@@ -24571,7 +24623,8 @@ function tcGererFicheLibre(text, d) {
     renderCharlyChat();
     return true;
   }
-  // Un métier n'est pas le nom de quelqu'un : « plombier » absent ne fait pas dire « personne qui s'appelle Plombier ».
+  // Un mot peu sûr, ou un métier, n'est pas le nom de quelqu'un : « personne qui s'appelle Plombier » serait faux.
+  if (d.noms.every(function (g) { return g.sur; })) return false;
   if (d.noms.every(function (g) { return !g.titre && g.mots.length === 1 && TC_PROFESSIONS.some(function (p) { return tcSansAccents(p) === g.mots[0]; }); })) return false;
   tcPousserMessageUtilisateur(text);
   charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: personne(d.noms), _fiches: { retrouver: true, ids: [] } });
