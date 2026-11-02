@@ -18,14 +18,14 @@ function fonction(texte, nom) {
   return null;
 }
 
-titre('1. La 2e ligne : 4 boutons, textes exacts, meme style que la 1re');
+titre('1. La 2e ligne : 5 boutons, textes exacts, meme style que la 1re');
 const l1 = page.match(/<div id="charlyQuickActions" [^>]*>[\s\S]*?<\/div>/);
 const l2 = page.match(/<div id="charlyQuickActions2" [^>]*>[\s\S]*?<\/div>/);
 verifie('les deux lignes existent, la 2e juste sous la 1re', !!(l1 && l2) && page.indexOf(l2[0]) > page.indexOf(l1[0]) && page.slice(page.indexOf(l1[0]) + l1[0].length, page.indexOf(l2[0])).replace(/<!--[\s\S]*?-->/g, '').trim() === '');
-const TEXTES = ['👥 Rendez-vous à plusieurs', '🤒 Je suis malade, décale tout', '🕐 Quand suis-je libre ?', '📸 Photo → rendez-vous'];
-const ACTIONS = ['groupe', 'malade', 'libre', 'photo'];
+const TEXTES = ['👥 Rendez-vous à plusieurs', '🤒 Je suis malade, décale tout', '🕐 Quand suis-je libre ?', '📸 Photo → rendez-vous', '👤 Retrouver un contact'];
+const ACTIONS = ['groupe', 'malade', 'libre', 'photo', 'contact'];
 const boutons = l2 ? (l2[0].match(/<button[^>]*>[^<]*<\/button>/g) || []) : [];
-verifie('4 boutons, dans l ordre, textes exacts', boutons.length === 4 && TEXTES.every((t, i) => boutons[i].indexOf('>' + t + '</button>') > -1), boutons.map((b) => b.replace(/<button[^>]*>/, '')).join(' | '));
+verifie('5 boutons, dans l ordre, textes exacts', boutons.length === 5 && TEXTES.every((t, i) => boutons[i].indexOf('>' + t + '</button>') > -1), boutons.map((b) => b.replace(/<button[^>]*>/, '')).join(' | '));
 verifie('chaque bouton appelle charlyQuickAction avec sa cle', ACTIONS.every((a, i) => boutons[i] && boutons[i].indexOf('onclick="charlyQuickAction(\'' + a + '\')"') > -1));
 const style1 = l1 ? (l1[0].match(/<button[^>]*style="([^"]*)"/) || [])[1] : '';
 const styles2 = boutons.map((b) => (b.match(/style="([^"]*)"/) || [])[1] || '');
@@ -46,6 +46,7 @@ const ctx = {
   tcPrevenirRetard: () => {}, tcDemarrerNouveauRdv: () => {}, tcDemarrerImprevu: () => {}, startAssistant: () => {}, tcDemarrerCalculTrajet: () => {},
   tcDemarrerRdvAPlusieurs: (t) => { appels.push('plusieurs:' + t); },
   tcDemarrerLibre: (t) => { appels.push('libre:' + t); },
+  tcDemarrerRetrouverContact: (t) => { appels.push('contact:' + t); },
   _agendaChecked: null, Set,
   document: { getElementById: () => ctx._champ }, _champ: { value: '' }
 };
@@ -64,6 +65,8 @@ if (!ko) {
   ctx.charlyQuickAction('libre');
   // Mission 49 : le questionnaire guidé (tcDemarrerLibre), avec la bulle du bouton ; plus de phrase pré-remplie.
   verifie('« Quand suis-je libre ? » : le questionnaire guidé démarre avec la bulle du bouton', appels.indexOf('libre:Quand suis-je libre ?') > -1 && appels.indexOf('envoi:Quand suis-je libre cette semaine ?') < 0, appels.join(' ; '));
+  ctx.charlyQuickAction('contact');
+  verifie('« Retrouver un contact » : Charly demande le nom, avec la bulle du bouton', appels.indexOf('contact:Retrouver un contact') > -1);
   ctx.charlyQuickAction('photo');
   verifie('« Photo → rendez-vous » : le même chemin que le trombone (Photos)', appels.indexOf('trombone:photo') > -1);
 }

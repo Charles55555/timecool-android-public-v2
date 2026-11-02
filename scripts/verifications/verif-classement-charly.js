@@ -1875,6 +1875,126 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     remise(agenda());
   }
 
+  titre('23. Mission 66 : Charly retrouve un contact (carte, « Ouvrir la fiche », « Ajouter X », bouton)');
+  {
+    ['tcMotsUtiles', 'tcContactsParMots', 'tcClasserContacts', 'tcDernierRdvParContact', 'tcDesignationSansPetitMot', 'tcBulleCharly', 'tcReponseOuiNon', 'tcRessembleAUneDemande', 'tcContactsDuLien', 'tcFormulaireContact', 'charlyQuickAction', 'renderChatMessage'].forEach((n) => {
+      if (typeof ctx[n] === 'function' || n === 'tcFormulaireContact' || n === 'charlyQuickAction' || n === 'renderChatMessage') return;
+      const src = extraire(n); if (src) vm.runInContext(src, ctx); else verifie(n + ' existe', false);
+    });
+    const echap0 = ctx.escapeHTMLSafe;
+    { const src = extraire('escapeHTMLSafe'); if (src) vm.runInContext(src, ctx); else verifie('escapeHTMLSafe existe', false); }
+    const dispo0 = ctx.DISPO_CATEGORIES;
+    if (!dispo0) vm.runInContext('var DISPO_CATEGORIES = [{ id: "travail", label: "Mon travail" }, { id: "famille", label: "Ma famille" }, { id: "personnel", label: "Mon temps libre" }];', ctx);
+    ['TC_PETITS_MOTS', 'TC_MSG_LIENS', 'TC_PROFESSIONS'].forEach((n) => {
+      if (vm.runInContext('typeof ' + n, ctx) !== 'undefined') return;
+      const m = page.match(new RegExp('const ' + n + ' = \\[[\\s\\S]*?\\];'));
+      if (m) vm.runInContext(m[0], ctx); else verifie(n + ' existe', false);
+    });
+    const contacts0 = ctx.contactsList, events0 = ctx.events;
+    ctx.events = [];
+    const carnet = () => [{ id: 'h', name: 'Hugo Besnard', phone: '0655507777', email: 'hugo@exemple.fr', categories: ['travail', 'personnel'] }, { id: 'g', name: 'Gaëlle Perrin', phone: '0655509999' },
+      { id: 'p1', name: 'Paul Fictif', email: 'paul@exemple.fr' }, { id: 'p2', name: 'Paul Martin', phone: '0611' }, { id: 'd', name: 'Jean-Marc Dentiste', phone: '0622' }, { id: 'm', name: 'Maman', phone: '0633', categories: ['famille'] }];
+    const fiches = (p) => { ctx.contactsList = carnet(); ctx.charlyIA.history = []; const d = ctx.tcDetecterFicheContact(p); const pris = !!d && ctx.tcGererFicheContact(p, d); const der = ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {}; return { pris, ids: pris ? (der._fiches ? der._fiches.ids : null) : null, der }; };
+
+    // 1. Les phrases de la mission.
+    const trouves = [];
+    for (const [p, id] of [['retrouve Hugo', 'h'], ['retrouve-moi Hugo', 'h'], ['cherche Gaëlle', 'g'], ['cherche-moi gaelle', 'g'], ['trouve Hugo', 'h'], ['trouve-moi hugo besnard', 'h'], ['est-ce que j’ai Hugo dans mes contacts ?', 'h'],
+      ['j’ai Hugo dans mes contacts ?', 'h'], ['qui est Hugo ?', 'h'], ['Hugo est dans mes contacts ?', 'h'], ['Gaëlle est-elle dans mes contacts ?', 'g'], ['tu peux me retrouver Hugo stp', 'h'], ['Hugo fait partie de mes contacts ?', 'h'],
+      ['retrouve ma mère', 'm'], ['cherche maman', 'm'], ['qui est mon dentiste ?', 'd']]) {
+      const r = fiches(p);
+      if (!r.pris || !r.ids || r.ids.join() !== id) trouves.push(p + ' → ' + r.ids);
+    }
+    verifie('les phrases de la mission donnent la carte de la bonne fiche, y compris « ma mère » (lien de famille) et « mon dentiste »', trouves.length === 0, trouves.join(' / '));
+
+    // 2. Les pièges : la main reste au chemin habituel, rien n'est poussé.
+    const pieges = [];
+    for (const p of ['trouve-moi un restaurant', 'trouve-moi un dentiste', 'cherche mon rendez-vous de lundi', 'retrouve mon rendez-vous de lundi', 'qui est le président ?', 'qui est libre jeudi ?', 'cherche un créneau jeudi', 'trouve un créneau avec Hugo',
+      'retrouve Hugo à 15h', 'retrouve Hugo jeudi', 'trouve-moi 2 heures de libre cette semaine', 'qui est-ce ?', 'qui est Macron ?', 'retrouve macron', 'cherche pharmacie', 'Cherche Pharmacie', 'Cherche Dentiste Durand au centre ville', 'bonjour', 'le numéro de Hugo', 'trouve moi le numéro de Hugo', 'cherche le mail de Gaëlle']) {
+      const r = fiches(p);
+      if (r.pris || ctx.charlyIA.history.length) pieges.push(p);
+    }
+    verifie('jamais de carte : un lieu, un rendez-vous, une chose, un moment, un nom inconnu sans majuscule, « qui est Macron ? »', pieges.length === 0, pieges.join(' / '));
+
+    // 3. La carte : les champs absents n'apparaissent pas, les catégories sont celles de la page (« personnel » n'en est pas une).
+    const r1 = fiches('retrouve Hugo');
+    const h1 = ctx.tcRendreFiches(r1.der);
+    const r2 = fiches('cherche Gaëlle');
+    const h2 = ctx.tcRendreFiches(r2.der);
+    verifie('la carte montre nom, téléphone, email, catégorie, bouton « Ouvrir la fiche » ; le texte gardé dit la même chose ; sans email ni catégorie, ces lignes n’existent pas',
+      /Hugo Besnard/.test(h1) && /0655507777/.test(h1) && /hugo@exemple\.fr/.test(h1) && /Mon travail/.test(h1) && !/temps libre/.test(h1) && /tcOuvrirFicheContact\(&quot;h&quot;\)/.test(h1) && />Ouvrir la fiche</.test(h1)
+      && r1.der.content === 'Hugo Besnard : 0655507777, hugo@exemple.fr, Mon travail' && r1.der.nature === 'reponse' && !r1.der._ficheAttente
+      && r2.der.content === 'Gaëlle Perrin : 0655509999' && (h2.match(/data-notranslate/g) || []).length === 2, h2);
+
+    // 4. Plusieurs fiches : une carte par fiche, 5 au plus, « Lequel ? », la réponse choisit.
+    const r3 = fiches('retrouve Paul');
+    const h3 = ctx.tcRendreFiches(r3.der);
+    ctx.contactsList = carnet().concat([1, 2, 3, 4, 5].map((i) => ({ id: 'x' + i, name: 'Paul Numero' + i })));
+    ctx.charlyIA.history = [];
+    ctx.tcGererFicheContact('retrouve Paul', ctx.tcDetecterFicheContact('retrouve Paul'));
+    const r4 = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+    verifie('deux Paul : deux cartes numérotées puis « Lequel ? » ; sept Paul : « Tu as 7 contacts à ce nom. Voici les 5 plus probables : », 5 cartes',
+      (h3.match(/Ouvrir la fiche/g) || []).length === 2 && /1\. Paul Fictif/.test(h3) && /Lequel \?/.test(h3) && r3.der.nature === 'question'
+      && r4._fiches.ids.length === 5 && /^Tu as 7 contacts à ce nom\. Voici les 5 plus probables :/.test(r4.content), r4.content);
+    const choix = (rep) => { const a = fiches('retrouve Paul'); const pris = ctx.tcRepondreFicheContact(rep); const der = ctx.charlyIA.history[ctx.charlyIA.history.length - 1]; return { pris, ids: der._fiches ? der._fiches.ids.join() : '', c: der.content }; };
+    const c2 = choix('2'), cn = choix('Martin'), cd = choix('le deuxième'), cp = choix('la première'), c9 = choix('annule mon rdv'), cnon = choix('non');
+    const finChoix = (fiches('retrouve Paul'), ctx.charlyIA.history.push({ role: 'user', content: 'autre' }), ctx.tcRepondreFicheContact('2'));
+    verifie('« Lequel ? » : « 2 », « Martin », « le deuxième », « la première » choisissent ; « non » : « D’accord, on laisse ça. » ; une autre demande suit le chemin habituel ; l’attente ne vaut que pour le message suivant',
+      c2.pris && c2.ids === 'p2' && cn.ids === 'p2' && cd.ids === 'p2' && cp.ids === 'p1' && c9.pris === false && cnon.pris && cnon.c === 'D’accord, on laisse ça.' && finChoix === false, [c2.ids, cn.ids, cd.ids, cp.ids, c9.pris, cnon.c, finChoix].join(' | '));
+
+    // 5. Aucune fiche : la question, le bouton, le « oui » tapé.
+    const absentes = {};
+    for (const p of ['retrouve Zoé', 'est-ce que j’ai Zoé dans mes contacts ?', 'est-ce que j’ai zoé dans mes contacts ?', 'Zoé Durand est dans mes contacts ?']) { absentes[p] = fiches(p).der.content; }
+    const r5 = fiches('retrouve Zoé');
+    const h5 = ctx.tcRendreFiches(r5.der);
+    let ouvert = null;
+    const form0 = ctx.tcFormulaireContact;
+    ctx.tcFormulaireContact = (id, nom) => { ouvert = [id, nom]; };
+    ctx.tcFicheAjouter('Zoé');
+    const ouvert1 = ouvert; ouvert = null;
+    fiches('retrouve Zoé');
+    const o1 = ctx.tcRepondreFicheContact('oui'); const oc = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content, ouvert2 = ouvert;
+    ouvert = null; fiches('retrouve Zoé');
+    const n1 = ctx.tcRepondreFicheContact('non merci'); const nc = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
+    ctx.tcFormulaireContact = form0;
+    verifie('« Je ne trouve pas « Zoé » dans tes contacts. Tu veux l’ajouter ? », bouton « Ajouter Zoé » vers le formulaire pré-rempli ; « oui » l’ouvre, « non merci » n’ajoute rien ; « zoé » tapé en minuscules s’écrit « Zoé »',
+      r5.der.content === 'Je ne trouve pas « Zoé » dans tes contacts. Tu veux l’ajouter ?' && Object.values(absentes).slice(0, 3).every((c) => c === r5.der.content) && /« Zoé Durand »/.test(absentes['Zoé Durand est dans mes contacts ?'])
+      && /tcFicheAjouter\(&quot;Zoé&quot;\)/.test(h5) && /Ajouter <span data-notranslate>Zoé</.test(h5) && JSON.stringify(ouvert1) === '[null,"Zoé"]' && o1 && JSON.stringify(ouvert2) === '[null,"Zoé"]' && /formulaire/.test(oc) && n1 && nc === 'D’accord, je n’ajoute rien.' && ouvert === null, [h5, JSON.stringify(ouvert2), nc].join(' | '));
+    const r6 = fiches('retrouve ma sœur');
+    const r7 = (ctx.contactsList = [{ id: 'z', name: 'Zed' }], ctx.charlyIA.history = [], ctx.tcGererFicheContact('retrouve ma mère', ctx.tcDetecterFicheContact('retrouve ma mère')), ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content);
+    verifie('« ma sœur » sans fiche à ce nom : la famille, dite comme telle ; rien dans la famille : le message de la mission 59', /^Je ne sais pas qui est ta sœur dans tes contacts\. Dans ta famille, j’ai :/.test(r6.der.content) && r6.der._fiches.ids.join() === 'm'
+      && r7 === 'Je ne trouve pas ta mère dans tes contacts : dis-moi son nom, ou classe sa fiche dans « Ma famille ».', r6.der.content + ' | ' + r7);
+
+    // 6. Un nom ou un email piégé reste du texte ; une fiche supprimée disparaît de la carte.
+    ctx.contactsList = [{ id: 'q"\'1', name: 'Léa <b>"x"</b>', phone: '<i>1', email: 'a"b@c' }];
+    ctx.charlyIA.history = [];
+    ctx.tcPousserFiches(ctx.contactsList);
+    const m6 = ctx.charlyIA.history[0];
+    const h6 = ctx.tcRendreFiches(m6);
+    const hA = ctx.tcRendreFiches({ content: 'x', _fiches: { ajouter: 'Lo"é<b>' } });
+    ctx.contactsList = [];
+    const h7 = ctx.tcRendreFiches(m6);
+    verifie('rien de ce que contient une fiche n’entre dans la page comme du code ; une fiche supprimée laisse le texte', h6.indexOf('<b>') < 0 && h6.indexOf('<i>') < 0 && !/onclick="[^"]*"[^ >]*"/.test(h6) && hA.indexOf('<b>') < 0 && h7.indexOf('Ouvrir la fiche') < 0 && /Léa/.test(h7), h6);
+
+    // 7. Le bouton de raccourci, la réponse au nom.
+    const nomRep = (rep) => { ctx.contactsList = carnet(); ctx.charlyIA.history = []; ctx.tcDemarrerRetrouverContact('Retrouver un contact'); const q = ctx.charlyIA.history[1].content; const pris = ctx.tcRepondreFicheContact(rep); const der = ctx.charlyIA.history[ctx.charlyIA.history.length - 1]; return { q, pris, c: der.content, n: ctx.charlyIA.history.length }; };
+    const b1 = nomRep('Gaëlle'), b2 = nomRep('c’est Hugo'), b3 = nomRep('zoé durand'), b4 = nomRep('annule mon rdv de demain'), b5 = nomRep('non'), b6 = nomRep('demain');
+    verifie('« De qui veux-tu la fiche ? Dis-moi son nom. » puis le nom → la carte ; un inconnu → « Tu veux l’ajouter ? » ; une autre demande ou « demain » suit le chemin habituel ; « non » : on laisse',
+      b1.q === 'De qui veux-tu la fiche ? Dis-moi son nom.' && b1.pris && b1.c === 'Gaëlle Perrin : 0655509999' && b2.c.indexOf('Hugo Besnard') === 0 && /« Zoé Durand »/.test(b3.c) && b4.pris === false && b4.n === 2 && b5.c === 'D’accord, on laisse ça.' && b6.pris === false, [b1.c, b2.c, b3.c, b4.pris, b5.c, b6.pris].join(' | '));
+
+    // 8. Le branchement.
+    const icoord = csm.indexOf('if (_coord) { tcGererCoordonnees(text, _coord); return; }');
+    const ifiche = csm.indexOf('if (_fiche && tcGererFicheContact(text, _fiche)) return;');
+    const imsg = csm.indexOf('await tcRepondreMessageSansTexte(text, texteTape)) return;'), irep = csm.indexOf('tcRepondreFicheContact(text)) return;');
+    verifie('charlySendMessage : la réponse attendue avec les autres, le déclencheur juste après les coordonnées ; les cartes dans renderChatMessage ; le bouton au bout de la 2e ligne ; « Ajouter » passe par le formulaire ; la présentation cite la fiche ; la carte de la page Contacts a son repère',
+      imsg > -1 && irep > imsg && icoord > -1 && ifiche > icoord && ifiche - icoord < 400
+      && /if \(m && m\._fiches\) return tcRendreFiches\(m\);/.test(page) && /charlyQuickAction\('contact'\)[^>]*>👤 Retrouver un contact<\/button>/.test(page) && /if \(action === 'contact'\) \{ tcDemarrerRetrouverContact\('Retrouver un contact'\); return; \}/.test(page)
+      && /function tcFormulaireContact\(contactId, nomPropose\)/.test(page) && /nomPropose \? tcContactDecouperNom\(nomPropose\)/.test(page) && /• retrouver la fiche d’un contact ;/.test(page) && /id="ctFiche_\$\{c\.id\}"/.test(page));
+    const b66 = bloc.indexOf('MISSION 66') > -1 ? bloc.slice(bloc.indexOf('MISSION 66')) : '';
+    verifie('pas de tiret long, d’assertion arrière ni de « \\b » dans le bloc 66', b66.length > 1000 && !/\(\?<[=!]/.test(b66) && b66.indexOf('—') < 0 && b66.indexOf('\\b') < 0);
+    ctx.contactsList = contacts0; ctx.events = events0; ctx.charlyIA.history = []; ctx.escapeHTMLSafe = echap0;
+    if (!dispo0) vm.runInContext('DISPO_CATEGORIES = undefined;', ctx);
+  }
+
   titre('13. Mission 56 : pros, clients, rappels et invitations');
   ctx.contactsList = [{ id: 'c1', name: 'Marc Dupont', phone: '06' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', phone: '06', referenceCompte: 'R3' },
     { id: 'h', name: 'Hugo Besnard', phone: '06', referenceCompte: 'HQ1' }, { id: 'g', name: 'Gaëlle Perrin', phone: '06', referenceCompte: 'GP1' }];

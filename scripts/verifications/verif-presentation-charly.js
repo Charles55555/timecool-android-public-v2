@@ -21,6 +21,7 @@ const ATTENDU = 'Je suis Charly, ton assistant personnel créé par TimeCool pou
   + '• créer tes rendez-vous, à 2 comme à 10 personnes ;\n'
   + '• prévenir d’un retard, annuler ou décaler un rendez-vous en m’excusant pour toi ;\n'
   + '• te dire ce que tu as, quand tu es libre, et le temps de trajet pour y aller ;\n'
+  + '• retrouver la fiche d’un contact ;\n'
   + '• changer la langue et tes réglages (bientôt).\n'
   + 'Parle-moi, j’exécute en un temps record. Et bien plus encore…';
 
@@ -33,7 +34,7 @@ if (!constante || !faq) { console.log('\n' + (ko || 1) + ' anomalie(s).'); proce
 const ctx = { console };
 vm.createContext(ctx);
 vm.runInContext(constante[0] + '\n' + fonction(page, 'tcContientMot') + '\nglobalThis.presentation = TC_CHARLY_PRESENTATION;\n' + faq[0].replace('const _faq', 'globalThis._faq'), ctx);
-verifie('le texte est exactement celui de Charles (apostrophes typographiques, 7 lignes)', ctx.presentation === ATTENDU, ctx.presentation);
+verifie('le texte est exactement celui de Charles (apostrophes typographiques, 8 lignes)', ctx.presentation === ATTENDU, ctx.presentation);
 verifie('aucune apostrophe droite dans le texte', ctx.presentation.indexOf("'") < 0);
 const entrees = ctx._faq.filter((f) => f.reply === ctx.presentation);
 verifie('les deux entrees (« que sais-tu faire » et « qui es-tu ») rendent ce texte', entrees.length === 2);

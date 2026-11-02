@@ -3026,3 +3026,17 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
   « hier », ni un rendez-vous ou contact nommé ; « de 14h » veut dire 14h00 ; une durée (« le rdv d'1h ») ou la nuit (« de 2h ») ne
   sont pas une heure. L'aide figée : un rendez-vous ou un contact nommé l'emporte (« avec Sophie, je suis pris à 14h » → Sophie), une
   période non lue (« la semaine prochaine à 14h ») garde la liste d'avant. « Demande à Hugo quand il est dispo en visio » est pris aussi.
+
+## 02/11/2026 — Mission 66 (chef, validée par Charles) : Charly retrouve un contact
+
+- « retrouve Hugo », « cherche-moi Gaëlle », « trouve-moi Paul », « est-ce que j'ai Hugo dans mes contacts ? », « Hugo est dans mes contacts ? »,
+  « qui est Hugo ? » : une petite carte dans le chat (nom, téléphone, email, catégories, champs absents non affichés) et un bouton « Ouvrir la
+  fiche » (la page Contacts, cherchée sur ce nom, la carte amenée à l'écran). Plusieurs fiches : une carte par fiche, 5 au plus, puis
+  « Lequel ? » (numéro, « le deuxième » ou nom). « ma mère » : le lien de famille de la mission 59.
+- Aucune fiche : « Je ne trouve pas « X » dans tes contacts. Tu veux l'ajouter ? », bouton « Ajouter X » vers le formulaire pré-rempli ; « oui »
+  tapé vaut le bouton. Seulement si la phrase parle bien d'un contact (« dans mes contacts », réponse au bouton, « retrouve Hugo » avec une
+  majuscule) ; sinon le chemin habituel : « retrouve macron », « qui est Macron ? », « trouve-moi un restaurant », « qui est le président ? ».
+- Bouton « 👤 Retrouver un contact » au bout de la 2e ligne : « De qui veux-tu la fiche ? Dis-moi son nom. » Présentation : « retrouver la fiche
+  d'un contact ». Les attentes vivent sur le message de Charly : elles ne valent que pour le message suivant.
+- Suites : verif-classement-charly section 23, verif-boutons-charly, verif-presentation-charly. Batterie :
+  TimeCool-Testeurs/charly-16-phrases-fiche-contact-02-11-2026.json.

@@ -1833,6 +1833,7 @@ if (window.pdfjsLib) {
     <button onclick="charlyQuickAction('malade')" style="flex-shrink:0; padding:8px 12px; background:#fce8e6; color:var(--g-red); border:1px solid #f5b8b3; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🤒 Je suis malade, décale tout</button>
     <button onclick="charlyQuickAction('libre')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">🕐 Quand suis-je libre ?</button>
     <button onclick="charlyQuickAction('photo')" style="flex-shrink:0; padding:8px 12px; background:#fff4e0; color:#8a6500; border:1px solid #fbd784; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">📸 Photo → rendez-vous</button>
+    <button onclick="charlyQuickAction('contact')" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">👤 Retrouver un contact</button>
   </div>
   <!-- Chat body -->
   <div class="main" id="charlyChatBody" style="background:#f7f9fc; padding:14px 12px 90px;"></div>
@@ -11474,6 +11475,7 @@ function tcDemandePrecedente(m) {
 
 function renderChatMessage(m) {
   if (m && m._groupe) return tcRendreGroupe(m);
+  if (m && m._fiches) return tcRendreFiches(m);
   if (m && m._questionType) return tcRendreQuestionType(m);
   if (m && m._questionnaire) return tcRendreQuestionnaire(m);
   if (m && m._envois) return tcRendreBilanQuestionnaire(m);
@@ -13317,6 +13319,8 @@ function charlyQuickAction(action) {
   if (action === 'malade') { tcDemarrerMalade('Je suis malade, décale tout'); return; }
   // Photo : le meme chemin que le trombone.
   if (action === 'photo') { charlyAttachAction('photo'); return; }
+  // Retrouver un contact : Charly demande le nom, la réponse suivante donne la carte (mission 66).
+  if (action === 'contact') { tcDemarrerRetrouverContact('Retrouver un contact'); return; }
   // Retard : le questionnaire guidé (mission 45) : combien, pour quel rendez-vous, et après, qui prévient, récapitulatif.
   if (action === 'retard') { tcPrevenirRetard('Je vais être en retard'); return; }
   // Nouveau rdv : le questionnaire guidé (mission 46) : quoi, avec qui, quand (trois créneaux), combien de temps, récapitulatif.
@@ -15143,6 +15147,7 @@ const TC_CHARLY_PRESENTATION = 'Je suis Charly, ton assistant personnel créé p
   + '• créer tes rendez-vous, à 2 comme à 10 personnes ;\n'
   + '• prévenir d’un retard, annuler ou décaler un rendez-vous en m’excusant pour toi ;\n'
   + '• te dire ce que tu as, quand tu es libre, et le temps de trajet pour y aller ;\n'
+  + '• retrouver la fiche d’un contact ;\n'
   + '• changer la langue et tes réglages (bientôt).\n'
   + 'Parle-moi, j’exécute en un temps record. Et bien plus encore…';
 
@@ -15196,6 +15201,8 @@ async function charlySendMessage() {
   if (typeof tcRepondreRecue === 'function' && await tcRepondreRecue(text)) return;
   // === « Que veux-tu dire à Marie ? », « C’est qui, ta mère ? » : le nom, puis le texte relu avant l'envoi (mission 59) ===
   if (typeof tcRepondreMessageSansTexte === 'function' && await tcRepondreMessageSansTexte(text, texteTape)) return;
+  // === « De qui veux-tu la fiche ? », « Lequel ? », « Tu veux l'ajouter ? » (mission 66) ===
+  if (typeof tcRepondreFicheContact === 'function' && tcRepondreFicheContact(text)) return;
   // === « Lequel je mets ? » (délai des rappels) : la valeur de la page, réglée pour de vrai (mission 60) ===
   if (typeof tcRepondreReglage === 'function' && await tcRepondreReglage(text)) return;
 
@@ -15416,6 +15423,11 @@ async function charlySendMessage() {
   if (typeof tcDetecterCoordonnees === 'function') {
     const _coord = tcDetecterCoordonnees(text);
     if (_coord) { tcGererCoordonnees(text, _coord); return; }
+  }
+  // === « retrouve Hugo », « est-ce que j'ai Hugo dans mes contacts ? », « qui est Hugo ? » : la carte de la fiche (mission 66). ===
+  if (typeof tcDetecterFicheContact === 'function') {
+    const _fiche = tcDetecterFicheContact(text);
+    if (_fiche && tcGererFicheContact(text, _fiche)) return;
   }
   if (typeof tcDetecterCreneauPourRecue === 'function') {
     const _recueCreneau = tcDetecterCreneauPourRecue(text);
@@ -23997,6 +24009,244 @@ async function tcDemanderDispoContactM65(text) {
   }
   return true;
 }
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 66 (02/11, chef, validée par Charles) : Charly retrouve un contact
+
+   - « retrouve Hugo », « cherche-moi Gaëlle », « qui est Hugo ? », « est-ce que j'ai Hugo dans mes contacts ? » : une carte par fiche (nom,
+     téléphone, email, catégories, bouton « Ouvrir la fiche »), 5 au plus, puis « Lequel ? ».
+   - Une fiche absente : « Je ne trouve pas « X » dans tes contacts. Tu veux l'ajouter ? », bouton « Ajouter X » (formulaire pré-rempli).
+     Seulement si la phrase parle bien d'un contact (« dans mes contacts », la réponse au bouton, « retrouve Hugo » avec une majuscule) ;
+     sinon le chemin habituel : « trouve-moi un restaurant », « qui est le président ? ».
+   - Le bouton « 👤 Retrouver un contact » : « De qui veux-tu la fiche ? Dis-moi son nom. »
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Les mots qui ne nomment jamais une fiche : un rendez-vous, un moment, un lieu, une chose, un petit mot de liaison. */
+const TC_FICHE_PAS_UN_NOM = /(^| )(rdv|rendez|vous|semaine|mois|agenda|reunion|reunions|telephone|compte|charly|timecool|appli|application|support|assistance|urgence|urgences|police|pompiers|samu|banque|mairie|poste|creneau|creneaux|moment|place|date|heure|heures|horaire|horaires|temps|trajet|itineraire|restaurant|restaurants|resto|restos|hotel|hotels|pharmacie|adresse|numero|mail|email|contact|contacts|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|invite|invitee|idee|solution|truc|chose|quelqu|quelque|personne|president|presidente|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|hier|matin|soir|midi|prochain|prochaine|a|au|aux|pour|avec|sur|en|vers|chez|dans|qui|que|quand|comment|pourquoi|et|ou|ce|ca|cela|il|elle|ils|elles|moi|toi|lui|nous|je|tu|on|oui|non|ok|merci|bonjour|salut)( |$)/;
+/** Un nom qui commence ainsi désigne une chose (« un restaurant », « le président »), pas une fiche : seuls « mon », « ma » restent. */
+const TC_FICHE_DETERMINANT = /^(un|une|des|du|de|d|le|la|les|l|ce|cet|cette|ces|mes|tes|ses|son|sa|ton|ta|notre|votre|leur|leurs|tout|toute|tous|toutes)( |$)/;
+
+/** Le nom tel qu'il a été tapé (« Hélène », « Jean-Marc »), retrouvé dans la phrase à partir de sa forme normalisée. */
+function tcFicheNomTape(brut, nom) {
+  const mots = nom.split(' ');
+  const re = /[^\s'’?!.,;:-]+/g;
+  const bouts = [];
+  let x;
+  while ((x = re.exec(brut))) bouts.push({ mot: tcClasseNormaliser(x[0]), debut: x.index, fin: x.index + x[0].length });
+  for (let i = 0; i + mots.length <= bouts.length; i++) {
+    if (mots.every(function (w, j) { return bouts[i + j].mot === w; })) return brut.slice(bouts[i].debut, bouts[i + mots.length - 1].fin);
+  }
+  return nom;
+}
+
+/** « hugo besnard » → « Hugo Besnard » ; un nom déjà écrit avec des majuscules ne change pas. */
+function tcFicheNomJoli(nom) {
+  const n = String(nom || '').trim();
+  if (n !== n.toLowerCase()) return n;
+  return n.replace(/(^|[\s-])(\S)/g, function (t, a, b) { return a + b.toUpperCase(); });
+}
+
+/** Un nom de 1 à 3 mots qui peut être celui d'une fiche. */
+function tcFicheNomPossible(nom) {
+  return !!nom && nom.split(' ').length <= 3 && !/\d/.test(nom) && !TC_FICHE_PAS_UN_NOM.test(nom);
+}
+
+/**
+ * Une recherche de contact : { nom, affiche, fort, verbe } ; null sinon.
+ * fort : la phrase parle bien des contacts (« … dans mes contacts ») ; verbe : « retrouve », « cherche », « trouve » ; ni l'un ni l'autre : « qui est … ? ».
+ */
+function tcDetecterFicheContact(text) {
+  const brut = String(text || '').replace(/œ/g, 'oe').replace(/Œ/g, 'Oe').replace(/æ/g, 'ae');
+  let n = tcClasseNormaliser(brut);
+  if (!n || n.split(' ').length > 12) return null;
+  n = n.replace(/^((stp|svp|charly|s il te plait|tu peux|tu pourrais|peux tu|pourrais tu|est ce que tu peux|est ce que tu pourrais) )+/, '').replace(/( (stp|svp|s il te plait|merci|charly))+$/, '');
+  let nom = null, fort = false, verbe = false;
+  const dansContacts = / (dans|parmi) (mes|les|tes) contacts$| (dans|sur) (mon|le|ton) (carnet( d adresses?)?|repertoire)$/;
+  const partie = n.match(/^(?:est ce que |est ce qu )?(.+?) fait partie de mes contacts$/);
+  if (partie) { nom = partie[1]; fort = true; }
+  else if (dansContacts.test(n)) {
+    const r = n.replace(dansContacts, '');
+    const m = r.match(/^(?:est ce que |est ce qu )?(?:j ai|j aurais|tu as|ai je|as tu|aurais je|il y a|y a t il|y a) (.+)$/)
+      || r.match(/^(?:re)?(?:trouve|cherche|trouver|chercher)(?: moi| me)? (.+)$/)
+      || r.match(/^(?:est ce que |est ce qu )?(.+?) (?:est il|est elle|est|serait)$/);
+    if (!m) return null;
+    nom = m[1]; fort = true;
+  } else {
+    const m = n.match(/^(?:me )?(?:retrouve|trouve|cherche|recherche|retrouver|trouver|chercher|rechercher)(?: moi| me)? (.+)$/);
+    if (m) { nom = m[1]; verbe = true; }
+    else {
+      const q = n.match(/^qui est (.+)$/);
+      if (!q) return null;
+      nom = q[1];
+    }
+  }
+  if (fort) nom = nom.replace(/^(un|une|des|du|de|d|le|la|les|l) /, '');
+  else if (TC_FICHE_DETERMINANT.test(nom)) return null;
+  if (!tcFicheNomPossible(nom)) return null;
+  return { nom: nom, affiche: tcFicheNomTape(brut, nom), fort: fort, verbe: verbe };
+}
+
+/** Les catégories de la fiche, avec leurs libellés de la page Contacts (« Même en temps libre » n'en est pas une). */
+function tcFicheCategories(c) {
+  const ids = Array.isArray(c.categories) ? c.categories : [];
+  return (Array.isArray(DISPO_CATEGORIES) ? DISPO_CATEGORIES : []).filter(function (cat) {
+    return cat.id !== 'personnel' && ids.indexOf(cat.id) > -1;
+  }).map(function (cat) { return cat.label; });
+}
+
+/** La carte en texte : ce que garde la conversation. Les champs absents n'y sont pas. */
+function tcFicheTexte(c, rang) {
+  const champs = [String(c.phone || '').trim(), String(c.email || '').trim()].concat(tcFicheCategories(c)).filter(Boolean);
+  return (rang ? rang + '. ' : '') + c.name + (champs.length ? ' : ' + champs.join(', ') : '');
+}
+
+/** Une carte par fiche (5 au plus), puis « Lequel ? » : la réponse suivante choisit. */
+function tcPousserFiches(fiches, avant) {
+  const vues = fiches.slice(0, 5);
+  const plusieurs = vues.length > 1;
+  let intro = avant || '';
+  if (!intro && plusieurs) intro = fiches.length > 5 ? 'Tu as ' + fiches.length + ' contacts à ce nom. Voici les 5 plus probables :' : 'Tu as ' + fiches.length + ' contacts à ce nom :';
+  const m = {
+    role: 'assistant', nature: plusieurs ? 'question' : 'reponse',
+    content: (intro ? intro + '\n' : '') + vues.map(function (c, i) { return tcFicheTexte(c, plusieurs ? i + 1 : 0); }).join('\n') + (plusieurs ? '\nLequel ?' : ''),
+    _fiches: { intro: intro, ids: vues.map(function (c) { return c.id; }), fin: plusieurs ? 'Lequel ?' : '' }
+  };
+  if (plusieurs) m._ficheAttente = { etape: 'choix', ids: m._fiches.ids };
+  charlyIA.history.push(m);
+}
+
+/** « Je ne trouve pas « Hugo » dans tes contacts. Tu veux l'ajouter ? », avec le bouton ; « oui » tapé vaut le bouton. */
+function tcPousserFicheAbsente(affiche) {
+  const nom = tcFicheNomJoli(tcDesignationSansPetitMot(affiche));
+  charlyIA.history.push({
+    role: 'assistant', nature: 'question', content: 'Je ne trouve pas « ' + nom + ' » dans tes contacts. Tu veux l’ajouter ?',
+    _fiches: { ajouter: nom, ids: [] }, _ficheAttente: { etape: 'ajouter', nom: nom }
+  });
+}
+
+/** Répond à une recherche de contact ; false quand rien n'indique que la phrase parlait d'une fiche (le chemin habituel). */
+function tcGererFicheContact(text, d) {
+  const lien = (typeof TC_MSG_LIENS !== 'undefined') ? TC_MSG_LIENS.find(function (l) { return l[0].test(' ' + d.nom + ' '); }) : null;
+  if (lien && typeof tcContactsDuLien === 'function') {
+    const res = tcContactsDuLien(lien[2]);
+    tcPousserMessageUtilisateur(text);
+    if (!res.liste.length) charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Je ne trouve pas ' + lien[1] + ' dans tes contacts : dis-moi son nom, ou classe sa fiche dans « Ma famille ».' });
+    else tcPousserFiches(tcClasserContacts(res.liste), res.parNom ? '' : 'Je ne sais pas qui est ' + lien[1] + ' dans tes contacts. Dans ta famille, j’ai :');
+    renderCharlyChat();
+    return true;
+  }
+  const fiches = tcClasserContacts(tcContactsParMots(tcMotsUtiles(d.nom)));
+  if (!fiches.length) {
+    // « retrouve Hugo » avec sa majuscule parle d'une personne ; « retrouve hugo », « cherche pharmacie », « qui est Hugo ? » restent au chemin habituel.
+    const metier = TC_PROFESSIONS.some(function (p) { return tcSansAccents(p) === tcSansAccents(d.nom); });
+    const personne = d.verbe && !metier && !/^(mon|ma) /.test(d.nom) && /^[A-ZÀ-Ý]/.test(d.affiche);
+    if (!d.fort && !personne) return false;
+    tcPousserMessageUtilisateur(text);
+    tcPousserFicheAbsente(d.affiche);
+    renderCharlyChat();
+    return true;
+  }
+  tcPousserMessageUtilisateur(text);
+  tcPousserFiches(fiches);
+  renderCharlyChat();
+  return true;
+}
+
+/** La réponse à ce que Charly vient de demander : le nom, « Lequel ? », « Tu veux l'ajouter ? ». Sinon false : le chemin habituel. */
+function tcRepondreFicheContact(text) {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  const der = h[h.length - 1];
+  const a = (der && der.role === 'assistant') ? der._ficheAttente : null;
+  if (!a) return false;
+  const dire = function (contenu) { charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: contenu }); renderCharlyChat(); };
+  const reponse = tcReponseOuiNon(text);
+  if (a.etape === 'ajouter') {
+    if (reponse === null) return false;
+    tcPousserMessageUtilisateur(text);
+    if (!reponse) { dire('D’accord, je n’ajoute rien.'); return true; }
+    dire('Je t’ouvre le formulaire : complète-le, puis enregistre.');
+    tcFicheAjouter(a.nom);
+    return true;
+  }
+  if (reponse === false) { tcPousserMessageUtilisateur(text); dire('D’accord, on laisse ça.'); return true; }
+  if (a.etape === 'nom') {
+    const d = tcDetecterFicheContact(text);
+    if (d) return tcGererFicheContact(text, Object.assign({}, d, { fort: true }));
+    if (tcRessembleAUneDemande(text)) return false;
+    const brut = String(text || '').replace(/œ/g, 'oe').replace(/Œ/g, 'Oe').replace(/æ/g, 'ae');
+    const nom = tcClasseNormaliser(brut).replace(/^(c est|il s appelle|elle s appelle) /, '').replace(/( (stp|svp|s il te plait|merci))+$/, '').replace(/^(un|une|des|du|de|d|le|la|les|l) /, '');
+    if (!tcFicheNomPossible(nom)) return false;
+    return tcGererFicheContact(text, { nom: nom, affiche: tcFicheNomTape(brut, nom), fort: true, verbe: false });
+  }
+  // « Lequel ? » : son numéro (« 2 », « le deuxième »), ou son nom.
+  const liste = a.ids.map(function (id) { return contactsList.find(function (c) { return c && c.id === id; }); }).filter(Boolean);
+  const n = tcClasseNormaliser(text).replace(/^(le|la|numero) /, '').replace(/ (stp|svp|merci)$/, '');
+  const rangs = { premier: 1, premiere: 1, deuxieme: 2, second: 2, seconde: 2, troisieme: 3, quatrieme: 4, cinquieme: 5, dernier: liste.length, derniere: liste.length };
+  const m = n.match(/^([1-5])( ?(er|ere|e|eme))?$/);
+  const rang = m ? Number(m[1]) : rangs[n];
+  let choisi = rang ? liste[rang - 1] : null;
+  if (!choisi && !rang) {
+    const mots = tcMotsUtiles(n);
+    const nommes = tcContactsParMots(mots).filter(function (c) { return liste.indexOf(c) > -1; });
+    if (nommes.length === 1) choisi = nommes[0];
+  }
+  if (!choisi) return false;
+  tcPousserMessageUtilisateur(text);
+  tcPousserFiches([choisi]);
+  renderCharlyChat();
+  return true;
+}
+
+/** Le bouton « 👤 Retrouver un contact ». */
+function tcDemarrerRetrouverContact(bulle) {
+  tcPousserMessageUtilisateur(bulle);
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'De qui veux-tu la fiche ? Dis-moi son nom.', _ficheAttente: { etape: 'nom' } });
+  renderCharlyChat();
+}
+
+/** « Ajouter Hugo » : le formulaire « Nouveau contact », pré-rempli avec le nom. */
+function tcFicheAjouter(nom) {
+  tcFormulaireContact(null, nom);
+}
+
+/** « Ouvrir la fiche » : la fiche de la page Contacts, seule à l'écran avec ses homonymes. */
+function tcOuvrirFicheContact(id) {
+  const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.id === id; });
+  if (!c) { showToast('Cette fiche n’existe plus.'); return; }
+  _contactsTimeCool = false;
+  _contactsRecents = false;
+  _contactsCategorie = '';
+  _contactsLettre = '';
+  contactsSearchQuery = String(c.name || '');
+  navigate('contacts');
+  renderContacts();
+  setTimeout(function () {
+    const carte = document.getElementById('ctFiche_' + id);
+    if (carte && carte.scrollIntoView) carte.scrollIntoView({ block: 'center' });
+  }, 80);
+}
+
+/** Les cartes dans le chat, dessinées avec la fiche d'aujourd'hui (une fiche supprimée entre-temps disparaît). */
+function tcRendreFiches(m) {
+  const f = m._fiches;
+  const bouton = 'margin-top:8px; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;';
+  if (f.ajouter) {
+    return tcBulleCharly(escapeHTMLSafe(m.content)
+      + '<div><button onclick="tcFicheAjouter(' + escapeHTMLSafe(JSON.stringify(f.ajouter)) + ')" style="' + bouton + '">Ajouter <span data-notranslate>' + escapeHTMLSafe(f.ajouter) + '</span></button></div>');
+  }
+  const liste = (f.ids || []).map(function (id) { return (Array.isArray(contactsList) ? contactsList : []).find(function (c) { return c && c.id === id; }); }).filter(Boolean);
+  if (!liste.length) return tcBulleCharly(escapeHTMLSafe(m.content).replace(/\n/g, '<br>'));
+  const ligne = function (texte) { return '<div data-notranslate style="font-size:13px; color:var(--text-sec); word-break:break-word;">' + escapeHTMLSafe(texte) + '</div>'; };
+  const cartes = liste.map(function (c, i) {
+    const cats = tcFicheCategories(c);
+    return '<div style="margin-top:8px; padding:10px 12px; background:#f8f9fa; border:1px solid var(--border); border-radius:12px;">'
+      + '<div data-notranslate style="font-size:14px; font-weight:600; color:var(--text); word-break:break-word;">' + (f.ids.length > 1 ? (f.ids.indexOf(c.id) + 1) + '. ' : '') + escapeHTMLSafe(c.name) + '</div>'
+      + (c.phone ? ligne(c.phone) : '') + (c.email ? ligne(c.email) : '')
+      + (cats.length ? '<div style="font-size:12px; color:var(--text-sec); margin-top:2px;">' + escapeHTMLSafe(cats.join(', ')) + '</div>' : '')
+      + '<button onclick="tcOuvrirFicheContact(' + escapeHTMLSafe(JSON.stringify(c.id)) + ')" style="' + bouton + '">Ouvrir la fiche</button></div>';
+  }).join('');
+  return tcBulleCharly((f.intro ? escapeHTMLSafe(f.intro) : '') + cartes + (f.fin ? '<div style="margin-top:8px;">' + escapeHTMLSafe(f.fin) + '</div>' : ''));
+}
+
 /** La phrase de Charly quand il n'a pas compris, avec sa question de reformulation. */
 function tcPhraseNonCompris(question) {
   return 'Sauf erreur de ma part, je n\'ai pas bien compris ta demande. ' + question;
@@ -28470,7 +28720,7 @@ function renderContactsListHTML(contacts) {
       const onTC = isTimeCoolUser(c);
 
       html += `
-        <div style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px;">
+        <div id="ctFiche_${c.id}" style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:12px 14px; margin-bottom:10px;">
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px; position:relative;">
             <div data-notranslate style="width:42px; height:42px; border-radius:50%; background:${color}; color:white; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; flex-shrink:0;">${initials}</div>
             <div style="flex:1; min-width:0;">
@@ -32903,11 +33153,11 @@ function tcContactDepuisFormulaire(v, existant) {
 }
 
 /** Ouvre le formulaire : vide pour un nouveau contact, pre-rempli pour une fiche existante. */
-function tcFormulaireContact(contactId) {
+function tcFormulaireContact(contactId, nomPropose) {
   const existant = contactId ? contactsList.find(function (x) { return x.id === contactId; }) : null;
   if (contactId && !existant) return;
   tcFormulaireContactFermer();
-  const nom = existant ? tcContactDecouperNom(existant.name) : { prenom: '', nom: '' };
+  const nom = existant ? tcContactDecouperNom(existant.name) : (nomPropose ? tcContactDecouperNom(nomPropose) : { prenom: '', nom: '' });
   const tel = existant ? tcContactDecouperTelephone(existant.phone) : { dial: '+33', national: '' };
   const cats = existant && Array.isArray(existant.categories) ? existant.categories : [];
   _tcContactForm = { id: contactId || null, cats: cats.filter(function (x) { return x !== 'personnel'; }), perso: cats.indexOf('personnel') > -1 };

@@ -32,7 +32,9 @@ const liste = () => [
   { id: 'g', title: 'Très vieille entrée sans date', categorie: 'rdv' }                   // sans timestamp : ancienne
 ];
 const toasts = [];
-const ctx = { console, Array, Date, Math, String, JSON, demarches: liste(), saveDemarches() { ctx._sauve = (ctx._sauve || 0) + 1; }, showToast: (x) => toasts.push(x), renderDemarches() { ctx._rendu = (ctx._rendu || 0) + 1; }, currentPage: 'demarches',
+// Horloge figee : les dates de la liste sont celles d octobre 2026, la suite ne doit pas dependre du jour ou elle tourne.
+class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(NOW); } static now() { return NOW; } }
+const ctx = { console, Array, Date: DateFixe, Math, String, JSON, demarches: liste(), saveDemarches() { ctx._sauve = (ctx._sauve || 0) + 1; }, showToast: (x) => toasts.push(x), renderDemarches() { ctx._rendu = (ctx._rendu || 0) + 1; }, currentPage: 'demarches',
   _confirmations: [], _reponse: true, tcConfirm: async (m, o) => { ctx._confirmations.push(m + ' | ' + JSON.stringify(o || {})); return ctx._reponse; } };
 vm.createContext(ctx);
 vm.runInContext("let _demarchesFiltre = 'tout'; let _demarchesPeriode = 'mois'; let _demarchesArchives = false;", ctx);
