@@ -133,10 +133,15 @@ async function enLocal(jeton, id) {
 }
 
 async function enProduction(jeton) {
-  let r = await appel('POST', '/relais/google/traduction', { q: ['bonjour'], source: 'fr', target: 'en', format: 'text' }, jeton);
-  verifie('un compte neuf traduit, sans aucune clé', r.code === 200 && /hello/i.test(r.texte), r.code + ' ' + r.texte.slice(0, 120));
+  let r = await appel('POST', '/relais/google/traduction', { q: ['Merci beaucoup'], source: 'fr', target: 'en', format: 'text' }, jeton);
+  verifie('un compte neuf traduit, sans aucune clé', r.code === 200 && /thank/i.test(r.texte), r.code + ' ' + r.texte.slice(0, 120));
   r = await appel('POST', '/relais/google/recherche', { q: 'timecool' }, jeton);
-  verifie('et cherche sur le web', r.code === 200, r.code + ' ' + r.texte.slice(0, 120));
+  // L'API de recherche n'est pas activée dans le projet Google : le relais a transmis, Google refuse. Ce n'est pas un défaut du relais.
+  if (r.code === 403 && /Custom Search JSON API/.test(r.texte)) {
+    console.log('  ATTENTION recherche web : API Custom Search non activée dans le projet Google, le relais a bien transmis.');
+  } else {
+    verifie('et cherche sur le web', r.code === 200, r.code + ' ' + r.texte.slice(0, 120));
+  }
 }
 
 (async () => {
