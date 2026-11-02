@@ -26,9 +26,9 @@ const constante = (nom) => {
 };
 vm.runInContext('var DISPO_CATEGORIES = [];', ctx);
 ['TC_PETITS_MOTS', 'TC_PROFESSIONS', 'TC_FICHE_PAS_UN_NOM', 'TC_FICHE_LIENS', 'TC_FICHE_RELATION', 'TC_FICHE_UN_LIEN', 'TC_FICHE_MOT_CONTACT', 'TC_FICHE_DE_CHOSE', 'TC_FICHE_DETERMINANT', 'TC_FICHE_QUANTITE', 'TC_FICHE_PASSE',
-  'TC_FICHE_LIBRE_VERBE', 'TC_FICHE_LIBRE_AUTRE', 'TC_FICHE_LIBRE_TITRES', 'TC_FICHE_LIBRE_OUTILS'].forEach(constante);
+  'TC_FICHE_LIBRE_VERBE', 'TC_FICHE_LIBRE_AUTRE', 'TC_FICHE_LIBRE_NEGATION', 'TC_FICHE_LIBRE_TITRES', 'TC_FICHE_LIBRE_LIAISON', 'TC_FICHE_LIBRE_PRONOM', 'TC_FICHE_LIBRE_PARTICULE', 'TC_FICHE_LIBRE_OUTILS'].forEach(constante);
 ['tcSansAccents', 'tcClasseNormaliser', 'tcMotsUtiles', 'tcContactsParMots', 'tcClasserContacts', 'tcDesignationSansPetitMot', 'tcFicheNomTape', 'tcFicheNomJoli', 'tcFicheNomPossible', 'tcDetecterFicheContact', 'tcFicheCategories', 'tcFicheTexte', 'tcPousserFiches', 'tcPousserFicheAbsente',
-  'tcGererFicheContact', 'tcRendreFiches', 'escapeHTMLSafe', 'tcFicheLibreGroupes', 'tcDetecterFicheLibre', 'tcGererFicheLibre'].forEach((n) => { const s = fonction(n); if (s) vm.runInContext(s, ctx); else verifie(n + ' existe', false); });
+  'tcGererFicheContact', 'tcRendreFiches', 'escapeHTMLSafe', 'tcFicheLibreMots', 'tcFicheLibreOutil', 'tcFicheLibreTitre', 'tcFicheLibreNom', 'tcFicheLibreApresTitre', 'tcFicheLibreSuite', 'tcFicheLibreRelation', 'tcFicheLibreAvant', 'tcFicheLibreApres', 'tcFicheLibreParTitre', 'tcDetecterFicheLibre', 'tcGererFicheLibre'].forEach((n) => { const s = fonction(n); if (s) vm.runInContext(s, ctx); else verifie(n + ' existe', false); });
 if (ko) { console.log('\n' + ko + ' anomalie(s).'); process.exit(1); }
 
 const carnet = () => [{ id: 's', name: 'Dr Sellam', phone: '0655500001' }, { id: 'h', name: 'Hugo Besnard', phone: '0655507777' }, { id: 'g', name: 'Gaëlle Perrin' }, { id: 'p1', name: 'Paul Fictif' }, { id: 'p2', name: 'Paul Martin' }, { id: 'mm', name: 'Marie Martin' }, { id: 'pl', name: 'Marc Plombier' }];
@@ -75,11 +75,33 @@ console.log('\n-- 3. Ce qui n est pas une recherche de fiche : le chemin habitue
 const pieges = ['trouve la fiche de paie', 'Montre-moi la fiche de paie de Hugo', 'Hugo tu peux retrouver ma fiche de paie', 'où est ma fiche de présence ? cherche-la', 'cherche la fiche de présence dans mes contacts', 'la fiche de poste, tu peux la retrouver',
   'rendez-vous avec Dr Sellam', 'trouve un rendez-vous avec Dr Sellam', 'cherche un créneau avec mon client Hugo', 'montre-moi mes rendez-vous avec mon dentiste', 'trouve un moment libre avec mon patron', 'affiche mes contacts', 'montre-moi tous mes contacts', 'trouve les doublons dans mes contacts',
   'cherche dans mes contacts', 'retrouve un contact', 'combien de contacts j’ai ? montre', 'ajoute Hugo à mes contacts et cherche Paul', 'envoie un message à mon client, trouve les mots', 'cherche un ami pour jouer', 'trouve un cadeau pour mon patron', 'affiche le 12 mon client', 'bonjour', 'ça va ?', 'montre-moi ma semaine'];
+pieges.push(
+  // Examen 1, défaut 1 : aucun mot ordinaire ne devient un nom.
+  'Je n’arrive pas à trouver un contact', 'Aide-moi à retrouver mes contacts', 'où puis-je trouver mes contacts ?', 'j’ai perdu mes contacts, retrouve-les', 'retrouve mes contacts perdus', 'retrouve les contacts supprimés', 'affiche les contacts bloqués',
+  'montre mes contacts famille', 'montre mes contacts du travail', 'montre mes contacts professionnels', 'trouve mes contacts favoris', 'trouve mon contact préféré', 'montre mes contacts par ordre alphabétique', 'montre mes contacts qui ont TimeCool', 'montre les contacts sans téléphone',
+  'affiche mes contacts Google', 'retrouve mes derniers contacts', 'affiche mes contacts récemment ajoutés', 'cherche les médecins dans mes contacts', 'trouve la fiche météo',
+  // Examen 1, défaut 5 : le verbe dans un autre sens.
+  'Hugo a trouvé un client', 'Hugo cherche un client', 'Le patient Hugo trouve que c’est cher', 'Trouve un client pour Hugo', 'trouve un cadeau pour mon ami Hugo', 'Ne cherche pas Hugo dans mes contacts', 'montre à Hugo mes contacts', 'Mon client Paul cherche un plombier',
+  'Trouve un hôtel à Lyon pour mon client', 'Je cherche un ami à Lyon', 'J’ai trouvé une cliente à Paris', 'Trouve un restaurant avec mon client', 'Cherche le meilleur plombier pour mon client');
 const rates = pieges.filter((p) => { ctx.contactsList = carnet(); ctx.charlyIA.history = []; const l = ctx.tcDetecterFicheLibre(p); return !!l && ctx.tcGererFicheLibre(p, l); });
 verifie('la phrase libre laisse passer ces ' + pieges.length + ' phrases, rien n’est poussé', rates.length === 0, rates.join(' / '));
 verifie('Mission 66 : « retrouve Zoé » seul reste « Je ne trouve pas « Zoé » dans tes contacts. »', dire('retrouve Zoé').c === 'Je ne trouve pas « Zoé » dans tes contacts.', dire('retrouve Zoé').c);
 verifie('Mission 66 : « la fiche de Zoé » garde « Ajouter Zoé »', dire('la fiche de Zoé').der._fiches.ajouter === 'Zoé');
 verifie('Mission 69 n’a pas de bouton « Ajouter » : un nom absent n’est pas proposé', !dire('Zoé tu peux me la retrouver dans mes contacts').der._fiches.ajouter);
+
+console.log('\n-- 3 bis. Examen 1 --');
+const large = () => carnet().concat([{ id: 'jp', name: 'Jean-Pierre Dupont' }, { id: 'lg', name: 'Dr Le Gall' }, { id: 'lc', name: 'Lucie Classe' }, { id: 'ps', name: 'Paul Sellam' }]);
+for (const [p, ids] of [['Jean-Pierre tu peux le retrouver dans mes contacts', 'jp'], ['Jean-Pierre Dupont tu peux me le retrouver dans mes contacts', 'jp'], ['Dr Le Gall tu peux me le retrouver dans mes contacts', 'lg'], ['Lucie Classe tu peux la retrouver dans mes contacts', 'lc'], ['Dr Sellam tu peux me le retrouver dans mes contacts', 's']]) {
+  const r = dire(p, large());
+  verifie(p + ' → cette fiche seule', r.pris && r.ids === ids && !/J’ai/.test(r.c), r.ids + ' ' + r.c);
+}
+const deux = dire('Dr Sellam et Hugo Besnard tu peux me les retrouver dans mes contacts');
+verifie('deux noms : les deux fiches', deux.ids.split(',').sort().join() === 'h,s', deux.c);
+const un2 = dire('Dr Sellam et Dr Zorglub tu peux me les retrouver dans mes contacts');
+verifie('deux noms, un absent : la fiche, et Charly le dit', un2.ids === 's' && /^Je n’ai trouvé personne qui s’appelle Dr Zorglub dans tes contacts\. J’ai :/.test(un2.c), un2.c);
+const oui = dire('Hugo mon client tu peux me le retrouver');
+verifie('« client » reste un mot de contact quand la phrase reprend la personne', oui.ids === 'h', oui.c);
+verifie('« Dr Martin » sans contact à ce titre : Marie et Paul Martin restent montrés', dire('Dr Martin tu peux me le retrouver dans mes contacts').ids.split(',').length === 2);
 
 console.log('\n-- 4. La page --');
 verifie('la phrase libre passe juste après la mission 66, avant le modèle', /if \(_fiche && tcGererFicheContact\(text, _fiche\)\) return;\s+\/\/[^\n]*\s+const _ficheLibre = tcDetecterFicheLibre\(text\);\s+if \(_ficheLibre && tcGererFicheLibre\(text, _ficheLibre\)\) return;/.test(page));
