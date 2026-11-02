@@ -1931,7 +1931,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('(examen) un mot en trop ne fait jamais dire qu’une fiche existante n’existe pas ; « je cherche Hugo », « la fiche de Hugo »', enTrop.length === 0, enTrop.join(' / '));
     const pasPersonne = [];
     for (const p of ['j’ai combien de personnes dans mes contacts ?', 'j’ai combien de clients dans mes contacts ?', 'j’ai beaucoup de monde dans mes contacts ?', 'est-ce que j’ai des doublons dans mes contacts ?', 'est-ce que j’ai des médecins dans mes contacts ?', 'il y a des gens dans mes contacts ?', 'j’ai quoi dans mes contacts ?', 'j’ai ajouté Zoé dans mes contacts', 'j’ai mis Hugo dans mes contacts',
-      'Cherche Google', 'Trouve Garage', 'Cherche Zoé', 'cherche-moi Zoé', 'trouve-moi Zoé', 'qui est zoé ?', 'qui est Zoé ?', 'qui est Macron ?', 'qui est Dieu ?']) {
+      'Cherche Google', 'Trouve Garage', 'Cherche Zoé', 'cherche-moi Zoé', 'trouve-moi Zoé', 'qui est zoé ?', 'qui est Zoé ?', 'qui est Macron ?', 'qui est Dieu ?', 'retrouve le patient suivant', 'retrouve mon client suivant', 'retrouve mon dernier client', 'retrouve ma première patiente', 'trouve ma fiche', 'retrouve le client précédent']) {
       const r = fiches(p);
       if (r.pris || ctx.charlyIA.history.length) pasPersonne.push(p);
     }
@@ -1958,6 +1958,8 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       && q3.der.content === 'Je ne trouve pas « Hugo Martin » dans tes contacts.' && q4.der.content === 'Je ne trouve pas « Hugo Martin » dans tes contacts. Tu veux l’ajouter ?' && !q5.pris && !q6.pris, [q1.der.content, q3.der.content, q4.der.content, q5.pris, q6.pris].join(' | '));
     proche('retrouve Marie Dupont');
     const pOui = ctx.tcRepondreFicheContact('oui'), pOuiC = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
+    const pElle = ['c’est elle', 'c’est lui', 'c’est bien elle', 'oui c’est elle'].filter((r) => { proche('retrouve Marie Dupont'); return !ctx.tcRepondreFicheContact(r) || ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content !== 'Marie Martin : 06'; });
+    verifie('(examen) « c’est elle », « c’est lui », « c’est bien elle » valent oui à « C’est cette personne ? »', pElle.length === 0, pElle.join(' / '));
     proche('retrouve Marie Dupont');
     const pNon = ctx.tcRepondreFicheContact('non'), pNonC = ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content;
     proche('est-ce que j’ai Marie Dupont dans mes contacts ?');

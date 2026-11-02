@@ -24022,7 +24022,7 @@ async function tcDemanderDispoContactM65(text) {
    ═══════════════════════════════════════════════════════════════ */
 
 /** Les mots qui ne nomment jamais une fiche : un rendez-vous, un moment, un lieu, une chose, un petit mot de liaison. */
-const TC_FICHE_PAS_UN_NOM = /(^| )(rdv|rendez|vous|semaine|mois|agenda|reunion|reunions|telephone|compte|charly|timecool|appli|application|support|assistance|urgence|urgences|police|pompiers|samu|banque|mairie|poste|creneau|creneaux|moment|place|date|heure|heures|horaire|horaires|temps|trajet|itineraire|restaurant|restaurants|resto|restos|hotel|hotels|pharmacie|adresse|numero|mail|email|contact|contacts|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|invite|invitee|idee|solution|truc|chose|quelqu|quelque|personne|president|presidente|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|hier|matin|soir|midi|prochain|prochaine|a|au|aux|pour|avec|sur|en|vers|chez|dans|qui|que|quand|comment|pourquoi|et|ou|ce|ca|cela|il|elle|ils|elles|moi|toi|lui|nous|je|tu|on|oui|non|ok|merci|bonjour|salut|bon|rien|pardon|quoi|hein|oublie|tant|pis|peu|importe|finalement|stop|gens|monde|doublon|doublons|paie|lecture|voiture|cle|cles|portefeuille|sac|lunettes|ordinateur|document|dossier|facture|billet|message|photo)( |$)/;
+const TC_FICHE_PAS_UN_NOM = /(^| )(rdv|rendez|vous|semaine|mois|agenda|reunion|reunions|telephone|compte|charly|timecool|appli|application|support|assistance|urgence|urgences|police|pompiers|samu|banque|mairie|poste|creneau|creneaux|moment|place|date|heure|heures|horaire|horaires|temps|trajet|itineraire|restaurant|restaurants|resto|restos|hotel|hotels|pharmacie|adresse|numero|mail|email|contact|contacts|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|invite|invitee|idee|solution|truc|chose|quelqu|quelque|personne|president|presidente|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|aujourd|hui|hier|matin|soir|midi|prochain|prochaine|a|au|aux|pour|avec|sur|en|vers|chez|dans|qui|que|quand|comment|pourquoi|et|ou|ce|ca|cela|il|elle|ils|elles|moi|toi|lui|nous|je|tu|on|oui|non|ok|merci|bonjour|salut|bon|rien|pardon|quoi|hein|oublie|tant|pis|peu|importe|finalement|stop|gens|monde|doublon|doublons|paie|lecture|voiture|cle|cles|portefeuille|sac|lunettes|ordinateur|document|dossier|facture|billet|message|photo|suivant|suivante|precedent|precedente|dernier|derniere|premier|premiere|fiche)( |$)/;
 /** Un nom qui commence ainsi désigne une chose (« un restaurant », « cette semaine »), pas une fiche. « le », « la » restent : « le docteur Martin ». */
 const TC_FICHE_DETERMINANT = /^(un|une|des|du|de|d|les|ce|cet|cette|ces|mes|tes|ses|son|sa|ton|ta|notre|votre|leur|leurs|tout|toute|tous|toutes)( |$)/;
 /** Une quantité ou une question, jamais un nom : « j'ai combien de personnes dans mes contacts ? ». */
@@ -24210,7 +24210,7 @@ function tcRepondreFicheContact(text) {
   }
   if (a.etape === 'proche') {
     const court = norm.split(' ').length <= 2 || !tcRessembleAUneDemande(text);
-    const v = court ? tcReponseValidation(text) : null;
+    const v = /^c est (bien )?(elle|lui|ca)$/.test(norm) ? 'oui' : (court ? tcReponseValidation(text) : null);
     if (v !== 'oui' && v !== 'non') return false;
     tcPousserMessageUtilisateur(text);
     const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.id === a.id; });
