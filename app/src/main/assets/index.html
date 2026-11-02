@@ -24105,6 +24105,7 @@ function tcDetecterFicheContact(text) {
     else return null;
   }
   if (TC_FICHE_QUANTITE.test(nom)) return null;
+  if (/^(le|la|l|les|lui|elle|eux)$/.test(nom)) return null;
   const relation = nom.match(TC_FICHE_RELATION);
   if (relation) nom = relation[1];
   // « des médecins », « les clients » : un pluriel n'est jamais proposé à l'ajout ; « le président » non plus, sauf si le carnet le connaît.
@@ -24351,7 +24352,7 @@ const TC_FICHE_LIBRE_VERBE = /^(retrouve|retrouves|retrouver|trouve|trouves|trou
 const TC_FICHE_LIBRE_AUTRE = /(^| )(rdv|rendez|creneau|creneaux|dispo|dispos|disponible|disponibles|disponibilite|disponibilites|libre|libres|reunion|reunions|agenda|planning|annule|annuler|decale|decaler|deplace|deplacer|ajoute|ajouter|supprime|supprimer|efface|effacer|enleve|enlever|retire|retirer|envoie|envoyer|ecris|ecrire|appelle|appeler|previens|prevenir|invite|inviter|partage|partager|importe|importer|exporte|exporter|bloque|bloquer|debloque|debloquer|classe|classer|modifie|modifier|change|changer|fusionne|fusionner|combien|doublon|doublons|tous|toutes|recent|recents|nouveau|nouveaux)( |$)/;
 const TC_FICHE_LIBRE_TITRES = /^(dr|docteur|doc|mme|madame|monsieur|mr|mlle|mademoiselle|pr|professeur|maitre)$/;
 /** Ce qui peut séparer le nom du verbe : « Hugo je n'arrive pas à le retrouver ». */
-const TC_FICHE_LIBRE_LIAISON = /^(tu|peux|pourrais|est|ce|que|je|j|veux|voudrais|aimerais|le|la|l|les|me|m|moi|stp|svp|charly|s|il|te|plait|en|fait|alors|sa|son|ne|n|pas|plus|arrive|a)$/;
+const TC_FICHE_LIBRE_LIAISON = /^(tu|peux|pourrais|est|ce|que|je|j|veux|voudrais|aimerais|le|la|l|les|me|m|moi|stp|svp|charly|s|il|te|plait|en|fait|alors|sa|son|ne|n|pas|plus|arrive|a|ai)$/;
 const TC_FICHE_LIBRE_REPRISE = /^(le|la|l|les)$/;
 const TC_FICHE_LIBRE_PARTICULE = /^(le|la|l|de|du|des|d|van|von)$/;
 const TC_FICHE_LIBRE_OUTILS = new RegExp('^(?:' + TC_FICHE_LIENS + '|retrouve|retrouves|retrouver|trouve|trouves|trouver|cherche|cherches|chercher|recherche|recherches|rechercher|affiche|affiches|afficher|montre|montres|montrer|'
@@ -24473,6 +24474,7 @@ function tcFicheLibreAvant(brut, bouts, v) {
         const nom = lien ? tcFicheLibreSuite(brut, part.slice(0, e), d + 2) : null;
         if (nom) noms.push(nom); else if (d === 0 || TC_FICHE_LIBRE_REPRISE.test(part[d - 1].n)) relation = tcFicheLibreRelation(part, d);
       } else if (d < e) {
+        if (d > 0 && /^(le|la|l|ce|cet|cette|un|une)$/.test(part[d - 1].n)) return null;
         let f = d;
         while (f < e && !tcFicheLibreOutil(part[f].n)) f++;
         const nom = f > d ? tcFicheLibreNom(brut, part.slice(d, f), null) : null;
@@ -24510,7 +24512,11 @@ function tcFicheLibreApres(brut, bouts, v) {
   if (d > -1) {
     let k = j;
     while (k < d && /^(le|la|l)$/.test(bouts[k].n)) k++;
-    if (k < d && /^(mon|ma)$/.test(bouts[k].n)) return { noms: [], relation: tcFicheLibreRelation(bouts, k) };
+    if (k < d && /^(mon|ma)$/.test(bouts[k].n)) {
+      const lien = TC_FICHE_UN_LIEN.test(bouts[k + 1] ? bouts[k + 1].n : '');
+      const nom = (lien && k + 2 < d) ? tcFicheLibreNom(brut, bouts.slice(k + 2, d), null) : null;
+      return nom ? { noms: [nom], relation: null } : { noms: [], relation: tcFicheLibreRelation(bouts, k) };
+    }
     while (k < d) {
       let e = k;
       while (e < d && !/^(et|ou)$/.test(bouts[e].n)) e++;
@@ -24553,7 +24559,10 @@ function tcDetecterFicheLibre(text) {
   if (!n || n.split(' ').length > 30 || /\d/.test(n)) return null;
   const bouts = tcFicheLibreMots(brut);
   // « trouvé », « trouvée » : ce qui s'est passé, pas ce qui est demandé.
-  const v = bouts.findIndex(function (b) { return TC_FICHE_LIBRE_VERBE.test(b.n) && !/[éÉ]e?s?$/.test(b.brut); });
+  const v = bouts.findIndex(function (b, k) {
+    if (!TC_FICHE_LIBRE_VERBE.test(b.n)) return false;
+    return !/[éÉ]e?s?$/.test(b.brut) || (k > 1 && bouts[k - 1].n === 'pas' && bouts[k - 2].n === 'ai');
+  });
   if (v < 0) return null;
   // « ne cherche pas Hugo » : un ordre de ne pas faire. « je ne trouve pas Hugo » : une recherche.
   for (let i = v - 1; i >= 0 && i >= v - 2; i--) {

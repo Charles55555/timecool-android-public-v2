@@ -121,6 +121,17 @@ verifie('« Maître Personne » : sa fiche', mp.ids === 'mp', mp.c);
 const pb = dire('Paul Bon tu peux le retrouver dans mes contacts', large2());
 verifie('« Paul Bon » : le nom complet gagne, Paul Bon seul', pb.ids === 'pb', pb.c);
 
+console.log('\n-- 3 quater. Examen 3 --');
+for (const p of ['je cherche mon ami Hugo dans mes contacts', 'je ne trouve pas mon ami Hugo dans mes contacts', 'je ne trouve pas mon client Hugo dans mes contacts', 'je n’ai pas trouvé Hugo dans mes contacts', 'je n’ai pas retrouvé Hugo dans mes contacts', 'Hugo je ne l’ai pas trouvé dans mes contacts']) {
+  const r = dire(p);
+  verifie(p + ' → la carte de Hugo', r.pris && r.ids === 'h', r.ids + ' ' + r.c);
+}
+const sansNom = ['La dame de la banque tu peux me la retrouver dans mes contacts', 'Cette dame tu peux me la retrouver dans mes contacts', 'Le gars du garage tu peux me le retrouver dans mes contacts', 'Le comptable tu peux me le retrouver dans mes contacts', 'Ce message tu peux le retrouver dans mes contacts', 'Cette photo tu peux la retrouver dans mes contacts', 'J’ai trouvé un contact',
+  'retrouve-le dans mes contacts', 'retrouve-la dans mes contacts', 'cherche-le dans mes contacts', 'Attends, retrouve-le dans mes contacts'].filter((p) => dire(p).pris);
+verifie('ces phrases gardent le chemin habituel : ni « Dame », ni « Ajouter Le »', sansNom.length === 0, sansNom.join(' / '));
+verifie('« Mon comptable tu peux me le retrouver dans mes contacts » reste une recherche', dire('Mon comptable tu peux me le retrouver dans mes contacts').pris);
+verifie('« Le Gall » garde sa fiche : après un titre et en nom complet', dire('Dr Le Gall tu peux me le retrouver dans mes contacts', [{ id: 'lg', name: 'Dr Le Gall' }]).ids === 'lg' && dire('Anne Le Gall tu peux la retrouver dans mes contacts', [{ id: 'al', name: 'Anne Le Gall' }]).ids === 'al');
+
 console.log('\n-- 4. La page --');
 verifie('la phrase libre passe juste après la mission 66, avant le modèle', /if \(_fiche && tcGererFicheContact\(text, _fiche\)\) return;\s+\/\/[^\n]*\s+const _ficheLibre = tcDetecterFicheLibre\(text\);\s+if \(_ficheLibre && tcGererFicheLibre\(text, _ficheLibre\)\) return;/.test(page));
 verifie('aucune assertion arrière dans la page (Safari ancien)', page.indexOf('(?<') < 0);
