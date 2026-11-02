@@ -356,7 +356,7 @@ function cleDuService(int $compteId, string $service): ?string
     $clair = Coffre::dechiffrer($chiffree);
     if ($clair === null || $clair === '') {
         error_log('relais : cle illisible, service ' . $service . ', compte ' . $compteId);
-        Rep::erreur(500, 'cle_illisible', 'Ce service n est pas disponible pour le moment.');
+        Rep::erreur(500, 'cle_illisible', "Ce service n'est pas disponible pour le moment.");
     }
     return $clair;
 }
@@ -418,7 +418,7 @@ function relaisCompter(array $compte, string $service, string $groupe): void
     error_log('relais : limite atteinte, compte ' . $id . ', ' . $service . ', ' . $n['n_minute'] . ' par minute, ' . $n['n_jour'] . ' par jour');
     Rep::erreur(429, 'limite_atteinte', $tropJour
         ? 'La limite du jour est atteinte. Réessaie demain.'
-        : 'Beaucoup de demandes d un coup. Réessaie dans une minute.');
+        : "Beaucoup de demandes d'un coup. Réessaie dans une minute.");
 }
 
 /** L'adresse du service, ou celle d'un faux service pour les essais locaux (variable absente en production). */
@@ -489,7 +489,7 @@ function relais(string $fonction): never
 
     $cle = cleDuService((int) $compte['id'], $def['cle']);
     if ($cle === null) {
-        Rep::erreur(503, 'service_indisponible', 'Ce service n est pas disponible pour le moment.');
+        Rep::erreur(503, 'service_indisponible', "Ce service n'est pas disponible pour le moment.");
     }
     relaisCompter($compte, $fonction, $def['groupe']);
 
@@ -5300,7 +5300,7 @@ switch ($route) {
     case 'GET /admin/relais':
         $moi = Auth::compte();
         if ((int) ($moi['admin'] ?? 0) !== 1) {
-            Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
+            Rep::erreur(403, 'acces_refuse', "Accès réservé à l'administrateur.");
         }
         Rep::ok([
             'aujourdhui' => Db::tous(

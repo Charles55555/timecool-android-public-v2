@@ -34523,6 +34523,7 @@ async function translateText(text, targetLang) {
 /* Une page entière demande des centaines de textes d'un coup : ils partent par lots de 100
    (mission 71). Une requête par texte occuperait tout le serveur à travers le relais. */
 var TC_TRADUCTION_LOT = 100;
+var TC_TRADUCTION_CARACTERES = 20000;
 var _tcFilesTraduction = {};
 
 function tcTraduireParLot(text, targetLang) {
@@ -34537,7 +34538,12 @@ function tcTraduireParLot(text, targetLang) {
 
 async function tcEnvoyerLotTraduction(targetLang) {
   var file = _tcFilesTraduction[targetLang];
-  var lot = file.attente.splice(0, TC_TRADUCTION_LOT);
+  var lot = [], caracteres = 0;
+  while (file.attente.length && lot.length < TC_TRADUCTION_LOT
+    && (!lot.length || caracteres + file.attente[0].texte.length <= TC_TRADUCTION_CARACTERES)) {
+    caracteres += file.attente[0].texte.length;
+    lot.push(file.attente.shift());
+  }
   file.minuteur = file.attente.length
     ? setTimeout(function () { tcEnvoyerLotTraduction(targetLang); }, 0)
     : null;

@@ -70,6 +70,12 @@ verifie('la purge lit une dernière ligne sans retour', purge.indexOf('while rea
 verifie('le nettoyage sauvegarde avant d effacer', nettoyage.indexOf('file_put_contents') > -1 && nettoyage.indexOf('file_put_contents') < nettoyage.indexOf('DELETE FROM'));
 verifie('le nettoyage n affiche aucune clé', !/echo[^;]*(\$clair|valeur_chiffree)/.test(nettoyage));
 
+["Ce service n'est pas disponible pour le moment.", "Beaucoup de demandes d'un coup. Réessaie dans une minute."].forEach((p) => {
+  verifie('phrase avec son apostrophe : ' + p, api.indexOf(p) > -1);
+});
+['service n est', 'demandes d un coup'].forEach((p) => verifie('plus de phrase sans apostrophe : ' + p, api.indexOf(p) < 0));
+verifie('GET /admin/relais : apostrophe', routePhp('GET /admin/relais').indexOf("à l'administrateur") > -1);
+
 // ── tcRelais, dans la page ───────────────────────────────
 async function essaisRelais() {
   let vu = null, rep = null, jeton = 'j'.repeat(64);
@@ -151,13 +157,22 @@ async function essaisLots() {
     },
   };
   vm.createContext(ctx);
-  vm.runInContext('var TC_TRADUCTION_LOT = 100;\nvar _tcFilesTraduction = {};\n' + fonction('tcTraduireParLot') + '\n' + fonction('tcEnvoyerLotTraduction'), ctx);
+  vm.runInContext('var TC_TRADUCTION_LOT = 100;\nvar TC_TRADUCTION_CARACTERES = 20000;\nvar _tcFilesTraduction = {};\n' + fonction('tcTraduireParLot') + '\n' + fonction('tcEnvoyerLotTraduction'), ctx);
   const textes = Array.from({ length: 250 }, (_, i) => 't' + i);
   const res = await Promise.all(textes.map((t) => ctx.tcTraduireParLot(t, 'en')));
   verifie('250 textes partent en 3 requêtes', envois.length === 3, envois.length + ' requêtes');
   verifie('par le relais de traduction, en français vers la langue', envois[0].f === 'google/traduction' && envois[0].c.source === 'fr' && envois[0].c.target === 'en');
   verifie('jamais plus de 100 par lot', envois.every((e) => e.c.q.length <= 100));
   verifie('chaque texte retrouve sa traduction', res.every((r, i) => r === 't' + i + '-en'));
+  envois.length = 0;
+  const longs = Array.from({ length: 5 }, (_, i) => i + 'x'.repeat(9000));
+  const resL = await Promise.all(longs.map((t) => ctx.tcTraduireParLot(t, 'es')));
+  verifie('un lot ne dépasse pas 20 000 caractères', envois.length === 3 && envois.every((e) => e.c.q.join('').length <= 20000), envois.length + ' requêtes');
+  verifie('les textes longs retrouvent leur traduction', resL.every((r, i) => r === longs[i] + '-en'));
+  envois.length = 0;
+  const enorme = 'y'.repeat(25000);
+  const resE = await ctx.tcTraduireParLot(enorme, 'it');
+  verifie('un texte seul plus long que la limite part quand même', envois.length === 1 && resE === enorme + '-en');
   panne = true;
   const r = await ctx.tcTraduireParLot('x', 'de');
   verifie('une panne rend null : le français reste affiché', r === null);

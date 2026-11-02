@@ -3082,3 +3082,4 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 - `scripts/cles-heritees.php --compter|--effacer` : à lancer avec la configuration de production dès l'API déployée. Retire une clé égale à celle de l'administrateur ou partagée par plusieurs comptes ; sauvegarde les lignes, toujours chiffrées, avant.
 - Glissé : `purger-comptes-test.sh` lit une dernière ligne sans retour et sauvegarde la nouvelle table.
 - Suites : `verif-relais` (statique et page), `verif-relais-e2e` (en local, faux service sur le port 8097 ; en production, vraie traduction et vraie recherche pour un compte neuf). Le chemin de la clé de l'administrateur n'est vérifiable qu'en production : le coffre local ne lit pas les vraies clés.
+- Examen de la mission 71 : apostrophes rétablies dans les refus du serveur ; un lot de traduction s arrête aussi à 20 000 caractères.
