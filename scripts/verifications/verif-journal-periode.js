@@ -19,22 +19,21 @@ function fonction(texte, nom) {
   }
   return null;
 }
-// Horloge : lundi 12 octobre 2026.
-const NOW = new Date(2026, 9, 12, 10, 0, 0).getTime();
-const t = (a, m, j) => new Date(a, m - 1, j, 12, 0, 0).getTime();
+// Les dates sont relatives a l horloge : t(0, 3) = le 3 de ce mois, t(-1, 20) = le 20 du mois dernier.
+const NOW = Date.now();
+const ICI = new Date(NOW);
+const t = (mois, j) => new Date(ICI.getFullYear(), ICI.getMonth() + mois, j, 12, 0, 0).getTime();
 const liste = () => [
-  { id: 'a', title: 'Dentiste', categorie: 'rdv', timestamp: t(2026, 10, 3) },
-  { id: 'b', title: 'Question à Charly', categorie: 'charly', timestamp: t(2026, 10, 8) },
-  { id: 'c', title: 'Rdv banque', categorie: 'rdv', timestamp: t(2026, 9, 20) },
-  { id: 'd', title: 'Mot de passe', categorie: 'compte', timestamp: t(2026, 8, 5) },
-  { id: 'e', title: 'Coiffeur', categorie: 'rdv', timestamp: t(2026, 6, 15) },            // 4 mois : ancienne
-  { id: 'f', title: 'Vieux rdv', timestamp: t(2025, 12, 1), archive: true },              // archivee
+  { id: 'a', title: 'Dentiste', categorie: 'rdv', timestamp: t(0, 3) },
+  { id: 'b', title: 'Question à Charly', categorie: 'charly', timestamp: t(0, 8) },
+  { id: 'c', title: 'Rdv banque', categorie: 'rdv', timestamp: t(-1, 20) },
+  { id: 'd', title: 'Mot de passe', categorie: 'compte', timestamp: t(-2, 5) },
+  { id: 'e', title: 'Coiffeur', categorie: 'rdv', timestamp: t(-4, 15) },                 // 4 mois : ancienne
+  { id: 'f', title: 'Vieux rdv', timestamp: t(-10, 1), archive: true },                   // archivee
   { id: 'g', title: 'Très vieille entrée sans date', categorie: 'rdv' }                   // sans timestamp : ancienne
 ];
 const toasts = [];
-// Horloge figee : les dates de la liste sont celles d octobre 2026, la suite ne doit pas dependre du jour ou elle tourne.
-class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(NOW); } static now() { return NOW; } }
-const ctx = { console, Array, Date: DateFixe, Math, String, JSON, demarches: liste(), saveDemarches() { ctx._sauve = (ctx._sauve || 0) + 1; }, showToast: (x) => toasts.push(x), renderDemarches() { ctx._rendu = (ctx._rendu || 0) + 1; }, currentPage: 'demarches',
+const ctx = { console, Array, Date, Math, String, JSON, demarches: liste(), saveDemarches() { ctx._sauve = (ctx._sauve || 0) + 1; }, showToast: (x) => toasts.push(x), renderDemarches() { ctx._rendu = (ctx._rendu || 0) + 1; }, currentPage: 'demarches',
   _confirmations: [], _reponse: true, tcConfirm: async (m, o) => { ctx._confirmations.push(m + ' | ' + JSON.stringify(o || {})); return ctx._reponse; } };
 vm.createContext(ctx);
 vm.runInContext("let _demarchesFiltre = 'tout'; let _demarchesPeriode = 'mois'; let _demarchesArchives = false;", ctx);
@@ -47,16 +46,19 @@ const V = (f, p, a, l) => ids(ctx.tcDemarchesVisibles(l || liste(), f, p, a, NOW
 (async () => {
 titre('1. La periode, combinee avec la categorie ; Archives = archivees + anciennes');
 const jourLocal = (t) => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + d.getHours() + 'h'; };   // heure locale, jamais UTC (toISOString decale d un jour en Europe)
-verifie('« Ce mois » commence le 1er octobre a minuit ; « 3 derniers mois » le 1er aout', jourLocal(ctx.tcDebutPeriodeDemarches('mois', NOW)) === '2026-10-01 0h' && jourLocal(ctx.tcDebutPeriodeDemarches('trois', NOW)) === '2026-08-01 0h', jourLocal(ctx.tcDebutPeriodeDemarches('mois', NOW)) + ' / ' + jourLocal(ctx.tcDebutPeriodeDemarches('trois', NOW)));
+// Ici la date est donnee a la fonction : le calcul est verifie sur des jours connus, a cheval sur une annee, quel que soit le jour d aujourd hui.
+const debut = (p, a, m, j) => jourLocal(ctx.tcDebutPeriodeDemarches(p, new Date(a, m - 1, j, 10, 0, 0).getTime()));
+verifie('le 12 octobre, « Ce mois » commence le 1er octobre a minuit ; « 3 derniers mois » le 1er aout', debut('mois', 2026, 10, 12) === '2026-10-01 0h' && debut('trois', 2026, 10, 12) === '2026-08-01 0h', debut('mois', 2026, 10, 12) + ' / ' + debut('trois', 2026, 10, 12));
+verifie('le 15 janvier, « Ce mois » commence le 1er janvier ; « 3 derniers mois » le 1er novembre de l annee d avant', debut('mois', 2027, 1, 15) === '2027-01-01 0h' && debut('trois', 2027, 1, 15) === '2026-11-01 0h', debut('mois', 2027, 1, 15) + ' / ' + debut('trois', 2027, 1, 15));
 const libelles = vm.runInContext('TC_DEMARCHES_PERIODES.map(function (p) { return p.label; }).join(" / ")', ctx);
 verifie('libelles courts : « Ce mois », « 3 derniers mois »', libelles === 'Ce mois / 3 derniers mois', libelles);
 verifie('Tout + ce mois : b, a (les plus recentes d abord) ; ni archivee ni ancienne', V('tout', 'mois', false) === 'ba', V('tout', 'mois', false));
-verifie('Tout + 3 derniers mois : b, a, c, d (aout → octobre) ; pas le coiffeur de juin ni l entree sans date', V('tout', 'trois', false) === 'bacd', V('tout', 'trois', false));
+verifie('Tout + 3 derniers mois : b, a, c, d (ce mois et les deux d avant) ; pas le coiffeur d il y a 4 mois ni l entree sans date', V('tout', 'trois', false) === 'bacd', V('tout', 'trois', false));
 verifie('Rendez-vous + 3 derniers mois : a, c', V('rdv', 'trois', false) === 'ac');
 verifie('Actions sur mon compte + ce mois : rien ; + 3 mois : d', V('compte', 'mois', false) === '' && V('compte', 'trois', false) === 'd');
-verifie('Archives (Tout) : l ancienne de juin (e), l archivee (f), l entree sans date (g) : rien n est hors d atteinte', V('tout', 'mois', true) === 'efg', V('tout', 'mois', true));
+verifie('Archives (Tout) : l ancienne de 4 mois (e), l archivee (f), l entree sans date (g) : rien n est hors d atteinte', V('tout', 'mois', true) === 'efg', V('tout', 'mois', true));
 verifie('Archives (Rendez-vous) : e, f (sans categorie = Rendez-vous, comme avant), g', V('rdv', 'mois', true) === 'efg');
-verifie('tcDemarcheAncienne : e (4 mois) oui, g (sans date) oui, d (aout) non, f (archivee) non', ctx.tcDemarcheAncienne(liste()[4], NOW) === true && ctx.tcDemarcheAncienne(liste()[6], NOW) === true && ctx.tcDemarcheAncienne(liste()[3], NOW) === false && ctx.tcDemarcheAncienne(liste()[5], NOW) === false);
+verifie('tcDemarcheAncienne : e (4 mois) oui, g (sans date) oui, d (2 mois) non, f (archivee) non', ctx.tcDemarcheAncienne(liste()[4], NOW) === true && ctx.tcDemarcheAncienne(liste()[6], NOW) === true && ctx.tcDemarcheAncienne(liste()[3], NOW) === false && ctx.tcDemarcheAncienne(liste()[5], NOW) === false);
 verifie('journal et Archives se completent : chaque entree est visible dans exactement l un des deux (3 derniers mois)', liste().every((d) => (V('tout', 'trois', false).includes(d.id) ? 1 : 0) + (V('tout', 'trois', true).includes(d.id) ? 1 : 0) === 1));
 
 titre('2. Archiver : confirmation, puis les entrees affichees passent dans les Archives ; Desarchiver les ramene');
@@ -82,8 +84,8 @@ verifie('rien a archiver : rien ne change, un mot le dit, aucune question', ctx.
 ctx.tcBasculerArchivesDemarches();
 verifie('le bouton « Archives » bascule la vue et redessine', vm.runInContext('_demarchesArchives', ctx) === true && ctx._rendu >= 3);
 ctx.tcDesarchiverDemarche('f');
-verifie('desarchiver f (decembre 2025) : elle reste atteignable dans Archives comme ancienne, avec e et g → on reste dans Archives', vm.runInContext('_demarchesArchives', ctx) === true && !ctx.demarches.find((d) => d.id === 'f').archive && V('tout', 'mois', true, ctx.demarches) === 'efg', V('tout', 'mois', true, ctx.demarches));
-ctx.demarches = [{ id: 'a', title: 'Dentiste', categorie: 'rdv', timestamp: t(2026, 10, 3) }, { id: 'h', title: 'Récent archivé', categorie: 'rdv', timestamp: t(2026, 10, 5), archive: true }];
+verifie('desarchiver f (10 mois) : elle reste atteignable dans Archives comme ancienne, avec e et g → on reste dans Archives', vm.runInContext('_demarchesArchives', ctx) === true && !ctx.demarches.find((d) => d.id === 'f').archive && V('tout', 'mois', true, ctx.demarches) === 'efg', V('tout', 'mois', true, ctx.demarches));
+ctx.demarches = [{ id: 'a', title: 'Dentiste', categorie: 'rdv', timestamp: t(0, 3) }, { id: 'h', title: 'Récent archivé', categorie: 'rdv', timestamp: t(0, 5), archive: true }];
 ctx.tcDesarchiverDemarche('h');
 verifie('desarchiver la DERNIERE entree d Archives ramene au journal (sinon un ecran vide, sans bouton de retour)', vm.runInContext('_demarchesArchives', ctx) === false && V('tout', 'mois', true, ctx.demarches) === '');
 ctx.setDemarchesPeriode('trois');
