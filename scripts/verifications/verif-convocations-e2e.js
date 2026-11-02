@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Mission 27b (12/10) : convocations de groupe REELLES et messages d'un bloqué retenus, contre l'API (comptes sonde
 // jetables e2erdv.convoc…). À lancer sur api-locale (TC_API=http://127.0.0.1:8099) tant que la migration 012 n'est pas
 // jouée en production, puis contre la prod après la mise en ligne de l'API.

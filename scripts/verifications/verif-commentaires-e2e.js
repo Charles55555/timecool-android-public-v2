@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Mission 33 (Charles, 12/10) : POST /commentaires contre l'API réelle (compte sonde jetable e2erdv.commentaire…
 // @exemple-timecool.fr : enregistré en base, JAMAIS d'e-mail à l'équipe).
 // À lancer APRÈS la migration 011 et la mise en ligne de l'API (ou TC_API=http://127.0.0.1:8099 avec api-locale.sh).

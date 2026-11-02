@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Espace administrateur, contre l'API réelle : qui voit la liste, qui
 // ne la voit pas, et ce que fait vraiment le bouton « Bloquer ».
 const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)

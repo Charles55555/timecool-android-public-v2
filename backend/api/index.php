@@ -706,6 +706,24 @@ function documentsEffacerDuCompte(int $compteId): int
     @rmdir($dossier);
     return $n;
 }
+/**
+ * Efface un compte et tout ce qui le concerne : le « Supprimer » de l administrateur et les comptes de test.
+ * La cascade emporte ce qui porte une clé étrangère ; ici, les fichiers joints et les tables qui n en ont pas.
+ * Rend le nombre de comptes effacés (0 si inconnu).
+ */
+function compteEffacer(int $id): int
+{
+    $c = Db::un('SELECT reference, email, telephone FROM comptes WHERE id = ?', [$id]);
+    if ($c === null) {
+        return 0;
+    }
+    documentsEffacerDuCompte($id);
+    Db::req('DELETE FROM commentaires WHERE compte_id = ?', [$id]);
+    Db::req('DELETE FROM rappels_envoyes WHERE compte_id = ?', [$id]);
+    Db::req('DELETE FROM rapports_techniques WHERE compte_id = ? OR compte_ref IN (?, ?)', [$id, $c['email'], $c['reference']]);
+    Db::req('DELETE FROM verifications WHERE destination IN (?, ?)', [$c['email'], $c['telephone']]);
+    return Db::req('DELETE FROM comptes WHERE id = ?', [$id])->rowCount();
+}
 /** Ce que la page voit d un document (jamais le chemin). */
 function documentsLigne(array $d): array
 {
@@ -3950,9 +3968,8 @@ switch ($route) {
         }
 
         /*
-         * Une seule ligne suffit : sessions, contacts, groupes, rendez-vous
-         * organisés, appairages et clés portent tous une clé étrangère en
-         * ON DELETE CASCADE. Rien à effacer à la main, donc rien à oublier.
+         * compteEffacer : sessions, contacts, groupes, rendez-vous organisés,
+         * appairages et clés partent en cascade, le reste y est effacé.
          *
          * Définitif, et c est le but : l email et le téléphone sont uniques
          * en base, et seule la disparition de la ligne les libère. Une
@@ -3961,14 +3978,9 @@ switch ($route) {
          * L agenda de la personne reste sur son téléphone : il n a jamais
          * été stocké ici.
          */
-        // Les documents joints (mission 40a) : la table part en cascade, les fichiers chiffres et le dossier aussi.
         // L id est lu SANS le filtre « cloture_le IS NULL » de compteParReference : un compte cloture se supprime aussi.
         $cibleSuppression = Db::un('SELECT id FROM comptes WHERE reference = ?', [$ref]);
-        if ($cibleSuppression !== null) {
-            documentsEffacerDuCompte((int) $cibleSuppression['id']);
-        }
-        $sup = Db::req('DELETE FROM comptes WHERE reference = ?', [$ref]);
-        if ($sup->rowCount() === 0) {
+        if ($cibleSuppression === null || compteEffacer((int) $cibleSuppression['id']) === 0) {
             Rep::erreur(404, 'compte_introuvable', 'Compte inconnu.');
         }
         Rep::ok();
@@ -4698,6 +4710,15 @@ switch ($route) {
         Db::req('UPDATE comptes SET langue = ? WHERE id = ?', [$langue, $compte['id']]);
 
         Rep::ok(['langue' => $langue]);
+
+    // Mission 70 : un compte de test (…@exemple-timecool.fr) s efface lui-même à la fin d une suite. Aucun autre compte.
+    case 'POST /compte/effacer-test':
+        $compte = Auth::compte();
+        if (!str_ends_with(strtolower((string) ($compte['email'] ?? '')), '@exemple-timecool.fr')) {
+            Rep::erreur(403, 'acces_refuse', 'Réservé aux comptes de test.');
+        }
+        compteEffacer((int) $compte['id']);
+        Rep::ok();
 
     case 'POST /compte/provenance':
         $compte = Auth::compte();

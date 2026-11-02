@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 /* Bout en bout, VRAI serveur, comptes de test neufs : rendez-vous a plusieurs.
  *   node e2e-rdv-groupe.js     (comptes sonde.groupe.*@exemple-timecool.fr) */
 const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)

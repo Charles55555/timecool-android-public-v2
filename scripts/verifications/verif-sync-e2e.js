@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Synchronisation par différences, contre l'API réelle. Deux appareils
 // simulés : ce que l'un écrit, l'autre doit le voir, et rien d'autre.
 const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)

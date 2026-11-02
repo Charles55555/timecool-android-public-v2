@@ -16,6 +16,10 @@ D=${TC_SUITES:-$(cd "$(dirname "$0")" && pwd)}
 
 rouge=0
 
+# Mission 70 : les comptes de test qu une suite n a pas pu effacer sont notes ici.
+export TC_COMPTES_RESTES=$(mktemp)
+trap 'rm -f "$TC_COMPTES_RESTES"' EXIT
+
 lancer() {
   local nom=$1; shift
   [ -f "$D/$nom.js" ] || { printf '%-26s absente\n' "$nom"; return; }
@@ -204,12 +208,18 @@ lancer verif-retour           "$PAGE" "$API"
 lancer verif-statistiques     "$PAGE" "$API"
 lancer verif-sync             "$PAGE" "$API"
 lancer verif-sync-e2e         "$PAGE" "$API"
+lancer verif-comptes-jetables "$PAGE" "$API"
+lancer verif-comptes-jetables-e2e "$PAGE" "$API"
 lancer verif-taches           "$PAGE" "$API"
 lancer verif-texte-invitation "$PAGE" "$API"
 lancer verif-transfert        "$PAGE" "$API"
 lancer verif-tri              "$PAGE" "$API"
 
 echo
+if [ -s "$TC_COMPTES_RESTES" ]; then
+  echo "ATTENTION : $(wc -l < "$TC_COMPTES_RESTES") compte(s) de test non efface(s) (l API en ligne a-t-elle la route /compte/effacer-test ?)."
+  head -3 "$TC_COMPTES_RESTES"
+fi
 if [ "$rouge" -eq 0 ]; then
   echo "Tout est vert."
 else

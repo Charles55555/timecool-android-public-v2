@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // « Mon temps libre » = temps protégé, contre l'API réelle (comptes sonde jetables).
 // À lancer APRÈS la mise en ligne de l'API : elle vérifie le serveur en production.
 const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)

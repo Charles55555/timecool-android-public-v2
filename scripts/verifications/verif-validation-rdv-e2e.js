@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // « Toujours attendre ma validation » contre l'API réelle (comptes sonde jetables).
 // À lancer APRÈS la mise en ligne de l'API : elle vérifie le serveur en production.
 //

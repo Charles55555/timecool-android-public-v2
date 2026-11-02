@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Mission 41 (14/10) : POST /rapports-techniques et GET /sante contre l'API réelle. Sans session, puis avec un compte
 // sonde jetable (…@exemple-timecool.fr). À lancer APRÈS la migration 014 et la mise en ligne de l'API
 // (ou TC_API=http://127.0.0.1:8099 avec api-locale.sh). Rejouable à volonté : trois rapports par passage, et le plafond de

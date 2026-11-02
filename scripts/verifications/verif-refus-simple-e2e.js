@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Mission 24 (Charles, 12/10) : « Refuser » simple, contre l API (TC_API = copie locale par api-locale.sh, comptes
 // sonde jetables e2erdv.refus…). Refus avec bloquer:false -> HTTP 200, statut refuse, PAS de fiche bloquee, le demandeur
 // recoit « [Prénom] ne peut pas donner suite à ta demande pour le moment. », il peut redemander (la demande arrive) ;

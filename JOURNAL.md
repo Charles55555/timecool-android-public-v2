@@ -3062,3 +3062,11 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 - Examen 2 de la mission 69 (4 défauts) : un nom sans titre placé avant le verbe doit être repris par la phrase (le, la, l', sa fiche, ce contact, « me » avec « dans mes contacts ») ; le nom complet d'un contact gagne sur toute autre lecture ; la négation écarte seulement l'ordre de ne pas chercher ; un mot peu sûr après « contact » ou « dans mes contacts » ne produit jamais « personne qui s'appelle X ».
 - Examen 3 de la mission 69 : « mon ami Hugo » après le verbe, un mot après un article ou un démonstratif n'est pas un nom (« Cette dame »), « je n'ai pas trouvé Hugo dans mes contacts » est une recherche. Ancien défaut de la mission 66 corrigé : « retrouve-le dans mes contacts » ne cherche plus quelqu'un qui s'appelle « Le ».
 - Examen 4 de la mission 69 : après un article, le carnet décide (« Le Gall » s'il le connaît, « Le comptable » sinon) ; « j'ai pas retrouvé Hugo dans mes contacts » ne prend plus le verbe pour le nom.
+
+## 02/11/2026 — Mission 70 : les comptes de test ne s'accumulent plus
+
+- `compteEffacer()` (API) : une seule logique d'effacement pour le « Supprimer » administrateur et les comptes de test ; elle nettoie aussi `commentaires`, `rappels_envoyes`, `rapports_techniques`, `verifications`, qui n'ont pas de clé étrangère et restaient en base.
+- Route `POST /compte/effacer-test` : un compte @exemple-timecool.fr s'efface lui-même avec sa session, aucun autre compte. À déployer avant de relancer `verifier.sh` contre l'API en ligne.
+- `scripts/verifications/comptes-jetables.js`, chargé en tête des 18 suites qui s'inscrivent : retient les comptes créés et les efface en fin de passage (fin normale, process.exit, exception, promesse rejetée, signal). Ce qui reste est signalé à la fin de `verifier.sh`.
+- `scripts/purger-comptes-test.sh --compter | --effacer | --fichiers LISTE` : sauvegarde vérifiée, effacement par paquets, vrais comptes comptés avant et après. Les fichiers joints de production sont protégés : `--fichiers` se lance en root.
+- Vérifié contre l'API locale (même base) : 26 185 comptes de test avant et après un passage complet, purge essayée sur 3 comptes.

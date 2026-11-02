@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Mission 12 : message d absence contre une API reelle (TC_API=http://127.0.0.1:8099 via api-locale.sh, ou l API en ligne
 // une fois deployee). Comptes jetables e2erdv.absence…@exemple-timecool.fr.
 //   Alice est absente (reglage tc_absence synchronise, periode en cours) : Bob lui ecrit → il recoit le message d absence

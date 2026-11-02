@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Mission 40a (12/10) : documents joints, contre l'API (comptes sonde jetables e2erdv.doc…, petits fichiers).
 // À lancer sur api-locale (TC_API=http://127.0.0.1:8099, dossier backend/private/documents) après la migration 013,
 // puis contre la prod après la mise en ligne. Node 18+ (FormData, Blob).

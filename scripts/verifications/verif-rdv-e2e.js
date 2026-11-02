@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Prise de rendez-vous entre deux comptes, contre l'API réelle.
 // Charles demande, Julian reçoit — dans son agenda ou dans sa messagerie
 // selon ce qu'il a configuré, sans jamais pouvoir distinguer un refus.

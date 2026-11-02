@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Suppression d'un compte et désignation d'un administrateur, contre
 // l'API réelle. Le point qui compte : la suppression libère bien l'email
 // et le téléphone, ce que le blocage ne fait pas.

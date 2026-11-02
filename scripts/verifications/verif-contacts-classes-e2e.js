@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Contacts classes contre l'API reelle (comptes sonde jetables) : un contact non classe passe par
 // la messagerie ; un contact classe ne reserve que dans les plages de SES categories.
 // À lancer APRÈS la mise en ligne de l'API : elle vérifie le serveur en production.

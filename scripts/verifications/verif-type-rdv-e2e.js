@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Le TYPE d'un rendez-vous contre l'API reelle (comptes sonde jetables).
 // À lancer APRÈS la migration 010 et la mise en ligne de l'API.
 const API = process.env.TC_API || 'https://api.timecool.fr';   // TC_API : une copie locale de l API (php -S)

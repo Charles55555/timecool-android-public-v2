@@ -1,3 +1,4 @@
+require('./comptes-jetables'); // Mission 70 : les comptes créés ici sont effacés en fin de passage.
 // Test de bout en bout du transfert d'agenda, contre l'API réelle.
 // Simule les deux appareils : le navigateur qui demande un code, le
 // téléphone qui l'approuve et envoie son agenda chiffré.
