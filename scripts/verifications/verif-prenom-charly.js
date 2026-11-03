@@ -1,9 +1,9 @@
 // « Charly connaît et utilise le prénom de l'utilisateur, partout où c'est naturel » (mission 72, chef, 03/11, ok de Charles).
 //
 // Le prénom du compte entre dans les consignes de Charly (prompt construit dans la page) et dans ses phrases fixes : accueil,
-// bonjour, au revoir. Sans prénom exploitable (champ vide, prénom = nom, un seul mot en majuscules comme « REPUBLIQUE »,
-// une adresse e-mail), Charly parle comme avant : jamais d'invention, jamais l'e-mail à la place. Le prénom s'écrit tel que
-// saisi, première lettre en majuscule.
+// bonjour, au revoir. Sans prénom exploitable (champ vide, prénom = nom, une adresse e-mail), Charly parle comme avant :
+// jamais d'invention, jamais l'e-mail à la place. Le prénom s'écrit mot par mot, première lettre en majuscule, le reste en
+// minuscules (décision du chef après l'examen : « CHARLES » → « Charles »).
 // Usage : node verif-prenom-charly.js <index.html>
 const fs = require('fs');
 const vm = require('vm');
@@ -40,7 +40,11 @@ const cas = [
   [{ firstname: 'Charles', lastname: 'Haddad', email: 'c@x.fr' }, 'Charles', 'prénom normal'],
   [{ firstname: 'charles', lastname: 'Haddad' }, 'Charles', 'saisi en minuscules : première lettre en majuscule'],
   [{ firstname: 'élodie', lastname: 'Martin' }, 'Élodie', 'première lettre accentuée'],
-  [{ firstname: 'jean-pierre', lastname: 'Roux' }, 'Jean-pierre', 'tel que saisi, seule la première lettre change'],
+  [{ firstname: 'jean-pierre', lastname: 'Roux' }, 'Jean-Pierre', 'prénom composé avec un trait d union'],
+  [{ firstname: 'JEAN PIERRE', lastname: 'Roux' }, 'Jean Pierre', 'deux mots en majuscules'],
+  [{ firstname: 'CHARLES', lastname: 'Haddad' }, 'Charles', 'un mot en majuscules'],
+  [{ firstname: 'ÉLODIE', lastname: 'Martin' }, 'Élodie', 'un mot en majuscules accentué'],
+  [{ firstname: 'mArIe', lastname: 'Martin' }, 'Marie', 'casse mélangée'],
   [{ firstname: '  Marie   Claire ', lastname: 'Dupont' }, 'Marie Claire', 'espaces en trop retirés'],
   [{ firstname: 'Inès' }, 'Inès', 'sans nom'],
   [{ firstName: 'Paul', lastName: 'Martin' }, 'Paul', 'champ firstName'],
@@ -53,8 +57,6 @@ const cas = [
   [{ firstname: 'Haddad', lastname: 'Haddad' }, '', 'prénom = nom'],
   [{ firstname: 'haddad', lastname: 'HADDAD' }, '', 'prénom = nom, casse différente'],
   [{ firstname: 'Hélène', lastname: 'Helene' }, '', 'prénom = nom, accents différents'],
-  [{ firstname: 'REPUBLIQUE', lastname: 'Paris' }, '', 'un seul mot en majuscules'],
-  [{ firstname: 'RÉPUBLIQUE' }, '', 'un seul mot en majuscules accentué'],
   [{ firstname: 'charles@exemple.fr' }, '', 'une adresse e-mail'],
   [{ firstname: 'charles.haddad' }, '', 'un identifiant avec un point'],
   [{ firstname: 'Test123' }, '', 'des chiffres'],
@@ -71,7 +73,7 @@ verifie('le bonjour attendu : « Bonjour Charles ! Qu’est-ce que je peux faire
 verifie('« C’est noté, Charles » et « Bonne journée, Charles »', consigne.indexOf('« C’est noté, Charles »') > -1 && consigne.indexOf('« Bonne journée, Charles »') > -1, consigne);
 verifie('jamais à chaque phrase, jamais dans un titre ni un bloc [AGENDA], jamais dans un message pour une autre personne', /Jamais à chaque phrase/.test(consigne) && /titre d’un rendez-vous/.test(consigne) && /\[AGENDA\]/.test(consigne) && /message écrit pour une autre personne/.test(consigne), consigne);
 verifie('pas de tiret long, pas d apostrophe droite', consigne.indexOf('—') < 0 && consigne.indexOf("'") < 0, consigne);
-[{ firstname: '', email: 'charles@x.fr' }, { firstname: 'REPUBLIQUE' }, { firstname: 'Haddad', lastname: 'Haddad' }, null].forEach((c) => {
+[{ firstname: '', email: 'charles@x.fr' }, { firstname: 'charles@x.fr' }, { firstname: 'Haddad', lastname: 'Haddad' }, null].forEach((c) => {
   ctx.userAccount = c;
   verifie('sans prénom exploitable (' + JSON.stringify(c) + ') : aucune consigne, Charly parle comme avant', ctx.tcConsignePrenom() === '');
 });

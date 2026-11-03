@@ -3089,7 +3089,7 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 ## 03/11/2026 : Mission 72, Charly appelle l'utilisateur par son prénom
 
 Chef, 03/11 (ok de Charles) : Charly connaît le prénom du compte et l'emploie là où un humain le ferait.
-- `tcPrenomUtilisateur()` : le prénom tel que saisi, première lettre en majuscule ; rien si le champ est vide, si le prénom est le nom, si c'est un seul mot en majuscules (« REPUBLIQUE »), une adresse e-mail, des chiffres ou des signes.
+- `tcPrenomUtilisateur()` : le prénom, chaque mot avec une majuscule et le reste en minuscules (« CHARLES » → « Charles », « jean-pierre » → « Jean-Pierre », décision du chef après l'examen) ; le champ du compte ne change pas. Rien si le champ est vide, si le prénom est le nom, une adresse e-mail, des chiffres ou des signes.
 - `tcConsignePrenom()` s'ajoute au prompt aux trois appels du modèle (pas dans le prompt modifiable des réglages) : bonjour, « C'est noté », « Bonne journée », jamais à chaque phrase, jamais dans un titre, un bloc [AGENDA] ou un message pour une autre personne. Sans prénom, aucune consigne : Charly parle comme avant.
 - Phrases fixes : accueil à la connexion (il prenait le champ brut, « REPUBLIQUE » compris), premier bonjour, bonjour suivant (« Bonjour Charles ! Qu'est-ce que je peux faire pour toi ? »), au revoir (« À bientôt, Charles ! »). Le merci ne change pas. Le classement ne bouge pas.
-- Suites : nouvelle `verif-prenom-charly` (23 comptes, la consigne, la page) ; `verif-classement-charly` rejoue bonjour, au revoir et merci avec et sans prénom.
+- Suites : nouvelle `verif-prenom-charly` (25 comptes, la consigne, la page) ; `verif-classement-charly` rejoue bonjour, au revoir et merci avec et sans prénom.

@@ -17783,21 +17783,10 @@ function closeWelcomeSplash() {
 }
 
 /**
- * Les initiales du compte connecte.
- *
- * Trois orthographes cohabitent dans le code -- firstname, firstName,
- * prenom -- selon le chemin qui a cree le compte. Les trois sont
- * acceptees ici plutot que laissees a la charge de chaque affichage :
- * c'est ainsi que l'entete montrait CC quand le menu montrait AA.
- *
- * Sans nom exploitable, la premiere lettre de l'email vaut mieux que
- * rien ; un rond vide n'apprend rien a personne.
- */
-/**
- * Le prénom du compte, tel que l'utilisateur l'a saisi, première lettre en majuscule (mission 72).
- * Rien (chaîne vide) quand il n'est pas exploitable : champ vide, prénom identique au nom, un seul mot
- * tout en majuscules (« REPUBLIQUE », un nom de rue ou de société), une adresse e-mail, des chiffres ou
- * des signes. Charly parle alors sans prénom : jamais d'invention, jamais l'e-mail à la place.
+ * Le prénom du compte, chaque mot avec sa première lettre en majuscule et le reste en minuscules
+ * (« CHARLES » → « Charles », « jean-pierre » → « Jean-Pierre ») ; le champ du compte ne change pas (mission 72).
+ * Rien (chaîne vide) quand il n'est pas exploitable : champ vide, prénom identique au nom, une adresse
+ * e-mail, des chiffres ou des signes. Charly parle alors sans prénom : jamais d'invention, jamais l'e-mail à la place.
  */
 function tcPrenomUtilisateur() {
   const a = (typeof userAccount !== 'undefined' && userAccount) ? userAccount : null;
@@ -17807,8 +17796,7 @@ function tcPrenomUtilisateur() {
   if (!brut || brut.length > 40 || !/^\p{L}[\p{L}'’ -]*$/u.test(brut)) return '';
   const plat = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (nom && plat(brut) === plat(nom)) return '';
-  if (brut.indexOf(' ') < 0 && brut.length > 1 && brut === brut.toUpperCase() && brut !== brut.toLowerCase()) return '';
-  return brut.charAt(0).toUpperCase() + brut.slice(1);
+  return brut.toLowerCase().replace(/(^|[ -])(\p{L})/gu, (m, avant, lettre) => avant + lettre.toUpperCase());
 }
 
 /** La consigne du prénom ajoutée au prompt de Charly ; rien quand le prénom n'est pas exploitable (mission 72). */
@@ -17820,6 +17808,17 @@ function tcConsignePrenom() {
     + ' »). Jamais à chaque phrase. Jamais dans le titre d’un rendez-vous ni dans un bloc [AGENDA], jamais dans un message écrit pour une autre personne.';
 }
 
+/**
+ * Les initiales du compte connecte.
+ *
+ * Trois orthographes cohabitent dans le code -- firstname, firstName,
+ * prenom -- selon le chemin qui a cree le compte. Les trois sont
+ * acceptees ici plutot que laissees a la charge de chaque affichage :
+ * c'est ainsi que l'entete montrait CC quand le menu montrait AA.
+ *
+ * Sans nom exploitable, la premiere lettre de l'email vaut mieux que
+ * rien ; un rond vide n'apprend rien a personne.
+ */
 function tcInitiales() {
   const a = (typeof userAccount !== 'undefined' && userAccount) ? userAccount : null;
   if (!a) return null;
