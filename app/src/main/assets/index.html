@@ -9839,40 +9839,49 @@ function tcConfianceCharly(regle) {
 
 /**
  * La phrase qui change le profil pour cette demande (mission 77) : { n: 1 | 3, sans: le texte sans elle }, ou null.
- * « Attends ma validation », « demande-moi avant », « vérifie avec moi », « ne fais rien sans … » → 1 ;
- * « fais-le directement », « tout seul », « pas besoin de me demander », et leurs variantes → 3. Les phrases du profil 1
- * d'abord : « ne fais rien sans … » reste du profil 1.
+ * Seulement un ordre donné à Charly, en proposition entière (début du message, après une virgule, « et » ou « mais »,
+ * jusqu'à la fin ou à la virgule suivante) : « attends ma validation », « demande-moi avant », « vérifie avec moi »,
+ * « ne fais rien sans … » → 1 ; « fais-le directement », « vas-y directement », « gère tout seul », « pas besoin de me
+ * demander » → 3. « sans … » et « tout seul » seuls : en fin de message, et seulement si le
+ * message commence par une action (décale, annule, préviens…) sans « que » avant (« Paul a annulé sans … », « je vais au
+ * cinéma, tout seul » ne changent rien). Dans le doute : rien, le texte entier et le profil réglé.
  */
 function tcConfianceDemandee(texte) {
   const brut = String(texte || '');
   const s = tcSansAccents(brut).replace(/[’´]/g, "'");
-  const AV = /(?:\s*[,;]\s*|\s+|^)(?:et\s+|mais\s+)?/.source;
+  const AVANT = /(^|[,;.!?]\s*|\s+(?:et|mais)\s+)/.source, APRES = /\s*(?=$|[,;.!?])/.source;
   const UN = [
-    AV + /(?:ne\s+)?(?:fais|fait|faites|decale|deplace|annule|envoie|touche)?\s*rien\s+sans\s+(?:me\s+demander|mon\s+accord|ma\s+validation|m'en\s+parler)\b/.source,
-    AV + /(?:attends?|attendez)\s+(?:ma|mon)\s+(?:validation|accord|feu\s+vert|ok)\b/.source,
-    AV + /demande[sz]?[\s-]*(?:le[\s-]*)?moi\s+(?:avant|d'abord|mon\s+avis)\b/.source,
-    AV + /verifie[sz]?\s+avec\s+moi(?:\s+avant|\s+d'abord)?\b/.source];
+    /(?:ne\s+)?(?:fais|decale|deplace|annule|envoie|touche|bouge)\s+rien\s+sans\s+(?:me\s+demander|mon\s+accord|ma\s+validation|m'en\s+parler)/,
+    /(?:attends|attendez)\s+(?:ma|mon)\s+(?:validation|accord|feu\s+vert|ok)/,
+    /demande[sz]?[\s-]*(?:le[\s-]*)?moi\s+(?:avant|d'abord|mon\s+avis)/,
+    /verifie[sz]?\s+avec\s+moi(?:\s+avant|\s+d'abord)?/];
   const TROIS = [
-    AV + /(?:fais|fait|faites)[\s-]*(?:le|la|les|ca|tout)?\s*(?:directement|tout\s+seule?|sans\s+me\s+demander)\b/.source,
-    AV + /vas[\s-]*y\s+(?:directement|tout\s+seule?|sans\s+me\s+demander)\b/.source,
-    AV + /(?:gere|occupe[\s-]*t'en|debrouille[\s-]*toi)\s+tout\s+seule?\b/.source,
-    AV + /(?:pas\s+besoin\s+de|inutile\s+de|(?:tu\s+n'as|t'as)\s+pas\s+besoin\s+de)\s+me\s+(?:demander|valider)\b/.source,
-    AV + /sans\s+(?:me\s+demander|attendre\s+(?:ma\s+validation|mon\s+accord)|ma\s+validation|mon\s+accord)\b/.source,
-    /(?:\s*,\s*|\s+et\s+)tout\s+seule?\s*[.!]*$/.source];
-  const essayer = function (liste, n) {
-    for (let i = 0; i < liste.length; i++) {
-      const m = new RegExp(liste[i]).exec(s);
-      if (!m) continue;
-      let sans = brut;
-      if (s.length === brut.length) {
-        sans = (brut.slice(0, m.index) + ' ' + brut.slice(m.index + m[0].length)).replace(/\s*[,;]\s*$/, '').replace(/\s+(?:et|mais)\s*$/i, '').replace(/\s+([,.!?])/g, '$1').replace(/^[\s,;]+/, '').replace(/\s{2,}/g, ' ').trim();
-        if (sans.split(/\s+/).filter(Boolean).length < 2) sans = brut;
-      }
-      return { n: n, sans: sans };
+    /(?:fais|faites)[\s-]*(?:le|la|les|ca|tout)?\s*(?:directement|tout\s+seule?|sans\s+me\s+demander)/,
+    /vas[\s-]*y\s+(?:directement|tout\s+seule?|sans\s+me\s+demander)/,
+    /(?:gere|occupe[\s-]*t'en|debrouille[\s-]*toi)\s+tout\s+seule?/,
+    /(?:pas\s+besoin\s+de|inutile\s+de|(?:tu\s+n'as|t'as)\s+pas\s+besoin\s+de)\s+me\s+(?:demander|valider)/];
+  const TROIS_APRES_UN_ORDRE = [/sans\s+(?:me\s+demander|attendre\s+(?:ma\s+validation|mon\s+accord)|ma\s+validation|mon\s+accord)/, /tout\s+seule?/];
+  const ordre = /^(?:(?:tu\s+peux|peux[\s-]*tu|stp)\s+)?(?:decal|deplac|annul|report|repouss|supprim|effac|enlev|retir|previen|envoi|bouge|chang|modifi|propos)[a-z]*\b/.test(s);
+  const couper = function (m, n) {
+    let sans = brut;
+    if (s.length === brut.length) {
+      sans = (brut.slice(0, m.index) + ' ' + brut.slice(m.index + m[0].length)).replace(/\s*[,;]\s*$/, '').replace(/\s+(?:et|mais)\s*$/i, '')
+        .replace(/\s+([,.!?])/g, '$1').replace(/^[\s,;]+/, '').replace(/\s{2,}/g, ' ').trim();
+      if (sans.split(/\s+/).filter(Boolean).length < 2) sans = brut;
     }
+    return { n: n, sans: sans };
+  };
+  const essayer = function (liste, n) {
+    for (let i = 0; i < liste.length; i++) { const m = new RegExp(AVANT + liste[i].source + APRES).exec(s); if (m) return couper(m, n); }
     return null;
   };
-  return essayer(UN, 1) || essayer(TROIS, 3);
+  const r = essayer(UN, 1) || essayer(TROIS, 3);
+  if (r || !ordre) return r;
+  for (let i = 0; i < TROIS_APRES_UN_ORDRE.length; i++) {
+    const m = new RegExp(/(?:[,;]\s*|\s+et\s+|\s+)/.source + TROIS_APRES_UN_ORDRE[i].source + /\s*[.!]*$/.source).exec(s);
+    if (m && !/\bqu(?:e\b|')/.test(s.slice(0, m.index))) return couper(m, 3);
+  }
+  return null;
 }
 
 /** Une fois par demande, seulement s'il change quelque chose : « D’accord, pour celle-ci … » (mission 77). */
@@ -9882,13 +9891,6 @@ function tcDireConfianceDuMoment() {
   m.dit = true;
   if (m.n === tcConfianceCharly(true)) return;
   charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: m.n === 1 ? 'D’accord, pour celle-ci j’attends ton accord.' : 'D’accord, pour celle-ci je fais tout et je te fais un compte rendu.' });
-}
-
-/** Une réponse qui arrive plus tard (le créneau choisi par un contact) suit le profil de la demande qui l'a envoyée. */
-async function tcAvecConfiance(n, f) {
-  const avant = _tcConfianceMoment;
-  _tcConfianceMoment = { n: n, dit: true, texte: null };
-  try { return await f(); } finally { _tcConfianceMoment = avant; }
 }
 
 /** Charly attend-il une réponse (questionnaire, oui / non, « J’envoie ? », « je le place ? », « qui est-ce ? ») ? */
@@ -26023,10 +26025,10 @@ async function tcEnvoyerPropositions(items) {
     else { if (res.sansMoyen.indexOf(c.name) < 0) res.sansMoyen.push(c.name); continue; }
     let d;
     try { d = await TC_BACKEND.propositionCreer(corps); } catch (e) { if (res.echecs.indexOf(c.name) < 0) res.echecs.push(c.name); continue; }
-    const _confianceAvant = ev.decalage && ev.decalage.confiance;
     ev.decalage = { rdv: d.rdv_id, qui: c.name, le: new Date().toISOString() };
-    // Mission 77 : le profil dit pour cette demande suit le rendez-vous jusqu'à la réponse du contact.
-    const _confiance = (typeof _tcConfianceMoment !== 'undefined' && _tcConfianceMoment) ? _tcConfianceMoment.n : _confianceAvant;
+    // Mission 77 : le profil dit pour cette demande suit le rendez-vous jusqu'à la réponse du contact. Un nouveau tour (réponse
+    // tardive) passe celui du rendez-vous (it.confiance), jamais le profil du moment d'une autre demande.
+    const _confiance = ('confiance' in it) ? it.confiance : ((typeof _tcConfianceMoment !== 'undefined' && _tcConfianceMoment) ? _tcConfianceMoment.n : null);
     if (_confiance === 1 || _confiance === 3) ev.decalage.confiance = _confiance;
     // Le lot (marche arrière commune) et le premier jour possible (jamais la période d'indisponibilité) : gardés pour les tours suivants.
     if (it.lot) ev.lotDecalage = { id: it.lot, apres: it.apres || null };
@@ -26042,7 +26044,7 @@ async function tcEnvoyerPropositions(items) {
 }
 
 /** Le bilan d'un envoi de propositions, ligne par ligne. */
-function tcLignesPropositions(res) {
+function tcLignesPropositions(res, profil) {
   const l = res.details.slice();
   if (res.proposes.length) l.push('• Envoyé dans la messagerie TimeCool : ' + tcNomsLisibles(res.proposes));
   const aEnvoyer = [];
@@ -26051,7 +26053,7 @@ function tcLignesPropositions(res) {
   if (res.echecs.length) l.push('• Pas envoyé, la connexion a manqué : ' + tcNomsLisibles(res.echecs) + '. Redemande-moi dans un instant.');
   if (res.sansMoyen.length) l.push('• Sans numéro ni email dans ta fiche contact, rien n’est parti : ' + tcNomsLisibles(res.sansMoyen));
   // Au profil 3, Charly place seul : il ne demande pas avant d'écrire (TESTEURS, 03/11).
-  if (res.details.length) l.push('Ces rendez-vous restent à leur place, marqués ⏳, jusqu’à la réponse. ' + (typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3
+  if (res.details.length) l.push('Ces rendez-vous restent à leur place, marqués ⏳, jusqu’à la réponse. ' + ((profil || (typeof tcConfianceCharly === 'function' ? tcConfianceCharly() : 1)) === 3
     ? 'Quand elle arrive, je place le créneau choisi dans ton agenda et je te fais un compte rendu.'
     : 'Quand elle arrive, je te demande avant de l’écrire dans ton agenda.'));
   return l;
@@ -26354,18 +26356,16 @@ async function tcSuivrePropositions(toujours) {
     let nouvelles = liste.filter(function (x) { return !deja(x) && !_tcAClore.some(function (y) { return y.id === Number(x.rdv_id); }); });
     if (!nouvelles.length) return;
     // Mission 77 : chaque réponse suit le profil de la demande qui l'a envoyée (« fais-le directement », « attends ma validation »).
+    // Une réponse arrive hors de toute demande : jamais le profil du moment, seulement celui du rendez-vous, sinon le réglage.
     const profilDe = function (x) {
       const e = tcRdvDeProposition(x), n = e && e.decalage ? Number(e.decalage.confiance) : 0;
-      return (n === 1 || n === 3) && typeof tcAvecConfiance === 'function' ? n : tcConfianceCharly();
+      return (n === 1 || n === 3) ? n : tcConfianceCharly(true);
     };
     const seuls = nouvelles.filter(function (x) { return profilDe(x) === 3; });
     const aDemander = nouvelles.filter(function (x) { return profilDe(x) < 2; });
-    if (seuls.length) { if (seuls.length === nouvelles.length && tcConfianceCharly() === 3) { await tcTraiterSeul(seuls); return; } await tcAvecConfiance(3, function () { return tcTraiterSeul(seuls); }); }
+    if (seuls.length) await tcTraiterSeul(seuls);
     nouvelles = nouvelles.filter(function (x) { return seuls.indexOf(x) < 0 && aDemander.indexOf(x) < 0; });
-    if (!nouvelles.length) {
-      if (aDemander.length) { if (tcConfianceCharly() < 2) tcPoserReponseCreneau(aDemander[0]); else await tcAvecConfiance(1, function () { tcPoserReponseCreneau(aDemander[0]); }); }
-      return;
-    }
+    if (!nouvelles.length) { if (aDemander.length) tcPoserReponseCreneau(aDemander[0]); return; }
     const seul = nouvelles.filter(function (x) { return x.etat !== 'choisi' && Number(x.tours || 1) < 2 && tcRdvDeProposition(x); });
     for (const x of seul) await tcReproposerSeul(x);
     const choisis = nouvelles.filter(function (x) { return x.etat === 'choisi'; });
@@ -26449,14 +26449,15 @@ async function tcExecuterReponseCreneau(m, cle) {
   } else {
     const contact = tcContactDuRdv(ev);
     const creneaux = contact ? tcCreneauxReproposes(ev) : [];
+    const confianceDuRdv = (ev.decalage && ev.decalage.confiance) || null;   // mission 77 : le nouveau tour garde le profil de sa demande
     delete ev.decalage;
     if (!creneaux.length) {
       decision = 'laisse';
       saveEventsToStorage();
       charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Je ne trouve pas d’autre moment libre dans les deux semaines : « ' + titre + ' » reste à sa place.' });
     } else {
-      const res = await tcEnvoyerPropositions([{ ev: ev, contact: contact, creneaux: creneaux }]);
-      tcDireBilanPropositions(tcLignesPropositions(res), res.envois);
+      const res = await tcEnvoyerPropositions([{ ev: ev, contact: contact, creneaux: creneaux, confiance: confianceDuRdv }]);
+      tcDireBilanPropositions(tcLignesPropositions(res, confianceDuRdv || tcConfianceCharly(true)), res.envois);
     }
   }
   let d = null;
@@ -26543,7 +26544,7 @@ async function tcTraiterSeul(liste) {
     if (creneaux.length) {
       const avant = x.ev.decalage;
       delete x.ev.decalage;
-      const res = await tcEnvoyerPropositions([{ ev: x.ev, contact: contact, creneaux: creneaux }]);
+      const res = await tcEnvoyerPropositions([{ ev: x.ev, contact: contact, creneaux: creneaux, confiance: (avant && avant.confiance) || null }]);
       // La connexion a manqué : rien n’est clos, la sonde réessaiera.
       if (!res.details.length) { x.ev.decalage = avant; echecs.push(x); continue; }
       res.envois.forEach(function (e) { envois.push(e); });

@@ -38,7 +38,7 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
   'tcIdsQuestion', 'tcRetirerQuestionsDe', 'tcPoserLotCreneaux', 'tcReproposerSeul', 'tcExecuterLotCreneaux', 'tcDireSuitesAuxContacts', 'tcExecuterDeplacement', 'tcGenesDuLot',
   'tcPrisTexte', 'tcPrisParentheses', 'tcTraiterSeul', 'tcSuitesEnLignes', 'tcProposerEnvoi', 'tcExecuterEnvoi',
   'tcSauverAClore', 'tcEchecClore', 'tcCloreEnAttente', 'tcNoterPourMarcheArriere', 'tcMaintenirPropositions',
-  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcAvecConfiance', 'tcUneQuestionAttend'];
+  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcUneQuestionAttend'];
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -489,7 +489,10 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
     ['préviens Paul que je suis en retard, pas besoin de me demander', 3, 'préviens Paul que je suis en retard'],
     ['j’ai un imprévu cet après-midi, gère tout seul', 3, 'j’ai un imprévu cet après-midi'],
     ['décale le rendez-vous avec Chloé à vendredi, vas-y directement', 3, 'décale le rendez-vous avec Chloé à vendredi']];
-  const sansPhrase77 = ['décale mon rendez-vous de demain avec Paul', 'je serai tout seul au dîner vendredi', 'attends-moi au café demain 9h', 'fais le plein demain 9h', 'vas-y', 'note que Paul doit valider le devis', 'rdv dentiste sans rendez-vous préalable'];
+  const sansPhrase77 = ['décale mon rendez-vous de demain avec Paul', 'je serai tout seul au dîner vendredi', 'attends-moi au café demain 9h', 'fais le plein demain 9h', 'vas-y', 'note que Paul doit valider le devis', 'rdv dentiste sans rendez-vous préalable',
+    // Examen de la 77 : ces phrases ne s'adressent pas à Charly.
+    'Paul a annulé sans me demander, remets le rdv jeudi 10h', 'note que Léa a pris rdv sans mon accord', 'mon fils fait tout seul ses devoirs',
+    'je vais au cinéma, tout seul', 'je vérifie avec moi-même demain', 'gère tout seul les réponses'];
   const mal77 = phrases77.filter(([t, n, s]) => { const r = ctx.tcConfianceDemandee(t); return !r || r.n !== n || r.sans !== s; }).map(([t, n, s]) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)) + ' (attendu ' + n + ', ' + s + ')')
     .concat(sansPhrase77.filter((t) => ctx.tcConfianceDemandee(t)).map((t) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)) + ' (attendu rien)'));
   verifie('les phrases77 du moment : « attends ma validation », « demande-moi avant », « vérifie avec moi », « rien sans me demander » → 1 ; « fais-le directement », « sans me demander », « tout seul », « pas besoin de me demander » → 3 ; ôtées du texte ; les phrases77 ordinaires ne changent rien', !mal77.length, mal77.join(' | '));
@@ -524,6 +527,26 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   await ctx.tcSuivrePropositions(true);
   verifie('plus tard, profil 1 réglé : la réponse de Paul suit « fais-le directement » (placé seul, compte rendu, aucune question) ; le profil du moment ne reste pas',
     e77.date === iso(4) && !ctx.charlyIA.history.some((m) => m.nature === 'question') && ctx.charlyIA.history.some((m) => m._compteRendu) && vm.runInContext('_tcConfianceMoment === null', ctx) && ctx.tcConfianceCharly() === 1, JSON.stringify(ctx.charlyIA.history));
+  // Examen de la 77 : le profil du moment d'une demande ne touche pas la réponse tardive d'une AUTRE demande.
+  const vieux = ev('v77', 'Café Paul', 3, 10, 0, 11, 0, { contact: 'c1', decalage: { rdv: 877 } });
+  ctx.events = [vieux]; ctx.charlyIA.history = [];
+  stock.tc_confiance_charly = '1';
+  vm.runInContext('_tcConfianceMoment = { n: 3, dit: true, texte: "x" }', ctx);
+  const nTr = trace.traitees.length;
+  reponses = [{ rdv_id: 877, titre: 'Café Paul', remplace: 'v77', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(5) + ' 09:00:00', fin: iso(5) + ' 10:00:00', pris: [] }];
+  await ctx.tcSuivrePropositions(true);
+  verifie('profil 1 réglé, « fais-le directement » en cours : la réponse tardive d’une autre demande demande « Je le place ? » (rien d’écrit, rien de traité)',
+    vieux.date === iso(3) && trace.traitees.length === nTr && last()._reponseCreneau && /Je le place dans ton agenda \?$/.test(last().content), JSON.stringify(last()));
+  stock.tc_confiance_charly = '3'; ctx.charlyIA.history = [];
+  vm.runInContext('_tcConfianceMoment = { n: 1, dit: true, texte: "x" }', ctx);
+  vieux.decalage = { rdv: 878 };
+  reponses = [{ rdv_id: 878, titre: 'Café Paul', remplace: 'v77', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(5) + ' 09:00:00', fin: iso(5) + ' 10:00:00', pris: [] }];
+  await ctx.tcSuivrePropositions(true);
+  verifie('profil 3 réglé, « attends ma validation » en cours : la réponse tardive d’une autre demande est placée seule, comme au réglage', vieux.date === iso(5) && !ctx.charlyIA.history.some((m) => m.nature === 'question'), JSON.stringify(ctx.charlyIA.history));
+  const sp77 = extraire('tcSuivrePropositions') || '', ts77 = extraire('tcTraiterSeul') || '', ex77 = extraire('tcExecuterReponseCreneau') || '';
+  verifie('les réponses tardives ne lisent jamais le profil du moment : le réglage (tcConfianceCharly(true)) ou celui du rendez-vous, passé aux nouveaux tours',
+    sp77.indexOf('tcConfianceCharly()') < 0 && /: tcConfianceCharly\(true\);/.test(sp77) && ts77.indexOf('confiance: (avant && avant.confiance) || null') > -1 && ex77.indexOf('confiance: confianceDuRdv') > -1 && page.indexOf('function tcAvecConfiance(') < 0);
+  vm.runInContext('_tcConfianceMoment = null', ctx);
   const csm77 = extraire('charlySendMessage') || '', pmu = extraire('tcPousserMessageUtilisateur') || '';
   verifie('charlySendMessage lit la phrase avant toute réponse attendue, l’ôte du texte, la garde pour une réponse et la retire à la nouvelle demande',
     csm77.indexOf('tcConfianceDemandee(text)') > -1 && csm77.indexOf('tcConfianceDemandee(text)') < csm77.indexOf('if (_tcTrajetEtapes)')
