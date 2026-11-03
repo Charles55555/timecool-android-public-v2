@@ -3093,3 +3093,12 @@ Chef, 03/11 (ok de Charles) : Charly connaît le prénom du compte et l'emploie 
 - `tcConsignePrenom()` s'ajoute au prompt aux trois appels du modèle (pas dans le prompt modifiable des réglages) : bonjour, « C'est noté », « Bonne journée », jamais à chaque phrase, jamais dans un titre, un bloc [AGENDA] ou un message pour une autre personne. Sans prénom, aucune consigne : Charly parle comme avant.
 - Phrases fixes : accueil à la connexion (il prenait le champ brut, « REPUBLIQUE » compris), premier bonjour, bonjour suivant (« Bonjour Charles ! Qu'est-ce que je peux faire pour toi ? »), au revoir (« À bientôt, Charles ! »). Le merci ne change pas. Le classement ne bouge pas.
 - Suites : nouvelle `verif-prenom-charly` (25 comptes, la consigne, la page) ; `verif-classement-charly` rejoue bonjour, au revoir et merci avec et sans prénom.
+
+## 03/11/2026 : Mission 74, trois textes validés par Charles
+
+Chef, 03/11 (ok de Charles), publiés avant la 73 (la 73a attend, mise de côté par git stash).
+- « Mes disponibilités » : le cadre gris en tête dit la même chose quelle que soit la case (confidentialité, qui prend rendez-vous et comment, et Charly). Décision du chef : « rien n'entre dans ton agenda avant ta validation » au lieu de « sans ton accord » (vocabulaire calme, garde-fou verif-vocabulaire-formulaire).
+- Charly, son nom ou qui il est : réponse fixe « Je m'appelle Charly, ton assistant TimeCool 😊 Je suis là pour optimiser ton temps. »
+- Ce qu'il sait faire, comment il aide ou optimise le temps : réponse fixe, le texte de Charles. Décision du chef : la puce de la photo devient « Un PDF ou un fichier texte… » (la lecture d'une photo n'existe pas encore ; elle reviendra avec sa mission). « C'est quoi TimeCool » reçoit ce texte.
+- Réponses fixes de la page (liste _faq), sans appel au modèle ; le classement laisse passer les nouvelles formulations (TC_CLASSE_SUJETS). L'exemple du prompt (CAS 3) reprend la présentation et rappelle que les photos ne sont pas lues.
+- Suites : verif-presentation-charly réécrite ; adaptées : banc-charly, verif-dispo, verif-contacts-classes, verif-validation-rdv, verif-classement-charly (la présentation ne cite plus la fiche d'un contact : texte de Charles).

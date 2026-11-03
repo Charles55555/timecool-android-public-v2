@@ -66,8 +66,8 @@ verifie('le mot « automatiquement » a disparu',
   'c est l automatisme qui inquiete, pas la reservation');
 verifie('la page dit qui decide',
   page.indexOf('tu restes ma\\u00eetre de ton agenda') > -1);
-verifie('elle dit ce que les contacts ne voient pas',
-  page.indexOf('ne voient jamais ton agenda') > -1);
+verifie('elle dit ce que les contacts ne voient pas (texte de la mission 74)',
+  page.indexOf('Personne ne voit ton agenda. Tes contacts voient seulement les créneaux que tu ouvres ici.') > -1);
 verifie('une categorie vide l annonce clairement',
   page.indexOf('Aucune plage ouverte') > -1);
 verifie('le bouton est raccourci',

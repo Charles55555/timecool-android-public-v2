@@ -2075,7 +2075,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('charlySendMessage : la réponse attendue avec les autres, le déclencheur juste après les coordonnées ; les cartes dans renderChatMessage ; le bouton au bout de la 2e ligne ; « Ajouter » passe par le formulaire ; la présentation cite la fiche ; la carte de la page Contacts a son repère',
       imsg > -1 && irep > imsg && icoord > -1 && ifiche > icoord && ifiche - icoord < 400
       && /if \(m && m\._fiches\) return tcRendreFiches\(m\);/.test(page) && /charlyQuickAction\('contact'\)[^>]*>👤 Retrouver un contact<\/button>/.test(page) && /if \(action === 'contact'\) \{ tcDemarrerRetrouverContact\('Retrouver un contact'\); return; \}/.test(page)
-      && /function tcFormulaireContact\(contactId, nomPropose\)/.test(page) && /nomPropose \? tcContactDecouperNom\(nomPropose\)/.test(page) && /• retrouver la fiche d’un contact ;/.test(page) && /id="ctFiche_\$\{c\.id\}"/.test(page));
+      && /function tcFormulaireContact\(contactId, nomPropose\)/.test(page) && /nomPropose \? tcContactDecouperNom\(nomPropose\)/.test(page) && /const TC_CHARLY_CE_QUE_JE_FAIS = /.test(page) && /id="ctFiche_\$\{c\.id\}"/.test(page));
     const b66 = bloc.indexOf('MISSION 66') > -1 ? bloc.slice(bloc.indexOf('MISSION 66')) : '';
     verifie('pas de tiret long, d’assertion arrière ni de « \\b » dans le bloc 66', b66.length > 1000 && !/\(\?<[=!]/.test(b66) && b66.indexOf('—') < 0 && b66.indexOf('\\b') < 0);
     ctx.contactsList = contacts0; ctx.events = events0; ctx.charlyIA.history = []; ctx.escapeHTMLSafe = echap0;

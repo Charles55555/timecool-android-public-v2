@@ -3146,7 +3146,8 @@ Contact indisponible ou protégé (refus implicite via ses réglages) → formul
 
 ═══ CAS 3 — QUI ES-TU / QUE SAIS-TU FAIRE ═══
 Réponse courte et concrète, jamais de liste longue. Maximum 3 exemples.
-Exemple : "Je suis Charly, ton assistant agenda 😊 Je peux créer tes RDV, gérer tes rappels et organiser ta semaine. Essaie de me dire : 'Demain à 15h, dentiste' !"
+Exemple (son nom, qui il est) : "Je m'appelle Charly, ton assistant TimeCool 😊 Je suis là pour optimiser ton temps."
+Ne promets jamais ce que l'application ne fait pas : tu ne lis pas encore les photos (un PDF avec du texte ou un fichier texte, oui).
 
 ═══ CAS 4 — CONSULTATION D'AGENDA ═══
 "Qu'est-ce que j'ai [jour] ?" → énumère les RDV avec leurs noms.
@@ -15130,17 +15131,20 @@ async function tcGererRechercheWeb(text, requete) {
 }
 
 /**
- * La presentation de Charly (Charles, 12/10) : une seule reponse, stable, jamais reecrite par le modele.
- * Tutoiement : Charly tutoie toujours (le reglage « Je vouvoie » ne vaut que pour les messages aux contacts).
+ * La présentation de Charly et ce qu'il sait faire (mission 74, textes validés par Charles le 03/11) : deux réponses fixes
+ * de la page (liste _faq), stables, sans appel au modèle. Tutoiement : Charly tutoie toujours.
+ * Rien n'y promet ce que l'application ne fait pas : la lecture d'une photo n'existe pas encore (seuls un PDF avec du texte
+ * ou un fichier texte sont lus) ; elle reviendra dans ce texte quand elle marchera (chef, 03/11).
  */
-const TC_CHARLY_PRESENTATION = 'Je suis Charly, ton assistant personnel créé par TimeCool pour t’aider à optimiser ton temps, parce que ton temps est la seule ressource que tu ne pourras jamais fabriquer.\n'
-  + 'Dis-moi, et je fais :\n'
-  + '• créer tes rendez-vous, à 2 comme à 10 personnes ;\n'
-  + '• prévenir d’un retard, annuler ou décaler un rendez-vous en m’excusant pour toi ;\n'
-  + '• te dire ce que tu as, quand tu es libre, et le temps de trajet pour y aller ;\n'
-  + '• retrouver la fiche d’un contact ;\n'
-  + '• changer la langue et tes réglages (bientôt).\n'
-  + 'Parle-moi, j’exécute en un temps record. Et bien plus encore…';
+const TC_CHARLY_PRESENTATION = 'Je m’appelle Charly, ton assistant TimeCool 😊 Je suis là pour optimiser ton temps.';
+const TC_CHARLY_CE_QUE_JE_FAIS = 'Pour la saisie d’un nouveau rendez-vous ou pour la gestion de ton agenda, je suis très rapide :\n'
+  + '• Une phrase suffit : « j’ai rdv chez mon dentiste ce jeudi 16h », et le rendez-vous est créé dans ton agenda.\n'
+  + '• Si tu précises l’adresse de ton rendez-vous, je te donne le temps de trajet à prévoir, et je peux même te guider pour y aller.\n'
+  + '• En fonction de tes préférences enregistrées dans la page « Mes disponibilités », je sais quand tu es libre et je te propose un créneau.\n'
+  + '• Un retard, un imprévu, une maladie : je préviens les personnes concernées et je décale pendant que tu travailles.\n'
+  + '• À plusieurs, je trouve l’heure qui convient à tout le monde.\n'
+  + '• Un PDF ou un fichier texte avec une date de rendez-vous : je le lis et j’en fais un nouveau rendez-vous dans ton agenda.\n'
+  + 'Dis-moi ce que tu veux faire, ou touche un bouton en haut : je te montre.';
 
 async function charlySendMessage() {
   const inp = document.getElementById('charlyInput');
@@ -15680,9 +15684,9 @@ async function charlySendMessage() {
   const _faq = [
     { keys: ['différence avec google','différence google agenda','différence google calendar','comparaison google','vs google','better than google','mieux que google'],
       reply: 'Google Agenda stocke tes RDV. Moi, je les crée, je les optimise et je t’aide à ne jamais perdre de temps 😊' },
-    { keys: ['qu’est-ce que tu sais faire','qu\'est-ce que tu sais faire','que sais-tu faire','que sais tu faire','tu sais faire quoi','tu fais quoi','tu peux faire quoi','tes fonctionnalités','tes fonctions','tu es capable de','tu sers à quoi','tu sers a quoi','à quoi tu sers','a quoi tu sers','tu es utile','tu es fait pour','tu fais quoi comme truc'],
-      reply: TC_CHARLY_PRESENTATION },
-    { keys: ['qui es-tu','qui es tu','tu es qui','tu t’appelles','tu t appelles','comment tu t appelles','comment tu t’appelles','tu t\'appelles','tu es une ia','t’es une ia','t\'es une ia','t’es quoi','c’est quoi timecool','c\'est quoi timecool','c’est quoi charly',"c'est quoi charly",'c est quoi charly','qui est charly','charly c’est qui',"charly c'est qui",'charly c est qui'],
+    { keys: ['qu’est-ce que tu sais faire', 'comment tu peux optimiser mon temps', 'comment peux-tu optimiser mon temps', 'comment peux tu optimiser mon temps', 'optimiser mon temps', 'comment tu peux m’aider', 'comment tu peux m\'aider', 'comment tu peux m aider', 'comment peux-tu m’aider', 'comment peux-tu m\'aider', 'comment peux tu m aider', 'tu peux m’aider comment', 'tu peux m\'aider comment', 'c’est quoi timecool', 'c\'est quoi timecool', 'c est quoi timecool','qu\'est-ce que tu sais faire','que sais-tu faire','que sais tu faire','tu sais faire quoi','tu fais quoi','tu peux faire quoi','tes fonctionnalités','tes fonctions','tu es capable de','tu sers à quoi','tu sers a quoi','à quoi tu sers','a quoi tu sers','tu es utile','tu es fait pour','tu fais quoi comme truc'],
+      reply: TC_CHARLY_CE_QUE_JE_FAIS },
+    { keys: ['qui es-tu', 'ton nom', 'ton prénom', 'tu t’appelles comment', 'tu t\'appelles comment', 'tu t appelles comment', 'comment t’appelles-tu', 'comment t\'appelles-tu', 'comment t appelles tu','qui es tu','tu es qui','tu t’appelles','tu t appelles','comment tu t appelles','comment tu t’appelles','tu t\'appelles','tu es une ia','t’es une ia','t\'es une ia','t’es quoi','c’est quoi charly',"c'est quoi charly",'c est quoi charly','qui est charly','charly c’est qui',"charly c'est qui",'charly c est qui'],
       reply: TC_CHARLY_PRESENTATION },
     { keys: ['données sécurisées','mes données','confidentialité','sécurité','tu enregistres','qui voit','privé','chiffré','rgpd'],
       reply: 'Tes messages et rendez-vous passent par les serveurs TimeCool, chiffrés en transit, et ne sont jamais vendus ni partagés 🔒' },
@@ -18958,7 +18962,10 @@ const TC_CLASSE_SUJETS = ['gratuit', 'prix', 'tarif', 'tarifs', 'abonnement', 'p
   'tu sais faire quoi', 'que sais tu faire', 'tu fais quoi', 'tu peux faire quoi', 'a quoi tu sers', 'tu sers a quoi',
   'comment ca marche', 'comment tu fonctionnes', 'comment tu marches', 'tes fonctions', 'tes fonctionnalites',
   'quel temps', 'fait quel temps', 'temps qu il fait', 'pleuvoir', 'il va pleuvoir', 'la meteo',
-  't es une ia', 'tu es une ia', 'es tu une ia', 't es un robot', 'tu es un robot', 't es humain', 'tu es humain', 't es un humain', 'tu es un humain', 't es qui toi'];
+  't es une ia', 'tu es une ia', 'es tu une ia', 't es un robot', 'tu es un robot', 't es humain', 'tu es humain', 't es un humain', 'tu es un humain', 't es qui toi',
+  // Mission 74 : son nom, ce qu'il sait faire, comment il aide.
+  'ton nom', 'tu t appelles', 't appelles tu', 'qu est ce que tu sais faire', 'optimiser mon temps', 'comment tu peux m aider', 'comment peux tu m aider',
+  'tu peux m aider comment'];
 /* Un mot de l'agenda : +1 (il faut autre chose avec, un moment ou un verbe). */
 const TC_CLASSE_AGENDA = ['agenda', 'rdv', 'rendez', 'rendez vous', 'reunion', 'rencontre', 'dejeuner', 'diner', 'seance', 'consultation',
   'creneau', 'creneaux', 'dispo', 'dispos', 'disponible', 'disponibilite', 'disponibilites', 'libre', 'planning', 'programme',
@@ -35028,17 +35035,16 @@ function renderDispo() {
   if (!c) return;
 
   var html = '<div style="font-size:13px;color:#5f6368;margin-bottom:16px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">';
+  // Mission 74 : le texte validé par Charles (03/11), le même quelle que soit la case.
   html += '\ud83d\udd12 <b>Cet espace reste confidentiel, et tu restes ma\u00eetre de ton agenda.</b><br>';
-  var exigee = tcValidationRdvExigee();
-  if (exigee) {
-    html += 'Pour l’instant, chaque demande de rendez-vous arrive dans ta messagerie, et tu choisis le créneau. ';
-    html += 'Personne ne voit jamais ton agenda.';
-  } else {
-    html += 'Tes contacts classés (avec 👥 Choisir qui, sous chaque catégorie) peuvent prendre rendez-vous directement, dans les plages de leur catégorie. ';
-    html += 'Eux ne voient jamais ton agenda — uniquement ces créneaux. ';
-    html += 'Un contact non classé, quelqu’un qui n’est pas dans tes contacts, ou un contact bloqué, passe toujours par ta messagerie.';
-  }
+  html += 'Personne ne voit ton agenda. Tes contacts voient seulement les créneaux que tu ouvres ici.<br><br>';
+  html += 'Qui peut prendre rendez-vous, et comment :<br>';
+  html += '• Au départ, la case « Toujours attendre ma validation » est cochée : chaque demande arrive dans ta messagerie, et rien n’entre dans ton agenda avant ta validation.<br>';
+  html += '• Si tu la décoches : tes contacts classés (👥 Choisir qui, sous chaque catégorie) réservent directement, mais seulement dans les plages de leur catégorie.<br>';
+  html += '• Un inconnu, un contact non classé ou un contact bloqué passe toujours par ta messagerie.<br>';
+  html += '• Et Charly ? Il attend toujours ta validation à chaque étape avant de passer à la suivante : tu vois tout, tu décides tout.';
   html += '</div>';
+  var exigee = tcValidationRdvExigee();
   html += tcCadreValidationRdv(exigee);
 
   DISPO_CATEGORIES.forEach(function(cat) {

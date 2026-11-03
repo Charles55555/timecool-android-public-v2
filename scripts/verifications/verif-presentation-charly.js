@@ -1,10 +1,13 @@
-// Mission 15 (Charles, 12/10) : « Tu es qui ? », « c est quoi Charly ? », « que sais-tu faire ? » rendent le texte exact de
-// presentation, une seule reponse fixe de la page (liste _faq), jamais reecrite par le modele.
+// Mission 15 (Charles, 12/10), refaite par la mission 74 (textes validés par Charles le 03/11) : deux réponses fixes de la page
+// (liste _faq), jamais réécrites par le modèle. Son nom, qui il est → la présentation courte ; ce qu'il sait faire, comment il
+// aide, comment il optimise le temps → la liste de ce qu'il fait. Rien n'y promet ce que l'application ne fait pas (pas de
+// lecture de photo : seuls un PDF avec du texte ou un fichier texte sont lus). Le classement laisse passer ces questions.
+// Usage : node verif-presentation-charly.js <index.html>
 const fs = require('fs');
 const vm = require('vm');
 const page = fs.readFileSync(process.argv[2], 'utf8');
 let ko = 0;
-function verifie(l, c, d) { if (!c) ko++; console.log('  ' + (c ? 'OK ' : 'KO ') + l + (d ? '  - ' + String(d).replace(/\s*\n\s*/g, ' ').slice(0, 240) : '')); }
+function verifie(l, c, d) { if (!c) ko++; console.log('  ' + (c ? 'OK ' : 'KO ') + l + (d && !c ? '  - ' + String(d).replace(/\s*\n\s*/g, ' ').slice(0, 240) : '')); }
 function titre(t) { console.log(''); console.log('-- ' + t + ' --'); }
 function fonction(texte, nom) {
   let d = texte.indexOf('function ' + nom + '(');
@@ -16,37 +19,47 @@ function fonction(texte, nom) {
   }
   return null;
 }
-const ATTENDU = 'Je suis Charly, ton assistant personnel créé par TimeCool pour t’aider à optimiser ton temps, parce que ton temps est la seule ressource que tu ne pourras jamais fabriquer.\n'
-  + 'Dis-moi, et je fais :\n'
-  + '• créer tes rendez-vous, à 2 comme à 10 personnes ;\n'
-  + '• prévenir d’un retard, annuler ou décaler un rendez-vous en m’excusant pour toi ;\n'
-  + '• te dire ce que tu as, quand tu es libre, et le temps de trajet pour y aller ;\n'
-  + '• retrouver la fiche d’un contact ;\n'
-  + '• changer la langue et tes réglages (bientôt).\n'
-  + 'Parle-moi, j’exécute en un temps record. Et bien plus encore…';
+const NOM = 'Je m’appelle Charly, ton assistant TimeCool 😊 Je suis là pour optimiser ton temps.';
+const AIDE = 'Pour la saisie d’un nouveau rendez-vous ou pour la gestion de ton agenda, je suis très rapide :\n'
+  + '• Une phrase suffit : « j’ai rdv chez mon dentiste ce jeudi 16h », et le rendez-vous est créé dans ton agenda.\n'
+  + '• Si tu précises l’adresse de ton rendez-vous, je te donne le temps de trajet à prévoir, et je peux même te guider pour y aller.\n'
+  + '• En fonction de tes préférences enregistrées dans la page « Mes disponibilités », je sais quand tu es libre et je te propose un créneau.\n'
+  + '• Un retard, un imprévu, une maladie : je préviens les personnes concernées et je décale pendant que tu travailles.\n'
+  + '• À plusieurs, je trouve l’heure qui convient à tout le monde.\n'
+  + '• Un PDF ou un fichier texte avec une date de rendez-vous : je le lis et j’en fais un nouveau rendez-vous dans ton agenda.\n'
+  + 'Dis-moi ce que tu veux faire, ou touche un bouton en haut : je te montre.';
 
-titre('1. Le texte, une seule constante, les deux entrees');
-const constante = page.match(/const TC_CHARLY_PRESENTATION = '[\s\S]*?encore…';/);
-verifie('la constante TC_CHARLY_PRESENTATION existe', !!constante);
+titre('1. Les deux textes, les deux entrées');
+const constantes = page.match(/const TC_CHARLY_PRESENTATION = '[\s\S]*?je te montre\.';/);
 const faq = page.match(/const _faq = \[[\s\S]*?\n  \];/);
-verifie('la liste _faq existe', !!faq);
-if (!constante || !faq) { console.log('\n' + (ko || 1) + ' anomalie(s).'); process.exit(1); }
+verifie('les constantes et la liste _faq existent', !!constantes && !!faq);
+if (!constantes || !faq) { console.log('\n' + (ko || 1) + ' anomalie(s).'); process.exit(1); }
 const ctx = { console };
 vm.createContext(ctx);
-vm.runInContext(constante[0] + '\n' + fonction(page, 'tcContientMot') + '\nglobalThis.presentation = TC_CHARLY_PRESENTATION;\n' + faq[0].replace('const _faq', 'globalThis._faq'), ctx);
-verifie('le texte est exactement celui de Charles (apostrophes typographiques, 8 lignes)', ctx.presentation === ATTENDU, ctx.presentation);
-verifie('aucune apostrophe droite dans le texte', ctx.presentation.indexOf("'") < 0);
-const entrees = ctx._faq.filter((f) => f.reply === ctx.presentation);
-verifie('les deux entrees (« que sais-tu faire » et « qui es-tu ») rendent ce texte', entrees.length === 2);
-verifie('l ancien texte a disparu', !/assistant intelligent créé par TIMECOOL/.test(faq[0]) && !/ton assistant agenda 😊/.test(faq[0]));
+vm.runInContext(constantes[0] + '\n' + fonction(page, 'tcContientMot') + '\nglobalThis.nom = TC_CHARLY_PRESENTATION; globalThis.aide = TC_CHARLY_CE_QUE_JE_FAIS;\n' + faq[0].replace('const _faq', 'globalThis._faq'), ctx);
+verifie('son nom : le texte exact de Charles', ctx.nom === NOM, ctx.nom);
+verifie('ce qu il sait faire : le texte exact de Charles (puce du fichier PDF ou texte, décision du chef)', ctx.aide === AIDE, ctx.aide);
+verifie('aucune apostrophe droite, pas de tiret long', (ctx.nom + ctx.aide).indexOf("'") < 0 && (ctx.nom + ctx.aide).indexOf('—') < 0);
+verifie('rien ne promet la lecture d une photo', !/photo/i.test(ctx.nom + ctx.aide));
+verifie('chaque texte a une seule entrée', ctx._faq.filter((f) => f.reply === ctx.nom).length === 1 && ctx._faq.filter((f) => f.reply === ctx.aide).length === 1);
+verifie('l ancien texte a disparu', page.indexOf('parce que ton temps est la seule ressource que tu ne pourras jamais fabriquer') < 0 && page.indexOf('ton assistant agenda 😊') < 0);
 
-titre('2. La reconnaissance, rejouee comme charlySendMessage');
+titre('2. La reconnaissance, rejouée comme charlySendMessage');
 const repond = (texte) => { const t = texte.toLowerCase(); const f = ctx._faq.find((x) => x.keys.some((k) => ctx.tcContientMot(t, k))); return f ? f.reply : null; };
-['Tu es qui ?', 'c’est quoi Charly ?', "c'est quoi charly", 'que sais-tu faire ?', 'Qui es-tu ?', 'tu sais faire quoi', 'qui est Charly', 'Charly c’est qui ?', 'c est quoi charly'].forEach((q) => {
-  verifie('« ' + q + ' » → la presentation', repond(q) === ctx.presentation, String(repond(q)).slice(0, 60));
+['Tu es qui ?', 'Qui es-tu ?', 'qui est Charly', 'Charly c’est qui ?', 'c’est quoi Charly ?', "c'est quoi charly", 'Comment tu t’appelles ?', "comment tu t'appelles", 'Tu t’appelles comment ?', 'C’est quoi ton nom ?', 'Comment t’appelles-tu ?'].forEach((q) => {
+  verifie('« ' + q + ' » → son nom', repond(q) === ctx.nom, String(repond(q)).slice(0, 60));
 });
-verifie('« rdv dentiste mardi 15h » ne la declenche pas', repond('rdv dentiste mardi 15h') === null);
-verifie('« c’est quoi TimeCool » : meme reponse (TimeCool et Charly se presentent ensemble)', repond('c’est quoi timecool') === ctx.presentation);
+['Comment tu peux optimiser mon temps ?', 'Comment peux-tu optimiser mon temps ?', 'Comment tu peux m’aider ?', "Comment tu peux m'aider ?", 'Comment peux-tu m’aider ?', 'Qu’est-ce que tu sais faire ?', "qu'est-ce que tu sais faire", 'que sais-tu faire ?', 'tu sais faire quoi', 'tu sers à quoi ?', 'c’est quoi TimeCool ?'].forEach((q) => {
+  verifie('« ' + q + ' » → ce qu il sait faire', repond(q) === ctx.aide, String(repond(q)).slice(0, 60));
+});
+verifie('« rdv dentiste mardi 15h » ne déclenche rien', repond('rdv dentiste mardi 15h') === null);
+
+titre('3. Le classement les laisse passer (un sujet sur Charly), sans toucher au reste');
+const sujets = (page.match(/const TC_CLASSE_SUJETS = \[[\s\S]*?\];/) || [''])[0];
+['ton nom', 'tu t appelles', 'qu est ce que tu sais faire', 'optimiser mon temps', 'comment tu peux m aider', 'comment peux tu m aider'].forEach((k) => {
+  verifie('« ' + k + ' » est un sujet', sujets.indexOf("'" + k + "'") > -1);
+});
+verifie('« tu sais faire » seul n est pas un sujet (« tu sais faire une réservation ? » ne change pas de classement)', sujets.indexOf("'tu sais faire'") < 0);
 
 console.log('');
 console.log(ko + ' anomalie(s).');
