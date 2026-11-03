@@ -69,6 +69,10 @@ const TC_BACKEND = {
     return {
       // Prénom seul : le serveur ne stocke pas le nom de famille.
       organizerName: d.organisateur,
+      // Proposition de Charly (mission 73a) : rien n'est confirmé tant que l'organisateur n'a pas dit oui.
+      charly: d.charly === true,
+      avant: d.avant || null,
+      suite: d.suite || null,
       slots: (d.creneaux || []).map(function (c) {
         // « 2026-09-01 14:00:00 » — découpé sans passer par Date(),
         // pour que l'heure affichée soit celle proposée et non une
@@ -167,6 +171,24 @@ function renderSlots(data, avertissement) {
   el.innerHTML = html;
 }
 
+/* Proposition de Charly (mission 73a, décision du chef du 03/11) : jamais « confirmé » tant que l'organisateur n'a pas
+   validé ; la page le redit si le contact rouvre son lien, puis dit « Rendez-vous déplacé » ou que l'ancien reste en place. */
+function renderSuite(data, suite) {
+  const s = suite || data.suite || {};
+  const qui = escapeHTML(data.organizerName || 'La personne qui t’a contacté(e)');
+  const avant = data.avant ? 'le rendez-vous du ' + escapeHTML(data.avant) : 'ton rendez-vous actuel';
+  if (s.etat === 'deplace') {
+    renderState('✅', '<span class="success">Rendez-vous déplacé : ' + escapeHTML(s.choix) + '.</span>');
+  } else if (s.etat === 'en_place') {
+    renderState('📅', 'Finalement, ' + avant + ' reste en place.');
+  } else if (s.etat === 'refus_note') {
+    renderState('👍', '<span class="success">C’est noté !</span><br>' + qui + ' reçoit ta réponse. En attendant, ' + avant + ' reste en place.');
+  } else {
+    renderState('✅', '<span class="success">Merci, ton choix est bien noté : ' + escapeHTML(s.choix) + '.</span><br>' + qui
+      + ' doit encore le confirmer : tu recevras un message dès que c’est fait. En attendant, ' + avant + ' reste en place.');
+  }
+}
+
 function renderState(icon, msg) {
   document.getElementById('content').innerHTML =
     '<div class="state"><div class="icon">' + icon + '</div><div class="msg">' + msg + '</div></div>';
@@ -187,7 +209,7 @@ async function init() {
     const data = await TC_BACKEND.fetchRdvLink(token);
     if (!data) { renderState('⏰', 'Ce lien a expiré ou a déjà été utilisé.'); return; }
     _currentData = data;
-    renderSlots(data);
+    if (data.suite) renderSuite(data); else renderSlots(data);
   } catch(e) {
     renderState('⚠️', 'Impossible de charger la proposition.<br>Vérifie ta connexion et réessaie.');
   }
@@ -199,7 +221,9 @@ async function chooseSlot(idx) {
   renderState('⏳', 'Enregistrement de ta réponse…');
   try {
     await TC_BACKEND.submitRdvChoice(token, idx);
-    if (idx === -1) {
+    if (_currentData.charly) {
+      renderSuite(_currentData, idx === -1 ? { etat: 'refus_note' } : { etat: 'note', choix: s.label });
+    } else if (idx === -1) {
       renderState('👍', '<span class="success">C\'est noté !</span><br>La personne qui t\'a contacté(e) va te proposer d\'autres créneaux.');
     } else {
       renderState('✅', '<span class="success">Rendez-vous confirmé !</span><br>' + escapeHTML(s.label) + ' à ' + ('0' + s.h).slice(-2) + 'h' + ('0' + s.m).slice(-2) + ', tu es prévenu(e).');

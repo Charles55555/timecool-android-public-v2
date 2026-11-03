@@ -1245,7 +1245,11 @@ function propositionCreneaux($creneaux): ?array
  */
 function propositionChoisir(array $rdv, int $rang): ?string
 {
-    if ($rdv['statut'] !== 'attente' || $rdv['traite_le'] !== null) {
+    // L'organisateur a déjà donné suite (laissé, reproposé) : la proposition n'est plus valable.
+    if ($rdv['traite_le'] !== null) {
+        return 'plus_valable';
+    }
+    if ($rdv['statut'] !== 'attente') {
         return 'deja_repondu';
     }
     $organisateurId = (int) $rdv['organisateur_id'];
@@ -1264,22 +1268,7 @@ function propositionChoisir(array $rdv, int $rang): ?string
         Db::req('UPDATE rdv_creneaux SET retenu = 1 WHERE rdv_id = ? AND rang = ?', [$rdv['id'], $rang]);
     }
     // La carte du contact garde son choix : sur un autre appareil, il ne revoit pas les boutons.
-    if ($rdv['invite_compte_id'] !== null) {
-        $organisateur = Db::un('SELECT reference FROM comptes WHERE id = ?', [$organisateurId]);
-        $conv = $organisateur === null ? null : Db::un(
-            'SELECT contenu FROM elements WHERE compte_id = ? AND type = "conversation" AND uid = ?',
-            [$rdv['invite_compte_id'], $organisateur['reference']]
-        );
-        $c = $conv === null ? null : json_decode((string) $conv['contenu'], true);
-        if (is_array($c) && is_array($c['thread'] ?? null)) {
-            foreach ($c['thread'] as $i => $ligne) {
-                if (($ligne['genre'] ?? null) === 'proposition_creneaux' && (int) ($ligne['rdv'] ?? 0) === (int) $rdv['id']) {
-                    $c['thread'][$i]['choix'] = $rang;
-                }
-            }
-            elementsPoser([['compte_id' => (int) $rdv['invite_compte_id'], 'type' => 'conversation', 'uid' => $organisateur['reference'], 'contenu' => $c]]);
-        }
-    }
+    propositionMarquerCarte($rdv, ['choix' => $rang]);
     return null;
 }
 
@@ -1292,7 +1281,85 @@ function propositionRefus(string $code): void
     if ($code === 'rang_invalide') {
         Rep::erreur(400, 'rang_invalide', 'Rang attendu : 1 à 3, ou -1.');
     }
+    if ($code === 'plus_valable') {
+        Rep::erreur(410, 'plus_valable', 'Cette proposition n’est plus valable.');
+    }
     Rep::erreur(410, 'deja_repondu', 'Cette proposition a déjà reçu une réponse.');
+}
+
+/**
+ * La carte du contact (compte TimeCool) garde ce qui s'est passé : son choix, puis la suite donnée par l'organisateur.
+ * Sur un autre appareil, il ne revoit pas les boutons. À appeler DANS une transaction.
+ */
+function propositionMarquerCarte(array $rdv, array $champs): void
+{
+    if ($rdv['invite_compte_id'] === null) {
+        return;
+    }
+    $organisateur = Db::un('SELECT reference FROM comptes WHERE id = ?', [(int) $rdv['organisateur_id']]);
+    $conv = $organisateur === null ? null : Db::un(
+        'SELECT contenu FROM elements WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+        [$rdv['invite_compte_id'], $organisateur['reference']]
+    );
+    $c = $conv === null ? null : json_decode((string) $conv['contenu'], true);
+    if (!is_array($c) || !is_array($c['thread'] ?? null)) {
+        return;
+    }
+    foreach ($c['thread'] as $i => $ligne) {
+        if (($ligne['genre'] ?? null) === 'proposition_creneaux' && (int) ($ligne['rdv'] ?? 0) === (int) $rdv['id']) {
+            $c['thread'][$i] = array_merge($ligne, $champs);
+        }
+    }
+    elementsPoser([['compte_id' => (int) $rdv['invite_compte_id'], 'type' => 'conversation', 'uid' => $organisateur['reference'], 'contenu' => $c]]);
+}
+
+/** Le libellé d'un créneau (« mardi 4 novembre à 10h »), sinon sa date et son heure. */
+function propositionLibelle(array $cr): string
+{
+    $l = trim((string) ($cr['libelle'] ?? ''));
+    return $l !== '' ? $l : date('d/m/Y à H\hi', strtotime((string) $cr['debut']));
+}
+
+/**
+ * Le message qui dit au contact la suite donnée par l'organisateur (décision du chef, 03/11), ou null : une nouvelle
+ * proposition suit (autres), ou le rendez-vous a disparu de l'agenda (ferme).
+ */
+function propositionMessageSuite(array $rdv, string $decision): ?string
+{
+    if ($decision === 'place') {
+        $cr = Db::un('SELECT libelle, debut FROM rdv_creneaux WHERE rdv_id = ? AND retenu = 1', [$rdv['id']]);
+        return $cr === null ? null : 'Rendez-vous déplacé : ' . propositionLibelle($cr) . '.';
+    }
+    if ($decision === 'laisse') {
+        $avant = trim((string) ($rdv['avant'] ?? ''));
+        return $avant !== '' ? 'Finalement, le rendez-vous du ' . $avant . ' reste en place.' : 'Finalement, le rendez-vous reste en place.';
+    }
+    return null;
+}
+
+/**
+ * Où en est une proposition de Charly, vue depuis son lien déjà utilisé ou fermé : noté (en attente de l'organisateur),
+ * déplacé, refus noté, ou le rendez-vous reste en place. null : rien à dire, le lien n'est plus valable.
+ */
+function propositionSuiteLien(array $rdv, array $lien): ?array
+{
+    if ($rdv['statut'] === 'annule') {
+        return ['etat' => 'en_place'];
+    }
+    if ($lien['statut'] === 'choisi') {
+        $cr = Db::un('SELECT libelle, debut FROM rdv_creneaux WHERE rdv_id = ? AND retenu = 1', [$rdv['id']]);
+        if ($cr === null) {
+            return null;
+        }
+        if ($rdv['traite_le'] === null) {
+            return ['etat' => 'note', 'choix' => propositionLibelle($cr)];
+        }
+        return $rdv['statut'] === 'choisi' ? ['etat' => 'deplace', 'choix' => propositionLibelle($cr)] : null;
+    }
+    if ($lien['statut'] === 'refuse' && $rdv['traite_le'] === null) {
+        return ['etat' => 'refus_note'];
+    }
+    return null;
 }
 
 /**
@@ -4617,6 +4684,8 @@ switch ($route) {
         }
         $texte = Entree::requis('texte', 2000);
         $reference = Entree::texte('reference', 26);
+        // Le rendez-vous qu'on décale (« mardi 4 novembre à 10h ») : le contact lit qu'il reste en place tant que rien n'est validé.
+        $avant = Entree::texte('avant', 120);
         $cible = null;
         if ($reference !== null && $reference !== '') {
             $cible = compteParReference($reference);
@@ -4635,10 +4704,10 @@ switch ($route) {
         $pdo->beginTransaction();
         try {
             Db::req(
-                'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, lieu, origine, remplace_uid, expire_le)
-                 VALUES (?, ?, ?, ?, "charly", ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
+                'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, lieu, origine, remplace_uid, avant, expire_le)
+                 VALUES (?, ?, ?, ?, "charly", ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
                 [$moi['id'], $cible === null ? null : $cible['id'], Entree::texte('titre', 200), Entree::texte('lieu', 255),
-                 Entree::texte('remplace', 100), PROPOSITION_SANS_REPONSE_HEURES]
+                 Entree::texte('remplace', 100), $avant, PROPOSITION_SANS_REPONSE_HEURES]
             );
             $rdvId = (int) $pdo->lastInsertId();
             foreach ($creneaux as $cr) {
@@ -4658,7 +4727,7 @@ switch ($route) {
                 // Bloqué par le contact : l'écho chez l'expéditeur seulement, comme une demande ordinaire.
                 messagePoser($moi, $cible, $texte, $rdvId, null, 'proposition_creneaux', null, null,
                     demandeurBloque((int) $cible['id'], $moi),
-                    ['creneaux' => array_map(static fn($c) => ['rang' => $c['rang'], 'debut' => $c['debut'], 'fin' => $c['fin'], 'libelle' => $c['libelle']], $creneaux)]);
+                    ['creneaux' => array_map(static fn($c) => ['rang' => $c['rang'], 'debut' => $c['debut'], 'fin' => $c['fin'], 'libelle' => $c['libelle']], $creneaux), 'avant' => $avant]);
             }
             $pdo->commit();
         } catch (Throwable $e) {
@@ -4696,9 +4765,9 @@ switch ($route) {
     case 'GET /rdv/propositions':
         $moi = Auth::compte();
         $lignes = Db::tous(
-            'SELECT r.id, r.titre, r.remplace_uid, r.statut, r.cree_le, r.repondu_le, r.expire_le,
+            'SELECT r.id, r.titre, r.remplace_uid, r.avant, r.statut, r.cree_le, r.repondu_le, r.expire_le,
                     l.prenom_destinataire, c.prenom AS invite_prenom, c.nom AS invite_nom, c.reference AS invite_reference,
-                    cr.debut, cr.fin
+                    cr.debut, cr.fin, cr.libelle
                FROM rdv r
                LEFT JOIN rdv_liens l ON l.rdv_id = r.id
                LEFT JOIN comptes c ON c.id = r.invite_compte_id
@@ -4718,18 +4787,55 @@ switch ($route) {
                 'reference' => $l['invite_reference'],
                 'debut'    => $l['debut'],
                 'fin'      => $l['fin'],
+                'libelle'  => $l['libelle'],
+                'avant'    => $l['avant'],
             ];
         }, $lignes)]);
 
-    // L'organisateur a donné suite (placé, laissé, ou reproposé) : la réponse ne revient plus.
+    // L'organisateur a donné suite : placé (place), laissé en place (laisse), reproposé (autres), ou rendez-vous disparu
+    // (ferme). La réponse ne revient plus et le lien pas encore utilisé se ferme (examen 73a, défaut 3). Le contact TimeCool
+    // lit la suite dans sa messagerie ; pour un contact au lien, le message revient à l'application, qui le prépare.
     case 'POST /rdv/proposition/traiter':
         $moi = Auth::compte();
-        $maj = Db::req(
-            'UPDATE rdv SET traite_le = NOW(), statut = IF(statut = "attente", "expire", statut)
-              WHERE id = ? AND organisateur_id = ? AND origine = "charly" AND traite_le IS NULL',
-            [Entree::entier('rdv_id') ?? 0, $moi['id']]
-        );
-        Rep::ok(['traite' => $maj->rowCount() > 0]);
+        $decision = Entree::texte('decision', 10) ?? '';
+        if (!in_array($decision, ['place', 'laisse', 'autres', 'ferme'], true)) {
+            Rep::erreur(400, 'decision_invalide', 'Décision attendue : place, laisse, autres ou ferme.');
+        }
+        $message = null;
+        $cible = null;
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            $rdv = Db::un('SELECT * FROM rdv WHERE id = ? AND organisateur_id = ? AND origine = "charly" AND traite_le IS NULL FOR UPDATE',
+                [Entree::entier('rdv_id') ?? 0, $moi['id']]);
+            if ($rdv === null) {
+                $pdo->rollBack();
+                Rep::ok(['traite' => false, 'message' => null, 'messagerie' => false]);
+            }
+            if ($decision === 'place' && $rdv['statut'] !== 'choisi') {
+                $pdo->rollBack();
+                Rep::erreur(409, 'pas_de_choix', 'Le contact n a choisi aucun créneau.');
+            }
+            $statut = ['place' => 'choisi', 'laisse' => 'annule', 'autres' => 'expire', 'ferme' => 'expire'][$decision];
+            Db::req('UPDATE rdv SET traite_le = NOW(), statut = ? WHERE id = ?', [$statut, $rdv['id']]);
+            Db::req('UPDATE rdv_liens SET statut = "expire" WHERE rdv_id = ? AND statut = "attente"', [$rdv['id']]);
+            $message = propositionMessageSuite($rdv, $decision);
+            $cible = $rdv['invite_compte_id'] === null ? null : Db::un('SELECT * FROM comptes WHERE id = ?', [$rdv['invite_compte_id']]);
+            if ($cible !== null) {
+                // La carte d'abord (plus de boutons), puis le message : messagePoser relit la conversation à jour.
+                propositionMarquerCarte($rdv, ['suite' => $decision]);
+                if ($message !== null) {
+                    messagePoser($moi, $cible, $message, (int) $rdv['id'], null, null, null, null, demandeurBloque((int) $cible['id'], $moi));
+                }
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+        Rep::ok(['traite' => true, 'message' => $message, 'messagerie' => $cible !== null]);
 
     // TC_BACKEND.fetchRdvLink — public, sans authentification.
     case 'GET /rdv/lien':
@@ -4743,6 +4849,16 @@ switch ($route) {
             'SELECT * FROM rdv_liens WHERE jeton_hash = ?',
             [Jeton::hacher($jeton)]
         );
+        // Proposition de Charly (mission 73a) : le contact qui rouvre son lien lit où en est sa réponse
+        // (noté, déplacé, ou le rendez-vous reste en place). Rien à dire : le lien n'est plus valable, comme les autres.
+        $rdvCharly = $lien === null ? null : Db::un('SELECT * FROM rdv WHERE id = ? AND origine = "charly"', [$lien['rdv_id']]);
+        if ($rdvCharly !== null && $lien['statut'] !== 'attente') {
+            $suite = propositionSuiteLien($rdvCharly, $lien);
+            if ($suite !== null) {
+                Rep::ok(['organisateur' => $lien['prenom_organisateur'], 'destinataire' => $lien['prenom_destinataire'],
+                    'charly' => true, 'avant' => $rdvCharly['avant'], 'suite' => $suite, 'creneaux' => []]);
+            }
+        }
         // Lien absent, déjà utilisé ou expiré : réponse indifférenciée.
         if ($lien === null
             || $lien['statut'] !== 'attente'
@@ -4753,6 +4869,8 @@ switch ($route) {
         Rep::ok([
             'organisateur' => $lien['prenom_organisateur'],
             'destinataire' => $lien['prenom_destinataire'],
+            'charly'       => $rdvCharly !== null,
+            'avant'        => $rdvCharly === null ? null : $rdvCharly['avant'],
             'creneaux'     => Db::tous(
                 'SELECT rang, debut, fin, libelle FROM rdv_creneaux WHERE rdv_id = ? ORDER BY rang',
                 [$lien['rdv_id']]

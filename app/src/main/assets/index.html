@@ -15233,7 +15233,10 @@ async function charlySendMessage() {
   }
 
   // === « Paul a choisi mardi 10h, je le place ? » : la réponse d'un contact à une proposition de Charly (mission 73) ===
+  const _questionCreneau = typeof tcReponseCreneauEnAttente === 'function' ? tcReponseCreneauEnAttente() : null;
   if (typeof tcRepondreReponseCreneau === 'function' && await tcRepondreReponseCreneau(text)) return;
+  // Une autre demande pendant que la question attend : traitée normalement, puis Charly repose sa question (chef, 03/11).
+  if (_questionCreneau) tcReposerReponseCreneau(_questionCreneau);
   // === « J'envoie ? » : la réponse à un message relu (oui → il part, non → rien) (mission 57) ===
   if (typeof tcRepondreEnvoi === 'function' && await tcRepondreEnvoi(text)) return;
   // === « Je lui propose ? », « Je réponds présent ? » : oui → ça part, non → rien, un autre moment → le nouveau créneau (mission 58) ===
@@ -25624,7 +25627,7 @@ async function tcEnvoyerPropositions(items) {
     const c = it.contact, ev = it.ev;
     const texte = tcPropositionTexte(c, ev);
     const corps = {
-      titre: ev.title || null, remplace: String(ev.id), texte: texte,
+      titre: ev.title || null, remplace: String(ev.id), texte: texte, avant: tcPropositionLibelle(ev),
       creneaux: it.creneaux.map(function (x) {
         return { debut: x.date + ' ' + tcHeureSql(x.startH, x.startM), fin: x.date + ' ' + tcHeureSql(x.endH, x.endM), libelle: tcPropositionLibelle(x) };
       })
@@ -25716,18 +25719,31 @@ function tcReponseCreneauEnAttente() {
   for (let i = h.length - 1, n = 0; i >= 0 && n < 3; i--, n++) {
     const m = h[i];
     if (m && m.role === 'assistant' && m._reponseCreneau) return m._reponseCreneau._resolu ? null : m;
+    // Une autre question posée depuis (« J’envoie ? »…) : c’est à elle que la réponse s’adresse.
+    if (m && m.role === 'assistant' && m.nature === 'question') return null;
   }
   return null;
 }
 
-/** Charly pose la question d'une réponse arrivée (une à la fois, profil 1). */
+/** Les rendez-vous de l'agenda que le créneau c chevaucherait (ev lui-même ne compte pas). */
+function tcGenesDuCreneau(ev, c) {
+  const debut = c.startH * 60 + c.startM, fin = c.endH * 60 + c.endM;
+  return (Array.isArray(events) ? events : []).filter(function (o) {
+    return o && o !== ev && o.mode === ev.mode && !o.allDay && !tcEstBandeau(o) && o.date === c.date && debut < (o.endH * 60 + o.endM) && fin > (o.startH * 60 + o.startM);
+  });
+}
+
+/** Charly pose la question d'une réponse arrivée (une à la fois, profil 1). Posée à nouveau : l'ancienne perd ses boutons. */
 function tcPoserReponseCreneau(p) {
   const ev = tcRdvDeProposition(p);
   const titre = ev ? ev.title : (p.titre || 'ton rendez-vous');
   const qui = String(p.qui || 'Ton contact');
   let content, choix;
   if (p.etat === 'choisi') {
-    content = qui + ' a choisi ' + tcPropositionLibelle(tcCreneauDeProposition(p)) + ' pour « ' + titre + ' ». Je le place dans ton agenda ?';
+    // Le chevauchement se dit avant l'accord, pas après le déplacement (remarque de l'examen).
+    const genes = ev ? tcGenesDuCreneau(ev, tcCreneauDeProposition(p)) : [];
+    content = qui + ' a choisi ' + tcPropositionLibelle(tcCreneauDeProposition(p)) + ' pour « ' + titre + ' ».'
+      + (genes.length ? ' Attention, ce créneau chevauche ' + genes.map(_tcLigneRdv).join(' ; ') + '.' : '') + ' Je le place dans ton agenda ?';
     choix = [{ cle: 'placer', texte: 'Oui, place-le' }, { cle: 'laisser', texte: 'Non, je le laisse où il est' }];
   } else {
     content = (p.etat === 'refuse' ? qui + ' n’a choisi aucun des créneaux proposés pour « ' + titre + ' ».'
@@ -25735,13 +25751,16 @@ function tcPoserReponseCreneau(p) {
       + ' Je propose d’autres moments, ou je laisse le rendez-vous à sa place ?';
     choix = [{ cle: 'autres', texte: 'Propose d’autres moments' }, { cle: 'laisser', texte: 'Je le laisse à sa place' }];
   }
+  (Array.isArray(charlyIA.history) ? charlyIA.history : []).forEach(function (m) {
+    if (m && m._reponseCreneau && !m._reponseCreneau._resolu && Number(m._reponseCreneau.p.rdv_id) === Number(p.rdv_id)) { m._reponseCreneau._resolu = true; m._reponseCreneau._repose = true; }
+  });
   charlyIA.history.push({ role: 'assistant', nature: 'question', content: content, _reponseCreneau: { p: p, choix: choix } });
   renderCharlyChat();
   if (currentPage !== 'assistant' && typeof showToast === 'function') showToast('💬 ' + qui + ' a répondu : Charly te demande la suite');
 }
 
 let _tcPropositionsEnCours = false;
-/** Les réponses qui attendent sur le serveur ; la première pas encore montrée devient une question de Charly. */
+/** Les réponses qui attendent sur le serveur ; la première pas encore tranchée devient une question de Charly. */
 async function tcSuivrePropositions(toujours) {
   if (_tcPropositionsEnCours || typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) return;
   if (!toujours && !(Array.isArray(events) ? events : []).some(function (e) { return e && e.decalage && e.decalage.rdv; })) return;
@@ -25751,25 +25770,49 @@ async function tcSuivrePropositions(toujours) {
   _tcPropositionsEnCours = false;
   if (tcReponseCreneauEnAttente()) return;
   const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
-  const deja = function (p) { return h.some(function (m) { return m && m._reponseCreneau && Number(m._reponseCreneau.p.rdv_id) === Number(p.rdv_id); }); };
+  const dernier = h[h.length - 1];
+  // Charly réfléchit, ou une autre question attend sa réponse : la nôtre vient après, jamais par-dessus.
+  if (charlyIA.isLoading || (dernier && dernier.role === 'assistant' && dernier.nature === 'question')) return;
+  // Tranchée : jamais reposée. Posée puis noyée sous d'autres messages sans réponse : reposée (chef, 03/11).
+  const deja = function (p) { return h.some(function (m) { return m && m._reponseCreneau && Number(m._reponseCreneau.p.rdv_id) === Number(p.rdv_id) && m._reponseCreneau._resolu && !m._reponseCreneau._repose; }); };
   const p = liste.find(function (x) { return !deja(x); });
   if (p) tcPoserReponseCreneau(p);
 }
 
-/** « oui » / « non » tapés pour « je le place ? » ; « d'autres moments » / « laisse-le » pour l'autre question. */
+// Les réponses tapées à la question : le message ENTIER, quelques mots, jamais une phrase qui contient une autre demande
+// (« ajoute un autre rdv… », « garde-moi une place… » : examen 73a, défaut 1). Texte normalisé (tcClasseNormaliser).
+const TC_PROPOSITION_REPONSE_PLACER = /^(oui|ouais|ok|okay|d accord|daccord|vas y|go|yes|parfait|super|tres bien|c est bon|place le|place la|mets le|mets la)( (oui|ok|vas y|merci|stp|s il te plait|place le|place la|mets le|mets la|c est bon|parfait|super))*$/;
+const TC_PROPOSITION_REPONSE_NON = /^((ok|oui) )?(non|nan|no)( (merci|stp|s il te plait))*$/;
+const TC_PROPOSITION_REPONSE_LAISSER = /^((non|ok|oui) )?((je |on )?(le |la )?(laisse|garde)( le| la)?( (a sa place|ou il est|ou elle est|comme ca|tel quel|en place))?|laisse tomber|ne fais rien|rien|reste a sa place|qu il reste a sa place|a sa place|pas besoin)( (merci|stp|s il te plait))?$/;
+const TC_PROPOSITION_REPONSE_AUTRES = /^((oui|ok|vas y) )?((re)?propose( lui| leur| en)?( (d autres|un autre|autre chose|d autres moments|d autres creneaux|d autres horaires|un autre moment|un autre creneau))?|d autres( moments| creneaux| horaires)?|autres (moments|creneaux|horaires)|un autre (moment|creneau)|autre chose|relance( le| la| lui)?)( (merci|stp|s il te plait))?$/;
+
+/** « oui » / « non » tapés pour « je le place ? » ; « d'autres moments » / « laisse-le » / « non » pour l'autre question. */
 async function tcRepondreReponseCreneau(text) {
   const m = tcReponseCreneauEnAttente();
   if (!m) return false;
   const t = tcClasseNormaliser(text);
-  const o = tcReponseOuiNon(text);
+  const laisser = TC_PROPOSITION_REPONSE_NON.test(t) || TC_PROPOSITION_REPONSE_LAISSER.test(t);
   let cle = null;
-  if (m._reponseCreneau.p.etat === 'choisi') cle = o === true ? 'placer' : (o === false ? 'laisser' : null);
-  else if (/(^| )(autre|autres|propose|repropose|relance)( |$)/.test(t)) cle = 'autres';
-  else if (/(^| )(laisse|laisse le|garde|garde le|rien)( |$)/.test(t)) cle = 'laisser';
+  if (m._reponseCreneau.p.etat === 'choisi') cle = TC_PROPOSITION_REPONSE_PLACER.test(t) ? 'placer' : (laisser ? 'laisser' : null);
+  else cle = TC_PROPOSITION_REPONSE_AUTRES.test(t) ? 'autres' : (laisser ? 'laisser' : null);
   if (!cle) return false;
   tcPousserMessageUtilisateur(text);
   await tcExecuterReponseCreneau(m, cle);
   return true;
+}
+
+/** Une autre demande est arrivée pendant que la question attendait : une fois Charly libre, il la repose (chef, 03/11). */
+function tcReposerReponseCreneau(m) {
+  let n = 0;
+  const essayer = function () {
+    if (charlyIA.isLoading && ++n < 120) { setTimeout(essayer, 500); return; }
+    const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+    const dernier = h[h.length - 1];
+    if (!m || !m._reponseCreneau || m._reponseCreneau._resolu || dernier === m) return;
+    if (dernier && dernier.role === 'assistant' && dernier.nature === 'question') return;
+    tcPoserReponseCreneau(m._reponseCreneau.p);
+  };
+  setTimeout(essayer, 800);
 }
 
 /** Un bouton de la question touché. */
@@ -25789,19 +25832,19 @@ async function tcExecuterReponseCreneau(m, cle) {
   const p = r.p;
   const ev = tcRdvDeProposition(p);
   const titre = ev ? ev.title : (p.titre || 'ton rendez-vous');
-  if (!ev && cle !== 'laisser') {
-    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: '« ' + titre + ' » n’est plus dans ton agenda : je n’ai rien placé.' });
+  // Ce que le serveur fait de la proposition : place, laisse (le contact l'apprend), autres (une nouvelle suit), ferme.
+  let decision = cle === 'placer' ? 'place' : (cle === 'laisser' ? 'laisse' : 'autres');
+  if (!ev) {
+    decision = 'ferme';
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: cle === 'laisser' ? 'D’accord, rien ne change.' : '« ' + titre + ' » n’est plus dans ton agenda : je n’ai rien placé.' });
   } else if (cle === 'placer') {
     const c = tcCreneauDeProposition(p);
     delete ev.decalage;
-    const debut = c.startH * 60 + c.startM, fin = c.endH * 60 + c.endM;
-    const genes = (Array.isArray(events) ? events : []).filter(function (o) {
-      return o && o !== ev && o.mode === ev.mode && !o.allDay && !tcEstBandeau(o) && o.date === c.date && debut < (o.endH * 60 + o.endM) && fin > (o.startH * 60 + o.startM);
-    });
+    const genes = tcGenesDuCreneau(ev, c);
     tcAppliquerDeplacement([{ ev: ev, p: c }]);
     if (genes.length) charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + genes.map(_tcLigneRdv).join(' ; ') + '.' });
   } else if (cle === 'laisser') {
-    if (ev) { delete ev.decalage; saveEventsToStorage(); if (currentPage === 'calendar') render(); }
+    delete ev.decalage; saveEventsToStorage(); if (currentPage === 'calendar') render();
     charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, « ' + titre + ' » reste à sa place.' });
   } else {
     const contact = tcContactDuRdv(ev);
@@ -25809,6 +25852,7 @@ async function tcExecuterReponseCreneau(m, cle) {
     const creneaux = contact ? tcCreneauxPourDecalage(ev, null, [], { date: tcISO(demain), minutes: TC_PROPOSITION_DEBUT }) : [];
     delete ev.decalage;
     if (!creneaux.length) {
+      decision = 'laisse';
       saveEventsToStorage();
       charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Je ne trouve pas d’autre moment libre dans les deux semaines : « ' + titre + ' » reste à sa place.' });
     } else {
@@ -25816,9 +25860,30 @@ async function tcExecuterReponseCreneau(m, cle) {
       tcDireBilanPropositions(tcLignesPropositions(res), res.envois);
     }
   }
-  try { await TC_BACKEND.propositionTraiter(p.rdv_id); } catch (e) {}
+  let d = null;
+  try { d = await TC_BACKEND.propositionTraiter(p.rdv_id, decision); } catch (e) { d = null; }
+  if (d && d.message) tcDireSuiteAuContact(p, ev, d);
   renderCharlyChat();
   setTimeout(function () { tcSuivrePropositions(true); }, 1500);
+}
+
+/**
+ * Le contact apprend la suite (décision du chef, 03/11) : le serveur l'a écrite dans sa messagerie TimeCool ; sinon le
+ * message est prêt, à envoyer d'un geste (l'application n'envoie pas seule un SMS ou un e-mail).
+ */
+function tcDireSuiteAuContact(p, ev, d) {
+  const qui = String(p.qui || 'ton contact');
+  if (d.messagerie) {
+    charlyIA.history.push({ role: 'system_info', content: '✉️ Message envoyé à ' + qui + ' dans sa messagerie TimeCool : « ' + d.message + ' »' });
+    return;
+  }
+  const c = ev ? tcContactDuRdv(ev) : null;
+  if (c && (c.phone || c.email)) {
+    tcDireBilanPropositions(['• Message prêt pour ' + c.name + ', à envoyer toi-même d’un geste (SMS ou email) : « ' + d.message + ' »'],
+      [{ nom: c.name, phone: c.phone || '', email: c.email || '', titre: '', texte: d.message }]);
+  } else {
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Pense à prévenir ' + qui + ' : « ' + d.message + ' »' });
+  }
 }
 
 function tcRendreReponseCreneau(m) {
@@ -25847,11 +25912,17 @@ function tcCadrePropositionCreneaux(p, nom) {
   const prenom = escapeHTMLSafe(String(nom || '').split(' ')[0]);
   const choix = (p.choix !== undefined && p.choix !== null) ? Number(p.choix) : _tcPropositionsRepondues[p.rdv];
   const cadre = 'margin-top:16px; padding:14px; background:#f0f7ff; border:1px solid #c8d7ee; border-radius:14px;';
-  if (choix !== undefined) {
+  // Jamais « confirmé » tant que l'organisateur n'a pas validé ; puis la suite qu'il a donnée (décision du chef, 03/11).
+  if (p.suite || choix !== undefined) {
     const c = p.creneaux.find(function (x) { return Number(x.rang) === choix; });
-    const dit = choix === -2 ? 'Cette proposition a déjà reçu une réponse.'
-      : c ? '✅ Tu as choisi : ' + escapeHTMLSafe(c.libelle || c.debut) + '. ' + prenom + ' reçoit ta réponse.'
-      : '✅ Tu as répondu qu’aucun de ces moments ne te va. ' + prenom + ' reçoit ta réponse.';
+    const libelle = c ? escapeHTMLSafe(c.libelle || c.debut) : '';
+    const avant = p.avant ? 'le rendez-vous du ' + escapeHTMLSafe(p.avant) : 'ton rendez-vous actuel';
+    const dit = p.suite === 'place' && c ? '✅ Rendez-vous déplacé : ' + libelle + '.'
+      : p.suite === 'laisse' ? '📅 Finalement, ' + avant + ' reste en place.'
+      : (p.suite || choix === -3) ? 'Cette proposition n’est plus valable.'
+      : choix === -2 ? 'Cette proposition a déjà reçu une réponse.'
+      : c ? '✅ Merci, ton choix est bien noté : ' + libelle + '. ' + prenom + ' doit encore le confirmer : tu recevras un message dès que c’est fait. En attendant, ' + avant + ' reste en place.'
+      : '✅ Tu as répondu qu’aucun de ces moments ne te va. ' + prenom + ' reçoit ta réponse. En attendant, ' + avant + ' reste en place.';
     return '<div style="' + cadre + ' font-size:12.5px; color:var(--text); line-height:1.5;">' + dit + '</div>';
   }
   const bouton = 'padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; font-weight:600;';
@@ -25869,10 +25940,10 @@ async function tcRepondreProposition(rdv, rang) {
     await TC_BACKEND.propositionChoisir(rdv, rang);
   } catch (e) {
     if (e && e.code === 'creneau_pris') { showToast('⚠️ Ce créneau vient d’être pris : choisis-en un autre'); return; }
-    if (e && e.code === 'deja_repondu') { _tcPropositionsRepondues[rdv] = -2; }
+    if (e && (e.code === 'deja_repondu' || e.code === 'plus_valable')) { _tcPropositionsRepondues[rdv] = e.code === 'plus_valable' ? -3 : -2; }
     else { showToast('⚠️ Réponse non envoyée : réessaie dans un instant'); return; }
   }
-  if (_tcPropositionsRepondues[rdv] !== -2) {
+  if (!(_tcPropositionsRepondues[rdv] <= -2)) {
     _tcPropositionsRepondues[rdv] = rang;
     showToast(rang === -1 ? '✅ Réponse envoyée' : '✅ Moment choisi, réponse envoyée');
   }
@@ -30872,8 +30943,8 @@ const TC_BACKEND = {
     const d = await tcAppel('GET', '/rdv/propositions');
     return (d && Array.isArray(d.propositions)) ? d.propositions : [];
   },
-  async propositionTraiter(rdvId) {
-    return tcAppel('POST', '/rdv/proposition/traiter', { rdv_id: rdvId });
+  async propositionTraiter(rdvId, decision) {
+    return tcAppel('POST', '/rdv/proposition/traiter', { rdv_id: rdvId, decision: decision });
   }
 };
 
