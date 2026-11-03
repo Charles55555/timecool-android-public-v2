@@ -9,3 +9,7 @@ fanny.roux@exemple-timecool.fr
 gaelle.perrin@exemple-timecool.fr
 hugo.besnard@exemple-timecool.fr
 ines.garnier@exemple-timecool.fr
+# Comptes du manuel de l'adjointe (captures), effacés par la purge du 02/11 ; ajoutés le 03/11/2026 (mission 78).
+alice.bernard@exemple-timecool.fr
+bruno.inconnu@exemple-timecool.fr
+chloe.martin@exemple-timecool.fr
