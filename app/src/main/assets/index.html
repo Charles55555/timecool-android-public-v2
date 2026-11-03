@@ -15105,7 +15105,7 @@ async function tcGererRechercheWeb(text, requete) {
       if (!charlyIA.config.demoMode) {
         try {
           synthese = await callAI([
-            {role:'system', content: tcPromptSysteme() + tcLangInstruction()},
+            {role:'system', content: tcPromptSysteme() + tcConsignePrenom() + tcLangInstruction()},
             {role:'user', content: consigne}
           ]);
         } catch (e) { synthese = null; }
@@ -15384,7 +15384,8 @@ async function charlySendMessage() {
     inp.value = ''; inp.style.height = 'auto';
     renderCharlyChat();
     await new Promise(r => setTimeout(r, 700));
-    const _reply = _sal + ' ! 😊 Je suis Charly, ton assistant TimeCool. J’espère que tu vas bien ! Qu’est-ce que je peux faire pour toi aujourd’hui ?';
+    const _prenom = tcPrenomUtilisateur();
+    const _reply = _sal + (_prenom ? ' ' + _prenom : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. J’espère que tu vas bien ! Qu’est-ce que je peux faire pour toi aujourd’hui ?';
     charlyIA.history.push({role:'assistant', content:_reply});
     renderCharlyChat();
     return;
@@ -15758,7 +15759,7 @@ async function charlySendMessage() {
         // Deux morceaux : les regles, qui ne bougent jamais et se mettent
         // en cache, puis la date et l'agenda, qui changent tout le temps.
         {role:'system',
-         content: tcPromptSysteme() + tcLangInstruction(),
+         content: tcPromptSysteme() + tcConsignePrenom() + tcLangInstruction(),
          volatil: dateContext + '\n\n' + tcAgendaSnapshotPourIA()},
         ...tcHistoriquePourIA()
       ];
@@ -16837,7 +16838,7 @@ function hideAuthFlow() {
   navigate('assistant');
   const h = new Date().getHours();
   const sal = h < 18 ? 'Bonjour' : 'Bonsoir';
-  const fname = userAccount ? userAccount.firstname : '';
+  const fname = tcPrenomUtilisateur();
   tcChargerHistoriqueCharly();
   const _accueil = sal + (fname ? ' ' + fname : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par où on commence ?';
   // appText : texte de l'app (pas une donnee personnelle) -> traduisible
@@ -17744,7 +17745,7 @@ function showWelcomeSplash(firstname) {
   navigate('assistant');
   const hG = new Date().getHours();
   const salG = hG < 18 ? 'Bonjour' : 'Bonsoir';
-  const fnameG = userAccount ? userAccount.firstname : '';
+  const fnameG = tcPrenomUtilisateur();
   tcChargerHistoriqueCharly();
   const _accueilG = salG + (fnameG ? ' ' + fnameG : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par où on commence ?';
   if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueilG, appText: true, fr: _accueilG});
@@ -17792,6 +17793,33 @@ function closeWelcomeSplash() {
  * Sans nom exploitable, la premiere lettre de l'email vaut mieux que
  * rien ; un rond vide n'apprend rien a personne.
  */
+/**
+ * Le prénom du compte, tel que l'utilisateur l'a saisi, première lettre en majuscule (mission 72).
+ * Rien (chaîne vide) quand il n'est pas exploitable : champ vide, prénom identique au nom, un seul mot
+ * tout en majuscules (« REPUBLIQUE », un nom de rue ou de société), une adresse e-mail, des chiffres ou
+ * des signes. Charly parle alors sans prénom : jamais d'invention, jamais l'e-mail à la place.
+ */
+function tcPrenomUtilisateur() {
+  const a = (typeof userAccount !== 'undefined' && userAccount) ? userAccount : null;
+  if (!a) return '';
+  const brut = String(a.firstname || a.firstName || a.prenom || '').trim().replace(/\s+/g, ' ');
+  const nom = String(a.lastname || a.lastName || a.nom || '').trim().replace(/\s+/g, ' ');
+  if (!brut || brut.length > 40 || !/^\p{L}[\p{L}'’ -]*$/u.test(brut)) return '';
+  const plat = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (nom && plat(brut) === plat(nom)) return '';
+  if (brut.indexOf(' ') < 0 && brut.length > 1 && brut === brut.toUpperCase() && brut !== brut.toLowerCase()) return '';
+  return brut.charAt(0).toUpperCase() + brut.slice(1);
+}
+
+/** La consigne du prénom ajoutée au prompt de Charly ; rien quand le prénom n'est pas exploitable (mission 72). */
+function tcConsignePrenom() {
+  const p = tcPrenomUtilisateur();
+  if (!p) return '';
+  return '\n\nPRÉNOM : l’utilisateur s’appelle ' + p + '. Emploie son prénom seulement là où un humain le ferait : au bonjour (« Bonjour ' + p
+    + ' ! Qu’est-ce que je peux faire pour toi ? »), pour confirmer (« C’est noté, ' + p + ' »), pour dire au revoir (« Bonne journée, ' + p
+    + ' »). Jamais à chaque phrase. Jamais dans le titre d’un rendez-vous ni dans un bloc [AGENDA], jamais dans un message écrit pour une autre personne.';
+}
+
 function tcInitiales() {
   const a = (typeof userAccount !== 'undefined' && userAccount) ? userAccount : null;
   if (!a) return null;
@@ -18729,7 +18757,7 @@ async function charlyProcessMessage() {
         // Deux morceaux : les regles, qui ne bougent jamais et se mettent
         // en cache, puis la date et l'agenda, qui changent tout le temps.
         {role:'system',
-         content: tcPromptSysteme() + tcLangInstruction(),
+         content: tcPromptSysteme() + tcConsignePrenom() + tcLangInstruction(),
          volatil: dateContext + '\n\n' + tcAgendaSnapshotPourIA()},
         ...tcHistoriquePourIA()
       ];
@@ -19486,9 +19514,13 @@ function tcClasserMessage(text, histoire) {
   }
   if (TC_CLASSE_SALUTATIONS.indexOf(norm) > -1) {
     const h = new Date().getHours();
-    return pasSur('salutation', (h < 18 ? 'Bonjour' : 'Bonsoir') + ' ! Qu’est-ce que je peux faire pour toi ?');
+    const prenom = (typeof tcPrenomUtilisateur === 'function') ? tcPrenomUtilisateur() : '';
+    return pasSur('salutation', (h < 18 ? 'Bonjour' : 'Bonsoir') + (prenom ? ' ' + prenom : '') + ' ! Qu’est-ce que je peux faire pour toi ?');
   }
-  if (TC_CLASSE_AU_REVOIR.indexOf(norm) > -1) return pasSur('au_revoir', 'À bientôt ! Je reste là si tu as besoin de moi.');
+  if (TC_CLASSE_AU_REVOIR.indexOf(norm) > -1) {
+    const prenom = (typeof tcPrenomUtilisateur === 'function') ? tcPrenomUtilisateur() : '';
+    return pasSur('au_revoir', 'À bientôt' + (prenom ? ', ' + prenom : '') + ' ! Je reste là si tu as besoin de moi.');
+  }
   const reaction = TC_CLASSE_REACTIONS.indexOf(norm) > -1 || TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1 || (mots.length === 1 && mots[0].length <= 3 && !/\d/.test(mots[0]));
   const ouiNon = (typeof tcReponseOuiNon === 'function') ? tcReponseOuiNon(brut) : null;
   const accord = ouiNon === true || TC_CLASSE_ACQUIESCEMENTS.indexOf(norm) > -1;

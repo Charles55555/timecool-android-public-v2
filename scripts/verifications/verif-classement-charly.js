@@ -78,7 +78,7 @@ vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null
   const src = extraireConst(c, c === 'TC_MOTS_CREUX' ? "\\.split\\(' '\\)\\);\\n" : (/DECLENCHEURS|PROFESSIONS|VERBES_DE_DEMANDE|PETITS_MOTS|TYPES_RDV/.test(c) ? '\\];\\n' : ';\\n'));
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  constante introuvable : ' + c); }
 });
-['tcSansAccents', 'tcISO', 'tcContientMot', 'tcHeureDansTexte', 'tcHorairePlage', 'tcFormaterHeure', 'tcComparerEvenements',
+['tcSansAccents', 'tcPrenomUtilisateur', 'tcISO', 'tcContientMot', 'tcHeureDansTexte', 'tcHorairePlage', 'tcFormaterHeure', 'tcComparerEvenements',
  'tcPeriodeAgenda', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'tcPeriodeCoherente', 'tcBorneDeFin', 'tcJoursDansTexte',
  'parseFrenchDateFromText', 'tcContactDuRdv', 'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
  'tcDetecterMalade', 'tcDetecterContrainte', 'detecterSuppressionRdv', 'tcDetecterPrevenance', 'tcReponseOuiNon',
@@ -125,6 +125,14 @@ verifie('« tu es sûr ? », « vraiment ? » : doute, Charly ne répète pas, i
 verifie('« merci », « super » : avec plaisir, et une question', classer('merci').question === 'Avec plaisir, tu veux autre chose ?' && classer('super').classe === 'remerciement');
 verifie('« ok » : d accord, et une question', classer('ok').question === 'D’accord, tu veux autre chose ?');
 verifie('« bonjour Charly » (pas le premier message) : bonjour, et une question', /^Bonjour ! Qu’est-ce que je peux faire pour toi \?$/.test(classer('bonjour Charly').question), classer('bonjour Charly').question);
+// Mission 72 : le prénom du compte au bonjour et à l'au revoir ; sans prénom exploitable, la phrase d'avant.
+ctx.userAccount = { firstname: 'charles', lastname: 'Haddad' };
+verifie('« bonjour » avec un prénom : « Bonjour Charles ! Qu’est-ce que je peux faire pour toi ? », même classement', classer('bonjour').question === 'Bonjour Charles ! Qu’est-ce que je peux faire pour toi ?' && classer('bonjour').classe === 'salutation', classer('bonjour').question);
+verifie('« au revoir » avec un prénom : « À bientôt, Charles ! », même classement', classer('au revoir').question === 'À bientôt, Charles ! Je reste là si tu as besoin de moi.' && classer('au revoir').classe === 'au_revoir', classer('au revoir').question);
+verifie('« merci » avec un prénom : inchangé (pas à chaque phrase)', classer('merci').question === 'Avec plaisir, tu veux autre chose ?', classer('merci').question);
+ctx.userAccount = { firstname: 'REPUBLIQUE', lastname: 'Paris', email: 'contact@republique.fr' };
+verifie('« bonjour » sans prénom exploitable (« REPUBLIQUE ») : la phrase d avant', classer('bonjour').question === 'Bonjour ! Qu’est-ce que je peux faire pour toi ?' && classer('au revoir').question === 'À bientôt ! Je reste là si tu as besoin de moi.', classer('bonjour').question);
+ctx.userAccount = null;
 verifie('« laisse tomber » : d accord, je laisse tomber, et une question', classer('laisse tomber').classe === 'abandon' && /\?$/.test(classer('laisse tomber').question));
 verifie('« au revoir » : à bientôt, sans question (ce n est pas un doute)', classer('au revoir').classe === 'au_revoir' && !/\?/.test(classer('au revoir').question), classer('au revoir').question);
 verifie('« lundi » → « tu veux noter quelque chose lundi, ou autre chose ? »', classer('lundi').question === NC + 'tu veux noter quelque chose lundi, ou autre chose ?', classer('lundi').question);

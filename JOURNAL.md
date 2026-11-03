@@ -3085,3 +3085,11 @@ Deuxième passage (examinateur, 25/10) : après « Marc est en retard → je pr�
 - Examen de la mission 71 : apostrophes rétablies dans les refus du serveur ; un lot de traduction s arrête aussi à 20 000 caractères.
 - Demande du chef, mission 71 : liste de modèles côté serveur (ceux de Configuration IA, 400 sinon). Taille par groupe : Charly 200 Ko (125 Ko mesurés au plus, aucune photo ne part), traduction 64 Ko, lieux et itinéraire 8 Ko, recherche 2 Ko.
 - verif-relais-e2e en production : phrase de traduction sans ambiguïté ; un 403 de Google qui cite Custom Search devient un avertissement, avec le message réel de Google.
+
+## 03/11/2026 : Mission 72, Charly appelle l'utilisateur par son prénom
+
+Chef, 03/11 (ok de Charles) : Charly connaît le prénom du compte et l'emploie là où un humain le ferait.
+- `tcPrenomUtilisateur()` : le prénom tel que saisi, première lettre en majuscule ; rien si le champ est vide, si le prénom est le nom, si c'est un seul mot en majuscules (« REPUBLIQUE »), une adresse e-mail, des chiffres ou des signes.
+- `tcConsignePrenom()` s'ajoute au prompt aux trois appels du modèle (pas dans le prompt modifiable des réglages) : bonjour, « C'est noté », « Bonne journée », jamais à chaque phrase, jamais dans un titre, un bloc [AGENDA] ou un message pour une autre personne. Sans prénom, aucune consigne : Charly parle comme avant.
+- Phrases fixes : accueil à la connexion (il prenait le champ brut, « REPUBLIQUE » compris), premier bonjour, bonjour suivant (« Bonjour Charles ! Qu'est-ce que je peux faire pour toi ? »), au revoir (« À bientôt, Charles ! »). Le merci ne change pas. Le classement ne bouge pas.
+- Suites : nouvelle `verif-prenom-charly` (23 comptes, la consigne, la page) ; `verif-classement-charly` rejoue bonjour, au revoir et merci avec et sans prénom.

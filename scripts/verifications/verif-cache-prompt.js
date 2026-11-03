@@ -63,7 +63,7 @@ titre('Ce qui changerait a chaque appel reste dehors');
   const site = page.indexOf('volatil: dateContext');
   verifie('date et agenda sont dans la partie volatile', site > -1);
   verifie('et les regles dans la partie stable',
-    /content: tcPromptSysteme\(\) \+ tcLangInstruction\(\)/.test(page),
+    /content: tcPromptSysteme\(\) \+ tcConsignePrenom\(\) \+ tcLangInstruction\(\)/.test(page),
     'tcPromptSysteme ne depend ni de l heure ni de l agenda');
   verifie('plus aucun prompt ne melange les deux',
     page.indexOf("tcPromptSysteme() + '\\n\\n' + dateContext") === -1,
