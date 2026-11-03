@@ -63,7 +63,7 @@ vm.runInContext('let _tcDeplacementPeriode = null; let _tcDeplacementEnAttente =
  'tcContactDuRdv', 'tcRemplirModele', 'tcValeursDuRdv', '_tcLigneRdv', 'tcAppliquerDeplacement',
  'tcPeriodeContexte', 'tcPeriodeDeplacer', 'tcRepondreDeplacementPeriode', 'tcChoixPeriode',
  // Mission 73 : un accord pour le lot, puis des créneaux proposés.
- 'tcExecuterDeplacement', 'tcRepondreDeplacement', 'tcReponseDecalage', 'tcNomsLisibles', 'tcPropositionTexte', 'tcProposerLesCreneaux',
+ 'tcExecuterDeplacement', 'tcConfianceCharly', 'tcRepondreDeplacement', 'tcReponseDecalage', 'tcNomsLisibles', 'tcPropositionTexte', 'tcProposerLesCreneaux',
  'tcEnvoyerPropositions', 'tcLignesPropositions', 'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle',
  'tcMinutesLisibles', 'tcHeureSql', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre'
 ].forEach((n) => {

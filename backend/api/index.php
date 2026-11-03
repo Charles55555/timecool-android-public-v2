@@ -1359,6 +1359,13 @@ function propositionSuiteLien(array $rdv, array $lien): ?array
     if ($lien['statut'] === 'refuse' && $rdv['traite_le'] === null) {
         return ['etat' => 'refus_note'];
     }
+    // Reproposé (une nouvelle proposition de Charly remplace le même rendez-vous) : la page le dit (chef, 03/11).
+    if ($rdv['traite_le'] !== null && $rdv['statut'] === 'expire' && $rdv['remplace_uid'] !== null && Db::un(
+        'SELECT id FROM rdv WHERE organisateur_id = ? AND origine = "charly" AND remplace_uid = ? AND id > ? LIMIT 1',
+        [$rdv['organisateur_id'], $rdv['remplace_uid'], $rdv['id']]
+    ) !== null) {
+        return ['etat' => 'autres'];
+    }
     return null;
 }
 
@@ -4765,7 +4772,9 @@ switch ($route) {
     case 'GET /rdv/propositions':
         $moi = Auth::compte();
         $lignes = Db::tous(
-            'SELECT r.id, r.titre, r.remplace_uid, r.avant, r.statut, r.cree_le, r.repondu_le, r.expire_le,
+            'SELECT r.id, r.titre, r.remplace_uid, r.avant, r.statut,
+                    (SELECT COUNT(*) FROM rdv r2 WHERE r2.organisateur_id = r.organisateur_id AND r2.origine = "charly"
+                        AND r2.remplace_uid = r.remplace_uid AND r2.id <= r.id) AS tours, r.cree_le, r.repondu_le, r.expire_le,
                     l.prenom_destinataire, c.prenom AS invite_prenom, c.nom AS invite_nom, c.reference AS invite_reference,
                     cr.debut, cr.fin, cr.libelle
                FROM rdv r
@@ -4789,6 +4798,8 @@ switch ($route) {
                 'fin'      => $l['fin'],
                 'libelle'  => $l['libelle'],
                 'avant'    => $l['avant'],
+                // La combientième proposition pour ce rendez-vous (profil 2 : Charly ne repropose seul qu'une fois).
+                'tours'    => (int) $l['tours'],
             ];
         }, $lignes)]);
 

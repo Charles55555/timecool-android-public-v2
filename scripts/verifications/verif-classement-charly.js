@@ -87,7 +87,7 @@ vm.runInContext((page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).
  'tcEstDeplacement', 'tcVerbeConjugue', 'tcDetecterMarcheArriere', 'tcEstUneReprise',
  'tcCreationLocale', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcJoursCites', 'tcDateEnLettres',
  'tcMotsUtiles', 'tcContactsParMots', 'tcLangueCourante', 'tcDetecterRdvGroupe', 'tcMotsDuTexte', 'tcComptesCitesDansTexte',
- 'tcAppliquerDeplacement', 'tcExecuterDeplacement', '_tcLigneRdv', 'tcRdvDesigne', 'tcRdvVise', 'tcConflitEnAttente', 'tcPropositionEnAttente', 'extractAgendaProposals', 'tcTypeRdvValide',
+ 'tcAppliquerDeplacement', 'tcExecuterDeplacement', 'tcConfianceCharly', '_tcLigneRdv', 'tcRdvDesigne', 'tcRdvVise', 'tcConflitEnAttente', 'tcPropositionEnAttente', 'extractAgendaProposals', 'tcTypeRdvValide',
  'tcGererPrevenance', 'tcReponseValidation', 'tcTypeDansTexte', 'tcHeureCourte', 'tcCiviliteEnTete',
  'tcGererContrainte', 'tcLibererPeriode', 'tcRdvDeLaPeriode', 'tcGererDemandeCreneau', 'tcCreneauxDisponibles', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour', 'tcEvenementFin', 'tcEvenementCouvre', 'tcEstBandeau', 'tcMinutesDeHeure', 'tcSansTempsProtege', 'tcHeureLisible', 'tcJoursFermes',
  'tcConversations', 'tcRdvNommeIntrouvable',

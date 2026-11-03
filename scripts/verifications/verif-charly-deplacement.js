@@ -24,7 +24,9 @@ const noms = ['tcEstDeplacement', 'tcVerbeConjugue', 'tcDeplacementsProposes', '
   // Mission 73 : les propositions de créneaux.
   'tcNomsLisibles', 'tcPropositionTexte', 'tcReponseDecalage', 'tcProposerLesCreneaux', 'tcEnvoyerPropositions', 'tcLignesPropositions',
   'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcClasseNormaliser',
-  'tcReponseOuiNon', 'tcISO', 'tcEstBandeau', 'tcEvenementSurPlusieursJours'];
+  'tcReponseOuiNon', 'tcISO', 'tcEstBandeau', 'tcEvenementSurPlusieursJours',
+  // Mission 73b : le profil (1 ici : aucune clé, « Je l’envoie ? » est posé).
+  'tcConfianceCharly'];
 const constantes = (page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).join('\n');
 
 let ko = 0;

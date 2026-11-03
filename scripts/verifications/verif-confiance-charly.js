@@ -34,7 +34,8 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
   'tcDireBilanPropositions', 'tcReponseDecalage', 'tcRdvDeProposition', 'tcCreneauDeProposition', 'tcReponseCreneauEnAttente',
   'tcPoserReponseCreneau', 'tcSuivrePropositions', 'tcRepondreReponseCreneau', 'tcChoisirReponseCreneau', 'tcExecuterReponseCreneau',
   'tcRendreReponseCreneau', 'tcPropositionRecue', 'tcCadrePropositionCreneaux', 'tcRepondreProposition', 'tcMarqueDecalage',
-  'tcGenesDuCreneau', 'tcReposerReponseCreneau', 'tcDireSuiteAuContact'];
+  'tcGenesDuCreneau', 'tcReposerReponseCreneau', 'tcDireSuiteAuContact',
+  'tcIdsQuestion', 'tcRetirerQuestionsDe', 'tcPoserLotCreneaux', 'tcReproposerSeul', 'tcExecuterLotCreneaux', 'tcDireSuitesAuxContacts', 'tcExecuterDeplacement'];
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -88,7 +89,7 @@ const ctx = {
 vm.createContext(ctx);
 const constantes = (page.match(/^const TC_(PROPOSITION_[A-Z_]+|CONFIANCE_VISIBLE) = [^;\n]+;$/gm) || []).join('\n');
 const profils = (page.match(/const TC_CONFIANCE_PROFILS = \[[\s\S]*?\n\];/) || [''])[0];
-vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; var _tcPropositionsRepondues = {};\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
+vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; let _tcDeplacementEnAttente = null; var _tcPropositionsRepondues = {};\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
   + ['tcSansAccents', 'tcISO', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre']
     .concat(noms).map(extraire).join('\n'), ctx);
 
@@ -240,7 +241,59 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   await ctx.tcChoisirReponseCreneau(202, 'placer');
   dern = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
   verifie('placé : le serveur reçoit « place », « Rendez-vous déplacé » part dans la messagerie TimeCool de Paul, c est dit', trace.decisions[trace.decisions.length - 1] === 'place' && ctx.events[1].date === iso(1) && dern.content === '✉️ Message envoyé à Paul Martin dans sa messagerie TimeCool : « Rendez-vous déplacé : ici. »', dern.content);
+  verifie('profil 1 : décaler un rendez-vous avec un contact demande toujours « Je l’envoie ? »', (ctx.charlyIA.history = [], ctx.tcExecuterDeplacement([{ ev: ev('t', 'Tennis', 3, 9, 0, 10, 0, { contact: 'c1' }), p: { date: iso(3), startH: 11, startM: 0, endH: 12, endM: 0 } }]), /Je l’envoie \?/.test(ctx.charlyIA.history[0].content)) && vm.runInContext('_tcDeplacementEnAttente !== null', ctx));
+  vm.runInContext('_tcDeplacementEnAttente = null', ctx);
   verifie('le rendez-vous d avant est envoyé avec la proposition (« avant »)', trace.creees.every((c) => /^[a-z]+ \d+ [a-zéû]+ à \d+h(\d\d)?$/.test(c.avant)), JSON.stringify(trace.creees.map((c) => c.avant)));
+
+
+  titre('7. Profil 2 (73b) : Charly envoie seul, demande avant d’écrire, repropose seul une fois');
+  const last = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+  stock.tc_confiance_charly = '2';
+  ctx.charlyIA.history = [];
+  ctx.events = [ev('a', 'Avocat', 0, 15, 0, 16, 0, { contact: 'c1' }), ev('k', 'Kiné', 0, 17, 0, 18, 0, { contact: 'c2' }), ev('g', 'Gym', 0, 12, 0, 13, 0)];
+  const nCreees = trace.creees.length, nDepl = trace.deplaces.length;
+  await ctx.tcExecuterDeplacement([{ ev: ctx.events[0], p: { date: iso(2), startH: 9, startM: 0, endH: 10, endM: 0 } }, { ev: ctx.events[1], p: { date: iso(2), startH: 14, startM: 0, endH: 15, endM: 0 } }, { ev: ctx.events[2], p: { date: iso(2), startH: 18, startM: 0, endH: 19, endM: 0 } }]);
+  dern = last();
+  verifie('pas de « Je l’envoie ? » : les deux propositions partent, Gym (sans contact) se déplace, Avocat et Kiné restent marqués ⏳, le bilan le dit avec le bouton pour Chloé',
+    !ctx.charlyIA.history.some((m) => /Je l’envoie/.test(m.content || '')) && trace.creees.length === nCreees + 2 && trace.deplaces.slice(nDepl).join() === 'g' && vm.runInContext('_tcDeplacementEnAttente', ctx) === null
+    && dern._envois && dern._envois[0].nom === 'Chloé Roux' && /Envoyé dans la messagerie TimeCool : Paul Martin/.test(dern.content) && ctx.events[0].date === iso(0) && ctx.events[0].decalage && ctx.events[1].decalage, dern.content);
+  const idA = ctx.events[0].decalage.rdv, idK = ctx.events[1].decalage.rdv;
+  reponses = [
+    { rdv_id: idA, titre: 'Avocat', remplace: 'a', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(2) + ' 09:00:00', fin: iso(2) + ' 10:00:00' },
+    { rdv_id: idK, titre: 'Kiné', remplace: 'k', etat: 'choisi', qui: 'Chloé', reference: null, tours: 1, debut: iso(2) + ' 18:00:00', fin: iso(2) + ' 19:00:00' }];
+  await ctx.tcSuivrePropositions(true);
+  q = last();
+  const l9 = ctx.tcPropositionLibelle({ date: iso(2), startH: 9, startM: 0 }), l18 = ctx.tcPropositionLibelle({ date: iso(2), startH: 18, startM: 0 });
+  verifie('deux réponses arrivées : un seul accord pour le lot, le chevauchement dit dans la question', q.content === '• Paul Martin a choisi ' + l9 + ' pour « Avocat ».\n• Chloé a choisi ' + l18 + ' pour « Kiné » (attention, ça chevauche « Gym »).\nJe les place dans ton agenda ?'
+    && /tcChoisirReponseCreneau\(\d+, 'placer'\)"[^>]*>Oui, place-les</.test(ctx.tcRendreReponseCreneau(q)) && /Non, je les laisse où ils sont</.test(ctx.tcRendreReponseCreneau(q)), q.content);
+  verifie('rien n est écrit avant ce oui', ctx.events[0].date === iso(0) && ctx.events[1].date === iso(0));
+  verifie('« place-les » : les deux sont placés, chaque proposition close (« place »), Paul par sa messagerie, Chloé par un bouton « Envoyer à … »',
+    await ctx.tcRepondreReponseCreneau('place-les') === true && ctx.events[0].date === iso(2) && ctx.events[1].startH === 18 && !ctx.events[0].decalage && !ctx.events[1].decalage && trace.decisions.slice(-2).join() === 'place,place'
+    && last()._envois && last()._envois.length === 1 && last()._envois[0].nom === 'Chloé Roux' && /✉️ Message envoyé à Paul Martin dans sa messagerie TimeCool/.test(last().content) && /Message prêt pour Chloé Roux/.test(last().content), JSON.stringify(last()));
+  ctx.events.push(ev('d', 'Dentiste', 3, 10, 0, 11, 0, { contact: 'c2', decalage: { rdv: 300 } }));
+  reponses = [{ rdv_id: 300, titre: 'Dentiste', remplace: 'd', etat: 'refuse', qui: 'Chloé', reference: null, tours: 1, debut: null, fin: null }];
+  const nC = trace.creees.length;
+  await ctx.tcSuivrePropositions(true);
+  verifie('« aucun ne me va » (1re fois) : Charly propose seul d’autres moments et le dit ; rien à trancher', ctx.charlyIA.history.some((m) => m.content === 'Chloé n’a choisi aucun des créneaux proposés pour « Dentiste » : je lui propose d’autres moments.')
+    && trace.creees.length === nC + 1 && trace.creees[nC].remplace === 'd' && trace.decisions[trace.decisions.length - 1] === 'autres' && ctx.tcReponseCreneauEnAttente() === null && last()._envois, JSON.stringify(last()));
+  reponses = [{ rdv_id: 301, titre: 'Dentiste', remplace: 'd', etat: 'sans_reponse', qui: 'Chloé', reference: null, tours: 2, debut: null, fin: null }];
+  await ctx.tcSuivrePropositions(true);
+  q = last();
+  verifie('la 2e fois (tours 2) : Charly demande, comme au profil 1', /^Chloé n’a pas répondu depuis 24 h pour « Dentiste »\. Je propose d’autres moments, ou je laisse le rendez-vous à sa place \?$/.test(q.content), q.content);
+  await ctx.tcRepondreReponseCreneau('laisse-le');
+  ctx.events.push(ev('e', 'Essai', 4, 9, 0, 10, 0, { contact: 'c1', decalage: { rdv: 400 } }), ev('f', 'Foot', 4, 15, 0, 16, 0, { contact: 'c1', decalage: { rdv: 401 } }));
+  reponses = [{ rdv_id: 400, titre: 'Essai', remplace: 'e', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(5) + ' 09:00:00', fin: iso(5) + ' 10:00:00' },
+    { rdv_id: 401, titre: 'Foot', remplace: 'f', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(5) + ' 15:00:00', fin: iso(5) + ' 16:00:00' }];
+  await ctx.tcSuivrePropositions(true);
+  verifie('« je les laisse où ils sont », « non je les laisse », « place-les » : des réponses', rt('LAISSER', 'je les laisse où ils sont') && rt('LAISSER', 'non je les laisse') && rt('PLACER', 'place-les'));
+  await ctx.tcRepondreReponseCreneau('Non, je les laisse où ils sont');
+  verifie('laissés : rien ne bouge, « restent à leur place », chaque proposition close (« laisse »), Paul l apprend', ctx.events.find((e) => e.id === 'e').date === iso(4) && !ctx.events.find((e) => e.id === 'f').decalage
+    && trace.decisions.slice(-2).join() === 'laisse,laisse' && ctx.charlyIA.history.some((m) => m.content === 'D’accord, « Essai », « Foot » restent à leur place.') && /✉️ Message envoyé à Paul Martin dans sa messagerie TimeCool : « Finalement/.test(last().content), JSON.stringify(last()));
+  ctx.events.push(ev('h', 'Hockey', 5, 9, 0, 10, 0, { contact: 'c1', decalage: { rdv: 500 } }));
+  reponses = [{ rdv_id: 500, titre: 'Hockey', remplace: 'h', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(6) + ' 09:00:00', fin: iso(6) + ' 10:00:00' }];
+  await ctx.tcSuivrePropositions(true);
+  verifie('une seule réponse : la question simple « Je le place dans ton agenda ? »', /a choisi .* pour « Hockey »\. Je le place dans ton agenda \?$/.test(last().content) && !last()._reponseCreneau.lot, last().content);
+  delete stock.tc_confiance_charly;
 
   console.log('');
   console.log(ko ? ko + ' anomalie(s).' : ok + ' vérifications, aucune anomalie.');

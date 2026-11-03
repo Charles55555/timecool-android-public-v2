@@ -98,7 +98,7 @@ async function carteChez(b, refA, rdvId) {
   verifie('Chloé répond « aucun ne me va »', r.code === 200, r.texte.slice(0, 200));
   r = await appel('GET', '/rdv/propositions', undefined, a.jeton);
   x = r.d.propositions.find((y) => y.rdv_id === p2);
-  verifie('Alice le retrouve : refusé, Chloé, Kiné', x && x.etat === 'refuse' && x.qui === 'Chloé' && x.titre === 'Kiné' && x.debut === null, JSON.stringify(x));
+  verifie('Alice le retrouve : refusé, Chloé, Kiné', x && x.etat === 'refuse' && x.qui === 'Chloé' && x.titre === 'Kiné' && x.debut === null && x.tours === 1, JSON.stringify(x));
   verifie('rien dans l agenda d Alice (un ancien lien aurait écrit tc_rdv_)', sql("SELECT COUNT(*) FROM elements WHERE compte_id = " + a.id + " AND type = 'rdv'") === '0');
   r = await appel('GET', '/rdv/lien?jeton=' + jetonLien);
   verifie('Chloé rouvre son lien : « refus noté », pas de créneaux', r.code === 200 && r.d.suite && r.d.suite.etat === 'refus_note' && r.d.creneaux.length === 0, r.texte.slice(0, 200));
@@ -154,6 +154,15 @@ async function carteChez(b, refA, rdvId) {
   r = await appel('POST', '/rdv/lien/choix', { jeton: jeton7, rang: 1 });
   verifie('et un choix tardif est refusé (410)', r.code === 410, r.code);
   verifie('le lien est marqué expiré en base', sql('SELECT statut FROM rdv_liens WHERE rdv_id = ' + p7) === 'expire');
+  r = await appel('POST', '/rdv/proposition/creer', { creneaux, texte: 'x', prenom_destinataire: 'Emma', titre: 'Coiffeur', remplace: 'orig7' }, a.jeton);
+  const p7b = r.d.rdv_id;
+  r = await appel('GET', '/rdv/lien?jeton=' + jeton7);
+  verifie('une nouvelle proposition pour le même rendez-vous : l ancien lien dit « d autres moments », sans créneaux (73b)', r.code === 200 && r.d.suite && r.d.suite.etat === 'autres' && r.d.creneaux.length === 0, r.texte.slice(0, 200));
+  sql('UPDATE rdv SET expire_le = DATE_SUB(NOW(), INTERVAL 1 MINUTE) WHERE id = ' + p7b);
+  r = await appel('GET', '/rdv/propositions', undefined, a.jeton);
+  x = r.d.propositions.find((y) => y.rdv_id === p7b);
+  verifie('la 2e proposition pour ce rendez-vous : tours = 2 (profil 2 : Charly ne repropose seul qu une fois)', x && x.tours === 2 && x.etat === 'sans_reponse', JSON.stringify(x));
+  await appel('POST', '/rdv/proposition/traiter', { rdv_id: p7b, decision: 'laisse' }, a.jeton);
   r = await appel('POST', '/rdv/proposition/creer', { creneaux, texte: 'x', prenom_destinataire: 'Farid', titre: 'Banque', remplace: 'orig8', avant: 'mercredi 4 novembre à 11h' }, a.jeton);
   const p8 = r.d.rdv_id, jeton8 = r.d.url.split('/').pop();
   await appel('POST', '/rdv/proposition/traiter', { rdv_id: p8, decision: 'laisse' }, a.jeton);

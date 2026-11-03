@@ -3119,3 +3119,14 @@ Chef, 03/11 (ok de Charles) : trois profils d'autonomie pour les actions de Char
 - Défaut 3 : /rdv/proposition/traiter prend une décision (place, laisse, autres, ferme), ferme le lien pas encore utilisé et marque la carte du contact ; un choix tardif reçoit « Cette proposition n’est plus valable » (410 plus_valable).
 - Remarque de l’examen : le chevauchement est dit dans la question, avant l’accord.
 - Migration 019 (rdv.avant, le libellé du rendez-vous qu’on décale), jouée par le chef. Suites : verif-confiance-charly 63, verif-propositions-e2e 48.
+
+## 03/11/2026 : Mission 73b, profil 2 « Charly réalise toutes les étapes et attend ma validation pour la dernière »
+
+Chef, 03/11 (ok de Charles). Le bloc reste caché (TC_CONFIANCE_VISIBLE = false) jusqu’à la 73c ; un seul « publié » à la fin.
+- Décaler un rendez-vous avec un contact : plus de « Je l’envoie ? » ; Charly envoie seul (messagerie TimeCool tout de suite, bouton « Envoyer à … » pour un contact au lien : l’application n’envoie pas seule un SMS ou un e-mail), les rendez-vous sans contact se déplacent, le bilan le dit.
+- Les réponses : un créneau choisi, « Paul a choisi …, je le place ? » ; plusieurs arrivées, un seul accord pour le lot (« Je les place dans ton agenda ? », « Oui, place-les » / « Non, je les laisse où ils sont »), chevauchements dits dans la question. Rien n’est écrit dans l’agenda sans ce oui.
+- « Aucun ne me va » ou pas de réponse sous 24 h : Charly propose seul d’autres moments, une fois (GET /rdv/propositions rend « tours ») ; la seconde fois, il demande, comme au profil 1. Décision prise seul, signalée au chef.
+- Le questionnaire « je suis malade » garde son récapitulatif « Oui, vas-y » : il valide aussi des écritures dans l’agenda (déplacer, supprimer), la dernière étape du profil 2.
+- Page du lien (contact sans TimeCool, décision du chef) : « [Prénom] doit encore le confirmer. Reviens sur cette page pour voir sa réponse. » ; la page reste lisible après la décision : déplacé, en place, ou « Ces créneaux ne sont plus proposés : [Prénom] a choisi de t’en proposer d’autres. ». La carte TimeCool garde « tu recevras un message » (le message part tout seul).
+- À savoir (examen de la 73a, non bloquant) : /rdv/lien/choix verrouille rdv_liens puis rdv, /rdv/proposition/traiter l’inverse ; deux requêtes au même instant peuvent finir en interblocage MySQL (500, le contact réessaie, rien de perdu). Repris après la 73c si ça se reproduit.
+- Suites : verif-confiance-charly 73 (section 7, profil 2), verif-propositions-e2e 50 (« tours », l’ancien lien dit « d’autres moments ») ; verif-charly-deplacement, verif-classement-charly, verif-deplacer-periode chargent tcConfianceCharly (profil 1 : « Je l’envoie ? » inchangé).

@@ -181,11 +181,13 @@ function renderSuite(data, suite) {
     renderState('✅', '<span class="success">Rendez-vous déplacé : ' + escapeHTML(s.choix) + '.</span>');
   } else if (s.etat === 'en_place') {
     renderState('📅', 'Finalement, ' + avant + ' reste en place.');
+  } else if (s.etat === 'autres') {
+    renderState('🔄', 'Ces créneaux ne sont plus proposés : ' + qui + ' a choisi de t’en proposer d’autres. En attendant, ' + avant + ' reste en place.');
   } else if (s.etat === 'refus_note') {
     renderState('👍', '<span class="success">C’est noté !</span><br>' + qui + ' reçoit ta réponse. En attendant, ' + avant + ' reste en place.');
   } else {
     renderState('✅', '<span class="success">Merci, ton choix est bien noté : ' + escapeHTML(s.choix) + '.</span><br>' + qui
-      + ' doit encore le confirmer : tu recevras un message dès que c’est fait. En attendant, ' + avant + ' reste en place.');
+      + ' doit encore le confirmer. Reviens sur cette page pour voir sa réponse. En attendant, ' + avant + ' reste en place.');
   }
 }
 
