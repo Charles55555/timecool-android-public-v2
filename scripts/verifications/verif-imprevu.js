@@ -39,7 +39,7 @@ function agenda() {
   ];
 }
 
-const trace = { saves: 0, toasts: [], envois: [], demarches: [] };
+const trace = { saves: 0, toasts: [], envois: [], demarches: [], propositions: [] };
 const ctx = {
   console, String, Number, Array, Object, RegExp, Promise, JSON, Math, parseInt, Date: DateFixe,
   mode: 'user', currentPage: 'chat', events: [], charlyIA: { history: [], config: {} },
@@ -53,7 +53,9 @@ const ctx = {
   escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
   localStorage: { getItem: () => null, setItem() {} },
   tcDemarrerRdvAPlusieurs() {}, charlyAttachAction() {}, tcPrevenirRetard() {}, tcDemarrerNouveauRdv() {}, startAssistant() {}, tcDemarrerCalculTrajet() {}, charlySendMessage() {}, tcDemarrerMalade() {},
-  document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null
+  document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null,
+  // Mission 73 : la proposition de créneaux part au serveur.
+  TC_BACKEND: { propositionCreer: async (corps) => { trace.propositions.push(corps); return { rdv_id: trace.propositions.length, url: corps.reference ? null : 'https://timecool.fr/rdv/ABCD2345' }; } }
 };
 vm.createContext(ctx);
 vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcGroupeEnAttente = 0;', ctx);
@@ -101,7 +103,7 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
   verifie('« Combien de retard, à peu près ? », quatre choix', carte()._questionnaire.question === 'Combien de retard, à peu près ?' && choixTextes() === '10 minutes | 15 minutes | 30 minutes | Environ 1 heure', choixTextes());
   verifie('« 15 » tapé vaut le bouton « 15 minutes »', await taper('15') === true && enCours().reponses.minutes === '15' && carte()._questionnaire.question === 'Qui prévient Marc Dupont ?', carte()._questionnaire.question);
   await taper('tu les préviens');
-  verifie('le récapitulatif : le retard et l heure d arrivée, « Je préviens Marc Dupont »', carte()._questionnaire.question === 'Voici ce que je vais faire :\n• « Dentiste » (' + quand(iso(0), { startH: 11, startM: 0, endH: 12, endM: 0 }) + ') : environ 15 minutes de retard, arrivée vers 11h15\n• Je préviens Marc Dupont', carte()._questionnaire.question);
+  verifie('le récapitulatif : le retard et l heure d arrivée, « Je préviens Marc Dupont »', carte()._questionnaire.question === 'Voici ce que je vais faire :\n• « Dentiste » (' + quand(iso(0), { startH: 11, startM: 0, endH: 12, endM: 0 }) + ') : environ 15 minutes de retard, arrivée vers 11h15\n• Je préviens Marc Dupont\nLe message : « Bonjour Marc, je te préviens que j\'aurai environ 15 minutes de retard. Merci de ta patience ! Je serai là vers 11h15. »', carte()._questionnaire.question);
   verifie('rien n est parti avant « Oui, vas-y »', trace.envois.length === 0);
   await taper('oui');
   verifie('le message « Je serai en retard » des Paramètres, avec les minutes et la nouvelle heure, part par la messagerie TimeCool', trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont' && /environ 15 minutes de retard/.test(trace.envois[0][1]) && /Je serai là vers 11h15\.$/.test(trace.envois[0][1]) && !/désolé/.test(trace.envois[0][1]), JSON.stringify(trace.envois));
@@ -127,15 +129,25 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
   await taper('je les décale');
   verifie('les créneaux dès demain, autour de « Banque » : Dentiste 9h-10h, Coach 11h-12h', textes().indexOf('« Dentiste » : ' + quand(iso(1), { startH: 9, startM: 0, endH: 10, endM: 0 })) > -1 && textes().indexOf('« Coach » : ' + quand(iso(1), { startH: 11, startM: 0, endH: 12, endM: 0 })) > -1, textes());
   verifie('« Qui prévient Marc Dupont et Sophie Anceau ? » (« et » avant le dernier nom)', carte()._questionnaire.question === 'Qui prévient Marc Dupont et Sophie Anceau ?');
-  await taper('tu les préviens'); await taper('vas-y');
+  await taper('tu les préviens');
+  verifie('(mission 73) le récapitulatif : des créneaux proposés à Marc et à Sophie, le rendez-vous reste à sa place, le message montré',
+    /• Pour « Dentiste », je propose à Marc Dupont le .+ ou deux autres moments ; il reste à sa place jusqu’à la réponse/.test(carte()._questionnaire.question)
+    && /• Pour « Coach », je propose à Sophie Anceau le /.test(carte()._questionnaire.question)
+    && /\nLe message pour Marc : « Bonjour Marc, je dois décaler notre rendez-vous du .*15 octobre à 11h00\. Voici ce que je peux te proposer : » suivi des créneaux à choisir$/.test(carte()._questionnaire.question), carte()._questionnaire.question);
+  await taper('vas-y');
   const bilan3 = dernier();
-  verifie('les deux sont déplacés (même identifiant), Marc prévenu par TimeCool, un bouton « Envoyer à Sophie Anceau », « remets-les »', ctx.events.find((e) => e.id === 'b').date === iso(1) && ctx.events.find((e) => e.id === 'c').date === iso(1) && trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont' && /^C’est fait\.\n• Déplacé : « Dentiste »/.test(dc()) && /• Prévenu par la messagerie TimeCool : Marc Dupont/.test(dc()) && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && bilan3._envois && bilan3._envois.length === 1 && /remets-les/.test(dc()), dc());
-  verifie('le message à Marc : « Je décale » avec l ancienne date et la nouvelle, sans « désolé »', /je dois décaler notre rendez-vous du .*15 octobre à 11h00/.test(trace.envois[0][1]) && /16 octobre à 09h00\.$/.test(trace.envois[0][1]) && !/désolé/.test(trace.envois[0][1]), trace.envois[0][1]);
-  verifie('43b : la marche arrière sait qui a vraiment été prévenu (Marc, pas Sophie)', memoire() && memoire().type === 'deplacement' && JSON.stringify(memoire().prevenus) === '["Marc Dupont"]', JSON.stringify(memoire() && memoire().prevenus));
+  verifie('(mission 73) rien ne bouge : Dentiste et Coach restent à leur place, marqués en attendant la réponse', ctx.events.find((e) => e.id === 'b').date === iso(0) && ctx.events.find((e) => e.id === 'c').date === iso(0)
+    && ctx.events.find((e) => e.id === 'b').decalage && ctx.events.find((e) => e.id === 'c').decalage, JSON.stringify(ctx.events.map((e) => e.id + ':' + e.date)));
+  const pm = trace.propositions[0] || {}, ps = trace.propositions[1] || {};
+  verifie('Marc (TimeCool) : une carte à boutons, d abord demain 9h ; Sophie (SMS) : un lien, d abord demain 11h ; jamais le même créneau aux deux',
+    trace.propositions.length === 2 && pm.reference === 'REF1' && pm.creneaux[0].debut === iso(1) + ' 09:00:00' && ps.canal === 'sms' && ps.creneaux[0].debut === iso(1) + ' 11:00:00'
+    && ps.creneaux.every((x) => !pm.creneaux.some((y) => y.debut === x.debut)), JSON.stringify(trace.propositions.map((p) => p.creneaux.map((c) => c.debut))));
+  verifie('rien n est parti par l ancien chemin ; le bilan : les créneaux, Marc dans sa messagerie, Sophie à envoyer d un geste (bouton avec le lien), pas de « remets-les »',
+    trace.envois.length === 0 && /^C’est fait\.\n• « Dentiste » : je propose à Marc Dupont /.test(dc()) && /• Envoyé dans la messagerie TimeCool : Marc Dupont/.test(dc())
+    && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && /restent à leur place, marqués ⏳/.test(dc())
+    && bilan3._envois && bilan3._envois.length === 1 && / https:\/\/timecool\.fr\/rdv\/ABCD2345$/.test(bilan3._envois[0].texte) && !/remets/.test(dc()), dc());
   await ctx.tcQuestionnaireEnvoyer(bilan3._envoisId, 0);
-  verifie('le bouton touché : Sophie rejoint les contacts prévenus', trace.envois.length === 2 && trace.envois[1][0] === 'Sophie Anceau' && JSON.stringify(memoire().prevenus) === '["Marc Dupont","Sophie Anceau"]', JSON.stringify(memoire().prevenus));
-  await ctx.tcMarcheArriere('remets-les');
-  verifie('« remets-les » : les deux reviennent, et « Pense à prévenir Marc Dupont et Sophie Anceau que c’est maintenu »', ctx.events.find((e) => e.id === 'b').date === iso(0) && /Pense à prévenir Marc Dupont et Sophie Anceau que c'est maintenu/.test(dc()), dc());
+  verifie('le bouton touché : le message de Sophie part par son chemin habituel, avec le lien des créneaux', trace.envois.length === 1 && trace.envois[0][0] === 'Sophie Anceau' && /Voici ce que je peux te proposer : https:\/\/timecool\.fr\/rdv\/ABCD2345$/.test(trace.envois[0][1]), JSON.stringify(trace.envois));
 
   titre('4. Un rendez-vous s ajoute, un rendez-vous précis : « Lequel ? », la place est faite, jamais le week-end');
   reinit();

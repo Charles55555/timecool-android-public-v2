@@ -73,7 +73,7 @@ const ctx = {
   showToast: (m) => jaune.toasts.push(m),
   requestAnimationFrame: (f) => f(),
   tcReperesDuJour: () => [], tcEvenementsDuJour: () => [], tcAppliquerCouleurEvenement: () => {},
-  tcIconeType: () => '', tcHorairePlage: () => '', tcBandeauRepere: () => element(), isCategoryVisible: () => true,
+  tcIconeType: () => '', tcMarqueDecalage: () => '', tcHorairePlage: () => '', tcBandeauRepere: () => element(), isCategoryVisible: () => true,
   tcTirerCacher: () => { jaune.tirerCache = (jaune.tirerCache || 0) + 1; },
   _tirerDepart: { x: 1, y: 1 }, _swipeActive: true,
   tcConfirm: async (m) => { jaune.confirmations.push(m); return ctx._reponseConfirm !== false; },

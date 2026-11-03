@@ -175,7 +175,7 @@ vm.runInContext(page.match(/const TC_TYPES_RDV = \[[\s\S]*?\n\];/)[0], c1);
   verifie('modification : seul un type valide s ecrit ; un ancien rendez-vous ouvert pour changer l heure reste sans type', /if \(champType && tcTypeRdvValide\(champType\.value\)\) e\.type = champType\.value;/.test(fonction(page, 'saveEventEdit') || ''));
   verifie('la categorie du formulaire (« Type » : personnel, santé…) n est pas touchee ; le nouveau champ s appelle « Comment »', /<div class="info-label">Type<\/div>\s*<select id="newEvtType"/.test(page) && /<div class="info-label">Comment<\/div>/.test(page));
   // 4e. Les icones
-  verifie('vue semaine, vue jour et fiche : l icone du type devant le titre', /week-event-title">\$\{tcIconeType\(e\)\}\$\{escapeHTMLSafe\(e\.title\)\}/.test(page) && /day-event-title">\$\{tcIconeType\(e\)\}\$\{escapeHTMLSafe\(e\.title\)\}/.test(page) && /emTitle'\)\.textContent = tcIconeType\(e\) \+ e\.title;/.test(page));
+  verifie('vue semaine, vue jour et fiche : l icone du type devant le titre', /week-event-title">\$\{tcMarqueDecalage\(e\)\}\$\{tcIconeType\(e\)\}\$\{escapeHTMLSafe\(e\.title\)\}/.test(page) && /day-event-title">\$\{tcMarqueDecalage\(e\)\}\$\{tcIconeType\(e\)\}\$\{escapeHTMLSafe\(e\.title\)\}/.test(page) && /emTitle'\)\.textContent = tcMarqueDecalage\(e\) \+ tcIconeType\(e\) \+ e\.title/.test(page));
 
   titre('5. Charly');
   const rx = page.match(/let m1 = line\.match\((\/[^\n]*\/)\);/);

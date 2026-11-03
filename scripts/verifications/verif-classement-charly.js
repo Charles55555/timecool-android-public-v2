@@ -73,7 +73,7 @@ const ctx = {
   _dispoData: {}, loadDispo() {}, showContrainte(touches, label) { ctx._contrainte = { titres: touches.map((e) => e.title), label }; }, tcViderDonneesDuCompte() {}
 };
 vm.createContext(ctx);
-vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcSuppressionChoix = null; let _tcDeplacementEnAttente = null;', ctx);
+vm.runInContext((page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).join('\n') + '\nlet _tcQuestionnaireNumero = 0; var tcModeleMessage = function () { return \'Bonjour [Prénom], je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux te proposer :\'; }; var tcVouvoiement = function () { return false; }; let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcSuppressionChoix = null; let _tcDeplacementEnAttente = null;', ctx);
 ['TC_JOURS_SEMAINE', 'TC_MOIS', 'TC_PROFESSIONS', 'TC_TRAJET_DECLENCHEURS', 'TC_WEB_DECLENCHEURS', 'TC_MOTS_CREUX', 'TC_VERBES_DE_DEMANDE', 'TC_JOURS_FR', 'TC_MOIS_FR', 'TC_PETITS_MOTS', 'TC_TYPES_RDV', 'TC_CONVERSATIONS_KEY'].forEach((c) => {
   const src = extraireConst(c, c === 'TC_MOTS_CREUX' ? "\\.split\\(' '\\)\\);\\n" : (/DECLENCHEURS|PROFESSIONS|VERBES_DE_DEMANDE|PETITS_MOTS|TYPES_RDV/.test(c) ? '\\];\\n' : ';\\n'));
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  constante introuvable : ' + c); }
@@ -90,7 +90,10 @@ vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null
  'tcAppliquerDeplacement', 'tcExecuterDeplacement', '_tcLigneRdv', 'tcRdvDesigne', 'tcRdvVise', 'tcConflitEnAttente', 'tcPropositionEnAttente', 'extractAgendaProposals', 'tcTypeRdvValide',
  'tcGererPrevenance', 'tcReponseValidation', 'tcTypeDansTexte', 'tcHeureCourte', 'tcCiviliteEnTete',
  'tcGererContrainte', 'tcLibererPeriode', 'tcRdvDeLaPeriode', 'tcGererDemandeCreneau', 'tcCreneauxDisponibles', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour', 'tcEvenementFin', 'tcEvenementCouvre', 'tcEstBandeau', 'tcMinutesDeHeure', 'tcSansTempsProtege', 'tcHeureLisible', 'tcJoursFermes',
- 'tcConversations', 'tcRdvNommeIntrouvable'
+ 'tcConversations', 'tcRdvNommeIntrouvable',
+ // Mission 73 : un accord pour le lot, puis des créneaux proposés.
+ 'tcReponseDecalage', 'tcNomsLisibles', 'tcPropositionTexte', 'tcProposerLesCreneaux', 'tcEnvoyerPropositions', 'tcLignesPropositions',
+ 'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcRemplirModele', 'tcValeursDuRdv'
 ].forEach((n) => { const src = extraire(n); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (bloc) vm.runInContext(bloc, ctx);
 if (ko) { console.log(''); console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -393,7 +396,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
   ctx.events = agendaDep(); ctx.charlyIA.history = [];
   await ctx.tcGererDeplacementLocal('déplace le dentiste à mercredi à 10h', ctx.tcDeplacementLocal('déplace le dentiste à mercredi à 10h', new DateFixe()));
   { const d = ctx.charlyIA.history[ctx.charlyIA.history.length - 1]; const att = vm.runInContext('_tcDeplacementEnAttente', ctx);
-    verifie('« déplace le dentiste à mercredi à 10h » (contact Marc Dupont) : « Je déplace : … Veux-tu que je prévienne Marc Dupont … ? », rien n est déplacé avant la réponse', /^Je déplace :\n• « Dentiste » : .*\n\nVeux-tu que je prévienne Marc Dupont, ou as-tu déjà vu le sujet ensemble \?$/.test(d.content) && d.nature === 'question' && att && att.liste.length === 1 && ctx.events.find((e) => e.id === 'dentiste').date === iso(1), d.content); }
+    verifie('« déplace le dentiste à mercredi à 10h » (contact Marc Dupont) : (mission 73) un accord, le nouveau créneau et le message montrés, rien n est déplacé avant la réponse', /^Pour Marc Dupont, je ne déplace rien tout de suite : je lui propose le nouveau créneau \(.+\) et deux autres, et je te demande avant de placer son choix\.\nLe message : « Bonjour Marc, je dois décaler .+ » suivi des créneaux à choisir\.\nJe l’envoie \? Si c’est déjà vu avec cette personne, dis « déjà vu » : je déplace sans prévenir\.$/.test(d.content) && d.nature === 'question' && att && att.liste.length === 1 && ctx.events.find((e) => e.id === 'dentiste').date === iso(1), d.content); }
   verifie('charlySendMessage : le déplacement local passe après « rendez-vous introuvable » et avant la demande de créneau ; tcTraiterDeplacement partage tcExecuterDeplacement', csm.indexOf('const _local = tcDeplacementLocal(text, new Date());') > csm.indexOf('const introuvable = tcRdvNommeIntrouvable(') && csm.indexOf('const _local = tcDeplacementLocal(text, new Date());') < csm.indexOf('const _creneau = detecterDemandeCreneau(text);') && /tcExecuterDeplacement\(liste\);\s+return true;\s+\}/.test(extraire('tcTraiterDeplacement') || ''));
   verifie('charlySendMessage : après « Lequel ? », le rendez-vous désigné passe par le « oui / non » (jamais de suppression immédiate)', /if \(_tcSuppressionChoix\) \{\s+const choisi = tcRdvDesigne\(_tcSuppressionChoix, text\);\s+_tcSuppressionChoix = null;\s+if \(choisi\) \{\s+tcPousserMessageUtilisateur\(text\);[\s\S]{0,200}_tcSuppressionEnAttente = \[choisi\];/.test(csm) && !/tcSupprimerRdvs\(\[choisi\]\)/.test(csm));
   verifie('charlySendMessage : l annulation sans cible passe juste après l annulation ciblée', csm.indexOf('if (tcDetecterSuppressionSansCible(text)) {') > csm.indexOf('if (detecterSuppressionRdv(text)) {') && csm.indexOf('if (tcDetecterSuppressionSansCible(text)) {') < csm.indexOf('const _consultation = detecterConsultationAgenda(text);'));
@@ -722,7 +725,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       && JSON.stringify((ctx.tcDeplacementLocal('Repousse Hugo à la semaine prochaine', new DateFixe()) || {}).liste || []).indexOf('"date":"' + iso(8) + '"') > -1,
       ctx.tcRdvNommeIntrouvable('Repousse Hugo à la semaine prochaine', new DateFixe(), ctx.events, 'user') + ' | ' + JSON.stringify(ctx.tcDeplacementLocal('Repousse Hugo à la semaine prochaine', new DateFixe())));
     { const d = D('Plutôt par téléphone avec Hugo vendredi 11h', RC.R1); await essai('Plutôt par téléphone avec Hugo vendredi 11h', RC.R1);
-      verifie('« Plutôt par téléphone avec Hugo vendredi 11h » → le Café existant passe par téléphone et à 11h (déplacement, question « prévenir ? »), rien n’est créé ni proposé', !!d && d.mode === 'modifier' && d.type === 'telephone' && ctx.events.find((e) => e.id === 'cafe').type === 'telephone' && envois.length === 0 && /^Je déplace :/.test(dernier().content) && ctx.events.length === 4, JSON.stringify(d) + ' | ' + dernier().content); }
+      verifie('« Plutôt par téléphone avec Hugo vendredi 11h » → le Café existant passe par téléphone et à 11h (déplacement, question « prévenir ? »), rien n’est créé ni proposé', !!d && d.mode === 'modifier' && d.type === 'telephone' && ctx.events.find((e) => e.id === 'cafe').type === 'telephone' && envois.length === 0 && /^Pour Hugo Besnard, je ne déplace rien tout de suite/.test(dernier().content) && ctx.events.length === 4, JSON.stringify(d) + ' | ' + dernier().content); }
     vm.runInContext('_tcDeplacementEnAttente = null', ctx);
     ctx.events = agenda().concat([ev('cafe', 'Café', 1, 9, 0, 10, 0, { contact: 'h' })]);
     await essai('Plutôt en visio avec Hugo', RC.R1);
@@ -818,9 +821,9 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       vm.runInContext('_tcDeplacementEnAttente = null', ctx); ctx.events = agenda().concat([ev('cafe', 'Café', 1, 9, 0, 10, 0, { contact: 'h' })]);
       const d2 = D('Plutôt par téléphone avec Hugo à 18h', RC.R1); await essai('Plutôt par téléphone avec Hugo à 18h', RC.R1); const m2 = dernier().content;
       vm.runInContext('_tcDeplacementEnAttente = null', ctx);
-      verifie('(2e passage) « Plutôt par téléphone avec Hugo lundi » → le Café passe par téléphone ET lundi 19 à la même heure (9h, « Je déplace : … ») ; « … à 18h » → le même jour (vendredi 16) à 18h ; jamais « rien d’autre ne change »',
-        !!d1 && d1.mode === 'modifier' && e1.type === 'telephone' && /^Je déplace :/.test(m1) && /2026-10-19|Lundi 19/.test(m1) && /09h|9h/.test(m1) && m1.indexOf('rien d’autre ne change') < 0
-        && !!d2 && d2.mode === 'modifier' && /^Je déplace :/.test(m2) && /18h/.test(m2) && /2026-10-16|Vendredi 16/.test(m2) && m2.indexOf('rien d’autre ne change') < 0, m1 + ' || ' + m2); }
+      verifie('(2e passage) « Plutôt par téléphone avec Hugo lundi » → le Café passe par téléphone ET lundi 19 à la même heure (9h, créneaux proposés à Hugo, mission 73) ; « … à 18h » → le même jour (vendredi 16) à 18h ; jamais « rien d’autre ne change »',
+        !!d1 && d1.mode === 'modifier' && e1.type === 'telephone' && /^Pour Hugo Besnard, je ne déplace rien tout de suite/.test(m1) && /2026-10-19|lundi 19/i.test(m1) && /09h|9h/.test(m1) && m1.indexOf('rien d’autre ne change') < 0
+        && !!d2 && d2.mode === 'modifier' && /^Pour Hugo Besnard, je ne déplace rien tout de suite/.test(m2) && /18h/.test(m2) && /2026-10-16|vendredi 16/i.test(m2) && m2.indexOf('rien d’autre ne change') < 0, m1 + ' || ' + m2); }
     ctx.events = agenda(); envois.length = 0;
     { await essai('Fixe Hugo vendredi 9h et samedi 10h', RC.R1);
       const q = dernier().content, n = envois.length;
@@ -1455,7 +1458,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('la nouvelle place chevauche un autre rendez-vous : la relecture le dit (« À cette heure-là, tu as déjà « Réunion équipe » (14h à 15h). »)', /\n• À cette heure-là, tu as déjà « Réunion équipe » \(14h à 15h\)\.\nRéponds/.test(dernier().content), dernier().content);
     await annonce('le dentiste passe à 17h');
     await ctx.tcRepondreDeplacement('oui');
-    verifie('un rendez-vous avec un contact : après « oui », la question habituelle « Veux-tu que je prévienne Marc Dupont… ? »', /^Je déplace :\n• « Dentiste » : 2026-10-16 17h à 18h\n\nVeux-tu que je prévienne Marc Dupont/.test(dernier().content) && attente() && !attente().confirmer, dernier().content);
+    verifie('un rendez-vous avec un contact : après « oui », la question habituelle (mission 73 : créneaux proposés à Marc Dupont, un accord)', /^Pour Marc Dupont, je ne déplace rien tout de suite : je lui propose le nouveau créneau \(vendredi 16 octobre à 17h\) et deux autres/.test(dernier().content) && attente() && !attente().confirmer, dernier().content);
     const ratesN = [];
     for (const t of ['La réunion est passée à 15h ?', 'Le train est passé à 15h', 'La réunion est passée', 'la réunion est à 15h', 'elle est passée à 15h', 'Hugo est passé à 15h', 'la réunion est passée à la trappe']) { if (await annonce(t)) ratesN.push(t + ' → ' + dernier().content); }
     verifie('une question, un rendez-vous absent (« le train »), « la réunion est passée », « la réunion est à 15h », « elle / Hugo est passé à 15h » : rien ici (le chemin habituel, puis le modèle)', !ratesN.length && ctx.charlyIA.history.length === 0, ratesN.join(' | '));

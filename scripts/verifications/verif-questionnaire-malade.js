@@ -37,7 +37,7 @@ function agenda() {
   ];
 }
 
-const trace = { saves: 0, toasts: [], envois: [], demarches: [], rendus: 0 };
+const trace = { saves: 0, toasts: [], envois: [], demarches: [], rendus: 0, propositions: [] };
 const ctx = {
   console, String, Number, Array, Object, RegExp, Promise, JSON, Math, parseInt, Date: DateFixe,
   mode: 'user', currentPage: 'chat', events: [], charlyIA: { history: [], config: {} },
@@ -54,7 +54,9 @@ const ctx = {
   escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
   // Les autres boutons de charlyQuickAction, hors sujet ici.
   tcDemarrerRdvAPlusieurs() {}, charlyAttachAction() {}, tcPrevenirRetard() {}, tcDemarrerNouveauRdv() {}, tcDemarrerImprevu() {}, startAssistant() {}, tcDemarrerCalculTrajet() {}, charlySendMessage() {},
-  document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null
+  document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null,
+  // Mission 73 : la proposition de créneaux part au serveur.
+  TC_BACKEND: { propositionCreer: async (corps) => { trace.propositions.push(corps); return { rdv_id: trace.propositions.length, url: corps.reference ? null : 'https://timecool.fr/rdv/ABCD2345' }; } }
 };
 vm.createContext(ctx);
 vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null; let _tcImprevuEnAttente = 0; let _tcGroupeEnAttente = 0;', ctx);
@@ -103,14 +105,18 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   verifie('la question « que fait-on ? » est sautée (le bouton disait « décale ») : les créneaux sont proposés, dès demain, dans les plages ouvertes', /Voici ce que je te propose/.test(textes()) && textes().indexOf('« Pharmacie » : ' + quand(iso(1), { startH: 10, startM: 0, endH: 11, endM: 0 })) > -1, textes());
   verifie('puis « Qui prévient Marc Dupont ? », trois choix exacts', carte()._questionnaire.etape === 'prevenir' && carte()._questionnaire.question === 'Qui prévient Marc Dupont ?' && choixTextes() === 'Je préviens les contacts moi-même | Tu les préviens | Personne', carte()._questionnaire.question + ' / ' + choixTextes());
   await cliquer(1);
-  verifie('le récapitulatif : « Voici ce que je vais faire : », le déplacement et la prévenance, boutons « Oui, vas-y » / « Non, j’arrête »', carte()._questionnaire.etape === 'recap' && carte()._questionnaire.question.indexOf('Voici ce que je vais faire :\n• Je décale « Pharmacie » au ' + quand(iso(1), { startH: 10, startM: 0, endH: 11, endM: 0 }) + '\n• Je préviens Marc Dupont') === 0 && choixTextes() === 'Oui, vas-y | Non, j’arrête', carte()._questionnaire.question);
+  verifie('le récapitulatif : « Voici ce que je vais faire : », les créneaux proposés (mission 73), la prévenance, le message montré, boutons « Oui, vas-y » / « Non, j’arrête »', carte()._questionnaire.etape === 'recap'
+    && carte()._questionnaire.question.indexOf('Voici ce que je vais faire :\n• Pour « Pharmacie », je propose à Marc Dupont le ' + quand(iso(1), { startH: 10, startM: 0, endH: 11, endM: 0 }) + ' ou deux autres moments ; il reste à sa place jusqu’à la réponse\n• Je préviens Marc Dupont\nLe message : « Bonjour Marc, ') === 0
+    && / » suivi des créneaux à choisir$/.test(carte()._questionnaire.question) && choixTextes() === 'Oui, vas-y | Non, j’arrête', carte()._questionnaire.question);
   verifie('rien n a encore bougé', ctx.events.find((e) => e.id === 'd').date === iso(0) && trace.saves === 0 && trace.envois.length === 0);
   await cliquer(0);
   const d = ctx.events.find((e) => e.id === 'd');
-  verifie('« Oui, vas-y » : « Pharmacie » est déplacé à demain 10h-11h (même identifiant), sauvegardé, marche arrière possible', d && d.date === iso(1) && d.startH === 10 && d.endH === 11 && trace.saves === 1 && vm.runInContext('_tcMarcheArriere && _tcMarcheArriere.type', ctx) === 'deplacement', JSON.stringify(d));
-  verifie('Marc Dupont prévenu par la mécanique habituelle : le message « Je décale » avec l ancienne date et la nouvelle', trace.envois.length === 1 && trace.envois[0][0] === 'Marc Dupont' && /je dois décaler notre rendez-vous du .*14 octobre à 21h00/.test(trace.envois[0][1]) && /15 octobre à 10h00\.$/.test(trace.envois[0][1]), JSON.stringify(trace.envois));
-  verifie('« C’est fait. Repose-toi. » puis le bilan : déplacé, prévenu (messagerie TimeCool), marche arrière', /^C’est fait\. Repose-toi\./.test(dc()) && /Déplacé : « Pharmacie », /.test(dc()) && /Prévenu par la messagerie TimeCool : Marc Dupont/.test(dc()) && /remets-le »/.test(dc()), dc());
-  verifie('un seul « C’est fait » (pas celui de tcAppliquerDeplacement), pas de toast en double, la démarche est notée', (textes().match(/C.est fait/g) || []).length === 1 && trace.toasts.length === 0 && trace.demarches.length === 1 && /Déplacement/.test(trace.demarches[0]), trace.toasts.join(' / ') + ' ' + trace.demarches.join(' / '));
+  verifie('(mission 73) « Oui, vas-y » : « Pharmacie » reste à sa place (même identifiant), marqué en attendant la réponse de Marc, sauvegardé', d && d.date === iso(0) && d.startH === 21 && d.decalage && d.decalage.rdv === 1 && trace.saves === 1, JSON.stringify(d));
+  const pm = trace.propositions[0] || {};
+  verifie('Marc (TimeCool) reçoit une carte à boutons : d abord demain 10h-11h, puis deux autres moments ; le texte « Je décale » avec l ancienne date', trace.propositions.length === 1 && pm.reference === 'REF1' && pm.remplace === 'd'
+    && pm.creneaux.length === 3 && pm.creneaux[0].debut === iso(1) + ' 10:00:00' && pm.creneaux[0].fin === iso(1) + ' 11:00:00' && /je dois décaler notre rendez-vous du .*14 octobre à 21h00/.test(pm.texte) && trace.envois.length === 0, JSON.stringify(trace.propositions));
+  verifie('« C’est fait. Repose-toi. » puis le bilan : les créneaux proposés, Marc dans sa messagerie, pas de marche arrière (rien n a bougé)', /^C’est fait\. Repose-toi\./.test(dc()) && /• « Pharmacie » : je propose à Marc Dupont /.test(dc()) && /Envoyé dans la messagerie TimeCool : Marc Dupont/.test(dc()) && /restent à leur place, marqués ⏳/.test(dc()) && !/remets/.test(dc()), dc());
+  verifie('un seul « C’est fait », pas de toast', (textes().match(/C.est fait/g) || []).length === 1 && trace.toasts.length === 0, trace.toasts.join(' / '));
   verifie('le questionnaire est terminé', enCours() === null);
 
   titre('3. Rien à décaler : « Rien à décaler … Repose-toi. » et le questionnaire s arrête');
@@ -162,7 +168,7 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   await ctx.tcDemarrerMalade('je suis malade demain, décale tout');
   verifie('les créneaux s enchaînent après-demain autour de « Banque » : Réunion 9h-10h, Dentiste 11h-12h30', textes().indexOf('« Réunion » : ' + quand(iso(2), { startH: 9, startM: 0, endH: 10, endM: 0 })) > -1 && textes().indexOf('« Dentiste » : ' + quand(iso(2), { startH: 11, startM: 0, endH: 12, endM: 30 })) > -1, textes());
   await taper('tu les préviens'); await taper('vas-y');
-  verifie('« Dentiste » sans contact n empêche rien : les deux déplacés ; Sophie (SMS) : rien d ouvert dans la boucle, un bouton « Envoyer à Sophie Anceau » dans le bilan', trace.envois.length === 0 && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 2 && dernier()._envois && dernier()._envois.length === 1 && /✉️ Envoyer à Sophie Anceau</.test(ctx.tcRendreBilanQuestionnaire(dernier())), dc());
+  verifie('« Dentiste » sans contact est déplacé ; Réunion (Sophie, SMS) reçoit des créneaux par un lien : rien d ouvert dans la boucle, un bouton « Envoyer à Sophie Anceau » dans le bilan', trace.envois.length === 0 && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 1 && /• « Réunion » : je propose à Sophie Anceau /.test(dc()) && dernier()._envois && dernier()._envois.length === 1 && /✉️ Envoyer à Sophie Anceau</.test(ctx.tcRendreBilanQuestionnaire(dernier())), dc());
 
   reinit([ev('d', 'Pharmacie', 0, 21, 0, 22, 0, { contact: 'c1' })]);
   await ctx.tcDemarrerMalade('je suis malade'); await taper('1');
@@ -208,11 +214,12 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   await ctx.tcDemarrerMalade('je suis malade demain, décale tout');
   await taper('tu les préviens'); await taper('oui');
   const bilan = dernier();
-  verifie('Sophie (SMS) et Paul (email) : tcTransmettrePrevenance n est pas appelée dans la boucle, les deux sont déplacés', trace.envois.length === 0 && (dc().match(/• Déplacé : /g) || []).length === 2, dc());
+  verifie('Sophie (SMS) et Paul (email) : tcTransmettrePrevenance n est pas appelée dans la boucle ; les deux rendez-vous restent à leur place, chacun reçoit des créneaux par un lien (mission 73)', trace.envois.length === 0 && (dc().match(/• Déplacé : /g) || []).length === 0
+    && /• « Réunion » : je propose à Sophie Anceau /.test(dc()) && /• « Kiné » : je propose à Paul Martin /.test(dc()) && trace.propositions.slice(-2).map((p) => p.canal).join() === 'sms,email', dc());
   verifie('le bilan le dit : « Message prêt, à envoyer toi-même d’un geste (SMS ou email) : Sophie Anceau et Paul Martin »', /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau et Paul Martin/.test(dc()) && !/Message prêt à envoyer/.test(dc()), dc());
-  verifie('deux boutons « Envoyer à … », un par message, avec le téléphone ou l email et le texte prêt', bilan._envois && bilan._envois.length === 2 && bilan._envois[0].nom === 'Sophie Anceau' && bilan._envois[0].phone === '06' && bilan._envois[1].nom === 'Paul Martin' && bilan._envois[1].email === 'paul@exemple.fr' && /je dois décaler notre rendez-vous du .*15 octobre à 09h00/.test(bilan._envois[0].texte) && /16 octobre à 09h00\.$/.test(bilan._envois[0].texte) && /15 octobre à 11h00/.test(bilan._envois[1].texte), JSON.stringify(bilan._envois));
+  verifie('deux boutons « Envoyer à … », un par message, avec le téléphone ou l email et le texte prêt', bilan._envois && bilan._envois.length === 2 && bilan._envois[0].nom === 'Sophie Anceau' && bilan._envois[0].phone === '06' && bilan._envois[1].nom === 'Paul Martin' && bilan._envois[1].email === 'paul@exemple.fr' && /je dois décaler notre rendez-vous du .*15 octobre à 09h00\. Voici ce que je peux te proposer : https:\/\/timecool\.fr\/rdv\/ABCD2345$/.test(bilan._envois[0].texte) && /15 octobre à 11h00/.test(bilan._envois[1].texte), JSON.stringify(bilan._envois));
   const rendu9 = ctx.tcRendreBilanQuestionnaire(bilan);
-  verifie('le rendu : les lignes du bilan puis deux boutons actifs « ✉️ Envoyer à Sophie Anceau » / « ✉️ Envoyer à Paul Martin »', (rendu9.match(/<button onclick="tcQuestionnaireEnvoyer\('env\d+-\d+', \d\)"/g) || []).length === 2 && /✉️ Envoyer à Sophie Anceau<\/button>/.test(rendu9) && /✉️ Envoyer à Paul Martin<\/button>/.test(rendu9) && /C’est fait\. Repose-toi\.<br>• Déplacé/.test(rendu9), rendu9.slice(-400));
+  verifie('le rendu : les lignes du bilan puis deux boutons actifs « ✉️ Envoyer à Sophie Anceau » / « ✉️ Envoyer à Paul Martin »', (rendu9.match(/<button onclick="tcQuestionnaireEnvoyer\('env\d+-\d+', \d\)"/g) || []).length === 2 && /✉️ Envoyer à Sophie Anceau<\/button>/.test(rendu9) && /✉️ Envoyer à Paul Martin<\/button>/.test(rendu9) && /C’est fait\. Repose-toi\.<br>• « Réunion » : je propose à Sophie Anceau/.test(rendu9), rendu9.slice(-400));
   await ctx.tcQuestionnaireEnvoyer(bilan._envoisId, 1);
   verifie('« Envoyer à Paul Martin » touché : le chemin habituel (tcTransmettrePrevenance) avec le nom, l email et le texte ; le bouton le dit et s éteint, l autre reste actif', trace.envois.length === 1 && trace.envois[0][0] === 'Paul Martin' && trace.envois[0][1] === bilan._envois[1].texte && bilan._envois[1].fait === 'email' && (ctx.tcRendreBilanQuestionnaire(bilan).match(/<button disabled onclick="tcQuestionnaireEnvoyer\('env\d+-\d+', 1\)"[^>]*>✅ Message prêt pour Paul Martin<\/button>/) || []).length === 1 && /<button onclick="tcQuestionnaireEnvoyer\('env\d+-\d+', 0\)"/.test(ctx.tcRendreBilanQuestionnaire(bilan)), JSON.stringify(trace.envois));
   await ctx.tcQuestionnaireEnvoyer(bilan._envoisId, 1);

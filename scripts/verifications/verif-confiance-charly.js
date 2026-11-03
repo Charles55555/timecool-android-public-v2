@@ -1,0 +1,198 @@
+// « Ma confiance en Charly » et les propositions de créneaux (mission 73, chef, 03/11, ok de Charles).
+//
+// 73a : le réglage (premier bloc des Paramètres, caché derrière TC_CONFIANCE_VISIBLE tant que les trois profils ne sont pas
+// faits ; profil 1 au départ ; clé de compte synchronisée) et le profil 1. Un rendez-vous qui concerne un contact ne se
+// déplace plus d'office : Charly propose 2 ou 3 créneaux (carte à boutons chez un contact TimeCool, lien sinon), le
+// rendez-vous reste en place, marqué ⏳, et chaque réponse demande un accord avant d'écrire dans l'agenda. « Aucun ne me
+// va » ou pas de réponse sous 24 h : Charly le dit et propose la suite.
+// Usage : node verif-confiance-charly.js <index.html>
+const fs = require('fs');
+const vm = require('vm');
+
+const page = fs.readFileSync(process.argv[2], 'utf8');
+let ko = 0, ok = 0;
+function verifie(l, c, d) {
+  if (c) ok++; else ko++;
+  console.log('  ' + (c ? 'OK ' : 'KO ') + l + (d !== undefined && !c ? '  - ' + String(d).replace(/\s*\n\s*/g, ' ').slice(0, 400) : ''));
+}
+function titre(t) { console.log(''); console.log('-- ' + t + ' --'); }
+function extraire(nom) {
+  let debut = page.indexOf('function ' + nom + '(');
+  if (debut < 0) return null;
+  if (page.slice(debut - 6, debut) === 'async ') debut -= 6;
+  let n = 0;
+  for (let j = page.indexOf('{', debut); j < page.length; j++) {
+    if (page[j] === '{') n++;
+    else if (page[j] === '}') { n--; if (n === 0) return page.slice(debut, j + 1); }
+  }
+  return null;
+}
+
+titre('0. La page');
+const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcMinutesLisibles', 'tcPropositionLibelle', 'tcNomsLisibles',
+  'tcCreneauxPourDecalage', 'tcPropositionTexte', 'tcHeureSql', 'tcEnvoyerPropositions', 'tcLignesPropositions', 'tcProposerLesCreneaux',
+  'tcDireBilanPropositions', 'tcReponseDecalage', 'tcRdvDeProposition', 'tcCreneauDeProposition', 'tcReponseCreneauEnAttente',
+  'tcPoserReponseCreneau', 'tcSuivrePropositions', 'tcRepondreReponseCreneau', 'tcChoisirReponseCreneau', 'tcExecuterReponseCreneau',
+  'tcRendreReponseCreneau', 'tcPropositionRecue', 'tcCadrePropositionCreneaux', 'tcRepondreProposition', 'tcMarqueDecalage'];
+const absentes = noms.filter((n) => !extraire(n));
+verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
+if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
+verifie('le bloc est caché tant que les trois profils ne sont pas faits (TC_CONFIANCE_VISIBLE = false), en tête des Paramètres, avant « Sauvegarde & Restauration »',
+  /const TC_CONFIANCE_VISIBLE = false;/.test(page) && /function renderSettingsInterne\(\) \{\s+document\.getElementById\('settingsContent'\)\.innerHTML = `\s+\$\{TC_CONFIANCE_VISIBLE \? tcBlocConfiance\(\) : ''\}\s+<div[^>]*>\s+<div[^>]*>💾 Sauvegarde & Restauration/.test(page));
+verifie('la clé tc_confiance_charly suit le compte (synchronisée : absente de TC_JAMAIS_TRANSFERE)', /var TC_CONFIANCE_KEY = 'tc_confiance_charly';/.test(page) && !/TC_JAMAIS_TRANSFERE = \[[^\]]*tc_confiance_charly/.test(page));
+const csm = extraire('charlySendMessage') || '';
+const iRep = csm.indexOf('await tcRepondreReponseCreneau(text)) return;');
+verifie('« je le place ? » : la réponse est lue avant « J’envoie ? » et avant le classement', iRep > -1 && iRep < csm.indexOf('await tcRepondreEnvoi(text)) return;') && iRep < csm.indexOf('const _classe = tcClasserMessage(text, charlyIA.history);'));
+verifie('la question à boutons a son rendu ; la carte du contact est dans la conversation', /if \(m && m\._reponseCreneau\) return tcRendreReponseCreneau\(m\);/.test(page) && /if \(propositionRecue\) body\.innerHTML \+= tcCadrePropositionCreneaux\(propositionRecue, msg\.with\);/.test(page));
+verifie('la pastille ⏳ : vue semaine, vue jour (« en cours de décalage »), fiche', /week-event-title">\$\{tcMarqueDecalage\(e\)\}/.test(page) && /\$\{tcMarqueDecalage\(e\) \? ' · en cours de décalage' : ''\}/.test(page) && /textContent = tcMarqueDecalage\(e\) \+ tcIconeType\(e\) \+ e\.title/.test(page));
+verifie('plus de fenêtre de confirmation par contact pour un décalage (tcPrevenirDecalages a disparu)', page.indexOf('function tcPrevenirDecalages(') < 0 && page.indexOf("tcConfirm('Prévenir ' + c.name") < 0);
+verifie('la sonde des réponses : toutes les 30 s, seulement si une proposition attend et que l application est visible', /setInterval\(function \(\) \{ if \(typeof document === 'undefined' \|\| !document\.hidden\) tcSuivrePropositions\(false\); \}, TC_PROPOSITION_SONDE_MS\);/.test(page) && /const TC_PROPOSITION_SONDE_MS = 30000;/.test(page));
+verifie('pas de tiret long dans le bloc, pas d assertion arrière dans la page', !/—/.test(page.slice(page.indexOf('PROPOSITIONS DE CRÉNEAUX DE CHARLY'), page.indexOf('/** Un contact vraiment prévenu'))) && !/\(\?<[=!]/.test(page));
+
+/* Horloge fixée : jeudi 15 octobre 2026, 10h00. */
+const FIXE = new Date(2026, 9, 15, 10, 0, 0);
+class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); } static now() { return FIXE.getTime(); } }
+const iso = (n) => { const d = new Date(2026, 9, 15 + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const stock = {};
+const trace = { syncs: 0, saves: 0, toasts: [], creees: [], traitees: [], choisies: [], deplaces: [] };
+let reponses = [];
+const ctx = {
+  console, Date: DateFixe, mode: 'user', currentPage: 'assistant', events: [], charlyIA: { history: [] },
+  contactsList: [{ id: 'c1', name: 'Paul Martin', referenceCompte: 'REFP' }, { id: 'c2', name: 'Chloé Roux', phone: '06' }],
+  localStorage: { getItem: (k) => (k in stock ? stock[k] : null), setItem: (k, v) => { stock[k] = String(v); } },
+  document: { getElementById: () => null, hidden: false },
+  tcSyncBientot() { trace.syncs++; }, saveEventsToStorage() { trace.saves++; }, render() {}, renderCharlyChat() {}, showToast(t) { trace.toasts.push(t); },
+  tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); },
+  tcModeleMessage: () => 'Bonjour [Prénom], je dois décaler notre rendez-vous du [date] à [heure]. Voici ce que je peux te proposer :',
+  tcVouvoiement: () => false,
+  escapeHTMLSafe: (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
+  tcBulleCharly: (x) => '<bulle>' + x + '</bulle>',
+  _tcLigneRdv: (e) => '« ' + e.title + ' »',
+  tcAppliquerDeplacement(liste) { liste.forEach((x) => { Object.assign(x.ev, { date: x.p.date, startH: x.p.startH, startM: x.p.startM, endH: x.p.endH, endM: x.p.endM }); trace.deplaces.push(x.ev.id); }); ctx.charlyIA.history.push({ role: 'system_info', content: 'C’est fait, rendez-vous déplacé' }); },
+  tcSyncTour: async () => {}, openConversation() {}, _currentConvId: null,
+  setTimeout: () => 0,
+  TC_BACKEND: {
+    estConnecte: () => true,
+    propositions: async () => reponses.slice(),
+    propositionTraiter: async (id) => { trace.traitees.push(id); reponses = reponses.filter((p) => p.rdv_id !== id); return { traite: true }; },
+    propositionCreer: async (corps) => { trace.creees.push(corps); return { rdv_id: 100 + trace.creees.length, url: corps.reference ? null : 'https://timecool.fr/rdv/ABCD2345' }; },
+    propositionChoisir: async (rdv, rang) => { trace.choisies.push([rdv, rang]); if (rang === 9) { const e = new Error('pris'); e.code = 'creneau_pris'; throw e; } if (rang === 8) { const e = new Error('deja'); e.code = 'deja_repondu'; throw e; } return { enregistre: true }; }
+  }
+};
+vm.createContext(ctx);
+const constantes = (page.match(/^const TC_(PROPOSITION_[A-Z_]+|CONFIANCE_VISIBLE) = [^;\n]+;$/gm) || []).join('\n');
+const profils = (page.match(/const TC_CONFIANCE_PROFILS = \[[\s\S]*?\n\];/) || [''])[0];
+vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; var _tcPropositionsRepondues = {};\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
+  + ['tcSansAccents', 'tcISO', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre']
+    .concat(noms).map(extraire).join('\n'), ctx);
+
+titre('1. Le réglage « Ma confiance en Charly »');
+verifie('profil 1 au départ, pour tout compte ; une valeur illisible vaut 1', ctx.tcConfianceCharly() === 1 && (stock.tc_confiance_charly = 'x', ctx.tcConfianceCharly() === 1) && (delete stock.tc_confiance_charly, true));
+const bloc = ctx.tcBlocConfiance();
+const texte = bloc.replace(/<[^>]+>/g, '|').replace(/\|+/g, '|');
+verifie('titre « 🤝 MA CONFIANCE EN CHARLY » (en capitales à l écran) et sous-titre « Jusqu’où Charly peut agir sans moi ? »', /\|🤝 Ma confiance en Charly\|/.test(texte) && /text-transform:uppercase/.test(bloc) && /\|Jusqu’où Charly peut agir sans moi \?\|/.test(texte), texte.slice(0, 200));
+verifie('les trois profils, textes exacts, chacun avec sa phrase grise', texte.indexOf('|Charly attend ma validation à chaque étape avant de passer à la suivante.|Pour te rassurer : tu vois tout, tu décides tout.|') > -1
+  && texte.indexOf('|Charly réalise toutes les étapes et attend ma validation pour la dernière, avant d’écrire dans mon agenda.|Quand tu seras rassuré : il travaille, tu gardes le dernier mot.|') > -1
+  && texte.indexOf('|Charly valide seul toutes les étapes et me laisse travailler tranquillement.|Quand tu seras convaincu de ses compétences : il fait tout et te fait un compte rendu.|') > -1, texte);
+verifie('un seul choix possible (radiogroup), le profil 1 sélectionné', (bloc.match(/role="radio" aria-checked="true"/g) || []).length === 1 && /aria-checked="true" onclick="tcChoisirConfiance\(1\)"/.test(bloc));
+ctx.tcChoisirConfiance(2);
+verifie('choisir le profil 2 : enregistré dans la clé du compte, synchronisé, sélectionné', stock.tc_confiance_charly === '2' && trace.syncs === 1 && ctx.tcConfianceCharly() === 2 && /aria-checked="true" onclick="tcChoisirConfiance\(2\)"/.test(ctx.tcBlocConfiance()));
+ctx.tcChoisirConfiance(7);
+verifie('une valeur hors des trois est ignorée', stock.tc_confiance_charly === '2' && trace.syncs === 1);
+delete stock.tc_confiance_charly;
+
+titre('2. Les créneaux proposés');
+const ev = (id, title, jour, h, m, hf, mf, extra) => Object.assign({ id, title, date: iso(jour), startH: h, startM: m, endH: hf, endM: mf, mode: 'user' }, extra || {});
+ctx.events = [ev('a', 'Avocat', 0, 15, 0, 16, 0, { contact: 'c1' }), ev('o', 'Occupé', 1, 12, 0, 13, 30), ev('p', 'Pro', 1, 14, 0, 15, 0, { mode: 'pro' })];
+let cr = ctx.tcCreneauxPourDecalage(ctx.events[0], { date: iso(1), startH: 10, startM: 0, endH: 11, endM: 0 }, []);
+verifie('d abord le créneau prévu, puis deux autres libres de même durée, à deux heures d écart au moins, sans chevaucher « Occupé » 12h-13h30 (l agenda pro ne compte pas)',
+  cr.map((c) => c.date + ' ' + c.startH + ':' + c.startM + '-' + c.endH + ':' + c.endM).join(' | ') === iso(1) + ' 10:0-11:0 | ' + iso(1) + ' 13:30-14:30 | ' + iso(1) + ' 15:30-16:30', JSON.stringify(cr));
+cr = ctx.tcCreneauxPourDecalage(ctx.events[0], null, [], null);
+verifie('sans créneau prévu : dès maintenant (10h, pas avant), le rendez-vous lui-même ne gêne pas', cr[0].date === iso(0) && cr[0].startH === 10 && cr.every((c) => c.startH >= 8 && c.endH <= 19), JSON.stringify(cr));
+cr = ctx.tcCreneauxPourDecalage(ctx.events[0], null, [{ date: iso(0), debut: 600, fin: 900 }], null);
+verifie('un créneau déjà proposé à un autre est évité', cr[0].date === iso(0) && cr[0].startH === 15, JSON.stringify(cr));
+verifie('« mardi 20 octobre à 10h30 » : le libellé', ctx.tcPropositionLibelle({ date: '2026-10-20', startH: 10, startM: 30 }) === 'mardi 20 octobre à 10h30');
+verifie('« déjà vu » / « oui » / « non » / autre chose', ctx.tcReponseDecalage('c’est déjà réglé avec eux') === 'vu' && ctx.tcReponseDecalage('ok') === 'envoyer' && ctx.tcReponseDecalage('non merci') === 'non' && ctx.tcReponseDecalage('et demain ?') === null);
+
+titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’un geste ; le rendez-vous est marqué');
+(async () => {
+  ctx.events = [ev('a', 'Avocat', 0, 15, 0, 16, 0, { contact: 'c1' }), ev('k', 'Kiné', 0, 17, 0, 18, 0, { contact: 'c2' })];
+  const env = await ctx.tcProposerLesCreneaux([{ ev: ctx.events[0], p: { date: iso(1), startH: 9, startM: 0, endH: 10, endM: 0 } }, { ev: ctx.events[1], p: { date: iso(1), startH: 10, startM: 0, endH: 11, endM: 0 } }]);
+  const [cp, cc] = trace.creees;
+  verifie('Paul : sa référence, le rendez-vous remplacé, le texte « Je décale », 3 créneaux avec libellés', cp.reference === 'REFP' && cp.remplace === 'a' && cp.titre === 'Avocat' && /^Bonjour Paul, je dois décaler notre rendez-vous du jeudi 15 octobre à 15h00\. Voici ce que je peux te proposer :$/.test(cp.texte)
+    && cp.creneaux.length === 3 && cp.creneaux[0].debut === iso(1) + ' 09:00:00' && cp.creneaux[0].libelle === 'vendredi 16 octobre à 9h', JSON.stringify(cp));
+  verifie('Chloé (sans TimeCool) : un lien par SMS, son prénom ; jamais le créneau prévu pour Paul', !cc.reference && cc.canal === 'sms' && cc.prenom_destinataire === 'Chloé' && cc.creneaux[0].debut === iso(1) + ' 10:00:00' && cc.creneaux.every((x) => !cp.creneaux.some((y) => y.debut === x.debut)), JSON.stringify(cc));
+  verifie('les deux rendez-vous restent à leur place, marqués (⏳ sur la carte)', ctx.events[0].date === iso(0) && ctx.events[0].decalage.rdv === 101 && ctx.events[1].decalage.rdv === 102 && ctx.tcMarqueDecalage(ctx.events[0]) === '⏳ ' && ctx.tcMarqueDecalage({}) === '');
+  verifie('le bilan dit ce qui part et ce qui reste à envoyer soi-même, sans rien promettre de plus', env.lignes.join('\n') === '• « Avocat » : je propose à Paul Martin vendredi 16 octobre à 9h, vendredi 16 octobre à 11h ou vendredi 16 octobre à 13h\n• « Kiné » : je propose à Chloé Roux vendredi 16 octobre à 10h, vendredi 16 octobre à 12h ou vendredi 16 octobre à 14h\n• Envoyé dans la messagerie TimeCool : Paul Martin\n• Message prêt avec le lien des créneaux, à envoyer toi-même d’un geste (SMS ou email) : Chloé Roux\nCes rendez-vous restent à leur place, marqués ⏳, jusqu’à la réponse. Quand elle arrive, je te demande avant de l’écrire dans ton agenda.', env.lignes.join(' / '));
+  verifie('le bouton « Envoyer à Chloé Roux » porte le texte et le lien', env.res.envois.length === 1 && env.res.envois[0].texte === cc.texte + ' https://timecool.fr/rdv/ABCD2345' && env.res.envois[0].titre === '');
+  ctx.contactsList.push({ id: 'c3', name: 'Zoé Sans' });
+  ctx.events.push(ev('z', 'Zumba', 2, 9, 0, 10, 0, { contact: 'c3' }));
+  const ctxBackend = ctx.TC_BACKEND.propositionCreer;
+  ctx.TC_BACKEND.propositionCreer = async () => { throw new Error('réseau'); };
+  const env2 = await ctx.tcProposerLesCreneaux([{ ev: ctx.events[2], p: null }, { ev: ctx.events[0], p: null }]);
+  ctx.TC_BACKEND.propositionCreer = ctxBackend;
+  verifie('sans numéro ni email : rien ne part, c est dit ; connexion manquée : c est dit, le rendez-vous n est pas marqué', /Sans numéro ni email dans ta fiche contact, rien n’est parti : Zoé Sans/.test(env2.lignes.join('\n')) && /Pas envoyé, la connexion a manqué : Paul Martin/.test(env2.lignes.join('\n')) && !ctx.events[2].decalage, env2.lignes.join(' / '));
+
+  titre('4. La réponse revient : un accord avant d’écrire (profil 1), une à la fois');
+  ctx.charlyIA.history = [];
+  ctx.events = [ev('a', 'Avocat', 0, 15, 0, 16, 0, { contact: 'c1', decalage: { rdv: 101 } }), ev('k', 'Kiné', 0, 17, 0, 18, 0, { contact: 'c2', decalage: { rdv: 102 } })];
+  reponses = [
+    { rdv_id: 101, titre: 'Avocat', remplace: 'a', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', debut: iso(1) + ' 11:00:00', fin: iso(1) + ' 12:00:00' },
+    { rdv_id: 102, titre: 'Kiné', remplace: 'k', etat: 'refuse', qui: 'Chloé', reference: null, debut: null, fin: null }
+  ];
+  await ctx.tcSuivrePropositions(false);
+  let q = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+  verifie('« Paul Martin a choisi vendredi 16 octobre à 11h pour « Avocat ». Je le place dans ton agenda ? », deux boutons', q && q.content === 'Paul Martin a choisi vendredi 16 octobre à 11h pour « Avocat ». Je le place dans ton agenda ?' && q.nature === 'question'
+    && /tcChoisirReponseCreneau\(101, 'placer'\)"[^>]*>Oui, place-le</.test(ctx.tcRendreReponseCreneau(q)) && /tcChoisirReponseCreneau\(101, 'laisser'\)"[^>]*>Non, je le laisse où il est</.test(ctx.tcRendreReponseCreneau(q)), q && q.content);
+  await ctx.tcSuivrePropositions(false);
+  verifie('une à la fois : tant que la question attend, la suivante ne vient pas', ctx.charlyIA.history.length === 1);
+  verifie('rien n est écrit avant l accord', ctx.events[0].date === iso(0) && trace.deplaces.length === 0);
+  verifie('« quel temps fait-il » ne répond pas à la question', await ctx.tcRepondreReponseCreneau('quel temps fait-il') === false);
+  verifie('« oui » tapé : placé à 11h-12h (même rendez-vous), plus de pastille, la proposition est close sur le serveur', await ctx.tcRepondreReponseCreneau('oui') === true && ctx.events[0].date === iso(1) && ctx.events[0].startH === 11 && ctx.events[0].endH === 12 && !ctx.events[0].decalage && trace.traitees.join() === '101' && !/place-le/.test(ctx.tcRendreReponseCreneau(q)));
+  await ctx.tcSuivrePropositions(false);
+  q = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+  verifie('la suivante : « Chloé n’a choisi aucun des créneaux proposés pour « Kiné ». Je propose d’autres moments, ou je laisse le rendez-vous à sa place ? »', q.content === 'Chloé n’a choisi aucun des créneaux proposés pour « Kiné ». Je propose d’autres moments, ou je laisse le rendez-vous à sa place ?'
+    && /Propose d’autres moments/.test(ctx.tcRendreReponseCreneau(q)) && /Je le laisse à sa place/.test(ctx.tcRendreReponseCreneau(q)), q.content);
+  verifie('« oui » seul ne tranche pas entre les deux : la phrase suit son chemin', await ctx.tcRepondreReponseCreneau('oui') === false);
+  const avant = trace.creees.length;
+  await ctx.tcChoisirReponseCreneau(102, 'autres');
+  const nouvelle = trace.creees[trace.creees.length - 1];
+  verifie('« Propose d’autres moments » : une nouvelle proposition à Chloé, dès demain, le rendez-vous reste marqué ; l ancienne est close', trace.creees.length === avant + 1 && nouvelle.remplace === 'k' && nouvelle.creneaux[0].debut >= iso(1) && ctx.events[1].date === iso(0) && ctx.events[1].decalage && ctx.events[1].decalage.rdv === 100 + trace.creees.length && trace.traitees.join() === '101,102', JSON.stringify(nouvelle));
+  reponses = [{ rdv_id: 103, titre: 'Kiné', remplace: 'k', etat: 'sans_reponse', qui: 'Chloé', debut: null, fin: null }];
+  await ctx.tcSuivrePropositions(false);
+  q = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+  verifie('pas de réponse sous 24 h : « Chloé n’a pas répondu depuis 24 h pour « Kiné ». … »', /^Chloé n’a pas répondu depuis 24 h pour « Kiné »\. Je propose d’autres moments, ou je laisse le rendez-vous à sa place \?$/.test(q.content), q.content);
+  verifie('« laisse-le » : le rendez-vous reste, la pastille part, c est dit', await ctx.tcRepondreReponseCreneau('laisse-le') === true && ctx.events[1].date === iso(0) && !ctx.events[1].decalage && /« Kiné » reste à sa place\.$/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content));
+  reponses = [{ rdv_id: 104, titre: 'Dentiste', remplace: 'disparu', etat: 'choisi', qui: 'Paul Martin', debut: iso(2) + ' 09:00:00', fin: iso(2) + ' 10:00:00' }];
+  ctx.events.push(ev('x', 'Marqué', 3, 9, 0, 10, 0, { decalage: { rdv: 999 } }));
+  await ctx.tcSuivrePropositions(false);
+  await ctx.tcRepondreReponseCreneau('oui');
+  verifie('le rendez-vous d origine n est plus dans l agenda : rien n est placé, c est dit', /« Dentiste » n’est plus dans ton agenda : je n’ai rien placé\.$/.test(ctx.charlyIA.history[ctx.charlyIA.history.length - 1].content));
+  const n = ctx.charlyIA.history.length;
+  reponses = [{ rdv_id: 104, titre: 'Dentiste', remplace: 'disparu', etat: 'choisi', qui: 'Paul Martin', debut: iso(2) + ' 09:00:00', fin: iso(2) + ' 10:00:00' }];
+  await ctx.tcSuivrePropositions(true);
+  verifie('une réponse déjà montrée n est jamais reposée', ctx.charlyIA.history.length === n);
+  ctx.events = [];
+  let appels = 0; const avantProp = ctx.TC_BACKEND.propositions; ctx.TC_BACKEND.propositions = async () => { appels++; return []; };
+  await ctx.tcSuivrePropositions(false);
+  verifie('la sonde ne coûte rien quand aucune proposition n attend (aucun appel)', appels === 0);
+  ctx.TC_BACKEND.propositions = avantProp;
+
+  titre('5. Chez le contact : la carte à boutons');
+  const msg = { serveur: true, thread: [{ from: 'them', genre: 'proposition_creneaux', rdv: 7, texte: 'x', creneaux: [{ rang: 1, debut: iso(1) + ' 09:00:00', libelle: 'vendredi 16 octobre à 9h' }, { rang: 2, debut: iso(1) + ' 14:00:00', libelle: 'vendredi 16 octobre à 14h' }] }] };
+  const p = ctx.tcPropositionRecue(msg);
+  verifie('la proposition reçue est trouvée ; celle qu on a envoyée (from me) ou une conversation locale, non', p && p.rdv === 7 && !ctx.tcPropositionRecue({ serveur: true, thread: [Object.assign({}, msg.thread[0], { from: 'me' })] }) && !ctx.tcPropositionRecue({ thread: msg.thread }));
+  const carte = ctx.tcCadrePropositionCreneaux(p, 'Inès Martin');
+  verifie('« 📅 Inès te propose un autre moment », un bouton par créneau, « Aucun ne me va »', /📅 Inès te propose un autre moment/.test(carte) && /onclick="tcRepondreProposition\(7, 1\)">vendredi 16 octobre à 9h</.test(carte) && /onclick="tcRepondreProposition\(7, 2\)">vendredi 16 octobre à 14h</.test(carte) && /onclick="tcRepondreProposition\(7, -1\)">Aucun ne me va</.test(carte), carte);
+  await ctx.tcRepondreProposition(7, 2);
+  verifie('touché : le choix part au serveur, la carte le dit (plus de boutons)', trace.choisies.join('|') === '7,2' && /✅ Tu as choisi : vendredi 16 octobre à 14h\. Inès reçoit ta réponse\./.test(ctx.tcCadrePropositionCreneaux(p, 'Inès Martin')) && !/<button/.test(ctx.tcCadrePropositionCreneaux(p, 'Inès Martin')));
+  verifie('le choix déjà enregistré par le serveur (autre appareil) : pas de boutons', /✅ Tu as répondu qu’aucun de ces moments ne te va\./.test(ctx.tcCadrePropositionCreneaux(Object.assign({}, p, { rdv: 8, choix: -1 }), 'Inès')));
+  await ctx.tcRepondreProposition(9, 9);
+  verifie('créneau pris entre-temps : « choisis-en un autre », les boutons restent', /Ce créneau vient d’être pris/.test(trace.toasts[trace.toasts.length - 1]) && /<button/.test(ctx.tcCadrePropositionCreneaux(Object.assign({}, p, { rdv: 9 }), 'Inès')));
+  await ctx.tcRepondreProposition(10, 8);
+  verifie('déjà répondu : la carte le dit', /Cette proposition a déjà reçu une réponse\./.test(ctx.tcCadrePropositionCreneaux(Object.assign({}, p, { rdv: 10 }), 'Inès')));
+
+  console.log('');
+  console.log(ko ? ko + ' anomalie(s).' : ok + ' vérifications, aucune anomalie.');
+  process.exit(ko ? 1 : 0);
+})().catch((e) => { console.log('  KO exception ' + e.stack); console.log((ko + 1) + ' anomalie(s).'); process.exit(1); });

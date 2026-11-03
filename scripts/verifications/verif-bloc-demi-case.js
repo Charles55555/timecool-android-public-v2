@@ -40,7 +40,7 @@ const ctx = {
   document: doc, requestAnimationFrame: (f) => f(), currentLanguage: 'fr', mode: 'user',
   agendaStartH: 8, agendaEndH: 19, today: new Date(2026, 9, 7), viewDate: new Date(2026, 9, 7), events: [],
   tcReperesDuJour: () => [], tcEvenementsDuJour: () => [], tcAppliquerCouleurEvenement: () => {},
-  tcIconeType: () => '', tcHorairePlage: (e) => e.startH + 'h-' + e.endH + 'h' + (e.endM ? e.endM : ''), tcBandeauRepere: () => element(),
+  tcIconeType: () => '', tcMarqueDecalage: () => '', tcHorairePlage: (e) => e.startH + 'h-' + e.endH + 'h' + (e.endM ? e.endM : ''), tcBandeauRepere: () => element(),
   tcRendreDeplacable: (el, e, geo) => { captures.push({ el, e, geo }); },
   localStorage: { getItem: () => null }, openEventModal: () => {},
 };

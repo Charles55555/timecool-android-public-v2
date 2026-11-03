@@ -1163,13 +1163,13 @@ function rdvPlagesParJour(array $e): array
     return $sortie;
 }
 
-/** Ce qu'occupe un compte, jour par jour (ses rendez-vous non supprimés). */
-function rdvOccupation(int $compteId): array
+/** Ce qu'occupe un compte, jour par jour (ses rendez-vous non supprimés), sauf le rendez-vous $sauf (celui qu'on décale). */
+function rdvOccupation(int $compteId, ?string $sauf = null): array
 {
     $occupes = [];
     foreach (Db::tous(
-        'SELECT contenu FROM elements WHERE compte_id = ? AND type = "rdv" AND supprime = 0',
-        [$compteId]
+        'SELECT contenu FROM elements WHERE compte_id = ? AND type = "rdv" AND supprime = 0' . ($sauf !== null ? ' AND uid <> ?' : ''),
+        $sauf !== null ? [$compteId, $sauf] : [$compteId]
     ) as $l) {
         $e = json_decode((string) $l['contenu'], true);
         if (!is_array($e)) {
@@ -1200,13 +1200,99 @@ function creneauEstLibre(array $occupes, string $jour, int $debut, int $fin): bo
  * DANS une transaction, après avoir verrouillé son compte : deux choix
  * simultanés se suivent alors, et le second voit le premier.
  */
-function creneauRetenuEstLibre(int $titulaireId, string $debutSql, string $finSql): bool
+function creneauRetenuEstLibre(int $titulaireId, string $debutSql, string $finSql, ?string $sauf = null): bool
 {
     $d = strtotime($debutSql);
     $f = strtotime($finSql);
     $jour = date('Y-m-d', $d);
     $min = static fn(int $t): int => (int) date('G', $t) * 60 + (int) date('i', $t);
-    return creneauEstLibre(rdvOccupation($titulaireId), $jour, $min($d), $min($f));
+    return creneauEstLibre(rdvOccupation($titulaireId, $sauf), $jour, $min($d), $min($f));
+}
+
+/*
+ * PROPOSITIONS DE CHARLY (mission 73). Charly décale un rendez-vous qui concerne un contact : il lui propose
+ * 2 ou 3 créneaux à boutons (messagerie s'il a TimeCool, lien de créneaux sinon). Le rendez-vous d'origine
+ * reste en place ; le choix du contact attend ici que l'application le place, le laisse ou repropose.
+ */
+const PROPOSITION_SANS_REPONSE_HEURES = 24;
+const PROPOSITION_LIEN_HEURES = 72;
+
+/** Les 1 à 3 créneaux d'une proposition, contrôlés ; null si l'un est incomplet ou à l'envers. */
+function propositionCreneaux($creneaux): ?array
+{
+    if (!is_array($creneaux) || count($creneaux) < 1 || count($creneaux) > 3) {
+        return null;
+    }
+    $sortie = [];
+    $motif = '/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/';
+    foreach (array_values($creneaux) as $i => $cr) {
+        $debut = is_array($cr) ? ($cr['debut'] ?? null) : null;
+        $fin   = is_array($cr) ? ($cr['fin'] ?? null) : null;
+        if (!is_string($debut) || !is_string($fin) || !preg_match($motif, $debut) || !preg_match($motif, $fin)
+            || strtotime($debut) === false || strtotime($fin) === false || strtotime($fin) <= strtotime($debut)) {
+            return null;
+        }
+        $libelle = is_array($cr) && is_string($cr['libelle'] ?? null) ? mb_substr(trim($cr['libelle']), 0, 120) : null;
+        $sortie[] = ['rang' => $i + 1, 'debut' => date('Y-m-d H:i:s', strtotime($debut)), 'fin' => date('Y-m-d H:i:s', strtotime($fin)), 'libelle' => $libelle];
+    }
+    return $sortie;
+}
+
+/**
+ * Le contact choisit (rang 1 à 3) ou répond « aucun ne me va » (-1). À appeler DANS une transaction.
+ * Rend null si c'est enregistré, sinon le code du refus. Rien ne s'écrit dans l'agenda ici : l'application
+ * de l'organisateur place ou demande, selon son profil.
+ */
+function propositionChoisir(array $rdv, int $rang): ?string
+{
+    if ($rdv['statut'] !== 'attente' || $rdv['traite_le'] !== null) {
+        return 'deja_repondu';
+    }
+    $organisateurId = (int) $rdv['organisateur_id'];
+    if ($rang === -1) {
+        Db::req('UPDATE rdv SET statut = "refuse", repondu_le = NOW() WHERE id = ?', [$rdv['id']]);
+    } else {
+        $cr = Db::un('SELECT * FROM rdv_creneaux WHERE rdv_id = ? AND rang = ?', [$rdv['id'], $rang]);
+        if ($cr === null) {
+            return 'rang_invalide';
+        }
+        Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$organisateurId]);
+        if (!creneauRetenuEstLibre($organisateurId, (string) $cr['debut'], (string) $cr['fin'], $rdv['remplace_uid'] !== null ? (string) $rdv['remplace_uid'] : null)) {
+            return 'creneau_pris';
+        }
+        Db::req('UPDATE rdv SET statut = "choisi", repondu_le = NOW() WHERE id = ?', [$rdv['id']]);
+        Db::req('UPDATE rdv_creneaux SET retenu = 1 WHERE rdv_id = ? AND rang = ?', [$rdv['id'], $rang]);
+    }
+    // La carte du contact garde son choix : sur un autre appareil, il ne revoit pas les boutons.
+    if ($rdv['invite_compte_id'] !== null) {
+        $organisateur = Db::un('SELECT reference FROM comptes WHERE id = ?', [$organisateurId]);
+        $conv = $organisateur === null ? null : Db::un(
+            'SELECT contenu FROM elements WHERE compte_id = ? AND type = "conversation" AND uid = ?',
+            [$rdv['invite_compte_id'], $organisateur['reference']]
+        );
+        $c = $conv === null ? null : json_decode((string) $conv['contenu'], true);
+        if (is_array($c) && is_array($c['thread'] ?? null)) {
+            foreach ($c['thread'] as $i => $ligne) {
+                if (($ligne['genre'] ?? null) === 'proposition_creneaux' && (int) ($ligne['rdv'] ?? 0) === (int) $rdv['id']) {
+                    $c['thread'][$i]['choix'] = $rang;
+                }
+            }
+            elementsPoser([['compte_id' => (int) $rdv['invite_compte_id'], 'type' => 'conversation', 'uid' => $organisateur['reference'], 'contenu' => $c]]);
+        }
+    }
+    return null;
+}
+
+/** Le message d'erreur d'un refus de propositionChoisir. */
+function propositionRefus(string $code): void
+{
+    if ($code === 'creneau_pris') {
+        Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris. Choisis-en un autre.');
+    }
+    if ($code === 'rang_invalide') {
+        Rep::erreur(400, 'rang_invalide', 'Rang attendu : 1 à 3, ou -1.');
+    }
+    Rep::erreur(410, 'deja_repondu', 'Cette proposition a déjà reçu une réponse.');
 }
 
 /**
@@ -4521,6 +4607,130 @@ switch ($route) {
             'expire_dans_heures' => $heures,
         ], 201);
 
+    // Mission 73 : Charly propose 1 à 3 créneaux à un contact pour remplacer un rendez-vous.
+    // reference : le contact a TimeCool, la proposition arrive dans sa messagerie (boutons) ; sinon un lien (url).
+    case 'POST /rdv/proposition/creer':
+        $moi = Auth::compte();
+        $creneaux = propositionCreneaux(Entree::corps()['creneaux'] ?? null);
+        if ($creneaux === null) {
+            Rep::erreur(400, 'creneaux_invalides', 'Fournir 1 à 3 créneaux, chacun avec un début et une fin.');
+        }
+        $texte = Entree::requis('texte', 2000);
+        $reference = Entree::texte('reference', 26);
+        $cible = null;
+        if ($reference !== null && $reference !== '') {
+            $cible = compteParReference($reference);
+            if ($cible === null) {
+                Rep::erreur(404, 'compte_introuvable', 'Ce contact n a pas de compte TimeCool.');
+            }
+            if ((int) $cible['id'] === (int) $moi['id']) {
+                Rep::erreur(400, 'soi_meme', 'Vous ne pouvez pas vous proposer un rendez-vous.');
+            }
+        }
+        $canal = Entree::texte('canal', 10) ?? 'sms';
+        if (!in_array($canal, ['sms', 'email', 'whatsapp'], true)) {
+            Rep::erreur(400, 'canal_invalide', 'Canal attendu : sms, email ou whatsapp.');
+        }
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            Db::req(
+                'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, lieu, origine, remplace_uid, expire_le)
+                 VALUES (?, ?, ?, ?, "charly", ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
+                [$moi['id'], $cible === null ? null : $cible['id'], Entree::texte('titre', 200), Entree::texte('lieu', 255),
+                 Entree::texte('remplace', 100), PROPOSITION_SANS_REPONSE_HEURES]
+            );
+            $rdvId = (int) $pdo->lastInsertId();
+            foreach ($creneaux as $cr) {
+                Db::req('INSERT INTO rdv_creneaux (rdv_id, rang, debut, fin, libelle) VALUES (?, ?, ?, ?, ?)',
+                    [$rdvId, $cr['rang'], $cr['debut'], $cr['fin'], $cr['libelle']]);
+            }
+            $url = null;
+            if ($cible === null) {
+                $jeton = jetonCourt();
+                Db::req(
+                    'INSERT INTO rdv_liens (rdv_id, jeton_hash, prenom_organisateur, prenom_destinataire, canal, expire_le)
+                     VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
+                    [$rdvId, Jeton::hacher($jeton), $moi['prenom'], Entree::texte('prenom_destinataire', 100), $canal, PROPOSITION_LIEN_HEURES]
+                );
+                $url = rtrim((string) Conf::get('url_publique'), '/') . '/rdv/' . $jeton;
+            } else {
+                // Bloqué par le contact : l'écho chez l'expéditeur seulement, comme une demande ordinaire.
+                messagePoser($moi, $cible, $texte, $rdvId, null, 'proposition_creneaux', null, null,
+                    demandeurBloque((int) $cible['id'], $moi),
+                    ['creneaux' => array_map(static fn($c) => ['rang' => $c['rang'], 'debut' => $c['debut'], 'fin' => $c['fin'], 'libelle' => $c['libelle']], $creneaux)]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+        Rep::ok(['rdv_id' => $rdvId, 'url' => $url], 201);
+
+    // Le contact (compte TimeCool) touche un créneau de la carte, ou « Aucun ne me va » (rang -1).
+    case 'POST /rdv/proposition/choisir':
+        $moi = Auth::compte();
+        $rang = Entree::corps()['rang'] ?? null;
+        if (!is_int($rang) || ($rang !== -1 && ($rang < 1 || $rang > 3))) {
+            Rep::erreur(400, 'rang_invalide', 'Rang attendu : 1 à 3, ou -1.');
+        }
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        $rdv = Db::un('SELECT * FROM rdv WHERE id = ? AND invite_compte_id = ? AND origine = "charly" FOR UPDATE',
+            [Entree::entier('rdv_id') ?? 0, $moi['id']]);
+        if ($rdv === null) {
+            $pdo->rollBack();
+            Rep::erreur(404, 'proposition_inconnue', 'Proposition introuvable.');
+        }
+        $refus = propositionChoisir($rdv, $rang);
+        if ($refus !== null) {
+            $pdo->rollBack();
+            propositionRefus($refus);
+        }
+        $pdo->commit();
+        Rep::ok(['enregistre' => true]);
+
+    // Les réponses qui attendent l'organisateur : choisi, refusé (aucun ne va), ou sans réponse passé le délai.
+    case 'GET /rdv/propositions':
+        $moi = Auth::compte();
+        $lignes = Db::tous(
+            'SELECT r.id, r.titre, r.remplace_uid, r.statut, r.cree_le, r.repondu_le, r.expire_le,
+                    l.prenom_destinataire, c.prenom AS invite_prenom, c.nom AS invite_nom, c.reference AS invite_reference,
+                    cr.debut, cr.fin
+               FROM rdv r
+               LEFT JOIN rdv_liens l ON l.rdv_id = r.id
+               LEFT JOIN comptes c ON c.id = r.invite_compte_id
+               LEFT JOIN rdv_creneaux cr ON cr.rdv_id = r.id AND cr.retenu = 1
+              WHERE r.organisateur_id = ? AND r.origine = "charly" AND r.traite_le IS NULL
+                AND (r.statut IN ("choisi", "refuse") OR (r.statut = "attente" AND r.expire_le < NOW()))
+              ORDER BY r.id',
+            [$moi['id']]
+        );
+        Rep::ok(['propositions' => array_map(static function ($l) {
+            return [
+                'rdv_id'   => (int) $l['id'],
+                'titre'    => $l['titre'],
+                'remplace' => $l['remplace_uid'],
+                'etat'     => $l['statut'] === 'attente' ? 'sans_reponse' : $l['statut'],
+                'qui'      => $l['invite_prenom'] !== null ? trim($l['invite_prenom'] . ' ' . $l['invite_nom']) : $l['prenom_destinataire'],
+                'reference' => $l['invite_reference'],
+                'debut'    => $l['debut'],
+                'fin'      => $l['fin'],
+            ];
+        }, $lignes)]);
+
+    // L'organisateur a donné suite (placé, laissé, ou reproposé) : la réponse ne revient plus.
+    case 'POST /rdv/proposition/traiter':
+        $moi = Auth::compte();
+        $maj = Db::req(
+            'UPDATE rdv SET traite_le = NOW(), statut = IF(statut = "attente", "expire", statut)
+              WHERE id = ? AND organisateur_id = ? AND origine = "charly" AND traite_le IS NULL',
+            [Entree::entier('rdv_id') ?? 0, $moi['id']]
+        );
+        Rep::ok(['traite' => $maj->rowCount() > 0]);
+
     // TC_BACKEND.fetchRdvLink — public, sans authentification.
     case 'GET /rdv/lien':
         $jeton = $_GET['jeton'] ?? '';
@@ -4578,6 +4788,18 @@ switch ($route) {
             }
 
             $lien = Db::un('SELECT * FROM rdv_liens WHERE jeton_hash = ?', [Jeton::hacher($jeton)]);
+
+            // Proposition de Charly (mission 73) : le choix attend l'application de l'organisateur, rien ne s'écrit ici.
+            $rdvCharly = Db::un('SELECT * FROM rdv WHERE id = ? AND origine = "charly"', [$lien['rdv_id']]);
+            if ($rdvCharly !== null) {
+                $refus = propositionChoisir($rdvCharly, $rang);
+                if ($refus !== null) {
+                    $pdo->rollBack();
+                    propositionRefus($refus);
+                }
+                $pdo->commit();
+                Rep::ok(['enregistre' => true]);
+            }
 
             /*
              * Le message envoye au contact promet que le rendez-vous

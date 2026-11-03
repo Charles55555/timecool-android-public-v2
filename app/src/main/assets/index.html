@@ -4837,7 +4837,7 @@ function renderWeek() {
         evt.style.height = `${hb.px}px`;
         evt.style.left = `${50 + di*colWidth + 1}px`;
         evt.style.width = `${colWidth - 2}px`;
-        evt.innerHTML = `<div class="week-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
+        evt.innerHTML = `<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         evt.onclick = () => openEventModal(e);
         tcRendreDeplacable(evt, e, { vue: 'week', pxParMin: 44/60, colWidth: colWidth, di: di });
         body.appendChild(evt);
@@ -4952,7 +4952,7 @@ function renderDay() {
     const hb = tcHauteurBloc('day', dm);
     if (hb.court) evt.classList.add('bloc-court');
     evt.style.height = `${hb.px}px`;
-    evt.innerHTML = `<div class="day-event-title">${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}</div>`;
+    evt.innerHTML = `<div class="day-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}${tcMarqueDecalage(e) ? ' · en cours de décalage' : ''}</div>`;
     evt.onclick = () => openEventModal(e);
     tcRendreDeplacable(evt, e, { vue: 'day', pxParMin: 48/60, colWidth: 0, di: 0 });
     body.appendChild(evt);
@@ -5396,7 +5396,7 @@ function tcLigneVideFiche(champ) {
 
 function openEventModal(e) {
   currentEvent = e;
-  document.getElementById('emTitle').textContent = tcIconeType(e) + e.title;
+  document.getElementById('emTitle').textContent = tcMarqueDecalage(e) + tcIconeType(e) + e.title + (tcMarqueDecalage(e) ? ' (en cours de décalage)' : '');
   const dateStr = tcPeriodeLisible(e);
   // Une journee entiere n'a pas d'horaire : afficher « 00:00 - 23:59 »
   // serait exact et incomprehensible.
@@ -7232,6 +7232,9 @@ function openConversation(id, origine) {
   // Une convocation de groupe recue et sans reponse (mission 27b).
   const convocationRecue = (typeof tcConvocationEnAttente === 'function') ? tcConvocationEnAttente(msg) : null;
   if (convocationRecue) body.innerHTML += tcCadreConvocation(convocationRecue, msg.with);
+  // Une proposition de créneaux de Charly (mission 73) : des boutons, ou la réponse déjà donnée.
+  const propositionRecue = (typeof tcPropositionRecue === 'function') ? tcPropositionRecue(msg) : null;
+  if (propositionRecue) body.innerHTML += tcCadrePropositionCreneaux(propositionRecue, msg.with);
   if (mode==='pro' && msg.isCancellation && !msg.accepted) {
     body.innerHTML += `
       <div style="margin-top:16px; display:flex; flex-direction:column; gap:8px;">
@@ -9641,8 +9644,57 @@ function renderSettings() {
   }
 }
 
+/*
+ * « Ma confiance en Charly » (mission 73) : jusqu'où Charly agit seul quand une action touche d'autres personnes
+ * (décaler, annuler, prévenir d'un retard, malade, rendez-vous à plusieurs). Profil 1 au départ pour tout compte.
+ * Clé de compte, synchronisée comme les autres réglages (elle suit le compte, pas l'appareil) ; le serveur la lit.
+ * Le bloc reste caché (TC_CONFIANCE_VISIBLE) tant que les trois profils ne marchent pas vraiment.
+ */
+const TC_CONFIANCE_VISIBLE = false;
+var TC_CONFIANCE_KEY = 'tc_confiance_charly';
+const TC_CONFIANCE_PROFILS = [
+  { n: 1, texte: 'Charly attend ma validation à chaque étape avant de passer à la suivante.', gris: 'Pour te rassurer : tu vois tout, tu décides tout.' },
+  { n: 2, texte: 'Charly réalise toutes les étapes et attend ma validation pour la dernière, avant d’écrire dans mon agenda.', gris: 'Quand tu seras rassuré : il travaille, tu gardes le dernier mot.' },
+  { n: 3, texte: 'Charly valide seul toutes les étapes et me laisse travailler tranquillement.', gris: 'Quand tu seras convaincu de ses compétences : il fait tout et te fait un compte rendu.' }
+];
+
+/** Le profil choisi : 1, 2 ou 3 ; 1 tant que rien n'a été choisi ou si la valeur est illisible. */
+function tcConfianceCharly() {
+  let v = null;
+  try { v = localStorage.getItem(TC_CONFIANCE_KEY); } catch (e) {}
+  return (v === '2' || v === '3') ? Number(v) : 1;
+}
+
+function tcChoisirConfiance(n) {
+  if ([1, 2, 3].indexOf(n) < 0) return;
+  try { localStorage.setItem(TC_CONFIANCE_KEY, String(n)); } catch (e) {}
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
+  const bloc = document.getElementById('tcConfianceBloc');
+  if (bloc) bloc.outerHTML = tcBlocConfiance();
+}
+
+/** Un seul choix sur trois, même mécanique visuelle que « Je tutoie / Je vouvoie ». */
+function tcBlocConfiance() {
+  const choisi = tcConfianceCharly();
+  const boutons = TC_CONFIANCE_PROFILS.map(function (p) {
+    const oui = p.n === choisi;
+    return '<button type="button" role="radio" aria-checked="' + oui + '" onclick="tcChoisirConfiance(' + p.n + ')" id="tcConfiance' + p.n + '"'
+      + ' style="display:block; width:100%; box-sizing:border-box; text-align:left; padding:12px 14px; border-radius:10px; cursor:pointer; margin-bottom:8px;'
+      + ' border:1.5px solid ' + (oui ? 'var(--g-blue)' : 'var(--border)') + '; background:' + (oui ? 'var(--g-blue)' : 'var(--bg)') + ';">'
+      + '<div style="font-size:13px; font-weight:600; line-height:1.4; color:' + (oui ? '#fff' : 'var(--text)') + ';">' + p.texte + '</div>'
+      + '<div style="font-size:11px; margin-top:4px; line-height:1.4; color:' + (oui ? 'rgba(255,255,255,0.85)' : 'var(--text-sec)') + ';">' + p.gris + '</div>'
+      + '</button>';
+  }).join('');
+  return '<div id="tcConfianceBloc" style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">'
+    + '<div style="padding:14px 16px 4px; background:var(--bg-soft); font-size:12px; font-weight:700; text-transform:uppercase; color:var(--text-sec);">🤝 Ma confiance en Charly</div>'
+    + '<div style="padding:0 16px 10px; background:var(--bg-soft); font-size:12px; color:var(--text-sec);">Jusqu’où Charly peut agir sans moi ?</div>'
+    + '<div role="radiogroup" aria-label="Ma confiance en Charly" style="padding:12px 16px 4px;">' + boutons + '</div>'
+    + '</div>';
+}
+
 function renderSettingsInterne() {
   document.getElementById('settingsContent').innerHTML = `
+    ${TC_CONFIANCE_VISIBLE ? tcBlocConfiance() : ''}
 
 
     <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
@@ -11471,6 +11523,7 @@ function renderChatMessage(m) {
   if (m && m._questionType) return tcRendreQuestionType(m);
   if (m && m._questionnaire) return tcRendreQuestionnaire(m);
   if (m && m._envois) return tcRendreBilanQuestionnaire(m);
+  if (m && m._reponseCreneau) return tcRendreReponseCreneau(m);
   if (m.role === 'user') {
     return `
       <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
@@ -14712,32 +14765,26 @@ function tcTraiterDeplacement(msg, text) {
  * (tcDeplacementLocal, mission 51).
  */
 function tcExecuterDeplacement(liste) {
-  const contacts = [];
-  liste.forEach(function (x) {
-    const c = tcContactDuRdv(x.ev);
-    if (c && !contacts.some(d => d.id === c.id)) contacts.push(c);
-  });
-  if (!contacts.length) {
+  // Mission 73 : un rendez-vous avec un contact ne bouge pas tout de suite ; Charly lui propose des créneaux, après UN accord
+  // pour tout le lot, le message montré. Sans contact, il se déplace comme avant.
+  const avec = liste.filter(function (x) { return !!tcContactDuRdv(x.ev); });
+  if (!avec.length) {
     tcAppliquerDeplacement(liste);
     return;
   }
-
-  // Les anciennes dates, avant qu'elles ne changent : le message de
-  // décalage cite le rendez-vous tel que le contact le connaît.
-  _tcDeplacementEnAttente = {
-    liste: liste,
-    contacts: contacts,
-    anciens: liste.map(x => ({ id: x.ev.id, date: x.ev.date, startH: x.ev.startH, startM: x.ev.startM, contact: x.ev.contact }))
-  };
-  const plan = liste.map(x => '• ' + _tcLigneRdv(Object.assign({}, x.ev,
+  const sans = liste.filter(function (x) { return avec.indexOf(x) < 0; });
+  _tcDeplacementEnAttente = { liste: liste, avec: avec, sans: sans };
+  const contacts = [];
+  avec.forEach(function (x) { const c = tcContactDuRdv(x.ev); if (!contacts.some(function (d) { return d.id === c.id; })) contacts.push(c); });
+  const un = contacts.length === 1;
+  const c0 = tcContactDuRdv(avec[0].ev);
+  const plan = sans.map(x => '• ' + _tcLigneRdv(Object.assign({}, x.ev,
     { date: x.p.date, startH: x.p.startH, startM: x.p.startM, endH: x.p.endH, endM: x.p.endM }))).join('\n');
-  const noms = contacts.map(c => c.name);
-  const avec = noms.length > 1 ? noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1] : noms[0];
-  charlyIA.history.push({role: 'assistant', content:
-    'Je déplace :\n' + plan + '\n\n'
-    + (noms.length > 1
-      ? `Veux-tu que je prévienne ${avec}, ou as-tu déjà vu le sujet avec eux ?`
-      : `Veux-tu que je prévienne ${avec}, ou as-tu déjà vu le sujet ensemble ?`), nature: 'question'});
+  charlyIA.history.push({role: 'assistant', nature: 'question', content:
+    (sans.length ? 'Je déplace :\n' + plan + '\n\n' : '')
+    + 'Pour ' + tcNomsLisibles(contacts.map(c => c.name)) + ', je ne déplace rien tout de suite : je ' + (un ? 'lui' : 'leur') + ' propose le nouveau créneau' + (avec.length === 1 ? ' (' + tcPropositionLibelle(avec[0].p) + ')' : '') + ' et deux autres, et je te demande avant de placer ' + (un ? 'son' : 'leur') + ' choix.\n'
+    + 'Le message' + (avec.length > 1 ? ' pour ' + String(c0.name).split(' ')[0] : '') + ' : « ' + tcPropositionTexte(c0, avec[0].ev) + ' » suivi des créneaux à choisir.\n'
+    + (avec.length > 1 ? 'Je l’envoie aux ' + avec.length + ' ?' : 'Je l’envoie ?') + ' Si c’est déjà vu avec ' + (un ? 'cette personne' : 'eux') + ', dis « déjà vu » : je déplace sans prévenir.'});
 }
 
 /** « déjà vu » → 'vu', « préviens-les » → 'prevenir', sinon null. */
@@ -14756,27 +14803,22 @@ async function tcRepondreDeplacement(text) {
     _tcDeplacementEnAttente = null;
     return typeof tcRepondreRelectureDeplacement === 'function' ? await tcRepondreRelectureDeplacement(text, attente) : false;
   }
-  const choix = tcReponsePrevenir(text);
+  const choix = tcReponseDecalage(text);
   _tcDeplacementEnAttente = null;
   if (!attente || !choix) return false;
   tcPousserMessageUtilisateur(text);
-  tcAppliquerDeplacement(attente.liste);
-  renderCharlyChat();
-  if (choix !== 'prevenir') return true;
-
-  // Un message par contact, celui de « Je décale » des Paramètres,
-  // complété de la nouvelle date. Chacun est relu avant de partir.
-  for (const c of attente.contacts) {
-    const ancien = attente.anciens.find(a => a.contact === c.id);
-    const nouveau = attente.liste.find(x => x.ev.contact === c.id);
-    if (!ancien || !nouveau) continue;
-    const valeursNouv = tcValeursDuRdv(c.name, nouveau.ev);
-    const texte = tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
-      + ' le ' + valeursNouv['[date]'] + ' à ' + valeursNouv['[heure]'] + '.';
-    if (!await tcConfirm('Prévenir ' + c.name + ' ?\n\n« ' + texte + ' »')) continue;
-    const chemin = await tcTransmettrePrevenance(c, texte);
-    tcDirePrevenance(chemin, c.name);
+  const avec = attente.avec || [], sans = attente.sans || attente.liste;
+  // « déjà vu » : tout se déplace, sans message.
+  if (choix === 'vu') { tcAppliquerDeplacement(attente.liste); renderCharlyChat(); return true; }
+  if (sans.length) tcAppliquerDeplacement(sans);
+  if (choix === 'non') {
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, je n’envoie rien : '
+      + avec.map(function (x) { return '« ' + x.ev.title + ' »'; }).join(', ') + (avec.length > 1 ? ' restent à leur place.' : ' reste à sa place.') });
+    renderCharlyChat();
+    return true;
   }
+  const envoi = await tcProposerLesCreneaux(avec);
+  tcDireBilanPropositions(envoi.lignes, envoi.res.envois);
   return true;
 }
 
@@ -15190,6 +15232,8 @@ async function charlySendMessage() {
     if (pris) return;
   }
 
+  // === « Paul a choisi mardi 10h, je le place ? » : la réponse d'un contact à une proposition de Charly (mission 73) ===
+  if (typeof tcRepondreReponseCreneau === 'function' && await tcRepondreReponseCreneau(text)) return;
   // === « J'envoie ? » : la réponse à un message relu (oui → il part, non → rien) (mission 57) ===
   if (typeof tcRepondreEnvoi === 'function' && await tcRepondreEnvoi(text)) return;
   // === « Je lui propose ? », « Je réponds présent ? » : oui → ça part, non → rien, un autre moment → le nouveau créneau (mission 58) ===
@@ -24938,34 +24982,12 @@ async function tcRepondreDeplacementPeriode(text) {
   });
   // « décale tout lundi » : la relecture (avant, après, ce qui chevauche), rien ne bouge avant « oui » (mission 64).
   if (attente.relire && typeof tcRelireDeplacementPeriode === 'function') { tcRelireDeplacementPeriode(liste, text); renderCharlyChat(); return true; }
-  tcAppliquerDeplacement(liste);
-  if (genes.length) {
-    charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + genes.map(_tcLigneRdv).join(' ; ') + '.' });
-    renderCharlyChat();
-  }
-  await tcPrevenirDecalages(liste, anciens);
+  if (genes.length) charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + genes.map(_tcLigneRdv).join(' ; ') + '.' });
+  tcExecuterDeplacement(liste);
+  renderCharlyChat();
   return true;
 }
 
-/**
- * Un message par contact, celui de « Je décale » des Paramètres,
- * complété de la nouvelle date. Chacun est relu et validé avant de partir.
- */
-async function tcPrevenirDecalages(liste, anciens) {
-  const vus = {};
-  for (const x of liste) {
-    const c = tcContactDuRdv(x.ev);
-    if (!c || vus[c.id]) continue;
-    vus[c.id] = true;
-    const ancien = anciens.find(function (a) { return a.id === x.ev.id; }) || x.ev;
-    const valeursNouv = tcValeursDuRdv(c.name, x.ev);
-    const texte = tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
-      + ' le ' + valeursNouv['[date]'] + ' à ' + valeursNouv['[heure]'] + '.';
-    if (!await tcConfirm('Prévenir ' + c.name + ' ?\n\n« ' + texte + ' »')) continue;
-    const chemin = await tcTransmettrePrevenance(c, texte);
-    tcDirePrevenance(chemin, c.name);
-  }
-}
 
 /**
  * « 1 », « 2 », « 3 », « je les annule », « rien » tapés quand les trois
@@ -25381,8 +25403,10 @@ function tcQuestionnaireRecap(r) {
   const lignes = [];
   if (r.action === 'decaler') {
     r._liste.forEach(function (x) {
-      lignes.push(x.p ? '• Je décale « ' + x.ev.title + ' » au ' + tcQuestionnaireQuand(x.p.date, x.p)
-        : '• Je laisse « ' + x.ev.title + ' » où il est (pas de place libre dans les deux semaines)');
+      const c = r.prevenir === 'charly' && x.p ? tcContactDuRdv(x.ev) : null;
+      lignes.push(!x.p ? '• Je laisse « ' + x.ev.title + ' » où il est (pas de place libre dans les deux semaines)'
+        : c ? '• Pour « ' + x.ev.title + ' », je propose à ' + c.name + ' le ' + tcQuestionnaireQuand(x.p.date, x.p) + ' ou deux autres moments ; il reste à sa place jusqu’à la réponse'
+        : '• Je décale « ' + x.ev.title + ' » au ' + tcQuestionnaireQuand(x.p.date, x.p));
     });
   } else if (r.action === 'retard') {
     (r._retardRdv ? [r._retardRdv] : r._rdvs).forEach(function (e) {
@@ -25394,7 +25418,14 @@ function tcQuestionnaireRecap(r) {
   }
   if (r._contacts.length) {
     const noms = tcQuestionnaireNoms(r._contacts);
-    if (r.prevenir === 'charly') lignes.push('• Je préviens ' + noms);
+    if (r.prevenir === 'charly') {
+      lignes.push('• Je préviens ' + noms);
+      // Le message montré avant l'envoi (mission 73) : celui du premier contact, les autres suivent le même modèle.
+      const ev = r._rdvs.filter(function (e) { return tcContactDuRdv(e); })[0];
+      const c = ev ? tcContactDuRdv(ev) : null;
+      if (c) lignes.push('Le message' + (r._contacts.length > 1 ? ' pour ' + String(c.name).split(' ')[0] : '') + ' : « '
+        + (r.action === 'decaler' ? tcPropositionTexte(c, ev) + ' » suivi des créneaux à choisir' : tcQuestionnaireMessage(r, c, ev, ev) + ' »'));
+    }
     else if (r.prevenir === 'moi') lignes.push('• Tu préviens ' + noms + ' toi-même');
     else lignes.push('• Je ne préviens personne');
   }
@@ -25433,8 +25464,12 @@ async function tcQuestionnaireExecuter(r, fin) {
   const present = function (e) { return presents.some(function (x) { return e && x.id === e.id; }); };
   const anciens = presents.map(function (e) { return { id: e.id, date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM }; });
   let deplaces = [], laisses = [], supprimes = [];
+  let aProposer = [];
   if (r.action === 'decaler') {
-    deplaces = r._liste.filter(function (x) { return x.p && present(x.ev); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
+    // Mission 73 : « Tu les préviens » → un rendez-vous avec un contact reste en place, Charly lui propose des créneaux.
+    const propose = function (x) { return r.prevenir === 'charly' && !!tcContactDuRdv(x.ev); };
+    aProposer = r._liste.filter(function (x) { return x.p && present(x.ev) && propose(x); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
+    deplaces = r._liste.filter(function (x) { return x.p && present(x.ev) && !propose(x); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
     laisses = r._liste.filter(function (x) { return !x.p && present(x.ev); }).map(function (x) { return frais(x.ev); });
     if (deplaces.length) tcAppliquerDeplacement(deplaces, { silencieux: true });
   } else if (r.action === 'retard' && Array.isArray(r._liste) && r._liste.length) {
@@ -25469,11 +25504,14 @@ async function tcQuestionnaireExecuter(r, fin) {
       }
     }
   }
+  const propositions = aProposer.length ? await tcProposerLesCreneaux(aProposer) : null;
+  if (propositions) propositions.res.envois.forEach(function (e) { envois.push(e); });
   const lignes = [fin];
   // Le retard d'abord, puis ce qui a bougé à cause de lui (testeurs, 15/10).
   if (r.action === 'retard') presents.filter(function (e) { return !r._retardRdv || e.id === r._retardRdv.id; }).forEach(function (e) { lignes.push('• Retard d’environ ' + r.minutes + ' minutes pour « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + '), arrivée vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes))); });
   deplaces.forEach(function (x) { lignes.push('• Déplacé : « ' + x.ev.title + ' », ' + tcQuestionnaireQuand(x.ev.date, x.ev)); });
   laisses.forEach(function (e) { lignes.push('• Laissé en place : « ' + e.title + ' », ' + tcQuestionnaireQuand(e.date, e)); });
+  if (propositions) propositions.lignes.forEach(function (l) { if (!/^• Message prêt avec le lien/.test(l)) lignes.push(l); });
   supprimes.forEach(function (e) { lignes.push('• Supprimé : « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + ')'); });
   if (r.quoi === 'ajout' && deplaces.length) lignes.push('• La place est libre pour le rendez-vous qui s’ajoute : ajoute-le quand tu veux.');
   if (prevenus.length) lignes.push('• Prévenu par la messagerie TimeCool : ' + tcQuestionnaireNoms(prevenus));
@@ -25486,6 +25524,372 @@ async function tcQuestionnaireExecuter(r, fin) {
   if (!envois.length) { tcQuestionnaireDire(lignes.join('\n')); return; }
   charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero) });
   renderCharlyChat();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PROPOSITIONS DE CRÉNEAUX DE CHARLY (mission 73, chef, 03/11, ok de Charles)
+
+   Un rendez-vous qui concerne un contact ne se déplace plus d'office : Charly propose au contact 2 ou 3 créneaux
+   (carte à boutons dans sa messagerie TimeCool, ou lien de créneaux à envoyer d'un geste par SMS ou e-mail). Le
+   rendez-vous d'origine reste en place, marqué « en cours de décalage » (ev.decalage), jusqu'au choix du contact,
+   qui attend sur le serveur. Profil 1 de « Ma confiance en Charly » : un seul accord avant d'envoyer le lot, puis
+   un accord par réponse avant d'écrire dans l'agenda ; « aucun ne me va » ou pas de réponse sous 24 h : Charly le
+   dit et propose la suite (d'autres moments, ou le rendez-vous reste à sa place).
+   ══════════════════════════════════════════════════════════════ */
+const TC_PROPOSITION_JOURS = 14;
+const TC_PROPOSITION_DEBUT = 8 * 60;
+const TC_PROPOSITION_FIN = 19 * 60;
+const TC_PROPOSITION_ECART = 120;
+const TC_PROPOSITION_SONDE_MS = 30000;
+
+function tcMinutesLisibles(m) {
+  const h = Math.floor(m / 60), mn = m % 60;
+  return h + 'h' + (mn ? String(mn).padStart(2, '0') : '');
+}
+
+/** « mardi 4 novembre à 10h » */
+function tcPropositionLibelle(c) {
+  const d = new Date(c.date + 'T12:00:00');
+  const jour = isNaN(d) ? c.date : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return jour + ' à ' + tcMinutesLisibles(Number(c.startH) * 60 + Number(c.startM || 0));
+}
+
+function tcNomsLisibles(noms) {
+  if (noms.length <= 1) return noms.join('');
+  return noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1];
+}
+
+/**
+ * Jusqu'à 3 créneaux pour remplacer ev : d'abord celui prévu (premier), puis des créneaux libres de même durée, de 8h à
+ * 19h, à deux heures au moins l'un de l'autre le même jour, sur 14 jours. Libre : aucun autre rendez-vous de l'agenda
+ * (ev lui-même ne compte pas) ni aucun créneau déjà proposé (occupes : [{ date, debut, fin }] en minutes). Jamais dans
+ * le passé. depuis : { date, minutes } où commencer la recherche quand il n'y a pas de premier créneau.
+ */
+function tcCreneauxPourDecalage(ev, premier, occupes, depuis) {
+  const duree = Math.max(15, (Number(ev.endH) * 60 + Number(ev.endM || 0)) - (Number(ev.startH) * 60 + Number(ev.startM || 0)));
+  const pris = Array.isArray(occupes) ? occupes : [];
+  const sortie = [];
+  const ajouter = function (date, debut) {
+    const fin = debut + duree;
+    sortie.push({ date: date, startH: Math.floor(debut / 60), startM: debut % 60, endH: Math.floor(fin / 60), endM: fin % 60 });
+    pris.push({ date: date, debut: debut, fin: fin });
+  };
+  const maintenant = new Date();
+  const aujourdhui = tcISO(maintenant);
+  const minNow = maintenant.getHours() * 60 + maintenant.getMinutes();
+  const libre = function (date, debut, fin) {
+    if (date < aujourdhui || (date === aujourdhui && debut < minNow)) return false;
+    if (pris.some(function (o) { return o.date === date && debut < o.fin && fin > o.debut; })) return false;
+    return !(Array.isArray(events) ? events : []).some(function (o) {
+      if (!o || o === ev || String(o.id) === String(ev.id) || o.mode !== ev.mode || o.allDay || tcEstBandeau(o) || o.date !== date) return false;
+      return debut < (o.endH * 60 + o.endM) && fin > (o.startH * 60 + o.startM);
+    });
+  };
+  let jour, apres;
+  if (premier) {
+    ajouter(premier.date, Number(premier.startH) * 60 + Number(premier.startM || 0));
+    jour = premier.date;
+    apres = Number(premier.startH) * 60 + Number(premier.startM || 0) + Math.max(duree, TC_PROPOSITION_ECART);
+  } else {
+    jour = (depuis && depuis.date > aujourdhui) ? depuis.date : aujourdhui;
+    apres = depuis && depuis.date === jour ? depuis.minutes : TC_PROPOSITION_DEBUT;
+  }
+  const d = new Date(jour + 'T12:00:00');
+  for (let n = 0; n < TC_PROPOSITION_JOURS && sortie.length < 3; n++) {
+    const date = tcISO(d);
+    for (let m = Math.max(TC_PROPOSITION_DEBUT, Math.ceil(apres / 30) * 30); m + duree <= TC_PROPOSITION_FIN && sortie.length < 3; m += 30) {
+      if (libre(date, m, m + duree)) { ajouter(date, m); m += Math.max(duree, TC_PROPOSITION_ECART) - 30; }
+    }
+    d.setDate(d.getDate() + 1);
+    apres = TC_PROPOSITION_DEBUT;
+  }
+  return sortie;
+}
+
+/** Le message au contact : le modèle « Je décale » des Paramètres ; les créneaux suivent (boutons, ou le lien). */
+function tcPropositionTexte(c, ev) {
+  return tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ev));
+}
+
+function tcHeureSql(h, m) { return String(h).padStart(2, '0') + ':' + String(m || 0).padStart(2, '0') + ':00'; }
+
+/**
+ * Envoie une proposition par rendez-vous (items : [{ ev, contact, creneaux }]). Contact TimeCool : la carte part tout de
+ * suite dans sa messagerie. Sinon : le message avec le lien des créneaux est prêt, à envoyer d'un geste (bouton
+ * « Envoyer à … ») ; l'application ne peut pas envoyer seule un SMS ou un e-mail. Le rendez-vous est marqué.
+ */
+async function tcEnvoyerPropositions(items) {
+  const res = { proposes: [], envois: [], echecs: [], sansMoyen: [], details: [] };
+  for (const it of items) {
+    const c = it.contact, ev = it.ev;
+    const texte = tcPropositionTexte(c, ev);
+    const corps = {
+      titre: ev.title || null, remplace: String(ev.id), texte: texte,
+      creneaux: it.creneaux.map(function (x) {
+        return { debut: x.date + ' ' + tcHeureSql(x.startH, x.startM), fin: x.date + ' ' + tcHeureSql(x.endH, x.endM), libelle: tcPropositionLibelle(x) };
+      })
+    };
+    if (c.referenceCompte) corps.reference = c.referenceCompte;
+    else if (c.phone || c.email) { corps.prenom_destinataire = String(c.name || '').split(' ')[0]; corps.canal = c.phone ? 'sms' : 'email'; }
+    else { if (res.sansMoyen.indexOf(c.name) < 0) res.sansMoyen.push(c.name); continue; }
+    let d;
+    try { d = await TC_BACKEND.propositionCreer(corps); } catch (e) { if (res.echecs.indexOf(c.name) < 0) res.echecs.push(c.name); continue; }
+    ev.decalage = { rdv: d.rdv_id, qui: c.name, le: new Date().toISOString() };
+    res.details.push('• « ' + ev.title + ' » : je propose à ' + c.name + ' ' + tcNomsLisibles(it.creneaux.map(tcPropositionLibelle)).replace(/ et ([^,]*)$/, ' ou $1'));
+    if (c.referenceCompte) { if (res.proposes.indexOf(c.name) < 0) res.proposes.push(c.name); }
+    else res.envois.push({ nom: c.name, phone: c.phone || '', email: c.email || '', titre: ev.title, texte: texte + ' ' + d.url });
+  }
+  // Le bouton ne cite le rendez-vous que si le contact en a plusieurs (comme le bilan du questionnaire).
+  res.envois.forEach(function (e) { if (res.envois.filter(function (x) { return x.nom === e.nom; }).length < 2) e.titre = ''; });
+  saveEventsToStorage();
+  if (currentPage === 'calendar') render();
+  return res;
+}
+
+/** Le bilan d'un envoi de propositions, ligne par ligne. */
+function tcLignesPropositions(res) {
+  const l = res.details.slice();
+  if (res.proposes.length) l.push('• Envoyé dans la messagerie TimeCool : ' + tcNomsLisibles(res.proposes));
+  const aEnvoyer = [];
+  res.envois.forEach(function (e) { if (aEnvoyer.indexOf(e.nom) < 0) aEnvoyer.push(e.nom); });
+  if (aEnvoyer.length) l.push('• Message prêt avec le lien des créneaux, à envoyer toi-même d’un geste (SMS ou email) : ' + tcNomsLisibles(aEnvoyer));
+  if (res.echecs.length) l.push('• Pas envoyé, la connexion a manqué : ' + tcNomsLisibles(res.echecs) + '. Redemande-moi dans un instant.');
+  if (res.sansMoyen.length) l.push('• Sans numéro ni email dans ta fiche contact, rien n’est parti : ' + tcNomsLisibles(res.sansMoyen));
+  if (res.details.length) l.push('Ces rendez-vous restent à leur place, marqués ⏳, jusqu’à la réponse. Quand elle arrive, je te demande avant de l’écrire dans ton agenda.');
+  return l;
+}
+
+/** Calcule les créneaux de chaque rendez-vous (sans proposer deux fois le même), envoie, et rend le bilan. */
+async function tcProposerLesCreneaux(liste) {
+  // Le créneau prévu de chacun est réservé d'abord : jamais proposé à un autre en second choix.
+  const occupes = liste.filter(function (x) { return x.p; }).map(function (x) {
+    const debut = Number(x.p.startH) * 60 + Number(x.p.startM || 0);
+    return { date: x.p.date, debut: debut, fin: debut + Math.max(15, (Number(x.ev.endH) * 60 + Number(x.ev.endM || 0)) - (Number(x.ev.startH) * 60 + Number(x.ev.startM || 0))) };
+  });
+  const items = [];
+  liste.forEach(function (x) {
+    const c = tcContactDuRdv(x.ev);
+    if (!c) return;
+    const creneaux = tcCreneauxPourDecalage(x.ev, x.p || null, occupes);
+    if (creneaux.length) items.push({ ev: x.ev, contact: c, creneaux: creneaux });
+  });
+  const res = await tcEnvoyerPropositions(items);
+  return { res: res, lignes: tcLignesPropositions(res) };
+}
+
+/** Le bilan dans la conversation : avec ses boutons « Envoyer à … » s'il y a des messages à envoyer d'un geste. */
+function tcDireBilanPropositions(lignes, envois) {
+  if (envois && envois.length) {
+    charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero) });
+  } else {
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: lignes.join('\n') });
+  }
+  renderCharlyChat();
+}
+
+/** « déjà vu » → 'vu' (déplacer sans prévenir), « oui » → 'envoyer', « non » → 'non', sinon null. */
+function tcReponseDecalage(text) {
+  const t = tcClasseNormaliser(text);
+  if (/(^| )(deja vu|deja regle|deja fait|c est regle|c est vu|on en a parle|pas besoin|inutile|sans (les |le |la )?prevenir)( |$)/.test(t)) return 'vu';
+  const o = tcReponseOuiNon(text);
+  if (o === true || /^(envoie|envoie le|envoie les|envoie la|vas y|go|previens|previens les|previens le|previens la)( |$)/.test(t)) return 'envoyer';
+  if (o === false) return 'non';
+  return null;
+}
+
+/* ── La réponse du contact revient ─────────────────────────────── */
+
+/** Le rendez-vous d'origine d'une proposition, dans l'agenda. */
+function tcRdvDeProposition(p) {
+  return (Array.isArray(events) ? events : []).find(function (e) { return e && p.remplace !== null && String(e.id) === String(p.remplace); }) || null;
+}
+
+/** Le créneau choisi, au format d'un rendez-vous. */
+function tcCreneauDeProposition(p) {
+  const d = String(p.debut || ''), f = String(p.fin || '');
+  return { date: d.slice(0, 10), startH: Number(d.slice(11, 13)), startM: Number(d.slice(14, 16)), endH: Number(f.slice(11, 13)), endM: Number(f.slice(14, 16)) };
+}
+
+/** La question « Paul a choisi … » qui attend encore, parmi les derniers messages, ou null. */
+function tcReponseCreneauEnAttente() {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  for (let i = h.length - 1, n = 0; i >= 0 && n < 3; i--, n++) {
+    const m = h[i];
+    if (m && m.role === 'assistant' && m._reponseCreneau) return m._reponseCreneau._resolu ? null : m;
+  }
+  return null;
+}
+
+/** Charly pose la question d'une réponse arrivée (une à la fois, profil 1). */
+function tcPoserReponseCreneau(p) {
+  const ev = tcRdvDeProposition(p);
+  const titre = ev ? ev.title : (p.titre || 'ton rendez-vous');
+  const qui = String(p.qui || 'Ton contact');
+  let content, choix;
+  if (p.etat === 'choisi') {
+    content = qui + ' a choisi ' + tcPropositionLibelle(tcCreneauDeProposition(p)) + ' pour « ' + titre + ' ». Je le place dans ton agenda ?';
+    choix = [{ cle: 'placer', texte: 'Oui, place-le' }, { cle: 'laisser', texte: 'Non, je le laisse où il est' }];
+  } else {
+    content = (p.etat === 'refuse' ? qui + ' n’a choisi aucun des créneaux proposés pour « ' + titre + ' ».'
+      : qui + ' n’a pas répondu depuis 24 h pour « ' + titre + ' ».')
+      + ' Je propose d’autres moments, ou je laisse le rendez-vous à sa place ?';
+    choix = [{ cle: 'autres', texte: 'Propose d’autres moments' }, { cle: 'laisser', texte: 'Je le laisse à sa place' }];
+  }
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: content, _reponseCreneau: { p: p, choix: choix } });
+  renderCharlyChat();
+  if (currentPage !== 'assistant' && typeof showToast === 'function') showToast('💬 ' + qui + ' a répondu : Charly te demande la suite');
+}
+
+let _tcPropositionsEnCours = false;
+/** Les réponses qui attendent sur le serveur ; la première pas encore montrée devient une question de Charly. */
+async function tcSuivrePropositions(toujours) {
+  if (_tcPropositionsEnCours || typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) return;
+  if (!toujours && !(Array.isArray(events) ? events : []).some(function (e) { return e && e.decalage && e.decalage.rdv; })) return;
+  _tcPropositionsEnCours = true;
+  let liste = [];
+  try { liste = await TC_BACKEND.propositions(); } catch (e) { liste = []; }
+  _tcPropositionsEnCours = false;
+  if (tcReponseCreneauEnAttente()) return;
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  const deja = function (p) { return h.some(function (m) { return m && m._reponseCreneau && Number(m._reponseCreneau.p.rdv_id) === Number(p.rdv_id); }); };
+  const p = liste.find(function (x) { return !deja(x); });
+  if (p) tcPoserReponseCreneau(p);
+}
+
+/** « oui » / « non » tapés pour « je le place ? » ; « d'autres moments » / « laisse-le » pour l'autre question. */
+async function tcRepondreReponseCreneau(text) {
+  const m = tcReponseCreneauEnAttente();
+  if (!m) return false;
+  const t = tcClasseNormaliser(text);
+  const o = tcReponseOuiNon(text);
+  let cle = null;
+  if (m._reponseCreneau.p.etat === 'choisi') cle = o === true ? 'placer' : (o === false ? 'laisser' : null);
+  else if (/(^| )(autre|autres|propose|repropose|relance)( |$)/.test(t)) cle = 'autres';
+  else if (/(^| )(laisse|laisse le|garde|garde le|rien)( |$)/.test(t)) cle = 'laisser';
+  if (!cle) return false;
+  tcPousserMessageUtilisateur(text);
+  await tcExecuterReponseCreneau(m, cle);
+  return true;
+}
+
+/** Un bouton de la question touché. */
+async function tcChoisirReponseCreneau(rdvId, cle) {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  let m = null;
+  for (let i = h.length - 1; i >= 0; i--) { if (h[i] && h[i]._reponseCreneau && Number(h[i]._reponseCreneau.p.rdv_id) === Number(rdvId)) { m = h[i]; break; } }
+  if (!m || m._reponseCreneau._resolu) return;
+  const ch = m._reponseCreneau.choix.find(function (x) { return x.cle === cle; });
+  tcPousserMessageUtilisateur(ch ? ch.texte : cle);
+  await tcExecuterReponseCreneau(m, cle);
+}
+
+async function tcExecuterReponseCreneau(m, cle) {
+  const r = m._reponseCreneau;
+  r._resolu = true;
+  const p = r.p;
+  const ev = tcRdvDeProposition(p);
+  const titre = ev ? ev.title : (p.titre || 'ton rendez-vous');
+  if (!ev && cle !== 'laisser') {
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: '« ' + titre + ' » n’est plus dans ton agenda : je n’ai rien placé.' });
+  } else if (cle === 'placer') {
+    const c = tcCreneauDeProposition(p);
+    delete ev.decalage;
+    const debut = c.startH * 60 + c.startM, fin = c.endH * 60 + c.endM;
+    const genes = (Array.isArray(events) ? events : []).filter(function (o) {
+      return o && o !== ev && o.mode === ev.mode && !o.allDay && !tcEstBandeau(o) && o.date === c.date && debut < (o.endH * 60 + o.endM) && fin > (o.startH * 60 + o.startM);
+    });
+    tcAppliquerDeplacement([{ ev: ev, p: c }]);
+    if (genes.length) charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + genes.map(_tcLigneRdv).join(' ; ') + '.' });
+  } else if (cle === 'laisser') {
+    if (ev) { delete ev.decalage; saveEventsToStorage(); if (currentPage === 'calendar') render(); }
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, « ' + titre + ' » reste à sa place.' });
+  } else {
+    const contact = tcContactDuRdv(ev);
+    const demain = new Date(); demain.setDate(demain.getDate() + 1);
+    const creneaux = contact ? tcCreneauxPourDecalage(ev, null, [], { date: tcISO(demain), minutes: TC_PROPOSITION_DEBUT }) : [];
+    delete ev.decalage;
+    if (!creneaux.length) {
+      saveEventsToStorage();
+      charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Je ne trouve pas d’autre moment libre dans les deux semaines : « ' + titre + ' » reste à sa place.' });
+    } else {
+      const res = await tcEnvoyerPropositions([{ ev: ev, contact: contact, creneaux: creneaux }]);
+      tcDireBilanPropositions(tcLignesPropositions(res), res.envois);
+    }
+  }
+  try { await TC_BACKEND.propositionTraiter(p.rdv_id); } catch (e) {}
+  renderCharlyChat();
+  setTimeout(function () { tcSuivrePropositions(true); }, 1500);
+}
+
+function tcRendreReponseCreneau(m) {
+  const r = m._reponseCreneau;
+  const boutons = r._resolu ? '' : r.choix.map(function (ch, i) {
+    return '<button onclick="tcChoisirReponseCreneau(' + Number(r.p.rdv_id) + ', \'' + ch.cle + '\')" style="padding:11px 12px; background:' + (i === 0 ? '#e8f0fe' : 'var(--bg)')
+      + '; color:' + (i === 0 ? '#1a56b8' : 'var(--text)') + '; border:1.5px solid ' + (i === 0 ? '#c8d7ee' : 'var(--border)')
+      + '; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; text-align:left;">' + escapeHTMLSafe(ch.texte) + '</button>';
+  }).join('');
+  return tcBulleCharly(escapeHTMLSafe(m.content).replace(/\n/g, '<br>')
+    + (boutons ? '<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">' + boutons + '</div>' : ''));
+}
+
+/* ── Chez le contact : la carte à boutons ──────────────────────── */
+var _tcPropositionsRepondues = {};
+/** La dernière proposition de créneaux reçue dans cette conversation du serveur, ou null. */
+function tcPropositionRecue(msg) {
+  if (!msg || !msg.serveur || !Array.isArray(msg.thread)) return null;
+  for (let i = msg.thread.length - 1; i >= 0; i--) {
+    const m = msg.thread[i];
+    if (m && m.from === 'them' && m.genre === 'proposition_creneaux' && m.rdv && Array.isArray(m.creneaux)) return m;
+  }
+  return null;
+}
+function tcCadrePropositionCreneaux(p, nom) {
+  const prenom = escapeHTMLSafe(String(nom || '').split(' ')[0]);
+  const choix = (p.choix !== undefined && p.choix !== null) ? Number(p.choix) : _tcPropositionsRepondues[p.rdv];
+  const cadre = 'margin-top:16px; padding:14px; background:#f0f7ff; border:1px solid #c8d7ee; border-radius:14px;';
+  if (choix !== undefined) {
+    const c = p.creneaux.find(function (x) { return Number(x.rang) === choix; });
+    const dit = choix === -2 ? 'Cette proposition a déjà reçu une réponse.'
+      : c ? '✅ Tu as choisi : ' + escapeHTMLSafe(c.libelle || c.debut) + '. ' + prenom + ' reçoit ta réponse.'
+      : '✅ Tu as répondu qu’aucun de ces moments ne te va. ' + prenom + ' reçoit ta réponse.';
+    return '<div style="' + cadre + ' font-size:12.5px; color:var(--text); line-height:1.5;">' + dit + '</div>';
+  }
+  const bouton = 'padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; font-weight:600;';
+  return '<div style="' + cadre + '">'
+    + '<div style="font-size:13px; font-weight:600; color:var(--g-blue); margin-bottom:10px;">📅 ' + prenom + ' te propose un autre moment</div>'
+    + '<div style="display:flex; flex-direction:column; gap:8px;">'
+    + p.creneaux.map(function (c) {
+      return '<button style="' + bouton + ' color:white; background:var(--g-green); text-transform:none;" onclick="tcRepondreProposition(' + Number(p.rdv) + ', ' + Number(c.rang) + ')">' + escapeHTMLSafe(c.libelle || c.debut) + '</button>';
+    }).join('')
+    + '<button style="' + bouton + ' color:var(--text); background:var(--bg); border:1.5px solid var(--border);" onclick="tcRepondreProposition(' + Number(p.rdv) + ', -1)">Aucun ne me va</button>'
+    + '</div></div>';
+}
+async function tcRepondreProposition(rdv, rang) {
+  try {
+    await TC_BACKEND.propositionChoisir(rdv, rang);
+  } catch (e) {
+    if (e && e.code === 'creneau_pris') { showToast('⚠️ Ce créneau vient d’être pris : choisis-en un autre'); return; }
+    if (e && e.code === 'deja_repondu') { _tcPropositionsRepondues[rdv] = -2; }
+    else { showToast('⚠️ Réponse non envoyée : réessaie dans un instant'); return; }
+  }
+  if (_tcPropositionsRepondues[rdv] !== -2) {
+    _tcPropositionsRepondues[rdv] = rang;
+    showToast(rang === -1 ? '✅ Réponse envoyée' : '✅ Moment choisi, réponse envoyée');
+  }
+  try { await tcSyncTour(); } catch (e) {}
+  if (_currentConvId && currentPage === 'conv') openConversation(_currentConvId);
+}
+
+/** Le rendez-vous qui attend la réponse du contact : une pastille discrète sur sa carte. */
+function tcMarqueDecalage(e) {
+  return (e && e.decalage && e.decalage.rdv) ? '⏳ ' : '';
+}
+
+// Les réponses arrivent sans notification : un coup d'œil toutes les 30 s, seulement si une proposition attend
+// et que l'application est visible ; et une fois au démarrage (une proposition faite depuis un autre appareil).
+if (typeof window !== 'undefined' && typeof setInterval === 'function') {
+  setInterval(function () { if (typeof document === 'undefined' || !document.hidden) tcSuivrePropositions(false); }, TC_PROPOSITION_SONDE_MS);
+  setTimeout(function () { tcSuivrePropositions(true); }, 5000);
 }
 
 /** Un contact vraiment prévenu : la marche arrière (« remets-les ») ne rappellera que ceux-là. */
@@ -30455,6 +30859,21 @@ const TC_BACKEND = {
   async submitRdvChoice(token, choiceIndex) {
     await tcAppel('POST', '/rdv/lien/choix', { jeton: token, rang: choiceIndex }, false);
     return true;
+  },
+
+  // Mission 73 : les propositions de créneaux de Charly.
+  async propositionCreer(corps) {
+    return tcAppel('POST', '/rdv/proposition/creer', corps);
+  },
+  async propositionChoisir(rdvId, rang) {
+    return tcAppel('POST', '/rdv/proposition/choisir', { rdv_id: rdvId, rang: rang });
+  },
+  async propositions() {
+    const d = await tcAppel('GET', '/rdv/propositions');
+    return (d && Array.isArray(d.propositions)) ? d.propositions : [];
+  },
+  async propositionTraiter(rdvId) {
+    return tcAppel('POST', '/rdv/proposition/traiter', { rdv_id: rdvId });
   }
 };
 
