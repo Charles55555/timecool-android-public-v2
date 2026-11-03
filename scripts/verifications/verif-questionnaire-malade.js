@@ -194,7 +194,7 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   verifie('un nouveau questionnaire remplace l ancien : l ancienne carte est abandonnée, un clic dessus ne fait rien', ancienne._questionnaire.etat === 'abandon' && (await ctx.tcQuestionnaireRepondre(ancienne._questionnaire.id, 0), enCours() && enCours().etape === 'action'));
   verifie('une carte dont le questionnaire n est plus en cours se rend inactive (après rechargement par exemple)', /disabled/.test(ctx.tcRendreQuestionnaire(ancienne)));
   verifie('« comment prévenir que je suis malade ? » n est pas un parcours malade ; « je suis malade » l est', !ctx.tcDetecterMalade('comment prévenir que je suis malade ?') && ctx.tcDetecterMalade('Je suis MALADE') && !ctx.tcDetecterMalade('maladie'));
-  verifie('la phrase : « après-demain » ne force aucune période ; « demain après-midi » et « supprime » sont lus', ctx.tcMaladeDansLaPhrase('je suis malade après-demain').periode === undefined && JSON.stringify(ctx.tcMaladeDansLaPhrase('malade demain après-midi, supprime tout')) === '{"periode":"demain_apresmidi","action":"supprimer"}');
+  verifie('la phrase : « après-demain » est compris (mission 77, TESTEURS 03/11) ; « demain après-midi » et « supprime » sont lus', ctx.tcMaladeDansLaPhrase('je suis malade après-demain').periode === 'apres_demain' && JSON.stringify(ctx.tcMaladeDansLaPhrase('malade demain après-midi, supprime tout')) === '{"periode":"demain_apresmidi","action":"supprimer"}');
 
   titre('8. Dans la page : l aiguillage, le rendu, le ménage, pas de tiret long, pas d assertion arrière');
   const csm = fonction(page, 'charlySendMessage') || '';

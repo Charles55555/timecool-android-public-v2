@@ -12732,8 +12732,14 @@ function tcListeDuJourPourDeplacement(reply, texte, now, events, mode) {
  * null si la phrase n a pas de verbe d annulation / deplacement, ou ne nomme rien (« annule mon rdv de mardi »).
  */
 const TC_MOTS_VISEE_CREUX = /^(annul\w*|supprim\w*|effac\w*|enlev\w*|retir\w*|deplac\w*|decal\w*|report\w*|repouss\w*|avanc\w*|reprogramm\w*|boug\w*|chang\w*|modifi\w*|ajoute[rsz]?|mets?|mettre|peux|pourrais|pouvez|pourriez|veux|voudrais|faut|merci|plait|rendez|vous|rdv|agenda|reunion|seance|consultation|aujourd|demain|hier|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|mois|matin|midi|soir|heure|heures|prochain|prochaine|dernier|derniere|plutot|meme|tout|tous|toute|toutes|celui|celle|cette|avec|chez|pour|dans|vers|jusqu|apres|avant|moment|creneau|horaire|jour|jours)$/;
+/** « Paul a annulé », « ont décalé », « a été reporté » : quelqu'un d'autre l'a fait, ce n'est pas un ordre à Charly. */
+function tcFaitRaconte(t) {
+  return /(?:^|[^\w'’])(?:a|ont|avait|avaient)\s+(?:ete\s+)?(?:annul|supprim|effac|enlev|retir|decal|deplac|report|repouss|avanc|boug|chang|modifi)(?:e|ee|es|ees)\b/.test(tcSansAccents(String(t || '')));
+}
 function tcRdvViseIntrouvable(texte, now, events, mode) {
   const t = tcSansAccents(texte);
+  // « Paul a annulé sans … », « le dentiste a été décalé » : un fait raconté, pas un ordre ; le modèle lit la suite (TESTEURS, 03/11).
+  if (typeof tcFaitRaconte === 'function' && tcFaitRaconte(t)) return null;
   // Le VERBE conjugue, avec fin de mot : « un deplacement a Lyon », « un reportage photo », « decalage horaire »,
   // « avancement du projet » sont des noms d evenements, jamais un ordre (examen de la mission 31).
   if (!(tcVerbeConjugue('deplacement').test(t) || /\b(annul|supprim|effac|enlev|retir)(e|er|es|ez|ons)\b/.test(t))) return null;
@@ -12807,6 +12813,8 @@ function tcSansCarteApresQuestion(reply, texte) {
 
 function tcRdvNommeIntrouvable(texte, now, events, mode) {
   const t = tcSansAccents(texte);
+  // « Paul a annulé sans … », « le dentiste a été décalé » : un fait raconté, pas un ordre ; le modèle lit la suite (TESTEURS, 03/11).
+  if (typeof tcFaitRaconte === 'function' && tcFaitRaconte(t)) return null;
   // Un vrai deplacement de rendez-vous : verbe strict, ou verbe large (« change », « modifie ») avec le mot
   // rendez-vous. « Change la couleur de mon agenda », « modifie mon profil » ne passent pas ici.
   // Le VERBE, avec fin de mot : « un deplacement a Lyon », « un reportage photo » sont des noms d evenements.
@@ -20991,10 +20999,12 @@ function tcSansHesitations(texte) {
   // « oui », « euh ») ; jamais au milieu d'une phrase qui a un sens (« on attend le plombier », « Paul attend ma réponse ») ; « je veux
   // dire » jamais devant « à / au » (« je veux dire à Paul que… ») : chef et examinateur, mission 55.
   const tete = '(^\\s*|[,;]\\s*|\\b(?:non|oui|ok|euh|heu|bah)\\s+)';
-  t = t.replace(new RegExp(tete + '(?:attends|attend|attendez|en fait|du coup|tu vois|voila|voilà|enfin bref|bref|comment dire|alors)(?=$|[\\s,;.!?])', 'gi'), '$1');
+  // « attends ma validation », « attends mon accord » : un ordre à Charly, jamais une hésitation (mission 77, TESTEURS 03/11).
+  const ordreAttendre = '(?!\\s+(?:ma|mon)\\s+(?:validation|accord|feu\\s+vert|ok)\\b)';
+  t = t.replace(new RegExp(tete + '(?:attends|attend|attendez|en fait|du coup|tu vois|voila|voilà|enfin bref|bref|comment dire|alors)(?=$|[\\s,;.!?])' + ordreAttendre, 'gi'), '$1');
   t = t.replace(new RegExp(tete + 'je veux dire(?=$|[\\s,;.!?])(?!\\s+(?:à|a|au|aux)(?:\\s|$))', 'gi'), '$1');
   // Deux hésitations à la suite (« euh attends en fait ») : on repasse une fois.
-  t = t.replace(new RegExp(tete + '(?:attends|attend|attendez|en fait|du coup|voila|voilà|bref|alors)(?=$|[\\s,;.!?])', 'gi'), '$1');
+  t = t.replace(new RegExp(tete + '(?:attends|attend|attendez|en fait|du coup|voila|voilà|bref|alors)(?=$|[\\s,;.!?])' + ordreAttendre, 'gi'), '$1');
   // « non attends annule », « non en fait supprime » : le « non » d'hésitation devant le verbe tombe, la demande est le verbe.
   // (« non annule pas », « non annule rien » gardent leur « non » : c'est un refus d'annuler.)
   t = t.replace(/^[\s,;]*non[\s,]+(?=(?:annule|annuler|supprime|supprimer|efface|effacer|laisse tomber|laisse|stop|arrete|arrête|oublie)\b(?!\s+(?:pas|rien|surtout pas)\b))/i, '');
@@ -25498,6 +25508,24 @@ async function tcQuestionnaireValider(id) {
   await tcQuestionnaireSuivant();
 }
 
+/**
+ * Mission 77 (TESTEURS, 03/11) : la demande finie, plus rien n'attend de réponse, le profil du moment tombe tout de suite,
+ * pas au début de la demande suivante. Après chaque message et chaque bouton du questionnaire.
+ */
+function tcFinirConfianceDuMoment() {
+  if (typeof _tcConfianceMoment === 'undefined' || !_tcConfianceMoment) return;
+  if (typeof charlyIA !== 'undefined' && charlyIA && charlyIA.isLoading) return;
+  if (typeof tcUneQuestionAttend === 'function' && tcUneQuestionAttend()) return;
+  _tcConfianceMoment = null;
+}
+if (typeof window !== 'undefined') ['charlySendMessage', 'tcQuestionnaireRepondre', 'tcQuestionnaireValider'].forEach(function (nom) {
+  const f = window[nom];
+  if (typeof f !== 'function' || f._tcFinConfiance) return;
+  const g = async function () { try { return await f.apply(this, arguments); } finally { tcFinirConfianceDuMoment(); } };
+  g._tcFinConfiance = true;
+  window[nom] = g;
+});
+
 /** Une réponse hors des choix (« 20 minutes ») : notée telle quelle, la carte est marquée répondue. */
 async function tcQuestionnaireRepondreLibre(valeur) {
   const q = _tcQuestionnaire;
@@ -25712,6 +25740,20 @@ function tcQuestionnaireLendemain(rdvs) {
   const d = new Date(dernier + 'T12:00:00');
   d.setDate(d.getDate() + 1);
   return d;
+}
+
+/**
+ * Un rendez-vous ⏳ attend déjà la réponse de son contact : il n'est pas reproposé (TESTEURS, 03/11). Charly le dit ;
+ * faux s'il ne reste rien à décaler (le questionnaire s'arrête là).
+ */
+function tcEcarterDecalagesEnCours(r) {
+  const enCours = (r._rdvs || []).filter(function (e) { return e && e.decalage && e.decalage.rdv; });
+  if (!enCours.length) return true;
+  r._rdvs = r._rdvs.filter(function (e) { return enCours.indexOf(e) < 0; });
+  tcQuestionnaireDire('Déjà en cours de décalage (⏳), j’attends la réponse : ' + enCours.map(function (e) { return '« ' + e.title + ' »'; }).join(', ') + '.');
+  if (r._rdvs.length) return true;
+  tcQuestionnaireDire('Rien d’autre à décaler.');
+  return false;
 }
 
 /** Les créneaux proposés, montrés à l'utilisateur ; `r._liste` les garde pour le récapitulatif et le travail. */
@@ -26744,7 +26786,9 @@ const TC_MALADE_PERIODES = {
   demain_matin:     { texte: 'Demain matin',               label: 'demain matin',                jours: [1, 1], debut: 0,   fin: 720,  mots: /matin/ },
   demain_apresmidi: { texte: 'Demain après-midi',          label: 'demain après-midi',           jours: [1, 1], debut: 720, fin: 1440, mots: /apres.?midi|aprem/ },
   demain:           { texte: 'Demain toute la journée',    label: 'demain',                      jours: [1, 1], debut: 0,   fin: 1440, mots: /^demain$|toute la journee|journee entiere|tout demain/ },
-  prochains_jours:  { texte: 'Les 2 ou 3 prochains jours', label: 'pour les 3 prochains jours',  jours: [0, 2], debut: 0,   fin: 1440, mots: /prochains|jours|2 ou 3|deux ou trois/ }
+  prochains_jours:  { texte: 'Les 2 ou 3 prochains jours', label: 'pour les 3 prochains jours',  jours: [0, 2], debut: 0,   fin: 1440, mots: /prochains|jours|2 ou 3|deux ou trois/ },
+  // « malade après-demain » dit dans la phrase (TESTEURS, 03/11) : pas de bouton de plus.
+  apres_demain:     { texte: 'Après-demain',               label: 'après-demain',                jours: [2, 2], debut: 0,   fin: 1440, mots: /apres.?demain/, cache: true }
 };
 
 /** « Malade » dans la phrase : le questionnaire guidé, jamais le modèle. Une question (« comment… ? ») n'en est pas une. */
@@ -26763,8 +26807,8 @@ function tcDetecterMalade(text) {
 function tcMaladeDansLaPhrase(text) {
   const sans = tcSansAccents(String(text || '')).replace(/[’'´]/g, "'");
   const connu = {};
-  if (/apres-?demain/.test(sans)) {
-    // Pas une option du questionnaire : on demande.
+  if (/apres[- ]?demain/.test(sans)) {
+    connu.periode = 'apres_demain';
   } else if (/\bdemain\b/.test(sans)) {
     if (/\bmatin/.test(sans)) connu.periode = 'demain_matin';
     else if (/apres-?midi|\baprem\b/.test(sans)) connu.periode = 'demain_apresmidi';
@@ -26796,7 +26840,7 @@ const TC_QUESTIONNAIRE_MALADE = {
   nom: 'malade',
   etapes: [
     { cle: 'periode', question: 'Je m’occupe de ton agenda pour quand ?',
-      choix: Object.keys(TC_MALADE_PERIODES).map(function (k) { return { cle: k, texte: TC_MALADE_PERIODES[k].texte, mots: TC_MALADE_PERIODES[k].mots }; }) },
+      choix: Object.keys(TC_MALADE_PERIODES).filter(function (k) { return !TC_MALADE_PERIODES[k].cache; }).map(function (k) { return { cle: k, texte: TC_MALADE_PERIODES[k].texte, mots: TC_MALADE_PERIODES[k].mots }; }) },
     { cle: 'action',
       avant: function (r) {
         const p = TC_MALADE_PERIODES[r.periode];
@@ -26811,6 +26855,7 @@ const TC_QUESTIONNAIRE_MALADE = {
     { cle: 'creneaux', si: function (r) { return r.action === 'decaler'; },
       avant: function (r) {
         // On est malade : jamais le même jour, les créneaux commencent le lendemain de la période.
+        if (!tcEcarterDecalagesEnCours(r)) return false;
         const p = TC_MALADE_PERIODES[r.periode];
         const now = new Date();
         const depuisMalade = new Date(now.getFullYear(), now.getMonth(), now.getDate() + p.jours[1] + 1);
@@ -26926,7 +26971,7 @@ const TC_QUESTIONNAIRE_IMPREVU = {
     { cle: 'fin_rien', si: function (r) { return r.action === 'rien'; },
       avant: function () { tcQuestionnaireDire('D’accord, je ne touche à rien.'); return false; } },
     { cle: 'creneaux', si: function (r) { return r.action === 'decaler'; },
-      avant: function (r) { tcQuestionnaireProposer(r, r.quoi === 'ajout' ? 'Pour faire de la place, voici ce que je te propose :' : 'Voici ce que je te propose :'); } },
+      avant: function (r) { if (!tcEcarterDecalagesEnCours(r)) return false; tcQuestionnaireProposer(r, r.quoi === 'ajout' ? 'Pour faire de la place, voici ce que je te propose :' : 'Voici ce que je te propose :'); } },
     TC_ETAPE_PREVENIR,
     TC_ETAPE_RECAP
   ],

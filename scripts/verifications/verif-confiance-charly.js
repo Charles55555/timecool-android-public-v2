@@ -38,7 +38,7 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
   'tcIdsQuestion', 'tcRetirerQuestionsDe', 'tcPoserLotCreneaux', 'tcReproposerSeul', 'tcExecuterLotCreneaux', 'tcDireSuitesAuxContacts', 'tcExecuterDeplacement', 'tcGenesDuLot',
   'tcPrisTexte', 'tcPrisParentheses', 'tcTraiterSeul', 'tcSuitesEnLignes', 'tcProposerEnvoi', 'tcExecuterEnvoi',
   'tcSauverAClore', 'tcEchecClore', 'tcCloreEnAttente', 'tcNoterPourMarcheArriere', 'tcMaintenirPropositions',
-  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcUneQuestionAttend'];
+  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcUneQuestionAttend', 'tcFinirConfianceDuMoment', 'tcEcarterDecalagesEnCours', 'tcFaitRaconte'];
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -575,6 +575,50 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   ctx.charlyIA.history.push({ role: 'user', content: 'oui' });
   verifie('une question attend : la réponse garde le profil du moment ; après la réponse, plus rien n’attend', qa === true && ctx.tcUneQuestionAttend() === false);
   delete stock.tc_confiance_charly;
+
+  titre('13. Retour TESTEURS (03/11) : le vrai parcours « malade » avec contacts');
+  ['tcSansHesitations', 'tcMaladeDansLaPhrase', 'tcFaitRaconte', 'tcEcarterDecalagesEnCours', 'tcFinirConfianceDuMoment'].forEach((n) => { const c = extraire(n); if (c) vm.runInContext(c, ctx); });
+  verifie('les fonctions du retour existent', ['tcSansHesitations', 'tcMaladeDansLaPhrase', 'tcFaitRaconte', 'tcEcarterDecalagesEnCours', 'tcFinirConfianceDuMoment'].every((n) => typeof ctx[n] === 'function'));
+  // 1. « attends ma validation » survit à la correction de dictée ; « attends » d'hésitation tombe toujours.
+  const h1_78 = ctx.tcSansHesitations('je suis malade demain, décale tout, attends ma validation');
+  const r1_78 = ctx.tcConfianceDemandee(h1_78);
+  verifie('« …, décale tout, attends ma validation » : « attends » n’est plus pris pour une hésitation, profil 1, texte sans la phrase', h1_78 === 'je suis malade demain, décale tout, attends ma validation' && r1_78 && r1_78.n === 1 && r1_78.sans === 'je suis malade demain, décale tout', JSON.stringify([h1_78, r1_78]));
+  verifie('« décale tout. Attends mon accord » : gardé aussi', (ctx.tcConfianceDemandee(ctx.tcSansHesitations('décale tout. Attends mon accord')) || {}).n === 1);
+  verifie('« attends, annule le dentiste » et « non attends annule » : l’hésitation tombe comme avant', ctx.tcSansHesitations('attends, annule le dentiste') === 'annule le dentiste' && ctx.tcSansHesitations('non attends annule') === 'annule');
+  // 2. Fin de la demande : le profil du moment tombe tout de suite.
+  vm.runInContext('_tcConfianceMoment = { n: 3, dit: true, texte: "x" }', ctx);
+  ctx.charlyIA.history = [{ role: 'assistant', nature: 'question', content: 'J’envoie ?' }];
+  ctx.tcFinirConfianceDuMoment();
+  const garde_78 = vm.runInContext('_tcConfianceMoment !== null', ctx);
+  ctx.charlyIA.isLoading = true; ctx.charlyIA.history = [];
+  ctx.tcFinirConfianceDuMoment();
+  const gardeCharge_78 = vm.runInContext('_tcConfianceMoment !== null', ctx);
+  ctx.charlyIA.isLoading = false;
+  ctx.tcFinirConfianceDuMoment();
+  verifie('une question attend ou Charly travaille : le profil du moment reste ; la demande finie : il tombe, tcConfianceCharly() rend le réglage', garde_78 && gardeCharge_78 && vm.runInContext('_tcConfianceMoment === null', ctx) && ctx.tcConfianceCharly() === 1);
+  verifie('après chaque message et chaque bouton du questionnaire (charlySendMessage, tcQuestionnaireRepondre, tcQuestionnaireValider), dans un finally',
+    /\['charlySendMessage', 'tcQuestionnaireRepondre', 'tcQuestionnaireValider'\]\.forEach\(function \(nom\) \{/.test(page) && /try \{ return await f\.apply\(this, arguments\); \} finally \{ tcFinirConfianceDuMoment\(\); \}/.test(page));
+  // 3. Après-demain.
+  verifie('« je suis malade après-demain, décale tout » : la période est comprise (après-demain), pas de « pour quand ? »', JSON.stringify(ctx.tcMaladeDansLaPhrase('je suis malade après-demain, décale tout')) === '{"periode":"apres_demain","action":"decaler"}' && ctx.tcMaladeDansLaPhrase('malade apres demain').periode === 'apres_demain' && ctx.tcMaladeDansLaPhrase('malade demain').periode === 'demain');
+  verifie('après-demain : jour + 2, toute la journée, sans bouton de plus dans « pour quand ? »', /apres_demain: +\{ texte: 'Après-demain', +label: 'après-demain', +jours: \[2, 2\], debut: 0, +fin: 1440, mots: \/apres\.\?demain\/, cache: true \}/.test(page) && page.indexOf('choix: Object.keys(TC_MALADE_PERIODES).filter(function (k) { return !TC_MALADE_PERIODES[k].cache; })') > -1);
+  // 4. Un rendez-vous ⏳ n'est pas reproposé.
+  const dits_78 = [], direAvant_78 = ctx.tcQuestionnaireDire;
+  ctx.tcQuestionnaireDire = (t) => dits_78.push(t);
+  const ra_78 = { _rdvs: [{ id: 'a', title: 'Point projet', decalage: { rdv: 1 } }, { id: 'b', title: 'Sport' }] };
+  const okA_78 = ctx.tcEcarterDecalagesEnCours(ra_78);
+  const rb_78 = { _rdvs: [{ id: 'c', title: 'Café Estelle', decalage: { rdv: 2 } }] };
+  const okB_78 = ctx.tcEcarterDecalagesEnCours(rb_78);
+  const rc_78 = { _rdvs: [{ id: 'd', title: 'Piscine' }] };
+  const okC_78 = ctx.tcEcarterDecalagesEnCours(rc_78);
+  ctx.tcQuestionnaireDire = direAvant_78;
+  verifie('un rendez-vous ⏳ est écarté et Charly le dit ; seul ⏳ : « Rien d’autre à décaler. », le questionnaire s’arrête', okA_78 === true && ra_78._rdvs.map((e) => e.id).join() === 'b' && okB_78 === false && okC_78 === true && rc_78._rdvs.length === 1
+    && dits_78[0] === 'Déjà en cours de décalage (⏳), j’attends la réponse : « Point projet ».' && dits_78[2] === 'Rien d’autre à décaler.' && dits_78.length === 3, JSON.stringify(dits_78));
+  verifie('malade et imprévu : l’étape des créneaux écarte les ⏳ d’abord', /if \(!tcEcarterDecalagesEnCours\(r\)\) return false;\n        const p = TC_MALADE_PERIODES\[r\.periode\];/.test(page) && page.indexOf('avant: function (r) { if (!tcEcarterDecalagesEnCours(r)) return false; tcQuestionnaireProposer(r, ') > -1);
+  // 5. « Paul a annulé sans me demander, note-le ».
+  verifie('« Paul a annulé sans me demander, note-le », « le dentiste a été décalé » : un fait raconté ; « annule le dentiste », « j ai annulé…, remets-le » : non',
+    ctx.tcFaitRaconte('Paul a annulé sans me demander, note-le') && ctx.tcFaitRaconte('le dentiste a été décalé') && !ctx.tcFaitRaconte('annule le dentiste') && !ctx.tcFaitRaconte('j ai annulé le dentiste, remets-le') && !ctx.tcFaitRaconte('décale le rdv qui a lieu demain'));
+  verifie('les deux « je ne trouve pas de rendez-vous » laissent passer un fait raconté', /function tcRdvViseIntrouvable\(texte, now, events, mode\) \{\n  const t = tcSansAccents\(texte\);\n  \/\/ [^\n]*\n  if \(typeof tcFaitRaconte === 'function' && tcFaitRaconte\(t\)\) return null;/.test(page) && /function tcRdvNommeIntrouvable\(texte, now, events, mode\) \{\n  const t = tcSansAccents\(texte\);\n  \/\/ [^\n]*\n  if \(typeof tcFaitRaconte === 'function' && tcFaitRaconte\(t\)\) return null;/.test(page));
+  vm.runInContext('_tcConfianceMoment = null', ctx);
 
   console.log('');
   console.log(ko ? ko + ' anomalie(s).' : ok + ' vérifications, aucune anomalie.');
