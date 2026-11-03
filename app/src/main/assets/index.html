@@ -4666,18 +4666,39 @@ function tcAppliquerCouleurEvenement(el, cat) {
 const TC_BLOC_HAUTEUR_HEURE = 42;
 /**
  * Un titre trop long pour sa case est coupé au milieu, jamais à la fin : le dernier mot reste entier (« Coupe c…Martin »).
- * Un seul mot : son début et sa fin restent. tient(texte) dit si un essai tient ; recherche par moitiés (mission 76).
+ * Un seul mot, ou un dernier mot plus large que la case (« Séance kinésithérapie ») : ce mot garde son début et sa fin
+ * (« kiné…pie »), deux lettres au moins, jamais « … » seul. tient(texte) dit si un essai tient ; recherche par moitiés (mission 76).
  */
 function tcCouperAuMilieu(titre, tient) {
   const t = String(titre || '').trim();
   if (!t || tient(t)) return t;
+  const unMot = function (w) {
+    if (w.length <= 2 || tient(w)) return w;
+    const essai = function (n) { return w.slice(0, Math.ceil(n / 2)) + '…' + w.slice(w.length - Math.floor(n / 2)); };
+    let bas = 2, haut = w.length - 1, meilleur = 2;
+    while (bas <= haut) { const m = (bas + haut) >> 1; if (tient(essai(m))) { meilleur = m; bas = m + 1; } else haut = m - 1; }
+    return essai(meilleur);
+  };
   const mots = t.split(/\s+/);
-  const fin = mots.length > 1 ? mots[mots.length - 1] : '';
-  const debut = fin ? t.slice(0, t.length - fin.length).trim() : t;
-  const essai = function (n) { return fin ? (debut.slice(0, n).trim() + '…' + fin) : (t.slice(0, Math.ceil(n / 2)) + '…' + t.slice(t.length - Math.floor(n / 2))); };
-  let bas = 0, haut = fin ? debut.length : t.length - 1, meilleur = 0;
+  if (mots.length < 2) return unMot(t);
+  const fin = mots[mots.length - 1];
+  if (!tient('…' + fin)) return unMot(fin);
+  const debut = t.slice(0, t.length - fin.length).trim();
+  const essai = function (n) { return debut.slice(0, n).trim() + '…' + fin; };
+  let bas = 0, haut = debut.length, meilleur = 0;
   while (bas <= haut) { const m = (bas + haut) >> 1; if (tient(essai(m))) { meilleur = m; bas = m + 1; } else haut = m - 1; }
   return essai(meilleur);
+}
+
+/**
+ * Un texte tient-il dans la case ? Une ligne : sa largeur. Plusieurs lignes : le retour à la ligne par mots, et aucun mot
+ * (coupé aussi après « … », où le navigateur peut aller à la ligne) plus large que la case : il serait cassé ailleurs.
+ */
+function tcTientDansCase(ctx, texte, largeur, lignes) {
+  if (lignes <= 1) return ctx.measureText(texte).width <= largeur;
+  const mots = String(texte || '').replace(/…/g, '… ').split(/\s+/).filter(Boolean);
+  if (mots.some(function (w) { return ctx.measureText(w).width > largeur; })) return false;
+  return tcLignesDuTexte(ctx, texte, largeur) <= lignes;
 }
 
 /** Le nombre de lignes d'un texte dans une largeur, comme le navigateur (par mots ; un mot trop long, par lettres). */
@@ -4751,7 +4772,7 @@ function tcAjusterTitresCases(racine) {
       if (p.prefixe === undefined) p.prefixe = '';
       if (p.noeud.nodeValue !== p.prefixe) p.noeud.nodeValue = p.prefixe;
     }
-    const tient = function (x) { return p.lignes === 1 ? ctx.measureText(p.prefixe + x).width <= largeur : tcLignesDuTexte(ctx, p.prefixe + x, largeur) <= p.lignes; };
+    const tient = function (x) { return tcTientDansCase(ctx, p.prefixe + x, largeur, p.lignes); };
     const texte = tcCouperAuMilieu(p.titre, tient);
     if (p.sp.textContent !== texte) p.sp.textContent = texte;
     if (p.lignes > 1 || !p.el.classList.contains('month-event-pill')) p.el.style.maxHeight = (p.lignes * p.lh) + 'px';

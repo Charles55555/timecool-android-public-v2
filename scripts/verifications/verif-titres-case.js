@@ -15,7 +15,7 @@ function fonction(nom) {
   const j = page.indexOf('\n}\n', i);
   return j < 0 ? '' : page.slice(i, j + 2);
 }
-const noms = ['tcSansAccents', 'tcTitreEssentiel', 'tcTitresEssentielsDuBloc', 'tcCouperAuMilieu', 'tcLignesDuTexte', 'tcAjusterTitresCases'];
+const noms = ['tcSansAccents', 'tcTitreEssentiel', 'tcTitresEssentielsDuBloc', 'tcCouperAuMilieu', 'tcLignesDuTexte', 'tcTientDansCase', 'tcAjusterTitresCases'];
 const absentes = noms.filter((n) => !fonction(n));
 verifie('les fonctions de la mission 76 existent', !absentes.length, absentes.join(' '));
 if (absentes.length) { console.log('ECHEC ' + ok + '/' + (ok + ko) + ' verifications passees'); process.exit(1); }
@@ -64,6 +64,22 @@ const t2 = ctx.tcCouperAuMilieu('Anniversaire', largeur(7));
 verifie('un seul mot trop long : son début et sa fin restent', t2 === 'Ann…ire', t2);
 const mesure = { measureText: (x) => ({ width: x.length * 5 }) };
 verifie('retour à la ligne par mots, un mot trop long par lettres', ctx.tcLignesDuTexte(mesure, 'Coupe couleur', 40) === 2 && ctx.tcLignesDuTexte(mesure, 'Maman', 40) === 1 && ctx.tcLignesDuTexte(mesure, 'Anniversaire', 40) === 2);
+// Examen du 03/11 : un dernier mot plus large que la colonne (Semaine à 390 px : environ 8 lettres par ligne) ne donne
+// jamais « … » seul. Bloc de 30 min : une ligne ; bloc de 1 h : deux lignes. Mesure fictive : 5 px par lettre, 40 px.
+const m5 = { measureText: (x) => ({ width: x.length * 5 }) };
+const tientCase = (lignes) => (x) => ctx.tcTientDansCase(m5, x, 40, lignes);
+const longs = ['Séance kinésithérapie', 'Dîner anniversaire', 'Contrôle ophtalmologie', 'Visio Ressources-Humaines', 'Point budget avec Lefebvre-Durand', 'Kinésithérapie'];
+const vus = [];
+[1, 2].forEach((l) => longs.forEach((t) => { const v = ctx.tcCouperAuMilieu(t, tientCase(l)); vus.push(l + ':' + v); }));
+verifie('dernier mot plus large que la case (30 min et 1 h) : jamais « … » seul, le mot garde son début et sa fin, et l essai tient',
+  vus.every((x) => { const v = x.slice(2), l = Number(x[0]); return /[A-Za-zÀ-ÿ]{2}…|[A-Za-zÀ-ÿ]…[A-Za-zÀ-ÿ]/.test(v) && v !== '…' && ctx.tcTientDansCase(m5, v, 40, l); }), vus.join(' | '));
+verifie('« Séance kinésithérapie » en 30 min → « kiné…pie » ; « Dîner anniversaire » → « anni…ire »',
+  ctx.tcCouperAuMilieu('Séance kinésithérapie', tientCase(1)) === 'kiné…pie' && ctx.tcCouperAuMilieu('Dîner anniversaire', tientCase(1)) === 'anni…ire', vus.join(' | '));
+verifie('sur plusieurs lignes, un mot plus large que la case ne « tient » pas (le navigateur le casserait au hasard), même collé à « … »',
+  !ctx.tcTientDansCase(m5, 'Séance kinésithérapie', 40, 2) && !ctx.tcTientDansCase(m5, '…kinésithérapie', 40, 3) && ctx.tcTientDansCase(m5, 'Coupe couleur', 40, 2));
+const pires = [];
+for (let n = 1; n <= 30; n++) ['Maman', 'Coupe couleur Mme Martin', 'Séance kinésithérapie', 'Kiné'].forEach((t) => { const v = ctx.tcCouperAuMilieu(t, (x) => x.length <= n); if (!/[A-Za-zÀ-ÿ]/.test(v)) pires.push(n + ':' + t + '→' + v); });
+verifie('toutes largeurs de 1 à 30 lettres : jamais un titre réduit à « … »', !pires.length, pires.join(' | '));
 const aj = fonction('tcAjusterTitresCases');
 verifie('les trois vues posent le titre dans .tc-titre-case et l ajustent après le dessin',
   /<span class="tc-titre-case">\$\{escapeHTMLSafe\(ev\.title\)\}<\/span>/.test(fonction('renderMonth')) && /tcAjusterTitresCasesBientot\(body\);/.test(fonction('renderMonth'))
