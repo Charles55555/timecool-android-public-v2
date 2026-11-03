@@ -496,6 +496,16 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   const mal77 = phrases77.filter(([t, n, s]) => { const r = ctx.tcConfianceDemandee(t); return !r || r.n !== n || r.sans !== s; }).map(([t, n, s]) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)) + ' (attendu ' + n + ', ' + s + ')')
     .concat(sansPhrase77.filter((t) => ctx.tcConfianceDemandee(t)).map((t) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)) + ' (attendu rien)'));
   verifie('les phrases77 du moment : « attends ma validation », « demande-moi avant », « vérifie avec moi », « rien sans me demander » → 1 ; « fais-le directement », « sans me demander », « tout seul », « pas besoin de me demander » → 3 ; ôtées du texte ; les phrases77 ordinaires ne changent rien', !mal77.length, mal77.join(' | '));
+  // Examen 2 de la 77 : côté profil 1, reconnu même suivi d'autres mots (le texte reste alors entier), « d abord » sans apostrophe.
+  const larges = [
+    ['décale tout mais demande-moi avant de prévenir Paul', 'décale tout mais demande-moi avant de prévenir Paul'],
+    ['décale tout et attends ma validation avant de prévenir', 'décale tout et attends ma validation avant de prévenir'],
+    ['je suis malade demain, décale tout, attends mon accord pour Paul', 'je suis malade demain, décale tout, attends mon accord pour Paul'],
+    ['décale le dentiste, vérifie avec moi avant de l envoyer', 'décale le dentiste, vérifie avec moi avant de l envoyer'],
+    ['décale tout, attends ma validation stp', 'décale tout'],
+    ['décale tout mais demande-moi d abord', 'décale tout']];
+  const largesKo = larges.filter(([t, s]) => { const r = ctx.tcConfianceDemandee(t); return !r || r.n !== 1 || r.sans !== s; }).map(([t]) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)));
+  verifie('profil 1 reconnu même suivi d autres mots (texte entier gardé), « stp » compris, « d abord » sans apostrophe ; « moi-même » toujours rien', !largesKo.length && ctx.tcConfianceDemandee('je vérifie avec moi-même demain') === null, largesKo.join(' | '));
   stock.tc_confiance_charly = '3'; ctx.charlyIA.history = [];
   vm.runInContext('_tcConfianceMoment = { n: 1, dit: false, texte: "x" }', ctx);
   verifie('profil 3 + « attends ma validation » : profil 1 pour celle-ci, le réglage reste 3 (Paramètres compris), « D’accord, pour celle-ci j’attends ton accord. » une seule fois',
