@@ -4665,29 +4665,48 @@ function tcAppliquerCouleurEvenement(el, cat) {
    calcule sur la vraie duree, jamais sur cette hauteur. */
 const TC_BLOC_HAUTEUR_HEURE = 42;
 /**
- * Un titre trop long pour sa case est coupé au milieu, jamais à la fin : le dernier mot reste entier (« Coupe c…Martin »).
- * Un seul mot, ou un dernier mot plus large que la case (« Séance kinésithérapie ») : ce mot garde son début et sa fin
- * (« kiné…pie »), deux lettres au moins, jamais « … » seul. tient(texte) dit si un essai tient ; recherche par moitiés (mission 76).
+ * Un titre trop long pour sa case (vues Jour et Semaine) est coupé au milieu : le dernier mot reste entier (« Coupe c…Martin »),
+ * le début garde deux lettres au moins (jamais une case qui commence par « … »), sinon le début reste (tcCouperALaFin).
+ * Un dernier mot plus large que la case (« Séance kinésithérapie ») : sur plusieurs lignes, le début entier puis ce mot coupé
+ * (« Séance / kiné…pie ») ; sinon ce mot seul garde son début et sa fin (« kiné…pie »), jamais « … » seul.
+ * tient(texte) dit si un essai tient ; recherche par moitiés (mission 76, retouche 76b).
  */
 function tcCouperAuMilieu(titre, tient) {
   const t = String(titre || '').trim();
   if (!t || tient(t)) return t;
+  const plusGrand = function (f, bas, haut) { let r = -1; while (bas <= haut) { const m = (bas + haut) >> 1; if (tient(f(m))) { r = m; bas = m + 1; } else haut = m - 1; } return r; };
+  const motCoupe = function (w, n) { return w.slice(0, Math.ceil(n / 2)) + '…' + w.slice(w.length - Math.floor(n / 2)); };
   const unMot = function (w) {
     if (w.length <= 2 || tient(w)) return w;
-    const essai = function (n) { return w.slice(0, Math.ceil(n / 2)) + '…' + w.slice(w.length - Math.floor(n / 2)); };
-    let bas = 2, haut = w.length - 1, meilleur = 2;
-    while (bas <= haut) { const m = (bas + haut) >> 1; if (tient(essai(m))) { meilleur = m; bas = m + 1; } else haut = m - 1; }
-    return essai(meilleur);
+    const n = plusGrand(function (k) { return motCoupe(w, k); }, 2, w.length - 1);
+    return motCoupe(w, n < 2 ? 2 : n);
   };
   const mots = t.split(/\s+/);
   if (mots.length < 2) return unMot(t);
   const fin = mots[mots.length - 1];
-  if (!tient('…' + fin)) return unMot(fin);
   const debut = t.slice(0, t.length - fin.length).trim();
-  const essai = function (n) { return debut.slice(0, n).trim() + '…' + fin; };
-  let bas = 0, haut = debut.length, meilleur = 0;
-  while (bas <= haut) { const m = (bas + haut) >> 1; if (tient(essai(m))) { meilleur = m; bas = m + 1; } else haut = m - 1; }
-  return essai(meilleur);
+  if (!tient('…' + fin)) {
+    const n = fin.length > 4 ? plusGrand(function (k) { return debut + ' ' + motCoupe(fin, k); }, 4, fin.length - 1) : -1;
+    return n >= 4 ? debut + ' ' + motCoupe(fin, n) : unMot(fin);
+  }
+  const n = plusGrand(function (k) { return debut.slice(0, k).trim() + '…' + fin; }, Math.min(2, debut.length), debut.length);
+  if (n >= 0) return debut.slice(0, n).trim() + '…' + fin;
+  return typeof tcCouperALaFin === 'function' ? tcCouperALaFin(t, tient) : unMot(fin);
+}
+
+/**
+ * Un titre coupé à la fin, son début gardé (« Anniv… », « Point… ») : les pastilles du Mois, et les cases trop étroites pour
+ * « Co…Martin ». Deux lettres au moins ; un dernier mot entamé de deux lettres au plus s'efface (« Point… », pas « Point m… »).
+ */
+function tcCouperALaFin(titre, tient) {
+  const t = String(titre || '').trim();
+  if (!t || tient(t)) return t;
+  let bas = 2, haut = t.length - 1, n = 2;
+  while (bas <= haut) { const m = (bas + haut) >> 1; if (tient(t.slice(0, m).trim() + '…')) { n = m; bas = m + 1; } else haut = m - 1; }
+  let garde = t.slice(0, n).trim();
+  const entame = garde.match(/^(.*\S)\s+(\S{1,2})$/);
+  if (entame && t.charAt(n) && !/\s/.test(t.charAt(n))) garde = entame[1];
+  return garde + '…';
 }
 
 /**
@@ -4767,13 +4786,21 @@ function tcAjusterTitresCases(racine) {
     const largeur = p.largeur * 0.96;
     if (p.variantes) {
       const t = String(p.titre || '').trim(), mots = t.split(/\s+/);
-      const minimum = mots.length > 1 ? '…' + mots[mots.length - 1] : (t.length <= 5 ? t : t.slice(0, 2) + '…' + t.slice(-2));
+      const minimum = t.length <= 6 ? t : t.slice(0, 4) + '…';
       p.prefixe = p.variantes.filter(function (v) { return ctx.measureText(v + minimum).width <= largeur; })[0];
       if (p.prefixe === undefined) p.prefixe = '';
       if (p.noeud.nodeValue !== p.prefixe) p.noeud.nodeValue = p.prefixe;
     }
+    // Un titre qui manque de un ou deux pixels (« Dentiste » dans la colonne de 390 px) se resserre un peu plutôt que d'être coupé.
+    const serre = [0, -0.25, -0.5].filter(function (ls) {
+      const m = { measureText: function (x) { return { width: ctx.measureText(x).width + ls * x.length }; } };
+      return tcTientDansCase(m, p.prefixe + p.titre, largeur, p.lignes);
+    })[0];
     const tient = function (x) { return tcTientDansCase(ctx, p.prefixe + x, largeur, p.lignes); };
-    const texte = tcCouperAuMilieu(p.titre, tient);
+    const texte = serre !== undefined ? String(p.titre || '').trim()
+      : (p.variantes || p.el.classList.contains('month-event-pill') ? tcCouperALaFin(p.titre, tient) : tcCouperAuMilieu(p.titre, tient));
+    const ls = serre ? serre + 'px' : '';
+    if (p.sp.style.letterSpacing !== ls) p.sp.style.letterSpacing = ls;
     if (p.sp.textContent !== texte) p.sp.textContent = texte;
     if (p.lignes > 1 || !p.el.classList.contains('month-event-pill')) p.el.style.maxHeight = (p.lignes * p.lh) + 'px';
   });
@@ -5778,6 +5805,12 @@ function tcDesignationPour(msg, p) {
   return null;
 }
 
+/** Un proche désigné par son lien (« maman », « mon frère ») : retouche 76b. */
+function tcEstUnProche(designation) {
+  const s = tcSansAccents(String(designation || '')).replace(/^(?:chez\s+)?(?:mon|ma|mes|ton|ta|tes)\s+/, '').trim();
+  return /^(maman|papa|mere|pere|mamie|mamy|papy|papi|parents|grand-?mere|grand-?pere|grands-parents|frere|soeur|fils|fille|oncle|tante|tonton|tata|cousin|cousine|belle-?mere|beau-?pere|mari|femme|epoux|epouse)$/.test(s);
+}
+
 /** Une designation dont on sait qu'elle ne designe personne. */
 function tcSurnomRefuse(designation) {
   const cle = tcCleSurnom(designation);
@@ -5803,6 +5836,8 @@ function tcAttenteContact(msg, propositions) {
     if (tcSurnomRefuse(nom)) continue;
     // Un lieu : on ne lui demande pas son prenom.
     if (tcEstUnLieu(nom)) continue;
+    // Un proche (« maman ») : la question seulement si un contact porte ce mot ; sinon l'agenda tout de suite (retouche 76b).
+    if (typeof tcEstUnProche === 'function' && tcEstUnProche(nom) && typeof tcResoudreContact === 'function' && !tcResoudreContact(nom).length) continue;
     if (!tcContactDeProposition(msg, p)) return nom;
   }
   return null;
@@ -12238,7 +12273,7 @@ function tcContexteDatePourIA(now) {
     + '- Une date de ce calendrier n’est JAMAIS passée. Une date demandée est toujours à venir : si un jour du mois est déjà passé ce mois-ci, c’est le mois suivant.\n'
     + '- Une heure déjà passée aujourd’hui (avant ' + hh + ') : dis-le calmement, ne crée rien, et propose un autre créneau (le prochain libre, ou demain à la même heure).\n'
     + '- L’année est ' + ref.getFullYear() + '. Dans ton texte, écris la date en toutes lettres telle qu’elle est dans le calendrier (ex. "' + tcDateEnLettres(demain) + '").\n'
-    + '- Le TITRE du rendez-vous est le mot-clé de la demande ("rdv dentiste mardi 15h" → "Dentiste", "mercredi prochain 10h30 coach" → "Coach", "avec le plombier" → "Plombier"). "Activité" seulement si la demande ne dit vraiment rien. Jamais « Rendez-vous », « RDV » ni « Rendez-vous chez » devant le titre : "rendez-vous chez ma maman" → "Maman", première lettre en majuscule (le titre reste court : il doit se lire dans la case de l’agenda).\n\n'
+    + '- Le TITRE du rendez-vous est le mot-clé de la demande ("rdv dentiste mardi 15h" → "Dentiste", "mercredi prochain 10h30 coach" → "Coach", "avec le plombier" → "Plombier"). "Activité" seulement si la demande ne dit vraiment rien. Jamais « Rendez-vous », « RDV » ni « Rendez-vous chez » devant le titre : "rendez-vous chez ma maman" → "Maman", première lettre en majuscule (le titre reste court : il doit se lire dans la case de l’agenda). Titre dicté (« appelle-le "Point mensuel équipe" », « intitule-le », « nomme-le », « titre : ») → seulement les mots dictés, sans le verbe : "Point mensuel équipe".\n\n'
     + '⚠️ SUJETS : tu ne relances JAMAIS un sujet précédent de toi-même (pas de « on reprend », pas de question d’avant reposée). Tu réponds seulement au dernier message. Seul l’utilisateur reprend un sujet (« on reprend », « on continue », « et pour le sport ? »).\n\n'
     + '⚠️ FORMAT OBLIGATOIRE pour proposer un événement :\n'
     + '[AGENDA]\n' + tcISO(demain) + ' | 15:00-16:00 | Banque | administratif\n[/AGENDA]\n\n'
@@ -12806,10 +12841,20 @@ function tcSansFormulesFaites(reply) {
  * (« Rendez-vous chez ma maman » → « Maman », « RDV dentiste » → « Dentiste »), première lettre en majuscule, pour se lire
  * dans la case de l'agenda (mission 76). Tel quel s'il ne commence pas par ces mots, s'il ne reste rien après eux, ou si
  * l'utilisateur l'a dicté mot pour mot (entre guillemets, ou après « intitulé », « titre », « appelle-le »).
+ * Un titre dicté (« appelle-le "Point mensuel équipe" ») est gardé tel quel, sans le verbe (retouche 76b).
  */
 function tcTitreEssentiel(titre, texteUtilisateur) {
-  const t = String(titre || '').trim();
-  if (!t) return t;
+  const t0 = String(titre || '').trim();
+  if (!t0) return t0;
+  const normD = function (x) { return ' ' + tcSansAccents(String(x || '')).replace(/[’']/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' '; };
+  const dicte = String(texteUtilisateur || '').match(/(?:appel(?:le|les|lez)|intitul(?:e|es|ez)|nomm(?:e|es|ez))[\s-]*(?:le|la|les|l['’])?\s*[:,]?\s*[«"“]\s*([^»"”]+?)\s*[»"”]|(?:titre|intitul[ée]e?)\s*[:=]?\s*[«"“]\s*([^»"”]+?)\s*[»"”]/i);
+  const motsDictes = dicte ? (dicte[1] || dicte[2] || '').trim() : '';
+  if (motsDictes && normD(t0).indexOf(normD(motsDictes)) > -1) return motsDictes;
+  let t = t0.replace(/^(?:appel(?:le|lez)|intitul(?:e|ez)|nomm(?:e|ez))-(?:le|la|les)\s*[:,]?\s*|^(?:titre|intitul[ée]e?)\s*[:,-]\s*/i, '');
+  if (t !== t0) {
+    t = t.replace(/^[«"“]\s*/, '').replace(/\s*[»"”]$/, '').trim();
+    t = t ? t.charAt(0).toUpperCase() + t.slice(1) : t0;
+  }
   let s = t.replace(/^(?:prise de\s+)?(?:rendez[\s-]*vous|rdv|r\.d\.v\.?)(?=[\s:,.-]|$)[\s:,.-]*/i, '');
   if (s === t) return t;
   const norm = function (x) { return tcSansAccents(String(x || '')).replace(/[’']/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); };

@@ -15,7 +15,7 @@ function fonction(nom) {
   const j = page.indexOf('\n}\n', i);
   return j < 0 ? '' : page.slice(i, j + 2);
 }
-const noms = ['tcSansAccents', 'tcTitreEssentiel', 'tcTitresEssentielsDuBloc', 'tcCouperAuMilieu', 'tcLignesDuTexte', 'tcTientDansCase', 'tcAjusterTitresCases'];
+const noms = ['tcSansAccents', 'tcTitreEssentiel', 'tcTitresEssentielsDuBloc', 'tcCouperAuMilieu', 'tcCouperALaFin', 'tcEstUnProche', 'tcLignesDuTexte', 'tcTientDansCase', 'tcAjusterTitresCases'];
 const absentes = noms.filter((n) => !fonction(n));
 verifie('les fonctions de la mission 76 existent', !absentes.length, absentes.join(' '));
 if (absentes.length) { console.log('ECHEC ' + ok + '/' + (ok + ko) + ' verifications passees'); process.exit(1); }
@@ -38,6 +38,19 @@ verifie('le titre dicté mot pour mot reste : entre guillemets, ou après « int
   && ctx.tcTitreEssentiel('RDV client', 'mets un truc intitulé RDV client demain 9h') === 'RDV client'
   && ctx.tcTitreEssentiel('Rendez-vous annuel', 'ajoute demain 9h et appelle-le rendez-vous annuel') === 'Rendez-vous annuel'
   && ctx.tcTitreEssentiel('Rendez-vous maman', 'note « dentiste » vendredi') === 'Maman');
+
+// Retouche 76b (TESTEURS, passage 29) : le titre dicté reste tel quel, sans le verbe.
+const dictes = [
+  ['Appelle-le Point mensuel équipe', 'appelle-le "Point mensuel équipe" lundi 10h', 'Point mensuel équipe'],
+  ['Point mensuel équipe', 'appelle-le "Point mensuel équipe" lundi 10h', 'Point mensuel équipe'],
+  ['Intitule-le Revue budget', 'mets jeudi 15h, intitule-le « Revue budget »', 'Revue budget'],
+  ['Nomme-le Point Lefebvre', 'nomme-le “Point Lefebvre” demain 9h', 'Point Lefebvre'],
+  ['Titre : Bilan trimestriel', 'ajoute vendredi 14h, titre : "Bilan trimestriel"', 'Bilan trimestriel'],
+  ['Intitule-le point mensuel', 'lundi 10h intitule-le point mensuel', 'Point mensuel'],
+  ['Appelle le plombier', 'rappelle-moi d appeler le plombier demain 9h', 'Appelle le plombier']];
+const dictesKo = dictes.filter(([a, u, b]) => ctx.tcTitreEssentiel(a, u) !== b).map(([a, u, b]) => a + ' → ' + ctx.tcTitreEssentiel(a, u) + ' (attendu ' + b + ')');
+verifie('titre dicté (« appelle-le », « intitule-le », « nomme-le », « titre : ») : les mots dictés, sans le verbe ; « Appelle le plombier » reste une tâche', !dictesKo.length, dictesKo.join(' | '));
+verifie('le modèle reçoit la règle du titre dicté', /Titre dicté \(« appelle-le "Point mensuel équipe" »/.test(page));
 
 console.log('2. La carte et la phrase « C est noté »');
 const rep = 'C’est noté : **Rendez-vous maman** vendredi à 11h.\n\n[AGENDA]\n2026-11-06 | 11:00-12:00 | Rendez-vous maman | famille | 47 avenue Paul Valéry | maman\n[/AGENDA]';
@@ -80,7 +93,22 @@ verifie('sur plusieurs lignes, un mot plus large que la case ne « tient » pas 
 const pires = [];
 for (let n = 1; n <= 30; n++) ['Maman', 'Coupe couleur Mme Martin', 'Séance kinésithérapie', 'Kiné'].forEach((t) => { const v = ctx.tcCouperAuMilieu(t, (x) => x.length <= n); if (!/[A-Za-zÀ-ÿ]/.test(v)) pires.push(n + ':' + t + '→' + v); });
 verifie('toutes largeurs de 1 à 30 lettres : jamais un titre réduit à « … »', !pires.length, pires.join(' | '));
+// Retouche 76b : deux lignes « Séance / kiné…pie » quand la hauteur le permet ; Mois : le début du titre reste ; jamais « … » en tête.
+verifie('« Séance kinésithérapie » sur deux lignes → « Séance kiné…pie » (Séance n est plus perdu)', ctx.tcCouperAuMilieu('Séance kinésithérapie', tientCase(2)) === 'Séance kiné…pie', ctx.tcCouperAuMilieu('Séance kinésithérapie', tientCase(2)));
+verifie('Mois : « Anniversaire de mariage de Paul et Marie » → « Anniv… », « Point mensuel équipe » → « Point… »',
+  ctx.tcCouperALaFin('Anniversaire de mariage de Paul et Marie', largeur(6)) === 'Anniv…' && ctx.tcCouperALaFin('Point mensuel équipe', largeur(8)) === 'Point…',
+  ctx.tcCouperALaFin('Anniversaire de mariage de Paul et Marie', largeur(6)) + ' | ' + ctx.tcCouperALaFin('Point mensuel équipe', largeur(8)));
+const tetes = [];
+for (let n = 1; n <= 30; n++) ['Anniversaire de mariage de Paul et Marie', 'Point mensuel équipe', 'Coupe couleur Mme Martin', 'Séance kinésithérapie', 'Dentiste', 'Maman'].forEach((t) => {
+  [ctx.tcCouperAuMilieu(t, largeur(n)), ctx.tcCouperALaFin(t, largeur(n))].forEach((v) => { if (/^…/.test(v) || v.replace(/[^A-Za-zÀ-ÿ]/g, '').length < 2) tetes.push(n + ':' + t + '→' + v); });
+});
+verifie('toutes largeurs de 1 à 30 lettres : jamais une case qui commence par « … », deux lettres au moins', !tetes.length, tetes.join(' | '));
 const aj = fonction('tcAjusterTitresCases');
+verifie('Mois : la pastille coupe à la fin ; un titre qui manque de peu se resserre (« Dentiste » entier) au lieu d être coupé',
+  /tcCouperALaFin\(p\.titre, tient\)/.test(aj) && /\[0, -0\.25, -0\.5\]/.test(aj) && /letterSpacing/.test(aj));
+verifie('« Maman » : la question du contact seulement si un contact porte ce mot',
+  ctx.tcEstUnProche('maman') && ctx.tcEstUnProche('ma maman') && ctx.tcEstUnProche('mon frère') && !ctx.tcEstUnProche('mon dentiste') && !ctx.tcEstUnProche('Michel')
+  && /tcEstUnProche\(nom\) && typeof tcResoudreContact === 'function' && !tcResoudreContact\(nom\)\.length\) continue;/.test(fonction('tcAttenteContact')));
 verifie('les trois vues posent le titre dans .tc-titre-case et l ajustent après le dessin',
   /<span class="tc-titre-case">\$\{escapeHTMLSafe\(ev\.title\)\}<\/span>/.test(fonction('renderMonth')) && /tcAjusterTitresCasesBientot\(body\);/.test(fonction('renderMonth'))
   && /<span class="tc-titre-case">\$\{escapeHTMLSafe\(e\.title\)\}<\/span>/.test(fonction('renderWeek')) && /tcAjusterTitresCases\(body\);/.test(fonction('renderWeek'))
