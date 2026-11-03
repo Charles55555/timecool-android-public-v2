@@ -503,8 +503,13 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
     ['je suis malade demain, décale tout, attends mon accord pour Paul', 'je suis malade demain, décale tout, attends mon accord pour Paul'],
     ['décale le dentiste, vérifie avec moi avant de l envoyer', 'décale le dentiste, vérifie avec moi avant de l envoyer'],
     ['décale tout, attends ma validation stp', 'décale tout'],
-    ['décale tout mais demande-moi d abord', 'décale tout']];
+    ['décale tout mais demande-moi d abord', 'décale tout'],
+    // Examen 3 : au milieu d'une proposition, ou « avant » devant.
+    ['décale tout puis attends ma validation', 'décale tout puis attends ma validation'], ['décale tout stp attends ma validation', 'décale tout stp attends ma validation'],
+    ['décale tout mais avant demande-moi', 'décale tout']];
   const largesKo = larges.filter(([t, s]) => { const r = ctx.tcConfianceDemandee(t); return !r || r.n !== 1 || r.sans !== s; }).map(([t]) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)));
+  const r3stp = ctx.tcConfianceDemandee('décale tout et fais-le directement stp');
+  verifie('profil 3 : « fais-le directement stp » compte, ôté du texte', r3stp && r3stp.n === 3 && r3stp.sans === 'décale tout', JSON.stringify(r3stp));
   verifie('profil 1 reconnu même suivi d autres mots (texte entier gardé), « stp » compris, « d abord » sans apostrophe ; « moi-même » toujours rien', !largesKo.length && ctx.tcConfianceDemandee('je vérifie avec moi-même demain') === null, largesKo.join(' | '));
   stock.tc_confiance_charly = '3'; ctx.charlyIA.history = [];
   vm.runInContext('_tcConfianceMoment = { n: 1, dit: false, texte: "x" }', ctx);

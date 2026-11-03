@@ -9849,12 +9849,13 @@ function tcConfianceCharly(regle) {
 function tcConfianceDemandee(texte) {
   const brut = String(texte || '');
   const s = tcSansAccents(brut).replace(/[’´]/g, "'");
-  const AVANT = /(^|[,;.!?]\s*|\s+(?:et|mais)\s+)/.source, APRES = /\s*(?=$|[,;.!?])/.source;
+  const AVANT = /(^|[,;.!?]\s*|\s+(?:et|mais)\s+)/.source, APRES = /(?:\s+(?:stp|svp|s'il\s+te\s+plait|merci))?\s*(?=$|[,;.!?])/.source;
   const UN = [
     /(?:ne\s+)?(?:fais|decale|deplace|annule|envoie|touche|bouge)\s+rien\s+sans\s+(?:me\s+demander|mon\s+accord|ma\s+validation|m'en\s+parler)/,
     /(?:attends|attendez)\s+(?:ma|mon)\s+(?:validation|accord|feu\s+vert|ok)/,
     /demande[sz]?[\s-]*(?:le[\s-]*)?moi\s+(?:avant|d(?:'|\s)?abord|mon\s+avis)/,
-    /verifie[sz]?\s+avec\s+moi(?:\s+avant|\s+d(?:'|\s)?abord)?/];
+    /verifie[sz]?\s+avec\s+moi(?:\s+avant|\s+d(?:'|\s)?abord)?/,
+    /(?:avant|d(?:'|\s)?abord)\s+(?:demande[sz]?[\s-]*(?:le[\s-]*)?moi|verifie[sz]?\s+avec\s+moi)/];
   const TROIS = [
     /(?:fais|faites)[\s-]*(?:le|la|les|ca|tout)?\s*(?:directement|tout\s+seule?|sans\s+me\s+demander)/,
     /vas[\s-]*y\s+(?:directement|tout\s+seule?|sans\s+me\s+demander)/,
@@ -9877,8 +9878,9 @@ function tcConfianceDemandee(texte) {
       // Profil 1 : reconnu même suivi d'autres mots (« demande-moi avant de prévenir Paul ») : une question de plus ne coûte
       // rien. Ôté seulement s'il finit la proposition (« stp » compris) ; sinon le texte reste entier.
       const m = new RegExp(AVANT + liste[i].source + /(?![\w-])(?:\s+(?:stp|svp|s'il\s+te\s+plait|merci))?/.source).exec(s);
-      if (!m) continue;
-      return /^\s*(?:$|[,;.!?])/.test(s.slice(m.index + m[0].length)) ? couper(m, 1) : { n: 1, sans: brut };
+      if (m) return /^\s*(?:$|[,;.!?])/.test(s.slice(m.index + m[0].length)) ? couper(m, 1) : { n: 1, sans: brut };
+      // Ailleurs dans la phrase (« décale tout puis attends ma validation ») : reconnu aussi, le texte reste entier.
+      if (new RegExp(/(?:^|[^\w-])/.source + liste[i].source + /(?![\w-])/.source).test(s)) return { n: 1, sans: brut };
     }
     return null;
   };
