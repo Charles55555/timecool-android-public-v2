@@ -171,7 +171,7 @@ if (m) {
 }
 verifie('la confirmation dit l\'heure retenue', /escapeHTML\(s\.label\) \+ ' à ' \+ \('0' \+ s\.h\)\.slice\(-2\) \+ 'h' \+ \('0' \+ s\.m\)\.slice\(-2\)/.test(rdv));
 verifie('créneau pris (409) : on propose les autres, le lien reste valable', /e\.status === 409 && idx >= 0/.test(rdv) && /_currentData\.slots\.splice\(idx, 1\)/.test(rdv) && /renderSlots\(_currentData, 'Ce créneau vient d’être pris/.test(rdv));
-verifie('et l\'erreur HTTP porte son code', /err\.status = r\.status; throw err;/.test(rdv));
+verifie('et l\'erreur HTTP porte son code (et celui de l API, mission 73c)', /err\.status = r\.status; try \{ err\.code = \(await r\.json\(\)\)\.erreur; \} catch \(x\) \{\} throw err;/.test(rdv));
 verifie('renderSlots affiche l\'avertissement, échappé', /function renderSlots\(data, avertissement\)/.test(rdv) && /escapeHTML\(avertissement\)/.test(rdv));
 
 console.log('');

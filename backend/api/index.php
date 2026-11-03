@@ -1264,6 +1264,20 @@ function propositionChoisir(array $rdv, int $rang): ?string
         if (!creneauRetenuEstLibre($organisateurId, (string) $cr['debut'], (string) $cr['fin'], $rdv['remplace_uid'] !== null ? (string) $rdv['remplace_uid'] : null)) {
             return 'creneau_pris';
         }
+        // Un autre contact a déjà choisi ce moment (chef, 03/11) : le premier garde le créneau. Celui-ci est marqué « pris »
+        // (retenu = 2) et n'est plus proposé ; il reste les autres. S'il n'en reste aucun, la réponse vaut « aucun ne va »
+        // et Charly reprend la main. La marque reste écrite : l'appelant valide la transaction.
+        if (propositionCreneauPrisParUnAutre($organisateurId, (int) $rdv['id'], (string) $cr['debut'], (string) $cr['fin'])) {
+            Db::req('UPDATE rdv_creneaux SET retenu = 2 WHERE rdv_id = ? AND rang = ?', [$rdv['id'], $rang]);
+            $libres = Db::un('SELECT COUNT(*) AS n FROM rdv_creneaux WHERE rdv_id = ? AND retenu = 0', [$rdv['id']]);
+            $tous = (int) $libres['n'] === 0;
+            if ($tous) {
+                Db::req('UPDATE rdv SET statut = "refuse", repondu_le = NOW() WHERE id = ?', [$rdv['id']]);
+            }
+            propositionMarquerCarte($rdv, ['pris' => array_map('intval', array_column(
+                Db::tous('SELECT rang FROM rdv_creneaux WHERE rdv_id = ? AND retenu = 2', [$rdv['id']]), 'rang'))]);
+            return $tous ? 'tous_pris' : 'pris_par_autre';
+        }
         Db::req('UPDATE rdv SET statut = "choisi", repondu_le = NOW() WHERE id = ?', [$rdv['id']]);
         Db::req('UPDATE rdv_creneaux SET retenu = 1 WHERE rdv_id = ? AND rang = ?', [$rdv['id'], $rang]);
     }
@@ -1272,9 +1286,50 @@ function propositionChoisir(array $rdv, int $rang): ?string
     return null;
 }
 
+/**
+ * Ce moment est-il déjà choisi par un autre contact, dans une autre proposition de Charly du même organisateur, pas encore
+ * placée (ou placée il y a moins de 10 minutes : l'agenda n'est peut-être pas encore synchronisé) ?
+ */
+function propositionCreneauPrisParUnAutre(int $organisateurId, int $rdvId, string $debut, string $fin): bool
+{
+    return Db::un(
+        'SELECT r.id FROM rdv r JOIN rdv_creneaux k ON k.rdv_id = r.id AND k.retenu = 1
+          WHERE r.organisateur_id = ? AND r.origine = "charly" AND r.id <> ? AND r.statut = "choisi"
+            AND (r.traite_le IS NULL OR r.traite_le > DATE_SUB(NOW(), INTERVAL 10 MINUTE))
+            AND k.debut < ? AND k.fin > ? LIMIT 1',
+        [$organisateurId, $rdvId, $fin, $debut]
+    ) !== null;
+}
+
+/** Les créneaux d'une proposition pris par un autre contact : [{ libelle, par }] (par : son nom, ou null). */
+function propositionPris(int $rdvId, int $organisateurId): array
+{
+    $sortie = [];
+    foreach (Db::tous('SELECT libelle, debut, fin FROM rdv_creneaux WHERE rdv_id = ? AND retenu = 2 ORDER BY rang', [$rdvId]) as $cr) {
+        $par = Db::un(
+            'SELECT c.prenom, c.nom, l.prenom_destinataire FROM rdv r
+               JOIN rdv_creneaux k ON k.rdv_id = r.id AND k.retenu = 1
+               LEFT JOIN comptes c ON c.id = r.invite_compte_id
+               LEFT JOIN rdv_liens l ON l.rdv_id = r.id
+              WHERE r.organisateur_id = ? AND r.origine = "charly" AND r.id <> ? AND k.debut < ? AND k.fin > ?
+              ORDER BY r.id LIMIT 1',
+            [$organisateurId, $rdvId, $cr['fin'], $cr['debut']]
+        );
+        $sortie[] = ['libelle' => propositionLibelle($cr),
+            'par' => $par === null ? null : ($par['prenom'] !== null ? trim($par['prenom'] . ' ' . $par['nom']) : $par['prenom_destinataire'])];
+    }
+    return $sortie;
+}
+
 /** Le message d'erreur d'un refus de propositionChoisir. */
 function propositionRefus(string $code): void
 {
+    if ($code === 'pris_par_autre') {
+        Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris. Choisis-en un autre.');
+    }
+    if ($code === 'tous_pris') {
+        Rep::erreur(409, 'tous_pris', 'Les créneaux proposés viennent d’être pris.');
+    }
     if ($code === 'creneau_pris') {
         Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris. Choisis-en un autre.');
     }
@@ -1357,7 +1412,8 @@ function propositionSuiteLien(array $rdv, array $lien): ?array
         return $rdv['statut'] === 'choisi' ? ['etat' => 'deplace', 'choix' => propositionLibelle($cr)] : null;
     }
     if ($lien['statut'] === 'refuse' && $rdv['traite_le'] === null) {
-        return ['etat' => 'refus_note'];
+        $libres = Db::un('SELECT COUNT(*) AS n FROM rdv_creneaux WHERE rdv_id = ? AND retenu <> 2', [$rdv['id']]);
+        return ['etat' => (int) $libres['n'] === 0 ? 'tous_pris' : 'refus_note'];
     }
     // Reproposé (une nouvelle proposition de Charly remplace le même rendez-vous) : la page le dit (chef, 03/11).
     if ($rdv['traite_le'] !== null && $rdv['statut'] === 'expire' && $rdv['remplace_uid'] !== null && Db::un(
@@ -4761,6 +4817,11 @@ switch ($route) {
             Rep::erreur(404, 'proposition_inconnue', 'Proposition introuvable.');
         }
         $refus = propositionChoisir($rdv, $rang);
+        if ($refus === 'pris_par_autre' || $refus === 'tous_pris') {
+            // Pris par un autre contact : la marque « pris » reste (sa carte et Charly le disent).
+            $pdo->commit();
+            propositionRefus($refus);
+        }
         if ($refus !== null) {
             $pdo->rollBack();
             propositionRefus($refus);
@@ -4774,7 +4835,10 @@ switch ($route) {
         $lignes = Db::tous(
             'SELECT r.id, r.titre, r.remplace_uid, r.avant, r.statut,
                     (SELECT COUNT(*) FROM rdv r2 WHERE r2.organisateur_id = r.organisateur_id AND r2.origine = "charly"
-                        AND r2.remplace_uid = r.remplace_uid AND r2.id <= r.id) AS tours, r.cree_le, r.repondu_le, r.expire_le,
+                        AND r2.remplace_uid = r.remplace_uid AND r2.id <= r.id
+                        AND r2.id > COALESCE((SELECT MAX(r3.id) FROM rdv r3 WHERE r3.organisateur_id = r.organisateur_id
+                            AND r3.origine = "charly" AND r3.remplace_uid = r.remplace_uid AND r3.id < r.id
+                            AND r3.traite_le IS NOT NULL AND r3.statut IN ("choisi", "annule")), 0)) AS tours, r.cree_le, r.repondu_le, r.expire_le,
                     l.prenom_destinataire, c.prenom AS invite_prenom, c.nom AS invite_nom, c.reference AS invite_reference,
                     cr.debut, cr.fin, cr.libelle
                FROM rdv r
@@ -4786,7 +4850,9 @@ switch ($route) {
               ORDER BY r.id',
             [$moi['id']]
         );
-        Rep::ok(['propositions' => array_map(static function ($l) {
+        Rep::ok(['propositions' => array_map(static function ($l) use ($moi) {
+            $pris = propositionPris((int) $l['id'], (int) $moi['id']);
+            $nb = Db::un('SELECT COUNT(*) AS n FROM rdv_creneaux WHERE rdv_id = ?', [$l['id']]);
             return [
                 'rdv_id'   => (int) $l['id'],
                 'titre'    => $l['titre'],
@@ -4798,8 +4864,12 @@ switch ($route) {
                 'fin'      => $l['fin'],
                 'libelle'  => $l['libelle'],
                 'avant'    => $l['avant'],
-                // La combientième proposition pour ce rendez-vous (profil 2 : Charly ne repropose seul qu'une fois).
+                // La combientième proposition de la série en cours pour ce rendez-vous (profil 2 : Charly ne repropose seul
+                // qu'une fois) ; un rendez-vous placé ou laissé termine la série.
                 'tours'    => (int) $l['tours'],
+                // Les créneaux pris par un autre contact (chef, 03/11) ; tous pris : la réponse vaut « aucun ne va ».
+                'pris'     => $pris,
+                'tous_pris' => count($pris) > 0 && count($pris) === (int) $nb['n'],
             ];
         }, $lignes)]);
 
@@ -4883,7 +4953,7 @@ switch ($route) {
             'charly'       => $rdvCharly !== null,
             'avant'        => $rdvCharly === null ? null : $rdvCharly['avant'],
             'creneaux'     => Db::tous(
-                'SELECT rang, debut, fin, libelle FROM rdv_creneaux WHERE rdv_id = ? ORDER BY rang',
+                'SELECT rang, debut, fin, libelle FROM rdv_creneaux WHERE rdv_id = ? AND retenu <> 2 ORDER BY rang',
                 [$lien['rdv_id']]
             ),
         ]);
@@ -4922,6 +4992,14 @@ switch ($route) {
             $rdvCharly = Db::un('SELECT * FROM rdv WHERE id = ? AND origine = "charly"', [$lien['rdv_id']]);
             if ($rdvCharly !== null) {
                 $refus = propositionChoisir($rdvCharly, $rang);
+                if ($refus === 'pris_par_autre' || $refus === 'tous_pris') {
+                    Db::req($refus === 'tous_pris'
+                        ? 'UPDATE rdv_liens SET statut = "refuse", choix_rang = -1 WHERE jeton_hash = ?'
+                        : 'UPDATE rdv_liens SET statut = "attente", choix_rang = NULL, utilise_le = NULL WHERE jeton_hash = ?',
+                        [Jeton::hacher($jeton)]);
+                    $pdo->commit();
+                    propositionRefus($refus);
+                }
                 if ($refus !== null) {
                     $pdo->rollBack();
                     propositionRefus($refus);

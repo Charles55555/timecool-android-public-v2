@@ -99,7 +99,7 @@ const TC_BACKEND = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ jeton: token, rang: rang })
     });
-    if (!r.ok) { const err = new Error('HTTP ' + r.status); err.status = r.status; throw err; }
+    if (!r.ok) { const err = new Error('HTTP ' + r.status); err.status = r.status; try { err.code = (await r.json()).erreur; } catch (x) {} throw err; }
     return true;
   }
 };
@@ -181,6 +181,8 @@ function renderSuite(data, suite) {
     renderState('✅', '<span class="success">Rendez-vous déplacé : ' + escapeHTML(s.choix) + '.</span>');
   } else if (s.etat === 'en_place') {
     renderState('📅', 'Finalement, ' + avant + ' reste en place.');
+  } else if (s.etat === 'tous_pris') {
+    renderState('😕', 'Les créneaux proposés viennent d’être pris. ' + qui + ' en est informé(e) : reviens sur cette page pour voir la suite. En attendant, ' + avant + ' reste en place.');
   } else if (s.etat === 'autres') {
     renderState('🔄', 'Ces créneaux ne sont plus proposés : ' + qui + ' a choisi de t’en proposer d’autres. En attendant, ' + avant + ' reste en place.');
   } else if (s.etat === 'refus_note') {
@@ -231,6 +233,8 @@ async function chooseSlot(idx) {
       renderState('✅', '<span class="success">Rendez-vous confirmé !</span><br>' + escapeHTML(s.label) + ' à ' + ('0' + s.h).slice(-2) + 'h' + ('0' + s.m).slice(-2) + ', tu es prévenu(e).');
     }
   } catch(e) {
+    // Proposition de Charly : un autre contact a pris le dernier créneau libre (chef, 03/11).
+    if (e && e.code === 'tous_pris' && _currentData.charly) { renderSuite(_currentData, { etat: 'tous_pris' }); return; }
     if (e && e.status === 409 && idx >= 0) {
       // Ce créneau vient d'être pris : le lien n'est pas consommé, on propose les autres.
       _currentData.slots.splice(idx, 1);
@@ -238,7 +242,8 @@ async function chooseSlot(idx) {
       if (_currentData.slots.length > 0) {
         renderSlots(_currentData, 'Ce créneau vient d’être pris. Choisis-en un autre :');
       } else {
-        renderState('😕', 'Les créneaux proposés viennent d’être pris.<br>La personne qui t’a contacté(e) va t’en proposer d’autres.');
+        if (_currentData.charly) renderSuite(_currentData, { etat: 'tous_pris' });
+        else renderState('😕', 'Les créneaux proposés viennent d’être pris.<br>La personne qui t’a contacté(e) va t’en proposer d’autres.');
       }
       return;
     }
