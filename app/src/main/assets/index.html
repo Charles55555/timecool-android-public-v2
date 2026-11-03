@@ -9696,6 +9696,90 @@ function renderSettingsInterne() {
   document.getElementById('settingsContent').innerHTML = `
     ${TC_CONFIANCE_VISIBLE ? tcBlocConfiance() : ''}
 
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">💬 Messages d'annulation &amp; retards</div>
+      <div style="padding:14px 16px; font-size:11px; color:var(--text-sec); line-height:1.5;">Trois messages, un par bouton. Ils sont proposés tels quels, et toujours modifiables avant d'être envoyés.</div>
+      <div id="tcMsgFormes" style="display:flex; gap:8px; padding:0 16px 12px;">
+        <button onclick="tcChoisirFormeMessages(false)" id="tcFormeTu"
+          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--g-blue); background:var(--g-blue); color:#fff;">Je tutoie</button>
+        <button onclick="tcChoisirFormeMessages(true)" id="tcFormeVous"
+          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:var(--bg); color:var(--text);">Je vouvoie</button>
+      </div>
+      <div id="tcMsgModeles"></div>
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🏖️ Message d'absence</div>
+      <div id="tcAbsenceZone"></div>
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔔 Notifications</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div style="flex:1;">
+          <div style="font-size:14px;">Rappels avant RDV</div>
+          <div style="font-size:11px; color:var(--text-sec);" id="rappelDelaiTexte">${tcDelaiRappelTexte()}${tcRappelEmail() ? ' \u00b7 aussi par email' : ''}</div>
+        </div>
+        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+          <input type="checkbox" id="rappelsToggle" ${tcRappelsActifs() ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerRappels(this.checked)" style="opacity:0; width:0; height:0;">
+          <span style="position:absolute; inset:0; background:${tcRappelsActifs() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
+          <span style="position:absolute; height:18px; width:18px; left:${tcRappelsActifs() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+        </label>
+      </div>
+      <div onclick="tcChoisirDelaiRappel()" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div><div style="font-size:14px;">Délai du rappel</div><div style="font-size:11px; color:var(--text-sec);">Combien de temps avant le rendez-vous</div></div>
+        <div style="font-size:13px; color:#1a73e8;">${tcDelaiRappelTexte()} ›</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div style="flex:1;">
+          <div style="font-size:14px;">Sonneries</div>
+          <div style="font-size:11px; color:var(--text-sec);">${tcSonneriesActives() ? 'Son et vibration' : 'Silencieux'}</div>
+        </div>
+        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+          <input type="checkbox" id="sonneriesToggle" ${tcSonneriesActives() ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerSonneries(this.checked)" style="opacity:0; width:0; height:0;">
+          <span style="position:absolute; inset:0; background:${tcSonneriesActives() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
+          <span style="position:absolute; height:18px; width:18px; left:${tcSonneriesActives() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+        </label>
+      </div>
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🎨 Affichage</div>
+      <div onclick="openSettingsModal('theme')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div><div style="font-size:14px;">Thème</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_theme_label">${{light:'Clair',dark:'Sombre',auto:'Auto (système)'}[currentTheme]||'Clair'}</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
+      </div>
+      <div onclick="openSettingsModal('timezone')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div><div style="font-size:14px;">Fuseau horaire</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_tz_label">${currentTimezone}</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
+      </div>
+      <div onclick="openSettingsModal('hours')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div><div style="font-size:14px;">Plage horaire de ma journée</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_hours_label">${agendaStartH}h00 → ${agendaEndH}h00</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
+      </div>
+      <div onclick="openSettingsModal('weekstart')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div><div style="font-size:14px;">Premier jour de la semaine</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_weekstart_label">${tcNomPremierJour()}</div></div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🌍 Langue & Région</div>
+      <div onclick="openLanguageSelector()" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div>
+          <div style="font-size:14px;">Langue de l'application</div>
+          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settingsLangDisplay">🇫🇷 Français</div>
+        </div>
+        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
+      </div>
+      <div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:14px;">Format des dates</div>
+          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">DD/MM/YYYY (français)</div>
+        </div>
+        <div style="font-size:13px; color:var(--text-sec); opacity:0.6;">Auto</div>
+      </div>
+    </div>
 
     <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:#e8f5e9; font-size:12px; font-weight:700; text-transform:uppercase; color:#2e7d32;">💾 Sauvegarde & Restauration</div>
@@ -9737,143 +9821,6 @@ function renderSettingsInterne() {
     </div>
 
     <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">📱 Application</div>
-      <div id="updateBannerZone"></div>
-      <div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div style="flex:1;">
-          <div style="font-size:14px; font-weight:500;">Mise à jour automatique</div>
-          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Installe les nouvelles versions sans confirmation</div>
-        </div>
-        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
-          <input type="checkbox" id="autoUpdateToggle" ${loadAutoUpdatePref() ? 'checked' : ''} onchange="setAutoUpdatePref(this.checked); tcMajVisuelInterrupteur(this)" style="opacity:0; width:0; height:0;">
-          <span style="position:absolute; inset:0; background:${loadAutoUpdatePref() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
-          <span style="position:absolute; height:18px; width:18px; left:${loadAutoUpdatePref() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
-        </label>
-      </div>
-      <div onclick="checkForUpdates(true)" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div>
-          <div style="font-size:14px; font-weight:500;">Vérifier les mises à jour</div>
-          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Version actuelle : ${tcFormaterVersion()}</div>
-        </div>
-        <div style="font-size:13px; color:#1a73e8;">🔄 Vérifier</div>
-      </div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">💬 Messages d'annulation &amp; retards</div>
-      <div style="padding:14px 16px; font-size:11px; color:var(--text-sec); line-height:1.5;">Trois messages, un par bouton. Ils sont proposés tels quels, et toujours modifiables avant d'être envoyés.</div>
-      <div id="tcMsgFormes" style="display:flex; gap:8px; padding:0 16px 12px;">
-        <button onclick="tcChoisirFormeMessages(false)" id="tcFormeTu"
-          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--g-blue); background:var(--g-blue); color:#fff;">Je tutoie</button>
-        <button onclick="tcChoisirFormeMessages(true)" id="tcFormeVous"
-          style="flex:1; padding:10px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:var(--bg); color:var(--text);">Je vouvoie</button>
-      </div>
-      <div id="tcMsgModeles"></div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🏖️ Message d'absence</div>
-      <div id="tcAbsenceZone"></div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🌍 Langue & Région</div>
-      <div onclick="openLanguageSelector()" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div>
-          <div style="font-size:14px;">Langue de l'application</div>
-          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settingsLangDisplay">🇫🇷 Français</div>
-        </div>
-        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
-      </div>
-      <div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="font-size:14px;">Format des dates</div>
-          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">DD/MM/YYYY (français)</div>
-        </div>
-        <div style="font-size:13px; color:var(--text-sec); opacity:0.6;">Auto</div>
-      </div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔔 Notifications</div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div style="flex:1;">
-          <div style="font-size:14px;">Rappels avant RDV</div>
-          <div style="font-size:11px; color:var(--text-sec);" id="rappelDelaiTexte">${tcDelaiRappelTexte()}${tcRappelEmail() ? ' \u00b7 aussi par email' : ''}</div>
-        </div>
-        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
-          <input type="checkbox" id="rappelsToggle" ${tcRappelsActifs() ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerRappels(this.checked)" style="opacity:0; width:0; height:0;">
-          <span style="position:absolute; inset:0; background:${tcRappelsActifs() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
-          <span style="position:absolute; height:18px; width:18px; left:${tcRappelsActifs() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
-        </label>
-      </div>
-      <div onclick="tcChoisirDelaiRappel()" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div><div style="font-size:14px;">Délai du rappel</div><div style="font-size:11px; color:var(--text-sec);">Combien de temps avant le rendez-vous</div></div>
-        <div style="font-size:13px; color:#1a73e8;">${tcDelaiRappelTexte()} ›</div>
-      </div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-        <div style="flex:1;">
-          <div style="font-size:14px;">Sonneries</div>
-          <div style="font-size:11px; color:var(--text-sec);">${tcSonneriesActives() ? 'Son et vibration' : 'Silencieux'}</div>
-        </div>
-        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
-          <input type="checkbox" id="sonneriesToggle" ${tcSonneriesActives() ? 'checked' : ''} onchange="tcMajVisuelInterrupteur(this); tcBasculerSonneries(this.checked)" style="opacity:0; width:0; height:0;">
-          <span style="position:absolute; inset:0; background:${tcSonneriesActives() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
-          <span style="position:absolute; height:18px; width:18px; left:${tcSonneriesActives() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
-        </label>
-      </div>
-    </div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🎨 Affichage</div>
-      <div onclick="openSettingsModal('theme')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div><div style="font-size:14px;">Thème</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_theme_label">${{light:'Clair',dark:'Sombre',auto:'Auto (système)'}[currentTheme]||'Clair'}</div></div>
-        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
-      </div>
-      <div onclick="openSettingsModal('language')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div><div style="font-size:14px;">Langue</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_lang_label">${(()=>{const l=SUPPORTED_LANGUAGES.find(x=>x.code===currentLanguage);return l?l.flag+' '+l.label:'🇫🇷 Français';})()}</div></div>
-        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
-      </div>
-      <div onclick="openSettingsModal('timezone')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div><div style="font-size:14px;">Fuseau horaire</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_tz_label">${currentTimezone}</div></div>
-        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
-      </div>
-      <div onclick="openSettingsModal('hours')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div><div style="font-size:14px;">Plage horaire de ma journée</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_hours_label">${agendaStartH}h00 → ${agendaEndH}h00</div></div>
-        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
-      </div>
-      <div onclick="openSettingsModal('weekstart')" style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-        <div><div style="font-size:14px;">Premier jour de la semaine</div><div style="font-size:11px; color:var(--text-sec); margin-top:2px;" id="settings_weekstart_label">${tcNomPremierJour()}</div></div>
-        <div style="font-size:13px; color:var(--g-blue);">Modifier ›</div>
-      </div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔒 Confidentialité & Sécurité</div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border);">
-        <div style="font-size:13px; color:var(--g-blue); font-weight:500;">🔒 Tes données</div>
-        <div style="font-size:11px; color:var(--text-sec); margin-top:4px; line-height:1.5;">${TC_PHRASE_CONFIDENTIALITE}</div>
-      </div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">ℹ️ À propos</div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border);">
-        <div style="font-size:14px;">Version</div>
-        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">${tcFormaterVersion()}</div>
-      </div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="openLegalPage('cgu', 'settings', false)">
-        <div style="font-size:14px;">Conditions d'utilisation</div>
-        <div style="color:var(--text-sec); font-size:18px;">›</div>
-      </div>
-      <div style="padding:12px 16px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="openLegalPage('privacy', 'settings', false)">
-        <div style="font-size:14px;">Politique de confidentialité</div>
-        <div style="color:var(--text-sec); font-size:18px;">›</div>
-      </div>
-    </div>
-
-    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔐 Compte & sécurité</div>
       <!-- Deux notions distinctes, auparavant confondues sous un seul
            "Identifiant" qui n'affichait que la référence technique :
@@ -9901,6 +9848,53 @@ function renderSettingsInterne() {
         <button onclick="tcModifierMotDePasse()" style="flex-shrink:0; padding:9px 14px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;">Modifier mon mot de passe</button>
       </div>
       ${tcRenderBiometrieToggle()}
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">📱 Application</div>
+      <div id="updateBannerZone"></div>
+      <div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div style="flex:1;">
+          <div style="font-size:14px; font-weight:500;">Mise à jour automatique</div>
+          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Installe les nouvelles versions sans confirmation</div>
+        </div>
+        <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+          <input type="checkbox" id="autoUpdateToggle" ${loadAutoUpdatePref() ? 'checked' : ''} onchange="setAutoUpdatePref(this.checked); tcMajVisuelInterrupteur(this)" style="opacity:0; width:0; height:0;">
+          <span style="position:absolute; inset:0; background:${loadAutoUpdatePref() ? 'var(--g-blue)' : '#ccc'}; border-radius:24px; transition:.2s;"></span>
+          <span style="position:absolute; height:18px; width:18px; left:${loadAutoUpdatePref() ? '23px' : '3px'}; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3);"></span>
+        </label>
+      </div>
+      <div onclick="checkForUpdates(true)" style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+        <div>
+          <div style="font-size:14px; font-weight:500;">Vérifier les mises à jour</div>
+          <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Version actuelle : ${tcFormaterVersion()}</div>
+        </div>
+        <div style="font-size:13px; color:#1a73e8;">🔄 Vérifier</div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">🔒 Confidentialité & Sécurité</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:13px; color:var(--g-blue); font-weight:500;">🔒 Tes données</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px; line-height:1.5;">${TC_PHRASE_CONFIDENTIALITE}</div>
+      </div>
+    </div>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">ℹ️ À propos</div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px;">Version</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:4px;">${tcFormaterVersion()}</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="openLegalPage('cgu', 'settings', false)">
+        <div style="font-size:14px;">Conditions d'utilisation</div>
+        <div style="color:var(--text-sec); font-size:18px;">›</div>
+      </div>
+      <div style="padding:12px 16px; border-top:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="openLegalPage('privacy', 'settings', false)">
+        <div style="font-size:14px;">Politique de confidentialité</div>
+        <div style="color:var(--text-sec); font-size:18px;">›</div>
+      </div>
     </div>
 
     <div style="text-align:center; padding:20px; font-size:11px; color:#5f6368; font-style:italic;">
@@ -18637,6 +18631,7 @@ function tcAppliquerLangueRecue(code) {
   try { localStorage.setItem('timecool_language', code); } catch (e) {}
   const el = document.getElementById('settings_lang_label');
   if (el) el.textContent = `${lang.flag} ${tcNomDeLangue(lang.code, lang.label)}`;
+  if (typeof initLanguageDisplay === 'function') initLanguageDisplay();   // la ligne « Langue de l'application » de Paramètres (mission 75)
   if (typeof translatePageWithGoogle === 'function') setTimeout(function () { translatePageWithGoogle(code, true); }, 120);
 }
 

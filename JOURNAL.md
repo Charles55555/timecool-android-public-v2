@@ -3157,3 +3157,13 @@ Chef, 03/11 (batterie passage 27 : 696/700 ; campagne m73 dans les 3 profils). U
 - Marche arrière du lot : chaque « Oui, place-le » écrasait la précédente. Désormais un lot (ev.lotDecalage.id) garde une seule marche arrière : chaque rendez-vous garde sa place d’avant (les rendez-vous sans contact déplacés d’office compris), « remets-les » remet tout le lot et chaque contact déjà prévenu lit « maintenu » (tcDeplacerDansLeLot). Un autre déplacement entre-temps repart de zéro.
 - Noms : les réponses prennent le nom de la fiche contact (« Gaëlle Perrin », « Jules Fictif »), pas celui du compte ni le prénom du lien, aussi dans « … avait déjà pris » (tcNomsDeFiche, seulement si c’est la même personne).
 - Suites : verif-confiance-charly 113 (section 11), verif-classement-charly (#431).
+
+## 03/11/2026 : Mission 75, la page Paramètres dans l'ordre voulu, une seule ligne « Langue »
+
+Charles, 03/11 (par le chef) : page seule. De haut en bas : Ma confiance en Charly, Messages d'annulation & retards, Message d'absence, Notifications, Affichage, Langue & Région, Sauvegarde & Restauration, Compte & sécurité, Application, Confidentialité & Sécurité, À propos, la citation, Se déconnecter.
+- Les cartes sont déplacées telles quelles (diff vérifié : mêmes lignes, autre ordre). Aucun réglage ni aucune clé ne change.
+- La ligne « Langue » d'Affichage (openSettingsModal('language')) et « Langue de l'application » de Langue & Région (openLanguageSelector) commandaient le même réglage : toutes deux appellent selectLanguageFromSettings, clé timecool_language. La première est retirée ; la branche 'language' d'openSettingsModal reste dans le code, plus appelée.
+- tcAppliquerLangueRecue (langue reçue du compte) ne mettait à jour que l'étiquette retirée : elle appelle aussi initLanguageDisplay, qui met à jour la ligne qui reste.
+- La carte Notifications finissait par un </div> en trop (ignoré par le navigateur) : retiré.
+- Sonde Chrome (compte Ines, écritures bloquées) à 390 px et 1280 px : ordre des 11 cartes exact, une seule ligne « Langue », fenêtre de langue qui s'ouvre, rien qui déborde, aucune erreur JS.
+- Suites : verif-parametres-ordre (nouvelle, 8, échoue sur la page d'avant), verif-confiance-charly (le bloc est suivi de Messages d'annulation).

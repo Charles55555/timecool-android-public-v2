@@ -42,8 +42,8 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
-verifie('les trois profils sont faits : le bloc est visible (TC_CONFIANCE_VISIBLE = true, 73c), en tête des Paramètres, avant « Sauvegarde & Restauration »',
-  /const TC_CONFIANCE_VISIBLE = true;/.test(page) && /function renderSettingsInterne\(\) \{\s+document\.getElementById\('settingsContent'\)\.innerHTML = `\s+\$\{TC_CONFIANCE_VISIBLE \? tcBlocConfiance\(\) : ''\}\s+<div[^>]*>\s+<div[^>]*>💾 Sauvegarde & Restauration/.test(page));
+verifie('les trois profils sont faits : le bloc est visible (TC_CONFIANCE_VISIBLE = true, 73c), en tête des Paramètres, avant « Messages d’annulation & retards » (mission 75)',
+  /const TC_CONFIANCE_VISIBLE = true;/.test(page) && /function renderSettingsInterne\(\) \{\s+document\.getElementById\('settingsContent'\)\.innerHTML = `\s+\$\{TC_CONFIANCE_VISIBLE \? tcBlocConfiance\(\) : ''\}\s+<div[^>]*>\s+<div[^>]*>💬 Messages d'annulation &amp; retards/.test(page));
 verifie('la clé tc_confiance_charly suit le compte (synchronisée : absente de TC_JAMAIS_TRANSFERE)', /var TC_CONFIANCE_KEY = 'tc_confiance_charly';/.test(page) && !/TC_JAMAIS_TRANSFERE = \[[^\]]*tc_confiance_charly/.test(page));
 const csm = extraire('charlySendMessage') || '';
 const iRep = csm.indexOf('await tcRepondreReponseCreneau(text)) return;');
