@@ -12847,7 +12847,7 @@ function tcTitreEssentiel(titre, texteUtilisateur) {
   const t0 = String(titre || '').trim();
   if (!t0) return t0;
   const normD = function (x) { return ' ' + tcSansAccents(String(x || '')).replace(/[’']/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' '; };
-  const dicte = String(texteUtilisateur || '').match(/(?:appel(?:le|les|lez)|intitul(?:e|es|ez)|nomm(?:e|es|ez))[\s-]*(?:le|la|les|l['’])?\s*[:,]?\s*[«"“]\s*([^»"”]+?)\s*[»"”]|(?:titre|intitul[ée]e?)\s*[:=]?\s*[«"“]\s*([^»"”]+?)\s*[»"”]/i);
+  const dicte = String(texteUtilisateur || '').match(/(?:appel(?:le|lez)|intitul(?:e|ez)|nomm(?:e|ez))-(?:le|la|les)\s*[:,]?\s*[«"“]\s*([^»"”]+?)\s*[»"”]|(?:titre|intitul[ée]e?)\s*[:=]?\s*[«"“]\s*([^»"”]+?)\s*[»"”]/i);
   const motsDictes = dicte ? (dicte[1] || dicte[2] || '').trim() : '';
   if (motsDictes && normD(t0).indexOf(normD(motsDictes)) > -1) return motsDictes;
   let t = t0.replace(/^(?:appel(?:le|lez)|intitul(?:e|ez)|nomm(?:e|ez))-(?:le|la|les)\s*[:,]?\s*|^(?:titre|intitul[ée]e?)\s*[:,-]\s*/i, '');

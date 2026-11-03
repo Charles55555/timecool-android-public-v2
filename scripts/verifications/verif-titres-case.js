@@ -47,7 +47,8 @@ const dictes = [
   ['Nomme-le Point Lefebvre', 'nomme-le “Point Lefebvre” demain 9h', 'Point Lefebvre'],
   ['Titre : Bilan trimestriel', 'ajoute vendredi 14h, titre : "Bilan trimestriel"', 'Bilan trimestriel'],
   ['Intitule-le point mensuel', 'lundi 10h intitule-le point mensuel', 'Point mensuel'],
-  ['Appelle le plombier', 'rappelle-moi d appeler le plombier demain 9h', 'Appelle le plombier']];
+  ['Appelle le plombier', 'rappelle-moi d appeler le plombier demain 9h', 'Appelle le plombier'],
+  ['Appeler Maman', 'appelle "Maman" mardi 10h', 'Appeler Maman'], ['Appeler Paul', 'appelle « Paul » demain 9h', 'Appeler Paul']];
 const dictesKo = dictes.filter(([a, u, b]) => ctx.tcTitreEssentiel(a, u) !== b).map(([a, u, b]) => a + ' → ' + ctx.tcTitreEssentiel(a, u) + ' (attendu ' + b + ')');
 verifie('titre dicté (« appelle-le », « intitule-le », « nomme-le », « titre : ») : les mots dictés, sans le verbe ; « Appelle le plombier » reste une tâche', !dictesKo.length, dictesKo.join(' | '));
 verifie('le modèle reçoit la règle du titre dicté', /Titre dicté \(« appelle-le "Point mensuel équipe" »/.test(page));
