@@ -38,7 +38,7 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
   'tcIdsQuestion', 'tcRetirerQuestionsDe', 'tcPoserLotCreneaux', 'tcReproposerSeul', 'tcExecuterLotCreneaux', 'tcDireSuitesAuxContacts', 'tcExecuterDeplacement', 'tcGenesDuLot',
   'tcPrisTexte', 'tcPrisParentheses', 'tcTraiterSeul', 'tcSuitesEnLignes', 'tcProposerEnvoi', 'tcExecuterEnvoi',
   'tcSauverAClore', 'tcEchecClore', 'tcCloreEnAttente', 'tcNoterPourMarcheArriere', 'tcMaintenirPropositions',
-  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcNomsDeFiche'];
+  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcAvecConfiance', 'tcUneQuestionAttend'];
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -99,7 +99,7 @@ const ctx = {
 vm.createContext(ctx);
 const constantes = (page.match(/^const TC_(PROPOSITION_[A-Z_]+|CONFIANCE_VISIBLE) = [^;\n]+;$/gm) || []).join('\n');
 const profils = (page.match(/const TC_CONFIANCE_PROFILS = \[[\s\S]*?\n\];/) || [''])[0];
-vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; let _tcDeplacementEnAttente = null; var _tcPropositionsRepondues = {}; var _tcPropositionsPris = {}; var _tcAClore = []; var TC_A_CLORE_KEY = \'tc_propositions_a_clore\'; let _tcMarcheArriere = null;\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
+vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; let _tcDeplacementEnAttente = null; var _tcPropositionsRepondues = {}; var _tcPropositionsPris = {}; var _tcAClore = []; var TC_A_CLORE_KEY = \'tc_propositions_a_clore\'; let _tcMarcheArriere = null; var _tcConfianceMoment = null;\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
   + ['tcSansAccents', 'tcISO', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre']
     .concat(noms).map(extraire).join('\n'), ctx);
 
@@ -472,6 +472,70 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   verifie('le nom de la fiche contact, jamais celui du compte : « Gaëlle Perrin » (pas « Gaelle Perrin »), « Jules Fictif » (pas « Jules »), aussi dans « … avait déjà pris »', ln[0].qui === 'Gaëlle Perrin' && ln[0].pris[0].par === 'Gaëlle Perrin' && ln[0].pris[1].par === 'Jules Fictif' && ln[1].qui === 'Jules Fictif', JSON.stringify(ln));
   verifie('tcSuivrePropositions prend les noms de la fiche dès la lecture', /try \{ liste = await TC_BACKEND\.propositions\(\); \} catch \(e\) \{ liste = \[\]; \}\s+tcNomsDeFiche\(liste\);/.test(extraire('tcSuivrePropositions') || ''));
   ctx.contactsList.splice(2);
+  delete stock.tc_confiance_charly;
+
+  titre('12. Mission 77 : la demande du moment prime sur le profil, pour cette demande seulement');
+  const phrases77 = [
+    ['décale mon rendez-vous de demain avec Paul et attends ma validation', 1, 'décale mon rendez-vous de demain avec Paul'],
+    ['Je suis malade, demande-moi avant', 1, 'Je suis malade'],
+    ['annule mon rdv de jeudi avec Chloé, vérifie avec moi', 1, 'annule mon rdv de jeudi avec Chloé'],
+    ['je serai en retard de 10 minutes, attends mon accord', 1, 'je serai en retard de 10 minutes'],
+    ['décale tout lundi mais ne fais rien sans me demander', 1, 'décale tout lundi'],
+    ['demande-moi d’abord, je dois décaler le rendez-vous de jeudi', 1, 'je dois décaler le rendez-vous de jeudi'],
+    ['décale mon rendez-vous de demain avec Paul, fais-le directement', 3, 'décale mon rendez-vous de demain avec Paul'],
+    ['je suis malade demain, fais-le sans me demander', 3, 'je suis malade demain'],
+    ['décale mes rendez-vous de demain sans me demander', 3, 'décale mes rendez-vous de demain'],
+    ['annule mon rdv de jeudi, tout seul', 3, 'annule mon rdv de jeudi'],
+    ['préviens Paul que je suis en retard, pas besoin de me demander', 3, 'préviens Paul que je suis en retard'],
+    ['j’ai un imprévu cet après-midi, gère tout seul', 3, 'j’ai un imprévu cet après-midi'],
+    ['décale le rendez-vous avec Chloé à vendredi, vas-y directement', 3, 'décale le rendez-vous avec Chloé à vendredi']];
+  const sansPhrase77 = ['décale mon rendez-vous de demain avec Paul', 'je serai tout seul au dîner vendredi', 'attends-moi au café demain 9h', 'fais le plein demain 9h', 'vas-y', 'note que Paul doit valider le devis', 'rdv dentiste sans rendez-vous préalable'];
+  const mal77 = phrases77.filter(([t, n, s]) => { const r = ctx.tcConfianceDemandee(t); return !r || r.n !== n || r.sans !== s; }).map(([t, n, s]) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)) + ' (attendu ' + n + ', ' + s + ')')
+    .concat(sansPhrase77.filter((t) => ctx.tcConfianceDemandee(t)).map((t) => t + ' → ' + JSON.stringify(ctx.tcConfianceDemandee(t)) + ' (attendu rien)'));
+  verifie('les phrases77 du moment : « attends ma validation », « demande-moi avant », « vérifie avec moi », « rien sans me demander » → 1 ; « fais-le directement », « sans me demander », « tout seul », « pas besoin de me demander » → 3 ; ôtées du texte ; les phrases77 ordinaires ne changent rien', !mal77.length, mal77.join(' | '));
+  stock.tc_confiance_charly = '3'; ctx.charlyIA.history = [];
+  vm.runInContext('_tcConfianceMoment = { n: 1, dit: false, texte: "x" }', ctx);
+  verifie('profil 3 + « attends ma validation » : profil 1 pour celle-ci, le réglage reste 3 (Paramètres compris), « D’accord, pour celle-ci j’attends ton accord. » une seule fois',
+    ctx.tcConfianceCharly() === 1 && ctx.tcConfianceCharly() === 1 && ctx.tcConfianceCharly(true) === 3 && stock.tc_confiance_charly === '3' && /aria-checked="true" onclick="tcChoisirConfiance\(3\)"/.test(ctx.tcBlocConfiance())
+    && ctx.charlyIA.history.filter((m) => m.content === 'D’accord, pour celle-ci j’attends ton accord.').length === 1, JSON.stringify(ctx.charlyIA.history));
+  ctx.charlyIA.history = [];
+  const nPrev77 = trace.prevenances.length;
+  await ctx.tcProposerEnvoi(paul, 'J’annule.', false, { supprimer: { id: 'x', title: 'X' } });
+  verifie('profil 3 + « attends ma validation » : le message attend « J’envoie ? »', /J’envoie \?/.test(last().content) && trace.prevenances.length === nPrev77, last().content);
+  stock.tc_confiance_charly = '1'; ctx.charlyIA.history = [];
+  vm.runInContext('_tcConfianceMoment = { n: 3, dit: false, texte: "x" }', ctx);
+  await ctx.tcProposerEnvoi(paul, 'J’annule.', false, { supprimer: { id: 'x', title: 'X' } });
+  verifie('profil 1 + « fais-le directement » : le message part seul, « D’accord, pour celle-ci je fais tout et je te fais un compte rendu. » avant',
+    trace.prevenances.length === nPrev77 + 1 && !ctx.charlyIA.history.some((m) => m.nature === 'question') && ctx.charlyIA.history[0].content === 'D’accord, pour celle-ci je fais tout et je te fais un compte rendu.', JSON.stringify(ctx.charlyIA.history));
+  verifie('profil 1 + « fais-le directement » : le bilan dit « je place le créneau choisi … et je te fais un compte rendu »', lignesDe().some((l) => /je place le créneau choisi dans ton agenda et je te fais un compte rendu\.$/.test(l)));
+  ctx.charlyIA.history = [];
+  vm.runInContext('_tcConfianceMoment = { n: 1, dit: false, texte: "x" }', ctx);
+  ctx.tcConfianceCharly();
+  verifie('le profil dit est déjà le réglage : rien n’est dit', !ctx.charlyIA.history.length);
+  const e77 = ev('e77', 'Avocat', 2, 15, 0, 16, 0, { contact: 'c1' });
+  ctx.events = [e77];
+  vm.runInContext('_tcConfianceMoment = { n: 3, dit: true, texte: "x" }', ctx);
+  await ctx.tcEnvoyerPropositions([{ ev: e77, contact: ctx.contactsList[0], creneaux: ctx.tcCreneauxReproposes(e77) }]);
+  verifie('le profil dit suit le rendez-vous proposé (decalage.confiance = 3)', e77.decalage && e77.decalage.confiance === 3, JSON.stringify(e77.decalage));
+  vm.runInContext('_tcConfianceMoment = null', ctx);
+  ctx.charlyIA.history = [];
+  const r77 = e77.decalage.rdv;
+  reponses = [{ rdv_id: r77, titre: 'Avocat', remplace: 'e77', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(4) + ' 09:00:00', fin: iso(4) + ' 10:00:00', pris: [] }];
+  await ctx.tcSuivrePropositions(true);
+  verifie('plus tard, profil 1 réglé : la réponse de Paul suit « fais-le directement » (placé seul, compte rendu, aucune question) ; le profil du moment ne reste pas',
+    e77.date === iso(4) && !ctx.charlyIA.history.some((m) => m.nature === 'question') && ctx.charlyIA.history.some((m) => m._compteRendu) && vm.runInContext('_tcConfianceMoment === null', ctx) && ctx.tcConfianceCharly() === 1, JSON.stringify(ctx.charlyIA.history));
+  const csm77 = extraire('charlySendMessage') || '', pmu = extraire('tcPousserMessageUtilisateur') || '';
+  verifie('charlySendMessage lit la phrase avant toute réponse attendue, l’ôte du texte, la garde pour une réponse et la retire à la nouvelle demande',
+    csm77.indexOf('tcConfianceDemandee(text)') > -1 && csm77.indexOf('tcConfianceDemandee(text)') < csm77.indexOf('if (_tcTrajetEtapes)')
+    && /if \(_moment\.sans !== text\) \{ text = _moment\.sans; _tcTexteTape = \{ tape: texteTape, corrige: text \}; \}/.test(csm77)
+    && /else if \(_tcConfianceMoment && !\(typeof tcUneQuestionAttend === 'function' && tcUneQuestionAttend\(\)\)\) _tcConfianceMoment = null;/.test(csm77)
+    && csm77.indexOf('if (_tcConfianceMoment && _tcConfianceMoment.texte !== text) _tcConfianceMoment = null;') > -1 && csm77.indexOf('if (_tcConfianceMoment && _tcConfianceMoment.texte !== text) _tcConfianceMoment = null;') < csm77.indexOf('INTERCEPTION SALUTATIONS'));
+  verifie('« D’accord, pour celle-ci … » juste après la bulle pour décaler, retard, annuler, malade, imprévu', /tcDireConfianceDuMoment\(\);/.test(pmu) && /decal\|deplac\|report\|repouss\|retard\|annul\|supprim\|malade\|imprevu\|empech\|previen/.test(pmu));
+  vm.runInContext('_tcConfianceMoment = null', ctx);
+  ctx.charlyIA.history = [{ role: 'assistant', nature: 'question', content: 'J’envoie ?' }];
+  const qa = ctx.tcUneQuestionAttend();
+  ctx.charlyIA.history.push({ role: 'user', content: 'oui' });
+  verifie('une question attend : la réponse garde le profil du moment ; après la réponse, plus rien n’attend', qa === true && ctx.tcUneQuestionAttend() === false);
   delete stock.tc_confiance_charly;
 
   console.log('');
