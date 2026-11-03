@@ -14565,6 +14565,8 @@ async function tcMarcheArriere(text) {
     + remis.map(function (e) { return '• ' + e.title + ' — ' + tcFormaterDateHumaine(e.date) + ' ' + tcFormaterHeure(e); }).join('\n')
     + (contacts.length ? '\nPense à prévenir ' + tcQuestionnaireNoms(contacts) + ' que c\'est maintenu.' : ''));
   showToast('↩️ Rendez-vous remis');
+  // Des créneaux placés par Charly (mission 73) : il prévient lui-même que c'est maintenu (chef, 03/11).
+  if (Array.isArray(m.propositions) && m.propositions.length && typeof tcMaintenirPropositions === 'function') await tcMaintenirPropositions(m.propositions);
 }
 
 function tcSupprimerRdvs(cible, options) {
@@ -25848,6 +25850,76 @@ async function tcReproposerSeul(p) {
   await tcExecuterReponseCreneau(m, 'autres');
 }
 
+/* ── Clore une proposition quand la connexion a manqué (examen 73c, décision du chef) ─────────────── */
+// La proposition attend ici (clé du compte : un autre appareil peut la clore aussi, traiter ne s'applique qu'une fois) ;
+// Charly réessaie seul à chaque passage de la sonde (TC_PROPOSITION_ESSAIS fois), puis à la prochaine ouverture.
+var TC_A_CLORE_KEY = 'tc_propositions_a_clore';
+const TC_PROPOSITION_ESSAIS = 5;
+var _tcAClore = (function () {
+  try { const v = JSON.parse(localStorage.getItem(TC_A_CLORE_KEY) || '[]'); return Array.isArray(v) ? v.map(function (x) { return Object.assign({}, x, { essais: 0 }); }) : []; } catch (e) { return []; }
+})();
+function tcSauverAClore() { try { localStorage.setItem(TC_A_CLORE_KEY, JSON.stringify(_tcAClore)); } catch (e) {} }
+
+/** La connexion a manqué : la proposition attend d’être close. dire : Charly le signale tout de suite (au profil 3, le compte rendu le dit). */
+function tcEchecClore(p, ev, decision, dire) {
+  const id = Number(p.rdv_id);
+  _tcAClore = _tcAClore.filter(function (x) { return x.id !== id; });
+  _tcAClore.push({ id: id, decision: decision, p: p, evId: ev ? ev.id : null, essais: 0 });
+  tcSauverAClore();
+  if (dire && (decision === 'place' || decision === 'laisse' || decision === 'maintenir')) charlyIA.history.push({ role: 'system_info', content: '⚠️ Je n’ai pas pu prévenir ' + String(p.qui || 'ton contact') + ', je réessaie.' });
+}
+
+/** Réessaie ce qui attend d’être clos ; ce qui part enfin est dit, avec le message au contact. */
+async function tcCloreEnAttente() {
+  const suites = [], abandon = [];
+  let change = false;
+  for (const x of _tcAClore.slice()) {
+    if (x.essais >= TC_PROPOSITION_ESSAIS) continue;
+    let d = null;
+    try { d = x.decision === 'maintenir' ? await TC_BACKEND.propositionMaintenir(x.id) : await TC_BACKEND.propositionTraiter(x.id, x.decision); }
+    catch (e) { x.essais++; if (x.essais === TC_PROPOSITION_ESSAIS) abandon.push(String(x.p.qui || 'ton contact')); continue; }
+    _tcAClore = _tcAClore.filter(function (y) { return y !== x; });
+    change = true;
+    const ev = (Array.isArray(events) ? events : []).find(function (e) { return e && String(e.id) === String(x.evId); }) || null;
+    if (d && d.message) suites.push({ p: x.p, ev: ev, d: d });
+  }
+  if (change) tcSauverAClore();
+  if (suites.length) {
+    charlyIA.history.push({ role: 'system_info', content: 'La connexion est revenue : je préviens ' + tcNomsLisibles(suites.map(function (s) { return String(s.p.qui || 'ton contact'); })) + '.' });
+    tcDireSuitesAuxContacts(suites);
+  }
+  if (abandon.length) charlyIA.history.push({ role: 'system_info', content: '⚠️ Je n’ai toujours pas pu prévenir ' + tcNomsLisibles(abandon) + ' : je réessaierai à la prochaine ouverture de TimeCool.' });
+  if (suites.length || abandon.length) renderCharlyChat();
+}
+
+/** Un créneau placé est noté pour « remets-les » : le contact sera prévenu que c’est maintenu (Charly s’en charge). */
+function tcNoterPourMarcheArriere(p, ev) {
+  if (typeof _tcMarcheArriere === 'undefined' || !_tcMarcheArriere || _tcMarcheArriere.type !== 'deplacement' || !ev) return;
+  if (!_tcMarcheArriere.rdvs.some(function (r) { return r.id === ev.id; })) return;
+  (_tcMarcheArriere.propositions = _tcMarcheArriere.propositions || []).push({ p: p, evId: ev.id });
+  _tcMarcheArriere.prevenus = [];
+}
+
+/**
+ * « Remets-les » après des créneaux placés (chef, 03/11) : chaque contact déjà prévenu du déplacement lit « Finalement, le
+ * rendez-vous du … est maintenu. ». Une proposition pas encore close (connexion manquée) n’a rien dit au contact : elle se
+ * ferme en « laissé » (il lit que le rendez-vous reste en place, la réponse à son choix), sans « maintenu ».
+ */
+async function tcMaintenirPropositions(liste) {
+  const suites = [];
+  for (const x of liste) {
+    const id = Number(x.p.rdv_id);
+    const attente = _tcAClore.find(function (y) { return y.id === id && y.decision === 'place'; });
+    if (attente) { attente.decision = 'laisse'; attente.essais = 0; tcSauverAClore(); continue; }
+    let d = null;
+    try { d = await TC_BACKEND.propositionMaintenir(id); } catch (e) { tcEchecClore(x.p, { id: x.evId }, 'maintenir', true); continue; }
+    const ev = (Array.isArray(events) ? events : []).find(function (e) { return e && String(e.id) === String(x.evId); }) || null;
+    if (d && d.message) suites.push({ p: x.p, ev: ev, d: d });
+  }
+  if (suites.length) tcDireSuitesAuxContacts(suites);
+  renderCharlyChat();
+}
+
 let _tcPropositionsEnCours = false;
 /**
  * Les réponses qui attendent sur le serveur ; la première pas encore tranchée devient une question de Charly.
@@ -25856,9 +25928,10 @@ let _tcPropositionsEnCours = false;
  */
 async function tcSuivrePropositions(toujours) {
   if (_tcPropositionsEnCours || typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte || !TC_BACKEND.estConnecte()) return;
-  if (!toujours && !(Array.isArray(events) ? events : []).some(function (e) { return e && e.decalage && e.decalage.rdv; })) return;
+  if (!toujours && !_tcAClore.length && !(Array.isArray(events) ? events : []).some(function (e) { return e && e.decalage && e.decalage.rdv; })) return;
   _tcPropositionsEnCours = true;
   try {
+    await tcCloreEnAttente();
     let liste = [];
     try { liste = await TC_BACKEND.propositions(); } catch (e) { liste = []; }
     if (tcReponseCreneauEnAttente()) return;
@@ -25873,7 +25946,8 @@ async function tcSuivrePropositions(toujours) {
           || (Array.isArray(m._traites) && m._traites.indexOf(Number(p.rdv_id)) > -1));
       });
     };
-    const nouvelles = liste.filter(function (x) { return !deja(x); });
+    // Une proposition qui attend d’être close (connexion manquée) n’est jamais retraitée : elle ne bouge plus, seul le message part.
+    const nouvelles = liste.filter(function (x) { return !deja(x) && !_tcAClore.some(function (y) { return y.id === Number(x.rdv_id); }); });
     if (!nouvelles.length) return;
     if (tcConfianceCharly() < 2) { tcPoserReponseCreneau(nouvelles[0]); return; }
     if (tcConfianceCharly() === 3) { await tcTraiterSeul(nouvelles); return; }
@@ -25972,7 +26046,8 @@ async function tcExecuterReponseCreneau(m, cle) {
     }
   }
   let d = null;
-  try { d = await TC_BACKEND.propositionTraiter(p.rdv_id, decision); } catch (e) { d = null; }
+  if (decision === 'place') tcNoterPourMarcheArriere(p, ev);
+  try { d = await TC_BACKEND.propositionTraiter(p.rdv_id, decision); } catch (e) { d = null; tcEchecClore(p, ev, decision, true); }
   if (d && d.message) tcDireSuiteAuContact(p, ev, d);
   renderCharlyChat();
   setTimeout(function () { tcSuivrePropositions(true); }, 1500);
@@ -26000,7 +26075,9 @@ async function tcExecuterLotCreneaux(m, cle) {
   const suites = [];
   for (const x of items) {
     let d = null;
-    try { d = await TC_BACKEND.propositionTraiter(x.p.rdv_id, !x.ev ? 'ferme' : (cle === 'placer' ? 'place' : 'laisse')); } catch (e) { d = null; }
+    const decision = !x.ev ? 'ferme' : (cle === 'placer' ? 'place' : 'laisse');
+    if (decision === 'place') tcNoterPourMarcheArriere(x.p, x.ev);
+    try { d = await TC_BACKEND.propositionTraiter(x.p.rdv_id, decision); } catch (e) { d = null; tcEchecClore(x.p, x.ev, decision, true); }
     if (d && d.message) suites.push({ p: x.p, ev: x.ev, d: d });
   }
   if (suites.length) tcDireSuitesAuxContacts(suites);
@@ -26022,10 +26099,17 @@ function tcDireSuiteAuContact(p, ev, d) {
  * courte de compte rendu pour le lot : déplacé, reproposé, laissé, ce qui attend encore, les chevauchements.
  */
 async function tcTraiterSeul(liste) {
-  const suites = [], deplaces = [], reproposes = [], laisses = [], absents = [], echecs = [], envois = [];
+  const suites = [], deplaces = [], reproposes = [], laisses = [], absents = [], echecs = [], envois = [], nonPrevenus = [], aClore = [];
   const traiter = async function (x, decision) {
     let d = null;
-    try { d = await TC_BACKEND.propositionTraiter(x.p.rdv_id, decision); } catch (e) { d = null; }
+    if (decision === 'place') tcNoterPourMarcheArriere(x.p, x.ev);
+    try { d = await TC_BACKEND.propositionTraiter(x.p.rdv_id, decision); } catch (e) {
+      // La connexion a manqué : la proposition attend d’être close, le compte rendu le dit, la sonde réessaie (sans redéplacer).
+      tcEchecClore(x.p, x.ev, decision, false);
+      aClore.push(Number(x.p.rdv_id));
+      if (decision === 'place' || decision === 'laisse') nonPrevenus.push(String(x.p.qui || 'ton contact'));
+      return;
+    }
     if (d && d.message) suites.push({ p: x.p, ev: x.ev, d: d });
   };
   const choisis = liste.filter(function (p) { return p.etat === 'choisi'; }).map(function (p) { return { p: p, ev: tcRdvDeProposition(p) }; });
@@ -26066,6 +26150,7 @@ async function tcTraiterSeul(liste) {
   laisses.forEach(function (x) { lignes.push('• Laissé à sa place : « ' + x.ev.title + ' » (' + (Number(x.p.tours || 1) >= 2 ? 'aucun créneau retenu après deux propositions' : 'pas d’autre moment libre') + ')'); });
   absents.forEach(function (x) { lignes.push('• Plus dans ton agenda, rien placé : « ' + (x.p.titre || 'un rendez-vous') + ' »'); });
   echecs.forEach(function (x) { lignes.push('• Pas envoyé, la connexion a manqué : « ' + x.ev.title + ' ». Je réessaie.'); });
+  nonPrevenus.forEach(function (q) { lignes.push('• Je n’ai pas pu prévenir ' + q + ', je réessaie.'); });
   if (alertes.length) lignes.push('⚠️ Attention, ça chevauche : ' + alertes.join(' ; ') + '.');
   const attente = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.decalage && e.decalage.rdv; }).length;
   if (attente) lignes.push('• En attente d’une réponse : ' + attente + ' rendez-vous');
@@ -26074,7 +26159,7 @@ async function tcTraiterSeul(liste) {
   s.aPrevenir.forEach(function (l) { lignes.push(l); });
   s.envois.forEach(function (e) { envois.push(e); });
   if (deplaces.length) lignes.push('Pour revenir en arrière, dis-moi « remets-' + (deplaces.length > 1 ? 'les' : 'le') + ' ».');
-  const traites = liste.filter(function (p) { return !echecs.some(function (x) { return x.p === p; }); }).map(function (p) { return Number(p.rdv_id); });
+  const traites = liste.filter(function (p) { return !echecs.some(function (x) { return x.p === p; }) && aClore.indexOf(Number(p.rdv_id)) < 0; }).map(function (p) { return Number(p.rdv_id); });
   const carte = { role: 'system_info', content: lignes.join('\n'), _compteRendu: true, _traites: traites };
   if (envois.length) { carte._envois = envois; carte._envoisId = 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero); }
   if (lignes.length > 1) charlyIA.history.push(carte);
@@ -31179,6 +31264,9 @@ const TC_BACKEND = {
   },
   async propositionTraiter(rdvId, decision) {
     return tcAppel('POST', '/rdv/proposition/traiter', { rdv_id: rdvId, decision: decision });
+  },
+  async propositionMaintenir(rdvId) {
+    return tcAppel('POST', '/rdv/proposition/maintenir', { rdv_id: rdvId });
   }
 };
 

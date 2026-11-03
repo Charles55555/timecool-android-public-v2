@@ -4918,6 +4918,38 @@ switch ($route) {
         }
         Rep::ok(['traite' => true, 'message' => $message, 'messagerie' => $cible !== null]);
 
+    // « Remets-les » après un créneau placé (chef, 03/11) : le rendez-vous d'avant est maintenu, le contact le lit
+    // (messagerie TimeCool ; pour un lien, le message revient à l'application et la page du lien dit « en place »).
+    case 'POST /rdv/proposition/maintenir':
+        $moi = Auth::compte();
+        $message = null;
+        $cible = null;
+        $pdo = Db::pdo();
+        $pdo->beginTransaction();
+        try {
+            $rdv = Db::un('SELECT * FROM rdv WHERE id = ? AND organisateur_id = ? AND origine = "charly" AND statut = "choisi" AND traite_le IS NOT NULL FOR UPDATE',
+                [Entree::entier('rdv_id') ?? 0, $moi['id']]);
+            if ($rdv === null) {
+                $pdo->rollBack();
+                Rep::ok(['maintenu' => false, 'message' => null, 'messagerie' => false]);
+            }
+            Db::req('UPDATE rdv SET statut = "annule" WHERE id = ?', [$rdv['id']]);
+            $avant = trim((string) ($rdv['avant'] ?? ''));
+            $message = $avant !== '' ? 'Finalement, le rendez-vous du ' . $avant . ' est maintenu.' : 'Finalement, le rendez-vous est maintenu.';
+            $cible = $rdv['invite_compte_id'] === null ? null : Db::un('SELECT * FROM comptes WHERE id = ?', [$rdv['invite_compte_id']]);
+            if ($cible !== null) {
+                propositionMarquerCarte($rdv, ['suite' => 'laisse']);
+                messagePoser($moi, $cible, $message, (int) $rdv['id'], null, null, null, null, demandeurBloque((int) $cible['id'], $moi));
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+        Rep::ok(['maintenu' => true, 'message' => $message, 'messagerie' => $cible !== null]);
+
     // TC_BACKEND.fetchRdvLink — public, sans authentification.
     case 'GET /rdv/lien':
         $jeton = $_GET['jeton'] ?? '';

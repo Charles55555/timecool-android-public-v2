@@ -36,7 +36,8 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
   'tcRendreReponseCreneau', 'tcPropositionRecue', 'tcCadrePropositionCreneaux', 'tcRepondreProposition', 'tcMarqueDecalage',
   'tcGenesDuCreneau', 'tcReposerReponseCreneau', 'tcDireSuiteAuContact',
   'tcIdsQuestion', 'tcRetirerQuestionsDe', 'tcPoserLotCreneaux', 'tcReproposerSeul', 'tcExecuterLotCreneaux', 'tcDireSuitesAuxContacts', 'tcExecuterDeplacement', 'tcGenesDuLot',
-  'tcPrisTexte', 'tcPrisParentheses', 'tcTraiterSeul', 'tcSuitesEnLignes', 'tcProposerEnvoi', 'tcExecuterEnvoi'];
+  'tcPrisTexte', 'tcPrisParentheses', 'tcTraiterSeul', 'tcSuitesEnLignes', 'tcProposerEnvoi', 'tcExecuterEnvoi',
+  'tcSauverAClore', 'tcEchecClore', 'tcCloreEnAttente', 'tcNoterPourMarcheArriere', 'tcMaintenirPropositions'];
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -57,7 +58,7 @@ const FIXE = new Date(2026, 9, 15, 10, 0, 0);
 class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); } static now() { return FIXE.getTime(); } }
 const iso = (n) => { const d = new Date(2026, 9, 15 + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const stock = {};
-const trace = { prevenances: [], syncs: 0, saves: 0, toasts: [], creees: [], traitees: [], choisies: [], deplaces: [], decisions: [] };
+const trace = { panne: null, maintenus: [], prevenances: [], syncs: 0, saves: 0, toasts: [], creees: [], traitees: [], choisies: [], deplaces: [], decisions: [] };
 let reponses = [];
 const ctx = {
   console, Date: DateFixe, mode: 'user', currentPage: 'assistant', events: [], charlyIA: { history: [] },
@@ -78,7 +79,13 @@ const ctx = {
   TC_BACKEND: {
     estConnecte: () => true,
     propositions: async () => reponses.slice(),
+    propositionMaintenir: async (id) => {
+      if (trace.panne === id) throw new Error('réseau');
+      trace.maintenus.push(id);
+      return { maintenu: true, messagerie: id !== 902, message: 'Finalement, le rendez-vous du jeudi 15 octobre à 15h est maintenu.' };
+    },
     propositionTraiter: async (id, decision) => {
+      if (trace.panne === id) throw new Error('réseau');
       trace.traitees.push(id); trace.decisions.push(decision);
       const p = reponses.find((x) => x.rdv_id === id) || {};
       reponses = reponses.filter((x) => x.rdv_id !== id);
@@ -91,7 +98,7 @@ const ctx = {
 vm.createContext(ctx);
 const constantes = (page.match(/^const TC_(PROPOSITION_[A-Z_]+|CONFIANCE_VISIBLE) = [^;\n]+;$/gm) || []).join('\n');
 const profils = (page.match(/const TC_CONFIANCE_PROFILS = \[[\s\S]*?\n\];/) || [''])[0];
-vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; let _tcDeplacementEnAttente = null; var _tcPropositionsRepondues = {}; var _tcPropositionsPris = {};\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
+vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; let _tcDeplacementEnAttente = null; var _tcPropositionsRepondues = {}; var _tcPropositionsPris = {}; var _tcAClore = []; var TC_A_CLORE_KEY = \'tc_propositions_a_clore\'; let _tcMarcheArriere = null;\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
   + ['tcSansAccents', 'tcISO', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre']
     .concat(noms).map(extraire).join('\n'), ctx);
 
@@ -371,6 +378,49 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   stock.tc_confiance_charly = '3'; ctx.charlyIA.history = [];
   await ctx.tcProposerEnvoi(paul, 'J’annule.', false, { supprimer: { id: 'x', title: 'X' } });
   verifie('profil 3 : il part seul, même avec la suppression', trace.prevenances.length === 2 && !ctx.charlyIA.history.some((m) => m.nature === 'question'));
+  titre('10. Examen de la 73c : la connexion manque au moment de clore ; « remets-les » prévient');
+  stock.tc_confiance_charly = '3'; ctx.charlyIA.history = [];
+  ctx.events = [ev('l', 'Déj Léa', 2, 12, 0, 13, 0, { contact: 'c4', decalage: { rdv: 800 } })];
+  const lea = () => [{ rdv_id: 800, titre: 'Déj Léa', remplace: 'l', etat: 'choisi', qui: 'Léa Bon', reference: 'REFL', tours: 1, debut: iso(3) + ' 12:00:00', fin: iso(3) + ' 13:00:00', pris: [] }];
+  reponses = lea(); trace.panne = 800;
+  const nDep = trace.deplaces.length;
+  await ctx.tcSuivrePropositions(true);
+  verifie('panne sur traiter : le rendez-vous est déplacé, et le compte rendu dit « Je n’ai pas pu prévenir Léa Bon, je réessaie. »', ctx.events[0].date === iso(3) && /• Je n’ai pas pu prévenir Léa Bon, je réessaie\./.test(last().content) && last()._traites.indexOf(800) < 0, last().content);
+  verifie('la proposition attend d’être close, gardée sur l’appareil', vm.runInContext('_tcAClore.length === 1 && _tcAClore[0].id === 800 && _tcAClore[0].decision === "place"', ctx) && /"id":800/.test(stock.tc_propositions_a_clore || ''));
+  const nHist = ctx.charlyIA.history.length;
+  await ctx.tcSuivrePropositions(false);
+  verifie('panne encore : rien n’est redéplacé, pas de nouvelle carte', trace.deplaces.length === nDep + 1 && ctx.charlyIA.history.length === nHist, trace.deplaces.length - nDep);
+  trace.panne = null;
+  await ctx.tcSuivrePropositions(false);
+  verifie('la connexion revient : traiter part une fois (« place »), Léa est prévenue, c’est dit ; rien n’est redéplacé', trace.decisions[trace.decisions.length - 1] === 'place' && trace.deplaces.length === nDep + 1 && vm.runInContext('_tcAClore.length', ctx) === 0
+    && ctx.charlyIA.history.some((m) => m.content === 'La connexion est revenue : je préviens Léa Bon.') && /✉️ Message envoyé à Léa Bon dans sa messagerie TimeCool/.test(last().content), JSON.stringify(ctx.charlyIA.history.slice(-2)));
+  trace.panne = 801;
+  ctx.tcEchecClore({ rdv_id: 801, qui: 'Max Roy' }, null, 'laisse', false);
+  for (let i = 0; i < 6; i++) await ctx.tcCloreEnAttente();
+  verifie('5 essais manqués : « Je n’ai toujours pas pu prévenir Max Roy : je réessaierai à la prochaine ouverture de TimeCool. », une seule fois', ctx.charlyIA.history.filter((m) => m.content === '⚠️ Je n’ai toujours pas pu prévenir Max Roy : je réessaierai à la prochaine ouverture de TimeCool.').length === 1);
+  vm.runInContext('_tcAClore = []', ctx); trace.panne = null;
+  stock.tc_confiance_charly = '1'; ctx.charlyIA.history = [];
+  ctx.events.push(ev('o2', 'Opéra', 4, 20, 0, 21, 0, { contact: 'c1', decalage: { rdv: 810 } }));
+  reponses = [{ rdv_id: 810, titre: 'Opéra', remplace: 'o2', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(5) + ' 18:00:00', fin: iso(5) + ' 19:00:00', pris: [] }];
+  await ctx.tcSuivrePropositions(true);
+  trace.panne = 810;
+  await ctx.tcRepondreReponseCreneau('oui');
+  verifie('profil 1, panne au « oui » : placé, et « ⚠️ Je n’ai pas pu prévenir Paul Martin, je réessaie. »', ctx.events[1].date === iso(5) && ctx.charlyIA.history.some((m) => m.content === '⚠️ Je n’ai pas pu prévenir Paul Martin, je réessaie.') && vm.runInContext('_tcAClore.length', ctx) === 1);
+  trace.panne = null; vm.runInContext('_tcAClore = []', ctx);
+  vm.runInContext('_tcMarcheArriere = { type: "deplacement", rdvs: [{ id: "q1" }, { id: "q2" }, { id: "q3" }] }', ctx);
+  ctx.events.push(ev('q1', 'Q1', 6, 9, 0, 10, 0, { contact: 'c1' }), ev('q2', 'Q2', 6, 11, 0, 12, 0, { contact: 'c2' }), ev('q3', 'Q3', 6, 14, 0, 15, 0, { contact: 'c4' }));
+  ctx.tcNoterPourMarcheArriere({ rdv_id: 901, qui: 'Paul Martin' }, ctx.events.find((e) => e.id === 'q1'));
+  ctx.tcNoterPourMarcheArriere({ rdv_id: 902, qui: 'Chloé' }, ctx.events.find((e) => e.id === 'q2'));
+  ctx.tcNoterPourMarcheArriere({ rdv_id: 903, qui: 'Léa Bon' }, ctx.events.find((e) => e.id === 'q3'));
+  ctx.tcEchecClore({ rdv_id: 903, qui: 'Léa Bon' }, ctx.events.find((e) => e.id === 'q3'), 'place', false);
+  verifie('les créneaux placés sont notés pour « remets-les » (et le « pense à prévenir » manuel ne vaut plus pour eux)', vm.runInContext('_tcMarcheArriere.propositions.length === 3 && _tcMarcheArriere.prevenus.length === 0', ctx));
+  ctx.charlyIA.history = [];
+  await ctx.tcMaintenirPropositions(vm.runInContext('_tcMarcheArriere.propositions', ctx));
+  verifie('« remets-les » : Paul (messagerie) et Chloé (bouton) lisent « Finalement, le rendez-vous du … est maintenu. »', trace.maintenus.join() === '901,902' && /✉️ Message envoyé à Paul Martin dans sa messagerie TimeCool : « Finalement, le rendez-vous du jeudi 15 octobre à 15h est maintenu\. »/.test(last().content)
+    && last()._envois && last()._envois[0].nom === 'Chloé Roux' && last()._envois[0].texte === 'Finalement, le rendez-vous du jeudi 15 octobre à 15h est maintenu.', JSON.stringify(last()));
+  verifie('Léa n’avait rien reçu (connexion manquée) : pas de « maintenu » ; sa proposition se ferme en « laissé »', trace.maintenus.indexOf(903) < 0 && vm.runInContext('_tcAClore.length === 1 && _tcAClore[0].decision === "laisse"', ctx));
+  verifie('tcMarcheArriere appelle tcMaintenirPropositions pour les créneaux placés', /if \(Array\.isArray\(m\.propositions\) && m\.propositions\.length && typeof tcMaintenirPropositions === 'function'\) await tcMaintenirPropositions\(m\.propositions\);/.test(extraire('tcMarcheArriere') || ''));
+  vm.runInContext('_tcAClore = []; _tcMarcheArriere = null', ctx);
   verifie('profil 3 : le questionnaire saute « Oui, vas-y » ; ses questions de cadrage restent', /if \(etape === TC_ETAPE_RECAP && typeof tcConfianceCharly === 'function' && tcConfianceCharly\(\) === 3\) \{ q\.reponses\.recap = 'oui'; continue; \}/.test(page));
   delete stock.tc_confiance_charly;
 

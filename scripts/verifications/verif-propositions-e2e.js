@@ -146,6 +146,17 @@ async function carteChez(b, refA, rdvId) {
   verifie('Alice place : « Rendez-vous déplacé : mardi à 16h. » revient à l application', r.code === 200 && r.d.message === 'Rendez-vous déplacé : mardi à 16h.' && r.d.messagerie === false, r.texte);
   r = await appel('GET', '/rdv/lien?jeton=' + jeton6);
   verifie('son lien dit maintenant « déplacé : mardi à 16h »', r.code === 200 && r.d.suite && r.d.suite.etat === 'deplace' && r.d.suite.choix === 'mardi à 16h', r.texte.slice(0, 200));
+  r = await appel('POST', '/rdv/proposition/maintenir', { rdv_id: p6 }, b.jeton);
+  verifie('« remets-les » : seule Alice peut maintenir', r.code === 200 && r.d.maintenu === false, r.texte);
+  r = await appel('POST', '/rdv/proposition/maintenir', { rdv_id: p6 }, a.jeton);
+  verifie('Alice remet : « Finalement, le rendez-vous du lundi 2 novembre à 15h est maintenu. » revient à l application (lien)', r.code === 200 && r.d.maintenu === true && r.d.message === 'Finalement, le rendez-vous du lundi 2 novembre à 15h est maintenu.' && r.d.messagerie === false, r.texte);
+  r = await appel('GET', '/rdv/lien?jeton=' + jeton6);
+  verifie('et le lien de Denis dit « en place »', r.code === 200 && r.d.suite && r.d.suite.etat === 'en_place', r.texte.slice(0, 200));
+  r = await appel('POST', '/rdv/proposition/maintenir', { rdv_id: p6 }, a.jeton);
+  verifie('une seule fois', r.code === 200 && r.d.maintenu === false, r.texte);
+  r = await appel('POST', '/rdv/proposition/maintenir', { rdv_id: p1 }, a.jeton);
+  const filB2 = JSON.parse(sql("SELECT contenu FROM elements WHERE compte_id = " + b.id + " AND type = 'conversation' AND uid = '" + echappe(a.reference) + "'")).thread;
+  verifie('Bruno (TimeCool) le lit dans sa messagerie, sa carte dit « en place »', r.d.maintenu === true && r.d.messagerie === true && filB2[filB2.length - 1].texte === 'Finalement, le rendez-vous est maintenu.' && (await carteChez(b, a.reference, p1)).suite === 'laisse', JSON.stringify(filB2.slice(-1)));
   r = await appel('POST', '/rdv/proposition/creer', { creneaux, texte: 'x', prenom_destinataire: 'Emma', titre: 'Coiffeur', remplace: 'orig7' }, a.jeton);
   const p7 = r.d.rdv_id, jeton7 = r.d.url.split('/').pop();
   await appel('POST', '/rdv/proposition/traiter', { rdv_id: p7, decision: 'autres' }, a.jeton);
