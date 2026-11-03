@@ -67,8 +67,8 @@ verifie('« Truc » categorie inconnue → green', C('Truc', 'xyz') === 'green')
 titre('La consigne n enseigne plus « rdv »');
 verifie('la liste des categories ne contient plus rdv', /Catégories : travail, sport, famille, sante, repas/.test(page) && !/famille, rdv, repas/.test(page));
 verifie('« N\'écris JAMAIS rdv comme catégorie »', /N'écris JAMAIS « rdv » comme catégorie/.test(page));
-verifie('les exemples medicaux disent sante', /Rendez-vous médecin \| sante/.test(page) && /Rendez-vous dentiste \| sante/.test(page));
-verifie('l exemple de la banque dit administratif', /Rendez-vous banque \| administratif/.test(page));
+verifie('les exemples medicaux disent sante', /\| Médecin \| sante/.test(page) && /\| Dentiste \| sante/.test(page));
+verifie('l exemple de la banque dit administratif', /\| Banque \| administratif/.test(page));
 verifie('plus aucun exemple « | rdv » de la consigne', (page.match(/Rendez-vous banque \| rdv|Titre du RDV \| rdv|médecin \| rdv|dentiste \| rdv/g) || []).length === 0);
 
 console.log('');

@@ -139,6 +139,7 @@ lancer verif-bande-semaine "$PAGE"
 lancer verif-ligne-semaine "$PAGE"
 lancer verif-compte-langue-theme "$PAGE" "$API"
 lancer verif-parametres-ordre "$PAGE"
+lancer verif-titres-case "$PAGE"
 lancer verif-commentaires "$PAGE" "$API" backend/sql/011_commentaires.sql
 lancer verif-convocations "$PAGE" "$API" backend/sql/012_convocations.sql
 lancer verif-import-ics "$PAGE"

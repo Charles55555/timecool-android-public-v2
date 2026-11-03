@@ -144,7 +144,7 @@ body { display:flex; flex-direction:column; }
 .hour-cell.closed { background:repeating-linear-gradient(45deg, #f5f5f5, #f5f5f5 4px, #fafafa 4px, #fafafa 8px); }
 
 .week-event { position:absolute; left:1px; right:1px; padding:3px 4px; border-radius:3px; color:white; font-size:10px; font-weight:500; cursor:pointer; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,0.1); }
-.week-event-title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.week-event-title { font-weight:600; white-space:normal; overflow:hidden; overflow-wrap:anywhere; }
 .week-event-time { font-size:9px; opacity:0.9; }
 
 /* La couleur d un evenement vient de TC_COULEURS_CATEGORIES, posee en
@@ -161,7 +161,7 @@ body { display:flex; flex-direction:column; }
 .day-hour { display:grid; grid-template-columns:56px 1fr; min-height:48px; border-bottom:1px solid #f1f3f4; }
 .day-hour-label { font-size:11px; color:var(--text-sec); padding:4px 8px 4px 16px; text-align:right; }
 .day-event { margin:2px 12px 2px 0; padding:8px 10px; border-radius:6px; color:white; font-size:13px; cursor:pointer; position:absolute; left:56px; right:12px; }
-.day-event-title { font-weight:600; margin-bottom:2px; }
+.day-event-title { font-weight:600; margin-bottom:2px; overflow:hidden; overflow-wrap:anywhere; }
 .day-event-time { font-size:11px; opacity:0.9; }
 /* Demi-case (moins d'une heure) : 21 px de haut. Vue Semaine : deux lignes compactes, la colonne est etroite.
    Vue Jour : une seule ligne « titre · 11:00 – 11:15 ». Jamais de texte coupe en hauteur. */
@@ -3346,7 +3346,7 @@ Tu ne demandes la date QUE si l'utilisateur ne donne AUCUNE indication temporell
 Pour tout événement à ajouter, utilise EXACTEMENT ce format :
 
 [AGENDA]
-2026-05-06 | 10:00-11:00 | Rendez-vous médecin | sante
+2026-05-06 | 10:00-11:00 | Médecin | sante
 [/AGENDA]
 
 Format : DATE(YYYY-MM-DD) | HEURE_DEBUT-HEURE_FIN | TITRE | CATEGORIE | LIEU (5e champ, facultatif) | CONTACT (6e champ, facultatif)
@@ -3359,7 +3359,7 @@ et tu ne demandes JAMAIS « lequel ? » ni « comment s'appelle-t-il ? » : l'ap
 personne, la lui fait désigner une seule fois si elle est inconnue, et s'en souvient ensuite.
 Ne remplis ce champ que si le rendez-vous est avec quelqu'un : « faire les courses » → pas de 6e champ.
 Si le lieu est absent mais qu'il y a un contact, mets « - » en 5e champ :
-2026-05-06 | 14:00-15:00 | Rendez-vous dentiste | sante | - | Michel
+2026-05-06 | 14:00-15:00 | Dentiste | sante | - | Michel
 
 TYPE (7e champ, facultatif) : comment se passe le rendez-vous — « telephone », « physique » ou « visio ».
 Mets-le dès que l'utilisateur le dit : « appelle-moi », « par téléphone », « au téléphone » → telephone ;
@@ -4592,7 +4592,7 @@ function renderMonth() {
       dayEvents.slice(0, maxShown).forEach(ev => {
         const color = catColor(ev.cat);
         const startStr = tcHorairePlage(ev);
-        html += `<div class="month-event-pill${tcTexteSombre(color) ? ' chip-texte-sombre' : ''}" style="background:${color};">${startStr} ${escapeHTMLSafe(ev.title)}</div>`;
+        html += `<div class="month-event-pill${tcTexteSombre(color) ? ' chip-texte-sombre' : ''}" style="background:${color};">${startStr} <span class="tc-titre-case">${escapeHTMLSafe(ev.title)}</span></div>`;
       });
       if (dayEvents.length > maxShown) {
         html += `<div class="month-event-more">+${dayEvents.length - maxShown} autres</div>`;
@@ -4602,6 +4602,7 @@ function renderMonth() {
     cell.innerHTML = html;
     body.appendChild(cell);
   }
+  if (typeof tcAjusterTitresCasesBientot === 'function') tcAjusterTitresCasesBientot(body);
 }
 
 /** Couleur d une categorie d agenda. Accepte les anciens identifiants. */
@@ -4663,6 +4664,106 @@ function tcAppliquerCouleurEvenement(el, cat) {
    Une heure ou plus : inchange. L'aimantation du deplacement au doigt se
    calcule sur la vraie duree, jamais sur cette hauteur. */
 const TC_BLOC_HAUTEUR_HEURE = 42;
+/**
+ * Un titre trop long pour sa case est coupé au milieu, jamais à la fin : le dernier mot reste entier (« Coupe c…Martin »).
+ * Un seul mot : son début et sa fin restent. tient(texte) dit si un essai tient ; recherche par moitiés (mission 76).
+ */
+function tcCouperAuMilieu(titre, tient) {
+  const t = String(titre || '').trim();
+  if (!t || tient(t)) return t;
+  const mots = t.split(/\s+/);
+  const fin = mots.length > 1 ? mots[mots.length - 1] : '';
+  const debut = fin ? t.slice(0, t.length - fin.length).trim() : t;
+  const essai = function (n) { return fin ? (debut.slice(0, n).trim() + '…' + fin) : (t.slice(0, Math.ceil(n / 2)) + '…' + t.slice(t.length - Math.floor(n / 2))); };
+  let bas = 0, haut = fin ? debut.length : t.length - 1, meilleur = 0;
+  while (bas <= haut) { const m = (bas + haut) >> 1; if (tient(essai(m))) { meilleur = m; bas = m + 1; } else haut = m - 1; }
+  return essai(meilleur);
+}
+
+/** Le nombre de lignes d'un texte dans une largeur, comme le navigateur (par mots ; un mot trop long, par lettres). */
+function tcLignesDuTexte(ctx, texte, largeur) {
+  const espace = ctx.measureText(' ').width;
+  let lignes = 1, cur = 0;
+  String(texte || '').split(/\s+/).filter(Boolean).forEach(function (w) {
+    let lw = ctx.measureText(w).width;
+    if (cur > 0 && cur + espace + lw <= largeur) { cur += espace + lw; return; }
+    if (cur > 0) { lignes++; cur = 0; }
+    while (lw > largeur && w.length > 1) {
+      let k = w.length - 1;
+      while (k > 1 && ctx.measureText(w.slice(0, k)).width > largeur) k--;
+      w = w.slice(k); lignes++; lw = ctx.measureText(w).width;
+    }
+    cur = lw;
+  });
+  return lignes;
+}
+
+/**
+ * Les titres des cases (vues Jour, Semaine, Mois) : chacun tient dans sa case, sur autant de lignes que sa hauteur le permet
+ * (une seule pour un bloc court ou une pastille du mois), coupé au milieu s'il le faut (tcCouperAuMilieu). Les tailles sont
+ * lues en une fois, le texte est mesuré au canevas, puis tout est écrit : pas de mise en page par essai (fluidité).
+ */
+var _tcCanevasTitres = null;
+function tcAjusterTitresCases(racine) {
+  if (!racine || typeof racine.querySelectorAll !== 'function' || typeof getComputedStyle !== 'function') return;
+  const spans = Array.prototype.slice.call(racine.querySelectorAll('.tc-titre-case'));
+  if (!spans.length) return;
+  if (!_tcCanevasTitres) { try { _tcCanevasTitres = document.createElement('canvas').getContext('2d'); } catch (e) {} }
+  const ctx = _tcCanevasTitres;
+  if (!ctx) return;
+  const px = function (v) { return parseFloat(v) || 0; };
+  // 1. Lectures
+  const plans = spans.map(function (sp) {
+    const el = sp.parentElement, bloc = el && el.parentElement;
+    if (!el || !bloc) return null;
+    if (!sp.hasAttribute('data-titre')) sp.setAttribute('data-titre', sp.textContent);
+    const cs = getComputedStyle(el), cb = getComputedStyle(bloc);
+    const taille = px(cs.fontSize) || 10;
+    const lh = px(cs.lineHeight) || taille * 1.2;
+    const plan = { sp: sp, el: el, police: cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily, lh: lh,
+      prefixe: el.textContent.slice(0, Math.max(0, el.textContent.length - sp.textContent.length)), titre: sp.getAttribute('data-titre') };
+    if (el.classList.contains('month-event-pill')) {
+      plan.lignes = 1; plan.largeur = el.clientWidth - px(cs.paddingLeft) - px(cs.paddingRight);
+      // Pastille étroite : le titre passe avant l'heure, qui se raccourcit (« 11h-12h » → « 11h ») puis s'efface.
+      const noeud = el.firstChild;
+      if (noeud && noeud.nodeType === 3 && noeud.nodeValue === plan.prefixe && plan.prefixe.trim()) {
+        plan.noeud = noeud;
+        plan.variantes = [plan.prefixe, plan.prefixe.trim().split(/[-–]/)[0] + ' ', ''];
+      }
+    } else if (cb.display === 'flex' && cb.flexDirection === 'row') {
+      const heure = bloc.querySelector('.day-event-time, .week-event-time');
+      plan.lignes = 1; plan.largeur = bloc.clientWidth - px(cb.paddingLeft) - px(cb.paddingRight) - (heure ? heure.offsetWidth + 6 : 0);
+    } else {
+      const heure = bloc.querySelector('.day-event-time, .week-event-time');
+      const libre = bloc.clientHeight - px(cb.paddingTop) - px(cb.paddingBottom) - (heure ? heure.offsetHeight : 0) - px(cs.marginBottom);
+      plan.lignes = Math.max(1, Math.floor((libre + 0.5) / lh)); plan.largeur = el.clientWidth;
+    }
+    return plan.largeur > 4 ? plan : null;
+  }).filter(Boolean);
+  // 2. Calculs au canevas, puis écritures
+  plans.forEach(function (p) {
+    ctx.font = p.police;
+    const largeur = p.largeur * 0.96;
+    if (p.variantes) {
+      const t = String(p.titre || '').trim(), mots = t.split(/\s+/);
+      const minimum = mots.length > 1 ? '…' + mots[mots.length - 1] : (t.length <= 5 ? t : t.slice(0, 2) + '…' + t.slice(-2));
+      p.prefixe = p.variantes.filter(function (v) { return ctx.measureText(v + minimum).width <= largeur; })[0];
+      if (p.prefixe === undefined) p.prefixe = '';
+      if (p.noeud.nodeValue !== p.prefixe) p.noeud.nodeValue = p.prefixe;
+    }
+    const tient = function (x) { return p.lignes === 1 ? ctx.measureText(p.prefixe + x).width <= largeur : tcLignesDuTexte(ctx, p.prefixe + x, largeur) <= p.lignes; };
+    const texte = tcCouperAuMilieu(p.titre, tient);
+    if (p.sp.textContent !== texte) p.sp.textContent = texte;
+    if (p.lignes > 1 || !p.el.classList.contains('month-event-pill')) p.el.style.maxHeight = (p.lignes * p.lh) + 'px';
+  });
+}
+
+/** Après le dessin (les vues Jour et Mois posent leurs cases d'un coup ; la Semaine appelle tcAjusterTitresCases elle-même). */
+function tcAjusterTitresCasesBientot(racine) {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { tcAjusterTitresCases(racine); });
+  else tcAjusterTitresCases(racine);
+}
+
 function tcHauteurBloc(vue, dureeMin) {
   if (dureeMin < 60) return { px: TC_BLOC_HAUTEUR_HEURE / 2, court: true };
   const parMin = vue === 'day' ? 48 / 60 : 44 / 60;
@@ -4837,12 +4938,13 @@ function renderWeek() {
         evt.style.height = `${hb.px}px`;
         evt.style.left = `${50 + di*colWidth + 1}px`;
         evt.style.width = `${colWidth - 2}px`;
-        evt.innerHTML = `<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
+        evt.innerHTML = `<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         evt.onclick = () => openEventModal(e);
         tcRendreDeplacable(evt, e, { vue: 'week', pxParMin: 44/60, colWidth: colWidth, di: di });
         body.appendChild(evt);
       });
     });
+    if (typeof tcAjusterTitresCases === 'function') tcAjusterTitresCases(body);
   });
 }
 
@@ -4952,11 +5054,12 @@ function renderDay() {
     const hb = tcHauteurBloc('day', dm);
     if (hb.court) evt.classList.add('bloc-court');
     evt.style.height = `${hb.px}px`;
-    evt.innerHTML = `<div class="day-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}${escapeHTMLSafe(e.title)}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}${tcMarqueDecalage(e) ? ' · en cours de décalage' : ''}</div>`;
+    evt.innerHTML = `<div class="day-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}${tcMarqueDecalage(e) ? ' · en cours de décalage' : ''}</div>`;
     evt.onclick = () => openEventModal(e);
     tcRendreDeplacable(evt, e, { vue: 'day', pxParMin: 48/60, colWidth: 0, di: 0 });
     body.appendChild(evt);
   });
+  if (typeof tcAjusterTitresCasesBientot === 'function') tcAjusterTitresCasesBientot(body);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -12114,10 +12217,10 @@ function tcContexteDatePourIA(now) {
     + '- Une date de ce calendrier n’est JAMAIS passée. Une date demandée est toujours à venir : si un jour du mois est déjà passé ce mois-ci, c’est le mois suivant.\n'
     + '- Une heure déjà passée aujourd’hui (avant ' + hh + ') : dis-le calmement, ne crée rien, et propose un autre créneau (le prochain libre, ou demain à la même heure).\n'
     + '- L’année est ' + ref.getFullYear() + '. Dans ton texte, écris la date en toutes lettres telle qu’elle est dans le calendrier (ex. "' + tcDateEnLettres(demain) + '").\n'
-    + '- Le TITRE du rendez-vous est le mot-clé de la demande ("rdv dentiste mardi 15h" → "Dentiste", "mercredi prochain 10h30 coach" → "Coach", "avec le plombier" → "Plombier"). "Activité" seulement si la demande ne dit vraiment rien.\n\n'
+    + '- Le TITRE du rendez-vous est le mot-clé de la demande ("rdv dentiste mardi 15h" → "Dentiste", "mercredi prochain 10h30 coach" → "Coach", "avec le plombier" → "Plombier"). "Activité" seulement si la demande ne dit vraiment rien. Jamais « Rendez-vous », « RDV » ni « Rendez-vous chez » devant le titre : "rendez-vous chez ma maman" → "Maman", première lettre en majuscule (le titre reste court : il doit se lire dans la case de l’agenda).\n\n'
     + '⚠️ SUJETS : tu ne relances JAMAIS un sujet précédent de toi-même (pas de « on reprend », pas de question d’avant reposée). Tu réponds seulement au dernier message. Seul l’utilisateur reprend un sujet (« on reprend », « on continue », « et pour le sport ? »).\n\n'
     + '⚠️ FORMAT OBLIGATOIRE pour proposer un événement :\n'
-    + '[AGENDA]\n' + tcISO(demain) + ' | 15:00-16:00 | Rendez-vous banque | administratif\n[/AGENDA]\n\n'
+    + '[AGENDA]\n' + tcISO(demain) + ' | 15:00-16:00 | Banque | administratif\n[/AGENDA]\n\n'
     + 'JAMAIS d’autre format. UNIQUEMENT [AGENDA] avec la date complète au format YYYY-MM-DD.';
 }
 
@@ -12675,6 +12778,58 @@ function tcSansFormulesFaites(reply) {
   const sans = r.replace(re, '$1').replace(/[ \t]{2,}/g, ' ').replace(/^ +| +$/gm, '').replace(/^[,;:]\s*/gm, '')
     .replace(/(^|\n)([a-zà-ÿ])/g, function (t, d, c) { return d + c.toUpperCase(); }).replace(/\n{3,}/g, '\n\n').trim();
   return sans || reply;
+}
+
+/**
+ * Le titre d'un rendez-vous, sans « Rendez-vous », « RDV », « Rendez-vous chez » devant : il garde l'essentiel
+ * (« Rendez-vous chez ma maman » → « Maman », « RDV dentiste » → « Dentiste »), première lettre en majuscule, pour se lire
+ * dans la case de l'agenda (mission 76). Tel quel s'il ne commence pas par ces mots, s'il ne reste rien après eux, ou si
+ * l'utilisateur l'a dicté mot pour mot (entre guillemets, ou après « intitulé », « titre », « appelle-le »).
+ */
+function tcTitreEssentiel(titre, texteUtilisateur) {
+  const t = String(titre || '').trim();
+  if (!t) return t;
+  let s = t.replace(/^(?:prise de\s+)?(?:rendez[\s-]*vous|rdv|r\.d\.v\.?)(?=[\s:,.-]|$)[\s:,.-]*/i, '');
+  if (s === t) return t;
+  const norm = function (x) { return tcSansAccents(String(x || '')).replace(/[’']/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); };
+  const nt = norm(t), u = String(texteUtilisateur || ''), nu = norm(u);
+  const cites = [];
+  u.replace(/[«"“]\s*([^»"”]+?)\s*[»"”]/g, function (a, c) { cites.push(norm(c)); return a; });
+  if (cites.indexOf(nt) > -1) return t;
+  if (/(^| )(intitule|intitulee|titre|appelle le|appelle la|nomme le|nomme la)( |$)/.test(nu) && (' ' + nu + ' ').indexOf(' ' + nt + ' ') > -1) return t;
+  s = s.replace(/^(?:t[ée]l[ée]phonique|en visio|visio|physique)(?=\s|$)\s*/i, '');
+  for (let n = 0; n < 3; n++) s = s.replace(/^(?:(?:chez|avec|de|du|des|au|aux|à|a|pour)\s+|d['’]\s*)/i, '');
+  s = s.replace(/^(?:l['’]\s*|(?:le|la|les|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|nos|un|une)\s+)/i, '').trim();
+  if (!s) return t;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Les titres des blocs [AGENDA] d'une réponse passent par tcTitreEssentiel ; la prose qui cite l'ancien titre entre
+ * guillemets ou en gras cite le nouveau (la carte et la phrase disent la même chose). La réponse telle quelle sinon.
+ */
+function tcTitresEssentielsDuBloc(reply, texteUtilisateur) {
+  const r = String(reply || '');
+  if (r.indexOf('[AGENDA]') < 0) return reply;
+  const changes = [];
+  const LIGNE = /^(\s*(?:\d{4}-\d{2}-\d{2}(?:\s*>\s*\d{4}-\d{2}-\d{2})?\s*\|\s*)?\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\s*\|\s*)([^|\n]+?)(\s*(?:\||$))/gm;
+  const BLOC = /\[AGENDA\][\s\S]*?(?:\[\/AGENDA\]|$)/g;
+  let out = r.replace(BLOC, function (bloc) {
+    return bloc.replace(LIGNE, function (a, debut, titre, fin) {
+      const n = tcTitreEssentiel(titre, texteUtilisateur);
+      if (n === titre.trim()) return a;
+      changes.push([titre.trim(), n]);
+      return debut + n + fin;
+    });
+  });
+  if (!changes.length) return reply;
+  const blocs = [];
+  out = out.replace(BLOC, function (b) { blocs.push(b); return '\u0000' + (blocs.length - 1) + '\u0000'; });
+  changes.forEach(function (c) {
+    const ancien = c[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp('([«"“*]\\s*)' + ancien + '(\\s*[»"”*])', 'gi'), function (a, g, d) { return g + c[1] + d; });
+  });
+  return out.replace(/\u0000(\d+)\u0000/g, function (a, i) { return blocs[Number(i)]; });
 }
 
 /** Le titre de la premiere ligne [AGENDA] d un message, ou ''. */
@@ -15836,6 +15991,8 @@ async function charlySendMessage() {
       const lastCharly = charlyIA.history.filter(m => m.role === 'assistant').slice(-1)[0]?.content || '';
       reply = reply + tcBlocAgendaDepuisAnnonce(lastUserText, lastCharly, new Date(), isAllDaysUser ? 7 : 1);
     }
+    // Le titre garde l essentiel, sans « Rendez-vous » devant : il doit se lire dans la case (mission 76).
+    if (typeof tcTitresEssentielsDuBloc === 'function') reply = tcTitresEssentielsDuBloc(reply, text);
     // Une simple question n appelle aucune carte (mission 31).
     // « Je bloque Hugo. C'est fait ! », « C'est envoyé » sans action réelle : remplacé par la vérité (mission 57). (En tête des garde-fous :
     // les suites campagne9, relance et notes-internes veulent les garde-fous suivants dans leur ordre exact.)
@@ -18819,6 +18976,7 @@ async function charlyProcessMessage() {
       reply = await callOpenAI(messages);
     }
     if (typeof tcFermerBlocsAgenda === 'function') reply = tcFermerBlocsAgenda(reply);
+    if (typeof tcTitresEssentielsDuBloc === 'function') reply = tcTitresEssentielsDuBloc(reply, '');   // mission 76
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId, nature: tcNatureReponse(reply)});
     renderCharlyChat();

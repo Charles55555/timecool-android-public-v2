@@ -3167,3 +3167,12 @@ Charles, 03/11 (par le chef) : page seule. De haut en bas : Ma confiance en Char
 - La carte Notifications finissait par un </div> en trop (ignoré par le navigateur) : retiré.
 - Sonde Chrome (compte Ines, écritures bloquées) à 390 px et 1280 px : ordre des 11 cartes exact, une seule ligne « Langue », fenêtre de langue qui s'ouvre, rien qui déborde, aucune erreur JS.
 - Suites : verif-parametres-ordre (nouvelle, 8, échoue sur la page d'avant), verif-confiance-charly (le bloc est suivi de Messages d'annulation).
+
+## 03/11/2026 : Mission 76, un titre de rendez-vous lisible dans sa case
+
+Charles, 03/11 (par le chef, prioritaire) : « tu peux me noter un rendez-vous vendredi 11h chez ma maman… » donnait « Rendez-vous maman » ; dans la vue Semaine du téléphone, la case affichait « Rendez-vous … », Charles a cru le rendez-vous absent.
+- Cause : l'exemple de format donné au modèle était lui-même « Rendez-vous banque » (et « Rendez-vous médecin / dentiste » dans le prompt). Les exemples disent maintenant « Banque », « Médecin », « Dentiste », et la règle est écrite : jamais « Rendez-vous », « RDV » ni « Rendez-vous chez » devant le titre.
+- Filet (tcTitreEssentiel, tcTitresEssentielsDuBloc) sur toute réponse de Charly avec un bloc [AGENDA] (conversation et fichier analysé) : « Rendez-vous chez ma maman » → « Maman », « RDV dentiste » → « Dentiste », première lettre en majuscule ; la prose qui cite l'ancien titre entre guillemets ou en gras cite le nouveau. Tel quel si rien ne reste après ces mots, ou si l'utilisateur l'a dicté mot pour mot (guillemets, « intitulé », « appelle-le »). Les agendas existants ne changent pas.
+- Cases (tcAjusterTitresCases) : vues Semaine et Jour, le titre passe sur autant de lignes que la case le permet ; s'il ne tient toujours pas, il est coupé au milieu, le dernier mot reste (« Coup…Martin ») ; pastille du Mois, une ligne, l'heure se raccourcit (« 11h ») puis s'efface pour laisser le titre. Mesure au canevas, une lecture des tailles puis les écritures : pas de mise en page par essai.
+- Sonde Chrome (compte Ines, écritures bloquées, le relais du modèle passe) : la phrase de Charles → carte « Maman » ; à 390 px et 1280 px, Jour / Semaine / Mois : le dernier mot visible partout sauf une pastille du mois à 390 px où même « …Dupont » ne tient pas (coupé par le navigateur) ; rien qui déborde ; aucune erreur JS.
+- Suites : verif-titres-case (nouvelle, 17) ; verif-categories-titre, verif-charly-dates, verif-campagne1, verif-type-rdv suivent les nouveaux exemples et le <span class="tc-titre-case">.

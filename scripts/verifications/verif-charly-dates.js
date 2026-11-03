@@ -81,7 +81,7 @@ const lignes = c.split('\n').filter((l) => /^- (lundi|mardi|mercredi|jeudi|vendr
 verifie('14 lignes jour → date, de demain (lundi 12) a dimanche 25', lignes.length === 14 && /^- lundi 12 octobre 2026 → 2026-10-12 \(demain\)/.test(lignes[0]) && /^- dimanche 25 octobre 2026 → 2026-10-25$/.test(lignes[13]), lignes[0] + ' … ' + lignes[13]);
 verifie('mardi 13, mercredi 14, lundi 19 y sont', /- mardi 13 octobre 2026 → 2026-10-13/.test(c) && /- mercredi 14 octobre 2026 → 2026-10-14/.test(c) && /- lundi 19 octobre 2026 → 2026-10-19/.test(c));
 verifie('regles : lire la table, jamais de date passee, heure passee → dire et proposer, titre = mot-cle', /JAMAIS de tête/.test(c) && /n’est JAMAIS passée/.test(c) && /heure déjà passée aujourd’hui \(avant 14h20\)/.test(c) && /"Coach"/.test(c) && /"Activité" seulement/.test(c));
-verifie('le format [AGENDA] est toujours impose', /\[AGENDA\]\n2026-10-12 \| 15:00-16:00 \| Rendez-vous banque \| administratif\n\[\/AGENDA\]/.test(c));
+verifie('le format [AGENDA] est toujours impose', /\[AGENDA\]\n2026-10-12 \| 15:00-16:00 \| Banque \| administratif\n\[\/AGENDA\]/.test(c));
 verifie('les deux appels (conversation, fichier) utilisent ce contexte (variable dateContext conservee)', (page.match(/const dateContext = tcContexteDatePourIA\(new Date\(\)\);/g) || []).length === 2 && (page.match(/volatil: dateContext/g) || []).length === 2);
 verifie('plus aucun calcul de date a la main dans ces deux appels', !/const tomorrow = new Date\(now\); tomorrow\.setDate/.test(page));
 
