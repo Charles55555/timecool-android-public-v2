@@ -14777,8 +14777,9 @@ function tcExecuterDeplacement(liste) {
   const sans = liste.filter(function (x) { return avec.indexOf(x) < 0; });
   // Profil 2 (mission 73b) : Charly envoie seul, sans « Je l’envoie ? » ; il demandera avant d’écrire le choix de chacun.
   if (tcConfianceCharly() >= 2) {
-    if (sans.length) tcAppliquerDeplacement(sans);
-    return tcProposerLesCreneaux(avec).then(function (envoi) { tcDireBilanPropositions(envoi.lignes, envoi.res.envois); });
+    const lotId = 'lot-' + Date.now();
+    if (sans.length) { tcAppliquerDeplacement(sans); if (_tcMarcheArriere) _tcMarcheArriere.lot = lotId; }
+    return tcProposerLesCreneaux(avec, { lot: lotId }).then(function (envoi) { tcDireBilanPropositions(envoi.lignes, envoi.res.envois); });
   }
   _tcDeplacementEnAttente = { liste: liste, avec: avec, sans: sans };
   const contacts = [];
@@ -14824,7 +14825,9 @@ async function tcRepondreDeplacement(text) {
     renderCharlyChat();
     return true;
   }
-  const envoi = await tcProposerLesCreneaux(avec);
+  const lotId = 'lot-' + Date.now();
+  if (sans.length && _tcMarcheArriere && _tcMarcheArriere.type === 'deplacement') _tcMarcheArriere.lot = lotId;
+  const envoi = await tcProposerLesCreneaux(avec, { lot: lotId });
   tcDireBilanPropositions(envoi.lignes, envoi.res.envois);
   return true;
 }
@@ -20951,7 +20954,16 @@ function tcAjusterCartePendante(text, msg) {
     const n = ({ une: 1, un: 1, deux: 2, trois: 3 })[mDec[1]] || Number(mDec[1]);
     debut = infos.debut + (/^h/.test(mDec[2]) ? n * 60 : n) * (/\b(avance|avancer|plus tot)\b/.test(sans) ? -1 : 1);
   }
-  if (!date && debut === infos.debut) return false;
+  if (!date && debut === infos.debut) {
+    // « à mercredi même heure » quand la carte est déjà mercredi à cette heure (l'heure du jour était passée, la carte a glissé au
+    // lendemain : TESTEURS #431, 03/11) : la carte reste, et Charly le dit.
+    const dits = tcJoursCites(String(text || '').replace(/[?!.,;]+/g, ' '), new Date(), false);
+    if (dits.indexOf(infos.date) < 0) return false;
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'D’accord : la proposition est bien ' + tcDateMinuscule(infos.date) + ' à ' + tcHeureCourte(infos.debut) + '. Tu la valides ?' });
+    renderCharlyChat();
+    return true;
+  }
   if (debut < 0 || debut > 23 * 60 + 45) return false;
   tcPousserMessageUtilisateur(text);
   return tcRecalerCartePendante(msg, infos, date || infos.date, debut);
@@ -25104,7 +25116,7 @@ async function tcQuestionnaireSuivant() {
       if (q !== _tcQuestionnaire) return;
     }
     if (q.reponses[etape.cle] !== undefined) continue;                     // déjà dit dans la phrase
-    if (etape === TC_ETAPE_RECAP && typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3) { q.reponses.recap = 'oui'; continue; }   // profil 3 (73c)
+    if (etape === TC_ETAPE_RECAP && typeof tcConfianceCharly === 'function' && (tcConfianceCharly() === 3 || (tcConfianceCharly() === 2 && q.reponses.action === 'decaler' && q.reponses.prevenir === 'charly'))) { q.reponses.recap = 'oui'; continue; }   // profil 3 (73c) ; profil 2 quand il propose aux contacts (TESTEURS, 03/11)
     const choix = typeof etape.choix === 'function' ? etape.choix(q.reponses) : etape.choix;
     if ((!choix || !choix.length) && typeof etape.libre !== 'function') continue;
     q.etape = etape.cle;
@@ -25375,7 +25387,9 @@ function tcQuestionnaireLendemain(rdvs) {
 
 /** Les créneaux proposés, montrés à l'utilisateur ; `r._liste` les garde pour le récapitulatif et le travail. */
 function tcQuestionnaireProposer(r, entete) {
-  r._liste = tcQuestionnaireCreneaux(r._rdvs, tcQuestionnaireLendemain(r._rdvs));
+  const depuis = tcQuestionnaireLendemain(r._rdvs);
+  r._depuis = tcISO(depuis);
+  r._liste = tcQuestionnaireCreneaux(r._rdvs, depuis);
   tcQuestionnaireDire(entete + '\n' + r._liste.map(function (x) {
     return x.p ? '• « ' + x.ev.title + ' » : ' + tcQuestionnaireQuand(x.p.date, x.p)
       : '• « ' + x.ev.title + ' » : je n’ai pas trouvé de place libre dans les deux semaines, je le laisse où il est';
@@ -25526,7 +25540,10 @@ async function tcQuestionnaireExecuter(r, fin) {
       }
     }
   }
-  const propositions = aProposer.length ? await tcProposerLesCreneaux(aProposer) : null;
+  // Un seul lot : les rendez-vous déplacés d'office (sans contact) et ceux proposés se remettent ensemble (TESTEURS, 03/11).
+  const lotId = 'lot-' + Date.now();
+  if (aProposer.length && deplaces.length && _tcMarcheArriere && _tcMarcheArriere.type === 'deplacement') _tcMarcheArriere.lot = lotId;
+  const propositions = aProposer.length ? await tcProposerLesCreneaux(aProposer, { apres: r._depuis || null, lot: lotId }) : null;
   if (propositions) propositions.res.envois.forEach(function (e) { envois.push(e); });
   const lignes = [fin];
   // Le retard d'abord, puis ce qui a bougé à cause de lui (testeurs, 15/10).
@@ -25628,6 +25645,38 @@ function tcCreneauxPourDecalage(ev, premier, occupes, depuis) {
   return sortie;
 }
 
+/**
+ * Les créneaux d'un nouveau tour : à partir de demain, et jamais avant le premier jour possible du lot (lotDecalage.apres :
+ * le lendemain du jour malade, de l'imprévu), même si des rendez-vous déplacés y ont libéré de la place ; jamais la place
+ * actuelle du rendez-vous (TESTEURS, 03/11).
+ */
+function tcCreneauxReproposes(ev) {
+  const demain = new Date(); demain.setDate(demain.getDate() + 1);
+  let depuis = tcISO(demain);
+  const apres = ev && ev.lotDecalage && ev.lotDecalage.apres;
+  if (apres && apres > depuis) depuis = apres;
+  const debut = Number(ev.startH) * 60 + Number(ev.startM || 0), fin = Number(ev.endH) * 60 + Number(ev.endM || 0);
+  return tcCreneauxPourDecalage(ev, null, [{ date: ev.date, debut: debut, fin: Math.max(fin, debut + 15) }], { date: depuis, minutes: TC_PROPOSITION_DEBUT });
+}
+
+/**
+ * Place des créneaux choisis : « remets-les » vaut pour tout le lot. Chaque rendez-vous du lot garde sa place d'avant, et les
+ * créneaux déjà placés restent notés (chacun lira « maintenu ») ; un autre déplacement entre-temps repart de zéro (TESTEURS, 03/11).
+ */
+function tcDeplacerDansLeLot(liste, options) {
+  const prev = _tcMarcheArriere;
+  tcAppliquerDeplacement(liste, options);
+  const lot = liste.map(function (x) { return x.ev && x.ev.lotDecalage && x.ev.lotDecalage.id; }).filter(Boolean)[0];
+  const m = _tcMarcheArriere;
+  if (!lot || !m || m === prev || m.type !== 'deplacement') return;
+  m.lot = lot;
+  if (prev && prev.type === 'deplacement' && prev.lot === lot) {
+    m.rdvs = prev.rdvs.concat(m.rdvs.filter(function (r) { return !prev.rdvs.some(function (q) { return q.id === r.id; }); }));
+    if (prev.propositions) m.propositions = prev.propositions.slice();
+    if (Array.isArray(prev.prevenus)) m.prevenus = prev.prevenus.slice();
+  }
+}
+
 /** Le message au contact : le modèle « Je décale » des Paramètres ; les créneaux suivent (boutons, ou le lien). */
 function tcPropositionTexte(c, ev) {
   return tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ev));
@@ -25657,6 +25706,8 @@ async function tcEnvoyerPropositions(items) {
     let d;
     try { d = await TC_BACKEND.propositionCreer(corps); } catch (e) { if (res.echecs.indexOf(c.name) < 0) res.echecs.push(c.name); continue; }
     ev.decalage = { rdv: d.rdv_id, qui: c.name, le: new Date().toISOString() };
+    // Le lot (marche arrière commune) et le premier jour possible (jamais la période d'indisponibilité) : gardés pour les tours suivants.
+    if (it.lot) ev.lotDecalage = { id: it.lot, apres: it.apres || null };
     res.details.push('• « ' + ev.title + ' » : je propose à ' + c.name + ' ' + tcNomsLisibles(it.creneaux.map(tcPropositionLibelle)).replace(/ et ([^,]*)$/, ' ou $1'));
     if (c.referenceCompte) { if (res.proposes.indexOf(c.name) < 0) res.proposes.push(c.name); }
     else res.envois.push({ nom: c.name, phone: c.phone || '', email: c.email || '', titre: ev.title, texte: texte + ' ' + d.url });
@@ -25677,12 +25728,17 @@ function tcLignesPropositions(res) {
   if (aEnvoyer.length) l.push('• Message prêt avec le lien des créneaux, à envoyer toi-même d’un geste (SMS ou email) : ' + tcNomsLisibles(aEnvoyer));
   if (res.echecs.length) l.push('• Pas envoyé, la connexion a manqué : ' + tcNomsLisibles(res.echecs) + '. Redemande-moi dans un instant.');
   if (res.sansMoyen.length) l.push('• Sans numéro ni email dans ta fiche contact, rien n’est parti : ' + tcNomsLisibles(res.sansMoyen));
-  if (res.details.length) l.push('Ces rendez-vous restent à leur place, marqués ⏳, jusqu’à la réponse. Quand elle arrive, je te demande avant de l’écrire dans ton agenda.');
+  // Au profil 3, Charly place seul : il ne demande pas avant d'écrire (TESTEURS, 03/11).
+  if (res.details.length) l.push('Ces rendez-vous restent à leur place, marqués ⏳, jusqu’à la réponse. ' + (typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3
+    ? 'Quand elle arrive, je place le créneau choisi dans ton agenda et je te fais un compte rendu.'
+    : 'Quand elle arrive, je te demande avant de l’écrire dans ton agenda.'));
   return l;
 }
 
 /** Calcule les créneaux de chaque rendez-vous (sans proposer deux fois le même), envoie, et rend le bilan. */
-async function tcProposerLesCreneaux(liste) {
+async function tcProposerLesCreneaux(liste, options) {
+  const o = options || {};
+  const lot = o.lot || ('lot-' + Date.now());
   // Le créneau prévu de chacun est réservé d'abord : jamais proposé à un autre en second choix.
   const occupes = liste.filter(function (x) { return x.p; }).map(function (x) {
     const debut = Number(x.p.startH) * 60 + Number(x.p.startM || 0);
@@ -25693,7 +25749,7 @@ async function tcProposerLesCreneaux(liste) {
     const c = tcContactDuRdv(x.ev);
     if (!c) return;
     const creneaux = tcCreneauxPourDecalage(x.ev, x.p || null, occupes);
-    if (creneaux.length) items.push({ ev: x.ev, contact: c, creneaux: creneaux });
+    if (creneaux.length) items.push({ ev: x.ev, contact: c, creneaux: creneaux, lot: lot, apres: o.apres || null });
   });
   const res = await tcEnvoyerPropositions(items);
   return { res: res, lignes: tcLignesPropositions(res) };
@@ -25920,6 +25976,31 @@ async function tcMaintenirPropositions(liste) {
   renderCharlyChat();
 }
 
+/** Les noms des réponses, pris dans la fiche contact (le serveur donne le nom du compte, ou le prénom du lien) : TESTEURS, 03/11. */
+function tcNomsDeFiche(liste) {
+  const tous = Array.isArray(contactsList) ? contactsList : [];
+  const norm = function (t) { return tcSansAccents(String(t || '')).toLowerCase().replace(/\s+/g, ' ').trim(); };
+  const fiche = function (nom) {
+    const n = norm(nom);
+    if (!n) return null;
+    let v = tous.filter(function (c) { return c && norm(c.name) === n; });
+    if (v.length !== 1 && n.indexOf(' ') < 0) v = tous.filter(function (c) { return c && norm(c.name).split(' ')[0] === n; });
+    return v.length === 1 ? v[0].name : null;
+  };
+  (Array.isArray(liste) ? liste : []).forEach(function (x) {
+    if (!x) return;
+    const ev = tcRdvDeProposition(x);
+    // La fiche du rendez-vous, quand c'est bien la même personne (même nom sans accents, ou son prénom seul) ; sinon le carnet.
+    const c = ev ? tcContactDuRdv(ev) : null;
+    const q = norm(x.qui);
+    const meme = c && c.name && (!q || norm(c.name) === q || (q.indexOf(' ') < 0 && norm(c.name).split(' ')[0] === q));
+    const f = meme ? c.name : fiche(x.qui);
+    if (f) x.qui = f;
+    if (Array.isArray(x.pris)) x.pris.forEach(function (y) { const g = y ? fiche(y.par) : null; if (g) y.par = g; });
+  });
+  return liste;
+}
+
 let _tcPropositionsEnCours = false;
 /**
  * Les réponses qui attendent sur le serveur ; la première pas encore tranchée devient une question de Charly.
@@ -25934,6 +26015,7 @@ async function tcSuivrePropositions(toujours) {
     await tcCloreEnAttente();
     let liste = [];
     try { liste = await TC_BACKEND.propositions(); } catch (e) { liste = []; }
+    tcNomsDeFiche(liste);
     if (tcReponseCreneauEnAttente()) return;
     const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
     const dernier = h[h.length - 1];
@@ -26026,15 +26108,14 @@ async function tcExecuterReponseCreneau(m, cle) {
     const c = tcCreneauDeProposition(p);
     delete ev.decalage;
     const genes = tcGenesDuCreneau(ev, c);
-    tcAppliquerDeplacement([{ ev: ev, p: c }]);
+    tcDeplacerDansLeLot([{ ev: ev, p: c }]);
     if (genes.length) charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + genes.map(_tcLigneRdv).join(' ; ') + '.' });
   } else if (cle === 'laisser') {
     delete ev.decalage; saveEventsToStorage(); if (currentPage === 'calendar') render();
     charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, « ' + titre + ' » reste à sa place.' });
   } else {
     const contact = tcContactDuRdv(ev);
-    const demain = new Date(); demain.setDate(demain.getDate() + 1);
-    const creneaux = contact ? tcCreneauxPourDecalage(ev, null, [], { date: tcISO(demain), minutes: TC_PROPOSITION_DEBUT }) : [];
+    const creneaux = contact ? tcCreneauxReproposes(ev) : [];
     delete ev.decalage;
     if (!creneaux.length) {
       decision = 'laisse';
@@ -26064,7 +26145,7 @@ async function tcExecuterLotCreneaux(m, cle) {
     const genesLot = tcGenesDuLot(presents, true);
     const chevauche = presents.map(function (x, i) { return genesLot[i].length ? '« ' + x.ev.title + ' » et ' + genesLot[i].map(_tcLigneRdv).join(', ') : ''; }).filter(Boolean);
     const liste = presents.map(function (x) { delete x.ev.decalage; return { ev: x.ev, p: tcCreneauDeProposition(x.p) }; });
-    tcAppliquerDeplacement(liste);
+    tcDeplacerDansLeLot(liste);
     if (chevauche.length) charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + chevauche.join(' ; ') + '.' });
   } else if (presents.length) {
     presents.forEach(function (x) { delete x.ev.decalage; });
@@ -26117,7 +26198,7 @@ async function tcTraiterSeul(liste) {
   const genesLot = tcGenesDuLot(presents, true);
   const alertes = presents.map(function (x, i) { return genesLot[i].length ? '« ' + x.ev.title + ' » et ' + genesLot[i].map(_tcLigneRdv).join(', ') : ''; }).filter(Boolean);
   if (presents.length) {
-    tcAppliquerDeplacement(presents.map(function (x) { delete x.ev.decalage; return { ev: x.ev, p: tcCreneauDeProposition(x.p) }; }), { silencieux: true });
+    tcDeplacerDansLeLot(presents.map(function (x) { delete x.ev.decalage; return { ev: x.ev, p: tcCreneauDeProposition(x.p) }; }), { silencieux: true });
     presents.forEach(function (x) { deplaces.push(x); });
   }
   for (const x of choisis) { if (!x.ev) absents.push(x); await traiter(x, x.ev ? 'place' : 'ferme'); }
@@ -26125,8 +26206,7 @@ async function tcTraiterSeul(liste) {
     const x = { p: p, ev: tcRdvDeProposition(p) };
     if (!x.ev) { absents.push(x); await traiter(x, 'ferme'); continue; }
     const contact = Number(p.tours || 1) < 2 ? tcContactDuRdv(x.ev) : null;
-    const demain = new Date(); demain.setDate(demain.getDate() + 1);
-    const creneaux = contact ? tcCreneauxPourDecalage(x.ev, null, [], { date: tcISO(demain), minutes: TC_PROPOSITION_DEBUT }) : [];
+    const creneaux = contact ? tcCreneauxReproposes(x.ev) : [];
     if (creneaux.length) {
       const avant = x.ev.decalage;
       delete x.ev.decalage;
@@ -26390,7 +26470,9 @@ const TC_QUESTIONNAIRE_MALADE = {
         // On est malade : jamais le même jour, les créneaux commencent le lendemain de la période.
         const p = TC_MALADE_PERIODES[r.periode];
         const now = new Date();
-        r._liste = tcQuestionnaireCreneaux(r._rdvs, new Date(now.getFullYear(), now.getMonth(), now.getDate() + p.jours[1] + 1));
+        const depuisMalade = new Date(now.getFullYear(), now.getMonth(), now.getDate() + p.jours[1] + 1);
+        r._depuis = tcISO(depuisMalade);   // la période malade n'est jamais reproposée (TESTEURS, 03/11)
+        r._liste = tcQuestionnaireCreneaux(r._rdvs, depuisMalade);
         tcQuestionnaireDire('Voici ce que je te propose :\n' + r._liste.map(function (x) {
           return x.p ? '• « ' + x.ev.title + ' » : ' + tcQuestionnaireQuand(x.p.date, x.p)
             : '• « ' + x.ev.title + ' » : je n’ai pas trouvé de place libre dans les deux semaines, je le laisse où il est';
