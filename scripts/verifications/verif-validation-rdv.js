@@ -198,7 +198,7 @@ verifie('son texte est celui valide par Charles (mardis et jeudis, 11h-12h, 14h-
 verifie('et si des plages existaient deja, la fenetre le dit autrement, en citant quand meme les mardis et jeudis 11h-12h / 14h-15h', /plages horaires sont déjà réglées/.test(fen) && (fen.match(/les mardis et les jeudis/g) || []).length === 2 && (fen.match(/de 14h à 15h/g) || []).length >= 1);
 h = zone.innerHTML;
 verifie('decoche : plus rien de grise, case decochee', !/aria-disabled="true"/.test(h) && !/id="dispoValidation" checked/.test(h) && !/opacity:0\.45/.test(h));
-verifie('decoche : le cadre gris dit la regle (contacts classes seulement, dans les plages de leur categorie ; non classe, inconnu ou bloque : messagerie)', /tes contacts class.s \(👥 Choisir qui, sous chaque cat.gorie\) r.servent directement, mais seulement dans les plages de leur cat.gorie/.test(h) && /• Un inconnu, un contact non class. ou un contact bloqu. passe toujours par ta messagerie/.test(h));
+verifie('decoche : le cadre gris dit la regle (contacts classes seulement, dans les plages de leur categorie ; non classe, inconnu ou bloque : messagerie)', /tes contacts class.s \(👥 Choisir qui, sous chaque cat.gorie\) prennent rendez-vous directement, mais seulement dans les plages de leur cat.gorie/.test(h) && /• Un inconnu, un contact non class. ou un contact bloqu. passe toujours par ta messagerie/.test(h));
 verifie('decoche : la ligne « N contacts peuvent prendre rendez-vous directement dans ces heures » reapparait (ici : aucun contact classe)', /Aucun contact ne peut encore prendre rendez-vous directement dans ces heures/.test(h));
 // On recoche : rien n est efface
 vm.runInContext('tcBasculerValidationRdv(true)', ctx);
