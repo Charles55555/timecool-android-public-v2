@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<WebView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/webview"
+<!-- Mission 79 : le cadre recoit les marges des barres systeme, de l encoche
+     et du clavier quand l appli cible le niveau 35 ou plus (version Google
+     Play). Noir comme l etaient ces zones avant ; sous ce niveau (version
+     site), aucune marge : la WebView occupe tout, comme avant. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/racine"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#ffffff"/>
+    android:background="#000000">
+
+    <WebView
+        android:id="@+id/webview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#ffffff"/>
+
+</FrameLayout>

@@ -2530,6 +2530,21 @@ const TC_MAJ_INTERVALLE = 5 * 60 * 1000;
 
 let _tcMajVersionApk = null;   // version a installer, dans l application
 
+/* Mission 79 : la version Google Play fait ses mises a jour par Play. Le pont
+   natif dit son canal (« site » ou « play ») ; un pont sans canal (anciens APK,
+   iPhone) vaut « site ». */
+function tcMajParBoutique() {
+  try {
+    return !!(window.TimeCoolNatif && typeof window.TimeCoolNatif.canal === 'function'
+      && window.TimeCoolNatif.canal() === 'play');
+  } catch (e) { return false; }
+}
+
+/** L application sait-elle telecharger et installer elle-meme sa mise a jour ? */
+function tcMajIntegree() {
+  return !!(window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj) && !tcMajParBoutique();
+}
+
 function tcEstDansApk() {
   return !!(window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj);
 }
@@ -2568,7 +2583,7 @@ function tcIgnorerMaj() {
 
 function tcActionBandeauMaj() {
   tcMasquerBandeauMaj();
-  if (tcEstDansApk() && _tcMajVersionApk) { tcLancerMaj(_tcMajVersionApk); return; }
+  if (tcMajIntegree() && _tcMajVersionApk) { tcLancerMaj(_tcMajVersionApk); return; }
   tcMettreAJourMaintenant();
 }
 
@@ -2634,6 +2649,11 @@ function tcVersionPlusRecente(a, b) {
  * on croirait la mise à jour faite alors que rien n'a changé.
  */
 function tcMettreAJourMaintenant() {
+  // Version Google Play : Play fait les mises a jour ; le bouton actualise les donnees (mission 79).
+  if (typeof tcMajParBoutique === 'function' && tcMajParBoutique()) {
+    if (typeof tcRafraichirTout === 'function') tcRafraichirTout();
+    return;
+  }
   if (window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj) {
     checkForUpdates(true);
     return;
@@ -2646,6 +2666,8 @@ function tcMettreAJourMaintenant() {
 }
 
 async function checkForUpdates(manual) {
+  // Version Google Play : aucune verification ici, Play s en charge (mission 79).
+  if (typeof tcMajParBoutique === 'function' && tcMajParBoutique()) return;
   const zone = document.getElementById('updateBannerZone');
   const { version: locale } = tcInfosVersion();
 
@@ -2687,6 +2709,7 @@ async function checkForUpdates(manual) {
 
 /** Telecharge puis remet l APK a l installateur d Android. */
 function tcLancerMaj(version) {
+  if (typeof tcMajParBoutique === 'function' && tcMajParBoutique()) return;   // Google Play (mission 79)
   if (_tcMajEnCours) return;   // Double appui : un seul telechargement.
   _tcMajEnCours = true;
   const zone = document.getElementById('updateBannerZone');
@@ -2748,6 +2771,11 @@ function tcMajEchec(raison) {
 
 window.addEventListener('load', function() {
   tcRepriseApresMaj();
+  // Version Google Play : le bouton du haut actualise, il ne cherche plus de version (mission 79).
+  if (tcMajParBoutique()) {
+    const b = document.querySelector('.header-right .icon-btn[onclick="tcMettreAJourMaintenant()"]');
+    if (b) { b.title = 'Actualiser'; b.setAttribute('aria-label', 'Actualiser'); }
+  }
   setTimeout(function () { checkForUpdates(false); }, 1500);
   tcSurveillerMaj();
 });
@@ -10106,6 +10134,12 @@ function renderSettingsInterne() {
     <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
       <div style="padding:14px 16px; background:var(--bg-soft); font-size:12px; font-weight:600; text-transform:uppercase; color:var(--text-sec);">📱 Application</div>
       <div id="updateBannerZone"></div>
+      ${(typeof tcMajParBoutique === 'function' && tcMajParBoutique()) ? `
+      <div style="padding:14px 16px; border-top:1px solid var(--border);">
+        <div style="font-size:14px; font-weight:500;">Version</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Version actuelle : ${tcFormaterVersion()}</div>
+        <div style="font-size:11px; color:var(--text-sec); margin-top:2px;">Les mises à jour arrivent par Google Play.</div>
+      </div>` : `
       <div style="padding:14px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
         <div style="flex:1;">
           <div style="font-size:14px; font-weight:500;">Mise à jour automatique</div>
@@ -10124,6 +10158,7 @@ function renderSettingsInterne() {
         </div>
         <div style="font-size:13px; color:#1a73e8;">🔄 Vérifier</div>
       </div>
+      `}
     </div>
 
     <div style="background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:16px;">
@@ -18364,9 +18399,13 @@ async function tcRafraichirTout() {
     // Deux chemins pour la meme question. Dans l'APK, la verification du
     // site s'arrete des sa premiere ligne : c'est le numero de version
     // de l'application qu'il faut comparer, pas l'horodatage du site.
-    const dansApk = !!(window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj);
+    // Version Google Play : Play fait les mises a jour, rien a comparer ici (mission 79).
+    const parBoutique = typeof tcMajParBoutique === 'function' && tcMajParBoutique();
+    const dansApk = !parBoutique && !!(window.TimeCoolNatif && window.TimeCoolNatif.telechargerEtInstallerMaj);
     if (dansApk) {
       if (typeof checkForUpdates === 'function') await checkForUpdates(false);
+    } else if (parBoutique) {
+      // rien : la version Google Play n a pas de bandeau de mise a jour
     } else if (typeof tcVerifierMajWeb === 'function') {
       await tcVerifierMajWeb();
     }
@@ -22693,7 +22732,12 @@ function tcDetecterReglage(text) {
       if (TC_REGLAGES_AILLEURS[i][0].test(norm)) {
         // « change mon mot de passe », mais pas « quel est le mot de passe de… » (question) ni un rendez-vous.
         if (/ (rdv|rendez vous|reunion) /.test(n)) return null;
-        return { quoi: 'ailleurs', phrase: TC_REGLAGES_AILLEURS[i][1] };
+        let phrase = TC_REGLAGES_AILLEURS[i][1];
+        // Version Google Play : pas de réglage de mise à jour dans l application (mission 79).
+        if (/Mise à jour automatique/.test(phrase) && typeof tcMajParBoutique === 'function' && tcMajParBoutique()) {
+          phrase = 'Les mises à jour de l’application arrivent par Google Play : rien à régler ici.';
+        }
+        return { quoi: 'ailleurs', phrase: phrase };
       }
     }
   }

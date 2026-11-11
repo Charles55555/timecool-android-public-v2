@@ -19,9 +19,9 @@
          WebView repond « refuse » sans qu'aucune fenetre n'apparaisse. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
-    <!-- Installation de la mise a jour depuis l'application. Sans elle,
-         Android refuse l'intent d'installation sans aucun message. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- REQUEST_INSTALL_PACKAGES (mise a jour integree) : dans
+         src/site/AndroidManifest.xml seulement, jamais dans la version
+         Google Play (mission 79). -->
 
     <!-- Rappels de rendez-vous. POST_NOTIFICATIONS n'existe qu'a partir
          d'Android 13 ; en dessous la notification s'affiche sans rien

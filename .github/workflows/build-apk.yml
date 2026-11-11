@@ -35,14 +35,14 @@ jobs:
       - name: Setup Gradle & generate wrapper
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.7'
+          gradle-version: '8.13'
 
       - name: Generate Gradle wrapper jar
         run: |
           # Le depot Maven repond parfois « 429 Too Many Requests ».
           # On retente plutot que d echouer sur un incident passager.
           for essai in 1 2 3; do
-            gradle wrapper --gradle-version=8.7 --distribution-type=bin && exit 0
+            gradle wrapper --gradle-version=8.13 --distribution-type=bin && exit 0
             echo "Tentative $essai en echec, nouvelle tentative dans 45 s."
             sleep 45
           done
@@ -77,7 +77,9 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build Release APK
+      # Mission 79 : la meme commande construit l APK du site et le bundle
+      # Google Play, avec le meme versionCode et la meme cle.
+      - name: Build Release APK et bundle Google Play
         env:
           KEYSTORE_FILE: ${{ steps.keystore.outputs.available == 'true' && format('{0}/timecool.jks', runner.temp) || '' }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -91,7 +93,7 @@ jobs:
           # Le depot Maven repond parfois « 429 Too Many Requests ».
           # On retente plutot que d echouer sur un incident passager.
           for essai in 1 2 3; do
-            ./gradlew assembleRelease --stacktrace && exit 0
+            ./gradlew assembleSiteRelease bundlePlayRelease --stacktrace && exit 0
             echo "Tentative $essai en echec, nouvelle tentative dans 45 s."
             sleep 45
           done
@@ -104,8 +106,9 @@ jobs:
         run: |
           mkdir -p dist
           # Sans keystore, AGP nomme la sortie app-release-unsigned.apk.
-          SRC=app/build/outputs/apk/release/app-release.apk
-          [ -f "$SRC" ] || SRC=app/build/outputs/apk/release/app-release-unsigned.apk
+          # Mission 79 : l APK du site est la variante « site ».
+          SRC=app/build/outputs/apk/site/release/app-site-release.apk
+          [ -f "$SRC" ] || SRC=app/build/outputs/apk/site/release/app-site-release-unsigned.apk
           cp "$SRC" dist/timecool.apk
           # Meme fichier, nomme avec sa version : c est celui que propose le site,
           # pour qu on sache toujours laquelle est sur le telephone.
@@ -123,6 +126,30 @@ jobs:
         with:
           name: TimeCool-${{ steps.version.outputs.name }}
           path: dist/timecool.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      # Mission 79 : le bundle Google Play (.aab), signe avec la meme cle que
+      # l APK du site. Depose en artefact du workflow, jamais dans la Release
+      # publique : c est le chef de projet qui le charge dans la Play Console.
+      - name: Préparer le bundle Google Play
+        run: |
+          mkdir -p dist-play
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab "dist-play/timecool-play-${{ steps.version.outputs.name }}.aab"
+          ls -lh dist-play
+
+      - name: Vérifier la signature du bundle
+        if: steps.keystore.outputs.available == 'true'
+        run: |
+          SORTIE=$(jarsigner -verify -verbose:summary "dist-play/timecool-play-${{ steps.version.outputs.name }}.aab")
+          echo "$SORTIE" | tail -5
+          echo "$SORTIE" | grep -q "jar verified" || { echo "Bundle non signe." >&2; exit 1; }
+
+      - name: Upload bundle Google Play en artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeCool-Play-${{ steps.version.outputs.name }}
+          path: dist-play/*.aab
           retention-days: 30
           if-no-files-found: error
 

@@ -41,6 +41,8 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import java.util.concurrent.Executors;
 import android.view.Window;
+import android.view.View;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
@@ -67,6 +69,9 @@ import javax.crypto.spec.GCMParameterSpec;
 public class MainActivity extends Activity {
 
     private WebView webView;
+
+    /** Mission 79 : retour arriere au niveau d API 36 (RetourPredictif), sinon null. */
+    private Object retourPredictif;
 
     /** Callback du sélecteur de fichiers, le temps que l'utilisateur choisisse. */
     private ValueCallback<Uri[]> fileCallback;
@@ -165,6 +170,9 @@ public class MainActivity extends Activity {
 
         webView = findViewById(R.id.webview);
 
+        // Mission 79 : niveau 35 et plus, l affichage passe sous les barres systeme.
+        installerBordABord();
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -232,6 +240,12 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void doUpdateVisitedHistory(WebView vue, String url, boolean recharge) {
+                super.doUpdateVisitedHistory(vue, url, recharge);
+                majRetourPredictif();
+            }
+
+            @Override
             public void onPageFinished(WebView vue, String url) {
                 // La page est prete : on livre un eventuel resultat Google
                 // arrive pendant qu'elle ne l'etait pas — cas typique d'une
@@ -240,6 +254,12 @@ public class MainActivity extends Activity {
                 livrerResultatGoogle();
             }
         });
+
+        // Mission 79 : au niveau 36 (Google Play), Android 16 n appelle plus
+        // onBackPressed ; le retour passe par RetourPredictif.
+        if (Build.VERSION.SDK_INT >= 33 && getApplicationInfo().targetSdkVersion >= 36) {
+            retourPredictif = new RetourPredictif(this, webView);
+        }
 
         /*
          * Sans onShowFileChooser, l'implémentation par défaut renvoie false
@@ -651,8 +671,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Exécute une fonction JavaScript de la page, sur le thread UI. */
-    private void appelerJs(final String fonction, final String argJson) {
+    /** Exécute une fonction JavaScript de la page, sur le thread UI. Visible du paquet : MajApk s en sert. */
+    void appelerJs(final String fonction, final String argJson) {
         final String script = argJson.isEmpty()
             ? fonction + "()"
             : fonction + "(" + JSONObject.quote(argJson) + ")";
@@ -865,6 +885,17 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean estNatif() {
             return true;
+        }
+
+        /**
+         * Canal de distribution de cette appli : « site » (APK de timecool.fr,
+         * mise a jour integree) ou « play » (Google Play, qui fait lui-meme
+         * les mises a jour). Mission 79 : la page n affiche rien de la mise a
+         * jour integree quand ce canal vaut « play ».
+         */
+        @JavascriptInterface
+        public String canal() {
+            return BuildConfig.CANAL;
         }
 
         /**
@@ -1109,74 +1140,9 @@ public class MainActivity extends Activity {
          */
         @JavascriptInterface
         public void telechargerEtInstallerMaj(final String url) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    java.io.File apk = null;
-                    try {
-                        java.io.File dossier = new java.io.File(getCacheDir(), "maj");
-                        if (!dossier.exists() && !dossier.mkdirs()) {
-                            throw new java.io.IOException("dossier de mise a jour impossible a creer");
-                        }
-                        // Un telechargement precedent interrompu laisserait un
-                        // fichier tronque, que l'installateur rejetterait.
-                        apk = new java.io.File(dossier, "timecool-maj.apk");
-                        if (apk.exists() && !apk.delete()) {
-                            throw new java.io.IOException("ancien fichier impossible a supprimer");
-                        }
-
-                        java.net.HttpURLConnection co =
-                            (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-                        co.setInstanceFollowRedirects(true);  // GitHub redirige vers son CDN
-                        co.setConnectTimeout(20000);
-                        co.setReadTimeout(60000);
-                        co.connect();
-                        if (co.getResponseCode() / 100 != 2) {
-                            throw new java.io.IOException("HTTP " + co.getResponseCode());
-                        }
-
-                        final int total = co.getContentLength();
-                        java.io.InputStream entree = co.getInputStream();
-                        java.io.FileOutputStream sortie = new java.io.FileOutputStream(apk);
-                        byte[] tampon = new byte[16384];
-                        int lu, cumul = 0, dernierPourcent = -1;
-                        while ((lu = entree.read(tampon)) != -1) {
-                            sortie.write(tampon, 0, lu);
-                            cumul += lu;
-                            if (total > 0) {
-                                final int pct = (int) ((cumul * 100L) / total);
-                                // Un appel par pour-cent : sans ce filtre on
-                                // saturerait la WebView de messages.
-                                if (pct != dernierPourcent) {
-                                    dernierPourcent = pct;
-                                    appelerJs("tcMajProgression", String.valueOf(pct));
-                                }
-                            }
-                        }
-                        sortie.close();
-                        entree.close();
-                        co.disconnect();
-
-                        if (apk.length() == 0) {
-                            throw new java.io.IOException("fichier vide");
-                        }
-
-                        android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
-                            MainActivity.this, getPackageName() + ".fileprovider", apk);
-                        Intent i = new Intent(Intent.ACTION_VIEW);
-                        i.setDataAndType(uri, "application/vnd.android.package-archive");
-                        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(i);
-                        appelerJs("tcMajPrete", "");
-                    } catch (Exception e) {
-                        if (apk != null && apk.exists()) {
-                            apk.delete();
-                        }
-                        appelerJs("tcMajEchec", e.getClass().getSimpleName());
-                    }
-                }
-            }).start();
+            // Mission 79 : MajApk est propre a chaque variante (src/site, src/play) ;
+            // celui de la version Google Play ne telecharge ni n installe rien.
+            MajApk.lancer(MainActivity.this, url);
         }
 
         /**
@@ -1610,6 +1576,35 @@ public class MainActivity extends Activity {
             instanceCourante = null;
         }
         super.onDestroy();
+    }
+
+    /*
+     * Mission 79 : a partir du niveau d API 35 (Google Play exige 36), Android 15
+     * et plus dessinent l appli sous les barres systeme et ne redimensionnent plus
+     * la fenetre pour le clavier (adjustResize n agit plus). On rend la place
+     * nous-memes : barres, encoche et clavier deviennent une marge autour de la
+     * WebView. Sous ce niveau (version site, ciblee 34), rien n est pose :
+     * l affichage reste exactement celui d avant.
+     */
+    private void installerBordABord() {
+        if (Build.VERSION.SDK_INT < 35 || getApplicationInfo().targetSdkVersion < 35) return;
+        View racine = findViewById(R.id.racine);
+        racine.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsets onApplyWindowInsets(View v, WindowInsets marges) {
+                android.graphics.Insets m = marges.getInsets(WindowInsets.Type.systemBars()
+                    | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                v.setPadding(m.left, m.top, m.right, m.bottom);
+                return WindowInsets.CONSUMED;
+            }
+        });
+    }
+
+    /** Mission 79 : le geste retour suit l historique de la WebView (niveau 36). */
+    private void majRetourPredictif() {
+        if (retourPredictif != null) {
+            ((RetourPredictif) retourPredictif).mettreAJour();
+        }
     }
 
     @Override

@@ -92,7 +92,7 @@ console.log('\n── Rien de ce que la page appelle ne manque ──');
   // n'y est pas fait retomber la page sur son comportement de
   // navigateur, et c'est le bon comportement.
   const fournies = Object.keys(natif);
-  const horsPortee = ['telechargerEtInstallerMaj', 'ecrireFichierTelechargement',
+  const horsPortee = ['telechargerEtInstallerMaj', 'ecrireFichierTelechargement', 'canal',
                       'connexionGoogle', 'enregistrerIdentifiants',
                       'dicteeDisponible', 'demarrerDictee', 'arreterDictee'];
 

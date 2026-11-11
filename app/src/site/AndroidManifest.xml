@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Variante « site » (APK de timecool.fr) seulement. Mission 79 : la version
+     Google Play ne doit pas declarer cette permission, Play fait lui-meme les
+     mises a jour. Fusionne avec app/src/main/AndroidManifest.xml. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Installation de la mise a jour depuis l'application. Sans elle,
+         Android refuse l'intent d'installation sans aucun message. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
+</manifest>

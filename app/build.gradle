@@ -27,7 +27,7 @@ def resolvedBuildTime = System.getenv('BUILD_TIME') ?:
 
 android {
     namespace 'com.timecool.app'
-    compileSdk 34
+    compileSdk 36
 
     buildFeatures {
         buildConfig true
@@ -56,6 +56,30 @@ android {
         versionName resolvedVersionName
 
         buildConfigField "String", "BUILD_TIME", "\"${resolvedBuildTime}\""
+    }
+
+    /* Mission 79 : deux canaux de distribution, une seule appli (meme
+       applicationId, meme page index.html, meme versionCode).
+       « site » : l APK de timecool.fr, avec sa mise a jour integree
+       (releases GitHub) ; cible toujours le niveau 34, comportement inchange.
+       « play » : Google Play, qui fait lui-meme les mises a jour. Aucune mise
+       a jour integree (MajApk propre a chaque variante), pas de
+       REQUEST_INSTALL_PACKAGES (declaree dans src/site/AndroidManifest.xml
+       seulement), et le niveau d API exige par Google Play depuis le
+       31/08/2026 pour une nouvelle appli : 36. La page lit le canal par
+       TimeCoolNatif.canal(). */
+    flavorDimensions = ['canal']
+    productFlavors {
+        site {
+            dimension 'canal'
+            targetSdk 34
+            buildConfigField "String", "CANAL", "\"site\""
+        }
+        play {
+            dimension 'canal'
+            targetSdk 36
+            buildConfigField "String", "CANAL", "\"play\""
+        }
     }
 
     buildTypes {
