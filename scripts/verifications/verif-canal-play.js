@@ -56,10 +56,11 @@ verifie('la WebView est dans un cadre « racine »', /<FrameLayout[\s\S]*android
 
 titre('GitHub : APK du site inchange, bundle Google Play en artefact');
 const wf = lire('.github/workflows/build-apk.yml');
-verifie('une seule commande pour les deux, meme versionCode', /\.\/gradlew assembleSiteRelease bundlePlayRelease --stacktrace/.test(wf) && (wf.match(/VERSION_CODE:/g) || []).length === 1);
+verifie('APK du site puis bundle Google Play, meme versionCode', /\.\/gradlew assembleSiteRelease --stacktrace/.test(wf) && /\.\/gradlew bundlePlayRelease --stacktrace/.test(wf) && (wf.match(/VERSION_CODE: \$\{\{ steps\.version\.outputs\.code \}\}/g) || []).length === 2);
+verifie('le bundle passe apres la Release du site (son echec ne retient jamais l APK)', wf.indexOf('gh release create') > -1 && wf.indexOf('- name: Build bundle Google Play') > wf.indexOf('gh release create') && wf.indexOf('- name: Préparer le bundle Google Play') > wf.indexOf('- name: Build bundle Google Play'));
 verifie('l APK du site vient de la variante site', /SRC=app\/build\/outputs\/apk\/site\/release\/app-site-release\.apk/.test(wf) && /cp "\$SRC" dist\/timecool\.apk/.test(wf));
 verifie('le bundle est verifie (jarsigner) et depose en artefact', /bundle\/playRelease\/app-play-release\.aab/.test(wf) && /jarsigner -verify/.test(wf) && /name: TimeCool-Play-/.test(wf) && /path: dist-play\/\*\.aab/.test(wf));
-const release = (wf.match(/gh release create[\s\S]*$/) || [''])[0];
+const release = wf.indexOf('gh release create') > -1 ? wf.slice(wf.indexOf('gh release create'), wf.indexOf('# Mission 79 : le bundle Google Play (.aab), construit APRES')) : '';
 verifie('le bundle n est pas dans la Release publique', release && !/\.aab|dist-play/.test(release));
 
 /* ── La page ─────────────────────────────────────────────────────── */

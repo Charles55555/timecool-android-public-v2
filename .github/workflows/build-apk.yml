@@ -77,9 +77,7 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Mission 79 : la meme commande construit l APK du site et le bundle
-      # Google Play, avec le meme versionCode et la meme cle.
-      - name: Build Release APK et bundle Google Play
+      - name: Build Release APK
         env:
           KEYSTORE_FILE: ${{ steps.keystore.outputs.available == 'true' && format('{0}/timecool.jks', runner.temp) || '' }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -93,7 +91,9 @@ jobs:
           # Le depot Maven repond parfois « 429 Too Many Requests ».
           # On retente plutot que d echouer sur un incident passager.
           for essai in 1 2 3; do
-            ./gradlew assembleSiteRelease bundlePlayRelease --stacktrace && exit 0
+            # Mission 79 : la variante « site » ; le bundle Google Play est construit
+            # apres la Release, pour ne jamais retenir l APK du site.
+            ./gradlew assembleSiteRelease --stacktrace && exit 0
             echo "Tentative $essai en echec, nouvelle tentative dans 45 s."
             sleep 45
           done
@@ -129,6 +129,51 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      # Publie la Release. L'asset garde toujours le même nom, donc
+      # l'URL releases/latest/download/timecool.apk reste valable à vie.
+      # workflow_dispatch est accepté au même titre qu'un push : sans
+      # cela, un lancement manuel construisait l'APK sans jamais publier
+      # de Release — seul recours quand GitHub n'a pas déclenché le build
+      # automatique après un push.
+      - name: Publier la Release
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && steps.keystore.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.name }}" \
+            --title "TimeCool v${{ steps.version.outputs.name }}" \
+            --notes "APK Android signé, installable par-dessus une version précédente sans désinstallation.
+
+          versionCode : ${{ steps.version.outputs.code }}
+          Commit : ${{ github.sha }}
+
+          Téléchargement permanent (pointe toujours vers la dernière version) :
+          https://github.com/${{ github.repository }}/releases/latest/download/timecool.apk" \
+            dist/timecool.apk \
+            "dist/timecool-${{ steps.version.outputs.name }}.apk"
+
+      # Mission 79 : le bundle Google Play (.aab), construit APRES la Release du
+      # site : s il echoue, l APK du site est deja publie et le run passe au
+      # rouge pour le signaler. Meme versionCode, meme cle que l APK du site.
+      - name: Build bundle Google Play
+        env:
+          KEYSTORE_FILE: ${{ steps.keystore.outputs.available == 'true' && format('{0}/timecool.jks', runner.temp) || '' }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          BUILD_TIME: ${{ steps.version.outputs.build_time }}
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+        run: |
+          for essai in 1 2 3; do
+            ./gradlew bundlePlayRelease --stacktrace && exit 0
+            echo "Tentative $essai en echec, nouvelle tentative dans 45 s."
+            sleep 45
+          done
+          echo "Trois tentatives en echec." >&2
+          exit 1
+
       # Mission 79 : le bundle Google Play (.aab), signe avec la meme cle que
       # l APK du site. Depose en artefact du workflow, jamais dans la Release
       # publique : c est le chef de projet qui le charge dans la Play Console.
@@ -152,26 +197,3 @@ jobs:
           path: dist-play/*.aab
           retention-days: 30
           if-no-files-found: error
-
-      # Publie la Release. L'asset garde toujours le même nom, donc
-      # l'URL releases/latest/download/timecool.apk reste valable à vie.
-      # workflow_dispatch est accepté au même titre qu'un push : sans
-      # cela, un lancement manuel construisait l'APK sans jamais publier
-      # de Release — seul recours quand GitHub n'a pas déclenché le build
-      # automatique après un push.
-      - name: Publier la Release
-        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && steps.keystore.outputs.available == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "v${{ steps.version.outputs.name }}" \
-            --title "TimeCool v${{ steps.version.outputs.name }}" \
-            --notes "APK Android signé, installable par-dessus une version précédente sans désinstallation.
-
-          versionCode : ${{ steps.version.outputs.code }}
-          Commit : ${{ github.sha }}
-
-          Téléchargement permanent (pointe toujours vers la dernière version) :
-          https://github.com/${{ github.repository }}/releases/latest/download/timecool.apk" \
-            dist/timecool.apk \
-            "dist/timecool-${{ steps.version.outputs.name }}.apk"
