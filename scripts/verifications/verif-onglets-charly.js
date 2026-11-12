@@ -37,8 +37,9 @@ titre('Les onglets, dans l ordre');
 const zone = (page.match(/<div id="charlyQuickActions"[\s\S]*?<\/div>/) || [''])[0];
 const libelles = Array.from(zone.matchAll(/charlyQuickAction\('([a-z]+)'\)"[^>]*>([^<]*)<\/button>/g)).map((m) => [m[1], m[2].trim()]);
 verifie('quatre onglets exactement', libelles.length === 4, libelles.length + ' : ' + libelles.map((l) => l[0]).join(','));
-verifie('1. 📅 Créer mon agenda', libelles[0] && libelles[0][0] === 'agenda' && /Créer mon agenda/.test(libelles[0][1]), libelles[0] && libelles[0][1]);
-verifie('2. ➕ Créer un nouveau rdv', libelles[1] && libelles[1][0] === 'rdv' && libelles[1][1] === '➕ Créer un nouveau rdv', libelles[1] && libelles[1][1]);
+// Mission 82 (Charles, 12/11) : le rendez-vous en premier (« Créer mon premier rendez-vous » tant que l agenda est vide), l agenda en deuxième.
+verifie('1. ➕ Créer un nouveau rdv', libelles[0] && libelles[0][0] === 'rdv' && libelles[0][1] === '➕ Créer un nouveau rdv', libelles[0] && libelles[0][1]);
+verifie('2. 📅 Créer mon agenda', libelles[1] && libelles[1][0] === 'agenda' && /Créer mon agenda/.test(libelles[1][1]), libelles[1] && libelles[1][1]);
 verifie('3. ⚡ Gérer un imprévu', libelles[2] && libelles[2][0] === 'impprevu' && libelles[2][1] === '⚡ Gérer un imprévu', libelles[2] && libelles[2][1]);
 verifie('4. ⏰ Prévenir d\'un retard', libelles[3] && libelles[3][0] === 'retard' && libelles[3][1] === '⏰ Prévenir d\'un retard', libelles[3] && libelles[3][1]);
 verifie('« Calculer trajet » n\'est plus un onglet', !/charlyQuickAction\('trajet'\)/.test(page));

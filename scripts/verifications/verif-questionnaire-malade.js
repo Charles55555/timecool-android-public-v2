@@ -54,6 +54,8 @@ const ctx = {
   escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
   // Les autres boutons de charlyQuickAction, hors sujet ici.
   tcDemarrerRdvAPlusieurs() {}, charlyAttachAction() {}, tcPrevenirRetard() {}, tcDemarrerNouveauRdv() {}, tcDemarrerImprevu() {}, startAssistant() {}, tcDemarrerCalculTrajet() {}, charlySendMessage() {},
+  // Mission 82 : agenda non vide, le questionnaire (l agenda vide : verif-premiere-minute).
+  tcAgendaVide: () => false,
   document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null,
   // Mission 73 : la proposition de créneaux part au serveur.
   TC_BACKEND: { propositionCreer: async (corps) => { trace.propositions.push(corps); return { rdv_id: trace.propositions.length, url: corps.reference ? null : 'https://timecool.fr/rdv/ABCD2345' }; } }

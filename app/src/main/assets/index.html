@@ -1822,8 +1822,8 @@ if (window.pdfjsLib) {
   <!-- Quick action buttons -->
   <div id="charlyQuickIntro" style="padding:8px 14px 0; background:#fff; font-size:11.5px; color:var(--text-sec);">Touche l'option qui correspond à ton besoin : Charly te guide.</div>
   <div id="charlyQuickActions" style="display:flex; gap:6px; padding:10px 12px 0; background:#fff; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+    <button id="charlyBtnRdv" onclick="charlyQuickAction('rdv')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">➕ Créer un nouveau rdv</button>
     <button onclick="charlyQuickAction('agenda')" style="flex-shrink:0; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">📅 Créer mon agenda</button>
-    <button onclick="charlyQuickAction('rdv')" style="flex-shrink:0; padding:8px 12px; background:#e6f4ea; color:var(--g-green); border:1px solid #b9e1c4; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">➕ Créer un nouveau rdv</button>
     <button onclick="charlyQuickAction('impprevu')" style="flex-shrink:0; padding:8px 12px; background:#fce8e6; color:var(--g-red); border:1px solid #f5b8b3; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⚡ Gérer un imprévu</button>
     <button onclick="charlyQuickAction('retard')" style="flex-shrink:0; padding:8px 12px; background:#fff4e0; color:#8a6500; border:1px solid #fbd784; border-radius:18px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⏰ Prévenir d'un retard</button>
   </div>
@@ -3598,6 +3598,38 @@ function tcLegalLangNotice(type) {
   main.insertBefore(box, main.firstChild);
 }
 
+/* ═══ MISSION 82 (Charles, 12/11) : la première minute d'un compte neuf ═══
+   Un nouvel inscrit doit voir un rendez-vous dans son agenda en moins de 20 secondes. Tant que l'agenda est vide :
+   l'arrivée invite à écrire son premier rendez-vous, le premier bouton s'appelle « ➕ Créer mon premier rendez-vous »
+   (une phrase, puis la carte « Valider »), « Je suis malade » dit qu'il n'y a rien à décaler. Ensuite, rien ne change. */
+const TC_PREMIER_RDV_EXEMPLE = 'dentiste mardi 15h';
+let _tcCompteNeuf = false;
+
+/** L'agenda (du mode affiché) n'a encore aucun rendez-vous. Les jours fériés et les anniversaires n'en sont pas. */
+function tcAgendaVide() {
+  const m = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  return !(typeof events !== 'undefined' && Array.isArray(events) ? events : []).some(function (e) {
+    return e && e.title && (e.mode || 'user') === m;
+  });
+}
+
+/** Le premier bouton de la barre de Charly : son nom suit l'agenda (vide ou non). */
+function tcMajBoutonPremierRdv() {
+  const b = document.getElementById('charlyBtnRdv');
+  if (!b) return;
+  const t = tcAgendaVide() ? '➕ Créer mon premier rendez-vous' : '➕ Créer un nouveau rdv';
+  if (b.textContent !== t) b.textContent = t;
+}
+
+/** « ➕ Créer mon premier rendez-vous » : une seule phrase à écrire, puis le parcours ordinaire de Charly (carte « Valider »). */
+function tcPremierRdvInviter() {
+  tcPousserMessageUtilisateur('Créer mon premier rendez-vous');
+  charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Écris ton rendez-vous en une phrase, par exemple : ' + TC_PREMIER_RDV_EXEMPLE });
+  renderCharlyChat();
+  const inp = document.getElementById('charlyInput');
+  if (inp) { try { inp.focus(); } catch (e) {} }
+}
+
 function tcSyncCharlyGreeting() {
   if (typeof charlyIA === 'undefined' || !charlyIA.history || !charlyIA.history.length) return;
   var msg = charlyIA.history[0];
@@ -4450,6 +4482,7 @@ function tcPanneauMoisAller(iso) {
 }
 
 function render() {
+  try { tcMajBoutonPremierRdv(); } catch (e) {}   // mission 82
   document.getElementById('monthTitle').textContent = `${MONTHS[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
 
   // Panneau du mois ouvert : il suit la période affichée dessous.
@@ -11743,6 +11776,7 @@ function tcEffacerHistoriqueCharly() {
 }
 
 function renderCharlyChat() {
+  try { tcMajBoutonPremierRdv(); } catch (e) {}   // mission 82
   // A chaque affichage, les dix derniers messages sont enregistres :
   // tout ce qui change la conversation finit par un affichage.
   tcChargerHistoriqueCharly();
@@ -13728,6 +13762,8 @@ function charlyQuickAction(action) {
   // Retard : le questionnaire guidé (mission 45) : combien, pour quel rendez-vous, et après, qui prévient, récapitulatif.
   if (action === 'retard') { tcPrevenirRetard('Je vais être en retard'); return; }
   // Nouveau rdv : le questionnaire guidé (mission 46) : quoi, avec qui, quand (trois créneaux), combien de temps, récapitulatif.
+  // Mission 82 : agenda vide, « Créer mon premier rendez-vous » : une phrase, puis la carte « Valider ».
+  if (action === 'rdv' && tcAgendaVide()) { tcPremierRdvInviter(); return; }
   if (action === 'rdv') { tcDemarrerNouveauRdv('Je veux créer un nouveau rendez-vous'); return; }
   // Imprévu : le questionnaire guidé (mission 44) : ce qui arrive, ce qui est touché, la solution, qui prévient, récapitulatif.
   if (action === 'impprevu') { tcDemarrerImprevu('J’ai un imprévu'); return; }
@@ -17336,7 +17372,11 @@ function hideAuthFlow() {
   // appText : texte de l'app (pas une donnee personnelle) -> traduisible
   // L'accueil ne s'ajoute que si la conversation est vide : sinon il
   // s'empilerait a chaque connexion, et elle ne doit plus jamais se vider.
-  if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueil, appText: true, fr: _accueil});
+  // Mission 82 : un compte qui vient d'être créé, agenda vide : une seule consigne, écrire son premier rendez-vous.
+  const _accueilNeuf = sal + (fname ? ' ' + fname : '') + ' ! 😊 Je suis Charly. Écris ton premier rendez-vous, par exemple : ' + TC_PREMIER_RDV_EXEMPLE;
+  const _texteAccueil = (_tcCompteNeuf && tcAgendaVide()) ? _accueilNeuf : _accueil;
+  _tcCompteNeuf = false;
+  if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _texteAccueil, appText: true, fr: _texteAccueil});
   renderCharlyChat();
   tcSyncCharlyGreeting();
   // Mission 81 : venu par https://timecool.fr/app/#supprimer-mon-compte, la confirmation s'ouvre une fois connecté.
@@ -18098,6 +18138,8 @@ async function tcCreerCompte(preuve) {
   };
   // Mission 80 : le compte est créé, le code retenu ne sert plus.
   _tcCodeEnCours = null;
+  // Mission 82 : l'arrivée (hideAuthFlow) saura que le compte est neuf.
+  _tcCompteNeuf = true;
   // La preuve Google ne doit pas resservir a une autre inscription.
   if (typeof tcPreuveGoogle !== 'undefined') tcPreuveGoogle = null;
 
@@ -27029,6 +27071,12 @@ function tcMaladeDansLaPhrase(text) {
 /** Le bouton ou la phrase : la bulle de l'utilisateur, puis la première question qui reste. */
 async function tcDemarrerMalade(text) {
   if (text) tcPousserMessageUtilisateur(text);
+  // Mission 82 : agenda vide, aucune question : rien à décaler, et l'invitation au premier rendez-vous.
+  if (tcAgendaVide()) {
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Ton agenda est vide pour l’instant, il n’y a rien à décaler. Veux-tu créer ton premier rendez-vous ? Écris-le, par exemple : ' + TC_PREMIER_RDV_EXEMPLE });
+    renderCharlyChat();
+    return;
+  }
   await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_MALADE, tcMaladeDansLaPhrase(text));
 }
 

@@ -97,6 +97,8 @@ const ctx = {
   escapeHTMLSafe: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'),
   localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   tcDemarrerRdvAPlusieurs() {}, charlyAttachAction() {}, startAssistant() {}, tcDemarrerCalculTrajet() {}, charlySendMessage() {}, tcDemarrerMalade() {}, tcDemarrerImprevu() {}, tcPrevenirRetard() {},
+  // Mission 82 : agenda non vide, le bouton garde son questionnaire (l agenda vide : verif-premiere-minute).
+  tcAgendaVide: () => false,
   document: { getElementById: () => ({ value: '', style: {} }) }, Set, _agendaChecked: null
 };
 vm.createContext(ctx);

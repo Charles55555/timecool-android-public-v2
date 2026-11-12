@@ -109,7 +109,7 @@ titre('Seul « Recommencer » efface');
   verifie('et c est celle du bouton Recommencer', /charlyIA\.history = \[\];\s*tcEffacerHistoriqueCharly\(\);/.test(reset));
   const auth = extraire('hideAuthFlow') || '';
   verifie('la connexion recharge au lieu de vider', /tcChargerHistoriqueCharly\(\);/.test(auth) && !/charlyIA\.history = \[\]/.test(auth));
-  verifie('et n ajoute l accueil que si la conversation est vide', /if \(!charlyIA\.history\.length\) charlyIA\.history\.push\(\{role:'assistant', content: _accueil,/.test(auth));
+  verifie('et n ajoute l accueil que si la conversation est vide', /if \(!charlyIA\.history\.length\) charlyIA\.history\.push\(\{role:'assistant', content: _texteAccueil,/.test(auth));
   const bienvenue = extraire('showWelcomeSplash') || '';
   verifie('l ecran de bienvenue aussi', /tcChargerHistoriqueCharly\(\);/.test(bienvenue) && !/charlyIA\.history = \[\]/.test(bienvenue));
 }

@@ -3241,3 +3241,15 @@ Chef, 12/11 (ok de Charles) ; choix envoyés avant de coder, acceptés (révocat
 - Décision prise seul : le bouton s'affiche pour tout le monde (la page ne sait pas qui est administrateur) ; pour l'administrateur, le serveur refuse avec un message clair.
 - Suites : verif-suppression-compte (nouvelle, 25 : page, confirmation jouée, API lue, deux comptes de test contre l'API). verifier.sh vert.
 - Après l'examen (1 défaut) : l'appareil gardait le nom et l'adresse (timecool_user_account), jusqu'à 5 copies automatiques de l'agenda (tc_backup_history, tc_auto_backup_last, tc_last_auto_backup_at) et l'empreinte (tc_biometrie_active, jeton mort dans le pont natif). Ils partent à la suppression (et desactiverBiometrie) ; la simple déconnexion ne change pas (choix ancien, chef). Bouton « Supprimer » rouge (tcPrompt passe danger à tcModale). verif-suppression-compte : 27.
+
+## 12/11/2026 : mission 82, la première minute d'un compte neuf
+
+Chef, 12/11 (ok de Charles, périmètre final après deux réponses de Charles). But : un nouvel inscrit voit un rendez-vous dans son agenda en moins de 20 secondes. Constat (compte 31248) : « Créer mon agenda » faisait poser au modèle des questions sur les horaires fixes, « Créer un nouveau rdv » lançait 6 à 8 questions, « Je suis malade » sur un agenda vide demandait une période avant de dire qu'il n'y avait rien.
+- Agenda vide = aucun rendez-vous du mode affiché (tcAgendaVide ; fériés et anniversaires n'en sont pas).
+- Arrivée d'un compte qui vient d'être créé (drapeau _tcCompteNeuf posé par tcCreerCompte, lu une fois par hideAuthFlow), agenda vide : « Bonjour Léa ! 😊 Je suis Charly. Écris ton premier rendez-vous, par exemple : dentiste mardi 15h ». Une connexion garde son accueil.
+- Barre : « ➕ Créer mon premier rendez-vous » en premier tant que l'agenda est vide, puis « ➕ Créer un nouveau rdv » ; « 📅 Créer mon agenda » en deuxième ; le reste dans le même ordre. Le libellé suit l'agenda à chaque affichage de Charly et de l'agenda (tcMajBoutonPremierRdv, une boucle qui s'arrête au premier rendez-vous).
+- « Créer mon premier rendez-vous » : « Écris ton rendez-vous en une phrase, par exemple : dentiste mardi 15h », le curseur dans la case ; la phrase suit le parcours ordinaire de Charly (carte « Valider »). Agenda non vide : le questionnaire de la mission 46, inchangé.
+- « Je suis malade » (bouton ou phrase), agenda vide : aucune question, « Ton agenda est vide pour l’instant, il n’y a rien à décaler. Veux-tu créer ton premier rendez-vous ? Écris-le, par exemple : dentiste mardi 15h ». Sinon inchangé.
+- « Créer mon agenda » : rien ne change (décision de Charles) ; qui le touche reçoit toujours les questions du modèle.
+- Suites : verif-premiere-minute (nouvelle, 17) ; verif-onglets-charly (nouvel ordre), verif-historique-charly (_texteAccueil), verif-nouveau-rdv et verif-questionnaire-malade (agenda non vide), verif-sms-inscription (ligne voisine). verifier.sh vert. Captures 390 px : arrivée, premier bouton, malade, barre après un rendez-vous.
+- Mission Charly : batterie de 500 phrases TESTEURS avant « publié ».
