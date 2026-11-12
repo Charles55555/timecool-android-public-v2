@@ -3241,3 +3241,14 @@ Chef, 12/11 (ok de Charles) ; choix envoyés avant de coder, acceptés (révocat
 - Décision prise seul : le bouton s'affiche pour tout le monde (la page ne sait pas qui est administrateur) ; pour l'administrateur, le serveur refuse avec un message clair.
 - Suites : verif-suppression-compte (nouvelle, 25 : page, confirmation jouée, API lue, deux comptes de test contre l'API). verifier.sh vert.
 - Après l'examen (1 défaut) : l'appareil gardait le nom et l'adresse (timecool_user_account), jusqu'à 5 copies automatiques de l'agenda (tc_backup_history, tc_auto_backup_last, tc_last_auto_backup_at) et l'empreinte (tc_biometrie_active, jeton mort dans le pont natif). Ils partent à la suppression (et desactiverBiometrie) ; la simple déconnexion ne change pas (choix ancien, chef). Bouton « Supprimer » rouge (tcPrompt passe danger à tcModale). verif-suppression-compte : 27.
+
+## 12/11/2026 : mission 82 mise de côté
+
+Charles a vu les captures : « laisse tomber ce sujet pour le moment ». Le chef demande de l'écarter avant la mission 83 pour qu'elle ne parte pas en ligne par accident. Commit abc2b4c (git revert de ef8b0f4) : la page et les suites reviennent à l'état de d9f6dac. Le travail entier reste sur la branche locale mission-82 (ef8b0f4), à reprendre tel quel (git cherry-pick ef8b0f4 ou git revert abc2b4c).
+
+## 12/11/2026 : mission 83, « Supprimer mon compte » en vrai bouton
+
+Chef, 12/11 (ok de Charles : « Supprimer mon compte » était caché et écrit trop petit).
+- Paramètres, tout en bas : le gros bouton rose « 🚪 Se déconnecter » est retiré ; « Supprimer mon compte » prend sa place, même taille et même forme (fond rose, bord, coins arrondis, 14 px gras), texte rouge, plus de soulignement. Même identifiant btnSupprimerMonCompte, même fenêtre de confirmation, #supprimer-mon-compte inchangé.
+- La déconnexion reste dans le menu du rond aux initiales et en bas du menu ☰ (non touchés).
+- Suites : verif-suppression-compte (plus de gros « Se déconnecter », le bouton et son style, les deux autres déconnexions présentes ; rouge sur la page d'avant), verif-parametres-ordre (le dernier bloc est « Supprimer mon compte »). verifier.sh vert. Captures 390 px : bas de Paramètres, menu du rond, menu ☰.

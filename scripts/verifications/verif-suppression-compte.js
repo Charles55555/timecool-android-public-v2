@@ -26,9 +26,12 @@ function fonction(src, nom) {
 
 // ─── 1. La page ───────────────────────────────────────────────
 const reglages = fonction(page, 'renderSettingsInterne') || '';
-const iDeco = page.indexOf('🚪 Se déconnecter\n    </button>');
-const iSuppr = page.indexOf('id="btnSupprimerMonCompte" onclick="tcSupprimerMonCompte()"');
-verifie('Paramètres : « Supprimer mon compte » tout en bas, sous « Se déconnecter »', iDeco > 0 && iSuppr > iDeco && iSuppr - iDeco < 400 && page.includes('      Supprimer mon compte\n    </button>\n  `;'));
+// Mission 83 (Charles, 12/11) : en bas de Paramètres, un vrai bouton « Supprimer mon compte » (taille et forme de
+// l'ancien bouton « Se déconnecter », texte rouge) ; la déconnexion reste dans le menu du rond et dans le menu ☰.
+verifie('Paramètres : plus de gros bouton « Se déconnecter »', !reglages.includes('logoutUser()') && !page.includes('🚪 Se déconnecter\n    </button>'));
+verifie('Paramètres : « Supprimer mon compte » tout en bas, en vrai bouton rouge', reglages.includes('<button id="btnSupprimerMonCompte" onclick="tcSupprimerMonCompte()" style="width:100%; padding:14px; background:#fce8e6; color:var(--g-red); border:1.5px solid #f5b8b3; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; margin-top:12px;">\n      Supprimer mon compte\n    </button>\n  `;') && !reglages.includes('underline'));
+verifie('la déconnexion reste dans le menu du rond aux initiales', page.includes('<div onclick="closeAccountMenu(); logoutUser();"') && /<span style="flex:1;">Se déconnecter<\/span>/.test(page));
+verifie('la déconnexion reste en bas du menu ☰', /const logoutBtn = `\n    <div onclick="logoutUser\(\)"[^\n]*\n      <span style="font-size:20px;">🚪<\/span>\n      <span>Se déconnecter<\/span>/.test(page) && page.includes('+ logoutBtn + createCalendarBtn;'));
 verifie('le bouton « Supprimer » de la confirmation est rouge', page.includes("libelleValider: 'Supprimer', danger: true });") && page.includes("    danger: !!o.danger\n  });"));
 verifie('un seul bouton « Supprimer mon compte »', (page.match(/onclick="tcSupprimerMonCompte\(\)"/g) || []).length === 1);
 verifie('la page appelle POST /compte/supprimer', page.includes("tcAppel('POST', '/compte/supprimer', { confirmation: confirmation })"));

@@ -17,10 +17,11 @@ const rsi = fonction('renderSettingsInterne');
 const pos = (t) => rsi.indexOf(t);
 const titres = ["${TC_CONFIANCE_VISIBLE ? tcBlocConfiance() : ''}", "💬 Messages d'annulation &amp; retards", "🏖️ Message d'absence", '🔔 Notifications', '🎨 Affichage',
   '🌍 Langue & Région', '💾 Sauvegarde & Restauration', '🔐 Compte & sécurité', '📱 Application', '🔒 Confidentialité & Sécurité', 'ℹ️ À propos',
-  '"Ton temps est la seule ressource', 'onclick="logoutUser()"'];
+  // Mission 83 (Charles, 12/11) : tout en bas, « Supprimer mon compte » à la place du gros « Se déconnecter ».
+  '"Ton temps est la seule ressource', 'onclick="tcSupprimerMonCompte()"'];
 const p = titres.map(pos);
 verifie('les 12 blocs (et la citation) sont là, chacun une fois', titres.every((t) => rsi.split(t).length === 2), titres.filter((t) => rsi.split(t).length !== 2).join(' | '));
-verifie('ordre : Confiance, Messages, Absence, Notifications, Affichage, Langue & Région, Sauvegarde, Compte, Application, Confidentialité, À propos, citation, Se déconnecter',
+verifie('ordre : Confiance, Messages, Absence, Notifications, Affichage, Langue & Région, Sauvegarde, Compte, Application, Confidentialité, À propos, citation, Supprimer mon compte',
   p.every((x, k) => x > -1 && (k === 0 || x > p[k - 1])), p.join(','));
 const aff = rsi.slice(pos('🎨 Affichage'), pos('🌍 Langue & Région'));
 verifie('Affichage : thème, fuseau horaire, plage horaire de ma journée, premier jour de la semaine ; plus de ligne « Langue »',
