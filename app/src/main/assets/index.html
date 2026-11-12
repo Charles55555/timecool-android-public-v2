@@ -17831,17 +17831,28 @@ async function chooseVerifyMethod(method) {
     ? (pendingSignup.phoneCountry.dial + pendingSignup.phone.replace(/^0/, '')).replace(/\s/g, '')
     : pendingSignup.email;
 
-  showToast('⏳ Envoi du code…');
-  try {
-    const r = await TC_BACKEND.demanderVerification(method, destination, 'inscription');
-    pendingSignup.verifRef = r.reference;
-    pendingSignup.codeMinutes = r.expire_dans_minutes;
-    pendingSignup.renvoiDans = r.renvoi_dans_secondes;
-    tcAfficherCodeTest(r);
-  } catch (e) {
-    // Auparavant l'échec était muet : l'écran s'affichait quoi qu'il arrive.
-    tcErreurEnvoiCode(e);
-    return;
+  // Mission 80 (examen) : un code déjà parti pour ce numéro et cette adresse, encore valable, sert de nouveau
+  // (flèche retour puis « Continuer ») : pas de deuxième SMS, pas d'attente.
+  const deja = tcCodeEncoreValable(method, destination);
+  if (deja) {
+    pendingSignup.verifRef = deja.r.reference;
+    pendingSignup.codeMinutes = deja.r.expire_dans_minutes;
+    pendingSignup.renvoiDans = Math.max(0, Math.ceil((deja.renvoiLe - Date.now()) / 1000));
+    tcAfficherCodeTest(deja.r);
+  } else {
+    showToast('⏳ Envoi du code…');
+    try {
+      const r = await TC_BACKEND.demanderVerification(method, destination, 'inscription');
+      pendingSignup.verifRef = r.reference;
+      pendingSignup.codeMinutes = r.expire_dans_minutes;
+      pendingSignup.renvoiDans = r.renvoi_dans_secondes;
+      tcAfficherCodeTest(r);
+      tcRetenirCode(method, destination, r);
+    } catch (e) {
+      // Auparavant l'échec était muet : l'écran s'affichait quoi qu'il arrive.
+      tcErreurEnvoiCode(e);
+      return;
+    }
   }
 
   // Personnaliser l'écran de saisie
@@ -17872,8 +17883,27 @@ async function chooseVerifyMethod(method) {
 /** « +33 6 12 34 56 78 » : le premier chiffre seul, puis deux par deux (avant : « +33 61 23 45 67 8 »). */
 function tcNumeroLisible(indicatif, numero) {
   const c = String(numero || '').replace(/\D/g, '').replace(/^0/, '');
+  if (indicatif === '+1' && c.length === 10) return '+1 ' + c.slice(0, 3) + ' ' + c.slice(3, 6) + ' ' + c.slice(6);
   const groupes = c.length === 9 ? [c[0]].concat(c.slice(1).match(/\d{1,2}/g) || []) : (c.match(/\d{1,2}/g) || []);
   return (indicatif + ' ' + groupes.join(' ')).trim();
+}
+
+/** Le dernier code parti (mission 80, examen) : il resservira tant qu'il est valable, pour ce numéro et cette adresse. */
+let _tcCodeEnCours = null;
+function tcRetenirCode(method, destination, r) {
+  const maintenant = Date.now();
+  _tcCodeEnCours = {
+    method: method, destination: destination, email: pendingSignup ? pendingSignup.email : '', r: r,
+    // Trente secondes de marge : le temps de taper le code avant qu'il expire.
+    expireLe: maintenant + (Number(r.expire_dans_minutes) || 10) * 60000 - 30000,
+    renvoiLe: maintenant + (Number(r.renvoi_dans_secondes) || 0) * 1000
+  };
+}
+function tcCodeEncoreValable(method, destination) {
+  const c = _tcCodeEnCours;
+  if (!c || c.method !== method || c.destination !== destination) return null;
+  if (c.email !== (pendingSignup ? pendingSignup.email : '') || Date.now() >= c.expireLe) return null;
+  return c;
 }
 
 /** Le retour depuis l'écran du code : le formulaire (SMS seul), sinon le choix SMS / e-mail. */
@@ -18005,6 +18035,8 @@ async function tcCreerCompte(preuve) {
     verifiedBy: pendingSignup.verifyMethod || null,
     createdAt: new Date().toISOString()
   };
+  // Mission 80 : le compte est créé, le code retenu ne sert plus.
+  _tcCodeEnCours = null;
   // La preuve Google ne doit pas resservir a une autre inscription.
   if (typeof tcPreuveGoogle !== 'undefined') tcPreuveGoogle = null;
 
@@ -18096,6 +18128,7 @@ async function resendCode() {
     tcAfficherCodeTest(r);
     showToast('📨 Nouveau code envoyé');
     tcRenvoiAttendre(r.renvoi_dans_secondes);
+    tcRetenirCode(method, destination, r);
   } catch (e) {
     tcErreurEnvoiCode(e);
     return;

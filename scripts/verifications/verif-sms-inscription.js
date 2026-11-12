@@ -37,6 +37,7 @@ verifie('le bouton « Renvoyer le code » a son identifiant', page.includes('id=
 verifie('le retour de l écran du code passe par tcRetourDepuisCode', page.includes('<button class="back-btn" onclick="tcRetourDepuisCode()">'));
 verifie('le parcours lit verification_sms_inscription', page.includes('verification_sms_inscription: d.verification_sms_inscription === true'));
 verifie('avec le SMS exigé, le code part dès le formulaire', /if \(params\.verification_sms_inscription\) \{\s*pendingSignup\.smsSeul = true;\s*await chooseVerifyMethod\('sms'\);/.test(page));
+verifie('l envoi reprend un code encore valable, le compte créé l oublie', /const deja = tcCodeEncoreValable\(method, destination\);\s*if \(deja\) \{/.test(page) && (page.match(/tcRetenirCode\(method, destination, r\);/g) || []).length === 2 && page.includes('  _tcCodeEnCours = null;\n  // La preuve Google'));
 verifie('la demande de code dit « inscription » (envoi et renvoi)', (page.match(/demanderVerification\(method, destination, 'inscription'\)/g) || []).length === 2);
 verifie('le texte de l écran dit l étape et la durée', page.includes("'Étape 2 sur 2 : un'") && page.includes("' code à 6 chiffres vient de partir par SMS au <b style=\"white-space:nowrap;\">' + phoneDisplay + '</b>.<br>Il est valable '"));
 verifie('messages du code : faux, expiré, trop d essais', page.includes('Ce code ne correspond pas : vérifie les 6 chiffres.') && page.includes('Ce code a expiré : demande un nouveau code.') && page.includes('Trop d’essais : demande un nouveau code.'));
@@ -84,6 +85,19 @@ verifie('Configuration IA : identifiant, jeton, expéditeur Twilio', page.includ
   vm.runInContext(fonction(page, 'tcNumeroLisible') + '\nthis.tcNumeroLisible = tcNumeroLisible;', ctx);
   verifie('numéro lisible : +33 6 12 34 56 78', ctx.tcNumeroLisible('+33', '06 12 34 56 78') === '+33 6 12 34 56 78', ctx.tcNumeroLisible('+33', '06 12 34 56 78'));
   verifie('numéro lisible : sans le zéro aussi', ctx.tcNumeroLisible('+33', '612345678') === '+33 6 12 34 56 78');
+  verifie('numéro lisible : +1 en 3-3-4', ctx.tcNumeroLisible('+1', '4155550123') === '+1 415 555 0123', ctx.tcNumeroLisible('+1', '4155550123'));
+  // Examen : flèche retour puis « Continuer » : le code déjà parti resservira (même numéro, même adresse, encore valable).
+  vm.runInContext('let _tcCodeEnCours = null;\n' + fonction(page, 'tcRetenirCode') + '\n' + fonction(page, 'tcCodeEncoreValable') + '\nthis.tcRetenirCode = tcRetenirCode; this.tcCodeEncoreValable = tcCodeEncoreValable;', ctx);
+  ctx.pendingSignup = { email: 'lea@exemple.fr' };
+  ctx.tcRetenirCode('sms', '+33612345678', { reference: 'R1', expire_dans_minutes: 10, renvoi_dans_secondes: 60 });
+  const garde = ctx.tcCodeEncoreValable('sms', '+33612345678');
+  verifie('retour puis Continuer : le code parti resservira', !!garde && garde.r.reference === 'R1');
+  verifie('un autre numéro : nouveau code', ctx.tcCodeEncoreValable('sms', '+33698765432') === null);
+  ctx.pendingSignup = { email: 'autre@exemple.fr' };
+  verifie('une autre adresse : nouveau code', ctx.tcCodeEncoreValable('sms', '+33612345678') === null);
+  ctx.pendingSignup = { email: 'lea@exemple.fr' };
+  ctx.tcRetenirCode('sms', '+33612345678', { reference: 'R2', expire_dans_minutes: 0.5, renvoi_dans_secondes: 0 });
+  verifie('un code expiré : nouveau code', ctx.tcCodeEncoreValable('sms', '+33612345678') === null);
 }
 
 // ─── 2. L'API, lue ────────────────────────────────────────────
