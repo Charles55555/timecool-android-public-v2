@@ -379,6 +379,159 @@ function cleDuService(int $compteId, string $service): ?string
     return $clair;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 80 (Charles, 12/11) : le portable confirmé par SMS à l'inscription.
+   Un code à 6 chiffres, 10 minutes, 5 essais, usage unique ; un numéro, un compte.
+   Les clés Twilio viennent de Configuration IA (compte administrateur, chiffrées en base),
+   sinon de config.php. Les comptes @exemple-timecool.fr ne reçoivent pas de SMS seulement
+   avec un numéro fictif de l'ARCEP (06 39 98 00 00 à 06 39 98 99 99) ET depuis une adresse
+   IP de ip_tests (le serveur, le PC de Charles).
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Portables acceptés au départ : France et outre-mer, Europe proche, Royaume-Uni, +1 (Canada et États-Unis). */
+const SMS_PREFIXES_DEFAUT = ['+336', '+337', '+262', '+590', '+594', '+596', '+508', '+681', '+687', '+689',
+    '+32', '+41', '+352', '+377', '+49', '+34', '+39', '+351', '+31', '+44', '+1'];
+
+/** Les identifiants Twilio : ceux de l'administrateur (Configuration IA), sinon config.php ; null si rien n'est posé. */
+function smsIdentifiants(): ?array
+{
+    $lire = static function (string $service): ?string {
+        $c = cleAdministrateur($service);
+        if ($c === null) {
+            return null;
+        }
+        $v = Coffre::dechiffrer($c);
+        return ($v === null || trim($v) === '') ? null : trim($v);
+    };
+    $id = ['sid' => $lire('twilio'), 'jeton' => $lire('twilio_jeton'), 'depuis' => $lire('twilio_expediteur')];
+    if ($id['sid'] === null || $id['jeton'] === null || $id['depuis'] === null) {
+        $id = [
+            'sid'    => (string) Conf::get('twilio_account_sid', ''),
+            'jeton'  => (string) Conf::get('twilio_auth_token', ''),
+            'depuis' => (string) Conf::get('twilio_numero_expediteur', ''),
+        ];
+    }
+    foreach ($id as $v) {
+        if ($v === null || $v === '' || $v === 'A_RENSEIGNER') {
+            return null;
+        }
+    }
+    // L'identifiant du compte commence par AC ; une clé d'API (SK…) seule ne suffit pas à envoyer.
+    if (!preg_match('/^AC[0-9a-fA-F]{32}$/', $id['sid'])) {
+        error_log('TimeCool SMS : identifiant Twilio inattendu (attendu : AC suivi de 32 caracteres)');
+        return null;
+    }
+    return $id;
+}
+
+/** Envoie un SMS par Twilio. Lève une exception si rien n'est configuré ou si Twilio refuse. */
+function smsEnvoyer(string $numeroE164, string $message): void
+{
+    $id = smsIdentifiants();
+    if ($id === null) {
+        throw new RuntimeException('Twilio non configure');
+    }
+    $base = 'https://api.twilio.com';
+    // Les vérifications locales (php -S) visent un faux Twilio, jamais le vrai.
+    if (PHP_SAPI === 'cli-server' && getenv('TC_SMS_FAUX')) {
+        $base = rtrim((string) getenv('TC_SMS_FAUX'), '/');
+    }
+    $ch = curl_init($base . '/2010-04-01/Accounts/' . rawurlencode($id['sid']) . '/Messages.json');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => http_build_query(['To' => $numeroE164, 'From' => $id['depuis'], 'Body' => $message]),
+        CURLOPT_USERPWD        => $id['sid'] . ':' . $id['jeton'],
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_SSL_VERIFYPEER => true,
+    ]);
+    $brut = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    if ($brut === false) {
+        throw new RuntimeException('Twilio : echec reseau ' . $err);
+    }
+    if ($code < 200 || $code >= 300) {
+        $rep = json_decode((string) $brut, true);
+        throw new RuntimeException('Twilio : ' . (is_array($rep) && isset($rep['message']) ? (string) $rep['message'] : 'HTTP ' . $code));
+    }
+}
+
+/** Un numéro fictif de l'ARCEP : il n'appartient à personne, aucun SMS n'y arrive. */
+function smsNumeroFictif(string $e164): bool
+{
+    return (bool) preg_match('/^\+3363998[0-9]{4}$/', $e164);
+}
+
+/** La requête vient d'une adresse de test (le serveur, le PC de Charles : réglage ip_tests). */
+function smsIpDeTest(): bool
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    $liste = Conf::get('ip_tests', []);
+    return $ip !== '' && is_array($liste) && in_array($ip, $liste, true);
+}
+
+/** Un portable d'un pays accepté (réglage sms_prefixes). */
+function smsNumeroAccepte(string $e164): bool
+{
+    $liste = Conf::get('sms_prefixes', SMS_PREFIXES_DEFAUT);
+    foreach (is_array($liste) ? $liste : SMS_PREFIXES_DEFAUT as $p) {
+        if (is_string($p) && $p !== '' && str_starts_with($e164, $p)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** Les envois réels de SMS (hors numéros fictifs) depuis $heures heures, pour ce numéro ou cette adresse IP. */
+function smsEnvoisRecents(int $heures, ?string $destEmpreinte, ?string $ipBinaire): int
+{
+    $sql = "SELECT COUNT(*) AS n FROM verifications
+             WHERE canal = 'sms' AND destination NOT LIKE '+3363998%'
+               AND cree_le > DATE_SUB(NOW(), INTERVAL ? HOUR)";
+    $p = [$heures];
+    if ($destEmpreinte !== null) {
+        $sql .= ' AND destination_empreinte = ?';
+        $p[] = $destEmpreinte;
+    }
+    if ($ipBinaire !== null) {
+        $sql .= ' AND ip_creation = ?';
+        $p[] = $ipBinaire;
+    }
+    return (int) Db::un($sql, $p)['n'];
+}
+
+/** Le plafond global est atteint : un e-mail aux administrateurs, une fois par jour. */
+function smsAlerterPlafond(int $plafond): void
+{
+    try {
+        Db::req(
+            'CREATE TABLE IF NOT EXISTS alertes_envoyees (
+                 cle       VARCHAR(64) NOT NULL,
+                 envoye_le DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                 PRIMARY KEY (cle)
+             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+        Db::req('INSERT INTO alertes_envoyees (cle) VALUES (?)', ['sms-plafond-' . date('Y-m-d')]);
+    } catch (PDOException $e) {
+        return;   // déjà prévenu aujourd'hui
+    }
+    foreach (Db::tous('SELECT email FROM comptes WHERE admin = 1 AND cloture_le IS NULL', []) as $a) {
+        try {
+            envoyerEmail(
+                (string) $a['email'],
+                'TIMECOOL - PLAFOND DE SMS ATTEINT',
+                "Bonjour,\n\nLe plafond de {$plafond} SMS de vérification sur 24 heures est atteint : "
+                . "les nouvelles inscriptions attendent que le compteur redescende.\n\n"
+                . "Pour le changer : réglage sms_plafond_jour de config.php.\n\n— TimeCool\n"
+            );
+        } catch (Throwable $e) {
+            error_log('TimeCool SMS plafond : ' . $e->getMessage());
+        }
+    }
+}
+
 /** Le compte du relais. Bloqué ou clôturé : 403. */
 function relaisCompte(): array
 {
@@ -2894,6 +3047,58 @@ switch ($route) {
         }
         $destEmpreinte = Empreinte::stockable($destination);
 
+        // Mission 80 : les vieilles demandes partent (le numéro y est en clair), puis les contrôles du SMS.
+        Db::req('DELETE FROM verifications WHERE cree_le < DATE_SUB(NOW(), INTERVAL 1 DAY)');
+        $sansEnvoi = false;
+        if ($canal === 'sms') {
+            if (smsNumeroFictif($destination)) {
+                if (!smsIpDeTest() && Conf::get('mode_test', false) !== true) {
+                    Rep::erreur(400, 'telephone_invalide', 'Ce numéro ne peut pas recevoir de SMS : vérifie-le.');
+                }
+                $sansEnvoi = true;
+            } elseif (str_starts_with($destination, '+33') && !preg_match('/^\+33[67]/', $destination)) {
+                Rep::erreur(400, 'pas_un_portable', 'Il faut un numéro de portable (06 ou 07) : le code arrive par SMS.');
+            } elseif (!smsNumeroAccepte($destination)) {
+                Rep::erreur(400, 'pays_non_pris', 'Pour l’instant, TimeCool accepte les portables de France et d’Europe.');
+            }
+            if ((Entree::corps()['but'] ?? '') === 'inscription'
+                && Db::un('SELECT id FROM comptes WHERE telephone = ? LIMIT 1', [$destination]) !== null) {
+                Rep::erreur(409, 'numero_deja_inscrit',
+                    'Ce numéro a déjà un compte TimeCool : connecte-toi, ou utilise « Mot de passe oublié ».');
+            }
+            if (!$sansEnvoi) {
+                $dernier = Db::un(
+                    "SELECT TIMESTAMPDIFF(SECOND, MAX(cree_le), NOW()) AS s FROM verifications
+                      WHERE canal = 'sms' AND destination_empreinte = ?",
+                    [$destEmpreinte]
+                );
+                $attente = (int) Conf::get('sms_renvoi_secondes', 60);
+                if ($dernier !== null && $dernier['s'] !== null && (int) $dernier['s'] < $attente) {
+                    Rep::erreur(429, 'renvoi_trop_tot', 'Un code vient de partir : attends une minute avant d’en demander un autre.');
+                }
+                if (smsEnvoisRecents(1, $destEmpreinte, null) >= (int) Conf::get('sms_max_numero_heure', 3)) {
+                    Rep::erreur(429, 'trop_de_demandes', 'Trop de codes demandés pour ce numéro : réessaie dans une heure.');
+                }
+                if (smsEnvoisRecents(24, $destEmpreinte, null) >= (int) Conf::get('sms_max_numero_jour', 5)) {
+                    Rep::erreur(429, 'trop_de_demandes', 'Trop de codes demandés pour ce numéro : réessaie demain.');
+                }
+                $ipB = isset($_SERVER['REMOTE_ADDR']) ? @inet_pton((string) $_SERVER['REMOTE_ADDR']) : false;
+                if ($ipB !== false && $ipB !== null) {
+                    if (smsEnvoisRecents(1, null, $ipB) >= (int) Conf::get('sms_max_ip_heure', 5)) {
+                        Rep::erreur(429, 'trop_de_demandes', 'Trop de codes demandés depuis cette connexion : réessaie dans une heure.');
+                    }
+                    if (smsEnvoisRecents(24, null, $ipB) >= (int) Conf::get('sms_max_ip_jour', 15)) {
+                        Rep::erreur(429, 'trop_de_demandes', 'Trop de codes demandés depuis cette connexion : réessaie demain.');
+                    }
+                }
+                $plafond = (int) Conf::get('sms_plafond_jour', 300);
+                if (smsEnvoisRecents(24, null, null) >= $plafond) {
+                    smsAlerterPlafond($plafond);
+                    Rep::erreur(429, 'envois_suspendus', 'Beaucoup d’inscriptions en ce moment : réessaie dans quelques heures.');
+                }
+            }
+        }
+
         // Plafond par destination : empêche d'inonder un numéro de SMS
         // et de balayer les codes en multipliant les demandes.
         $recentes = Db::un(
@@ -2907,7 +3112,8 @@ switch ($route) {
 
         $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $ref     = Jeton::reference();
-        $minutes = (int) Conf::get('verification_minutes', 15);
+        // Mission 80 : un code par SMS vaut 10 minutes.
+        $minutes = $canal === 'sms' ? (int) Conf::get('verification_sms_minutes', 10) : (int) Conf::get('verification_minutes', 15);
         $ip      = $_SERVER['REMOTE_ADDR'] ?? null;
 
         Db::req(
@@ -2925,16 +3131,20 @@ switch ($route) {
         // Envoi réel — SMS via Twilio (voir la classe Sms dans lib.php).
         // TODO distinct, non couvert ici : l'email n'a encore aucun
         // fournisseur branché (SendGrid ou équivalent).
-        $reponse = ['reference' => $ref, 'expire_dans_minutes' => $minutes];
-        if (Conf::get('mode_test', false) === true) {
+        $reponse = ['reference' => $ref, 'expire_dans_minutes' => $minutes,
+                    'renvoi_dans_secondes' => (int) Conf::get('sms_renvoi_secondes', 60)];
+        if (Conf::get('mode_test', false) === true || $sansEnvoi) {
+            // Mission 80 : un compte de test (numéro fictif, adresse de test) lit son code à l'écran.
             $reponse['code_test'] = $code;
             $reponse['avertissement'] = 'Mode test actif : aucun message envoyé.';
         } elseif ($canal === 'sms') {
             try {
-                Sms::envoyer($destination, "Votre code de vérification TimeCool : {$code} (valable {$minutes} minutes).");
+                smsEnvoyer($destination, "TimeCool : ton code est {$code}. Il est valable {$minutes} minutes.");
             } catch (Throwable $e) {
                 error_log('TimeCool SMS verification: ' . $e->getMessage());
-                Rep::erreur(502, 'envoi_echoue', 'Envoi du SMS impossible pour le moment. Réessayez.');
+                // Un envoi raté ne compte pas dans les limites.
+                Db::req('DELETE FROM verifications WHERE reference = ?', [$ref]);
+                Rep::erreur(502, 'envoi_echoue', 'Le SMS n’a pas pu partir : réessaie dans un instant.');
             }
         } else {
             Rep::erreur(503, 'envoi_indisponible', 'Envoi par email pas encore disponible — utilisez le SMS.');
@@ -2985,18 +3195,23 @@ switch ($route) {
     // reçu et confirmé — ou, si conservé plus longtemps que prévu, au
     // minimum restreindre à un compte admin identifié.
     // ═══════════════════════════════════════════════════════════
+    // Mission 80 : réservé à l'administrateur, vers le numéro de SON compte, avec les clés de Configuration IA.
     case 'POST /test/sms-twilio':
-        Auth::compte();
+        $moi = Auth::compte();
+        if ((int) ($moi['admin'] ?? 0) !== 1) {
+            Rep::erreur(403, 'acces_refuse', "Accès réservé à l'administrateur.");
+        }
+        if (smsIdentifiants() === null) {
+            Rep::erreur(503, 'twilio_non_configure',
+                'Twilio n est pas configuré : poser l identifiant (AC…), le jeton secret et l expéditeur dans Configuration IA.');
+        }
         try {
-            Sms::envoyer(
-                Empreinte::normaliserTelephone('06 07 78 66 26'),
-                'Test TimeCool : intégration Twilio fonctionnelle.'
-            );
+            smsEnvoyer((string) $moi['telephone'], 'Test TimeCool : les SMS fonctionnent.');
         } catch (Throwable $e) {
             error_log('TimeCool SMS test: ' . $e->getMessage());
             Rep::erreur(502, 'envoi_echoue', 'Envoi Twilio impossible : ' . $e->getMessage());
         }
-        Rep::ok(['envoye' => true]);
+        Rep::ok(['envoye' => true, 'vers' => '…' . substr((string) $moi['telephone'], -2)]);
 
     // ═══════════════════════════════════════════════════════════
     // ⚠️ TEMPORAIRE — TEST D'ENVOI D'E-MAIL, À RETIRER AVANT LE LANCEMENT
@@ -3100,6 +3315,17 @@ switch ($route) {
                     Rep::erreur(403, 'verification_non_concordante',
                         'La vérification ne correspond pas à l identifiant fourni.');
                 }
+            }
+        }
+
+        // Mission 80 : avec verification_sms_inscription, le portable est confirmé par SMS (Google compris).
+        if (Conf::get('verification_sms_inscription', false) === true) {
+            if (smsNumeroFictif($telephone)
+                && (!preg_match('/@exemple-timecool\.fr$/', $emailNorm) || (!smsIpDeTest() && Conf::get('mode_test', false) !== true))) {
+                Rep::erreur(400, 'telephone_invalide', 'Ce numéro ne peut pas recevoir de SMS : vérifie-le.');
+            }
+            if ($v === null || $v['canal'] !== 'sms') {
+                Rep::erreur(403, 'verification_sms_requise', 'Confirme d’abord ton numéro de portable avec le code reçu par SMS.');
             }
         }
 
@@ -6015,6 +6241,9 @@ switch ($route) {
         Rep::ok([
             'verification_obligatoire' => Conf::get('verification_obligatoire', true) === true,
             'mode_test'                => Conf::get('mode_test', false) === true,
+            // Mission 80
+            'verification_sms_inscription' => Conf::get('verification_sms_inscription', false) === true,
+            'sms_renvoi_secondes'          => (int) Conf::get('sms_renvoi_secondes', 60),
         ]);
 
     // ═══════════════════════════════════════════════════════════

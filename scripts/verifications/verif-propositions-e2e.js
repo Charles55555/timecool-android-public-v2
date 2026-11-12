@@ -26,7 +26,7 @@ const sql = (q, p) => cp.execFileSync('mysql', ['--no-defaults', '-u', 'claudeco
 const echappe = (t) => String(t).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
 async function compte(nom, stamp, n) {
-  const id = { prenom: nom, nom: 'Proposition', ville: 'Lyon', code_postal: '69001', email: 'sonde.proposition' + n + stamp + '@exemple-timecool.fr', telephone: '+336' + String(stamp + n).slice(-8), mot_de_passe: 'Motdepasse-propo-1' };
+  const id = { prenom: nom, nom: 'Proposition', ville: 'Lyon', code_postal: '69001', email: 'sonde.proposition' + n + stamp + '@exemple-timecool.fr', telephone: '+3363998' + String(stamp + n).slice(-4), mot_de_passe: 'Motdepasse-propo-1' };
   const a = await appel('POST', '/inscription', id);
   verifie('compte ' + nom + ' créé', a.code === 200 || a.code === 201, a.texte.slice(0, 200));
   const jeton = a.d.session.jeton;

@@ -43,9 +43,37 @@ if (require.main === module) {
   const vraiExit = process.exit.bind(process);
   let fait = false;
 
+  // Mission 80 : le portable confirmé par SMS. Un compte de test (adresse @exemple-timecool.fr, numéro fictif
+  // 06 39 98 xx xx) lit son code dans la réponse du serveur (adresse IP de test) et recommence avec la preuve.
+  // Tout autre refus est rendu tel quel.
+  async function avecCodeDeTest(chemin, options, r) {
+    let d = null;
+    try { d = await r.clone().json(); } catch (e) { return r; }
+    if (!d || d.erreur !== 'verification_sms_requise') return r;
+    let corps;
+    try { corps = JSON.parse(options.body); } catch (e) { return r; }
+    let tel = String(corps.telephone || '').replace(/[^\d+]/g, '');
+    if (/^0/.test(tel)) tel = '+33' + tel.slice(1);
+    if (!DOMAINE.test(String(corps.email || '')) || !/^\+3363998\d{4}$/.test(tel)) return r;
+    const base = chemin.replace(/\/inscription$/, '');
+    const h = { 'Content-Type': 'application/json' };
+    const dem = await vraiFetch(base + '/verification/demander', { method: 'POST', headers: h, body: JSON.stringify({ canal: 'sms', destination: tel }) });
+    let dd = null;
+    try { dd = await dem.json(); } catch (e) { return r; }
+    if (!dem.ok || !dd || !dd.code_test) return r;
+    const val = await vraiFetch(base + '/verification/valider', { method: 'POST', headers: h, body: JSON.stringify({ reference: dd.reference, code: dd.code_test }) });
+    let dv = null;
+    try { dv = await val.json(); } catch (e) { return r; }
+    if (!val.ok || !dv || !dv.preuve) return r;
+    return vraiFetch(chemin, Object.assign({}, options, { body: JSON.stringify(Object.assign({}, corps, { preuve: dv.preuve })) }));
+  }
+
   globalThis.fetch = async function (url, options) {
-    const r = await vraiFetch(url, options);
+    let r = await vraiFetch(url, options);
     const chemin = String(url);
+    if (r.status === 403 && options && options.method === 'POST' && /\/inscription$/.test(chemin)) {
+      r = await avecCodeDeTest(chemin, options, r);
+    }
     if (r.ok && options && options.method === 'POST' && /\/(inscription|connexion)$/.test(chemin)) {
       try {
         const d = await r.clone().json();

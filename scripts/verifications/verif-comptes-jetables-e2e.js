@@ -18,7 +18,7 @@ async function appel(methode, chemin, corps, jeton) {
 
 (async () => {
   const stamp = Date.now();
-  const identite = { email: 'sonde.jetable' + stamp + '@exemple-timecool.fr', telephone: '+336' + String(stamp).slice(-8), mot_de_passe: 'MotDePasseDeTest2026!', prenom: 'Jetable', nom: 'Verif', ville: 'Lyon', code_postal: '69001' };
+  const identite = { email: 'sonde.jetable' + stamp + '@exemple-timecool.fr', telephone: '+3363998' + String(stamp).slice(-4), mot_de_passe: 'MotDePasseDeTest2026!', prenom: 'Jetable', nom: 'Verif', ville: 'Lyon', code_postal: '69001' };
   const a = await appel('POST', '/inscription', identite);
   verifie('compte créé', a.code === 200 || a.code === 201, JSON.stringify(a.d));
   const jeton = a.d.session.jeton;

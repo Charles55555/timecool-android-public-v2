@@ -28,7 +28,7 @@ let compteur = 0;
 async function inscrire(prenom, identite) {
   const id = identite || {
     email: 'e2e' + Date.now() + (compteur++) + '@exemple-timecool.fr',
-    telephone: '+336' + String(Date.now() + compteur).slice(-8),
+    telephone: '+3363998' + String(Date.now() + compteur).slice(-4),
   };
   const r = await appel('POST', '/inscription', {
     email: id.email, telephone: id.telephone,

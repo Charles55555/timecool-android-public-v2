@@ -147,7 +147,7 @@ async function enProduction(jeton) {
 
 (async () => {
   const stamp = Date.now();
-  const identite = { prenom: 'Sonde', nom: 'Relais', ville: 'Lyon', code_postal: '69001', email: 'sonde.relais' + stamp + '@exemple-timecool.fr', telephone: '+336' + String(stamp).slice(-8), mot_de_passe: 'Motdepasse-relais-1' };
+  const identite = { prenom: 'Sonde', nom: 'Relais', ville: 'Lyon', code_postal: '69001', email: 'sonde.relais' + stamp + '@exemple-timecool.fr', telephone: '+3363998' + String(stamp).slice(-4), mot_de_passe: 'Motdepasse-relais-1' };
   const a = await appel('POST', '/inscription', identite);
   verifie('compte créé', a.code === 200 || a.code === 201, a.texte);
   const jeton = a.d.session.jeton;

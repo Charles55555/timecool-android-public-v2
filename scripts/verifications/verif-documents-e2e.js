@@ -36,7 +36,7 @@ async function lire(jeton, id) {
 let n = 0;
 async function inscrire(prenom) {
   n++;
-  const tel = '+336' + String(Date.now() + n * 613).slice(-8);
+  const tel = '+3363998' + String(Date.now() + n * 613).slice(-4);
   const r = await appel('POST', '/inscription', {
     email: 'e2erdv.doc' + Date.now() + n + '@exemple-timecool.fr',
     telephone: tel, mot_de_passe: 'MotDePasseDeTest2026!',

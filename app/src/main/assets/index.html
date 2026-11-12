@@ -855,7 +855,7 @@ if (window.pdfjsLib) {
 <!-- Page Saisie du code -->
 <div class="page auth-page" id="page-auth-verify-code" style="background:#f7f9fc;">
   <div class="conv-header">
-    <button class="back-btn" onclick="navigateAuth('auth-verify-method')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <button class="back-btn" onclick="tcRetourDepuisCode()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div style="font-size:16px; font-weight:600;">Code de vérification</div>
   </div>
   <div style="padding:24px 24px 40px;">
@@ -873,19 +873,19 @@ if (window.pdfjsLib) {
     </div>
 
     <div style="display:flex; gap:8px; justify-content:center; margin-bottom:24px;">
-      <input type="text" maxlength="1" class="code-digit" data-idx="0" oninput="handleCodeInput(this, 0)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
-      <input type="text" maxlength="1" class="code-digit" data-idx="1" oninput="handleCodeInput(this, 1)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
-      <input type="text" maxlength="1" class="code-digit" data-idx="2" oninput="handleCodeInput(this, 2)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
-      <input type="text" maxlength="1" class="code-digit" data-idx="3" oninput="handleCodeInput(this, 3)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
-      <input type="text" maxlength="1" class="code-digit" data-idx="4" oninput="handleCodeInput(this, 4)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
-      <input type="text" maxlength="1" class="code-digit" data-idx="5" oninput="handleCodeInput(this, 5)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6" class="code-digit" data-idx="0" oninput="handleCodeInput(this, 0)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="code-digit" data-idx="1" oninput="handleCodeInput(this, 1)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="code-digit" data-idx="2" oninput="handleCodeInput(this, 2)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="code-digit" data-idx="3" oninput="handleCodeInput(this, 3)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="code-digit" data-idx="4" oninput="handleCodeInput(this, 4)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" class="code-digit" data-idx="5" oninput="handleCodeInput(this, 5)" style="width:42px; height:52px; text-align:center; font-size:24px; font-weight:600; border:2px solid var(--border); border-radius:10px; outline:none;">
     </div>
 
     <button id="btnVerifierCode" onclick="submitVerifyCode()" style="width:100%; padding:16px; background:var(--g-blue); color:white; border:none; border-radius:14px; font-size:15px; font-weight:600; cursor:pointer; margin-bottom:12px;">
       Vérifier
     </button>
 
-    <button onclick="resendCode()" style="width:100%; padding:14px; background:transparent; color:var(--g-blue); border:none; font-size:13px; cursor:pointer;">
+    <button id="btnRenvoyerCode" onclick="resendCode()" style="width:100%; padding:14px; background:transparent; color:var(--g-blue); border:none; font-size:13px; cursor:pointer;">
       ↻ Renvoyer le code
     </button>
   </div>
@@ -10556,7 +10556,9 @@ function renderAIConfig() {
     {
       priority: 3, medal: '🥉', label: 'Priorité 3 — Communication', color: '#34a853', bg: '#e8f5e9',
       items: [
-        { id: 'twilio', name: 'Twilio (SMS)', icon: '📱', placeholder: 'SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', testable: false, url: 'https://console.twilio.com' },
+        { id: 'twilio', name: 'Twilio (SMS), identifiant du compte', icon: '📱', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (Account SID)', testable: false, url: 'https://console.twilio.com' },
+        { id: 'twilio_jeton', name: 'Twilio (SMS), jeton secret', icon: '🔑', placeholder: 'Auth Token', testable: false, url: 'https://console.twilio.com' },
+        { id: 'twilio_expediteur', name: 'Twilio (SMS), expéditeur', icon: '✉️', placeholder: 'TimeCool', testable: false, url: 'https://console.twilio.com' },
         { id: 'vonage', name: 'Vonage / Nexmo (SMS Europe)', icon: '📲', placeholder: 'xxxxxxxxxxxxxxxx', testable: false, url: 'https://dashboard.nexmo.com', badge: 'Moins cher EU' },
         { id: 'whatsapp', name: 'WhatsApp Business', icon: '💚', placeholder: 'EAAxxxxx...', testable: false, url: 'https://developers.facebook.com' },
         { id: 'sendgrid', name: 'SendGrid (Emails)', icon: '✉️', placeholder: 'SG.xxxxxxxxxxxxxxxx...', testable: false, url: 'https://sendgrid.com/pricing', badge: 'Prioritaire' },
@@ -17783,7 +17785,7 @@ async function submitSignup() {
   pendingSignup = { firstname, lastname, email, phone, zip, city, password, phoneCountry: signupPhoneCountry };
 
   // Mettre à jour l'affichage des destinations
-  const phoneDisplay = signupPhoneCountry.dial + ' ' + phone.replace(/^0/, '').replace(/(\d{1,2})/g, '$1 ').trim();
+  const phoneDisplay = tcNumeroLisible(signupPhoneCountry.dial, phone);
   document.getElementById('verifyPhoneDisplay').textContent = 'Au numéro ' + phoneDisplay;
   document.getElementById('verifyEmailDisplay').textContent = 'À l\'adresse ' + email;
 
@@ -17792,6 +17794,12 @@ async function submitSignup() {
   // republication de l'application.
   showToast('⏳ Création du compte…');
   const params = await TC_BACKEND.parametres();
+  // Mission 80 : le portable confirmé par SMS, une seule étape de plus.
+  if (params.verification_sms_inscription) {
+    pendingSignup.smsSeul = true;
+    await chooseVerifyMethod('sms');
+    return;
+  }
   if (params.verification_obligatoire) {
     navigateAuth('auth-verify-method');
     return;
@@ -17825,26 +17833,24 @@ async function chooseVerifyMethod(method) {
 
   showToast('⏳ Envoi du code…');
   try {
-    const r = await TC_BACKEND.demanderVerification(method, destination);
+    const r = await TC_BACKEND.demanderVerification(method, destination, 'inscription');
     pendingSignup.verifRef = r.reference;
+    pendingSignup.codeMinutes = r.expire_dans_minutes;
+    pendingSignup.renvoiDans = r.renvoi_dans_secondes;
     tcAfficherCodeTest(r);
   } catch (e) {
     // Auparavant l'échec était muet : l'écran s'affichait quoi qu'il arrive.
-    if (e.code === 'trop_de_demandes') {
-      showToast('⚠️ Trop de demandes. Réessaie dans une heure.');
-    } else if (e.code === 'reseau' || e.code === 'delai_depasse') {
-      tcVerifionsEnsemble('inscription_code');
-    } else {
-      showToast('❌ ' + (e.message || 'Envoi impossible'));
-    }
+    tcErreurEnvoiCode(e);
     return;
   }
 
   // Personnaliser l'écran de saisie
   if (method === 'sms') {
     document.getElementById('verifyMethodIcon').textContent = '📱';
-    const phoneDisplay = pendingSignup.phoneCountry.dial + ' ' + pendingSignup.phone.replace(/^0/, '').replace(/(\d{1,2})/g, '$1 ').trim();
-    document.getElementById('verifyMethodDestination').innerHTML = 'Un code à 6 chiffres a été envoyé par SMS au<br><b>' + phoneDisplay + '</b>';
+    const phoneDisplay = tcNumeroLisible(pendingSignup.phoneCountry.dial, pendingSignup.phone);
+    document.getElementById('verifyMethodDestination').innerHTML = (pendingSignup.smsSeul ? 'Étape 2 sur 2 : un' : 'Un')
+      + ' code à 6 chiffres vient de partir par SMS au <b style="white-space:nowrap;">' + phoneDisplay + '</b>.<br>Il est valable '
+      + (Number(pendingSignup.codeMinutes) || 10) + ' minutes.';
   } else {
     document.getElementById('verifyMethodIcon').textContent = '✉️';
     document.getElementById('verifyMethodDestination').innerHTML = 'Un code à 6 chiffres a été envoyé par email à<br><b>' + pendingSignup.email + '</b>';
@@ -17856,10 +17862,71 @@ async function chooseVerifyMethod(method) {
   // ne doit pas hériter d'un état resté bloqué à la tentative précédente.
   tcVerifFin();
   navigateAuth('auth-verify-code');
+  tcRenvoiAttendre(pendingSignup.renvoiDans);
   setTimeout(() => document.querySelector('.code-digit[data-idx="0"]').focus(), 100);
 }
 
+/* Mission 80 (Charles, 12/11) : le portable confirmé par SMS à l'inscription. Quand le serveur l'exige
+   (verification_sms_inscription), le code part dès le formulaire validé, sans le choix SMS / e-mail. */
+
+/** « +33 6 12 34 56 78 » : le premier chiffre seul, puis deux par deux (avant : « +33 61 23 45 67 8 »). */
+function tcNumeroLisible(indicatif, numero) {
+  const c = String(numero || '').replace(/\D/g, '').replace(/^0/, '');
+  const groupes = c.length === 9 ? [c[0]].concat(c.slice(1).match(/\d{1,2}/g) || []) : (c.match(/\d{1,2}/g) || []);
+  return (indicatif + ' ' + groupes.join(' ')).trim();
+}
+
+/** Le retour depuis l'écran du code : le formulaire (SMS seul), sinon le choix SMS / e-mail. */
+function tcRetourDepuisCode() {
+  navigateAuth(pendingSignup && pendingSignup.smsSeul ? 'auth-signup' : 'auth-verify-method');
+}
+
+/** L'envoi du code a échoué : le message du serveur (calme, précis), et le champ du numéro s'il est à revoir. */
+function tcErreurEnvoiCode(e) {
+  const code = e && e.code;
+  if (code === 'reseau' || code === 'delai_depasse') { tcVerifionsEnsemble('inscription_code'); return; }
+  const connus = ['numero_deja_inscrit', 'renvoi_trop_tot', 'trop_de_demandes', 'envois_suspendus',
+    'pas_un_portable', 'pays_non_pris', 'telephone_invalide', 'envoi_echoue'];
+  if (connus.indexOf(code) >= 0 && e.message) showToast((code === 'renvoi_trop_tot' ? '⏳ ' : '⚠️ ') + e.message);
+  else showToast('❌ ' + ((e && e.message) || 'Envoi impossible'));
+  if (['numero_deja_inscrit', 'pas_un_portable', 'pays_non_pris', 'telephone_invalide'].indexOf(code) >= 0) {
+    const tel = document.getElementById('signupPhone');
+    if (tel && tel.offsetParent !== null) tel.focus();
+  }
+}
+
+/** « Renvoyer le code » attend la fin du délai (le serveur le vérifie aussi). */
+let _tcRenvoiMinuteur = null;
+function tcRenvoiAttendre(secondes) {
+  const b = document.getElementById('btnRenvoyerCode');
+  if (!b) return;
+  if (_tcRenvoiMinuteur) { clearInterval(_tcRenvoiMinuteur); _tcRenvoiMinuteur = null; }
+  let reste = Math.max(0, Math.round(Number(secondes) || 0));
+  const peindre = function () {
+    if (reste <= 0) {
+      if (_tcRenvoiMinuteur) { clearInterval(_tcRenvoiMinuteur); _tcRenvoiMinuteur = null; }
+      b.disabled = false; b.style.opacity = ''; b.textContent = '↻ Renvoyer le code';
+      return;
+    }
+    b.disabled = true; b.style.opacity = '.55'; b.textContent = '↻ Renvoyer le code (dans ' + reste + ' s)';
+    reste--;
+  };
+  peindre();
+  if (b.disabled) _tcRenvoiMinuteur = setInterval(peindre, 1000);
+}
+
 function handleCodeInput(input, idx) {
+  // Mission 80 : le code proposé par le clavier ou collé (plusieurs chiffres d'un coup) se répartit dans les cases.
+  const brut = String(input.value || '').replace(/\D/g, '');
+  if (brut.length > 1) {
+    const cases = document.querySelectorAll('.code-digit');
+    for (let i = 0; i < brut.length && idx + i < 6; i++) cases[idx + i].value = brut[i];
+    const fin = Math.min(5, idx + brut.length - 1);
+    if (cases[fin]) cases[fin].focus();
+    if (idx + brut.length >= 6) setTimeout(() => submitVerifyCode(), 300);
+    return;
+  }
+  if (input.value !== brut) input.value = brut;
   // Auto-focus next field
   if (input.value && idx < 5) {
     const next = document.querySelector(`.code-digit[data-idx="${idx + 1}"]`);
@@ -17915,6 +17982,7 @@ async function tcCreerCompte(preuve) {
     });
   } catch (e) {
     if (e.code === 'compte_existant')  showToast('⚠️ Ce compte existe déjà — connecte-toi plutôt.');
+    else if (e.code === 'verification_sms_requise' || e.code === 'telephone_invalide') showToast('⚠️ ' + e.message);
     else if (e.code === 'delai_depasse' || e.code === 'reseau') tcVerifionsEnsemble('inscription');
     else if (e.code === 'mot_de_passe_faible') showToast('⚠️ Mot de passe : 10 caractères minimum.');
     else showToast('❌ ' + (e.message || 'Création du compte impossible'));
@@ -17971,13 +18039,13 @@ async function submitVerifyCode() {
     } catch (e) {
       // Seul un code réellement faux justifie de vider la saisie.
       if (e.code === 'code_incorrect') {
-        showToast('❌ Code incorrect, réessaie');
+        showToast('❌ Ce code ne correspond pas : vérifie les 6 chiffres.');
         inputs.forEach(inp => inp.value = '');
         inputs[0].focus();
         return;
       }
-      if (e.code === 'trop_de_tentatives')   return showToast('⚠️ Trop d\'essais. Demande un nouveau code.');
-      if (e.code === 'verification_expiree') return showToast('⏰ Code expiré. Demande un nouveau code.');
+      if (e.code === 'trop_de_tentatives')   return showToast('⚠️ Trop d’essais : demande un nouveau code.');
+      if (e.code === 'verification_expiree') return showToast('⏰ Ce code a expiré : demande un nouveau code.');
       if (e.code === 'delai_depasse' || e.code === 'reseau') return tcVerifionsEnsemble('inscription_verification');
       return showToast('❌ ' + (e.message || 'Vérification impossible'));
     }
@@ -18023,16 +18091,13 @@ async function resendCode() {
   try {
     // Nouvelle demande serveur : la précédente référence est abandonnée,
     // son code ne vaut plus rien.
-    const r = await TC_BACKEND.demanderVerification(method, destination);
+    const r = await TC_BACKEND.demanderVerification(method, destination, 'inscription');
     pendingSignup.verifRef = r.reference;
     tcAfficherCodeTest(r);
     showToast('📨 Nouveau code envoyé');
+    tcRenvoiAttendre(r.renvoi_dans_secondes);
   } catch (e) {
-    if (e.code === 'trop_de_demandes') {
-      showToast('⚠️ Trop de demandes. Réessaie dans une heure.');
-    } else {
-      showToast('❌ ' + (e.message || 'Envoi impossible'));
-    }
+    tcErreurEnvoiCode(e);
     return;
   }
   document.querySelectorAll('.code-digit').forEach(inp => inp.value = '');
@@ -31244,10 +31309,11 @@ const TC_BACKEND = {
       const d = await tcAppel('GET', '/parametres', undefined, false);
       return {
         verification_obligatoire: d.verification_obligatoire !== false,
-        mode_test: d.mode_test === true
+        mode_test: d.mode_test === true,
+        verification_sms_inscription: d.verification_sms_inscription === true
       };
     } catch (e) {
-      return { verification_obligatoire: true, mode_test: false };
+      return { verification_obligatoire: true, mode_test: false, verification_sms_inscription: false };
     }
   },
 
@@ -31261,10 +31327,12 @@ const TC_BACKEND = {
    * code_test n'est présent que si le serveur est en mode test. En
    * production il est absent, et l'application n'a donc rien à afficher.
    */
-  async demanderVerification(canal, destination) {
+  async demanderVerification(canal, destination, but) {
+    // Mission 80 : but « inscription » : le serveur dit tout de suite si le numéro a déjà un compte.
     return await tcAppel('POST', '/verification/demander', {
       canal: canal,
-      destination: destination
+      destination: destination,
+      but: but || undefined
     }, false);
   },
 

@@ -11,7 +11,7 @@ async function appel(methode, chemin, jeton, corps) {
   return { status: r.status, data: d && d.data !== undefined ? d.data : d, brut: d };
 }
 async function creer(prenom, i) {
-  const tel = '06' + stamp.slice(-7) + String(i);
+  const tel = '063998' + stamp.slice(-3) + String(i);
   const r = await appel('POST', '/inscription', null, { email: 'sonde.groupe.' + prenom.toLowerCase() + '.' + stamp + '@exemple-timecool.fr', telephone: tel, mot_de_passe: 'SondeGroupe-' + stamp, prenom: prenom, nom: 'Sonde', ville: 'Paris', code_postal: '75001' });
   const d = r.data || {};
   if (!d.session) throw new Error('inscription ' + prenom + ' : ' + JSON.stringify(r.brut).slice(0, 200));

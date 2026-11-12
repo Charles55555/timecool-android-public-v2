@@ -25,7 +25,7 @@ async function appel(methode, chemin, corps, jeton) {
   const m = 'e2esync' + Date.now();
   const insc = await appel('POST', '/inscription', {
     email: m + '@exemple-timecool.fr', mot_de_passe: 'MotDePasseDeTest2026!',
-    telephone: '+336' + String(Date.now()).slice(-8),
+    telephone: '+3363998' + String(Date.now()).slice(-4),
     prenom: 'Sync', nom: 'Verif', ville: 'Lyon', code_postal: '69001',
   });
   if (insc.code !== 200 && insc.code !== 201) {
@@ -153,7 +153,7 @@ async function appel(methode, chemin, corps, jeton) {
   const autre = await appel('POST', '/inscription', {
     email: 'e2eiso' + Date.now() + '@exemple-timecool.fr',
     mot_de_passe: 'MotDePasseDeTest2026!',
-    telephone: '+337' + String(Date.now()).slice(-8),
+    telephone: '+3363998' + String(Date.now()).slice(-4),
     prenom: 'Autre', nom: 'Verif', ville: 'Lyon', code_postal: '69001',
   });
   const vuAutre = await appel('GET', '/sync?depuis=0', undefined, autre.d.session.jeton);

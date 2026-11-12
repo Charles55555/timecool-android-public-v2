@@ -57,7 +57,7 @@ async function dechiffrer(cle, t) {
   const insc = await appel('POST', '/inscription', {
     email: marque + '@exemple-timecool.fr',
     mot_de_passe: 'MotDePasseDeTest2026!',
-    telephone: '+336' + String(Date.now()).slice(-8),
+    telephone: '+3363998' + String(Date.now()).slice(-4),
     prenom: 'Test', nom: 'Appairage', ville: 'Paris', code_postal: '75001',
   });
   if (insc.code !== 200 && insc.code !== 201) {

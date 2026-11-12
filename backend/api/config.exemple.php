@@ -116,6 +116,25 @@ return [
     'mode_test' => false,
 
     /*
+     * Mission 80 : le portable confirmé par SMS à l'inscription.
+     *   - verification_sms_inscription : true pour l'exiger (Google compris) ;
+     *   - les clés Twilio se posent de préférence dans Configuration IA (compte administrateur :
+     *     twilio = identifiant AC…, twilio_jeton, twilio_expediteur), sinon les twilio_* ci-dessus ;
+     *   - ip_tests : adresses d'où un compte @exemple-timecool.fr avec un numéro fictif de l'ARCEP
+     *     (06 39 98 00 00 à 06 39 98 99 99) lit son code à l'écran, sans SMS ;
+     *   - sms_prefixes : portables acceptés (par défaut France, outre-mer, Europe proche, +1).
+     */
+    'verification_sms_inscription' => false,
+    'verification_sms_minutes' => 10,
+    'sms_renvoi_secondes' => 60,
+    'sms_max_numero_heure' => 3,
+    'sms_max_numero_jour' => 5,
+    'sms_max_ip_heure' => 5,
+    'sms_max_ip_jour' => 15,
+    'sms_plafond_jour' => 300,
+    'ip_tests' => [],
+
+    /*
      * ENVOI D'E-MAILS — boîte dédiée chez l'hébergeur du domaine.
      *
      * Le courrier de timecool.fr est géré par IONOS, et l'autorisation

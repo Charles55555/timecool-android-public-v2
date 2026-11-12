@@ -182,9 +182,10 @@ const arrows = [...page.matchAll(/class="back-btn"\s+onclick="([^"]+)"/g)].map((
 verifie('les flèches sont trouvées (13)', arrows.length === 13, arrows.length);
 const auth = arrows.filter((a) => /^navigateAuth\(/.test(a));
 const autres = arrows.filter((a) => !/^navigateAuth\(/.test(a));
-verifie('6 écrans d\'authentification gardent leur point de départ fixe (parcours linéaire avant la connexion)', auth.length === 6, auth.join(' '));
-const permis = ['tcRetour()', 'tcRetourImport()', 'tcRetourDepuisConversation()', 'closeLegalPage()'];
-verifie('toutes les autres passent par une fonction de retour (jamais navigate(\'…\') en dur)', autres.length === 7 && autres.every((a) => permis.includes(a)), autres.join(' | '));
+// Mission 80 : l'écran du code revient au formulaire (SMS seul) ou au choix SMS / e-mail : tcRetourDepuisCode().
+verifie('5 écrans d\'authentification gardent leur point de départ fixe (parcours linéaire avant la connexion)', auth.length === 5, auth.join(' '));
+const permis = ['tcRetour()', 'tcRetourImport()', 'tcRetourDepuisConversation()', 'closeLegalPage()', 'tcRetourDepuisCode()'];
+verifie('toutes les autres passent par une fonction de retour (jamais navigate(\'…\') en dur)', autres.length === 8 && autres.every((a) => permis.includes(a)), autres.join(' | '));
 verifie('aucune flèche (ni son dessin) ne fait navigate(\'…\') en dur', !/class="back-btn"\s+onclick="navigate\(/.test(page));
 // toute flèche dessinée à la main (le même dessin SVG), classe ou non
 const dessins = [...page.matchAll(/<button[^>]*onclick="([^"]+)"[^>]*>\s*<svg viewBox="0 0 24 24"><path d="M20 11H7\.83/g)].map((m) => m[1]);

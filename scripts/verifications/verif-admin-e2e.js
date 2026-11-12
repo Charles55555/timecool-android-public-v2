@@ -29,7 +29,7 @@ async function inscrire(prenom) {
   const r = await appel('POST', '/inscription', {
     email: m + '@exemple-timecool.fr',
     mot_de_passe: 'MotDePasseDeTest2026!',
-    telephone: '+336' + String(Date.now()).slice(-8),
+    telephone: '+3363998' + String(Date.now()).slice(-4),
     prenom, nom: 'Verif', ville: 'Lyon', code_postal: '69001',
   });
   if (r.code !== 200 && r.code !== 201) throw new Error(prenom + ' : ' + JSON.stringify(r.d));

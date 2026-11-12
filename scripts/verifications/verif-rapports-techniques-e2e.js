@@ -24,7 +24,7 @@ async function appel(methode, chemin, corps, jeton, brut) {
 }
 
 async function inscrire(prenom) {
-  const tel = '+336' + String(Date.now() + 947).slice(-8);
+  const tel = '+3363998' + String(Date.now() + 947).slice(-4);
   const r = await appel('POST', '/inscription', {
     email: 'e2erdv.rapport' + Date.now() + '@exemple-timecool.fr',
     telephone: tel, mot_de_passe: 'MotDePasseDeTest2026!',
