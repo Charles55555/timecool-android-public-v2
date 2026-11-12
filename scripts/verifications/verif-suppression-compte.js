@@ -29,6 +29,7 @@ const reglages = fonction(page, 'renderSettingsInterne') || '';
 const iDeco = page.indexOf('🚪 Se déconnecter\n    </button>');
 const iSuppr = page.indexOf('id="btnSupprimerMonCompte" onclick="tcSupprimerMonCompte()"');
 verifie('Paramètres : « Supprimer mon compte » tout en bas, sous « Se déconnecter »', iDeco > 0 && iSuppr > iDeco && iSuppr - iDeco < 400 && page.includes('      Supprimer mon compte\n    </button>\n  `;'));
+verifie('le bouton « Supprimer » de la confirmation est rouge', page.includes("libelleValider: 'Supprimer', danger: true });") && page.includes("    danger: !!o.danger\n  });"));
 verifie('un seul bouton « Supprimer mon compte »', (page.match(/onclick="tcSupprimerMonCompte\(\)"/g) || []).length === 1);
 verifie('la page appelle POST /compte/supprimer', page.includes("tcAppel('POST', '/compte/supprimer', { confirmation: confirmation })"));
 verifie('le texte de la confirmation', page.includes('Supprimer ton compte ?\\nTon agenda, tes contacts et tes messages seront effacés, sans retour possible.\\n\\nÉcris « supprimer » pour confirmer.'));
@@ -41,6 +42,7 @@ async function jouer(saisie, echec) {
   const ctx = {
     journal, localStorage: { setItem: (k, v) => journal.push('set ' + k + '=' + v), removeItem: (k) => journal.push('rm ' + k), getItem: () => 'true' },
     TC_COMPTE_LOCAL_KEY: 'tc_compte', _tcSyncBientot: null,
+    window: { TimeCoolNatif: { desactiverBiometrie: () => journal.push('biometrie') } },
     tcPrompt: async () => saisie,
     TC_BACKEND: {
       supprimerMonCompte: async (m) => { journal.push('api ' + m); if (echec) { const e = new Error(echec); throw e; } },
@@ -89,6 +91,7 @@ async function inscrire(prenom, email) {
   r = await jouer(' Supprimer ', 'Ce compte est administrateur : il ne peut pas être supprimé d’ici.');
   verifie('refus du serveur : le message, l appareil garde tout', r.r === false && r.journal.includes('toast ⚠️ Ce compte est administrateur : il ne peut pas être supprimé d’ici.') && !r.journal.includes('vider'), r.journal.join(' | '));
   r = await jouer('supprimer');
+  verifie('supprimé : nom, adresse, copies de l agenda et empreinte effacés de l appareil', ['biometrie', 'rm timecool_user_account', 'rm tc_user_account', 'rm tc_biometrie_active', 'rm tc_backup_history', 'rm tc_auto_backup_last', 'rm tc_last_auto_backup_at', 'rm tc_mdp_local'].every((x) => r.journal.includes(x)), r.journal.join(' | '));
   verifie('supprimé : l appareil oublie tout, retour à l accueil', r.r === true && ['api supprimer', 'deconnecter', 'set timecool_session_active=false', 'oublier', 'vider', 'rm tc_compte', 'champs', 'auth auth-welcome'].every((x) => r.journal.includes(x)) && r.journal.includes('toast Ton compte est supprimé. Merci d’avoir essayé TimeCool.'), r.journal.join(' | '));
 
   const lea = await inscrire('Lea');
