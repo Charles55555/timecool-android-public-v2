@@ -10192,6 +10192,10 @@ function renderSettingsInterne() {
     <button onclick="logoutUser()" style="width:100%; padding:14px; background:#fce8e6; color:var(--g-red); border:1.5px solid #f5b8b3; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer; margin-top:12px;">
       🚪 Se déconnecter
     </button>
+
+    <button id="btnSupprimerMonCompte" onclick="tcSupprimerMonCompte()" style="width:100%; padding:12px; background:transparent; color:var(--g-red); border:none; font-size:13px; cursor:pointer; margin-top:10px; text-decoration:underline;">
+      Supprimer mon compte
+    </button>
   `;
   // Mettre à jour l'affichage de la langue dans Paramètres
   setTimeout(() => initLanguageDisplay(), 50);
@@ -17099,6 +17103,55 @@ function saveUserAccount(account) {
   if (typeof tcPreparerAppareilPourCompte === 'function') { try { tcPreparerAppareilPourCompte(); } catch (e) {} }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   MISSION 81 (Charles, 12/11 ; exigence Google Play) : « Supprimer mon compte ».
+   Paramètres, tout en bas. On écrit « supprimer » pour confirmer ; le serveur efface le compte et ses données
+   (comme la suppression par l'administrateur), puis l'appareil oublie tout, comme à la déconnexion.
+   Sans l'application : https://timecool.fr/app/#supprimer-mon-compte ouvre la même confirmation, une fois connecté.
+   ══════════════════════════════════════════════════════════════ */
+let _tcSuppressionDemandee = false;
+try { _tcSuppressionDemandee = /^#supprimer-mon-compte$/i.test(String(location.hash || '')); } catch (e) { _tcSuppressionDemandee = false; }
+
+async function tcSupprimerMonCompte() {
+  const saisie = await tcPrompt('Supprimer ton compte ?\nTon agenda, tes contacts et tes messages seront effacés, sans retour possible.\n\nÉcris « supprimer » pour confirmer.',
+    '', { icone: '🗑️', exemple: 'supprimer', libelleValider: 'Supprimer' });
+  if (saisie === null) return false;
+  if (String(saisie).trim().toLowerCase() !== 'supprimer') {
+    showToast('Rien n’est effacé : le mot ne correspond pas.');
+    return false;
+  }
+  try {
+    await TC_BACKEND.supprimerMonCompte('supprimer');
+  } catch (e) {
+    showToast('⚠️ ' + ((e && e.message) || 'Suppression impossible pour le moment. Réessaie.'));
+    return false;
+  }
+  // Le compte n'existe plus : rien ne repart vers le serveur, l'appareil oublie tout (comme « Se déconnecter »).
+  try { if (typeof _tcSyncBientot !== 'undefined' && _tcSyncBientot) { clearTimeout(_tcSyncBientot); _tcSyncBientot = null; } } catch (e) {}
+  try { await TC_BACKEND.deconnecter(); } catch (e) {}
+  try { localStorage.setItem('timecool_session_active', 'false'); } catch (e) {}
+  tcOublierMotDePasse();
+  tcViderDonneesDuCompte();
+  try { localStorage.removeItem(TC_COMPTE_LOCAL_KEY); } catch (e) {}
+  tcViderChampsConnexion();
+  showAuthFlow('auth-welcome');
+  showToast('Ton compte est supprimé. Merci d’avoir essayé TimeCool.');
+  return true;
+}
+
+/** L'adresse web de suppression : connecté, Paramètres puis la confirmation ; sinon, on le dit, et elle s'ouvrira après la connexion. */
+function tcSuppressionDepuisLien() {
+  if (!_tcSuppressionDemandee) return;
+  let connecte = false;
+  try { connecte = localStorage.getItem('timecool_session_active') === 'true' && TC_BACKEND.estConnecte(); } catch (e) { connecte = false; }
+  if (!connecte) { showToast('Connecte-toi : la suppression de ton compte s’ouvrira ensuite.'); return; }
+  _tcSuppressionDemandee = false;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  navigate('settings');
+  setTimeout(tcSupprimerMonCompte, 400);
+}
+window.addEventListener('load', function () { setTimeout(tcSuppressionDepuisLien, 1500); });
+
 async function logoutUser() {
   if (!await tcConfirm('Déconnexion ?\n\nTu pourras te reconnecter avec ton email et ton mot de passe.')) return;
   // Fermer le menu
@@ -17280,6 +17333,8 @@ function hideAuthFlow() {
   if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueil, appText: true, fr: _accueil});
   renderCharlyChat();
   tcSyncCharlyGreeting();
+  // Mission 81 : venu par https://timecool.fr/app/#supprimer-mon-compte, la confirmation s'ouvre une fois connecté.
+  setTimeout(tcSuppressionDepuisLien, 900);
 }
 
 // ═══ GOOGLE SIGN-IN — POINT DE BRANCHEMENT UNIQUE (Client ID) ═══
@@ -31781,6 +31836,12 @@ const TC_BACKEND = {
    *  l'email et le téléphone, qui sont uniques en base. */
   async supprimerUtilisateur(reference) {
     await tcAppel('POST', '/admin/supprimer', { reference: reference });
+    return true;
+  },
+
+  /** Mission 81 : l'utilisateur supprime son propre compte (mot « supprimer »). */
+  async supprimerMonCompte(confirmation) {
+    await tcAppel('POST', '/compte/supprimer', { confirmation: confirmation });
     return true;
   },
 

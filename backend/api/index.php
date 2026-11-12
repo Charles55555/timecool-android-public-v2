@@ -3700,7 +3700,7 @@ switch ($route) {
             [$rdvId, $moi['id']]
         );
         if ($rdv === null) {
-            Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+            Rep::erreur(404, 'rdv_introuvable', 'Cette demande n’est plus valable.');
         }
         $creneau = Db::un('SELECT * FROM rdv_creneaux WHERE rdv_id = ? AND rang = ?', [$rdvId, $rang]);
         if ($creneau === null) {
@@ -3729,7 +3729,7 @@ switch ($route) {
             );
             if ($pris->rowCount() === 0) {
                 $pdo->rollBack();
-                Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+                Rep::erreur(404, 'rdv_introuvable', 'Cette demande n’est plus valable.');
             }
             // L'agenda du titulaire est verrouillé le temps de la vérification et de l'écriture.
             Db::un('SELECT id FROM comptes WHERE id = ? FOR UPDATE', [$cible['id']]);
@@ -4250,7 +4250,7 @@ switch ($route) {
             [$rdvId, $moi['id']]
         );
         if ($rdv === null) {
-            Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+            Rep::erreur(404, 'rdv_introuvable', 'Cette demande n’est plus valable.');
         }
         $demandeur = Db::un('SELECT * FROM comptes WHERE id = ? AND cloture_le IS NULL', [$rdv['organisateur_id']]);
         if ($demandeur === null) {
@@ -4269,7 +4269,7 @@ switch ($route) {
             );
             if ($pris->rowCount() === 0) {
                 $pdo->rollBack();
-                Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+                Rep::erreur(404, 'rdv_introuvable', 'Cette demande n’est plus valable.');
             }
             // Les deux agendas sont verrouillés dans l ordre des identifiants.
             $ids = [(int) $moi['id'], (int) $demandeur['id']];
@@ -4357,7 +4357,7 @@ switch ($route) {
             [$rdvId, $moi['id']]
         );
         if ($rdv === null) {
-            Rep::erreur(404, 'rdv_introuvable', 'Demande inconnue ou déjà traitée.');
+            Rep::erreur(404, 'rdv_introuvable', 'Cette demande n’est plus valable.');
         }
         $demandeur = Db::un('SELECT * FROM comptes WHERE id = ?', [$rdv['organisateur_id']]);
         if ($demandeur === null) {
@@ -5622,6 +5622,33 @@ switch ($route) {
         Rep::ok(['langue' => $langue]);
 
     // Mission 70 : un compte de test (…@exemple-timecool.fr) s efface lui-même à la fin d une suite. Aucun autre compte.
+    // Mission 81 (Charles, 12/11 ; Google Play) : l'utilisateur supprime son compte. Même effacement que la suppression
+    // par l'administrateur (compteEffacer), immédiat et définitif. Confirmation : le mot « supprimer » (un compte Google
+    // n'a pas de mot de passe). Un administrateur ne se supprime pas d'ici. L'accès à Google Agenda est rendu chez
+    // Google ; si Google ne répond pas, la suppression se fait quand même.
+    case 'POST /compte/supprimer':
+        $moi = Auth::compte();
+        $mot = mb_strtolower(trim((string) (Entree::corps()['confirmation'] ?? '')));
+        if ($mot !== 'supprimer') {
+            Rep::erreur(400, 'confirmation_requise', 'Écris « supprimer » pour confirmer.');
+        }
+        if ((int) ($moi['admin'] ?? 0) === 1) {
+            Rep::erreur(403, 'administrateur', 'Ce compte est administrateur : il ne peut pas être supprimé d’ici.');
+        }
+        try {
+            $liaison = googleAgendaLiaison((int) $moi['id']);
+            if ($liaison !== null) {
+                $jetonG = Coffre::dechiffrer((string) $liaison['jeton_renouvellement']);
+                if (is_string($jetonG) && $jetonG !== '') {
+                    googlePoster('https://oauth2.googleapis.com/revoke', ['token' => $jetonG]);
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('TimeCool suppression de compte : acces Google non rendu (' . $e->getMessage() . ')');
+        }
+        compteEffacer((int) $moi['id']);
+        Rep::ok(['supprime' => true]);
+
     case 'POST /compte/effacer-test':
         $compte = Auth::compte();
         if (!str_ends_with(strtolower((string) ($compte['email'] ?? '')), '@exemple-timecool.fr')) {
