@@ -41,10 +41,13 @@ async function appel(methode, chemin, corps, jeton) {
   const web = co.d.session.jeton;
   dire(!!web && web !== mobile, 'deux appareils, deux sessions, un compte', reference);
 
-  console.log('\nAu départ, rien :');
+  // Mission 85 (Charles, 14/11) : un compte neuf porte un seul réglage, le rappel par e-mail allumé (version 1).
+  console.log('\nAu départ, seul le rappel par e-mail :');
   const vide = await appel('GET', '/sync?depuis=0', undefined, mobile);
-  dire(vide.code === 200 && vide.d.elements.length === 0 && vide.d.version === 0,
-    'aucun élément, version 0', 'version ' + vide.d.version);
+  dire(vide.code === 200 && vide.d.elements.length === 1 && vide.d.version === 1
+    && vide.d.elements[0].type === 'reglage' && vide.d.elements[0].uid === 'tc_rappel_email' && vide.d.elements[0].contenu.v === '1',
+    'un seul élément (tc_rappel_email = 1), version 1', 'version ' + vide.d.version);
+  const B = 1;   // les versions qui suivent partent de là
 
   console.log('\nLe mobile crée trois objets :');
   const pousse = await appel('POST', '/sync', {
@@ -54,22 +57,22 @@ async function appel(methode, chemin, corps, jeton) {
       { type: 'contact', uid: 'ct_1', contenu: { nom: 'Marie Dupont' } },
     ],
   }, mobile);
-  dire(pousse.code === 200 && pousse.d.version === 3, 'trois versions attribuées',
+  dire(pousse.code === 200 && pousse.d.version === B + 3, 'trois versions attribuées',
     'version ' + pousse.d.version);
 
   console.log('\nLe web les récupère sans avoir rien fait :');
   const tire = await appel('GET', '/sync?depuis=0', undefined, web);
-  dire(tire.d.elements.length === 3, 'les trois arrivent', tire.d.elements.length);
+  dire(tire.d.elements.filter((e) => e.type !== 'reglage').length === 3, 'les trois arrivent', tire.d.elements.length);
   const rdv = tire.d.elements.find((e) => e.uid === 'evt_2');
   dire(rdv && rdv.contenu.titre === 'Réunion — éàç', 'contenu et accents intacts',
     rdv ? rdv.contenu.titre : 'absent');
-  dire(tire.d.version === 3 && tire.d.suite === false, 'curseur rendu, pas de suite',
+  dire(tire.d.version === B + 3 && tire.d.suite === false, 'curseur rendu, pas de suite',
     'version ' + tire.d.version);
 
   console.log('\nOn ne retélécharge que la suite :');
-  const rien = await appel('GET', '/sync?depuis=3', undefined, web);
+  const rien = await appel('GET', '/sync?depuis=' + (B + 3), undefined, web);
   dire(rien.d.elements.length === 0, 'rien de neuf, rien ne transite');
-  const partiel = await appel('GET', '/sync?depuis=2', undefined, web);
+  const partiel = await appel('GET', '/sync?depuis=' + (B + 2), undefined, web);
   dire(partiel.d.elements.length === 1 && partiel.d.elements[0].uid === 'ct_1',
     'un seul objet après la version 2', partiel.d.elements[0].uid);
 
@@ -77,8 +80,8 @@ async function appel(methode, chemin, corps, jeton) {
   const modif = await appel('POST', '/sync', {
     elements: [{ type: 'rdv', uid: 'evt_1', contenu: { titre: 'Dentiste 15h', date: '2026-09-05' } }],
   }, web);
-  dire(modif.d.version === 4, 'la version monte', 'version ' + modif.d.version);
-  const vuMobile = await appel('GET', '/sync?depuis=3', undefined, mobile);
+  dire(modif.d.version === B + 4, 'la version monte', 'version ' + modif.d.version);
+  const vuMobile = await appel('GET', '/sync?depuis=' + (B + 3), undefined, mobile);
   dire(vuMobile.d.elements.length === 1
     && vuMobile.d.elements[0].contenu.titre === 'Dentiste 15h',
     'le mobile reçoit la modification, et elle seule',
@@ -88,8 +91,8 @@ async function appel(methode, chemin, corps, jeton) {
   const supp = await appel('POST', '/sync', {
     elements: [{ type: 'rdv', uid: 'evt_2', contenu: null }],
   }, mobile);
-  dire(supp.d.version === 5, 'version 5');
-  const vuWeb = await appel('GET', '/sync?depuis=4', undefined, web);
+  dire(supp.d.version === B + 5, 'version ' + (B + 5));
+  const vuWeb = await appel('GET', '/sync?depuis=' + (B + 4), undefined, web);
   dire(vuWeb.d.elements.length === 1 && vuWeb.d.elements[0].supprime === true
     && vuWeb.d.elements[0].contenu === null,
     'marquée supprimée, pas simplement absente',
@@ -157,7 +160,8 @@ async function appel(methode, chemin, corps, jeton) {
     prenom: 'Autre', nom: 'Verif', ville: 'Lyon', code_postal: '69001',
   });
   const vuAutre = await appel('GET', '/sync?depuis=0', undefined, autre.d.session.jeton);
-  dire(vuAutre.d.elements.length === 0, 'un autre compte ne voit rien',
+  // Mission 85 : il ne voit que son propre rappel par e-mail, rien du premier compte.
+  dire(vuAutre.d.elements.length === 1 && vuAutre.d.elements[0].uid === 'tc_rappel_email', 'un autre compte ne voit rien',
     vuAutre.d.elements.length + ' éléments');
 
   console.log('\nÀ supprimer : ' + reference + ', ' + autre.d.compte.reference);

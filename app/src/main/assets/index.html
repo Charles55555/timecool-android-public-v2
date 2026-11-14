@@ -18099,6 +18099,9 @@ async function tcCreerCompte(preuve) {
   if (typeof tcPreuveGoogle !== 'undefined') tcPreuveGoogle = null;
 
   saveUserAccount(account);
+  // Mission 85 (Charles, 14/11) : le rappel par e-mail est allumé dès l'inscription (le serveur l'écrit aussi dans le
+  // compte) ; l'interrupteur des Paramètres le montre tout de suite, sans attendre la synchronisation.
+  try { localStorage.setItem(TC_RAPPEL_EMAIL_CLE, '1'); } catch (e) {}
 
   // Popup native du navigateur (Chrome/Edge) proposant d'enregistrer le
   // mot de passe. Il n'est pas conservé par TimeCool.

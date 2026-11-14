@@ -3260,3 +3260,13 @@ Chef, 14/11 (ok de Charles). Constat : Configuration IA > Utilisateurs inscrits 
 - Autres dates de la page administrateur : aucune autre n'est affichée (derniere_connexion est rendue par l'API mais pas montrée ; Configuration IA ne montre pas maj_le).
 - Recherche dans le reste de la page : aucun autre écran n'affiche une date de la base avec son heure. La carte d'un demandeur inconnu (« depuis le JJ/MM/AAAA ») reçoit date('c') de l'API, donc un fuseau explicite.
 - Suite : verif-heure-paris-admin (nouvelle, 9 ; jouée sous TZ UTC, Paris et New York ; 8 rouges sur la page d'avant). verifier.sh vert. Capture 390 px avec deux comptes fictifs.
+
+## 14/11/2026 : mission 85, le rappel par e-mail allumé dès l'inscription, et son bouton stop
+
+Chef, 14/11 (ok de Charles). Avant : rappelsEnvoyer() n'écrivait qu'aux comptes dont le réglage tc_rappel_email valait « 1 », éteint au départ.
+- API, /inscription : le nouveau compte reçoit tc_rappel_email = « 1 » par elementsPoser (délai par défaut inchangé : une heure). Un échec n'empêche pas l'inscription. Comptes existants : rien ne change (pas de migration).
+- Page, tcCreerCompte : la même clé posée tout de suite sur l'appareil, l'interrupteur la montre sans attendre la synchronisation ; les autres appareils la reçoivent par GET /sync.
+- E-mail : rappelEnvoyerUn passe par rappelMessage (même texte, même sujet) qui ajoute le bouton gris « Ne plus recevoir ces rappels », le lien dans la version texte, et les en-têtes List-Unsubscribe + List-Unsubscribe-Post (clic unique des messageries). envoyerEmail accepte des en-têtes en plus (toute ligne avec un retour à la ligne est écartée).
+- Lien : https://api.timecool.fr/rappels/arreter?c=<référence>&s=<signature>. Signature = HMAC-SHA256 (poivre du serveur) de « rappels-stop|référence », 18 octets en base64url ; comparée par hash_equals. Sans poivre, pas de lien. GET : page calme (« C’est noté. Vous ne recevrez plus de rappel par e-mail… »), vouvoiement comme la page de retour Google ; POST : réponse « ok » pour le clic unique. Éteint par elementsPoser (« 0 ») : l'interrupteur s'éteint sur les appareils ; déjà éteint, rien n'est réécrit. Lien faux ou d'un autre compte : 400, « Ce lien n’est pas valable », rien ne change.
+- Suites : verif-rappels-stop-e2e (nouvelle, 28 : code, e-mail rendu par le vrai code php, liens joués contre l'API locale) ; verif-sync-e2e adaptée (un compte neuf porte désormais un élément, version 1). verifier.sh vert. Captures : e-mail et page de confirmation.
+- À savoir : la suite verif-sync-e2e contre la production ne passe qu'une fois cette API en ligne. Les comptes de test @exemple-timecool.fr ont eux aussi le rappel allumé.

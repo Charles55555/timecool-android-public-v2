@@ -129,7 +129,7 @@ function jetonCourt(int $longueur = 12): string
  * @throws RuntimeException si la configuration manque ou si le serveur
  *         refuse. L'appelant décide quoi en dire.
  */
-function envoyerEmail(string $vers, string $sujet, string $texte, ?string $html = null): void
+function envoyerEmail(string $vers, string $sujet, string $texte, ?string $html = null, array $entetesEnPlus = []): void
 {
     $adresse = (string) Conf::get('email_expediteur', '');
     $motDePasse = (string) Conf::get('email_mot_de_passe', '');
@@ -193,6 +193,13 @@ function envoyerEmail(string $vers, string $sujet, string $texte, ?string $html 
             'Date: ' . date('r'),
             'MIME-Version: 1.0',
         ];
+        // Mission 85 : en-têtes en plus (List-Unsubscribe des rappels). Une ligne qui contiendrait un retour à la ligne
+        // ouvrirait la porte à d'autres en-têtes : elle est écartée.
+        foreach ($entetesEnPlus as $l) {
+            if (is_string($l) && $l !== '' && !preg_match('/[\r\n]/', $l)) {
+                $communs[] = $l;
+            }
+        }
 
         if ($html === null) {
             $entetes = implode("\r\n", array_merge($communs, [
@@ -2166,7 +2173,7 @@ function rappelsEnvoyer(): array
     $debutFenetre = (clone $maintenant)->modify('-2 minutes');
 
     $comptes = Db::tous(
-        "SELECT c.id, c.email, c.prenom
+        "SELECT c.id, c.reference, c.email, c.prenom
            FROM elements e
            JOIN comptes c ON c.id = e.compte_id
           WHERE e.type = 'reglage' AND e.uid = 'tc_rappel_email'
@@ -2264,8 +2271,67 @@ function rappelDelaiParDefaut(int $compteId): int
     return in_array($minutes, [0, 5, 10, 30, 60, 120, 1440], true) ? $minutes : 60;
 }
 
-/** Un rappel, mis en forme et poste. */
-function rappelEnvoyerUn(array $compte, array $rdv, DateTime $debut, int $delai): void
+/**
+ * Mission 85 (Charles, 14/11) : la signature du lien « Ne plus recevoir ces rappels », propre au compte.
+ * HMAC avec le poivre du serveur : impossible à deviner, et celle d'un compte ne vaut rien pour un autre.
+ * null sans poivre : aucun lien plutôt qu'un lien sans signature.
+ */
+function rappelStopJeton(string $reference): ?string
+{
+    $poivre = (string) Conf::get('poivre', '');
+    if ($poivre === '' || $reference === '') {
+        return null;
+    }
+    $mac = hash_hmac('sha256', 'rappels-stop|' . $reference, $poivre, true);
+    return rtrim(strtr(base64_encode(substr($mac, 0, 18)), '+/', '-_'), '=');
+}
+
+/** Mission 85 : l'adresse du lien « Ne plus recevoir ces rappels », ou null. */
+function rappelStopLien(string $reference): ?string
+{
+    $jeton = rappelStopJeton($reference);
+    if ($jeton === null) {
+        return null;
+    }
+    $base = rtrim((string) Conf::get('api_publique', 'https://api.timecool.fr'), '/');
+    return $base . '/rappels/arreter?c=' . rawurlencode($reference) . '&s=' . $jeton;
+}
+
+/**
+ * Mission 85 : la page vue après le lien « Ne plus recevoir ces rappels ». Pas du JSON : une personne la lit.
+ */
+function rappelsStopPage(bool $reussi): never
+{
+    http_response_code($reussi ? 200 : 400);
+    header('Content-Type: text/html; charset=utf-8');
+    header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'");
+    $titre = $reussi ? 'C’est noté' : 'Ce lien n’est pas valable';
+    $message = $reussi
+        ? 'Vous ne recevrez plus de rappel par e-mail. Vous pouvez les rallumer dans Paramètres, Notifications, Rappels avant RDV.'
+        : 'Pour ne plus recevoir les rappels par e-mail, coupez-les dans Paramètres, Notifications, Rappels avant RDV.';
+    echo '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+        . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<title>TimeCool — ' . $titre . '</title></head>'
+        . '<body style="margin:0;font-family:system-ui,sans-serif;background:#f6f7f9;color:#222;'
+        . 'display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">'
+        . '<div style="max-width:420px;background:#fff;border-radius:16px;padding:32px 24px;text-align:center;'
+        . 'box-shadow:0 2px 12px rgba(0,0,0,.08)">'
+        . '<div style="font-size:44px">' . ($reussi ? '✅' : 'ℹ️') . '</div>'
+        . '<h1 style="font-size:20px;margin:12px 0">' . $titre . '</h1>'
+        . '<p style="font-size:15px;line-height:1.5;color:#555">' . $message . '</p>'
+        . '<p style="margin-top:24px"><a href="https://timecool.fr/app/" '
+        . 'style="display:inline-block;background:#1a73e8;color:#fff;text-decoration:none;'
+        . 'padding:12px 20px;border-radius:10px;font-weight:600">Ouvrir TimeCool</a></p>'
+        . '<p style="font-size:13px;color:#888">Vous pouvez aussi simplement fermer cette page.</p>'
+        . '</div></body></html>';
+    exit;
+}
+
+/**
+ * Un rappel mis en forme : sujet, texte, HTML et en-têtes. À part de l'envoi pour pouvoir le relire sans serveur
+ * d'envoi (mission 85).
+ */
+function rappelMessage(array $compte, array $rdv, DateTime $debut, int $delai): array
 {
     $quand = [
         5 => 'dans 5 minutes', 15 => 'dans 15 minutes', 30 => 'dans 30 minutes',
@@ -2287,12 +2353,31 @@ function rappelEnvoyerUn(array $compte, array $rdv, DateTime $debut, int $delai)
     $texte = $titre . ', c\'est ' . $quand . '. Le ' . $jour . ' à ' . $heure . '.'
         . ($lieu !== '' ? ' Lieu : ' . $lieu . '.' : '');
 
-    envoyerEmail(
-        (string) $compte['email'],
-        'TIMECOOL - RAPPEL : ' . mb_strtoupper($titre, 'UTF-8'),
-        $texte,
-        emailHabille('Rappel de rendez-vous', $corps)
-    );
+    // Mission 85 : un toucher suffit pour ne plus les recevoir, sans se connecter.
+    $entetes = [];
+    $lien = rappelStopLien((string) ($compte['reference'] ?? ''));
+    if ($lien !== null) {
+        $corps .= '<p style="margin:26px 0 0; text-align:center;"><a href="' . htmlspecialchars($lien, ENT_QUOTES, 'UTF-8') . '" '
+            . 'style="display:inline-block; padding:10px 18px; border:1px solid #dadce0; border-radius:10px; '
+            . 'color:#5f6368; font-size:13px; text-decoration:none;">Ne plus recevoir ces rappels</a></p>';
+        $texte .= "\n\nNe plus recevoir ces rappels : " . $lien;
+        $entetes[] = 'List-Unsubscribe: <' . $lien . '>';
+        $entetes[] = 'List-Unsubscribe-Post: List-Unsubscribe=One-Click';
+    }
+
+    return [
+        'sujet'   => 'TIMECOOL - RAPPEL : ' . mb_strtoupper($titre, 'UTF-8'),
+        'texte'   => $texte,
+        'html'    => emailHabille('Rappel de rendez-vous', $corps),
+        'entetes' => $entetes,
+    ];
+}
+
+/** Un rappel, mis en forme et poste. */
+function rappelEnvoyerUn(array $compte, array $rdv, DateTime $debut, int $delai): void
+{
+    $m = rappelMessage($compte, $rdv, $debut, $delai);
+    envoyerEmail((string) $compte['email'], $m['sujet'], $m['texte'], $m['html'], $m['entetes']);
 }
 
 
@@ -3364,6 +3449,18 @@ switch ($route) {
         }
 
         $id = (int) Db::pdo()->lastInsertId();
+
+        // Mission 85 (Charles, 14/11) : le rappel par e-mail est allumé dès l'inscription (délai par défaut : une heure).
+        // Écrit comme le réglage de l'appareil (tc_rappel_email) : l'interrupteur des Paramètres le montre sur chaque
+        // appareil du compte. Un échec ici n'empêche pas l'inscription.
+        try {
+            elementsPoser([[
+                'compte_id' => $id, 'type' => 'reglage', 'uid' => 'tc_rappel_email',
+                'contenu' => ['id' => 'tc_rappel_email', 'v' => '1'],
+            ]]);
+        } catch (Throwable $e) {
+            error_log('rappel e-mail non allume pour le compte ' . $id . ' : ' . $e->getMessage());
+        }
 
         // Utilisable des la premiere seconde : les relais prennent la cle de l administrateur, rien n est copie (mission 71).
 
@@ -6146,6 +6243,40 @@ switch ($route) {
 
     // Google renvoie ici le navigateur de la personne. Pas de session :
     // le compte est celui que porte l'état chiffré.
+    // ═══════════════════════════════════════════════════════════
+    // Mission 85 : « Ne plus recevoir ces rappels », sans connexion. GET : le bouton de l'e-mail (page lisible).
+    // POST : le désabonnement en un clic des messageries (List-Unsubscribe-Post). Deux fois : rien ne change.
+    // ═══════════════════════════════════════════════════════════
+    case 'GET /rappels/arreter':
+    case 'POST /rappels/arreter':
+        $ref = (string) ($_GET['c'] ?? '');
+        $sig = (string) ($_GET['s'] ?? '');
+        $cible = preg_match('/^[0-9A-Z]{12,26}$/', $ref) ? compteParReference($ref) : null;
+        $attendu = $cible !== null ? rappelStopJeton($ref) : null;
+        $valide = $attendu !== null && hash_equals($attendu, $sig);
+        if ($valide) {
+            $l = Db::un(
+                "SELECT contenu FROM elements
+                  WHERE compte_id = ? AND type = 'reglage' AND uid = 'tc_rappel_email' AND supprime = 0",
+                [(int) $cible['id']]
+            );
+            $d = $l !== null ? json_decode((string) $l['contenu'], true) : null;
+            // Déjà éteint : aucune écriture, aucun tour de synchronisation de plus.
+            if (!is_array($d) || ($d['v'] ?? null) !== '0') {
+                elementsPoser([[
+                    'compte_id' => (int) $cible['id'], 'type' => 'reglage', 'uid' => 'tc_rappel_email',
+                    'contenu' => ['id' => 'tc_rappel_email', 'v' => '0'],
+                ]]);
+            }
+        }
+        if ($methode === 'POST') {
+            http_response_code($valide ? 200 : 400);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo $valide ? 'ok' : 'lien non valable';
+            exit;
+        }
+        rappelsStopPage($valide);
+
     case 'GET /google/agenda/retour':
         if (isset($_GET['error'])) {
             googleAgendaPage(false, $_GET['error'] === 'access_denied'
