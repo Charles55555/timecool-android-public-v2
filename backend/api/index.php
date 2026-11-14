@@ -6241,8 +6241,6 @@ switch ($route) {
             'state'         => googleAgendaEtatCreer((int) $compte['id']),
         ])]);
 
-    // Google renvoie ici le navigateur de la personne. Pas de session :
-    // le compte est celui que porte l'état chiffré.
     // ═══════════════════════════════════════════════════════════
     // Mission 85 : « Ne plus recevoir ces rappels », sans connexion. GET : le bouton de l'e-mail (page lisible).
     // POST : le désabonnement en un clic des messageries (List-Unsubscribe-Post). Deux fois : rien ne change.
@@ -6277,6 +6275,8 @@ switch ($route) {
         }
         rappelsStopPage($valide);
 
+    // Google renvoie ici le navigateur de la personne. Pas de session :
+    // le compte est celui que porte l'état chiffré.
     case 'GET /google/agenda/retour':
         if (isset($_GET['error'])) {
             googleAgendaPage(false, $_GET['error'] === 'access_denied'
