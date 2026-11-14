@@ -154,7 +154,8 @@ function preparer(T, nom, reglages) {
     });
     await new Promise((r) => twilio.listen(0, '127.0.0.1', r));
     const SID = 'AC' + '0'.repeat(32);
-    const commun = "'mode_test' => false, 'verification_sms_inscription' => true, 'twilio_account_sid' => '" + SID + "', 'twilio_auth_token' => 'jeton-de-test', 'twilio_numero_expediteur' => 'TimeCool', 'sms_max_ip_heure' => 1000, 'sms_max_ip_jour' => 1000";
+    // Mission 86 : sms_fournisseur => twilio, ce parcours vise le faux Twilio même si des clés OVHcloud sont posées.
+    const commun = "'sms_fournisseur' => 'twilio', 'mode_test' => false, 'verification_sms_inscription' => true, 'twilio_account_sid' => '" + SID + "', 'twilio_auth_token' => 'jeton-de-test', 'twilio_numero_expediteur' => 'TimeCool', 'sms_max_ip_heure' => 1000, 'sms_max_ip_jour' => 1000";
     const A = preparer(T, 'a', "[" + commun + ", 'ip_tests' => ['127.0.0.1'], 'sms_renvoi_secondes' => 60]");
     const B = preparer(T, 'b', "[" + commun + ", 'ip_tests' => [], 'sms_renvoi_secondes' => 0, 'sms_max_numero_heure' => 3]");
     const port = 18100 + Math.floor(Math.random() * 800);

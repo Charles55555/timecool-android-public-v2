@@ -10561,6 +10561,11 @@ function renderAIConfig() {
         { id: 'twilio', name: 'Twilio (SMS), identifiant du compte', icon: '📱', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (Account SID)', testable: false, url: 'https://console.twilio.com' },
         { id: 'twilio_jeton', name: 'Twilio (SMS), jeton secret', icon: '🔑', placeholder: 'Auth Token', testable: false, url: 'https://console.twilio.com' },
         { id: 'twilio_expediteur', name: 'Twilio (SMS), expéditeur', icon: '✉️', placeholder: 'TimeCool', testable: false, url: 'https://console.twilio.com' },
+        // Mission 86 (Charles, 14/11) : OVHcloud passe avant Twilio dès que ses trois premières valeurs sont posées.
+        { id: 'ovh_sms_compte', name: 'OVHcloud (SMS), nom du compte SMS', icon: '🇫🇷', placeholder: 'sms-ab12345-1', testable: false, url: 'https://manager.eu.ovhcloud.com/#/telecom/sms' },
+        { id: 'ovh_sms_utilisateur', name: 'OVHcloud (SMS), utilisateur API', icon: '👤', placeholder: 'timecool', testable: false, url: 'https://manager.eu.ovhcloud.com/#/telecom/sms' },
+        { id: 'ovh_sms_mot_de_passe', name: 'OVHcloud (SMS), mot de passe de l’utilisateur API', icon: '🔑', placeholder: '8 lettres ou chiffres', testable: false, url: 'https://manager.eu.ovhcloud.com/#/telecom/sms' },
+        { id: 'ovh_sms_expediteur', name: 'OVHcloud (SMS), expéditeur (facultatif)', icon: '✉️', placeholder: 'TimeCool (vide : numéro court)', testable: false, url: 'https://manager.eu.ovhcloud.com/#/telecom/sms' },
         { id: 'vonage', name: 'Vonage / Nexmo (SMS Europe)', icon: '📲', placeholder: 'xxxxxxxxxxxxxxxx', testable: false, url: 'https://dashboard.nexmo.com', badge: 'Moins cher EU' },
         { id: 'whatsapp', name: 'WhatsApp Business', icon: '💚', placeholder: 'EAAxxxxx...', testable: false, url: 'https://developers.facebook.com' },
         { id: 'sendgrid', name: 'SendGrid (Emails)', icon: '✉️', placeholder: 'SG.xxxxxxxxxxxxxxxx...', testable: false, url: 'https://sendgrid.com/pricing', badge: 'Prioritaire' },

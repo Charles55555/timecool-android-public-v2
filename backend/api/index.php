@@ -431,8 +431,165 @@ function smsIdentifiants(): ?array
     return $id;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 86 (Charles, 14/11) : les SMS partent par OVHcloud, fournisseur français, quand ses clés sont posées
+   (Twilio refusait l'envoi : profil de conformité non approuvé). Sinon Twilio, comme avant : rien n'est retiré.
+   OVHcloud par http2sms : un appel HTTPS, compte SMS (sms-ab12345-1) + utilisateur API + mot de passe. Tout part
+   dans le CORPS de la requête (POST) : le mot de passe n'apparaît dans aucune adresse, ni chez nous ni chez OVHcloud.
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Une clé de l'administrateur (Configuration IA), en clair, ou null. */
+function smsCleAdministrateur(string $service): ?string
+{
+    $c = cleAdministrateur($service);
+    if ($c === null) {
+        return null;
+    }
+    $v = Coffre::dechiffrer($c);
+    return ($v === null || trim($v) === '') ? null : trim($v);
+}
+
+/**
+ * Les identifiants OVHcloud : ceux de config.php s'ils y sont (les vérifications locales), sinon ceux de
+ * Configuration IA ; null si l'un des trois manque. L'expéditeur est facultatif ('' : numéro court).
+ */
+function smsIdentifiantsOvh(): ?array
+{
+    $id = [
+        'compte'       => trim((string) Conf::get('ovh_sms_compte', '')),
+        'utilisateur'  => trim((string) Conf::get('ovh_sms_utilisateur', '')),
+        'mot_de_passe' => trim((string) Conf::get('ovh_sms_mot_de_passe', '')),
+        'expediteur'   => trim((string) Conf::get('ovh_sms_expediteur', '')),
+    ];
+    if ($id['compte'] === '' || $id['utilisateur'] === '' || $id['mot_de_passe'] === '') {
+        $id = [
+            'compte'       => smsCleAdministrateur('ovh_sms_compte') ?? '',
+            'utilisateur'  => smsCleAdministrateur('ovh_sms_utilisateur') ?? '',
+            'mot_de_passe' => smsCleAdministrateur('ovh_sms_mot_de_passe') ?? '',
+            'expediteur'   => smsCleAdministrateur('ovh_sms_expediteur') ?? '',
+        ];
+    }
+    if ($id['compte'] === '' || $id['utilisateur'] === '' || $id['mot_de_passe'] === '') {
+        return null;
+    }
+    $id['compte'] = strtolower($id['compte']);
+    if (!preg_match('/^sms-[a-z]{2}[0-9]+-[0-9]+$/', $id['compte'])) {
+        error_log('TimeCool SMS : nom du compte OVHcloud inattendu (attendu : sms-ab12345-1)');
+        return null;
+    }
+    return $id;
+}
+
+/**
+ * Le fournisseur qui enverra : 'ovh', 'twilio', ou null si aucun n'est configuré. Réglage sms_fournisseur
+ * ('auto' par défaut : OVHcloud s'il est configuré, sinon Twilio ; 'ovh' ou 'twilio' pour n'en garder qu'un).
+ */
+function smsFournisseur(): ?string
+{
+    $voulu = (string) Conf::get('sms_fournisseur', 'auto');
+    if ($voulu !== 'twilio' && smsIdentifiantsOvh() !== null) {
+        return 'ovh';
+    }
+    if ($voulu !== 'ovh' && smsIdentifiants() !== null) {
+        return 'twilio';
+    }
+    return null;
+}
+
+/**
+ * Envoie un SMS par le fournisseur configuré. Rend ['fournisseur' => …] (et pour OVHcloud les crédits restants,
+ * l'expéditeur réellement utilisé). Lève une exception si rien n'est configuré ou si le fournisseur refuse.
+ */
+function smsEnvoyer(string $numeroE164, string $message): array
+{
+    $f = smsFournisseur();
+    if ($f === 'ovh') {
+        return smsEnvoyerOvh(smsIdentifiantsOvh(), $numeroE164, $message);
+    }
+    if ($f === 'twilio') {
+        smsEnvoyerTwilio($numeroE164, $message);
+        return ['fournisseur' => 'twilio'];
+    }
+    throw new RuntimeException('Aucun fournisseur de SMS configure');
+}
+
+/** Le message d'OVHcloud, sans son renvoi vers la documentation. */
+function smsMessageOvh(array $rep): string
+{
+    $m = trim((string) ($rep['message'] ?? ''));
+    $m = trim((string) preg_replace('/\s*For more informations?\s*:.*$/is', '', $m));
+    return $m !== '' ? $m : 'statut ' . (int) ($rep['status'] ?? 0);
+}
+
+/** Envoie un SMS par OVHcloud (http2sms). */
+function smsEnvoyerOvh(array $id, string $numeroE164, string $message): array
+{
+    $base = 'https://www.ovh.com';
+    if (PHP_SAPI === 'cli-server') {
+        // Les vérifications locales (php -S) visent un faux OVHcloud, jamais le vrai.
+        $faux = (string) getenv('TC_SMS_FAUX_OVH');
+        if ($faux === '') {
+            throw new RuntimeException('OVHcloud : envoi reel refuse en local');
+        }
+        $base = rtrim($faux, '/');
+    }
+    // OVHcloud attend le format 0033612345678.
+    $vers = '00' . ltrim($numeroE164, '+');
+    $appeler = static function (array $expediteur) use ($base, $id, $vers, $message): array {
+        $ch = curl_init($base . '/cgi-bin/sms/http2sms.cgi');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => http_build_query([
+                'account'     => $id['compte'],
+                'login'       => $id['utilisateur'],
+                'password'    => $id['mot_de_passe'],
+                'to'          => $vers,
+                'message'     => $message,
+                // Messages de service, pas de publicité : pas de mention « STOP » ajoutée.
+                'noStop'      => '1',
+                'contentType' => 'application/json',
+            ] + $expediteur),
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $brut = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+        if ($brut === false) {
+            throw new RuntimeException('OVHcloud : echec reseau ' . $err);
+        }
+        $rep = json_decode((string) $brut, true);
+        if (!is_array($rep) || !isset($rep['status'])) {
+            throw new RuntimeException('OVHcloud : reponse illisible (HTTP ' . $code . ')');
+        }
+        return $rep;
+    };
+    $reussi = static fn (array $r): bool => (int) $r['status'] >= 100 && (int) $r['status'] < 200;
+    // Sans expéditeur validé : le numéro court d'OVHcloud (France), qui marche dès l'achat du pack.
+    $numeroCourt = ['from' => '', 'senderForResponse' => '1'];
+
+    $utilise = $id['expediteur'] !== '' ? $id['expediteur'] : 'numero_court';
+    $rep = $appeler($id['expediteur'] !== '' ? ['from' => $id['expediteur']] : $numeroCourt);
+    if (!$reussi($rep) && $id['expediteur'] !== '' && preg_match('/sender|exp[ée]diteur|\bfrom\b/i', smsMessageOvh($rep))) {
+        // « TimeCool » pas encore validé chez OVHcloud : le numéro court plutôt qu'un échec.
+        error_log('TimeCool SMS : expediteur OVHcloud refuse (' . smsMessageOvh($rep) . '), envoi par le numero court');
+        $rep = $appeler($numeroCourt);
+        $utilise = 'numero_court';
+    }
+    if (!$reussi($rep)) {
+        throw new RuntimeException('OVHcloud : ' . smsMessageOvh($rep));
+    }
+    return [
+        'fournisseur' => 'ovh',
+        'expediteur'  => $utilise,
+        'credits'     => isset($rep['creditLeft']) ? (string) $rep['creditLeft'] : null,
+    ];
+}
+
 /** Envoie un SMS par Twilio. Lève une exception si rien n'est configuré ou si Twilio refuse. */
-function smsEnvoyer(string $numeroE164, string $message): void
+function smsEnvoyerTwilio(string $numeroE164, string $message): void
 {
     $id = smsIdentifiants();
     if ($id === null) {
@@ -3281,22 +3438,33 @@ switch ($route) {
     // minimum restreindre à un compte admin identifié.
     // ═══════════════════════════════════════════════════════════
     // Mission 80 : réservé à l'administrateur, vers le numéro de SON compte, avec les clés de Configuration IA.
+    // Mission 86 : même route pour OVHcloud (et son nom neutre /test/sms) ; la réponse dit quel fournisseur a servi.
+    case 'POST /test/sms':
     case 'POST /test/sms-twilio':
         $moi = Auth::compte();
         if ((int) ($moi['admin'] ?? 0) !== 1) {
             Rep::erreur(403, 'acces_refuse', "Accès réservé à l'administrateur.");
         }
-        if (smsIdentifiants() === null) {
-            Rep::erreur(503, 'twilio_non_configure',
-                'Twilio n est pas configuré : poser l identifiant (AC…), le jeton secret et l expéditeur dans Configuration IA.');
+        $fournisseur = smsFournisseur();
+        if ($fournisseur === null) {
+            Rep::erreur(503, 'sms_non_configure',
+                'Aucun envoi de SMS configuré : poser le compte SMS, l utilisateur API et son mot de passe OVHcloud (ou les clés Twilio) dans Configuration IA.');
         }
+        $nomFournisseur = $fournisseur === 'ovh' ? 'OVHcloud' : 'Twilio';
         try {
-            smsEnvoyer((string) $moi['telephone'], 'Test TimeCool : les SMS fonctionnent.');
+            $envoi = smsEnvoyer((string) $moi['telephone'], 'Test TimeCool : les SMS fonctionnent.');
         } catch (Throwable $e) {
             error_log('TimeCool SMS test: ' . $e->getMessage());
-            Rep::erreur(502, 'envoi_echoue', 'Envoi Twilio impossible : ' . $e->getMessage());
+            Rep::erreur(502, 'envoi_echoue', 'Envoi ' . $nomFournisseur . ' impossible : '
+                . preg_replace('/^(OVHcloud|Twilio) : /', '', $e->getMessage()));
         }
-        Rep::ok(['envoye' => true, 'vers' => '…' . substr((string) $moi['telephone'], -2)]);
+        Rep::ok([
+            'envoye'          => true,
+            'fournisseur'     => $nomFournisseur,
+            'expediteur'      => $envoi['expediteur'] ?? null,
+            'credits_restants' => $envoi['credits'] ?? null,
+            'vers'            => '…' . substr((string) $moi['telephone'], -2),
+        ]);
 
     // ═══════════════════════════════════════════════════════════
     // ⚠️ TEMPORAIRE — TEST D'ENVOI D'E-MAIL, À RETIRER AVANT LE LANCEMENT
