@@ -3252,3 +3252,11 @@ Chef, 12/11 (ok de Charles : « Supprimer mon compte » était caché et écrit 
 - Paramètres, tout en bas : le gros bouton rose « 🚪 Se déconnecter » est retiré ; « Supprimer mon compte » prend sa place, même taille et même forme (fond rose, bord, coins arrondis, 14 px gras), texte rouge, plus de soulignement. Même identifiant btnSupprimerMonCompte, même fenêtre de confirmation, #supprimer-mon-compte inchangé.
 - La déconnexion reste dans le menu du rond aux initiales et en bas du menu ☰ (non touchés).
 - Suites : verif-suppression-compte (plus de gros « Se déconnecter », le bouton et son style, les deux autres déconnexions présentes ; rouge sur la page d'avant), verif-parametres-ordre (le dernier bloc est « Supprimer mon compte »). verifier.sh vert. Captures 390 px : bas de Paramètres, menu du rond, menu ☰.
+
+## 14/11/2026 : mission 84, l'heure de Paris dans la liste des comptes
+
+Chef, 14/11 (ok de Charles). Constat : Configuration IA > Utilisateurs inscrits affichait l'heure UTC brute de la base (compte 32457 « 11:50 » pour une inscription à 12h50 à Paris). Cause : l'API rend cree_le « 2026-11-14 11:50:13 » sans fuseau (base et serveur en UTC) ; la page le lisait comme une heure locale.
+- Correction côté affichage seulement (API, base et autres routes inchangées) : tcDateServeurUTC ajoute le Z à la date de la base, tcDateHeureParis formate en Europe/Paris (hiver +1, été +2), quel que soit le fuseau de l'appareil. Même format « JJ/MM/AAAA HH:MM ». L'export CSV prend aussi la date de Paris. Le tri ne change pas (même ordre).
+- Autres dates de la page administrateur : aucune autre n'est affichée (derniere_connexion est rendue par l'API mais pas montrée ; Configuration IA ne montre pas maj_le).
+- Recherche dans le reste de la page : aucun autre écran n'affiche une date de la base avec son heure. La carte d'un demandeur inconnu (« depuis le JJ/MM/AAAA ») reçoit date('c') de l'API, donc un fuseau explicite.
+- Suite : verif-heure-paris-admin (nouvelle, 9 ; jouée sous TZ UTC, Paris et New York ; 8 rouges sur la page d'avant). verifier.sh vert. Capture 390 px avec deux comptes fictifs.

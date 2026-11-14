@@ -35477,6 +35477,25 @@ let _tcUsersMoi = null;            // sa propre référence de compte
 let _tcUsersEtat = 'chargement';   // chargement | pret | refus | erreur
 let _tcUsersMessage = '';
 
+/** Mission 84 : une date de la base (« 2026-11-14 11:50:13 », heure UTC) en date ISO lisible partout, avec son Z. */
+function tcDateServeurUTC(v) {
+  const s = String(v || '').trim().replace(' ', 'T');
+  if (!s) return '';
+  return /(Z|[+-]\d\d:?\d\d)$/i.test(s) ? s : s + 'Z';
+}
+
+/** Mission 84 : la date et l'heure de Paris (heure d'hiver ou d'été), quel que soit le fuseau de l'appareil. */
+function tcDateHeureParis(d) {
+  try {
+    return {
+      date: d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }),
+      heure: d.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })
+    };
+  } catch (e) {
+    return { date: d.toLocaleDateString('fr-FR'), heure: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) };
+  }
+}
+
 /** Ligne du serveur ramenée à la forme attendue par l'affichage. */
 function tcUserDepuisServeur(u, i) {
   return {
@@ -35492,7 +35511,9 @@ function tcUserDepuisServeur(u, i) {
     provenanceDetail: u.provenance_detail || '',
     // MySQL rend « 2026-09-03 07:49:12 ». Sans le T, certains moteurs
     // rendent une date invalide, et le tri par date s'effondre.
-    registeredAt: (u.cree_le || '').replace(' ', 'T'),
+    // Mission 84 : la base est en heure UTC ; sans le Z, l'heure était lue comme une heure locale (une heure de moins
+    // affichée en hiver, deux en été).
+    registeredAt: tcDateServeurUTC(u.cree_le),
     blocked: !!u.bloque_le,
     admin: !!Number(u.admin),
     estMoi: !!_tcUsersMoi && u.reference === _tcUsersMoi
@@ -35620,7 +35641,8 @@ function renderUsersTab() {
     : users.length === 0 ? vide('Aucun utilisateur inscrit pour le moment')
     : tcTrierUsers(users).map(u => {
         const d = new Date(u.registeredAt);
-        const dateStr = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+        const paris = tcDateHeureParis(d);
+        const dateStr = paris.date + ' ' + paris.heure;
         const isBlocked = u.blocked === true;
         return `
           <div style="border:1px solid ${isBlocked ? '#f5b8b3' : '#e8eaed'}; background:${isBlocked ? '#fef7f6' : '#fff'}; border-radius:12px; padding:14px 16px; margin-bottom:10px; background:#fff;">
@@ -35702,9 +35724,7 @@ async function exportUsersCsv() {
 
   users.forEach(u => {
     const d = u.registeredAt ? new Date(u.registeredAt) : null;
-    const dateStr = (d && !isNaN(d.getTime()))
-      ? String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear()
-      : '';
+    const dateStr = (d && !isNaN(d.getTime())) ? tcDateHeureParis(d).date : '';
     lignes.push([
       u.lastname || '',
       u.firstname || '',
