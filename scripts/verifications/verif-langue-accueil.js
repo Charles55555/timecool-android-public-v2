@@ -114,8 +114,18 @@ titre('Branche aux bons endroits');
 const tpg = fonction(page, 'translatePageWithGoogle') || '';
 verifie('sans compte, la page se traduit quand meme (textes figes seulement), sans « Connecte-toi pour traduire »', /if \(!TC_BACKEND\.estConnecte\(\)\) silent = true;/.test(tpg) && tpg.indexOf('Connecte-toi pour traduire') < 0);
 const tt = fonction(page, 'translateText') || '';
-verifie('translateText lit le dictionnaire avant le cache et avant le reseau', tt.indexOf('tcTraduireFixe(text, targetLang)') > 0 && tt.indexOf('tcTraduireFixe') < tt.indexOf('TC_TRANSLATE_CACHE[cacheKey]') && tt.indexOf('tcTraduireFixe') < tt.indexOf('estConnecte'));
-verifie('showToast et les erreurs sous les champs passent par tcT', /if \(typeof tcT === 'function'\) msg = tcT\(msg\);[^\n]*\n\s*t\.textContent = msg;/.test(fonction(page, 'showToast') || '') && /zone\.textContent = tcT\(message\)/.test(fonction(page, 'tcErreurChamp') || ''));
+verifie('translateText : sans compte, le dictionnaire avant le cache ; connecte, Google comme avant (examen, remarque 1)', /var fixe = TC_BACKEND\.estConnecte\(\) \? null : tcTraduireFixe\(text, targetLang\);/.test(tt) && tt.indexOf('tcTraduireFixe') < tt.indexOf('TC_TRANSLATE_CACHE[cacheKey]'));
+verifie('showToast (sans compte seulement) et les erreurs sous les champs passent par tcT', /if \(typeof tcT === 'function' && typeof TC_BACKEND !== 'undefined' && !TC_BACKEND\.estConnecte\(\)\) msg = tcT\(msg\);\n\s*t\.textContent = msg;/.test(fonction(page, 'showToast') || '') && /zone\.textContent = tcT\(message\)/.test(fonction(page, 'tcErreurChamp') || ''));
+{
+  // Connecte : « Connexion » ailleurs dans l appli part chez Google comme avant, sans prendre le texte de l ecran de connexion.
+  const c4 = Object.assign({}, ctx, { TC_TRANSLATE_CACHE: {}, localStorage: { setItem() {} }, TC_BACKEND: { estConnecte: () => true }, envoyes: [] });
+  vm.createContext(c4);
+  vm.runInContext(decl + '\n' + ['tcAccueilNormaliser', 'tcAccueilTrouver', 'tcTraduireFixe', 'translateText'].map((n) => fonction(page, n)).join('\n'), c4);
+  c4.tcTraduireParLot = (t, l) => { c4.envoyes.push(t); return Promise.resolve('[google ' + l + '] ' + t); };
+  c4.translateText('Connexion', 'es').then((r) => {
+    verifie('rejeu connecte : « Connexion » → Google (« [google es] Connexion »), pas « Iniciar sesión »', r === '[google es] Connexion' && c4.envoyes.join() === 'Connexion', r);
+  });
+}
 verifie('l indicatif du pays : titre traduit, noms des pays par le navigateur, francais de la liste inchange', /tcT\('Indicatif du pays'\)/.test(fonction(page, 'openPhoneCountryPicker') || '') && /tcNomDePays\(c\)/.test(fonction(page, 'openPhoneCountryPicker') || '') && /if \(langue === 'fr' \|\| !TC_PAYS_REGION\[c\.code\]\) return c\.name;/.test(fonction(page, 'tcNomDePays') || ''));
 const sl = fonction(page, 'selectLanguage') || '';
 verifie('selecteur sans compte : langue retenue sur l appareil (timecool_language) et marquee « choisie avant connexion »', /localStorage\.setItem\('timecool_language', code\)/.test(sl) && /if \(!TC_BACKEND\.estConnecte\(\)\) \{ try \{ localStorage\.setItem\(TC_LANGUE_AVANT_CONNEXION, code\); \} catch \(e\) \{\} \}/.test(sl));

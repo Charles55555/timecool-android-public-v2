@@ -8726,7 +8726,8 @@ function tcRenderBiometrieToggle() {
 
 function showToast(msg) {
   const t = document.getElementById('toast');
-  if (typeof tcT === 'function') msg = tcT(msg);   // ecrans d'avant connexion dans la langue choisie (mission 87)
+  // Ecrans d'avant connexion dans la langue choisie (mission 87) ; connecte, les messages restent ce qu'ils etaient.
+  if (typeof tcT === 'function' && typeof TC_BACKEND !== 'undefined' && !TC_BACKEND.estConnecte()) msg = tcT(msg);
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
@@ -36068,7 +36069,8 @@ try {
 
 async function translateText(text, targetLang) {
   if (!text || targetLang === 'fr') return text;
-  var fixe = tcTraduireFixe(text, targetLang);   // mission 87 : ecrans d'avant connexion
+  // Mission 87 : sans compte seulement (ecrans d'avant connexion) ; connecte, Google comme avant.
+  var fixe = TC_BACKEND.estConnecte() ? null : tcTraduireFixe(text, targetLang);
   if (fixe !== null) return fixe;
   var cacheKey = targetLang + ':' + text;
   if (TC_TRANSLATE_CACHE[cacheKey]) return TC_TRANSLATE_CACHE[cacheKey];
