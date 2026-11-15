@@ -41,6 +41,7 @@ const ctx = {
     { id: 'p1', name: 'Paul Martin', referenceCompte: 'REFPAUL' },
     { id: 'm1', name: 'Marie Dupont' },
     { id: 'h1', name: 'Hélène Roux', referenceCompte: 'REFHEL' },
+    { id: 'b1', name: 'Bruno Bloqué', referenceCompte: 'REFBRU', blocked: true },
   ],
   conversations: [],
   tcConversationsAffichables: () => ctx.conversations,
@@ -58,6 +59,8 @@ if (!ko) {
   verifie('« helene » sans accent trouve Hélène Roux', /messageContact\('h1'\)/.test(chercher('helene')), texte());
   chercher('Marie');
   verifie('« Marie » (sans TimeCool) n est pas proposée : « Marie n’a pas encore TimeCool. Tu ne peux pas lui écrire ici. »', texte() === 'Marie n’a pas encore TimeCool. Tu ne peux pas lui écrire ici.' && liste.innerHTML.indexOf('messageContact') < 0, texte());
+  chercher('Bruno');
+  verifie('(examen) un contact TimeCool bloqué n est jamais proposé', liste.innerHTML.indexOf('messageContact') < 0 && texte() === 'Aucun contact TimeCool à ce nom.', texte());
   chercher('Zorro');
   verifie('rien ne correspond : « Aucun contact TimeCool à ce nom. »', texte() === 'Aucun contact TimeCool à ce nom.', texte());
   ctx.conversations = [{ id: 'srv_REFPAUL', reference: 'REFPAUL', with: 'Paul Martin', avatar: 'PM', icon: '', color: '#123', unread: 0, archived: false, thread: [{ from: 'them', text: 'Salut', time: '10:00' }] }];

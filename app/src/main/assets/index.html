@@ -7318,7 +7318,8 @@ function tcContactsTimeCoolCherches(q, conversationsMontrees) {
   const refs = (conversationsMontrees || []).map(function (m) { return m.reference; }).filter(Boolean);
   const noms = (conversationsMontrees || []).map(function (m) { return String(m.with || '').trim().toLowerCase(); });
   return tcContactsCherches(q).filter(function (c) {
-    return !!c.referenceCompte && refs.indexOf(c.referenceCompte) < 0 && noms.indexOf(String(c.name).trim().toLowerCase()) < 0;
+    // Examen : un contact bloqué n'est jamais proposé (comme partout ailleurs : c.referenceCompte && !c.blocked).
+    return !!c.referenceCompte && !c.blocked && refs.indexOf(c.referenceCompte) < 0 && noms.indexOf(String(c.name).trim().toLowerCase()) < 0;
   }).slice(0, 8);
 }
 
