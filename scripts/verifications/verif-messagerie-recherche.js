@@ -50,13 +50,16 @@ const ctx = {
   tcConversationsAffichables: () => ctx.conversations,
 };
 vm.createContext(ctx);
-['escapeHTMLSafe', 'tcSansAccents', 'tcPrenomPresentable', 'getContactInitials', 'getContactColor', 'tcContactsCherches', 'tcContactsTimeCoolCherches', 'tcLangueCourante', 'tcTexteRechercheMessagerie', 'renderMessages']
+['escapeHTMLSafe', 'tcSansAccents', 'tcPrenomPresentable', 'getContactInitials', 'getContactColor', 'tcContactsCherches', 'tcContactsTimeCoolCherches', 'tcLangueCourante', 'tcTexteRechercheMessagerie', 'tcLigneCharlyMessagerie', 'renderMessages']
   .forEach((n) => { const f = fonction(n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
-const texte = () => liste.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+// Mission 96 : la ligne de Charly est toujours en tête ; le reste de la liste se lit sans elle.
+const sansCharly = (h) => h.replace(/<div class="msg-preview" id="msgCharly"[\s\S]*?<\/div><\/div><\/div>/, '');
+const texte = () => sansCharly(liste.innerHTML).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const chercher = (q) => { champ.value = q; ctx.renderMessages(); return liste.innerHTML; };
 if (!ko) {
   chercher('');
   verifie('page vide : « Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire. »', texte() === 'Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire.', texte());
+  verifie('(mission 96) page vide : la ligne de Charly en tête, au-dessus de la phrase', /^<div class="msg-preview" id="msgCharly" onclick="tcOuvrirCharlyAide\(\)">/.test(liste.innerHTML) && /Charly, ton aide TimeCool/.test(liste.innerHTML), liste.innerHTML.slice(0, 200));
   const h = chercher('paul');
   verifie('« paul » : Paul Martin (TimeCool) proposé, « Écrire un message », un toucher ouvre sa conversation (messageContact)', /onclick="messageContact\('p1'\)"/.test(h) && /Paul Martin/.test(texte()) && /Écrire un message/.test(texte()), h);
   verifie('« helene » sans accent trouve Hélène Roux', /messageContact\('h1'\)/.test(chercher('helene')), texte());
@@ -105,7 +108,7 @@ if (!exe) {
     navigate('messages');
     setTimeout(function () {
       var res = {};
-      res.vide = document.getElementById('messagesList').innerText.trim();
+      res.vide = (document.getElementById('msgVide') || { innerText: '' }).innerText.trim(); res.charly = !!document.getElementById('msgCharly');
       var si = document.getElementById('msgSearch');
       si.value = 'Paul'; renderMessages();
       var ligne = document.querySelector('#messagesList [data-contact-tc="p1"]');

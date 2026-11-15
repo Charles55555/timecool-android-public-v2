@@ -7283,6 +7283,7 @@ function renderMessages() {
 
   // Mission 94 : la recherche trouve aussi les contacts TimeCool à qui on n'a pas encore écrit (un toucher ouvre la conversation).
   const contactsTc = (q && _msgFilter === 'all') ? tcContactsTimeCoolCherches(q, msgs) : [];
+  const ligneCharly = tcLigneCharlyMessagerie(q);
 
   if (!msgs.length && !contactsTc.length) {
     let txt;
@@ -7296,11 +7297,11 @@ function renderMessages() {
         : _msgFilter === 'archived' ? 'Aucune conversation archivée'
         : 'Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire.';
     }
-    list.innerHTML = '<div id="msgVide" style="padding:40px 24px; text-align:center; color:var(--text-sec); line-height:1.5;">' + txt + '</div>';
+    list.innerHTML = ligneCharly + '<div id="msgVide" style="padding:40px 24px; text-align:center; color:var(--text-sec); line-height:1.5;">' + txt + '</div>';
     return;
   }
 
-  list.innerHTML = contactsTc.map(function (c) {
+  list.innerHTML = ligneCharly + contactsTc.map(function (c) {
     return '<div class="msg-preview" data-contact-tc="' + escapeHTMLSafe(c.id) + '" onclick="messageContact(\'' + escapeHTMLSafe(c.id) + '\')">'
       + '<div class="msg-avatar" style="background:' + getContactColor(c.name) + ';">' + escapeHTMLSafe(getContactInitials(c.name)) + '</div>'
       + '<div class="msg-body"><div class="msg-name">' + escapeHTMLSafe(c.name) + '</div>'
@@ -7321,6 +7322,25 @@ function renderMessages() {
       </div>
       ${m.unread>0?`<div class="card-badge" style="margin-left:8px;">${m.unread}</div>`:''}
     </div>`; }).join('');
+}
+
+/**
+ * Mission 96 : la ligne de Charly, toujours en tête de la messagerie (filtre « tout » ; avec une recherche, seulement si elle
+ * cite Charly ou l'aide). Ce n'est pas une conversation : ni supprimable, ni archivable, jamais comptée dans les non-lus.
+ */
+function tcLigneCharlyMessagerie(q) {
+  if (typeof _msgFilter !== 'undefined' && _msgFilter !== 'all') return '';
+  const cle = tcSansAccents(String(q || '')).toLowerCase().trim();
+  if (cle && 'charly, ton aide timecool'.indexOf(cle) < 0 && !/^aide/.test(cle)) return '';
+  return '<div class="msg-preview" id="msgCharly" onclick="tcOuvrirCharlyAide()">'
+    + '<div class="msg-avatar" style="background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>'
+    + '<div class="msg-body"><div class="msg-name">Charly, ton aide TimeCool</div>'
+    + '<div class="msg-text" style="white-space:normal;">Une question\u00a0? Demande-moi\u00a0: «\u00a0Comment changer la langue\u00a0?\u00a0»</div></div></div>';
+}
+
+/** Mission 96 : la ligne de Charly ouvre la page Charly IA ; sa flèche retour ramène à la messagerie (pile des écrans). */
+function tcOuvrirCharlyAide() {
+  navigate('assistant');
 }
 
 /** Mission 94 : les contacts dont le nom contient ce qui est tapé (sans accents, sans majuscules). */
@@ -15937,6 +15957,9 @@ async function charlySendMessage() {
     renderCharlyChat();
     return;
   }
+
+  // === MISSION 96 : UNE QUESTION D'AIDE (« comment changer la langue ? ») : la réponse de TC_AIDE, sans le modèle ===
+  if (typeof tcRepondreAide === 'function' && tcRepondreAide(text)) return;
 
   // === CLASSER AVANT DE RÉPONDRE (mission 50) : pas sûr d'avoir compris → une seule question, aucune action ===
   // Les réponses attendues (questionnaire, oui/non, trajet, « qui est-ce ? ») sont déjà passées au-dessus. Du code, le même
@@ -29804,10 +29827,123 @@ function renderHolidayItem(h, todayD, isPast=false) {
   `;
 }
 
+/* ══ Mission 96 : la base d'aide de Charly ══
+ * Une seule liste : Charly y répond tout seul (sans le modèle, sans réseau) et la page « Aide et commentaires » l'affiche.
+ * Chaque réponse : 2 à 4 phrases, pour un enfant de 10 ans, avec le chemin exact. « ecran » liste les mots de l'écran cités :
+ * la suite verif-aide-charly vérifie qu'ils existent ailleurs dans la page. « mots » : ce qui fait reconnaître la question
+ * (sans accents, en minuscules).
+ * À ne jamais faire dire : synchro ou import Doctolib, synchro Outlook (« bientôt »), « TimeCool trouve des créneaux » sans
+ * « selon tes préférences et tes disponibilités enregistrées dans tes paramètres ».
+ */
+const TC_AIDE = [
+  { id: 'rdv', q: '📅 Comment je prends un rendez-vous ?', mots: ['(prendre|creer|ajouter|noter|mettre|faire) un (rdv|rendez vous)', 'nouveau (rdv|rendez vous)'],
+    ecran: ['Valider mon agenda'],
+    a: 'Écris ou dis à Charly ce que tu veux, par exemple : « Dentiste demain à 15h ». Charly te montre ton rendez-vous. Touche « Valider mon agenda » pour le garder.' },
+  { id: 'langue', q: '🌍 Comment je change la langue ?', mots: ['langue', 'anglais', 'espagnol', 'traduire', 'traduction'],
+    ecran: ['Paramètres', 'Langue & Région', 'Langue de l\'application', 'Modifier'],
+    a: 'Ouvre le menu ☰, puis « Paramètres ». Dans « Langue & Région », touche « Modifier » à côté de « Langue de l’application ». Choisis ta langue : toute l’appli change.' },
+  { id: 'motdepasse', q: '🔐 Comment je change mon mot de passe ?', mots: ['mot de passe', 'mdp'],
+    ecran: ['Paramètres', 'Compte & sécurité', 'Modifier mon mot de passe'],
+    a: 'Ouvre le menu ☰, puis « Paramètres ». Dans « Compte & sécurité », touche « Modifier mon mot de passe » et suis les étapes.' },
+  { id: 'contact', q: '👤 Comment j’ajoute un contact ?', mots: ['(ajouter|ajoute|creer|cree|enregistrer|importer|mettre) (un |des |mes |le )?contacts?', 'nouveau contact'],
+    ecran: ['Mes contacts', '+ Ajouter', 'Enregistrer', 'Importer mes contacts'],
+    a: 'Ouvre le menu ☰, puis « Mes contacts ». Touche le bouton vert « + Ajouter », écris le prénom, le nom et le mobile, puis touche « Enregistrer ». Sur ton téléphone, « 📱 Importer mes contacts » les reprend tous d’un coup.' },
+  { id: 'inviter', q: '💌 Comment j’invite quelqu’un qui n’a pas TimeCool ?', mots: ['invit', 'parrain', 'n a pas timecool', 'sans timecool', 'faire venir'],
+    ecran: ['Mes contacts', 'Inviter sur TimeCool'],
+    a: 'Dans « Mes contacts », ouvre la fiche de la personne et touche « 💌 Inviter sur TimeCool ». Un message tout prêt s’ouvre dans tes SMS, avec le lien timecool.fr. Il faut que sa fiche ait un numéro de mobile.' },
+  { id: 'dispos', q: '🕘 Comment je règle mes disponibilités ?', mots: ['disponibilites', 'dispos', 'mes horaires', 'heures ou on peut'],
+    ecran: ['Mes disponibilités', 'Toujours attendre ma validation'],
+    a: 'Ouvre le menu ☰, puis « Mes disponibilités ». Tu choisis les heures où l’on peut te demander un rendez-vous. Au départ, « Toujours attendre ma validation » est cochée : rien n’entre dans ton agenda avant que tu dises oui.' },
+  { id: 'confiance', q: '🤝 C’est quoi « Ma confiance en Charly » ?', mots: ['confiance', 'profil (1|2|3)', 'profils'],
+    ecran: ['Paramètres', 'Ma confiance en Charly', 'Journal d’activité'],
+    a: 'C’est en haut de « Paramètres » : « Ma confiance en Charly ». Profil 1 : Charly te demande à chaque étape. Profil 2 : il prépare tout et te demande une seule fois, à la fin. Profil 3 : il fait tout seul et te fait un compte rendu dans le « Journal d’activité ».' },
+  // page: false : la page d'aide a déjà sa propre réponse sur ce sujet (plus détaillée) ; celle-ci sert à Charly seul.
+  { id: 'rappel', page: false, q:'⏰ Comment je reçois un rappel avant un rendez-vous ?', mots: ['rappels?', 'prevenu avant', 'alerte avant'],
+    ecran: ['Paramètres', 'Notifications', 'Délai du rappel', 'aussi par email'],
+    a: 'Ouvre « Paramètres », puis « Notifications ». Touche « Délai du rappel » et choisis combien de temps avant tu veux être prévenu. Si tu reçois aussi un e-mail, c’est écrit « aussi par email ».' },
+  { id: 'google', page: false, q:'📅 Comment j’importe ou je synchronise mon agenda Google ?', mots: ['google', 'ancien agenda', 'synchronis', 'importer mon agenda', 'ics'],
+    ecran: ['Importer mon ancien agenda', 'Synchroniser avec mon ancien agenda', 'Google Agenda'],
+    a: 'Pour reprendre ton ancien agenda : menu ☰, « Importer mon ancien agenda », avec son fichier .ics. Pour la suite : menu ☰, « Synchroniser avec mon ancien agenda », puis la carte Google Agenda. Ce que tu crées ou changes dans TimeCool apparaît aussi dans Google, dans ce sens-là seulement.' },
+  { id: 'compte', q: '🗑️ Comment je supprime mon compte ?', mots: ['(supprimer|effacer|fermer|detruire) (mon |le )?compte', 'desinscri'],
+    ecran: ['Paramètres', 'Supprimer mon compte'],
+    a: 'Ouvre « Paramètres » et descends tout en bas. Touche « Supprimer mon compte », puis écris le mot « supprimer » pour confirmer. Ton compte, tes contacts et tes messages sont effacés, sans retour possible.' },
+  { id: 'theme', q: '🌙 Comment je mets le thème sombre ?', mots: ['theme', 'sombre', 'mode nuit', 'mode clair'],
+    ecran: ['Paramètres', 'Affichage', 'Thème', 'Clair', 'Sombre', 'Auto'],
+    a: 'Ouvre « Paramètres », puis « Affichage ». Touche « Modifier » à côté de « Thème » : Clair, Sombre, ou Auto (comme ton téléphone). Tu peux aussi écrire à Charly « mets le thème sombre ».' },
+  { id: 'sons', q: '🔔 Comment je règle les sons ?', mots: ['sons?', 'sonneries?', 'vibration', 'silencieux', 'bruit'],
+    ecran: ['Paramètres', 'Notifications', 'Sonneries', 'Son et vibration', 'Silencieux'],
+    a: 'Ouvre « Paramètres », puis « Notifications ». Touche l’interrupteur de la ligne « Sonneries » : elle dit « Son et vibration » ou « Silencieux ».' },
+  { id: 'bloquer', q: '🚫 Comment je bloque un contact ?', mots: ['bloqu', 'debloqu'],
+    ecran: ['Mes contacts', 'Bloquer l\'accès à mon agenda', 'Débloquer l\'accès'],
+    a: 'Dans « Mes contacts », touche les trois points ⋮ à droite du contact, puis « Bloquer l’accès à mon agenda ». Cette personne ne peut plus t’écrire ni prendre rendez-vous avec toi, et elle ne le sait pas. Pour revenir en arrière : « Débloquer l’accès ».' },
+  { id: 'messagerie', q: '💬 Comment j’écris dans la messagerie ?', mots: ['messagerie', 'envoyer un message', 'ecrire (a|un message)'],
+    ecran: ['Ma messagerie sécurisée'],
+    a: 'Ouvre « Ma messagerie sécurisée » et écris le nom d’un contact dans la case de recherche. Touche son nom : la conversation s’ouvre. Tu peux écrire seulement aux contacts qui ont déjà TimeCool.' },
+  { id: 'groupe', q: '👥 Comment je prends un rendez-vous à plusieurs ?', mots: ['plusieurs', 'a plusieurs', 'groupe', 'reunion avec'],
+    ecran: [],
+    a: 'Écris à Charly, par exemple : « Trouve-nous un moment avec Paul et Marie cette semaine ». Charly regarde les agendas de ceux qui ont TimeCool et t’ouvrent leurs disponibilités. Il te montre les moments où tout le monde est libre : touche celui qui te va.' },
+  { id: 'malade', q: '🤒 Je suis malade : comment je décale mes rendez-vous ?', mots: ['malade'],
+    ecran: ['Ma confiance en Charly'],
+    a: 'Écris ou dis à Charly : « Je suis malade, décale mes rendez-vous d’aujourd’hui ou de demain ». Charly te montre les nouveaux moments qu’il propose à chaque personne, selon tes préférences et tes disponibilités enregistrées dans tes paramètres. Il te demande avant d’envoyer, selon ton réglage « Ma confiance en Charly ».' },
+  { id: 'retard', q: '⏱️ Je vais être en retard : comment je préviens ?', mots: ['retard'],
+    ecran: ['Oui, envoie'],
+    a: 'Écris ou dis à Charly, par exemple : « Préviens Paul que j’aurai 10 minutes de retard ». Charly te montre le message. Touche « Oui, envoie » pour le faire partir.' },
+  { id: 'libre', page: false, q:'🕐 Comment je sais quand je suis libre ?', mots: ['libre', 'creneaux? libres?', 'quand je suis dispo'],
+    ecran: [],
+    a: 'Demande à Charly, par exemple : « Quand suis-je libre jeudi ? ». Il regarde ton agenda et te montre les moments libres, selon tes préférences et tes disponibilités enregistrées dans tes paramètres.' },
+  { id: 'sauvegarde', q: '💾 Comment je sauvegarde mes données ?', mots: ['sauvegard', 'exporter', 'restaurer', 'backup'],
+    ecran: ['Paramètres', 'Sauvegarde & Restauration', 'Exporter mes données', 'Exporter', 'Restaurer mes données', 'Importer'],
+    a: 'Ouvre « Paramètres », puis « Sauvegarde & Restauration ». Touche « Exporter » sur la ligne « Exporter mes données » : un fichier de sauvegarde se télécharge. Pour tout remettre, touche « Importer » sur la ligne « Restaurer mes données ».' },
+  { id: 'appareil', q: '💻 Comment je connecte un autre appareil ?', mots: ['autre appareil', 'ordinateur', 'tablette', 'lier', 'appair', 'deux telephones'],
+    ecran: ['Lier un nouvel appareil'],
+    a: 'Sur ton ordinateur, ouvre timecool.fr : la page montre un code et un code QR. Sur ton téléphone, touche tes initiales en haut à droite, puis « Lier un nouvel appareil ». Scanne ou écris le code, et l’ordinateur se connecte à ton compte.' },
+  { id: 'deconnexion', q: '🚪 Comment je me déconnecte ?', mots: ['deconnect', 'sortir de mon compte'],
+    ecran: ['Se déconnecter'],
+    a: 'Touche tes initiales en haut à droite, puis « Se déconnecter ». Tu le trouves aussi tout en bas du menu ☰.' },
+  { id: 'photo', q: '📸 Comment je transforme une photo en rendez-vous ?', mots: ['photo', 'image', 'scanner', 'capture'],
+    ecran: ['Photo → rendez-vous'],
+    a: 'Dans Charly, touche « 📸 Photo → rendez-vous ». Prends en photo une invitation ou un papier : Charly lit la date et l’heure et te propose le rendez-vous.' },
+];
+
+/** Mission 96 : une question d'aide (« comment… », « c'est quoi… », « où… », « je n'arrive pas à… ») → l'entrée de TC_AIDE, sinon null.
+ *  Une vraie demande (un jour, une heure, une date) n'est jamais prise pour une question d'aide. */
+function tcAideCharly(text) {
+  const brut = String(text || '').trim();
+  const t = tcSansAccents(brut).toLowerCase().replace(/[’'«»"]/g, ' ').replace(/[^a-z0-9?☰ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t || t.length > 140) return null;
+  const question = /^(comment|c est quoi|qu est ce qu|ou (est|sont|se trouve|trouver|je|on|change|regle|mettre)|a quoi sert|je n arrive pas|j arrive pas|je ne trouve pas|je trouve pas|je ne sais pas comment|je sais pas comment|est ce que je peux|est ce qu on peut|peut on|puis je|on fait comment|je fais comment|aide moi a)\b/.test(t)
+    || (/\bcomment\b/.test(t) && /\?\s*$/.test(t));
+  if (!question) return null;
+  if (typeof tcHeureDansTexte === 'function' && tcHeureDansTexte(brut.toLowerCase())) return null;
+  if (typeof tcPeriodeAgenda === 'function' && tcPeriodeAgenda(brut)) return null;
+  // « Je suis malade, comment je fais ? » : une demande, le parcours malade la prend (pas une question sur l'appli).
+  if (typeof tcDetecterMalade === 'function' && tcDetecterMalade(brut)) return null;
+  let meilleure = null, score = 0;
+  TC_AIDE.forEach(function (x) {
+    const n = x.mots.filter(function (m) { return new RegExp('\\b(' + m + ')').test(t); }).length;
+    if (n > score) { score = n; meilleure = x; }
+  });
+  return meilleure;
+}
+
+/** Mission 96 : une question d'aide reçoit sa réponse de TC_AIDE, tout de suite (sans le modèle). */
+function tcRepondreAide(text) {
+  const x = tcAideCharly(text);
+  if (!x) return false;
+  charlyIA.history.push({ role: 'user', content: tcBulleTapee(text), _corrige: text });
+  const inp = document.getElementById('charlyInput');
+  if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+  charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: x.a, _aide: x.id });
+  renderCharlyChat();
+  return true;
+}
+
 // ═══ AIDE ET COMMENTAIRES ═══
 function renderHelp() {
   const c = document.getElementById('helpContent');
-  const faq = [
+  // Mission 96 : la base d'aide de Charly en tête (une seule liste), puis les autres questions de la page.
+  // Les sujets que la page traitait déjà (Google, rappels, créneaux libres) gardent leur réponse ici (page: false dans TC_AIDE).
+  const faq = TC_AIDE.filter(function (x) { return x.page !== false; }).map(function (x) { return { q: escapeHTMLSafe(x.q), a: escapeHTMLSafe(x.a) }; }).concat([
     {q: '⚡ Comment Charly IA peut-il m\'aider ?', a: 'Charly IA est ton assistant intelligent. Tu peux lui parler en langage naturel pour créer des rendez-vous (ex: "demain à 15h banque"), importer un PDF d\'invitation, ou demander de réorganiser ton agenda. Il comprend les dates relatives ("dans 5 jours", "lundi prochain", etc.).'},
     {q: '📋 Que sont les "Journal d’activité" ?', a: 'C\'est l\'historique des actions que Charly a réalisées pour toi (prises de RDV, créations d\'agenda, réservations) ainsi que le suivi de tes rendez-vous. Tu y retrouves chaque démarche avec son statut (préparée, envoyée, confirmée…), du mois en cours ou des trois derniers mois, et tu peux archiver celles qui sont terminées.'},
     {q: '📄 Comment importer un PDF dans Charly IA ?', a: 'Va dans Charly IA, clique sur le bouton "+" à gauche du micro, choisis "Fichiers", sélectionne ton PDF (par exemple une invitation de mariage). Charly extrait automatiquement les dates et te propose de les ajouter à ton agenda.'},
@@ -29824,7 +29960,7 @@ function renderHelp() {
     {q: '⏰ Comment régler mes rappels ?', a: 'Va dans Paramètres → Notifications. Tu choisis le délai : 5, 10 ou 30 minutes avant, 1 heure, 2 heures, ou la veille. Le téléphone te réveille tout seul à l\'heure dite, même sans connexion.'},
     {q: '🔄 Comment l\'application se met-elle à jour ?', a: 'Toute seule. Sur Android, TimeCool vérifie s\'il existe une version plus récente et l\'installe sans rien te demander. Sur le web, tu as toujours la dernière version en ouvrant la page.'},
     {q: '💶 Combien coûte l\'intelligence artificielle ?', a: 'Rien pour toi. L\'intelligence artificielle de Charly est prise en charge par TimeCool : elle est incluse dans l\'application, tu n\'as rien à payer en plus.'}
-  ];
+  ]);
   c.innerHTML = `
     <div style="background:linear-gradient(135deg, #e8f0fe, #fff); border:1px solid #c8d7ee; border-radius:14px; padding:18px; margin-bottom:18px;">
       <div style="font-size:16px; font-weight:700; color:var(--g-blue); margin-bottom:6px;">👋 Bienvenue dans l'aide TimeCool</div>

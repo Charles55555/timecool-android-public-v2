@@ -3408,3 +3408,11 @@ Chef, 15/11 (validé par Charles).
 - Page vide : « Aucun message pour l’instant. Cherche un contact TimeCool ci-dessus pour lui écrire. »
 - Un contact sans TimeCool n'est jamais proposé : « Paul n’a pas encore TimeCool. Tu ne peux pas lui écrire ici. » ; rien ne correspond : « Aucun contact TimeCool à ce nom. »
 - API non touchée. Suite verif-messagerie-recherche (nouvelle ; Chrome sur le PC). verifier.sh vert.
+
+## 15/11/2026 : mission 96, Charly en tête de la messagerie, et sa base d'aide
+
+Chef, 15/11 (tranché ; liste de l'adjointe du 15/11, revue et vérifiée dans le code).
+- TC_AIDE : 22 questions d'un nouvel utilisateur, chacune avec sa réponse (2 à 4 phrases, chemin exact). Charly y répond seul, sans le modèle, dès qu'on lui pose une question d'aide (« comment… », « c'est quoi… », « où… », « je n'arrive pas à… ») ; une phrase avec un jour ou une heure, ou « je suis malade », n'est jamais prise pour une question d'aide. La réponse passe après les réponses attendues et les salutations, avant tout le reste.
+- La page « Aide et commentaires » montre la même liste en tête, puis ses autres questions ; Google, rappels et créneaux libres gardent leur réponse de la page (page: false dans TC_AIDE).
+- Ma messagerie sécurisée : « Charly, ton aide TimeCool » toujours en tête (« Une question ? Demande-moi : « Comment changer la langue ? » ») ; ce n'est pas une conversation (ni supprimable, ni archivable, jamais dans les non-lus) ; un toucher ouvre Charly IA, la flèche retour ramène à la messagerie.
+- Suite verif-aide-charly (nouvelle ; Chrome sur le PC) ; messagerie-recherche et messagerie-texte connaissent la ligne de Charly. verifier.sh vert.
