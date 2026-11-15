@@ -3362,3 +3362,11 @@ Chef, 15/11 : Charles refuse la première carte du profil 2 (« trop compliqué 
   - verif-charly-deplacement et verif-deplacer-periode (nouvelles fonctions).
   verifier.sh vert.
 - Captures (PC, m71/captures91b) : carte avec TimeCool, sans TimeCool, à plusieurs, ce que voit Paul.
+
+## 15/11/2026 : mission 95, messagerie : le texte reçu est affiché comme du texte
+
+Chef, 15/11 (trouvé par EXAMINATEUR).
+- Page : dans la conversation et dans la liste des conversations, le texte des messages, le nom, les initiales, l'heure et la recherche tapée sont échappés (escapeHTMLSafe) avant d'être affichés.
+- Revu et déjà bon : le texte d'origine d'une traduction, les cartes reçues (demande de rendez-vous, convocation, proposition de créneaux), la carte du demandeur, la page publique des liens (backend/web/rdv.html), les toasts (textContent), le compte rendu au Journal (mission 91).
+- API : les titres et lieux saisis par un compte et écrits chez un autre (demande de rendez-vous, rendez-vous à plusieurs, convocation, liens et propositions) passent par texteSur, comme les noms.
+- Suite verif-messagerie-texte (nouvelle ; Chrome sur le PC). verifier.sh vert.

@@ -7269,7 +7269,7 @@ function renderMessages() {
   }
 
   if (!msgs.length) {
-    const txt = q ? 'Aucun résultat pour « ' + q + ' »'
+    const txt = q ? 'Aucun résultat pour « ' + escapeHTMLSafe(q) + ' »'
               : _msgFilter === 'unread' ? 'Aucun message non lu'
               : _msgFilter === 'archived' ? 'Aucune conversation archivée'
               : 'Aucun message';
@@ -7286,10 +7286,10 @@ function renderMessages() {
          ontouchstart="_msgPressTimer=setTimeout(function(){msgLongPress('${m.id}');},550)"
          ontouchend="clearTimeout(_msgPressTimer)"
          ontouchmove="clearTimeout(_msgPressTimer)">
-      <div class="msg-avatar" style="background:${m.color};">${m.icon||m.avatar}</div>
+      <div class="msg-avatar" style="background:${m.color};">${escapeHTMLSafe(m.icon||m.avatar)}</div>
       <div class="msg-body">
-        <div class="msg-name">${m.with}<span class="msg-time">${last.time}</span></div>
-        <div class="msg-text">${last.text.substring(0,60)}${last.text.length>60?'...':''}</div>
+        <div class="msg-name">${escapeHTMLSafe(m.with)}<span class="msg-time">${escapeHTMLSafe(last.time)}</span></div>
+        <div class="msg-text">${escapeHTMLSafe(last.text.substring(0,60))}${last.text.length>60?'...':''}</div>
       </div>
       ${m.unread>0?`<div class="card-badge" style="margin-left:8px;">${m.unread}</div>`:''}
     </div>`; }).join('');
@@ -7368,16 +7368,17 @@ function openConversation(id, origine) {
   body.innerHTML = msg.thread.length
     ? msg.thread.map(t => t.from === 'system'
         ? (t.convocId
-            ? `<div onclick="openConvocationDashboard('${t.convocId}')" style="text-align:center; margin:10px 0; font-size:11.5px; color:var(--g-blue); cursor:pointer; text-decoration:underline;">${t.text} — voir le décompte</div>`
-            : `<div style="text-align:center; margin:10px 0; font-size:11.5px; color:var(--text-sec);">${t.text}</div>`)
-        : `<div class="conv-msg ${t.from==='me'?'sent':'received'}">${t.text.replace(/\n/g,'<br>')}${tcOriginalHTML(t)}<div class="conv-time">${t.time}</div></div>`
+            ? `<div onclick="openConvocationDashboard('${escapeHTMLSafe(String(t.convocId)).replace(/'/g, '')}')" style="text-align:center; margin:10px 0; font-size:11.5px; color:var(--g-blue); cursor:pointer; text-decoration:underline;">${escapeHTMLSafe(t.text)} — voir le décompte</div>`
+            : `<div style="text-align:center; margin:10px 0; font-size:11.5px; color:var(--text-sec);">${escapeHTMLSafe(t.text)}</div>`)
+        // Mission 95 : le texte reçu est affiché comme du texte (échappé, puis les retours à la ligne).
+        : `<div class="conv-msg ${t.from==='me'?'sent':'received'}">${escapeHTMLSafe(t.text).replace(/\n/g,'<br>')}${tcOriginalHTML(t)}<div class="conv-time">${escapeHTMLSafe(t.time)}</div></div>`
       ).join('')
     : '<div style="text-align:center; padding:36px 20px; color:var(--text-sec); font-size:12.5px; line-height:1.6;">\u{1F512} Conversation priv\u00e9e.<br>\u00c9cris ton premier message ci-dessous.</div>';
   if (msg.rdvRequest && !msg.rdvHandled) {
     body.innerHTML += `
       <div style="margin-top:16px; padding:14px; background:#fff8e1; border:1px solid #fbbc04; border-radius:14px;">
         <div style="font-size:13px; font-weight:600; color:#5f4500; margin-bottom:4px;">\u{1F4C5} Demande de rendez-vous</div>
-        <div style="font-size:12px; color:#5f4500; line-height:1.5; margin-bottom:12px;">${msg.with} souhaite convenir d'un cr\u00e9neau avec toi.</div>
+        <div style="font-size:12px; color:#5f4500; line-height:1.5; margin-bottom:12px;">${escapeHTMLSafe(msg.with)} souhaite convenir d'un cr\u00e9neau avec toi.</div>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--g-green);" onclick="showToast('Proposition de cr\u00e9neaux envoy\u00e9e')">\u2705 Proposer un cr\u00e9neau</button>
           <button style="padding:12px; font-size:13px; border:none; cursor:pointer; border-radius:16px; color:white; font-weight:600; background:var(--text-sec);" onclick="showToast('R\u00e9ponse envoy\u00e9e')">\u{1F550} D\u00e9cliner poliment</button>

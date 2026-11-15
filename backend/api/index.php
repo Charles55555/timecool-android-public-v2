@@ -3974,7 +3974,7 @@ switch ($route) {
             Rep::erreur(400, 'soi_meme', 'Vous ne pouvez pas vous prendre rendez-vous.');
         }
 
-        $titre = Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom']);
+        $titre = texteSur((string) (Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom'])));
         $typeRdv = typeRdvValide(Entree::corps()['type'] ?? null);
 
         /*
@@ -4242,6 +4242,7 @@ switch ($route) {
         $typeRdv = typeRdvValide($corps['type'] ?? null) ?? 'physique';
         // Mission 46 : le titre et la catégorie du questionnaire « Créer un nouveau rdv » ; sans eux, comme avant (les prénoms, Travail).
         $titreDonne = Entree::texte('titre', 120);
+        $titreDonne = $titreDonne === null ? null : (texteSur($titreDonne) !== '' ? texteSur($titreDonne) : null);
         $catDonnee = Entree::texte('cat', 20);
         if ($catDonnee !== null && !in_array($catDonnee, ['travail', 'sante', 'famille', 'amis', 'sport', 'voyages', 'personnel', 'perso'], true)) {
             $catDonnee = null;
@@ -4355,7 +4356,7 @@ switch ($route) {
     case 'POST /convocations':
         $moi = Auth::compte();
         $corps = Entree::corps();
-        $titre = Entree::requis('titre', 120);
+        $titre = texteSur(Entree::requis('titre', 120));
         $groupe = Entree::texte('groupe', 120);
         $jour = (string) ($corps['date'] ?? '');
         $debut = (string) ($corps['debut'] ?? '');
@@ -4483,7 +4484,7 @@ switch ($route) {
         if ($c === null) {
             Rep::erreur(404, 'convocation_introuvable', 'Convocation introuvable.');
         }
-        $titre = Entree::texte('titre', 120) ?? (string) $c['titre'];
+        $titre = texteSur((string) (Entree::texte('titre', 120) ?? (string) $c['titre']));
         $cat = Entree::texte('cat', 20);
         if ($cat === null || !in_array($cat, ['travail', 'sante', 'famille', 'amis', 'sport', 'voyages', 'personnel', 'perso'], true)) {
             $cat = 'travail';
@@ -5283,8 +5284,8 @@ switch ($route) {
                 [
                     $compte['id'],
                     Entree::entier('contact_id'),
-                    Entree::texte('titre', 200),
-                    Entree::texte('lieu', 255),
+                    Entree::texte('titre', 200) === null ? null : texteSur(Entree::texte('titre', 200)),
+                    Entree::texte('lieu', 255) === null ? null : texteSur(Entree::texte('lieu', 255)),
                 ]
             );
             $rdvId = (int) $pdo->lastInsertId();
@@ -5412,7 +5413,7 @@ switch ($route) {
             Db::req(
                 'INSERT INTO rdv (organisateur_id, invite_compte_id, titre, lieu, origine, remplace_uid, avant, expire_le)
                  VALUES (?, ?, ?, ?, "charly", ?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR))',
-                [$moi['id'], $cible === null ? null : $cible['id'], Entree::texte('titre', 200), Entree::texte('lieu', 255),
+                [$moi['id'], $cible === null ? null : $cible['id'], Entree::texte('titre', 200) === null ? null : texteSur(Entree::texte('titre', 200)), Entree::texte('lieu', 255) === null ? null : texteSur(Entree::texte('lieu', 255)),
                  Entree::texte('remplace', 100), $avant, PROPOSITION_SANS_REPONSE_HEURES]
             );
             $rdvId = (int) $pdo->lastInsertId();
