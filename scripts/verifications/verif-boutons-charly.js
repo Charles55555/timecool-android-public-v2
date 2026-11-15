@@ -33,7 +33,7 @@ const forme = (s) => s.replace(/background:[^;]*;|color:[^;]*;|border:1px solid 
 verifie('meme forme que la 1re ligne (pilules : padding, rayon, taille, graisse), seules les couleurs changent', !!style1 && styles2.every((s) => forme(s) === forme(style1)), forme(style1));
 verifie('les deux lignes defilent a l horizontale et ne font qu un bloc blanc (le trait est sous la 2e)', /overflow-x:auto/.test(l1[0]) && /overflow-x:auto/.test(l2[0]) && !/border-bottom/.test(l1[0].split('>')[0]) && /border-bottom:1px solid var\(--border\)/.test(l2[0].split('>')[0]));
 
-titre('2. charlyQuickAction lance le parcours existant');
+titre('2. (mission 93) charlyQuickAction : une phrase d exemple, mot pour mot, sans bulle de l utilisateur ni questionnaire');
 const appels = [];
 const ctx = {
   console, String, Array, Object, JSON, Date,
@@ -47,28 +47,41 @@ const ctx = {
   tcDemarrerRdvAPlusieurs: (t) => { appels.push('plusieurs:' + t); },
   tcDemarrerLibre: (t) => { appels.push('libre:' + t); },
   tcDemarrerRetrouverContact: (t) => { appels.push('contact:' + t); },
-  _agendaChecked: null, Set,
+  _agendaChecked: null, Set, _tcQuestionnaire: null,
+  tcQuestionnaireArreter: () => { appels.push('arret'); ctx._tcQuestionnaire = null; },
   document: { getElementById: () => ctx._champ }, _champ: { value: '' }
 };
 vm.createContext(ctx);
 ['let _tcImprevuEnAttente = 0;', 'let _tcGroupeEnAttente = 0;', 'let _tcGroupeEnAttenteDepuis = 0;'].forEach((d) => vm.runInContext(d, ctx));
+{ const m = page.match(/const TC_PHRASES_BOUTONS = \{[\s\S]*?\n\};/); if (m) vm.runInContext(m[0].replace('const TC_PHRASES_BOUTONS', 'var TC_PHRASES_BOUTONS'), ctx); else { ko++; console.log('  KO  TC_PHRASES_BOUTONS introuvable'); } }
 { const m = page.match(/const TC_VERBES_DE_DEMANDE = \[[^\]]*\];/); if (m) vm.runInContext(m[0], ctx); else { ko++; console.log('  KO  TC_VERBES_DE_DEMANDE introuvable'); } }
 ['tcSansAccents', 'tcRessembleAUneDemande', 'charlyQuickAction'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 verifie('tcRessembleAUneDemande (règle de « qui est-ce ? ») n est déclarée qu une fois dans la page : réutilisée, pas doublée', page.split('function tcRessembleAUneDemande(').length - 1 === 1);
 if (!ko) {
-  ctx.charlyQuickAction('groupe');
-  // Mission 47 : le questionnaire guidé (tcDemarrerRdvAPlusieurs), avec la bulle du bouton.
-  verifie('« Rendez-vous à plusieurs » : le questionnaire guidé démarre avec la bulle du bouton', appels.indexOf('plusieurs:Je veux un rendez-vous à plusieurs') > -1, appels.join(' ; '));
-  ctx.charlyQuickAction('malade');
-  // Mission 43 : le questionnaire guidé (tcDemarrerMalade) ; sans jour dans le texte du bouton, la période est demandée.
-  verifie('« Je suis malade, décale tout » : le questionnaire guidé démarre avec le texte du bouton', appels.indexOf('malade:Je suis malade, décale tout') > -1, appels.find((a) => a.indexOf('malade:') === 0));
-  ctx.charlyQuickAction('libre');
-  // Mission 49 : le questionnaire guidé (tcDemarrerLibre), avec la bulle du bouton ; plus de phrase pré-remplie.
-  verifie('« Quand suis-je libre ? » : le questionnaire guidé démarre avec la bulle du bouton', appels.indexOf('libre:Quand suis-je libre ?') > -1 && appels.indexOf('envoi:Quand suis-je libre cette semaine ?') < 0, appels.join(' ; '));
-  ctx.charlyQuickAction('contact');
-  verifie('« Retrouver un contact » : Charly demande le nom, avec la bulle du bouton', appels.indexOf('contact:Retrouver un contact') > -1);
+  // Les sept phrases validées (Charles, 15/11), mot pour mot, avec la typographie française (espace insécable avant « : » et « ? »).
+  const ATTENDU = [
+  ['rdv', 'Pour créer un nouveau rendez-vous, écris-moi ou dis-moi ci-dessous, par exemple\u00a0: Dentiste demain à 15h.'],
+  ['impprevu', 'Pour gérer un imprévu, écris-moi ou dis-moi ci-dessous, par exemple\u00a0: Décale mon dentiste de demain à vendredi.'],
+  ['retard', 'Pour prévenir d\u2019un retard, écris-moi ou dis-moi ci-dessous, par exemple\u00a0: Préviens Paul que j\u2019aurai 10 minutes de retard.'],
+  ['groupe', 'Pour un rendez-vous à plusieurs, écris-moi ou dis-moi ci-dessous, par exemple\u00a0: Dîner avec Paul et Marie samedi soir.'],
+  ['malade', 'Si tu es malade, écris-moi ou dis-moi ci-dessous, par exemple\u00a0: Je suis malade, décale mes rendez-vous d\u2019aujourd\u2019hui ou de demain.'],
+  ['libre', 'Pour savoir quand tu es libre, écris-moi ou dis-moi ci-dessous, par exemple\u00a0: Quand suis-je libre mardi, jeudi ou cette semaine\u00a0?'],
+  ['contact', 'Pour retrouver un contact, écris-moi ou dis-moi ci-dessous, par exemple\u00a0: Retrouve Paul.'],
+  ];
+  ATTENDU.forEach(([cle, phrase]) => {
+    ctx.charlyIA.history = []; appels.length = 0;
+    ctx.charlyQuickAction(cle);
+    const h = ctx.charlyIA.history;
+    verifie('« ' + cle + ' » : une seule bulle, de Charly, la phrase exacte ; aucune bulle de l utilisateur, aucun questionnaire, l écran redessiné', h.length === 1 && h[0].role === 'assistant' && h[0].content === phrase && appels.join() === 'render', JSON.stringify(h) + ' / ' + appels.join());
+  });
+  verifie('toutes les phrases disent « écris-moi ou dis-moi ci-dessous, par exemple » et rien d autre ne s y ajoute', Object.keys(ctx.TC_PHRASES_BOUTONS).length === 7 && Object.keys(ctx.TC_PHRASES_BOUTONS).every((k) => ctx.TC_PHRASES_BOUTONS[k].indexOf('écris-moi ou dis-moi ci-dessous, par exemple\u00a0: ') > -1));
+  ctx.charlyIA.history = []; appels.length = 0; ctx._tcQuestionnaire = { id: 'q' };
+  vm.runInContext('_tcQuestionnaire = { id: "q" };', ctx);
+  ctx.charlyQuickAction('retard');
+  verifie('un questionnaire en cours s arrête avant la phrase', appels[0] === 'arret' && ctx.charlyIA.history.length === 1, appels.join());
+  appels.length = 0;
   ctx.charlyQuickAction('photo');
-  verifie('« Photo → rendez-vous » : le même chemin que le trombone (Photos)', appels.indexOf('trombone:photo') > -1);
+  verifie('« Photo → rendez-vous » : le même chemin que le trombone (Photos), inchangé', appels.indexOf('trombone:photo') > -1);
 }
 
 titre('3. L ancienne attente « Avec qui ? » (prénoms tapés, deux essais) a disparu : le bouton passe par le questionnaire (mission 47)');
@@ -102,8 +115,7 @@ let ko4 = 0;
   .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, c4); else { ko4++; console.log('  KO  ' + n + ' introuvable'); } });
 ko += ko4;
 if (!ko4) {
-  const bouton = (fonction(page, 'charlyQuickAction') || '').match(/tcDemarrerMalade\(("|')((?:[^"\\]|\\.)*?)\1\)/);
-  verifie('le texte du bouton « malade » est passé à tcDemarrerMalade (mission 43 : le questionnaire guidé)', !!bouton && /malade/.test(bouton[2]), bouton && bouton[2]);
+  verifie('(mission 93) le bouton « malade » ne lance plus tcDemarrerMalade : la phrase tapée suit son chemin', (fonction(page, 'charlyQuickAction') || '').indexOf('tcDemarrerMalade') < 0);
   const essais = ["Je suis malade, décale tout aujourd'hui", 'Je suis malade, décale tout aujourd’hui'];
   (async () => {
     for (const texte of essais) {

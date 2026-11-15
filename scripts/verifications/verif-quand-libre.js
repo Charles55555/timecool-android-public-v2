@@ -32,7 +32,7 @@ function extraire(nom) {
 
 titre('0. La page');
 const act = extraire('charlyQuickAction') || '';
-verifie('l onglet « Quand suis-je libre ? » lance le questionnaire avec sa bulle, sans phrase pré-remplie', /action === 'libre'\) \{ tcDemarrerLibre\('Quand suis-je libre \?'\); return; \}/.test(act) && act.indexOf("libre: 'Quand suis-je libre cette semaine ?'") < 0);
+verifie('(mission 93) le bouton ne lance plus le questionnaire : il donne sa phrase d exemple, mot pour mot', act.indexOf('tcDemarrerLibre') < 0 && /TC_PHRASES_BOUTONS\[action\]/.test(act) && page.indexOf("\n  libre: 'Pour savoir quand tu es libre, écris-moi ou dis-moi ci-dessous, par exemple : Quand suis-je libre mardi, jeudi ou cette semaine ?'") > -1);
 verifie('tcNouveauRdvPropositions prend le nombre voulu (six pour la liste)', /function tcNouveauRdvPropositions\(r, combien\)/.test(page) && /tcNouveauRdvPropositions\(r, 6\)/.test(page));
 
 /* Horloge fixée : jeudi 15 octobre 2026, 10h00. */
@@ -104,7 +104,7 @@ const reinit = (evts) => {
   trace.saves = 0; trace.toasts.length = 0; trace.envois.length = 0; trace.demarches.length = 0;
   vm.runInContext('_tcQuestionnaire = null; _tcMarcheArriere = null;', ctx);
 };
-const bouton = async () => { ctx.charlyQuickAction('libre'); await new Promise((r) => setTimeout(r, 0)); };
+const bouton = async () => { ctx.tcDemarrerLibre('Quand suis-je libre ?') /* mission 93 : plus par le bouton */; await new Promise((r) => setTimeout(r, 0)); };
 const nouveaux = () => ctx.events.filter((e) => String(e.id).indexOf('charly_ai_') === 0);
 
 (async () => {

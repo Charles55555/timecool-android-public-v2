@@ -3377,3 +3377,16 @@ Chef, 15/11 (texte validé par Charles).
 - Les deux variantes du message d'accueil de Charly (avec et sans prénom) se terminent par « Par exemple, écris-moi ou dis-moi ci-dessous : « Crée-moi un rendez-vous demain à 15h chez mon dentiste ». » au lieu de « Par où on commence ? ».
 - verif-prenom-charly : texte exact des deux variantes. verif-charly-campagne10 : la phrase d'exemple, tapée telle quelle, donne bien la carte « Dentiste » demain à 15h.
 - verifier.sh vert.
+
+## 15/11/2026 : mission 93, les boutons de Charly donnent un exemple
+
+Chef, 15/11 (phrases et propositions validées par Charles ; complément « Qui est ton dentiste ? » validé le même jour).
+- Les sept boutons (nouveau rdv, imprévu, retard, à plusieurs, malade, libre, contact) ne lancent plus de série de questions : Charly répond par une phrase avec un exemple à écrire ou à dire (TC_PHRASES_BOUTONS). Photo et Créer mon agenda ne changent pas. Les questionnaires restent joignables en tapant.
+- Chaque exemple aboutit simplement, sans le modèle :
+  - « Dentiste demain à 15h » (quoi, jour, heure) donne la carte tout de suite ; jamais pour une personne (nom de contact, majuscule, civilité, « avec »), un verbe ou « me rappeler » ;
+  - décaler au profil 1 : la carte simple de la 91 (« Je lui envoie ? ») ;
+  - retard : le contact nommé donne son rendez-vous du jour ; plus de « Et après ? » ni de « Qui prévient ? » ; une carte (« Tu seras en retard… Je lui envoie ? ») ;
+  - malade : « aujourd'hui ou demain » = les deux jours ; Charly prévient (plus de « Qui prévient ? ») ;
+  - « Dîner avec Paul et Marie samedi soir » : « À quelle heure ? » puis la carte.
+- Contact du rendez-vous : compte sans contact, pas de question (la carte dit « sans contact · relier ») ; sinon « C’est avec quelqu’un de tes contacts ? » (« 👤 Choisir un contact » / « Non, personne »), « C’est l’un d’eux ? » pour deux ou trois.
+- Suite verif-phrases-boutons (nouvelle ; Chrome sur le PC) : les sept phrases, puis chaque exemple tapé sur un compte neuf et un compte rempli. Treize suites adaptées. verifier.sh vert.

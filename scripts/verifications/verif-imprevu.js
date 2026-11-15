@@ -89,7 +89,7 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
 (async () => {
   titre('1. Le bouton : la bulle, puis « Qu’est-ce qui t’arrive ? », quatre choix, dans l ordre');
   reinit();
-  ctx.charlyQuickAction('impprevu');
+  ctx.tcDemarrerImprevu('J’ai un imprévu') /* mission 93 : plus par le bouton */;
   await new Promise((r) => setTimeout(r, 0));
   verifie('la bulle « J’ai un imprévu » puis la carte', H().length === 2 && H()[0].role === 'user' && H()[0].content === 'J’ai un imprévu' && carte() && carte()._questionnaire.question === 'Qu’est-ce qui t’arrive ?', textes());
   verifie('les quatre cas, textes exacts', choixTextes() === 'Je suis en retard | Je dois partir plus tôt | Un rendez-vous s’ajoute | Je ne peux pas venir', choixTextes());
@@ -192,7 +192,7 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
 
   titre('7. Dans la page : le bouton, l aiguillage, l ancien parcours parti, formule neutre, week-end, pas de tiret long ni d assertion arrière');
   const act = fonction(page, 'charlyQuickAction') || '';
-  verifie('le bouton « Gérer un imprévu » lance le questionnaire avec la bulle « J’ai un imprévu »', /if \(action === 'impprevu'\) \{ tcDemarrerImprevu\('J’ai un imprévu'\); return; \}/.test(act));
+  verifie('(mission 93) le bouton ne lance plus le questionnaire : il donne sa phrase d exemple, mot pour mot', act.indexOf('tcDemarrerImprevu') < 0 && /TC_PHRASES_BOUTONS\[action\]/.test(act) && page.indexOf("\n  impprevu: 'Pour gérer un imprévu, écris-moi ou dis-moi ci-dessous, par exemple : Décale mon dentiste de demain à vendredi.'") > -1);
   const csm = fonction(page, 'charlySendMessage') || '';
   verifie('« j’ai un imprévu » tapé (sans jour) va au même questionnaire, avant la contrainte', /if \(\/\\b\(imprevu\|reorganis\)\/\.test\(tcSansAccents\(text\)\) && !tcPeriodeContrainte\(text\)\) \{\s+await tcDemarrerImprevu\(text\);\s+return;\s+\}/.test(csm) && csm.indexOf('tcDemarrerImprevu(text)') < csm.indexOf('tcDetecterMalade(text)'));
   verifie('l ancien parcours (question libre, deux essais) a disparu', page.indexOf('_tcImprevuEnAttente') < 0 && page.indexOf('tcRepondreImprevu') < 0 && page.indexOf('TC_QUESTION_IMPREVU') < 0 && page.indexOf('tcPeriodeImprevu') < 0);

@@ -36,7 +36,7 @@ function extraire(nom) {
 
 titre('0. La page et l API');
 const act = extraire('charlyQuickAction') || '';
-verifie('l onglet « Rendez-vous à plusieurs » lance le questionnaire avec sa bulle', /action === 'groupe'\) \{ tcDemarrerRdvAPlusieurs\('Je veux un rendez-vous à plusieurs'\); return; \}/.test(act));
+verifie('(mission 93) le bouton ne lance plus le questionnaire : il donne sa phrase d exemple, mot pour mot', act.indexOf('tcDemarrerRdvAPlusieurs') < 0 && /TC_PHRASES_BOUTONS\[action\]/.test(act) && page.indexOf("\n  groupe: 'Pour un rendez-vous à plusieurs, écris-moi ou dis-moi ci-dessous, par exemple : Dîner avec Paul et Marie samedi soir.'") > -1);
 verifie('l ancienne attente « Avec qui ? » (prénoms tapés, deux essais) a disparu', page.indexOf('_tcGroupeEnAttente') < 0 && page.indexOf('tcDemandeHorsPrenoms') < 0);
 verifie('les réponses sont relues à chaque tour de synchronisation', /await tcSyncPousser\(\);\s+\/\/[^\n]*\n\s+if \(typeof tcPlusieursVerifier === 'function'\) \{ try \{ await tcPlusieursVerifier\(\); \} catch \(e\) \{\} \}/.test(extraire('tcSyncTour') || ''));
 verifie('les étapes de fin sont partagées entre les deux parcours, la durée avant les créneaux (mission 48)', /const TC_ETAPES_NRDV_FIN = \[/.test(page) && /TC_ETAPE_NRDV_DUREE,\s+TC_ETAPE_NRDV_DUREE_AUTRE,\s+\{ cle: 'creneau',/.test(page) && /TC_ETAPE_NRDV_DUREE,\s+\{ cle: 'creneau',/.test(page) && /TC_ETAPE_NRDV_VERIF,\s+TC_ETAPE_NRDV_CRENEAU_BIS,\s+TC_ETAPE_NRDV_VERIF_BIS,\s+TC_ETAPE_RECAP_PLUSIEURS/.test(page));
@@ -143,7 +143,7 @@ const reinit = (evts) => {
   Object.keys(stockage).forEach((k) => delete stockage[k]);
   vm.runInContext('_tcQuestionnaire = null; _tcMarcheArriere = null; _tcPlusieursDernierControle = 0;', ctx);
 };
-const bouton = async () => { ctx.charlyQuickAction('groupe'); await new Promise((r) => setTimeout(r, 0)); };
+const bouton = async () => { ctx.tcDemarrerRdvAPlusieurs('Je veux un rendez-vous à plusieurs') /* mission 93 : plus par le bouton */; await new Promise((r) => setTimeout(r, 0)); };
 const SERVEUR = () => ({ creneaux: [{ date: iso(1), heure: 14, minute: 0, manquants: [] }, { date: iso(4), heure: 9, minute: 0, manquants: ['Paul'] }, { date: iso(5), heure: 16, minute: 0, manquants: [] }], invites: ['Marc', 'Paul'], sans_acces: [] });
 const CONVOC = () => ({ id: 77, quand: 'vendredi 16 octobre de 14:00 à 15:00', envoyes: [{ reference: 'REF1', prenom: 'Marc', nom: 'Dupont' }, { reference: 'REF3', prenom: 'Paul', nom: 'Martin' }], sans_compte: [] });
 const PROPOSITION = (extra) => JSON.stringify([Object.assign({ id: 81, titre: 'Travail', cat: 'travail', date: iso(5), debut: 960, fin: 1020, heure: 16, references: ['REF1', 'REF3'], noms: ['Marc Dupont', 'Paul Martin'], quand: 'mardi 20 octobre, 16h à 17h', envoye: 0 }, extra || {})]);

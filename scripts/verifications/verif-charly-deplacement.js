@@ -24,7 +24,7 @@ const noms = ['tcEstDeplacement', 'tcVerbeConjugue', 'tcDeplacementsProposes', '
   // Mission 73 : les propositions de créneaux.
   'tcNomsLisibles', 'tcPropositionTexte', 'tcReponseDecalage', 'tcProposerLesCreneaux', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcCreneauxReproposesPour', 'tcJourLisible', 'tcCarteEnvoiCreneaux', 'tcRendreBoutonsEnvoi', 'tcChoisirEnvoiDeplacement', 'tcRecapEnvoi', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcEnvoyerPropositions', 'tcLignesPropositions',
   'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcClasseNormaliser',
-  'tcReponseOuiNon', 'tcISO', 'tcEstBandeau', 'tcEvenementSurPlusieursJours',
+  'tcReponseOuiNon', 'tcCreneauxEncoreValables', 'tcGenesDuCreneau', 'tcISO', 'tcEstBandeau', 'tcEvenementSurPlusieursJours',
   // Mission 73b : le profil (1 ici : aucune clé, « Je l’envoie ? » est posé).
   'tcConfianceCharly'];
 const constantes = (page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).join('\n');
@@ -76,17 +76,21 @@ const reponse = { role: 'assistant', content: 'Je m\'en occupe 👍\n[AGENDA]\n'
   + apres + ' | 10:00-11:00 | Rendez-vous avocat | rdv\n'
   + apres + ' | 16:00-17:00 | Rendez-vous dermatologue | rdv\n[/AGENDA]' };
 
+const attendre = () => new Promise((r) => setTimeout(r, 50));
 (async () => {
   // Avec contacts : une question, rien ne bouge encore
   const c = contexte(true);
   c.charlyIA.history.push(reponse);
   verifie('la demande est reconnue comme un déplacement', c.tcTraiterDeplacement(reponse, demande) === true);
+  await attendre();
   verifie('pas de carte « Valider » à cliquer', reponse._deplacement === true);
-  const q = c.charlyIA.history[c.charlyIA.history.length - 1].content;
-  verifie('Charly demande UN accord pour le lot, le message montré, « déjà vu » possible (mission 73)',
-    /William Ayache et Marie Dupont, je ne déplace rien tout de suite : je leur propose le nouveau créneau et deux autres/.test(q)
-    && /Le message pour William : « Bonjour William, je dois décaler notre rendez-vous du .+ à 10h00\. Voici ce que je peux te proposer : » suivi des créneaux à choisir\./.test(q)
-    && /Je l’envoie aux 2 \? Si c’est déjà vu avec eux, dis « déjà vu » : je déplace sans prévenir\.$/.test(q), q);
+  const dq = c.charlyIA.history[c.charlyIA.history.length - 1];
+  const q = dq.content;
+  verifie('(mission 93) Charly demande UN accord pour le lot, avec la carte simple : les créneaux de chacun (d abord celui demandé), « Je leur envoie ? »',
+    /^Je déplace 2 rendez-vous\.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres\.\n/.test(q)
+    && q.indexOf('« Rendez-vous avocat » avec William : ' + c.tcJourLisible(apres) + ', 10h') > -1 && q.indexOf('« Rendez-vous dermatologue » avec Marie') > -1
+    && /\nChacun choisit celui qui lui convient\.\nJe te demande avant de noter leurs choix dans ton agenda\.\nJe leur envoie \?$/.test(q)
+    && dq._boutonsEnvoi && dq._boutonsEnvoi.oui === 'Oui, envoie' && dq._boutonsEnvoi.non === 'Non', q);
   verifie('la date est en toutes lettres, pas « ' + apres + ' »', q.indexOf(apres) < 0, q);
   verifie('rien n est déplacé avant la réponse', c.events[0].date === demain && c.events[1].date === demain);
 
@@ -102,6 +106,7 @@ const reponse = { role: 'assistant', content: 'Je m\'en occupe 👍\n[AGENDA]\n'
   const c2 = contexte(true);
   c2.charlyIA.history.push(reponse);
   c2.tcTraiterDeplacement(Object.assign({}, reponse), demande);
+  await attendre();
   await c2.tcRepondreDeplacement('oui préviens-les');
   verifie('« oui » : rien n est déplacé, les deux restent à leur place, marqués', c2.events[0].date === demain && c2.events[1].date === demain
     && c2.events[0].decalage && c2.events[0].decalage.rdv === 1 && c2.events[1].decalage && c2.events[1].decalage.rdv === 2, JSON.stringify(c2.events.map(e => e.decalage)));
@@ -125,6 +130,7 @@ const reponse = { role: 'assistant', content: 'Je m\'en occupe 👍\n[AGENDA]\n'
   const c5 = contexte(true);
   c5.charlyIA.history.push(reponse);
   c5.tcTraiterDeplacement(Object.assign({}, reponse), demande);
+  await attendre();
   await c5.tcRepondreDeplacement('non');
   verifie('« non » : rien ne part, les deux restent à leur place', c5.propositions.length === 0 && c5.events[0].date === demain && c5.events[1].date === demain
     && /restent à leur place\.$/.test(c5.charlyIA.history[c5.charlyIA.history.length - 1].content), c5.charlyIA.history[c5.charlyIA.history.length - 1].content);

@@ -303,9 +303,16 @@ titre('Rien n est note tant qu on ne sait pas qui c est');
   verifie('la proposition attend',
     ctx.tcAttenteContact(msg, [p]) === 'mon ostéopathe',
     String(ctx.tcAttenteContact(msg, [p])));
-  verifie('et la question se pose a la deuxieme personne',
-    ctx.tcQuestionContact('mon ostéopathe').indexOf('ton ostéopathe') > -1,
+  verifie('(mission 93) la question, simple : « C’est avec quelqu’un de tes contacts ? »',
+    ctx.tcQuestionContact('mon ostéopathe') === 'C’est avec quelqu’un de tes contacts\u00a0?',
     ctx.tcQuestionContact('mon ostéopathe'));
+  {
+    const tous = ctx.contactsList;
+    ctx.contactsList = [];
+    verifie('(mission 93) un compte sans aucun contact : pas de question, la carte tout de suite',
+      ctx.tcAttenteContact(msg, [p]) === null, String(ctx.tcAttenteContact(msg, [p])));
+    ctx.contactsList = tous;
+  }
   verifie('« ma mère » devient « ta mère »',
     ctx.tcDesignationTutoyee('ma mère') === 'ta mère');
   verifie('« mes parents » devient « tes parents »',
@@ -422,9 +429,9 @@ titre('Repondre « oui », comme tout le monde');
   verifie('avec deux homonymes, la question se pose',
     ctx.tcAttenteContact(poser(), [{ contact: 'William Ayache' }]) === 'William Ayache',
     'on ne choisit pas a la place de quelqu un entre deux fiches identiques');
-  verifie('et elle dit qu ils sont deux',
-    ctx.tcQuestionContact('William Ayache').indexOf('Je vois 2 contacts avec') > -1,
-    ctx.tcQuestionContact('William Ayache').split('\n')[0]);
+  verifie('(mission 93) et elle demande « C’est l’un d’eux ? »',
+    ctx.tcQuestionContact('William Ayache') === 'C’est l’un d’eux\u00a0?',
+    ctx.tcQuestionContact('William Ayache'));
 
   let msg = poser();
   ctx.tcRepondreQuiEstCe('Oui il existe dans mes contacts');
@@ -469,13 +476,8 @@ titre('Repondre « oui », comme tout le monde');
 titre('Ce que la question annonce');
 {
   const q = ctx.tcQuestionContact('mon dermatologue');
-  verifie('elle demande s il est dans les contacts',
-    q.indexOf('dans tes contacts') > -1, q.split('\n')[0]);
-  verifie('elle demande le nom et le prénom',
-    q.indexOf('son nom et son prénom') > -1);
-  verifie('et elle dit ce qu on perd sans contact',
-    q.indexOf('annuler') > -1 && q.indexOf('retard') > -1,
-    'le dire maintenant vaut mieux qu au moment du retard');
+  verifie('(mission 93) elle demande seulement si c est avec un contact, en une ligne, sans « Si non… »',
+    q === 'C’est avec quelqu’un de tes contacts\u00a0?' && q.indexOf('\n') < 0 && q.indexOf('annuler') < 0, q);
 }
 
 titre('Ce que Charly ecrit, et ce qu on en lit');
@@ -627,9 +629,9 @@ function fin() {
   verifie('et la proposition ne s affiche qu apres',
     /if \(contactAttendu\) \{[\s\S]{0,2000}?\} else if \(displayProposals && displayProposals\.length( && !m\._deplacement)?\) \{/.test(page),
     'affichees ensemble, elles donnaient a croire que le rendez-vous etait pris');
-  verifie('les deux issues sont offertes',
-    page.indexOf('Choisir dans mes contacts') > -1
-    && page.indexOf('Noter sans contact') > -1,
+  verifie('les deux issues sont offertes (mission 93 : « 👤 Choisir un contact » / « Non, personne »)',
+    page.indexOf('>👤 Choisir un contact</button>') > -1
+    && page.indexOf('>Non, personne</button>') > -1 && page.indexOf('Noter sans contact') < 0,
     'un rendez-vous ne doit jamais rester bloque');
   verifie('le champ dit ou il cherche',
     page.indexOf('Cherche dans tes ') > -1

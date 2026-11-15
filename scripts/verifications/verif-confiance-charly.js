@@ -254,7 +254,12 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   await ctx.tcChoisirReponseCreneau(202, 'placer');
   dern = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
   verifie('placé : le serveur reçoit « place », « Rendez-vous déplacé » part dans la messagerie TimeCool de Paul, c est dit', trace.decisions[trace.decisions.length - 1] === 'place' && ctx.events[1].date === iso(1) && dern.content === '✉️ Message envoyé à Paul Martin dans sa messagerie TimeCool : « Rendez-vous déplacé : ici. »', dern.content);
-  verifie('profil 1 : décaler un rendez-vous avec un contact demande toujours « Je l’envoie ? »', (ctx.charlyIA.history = [], ctx.tcExecuterDeplacement([{ ev: ev('t', 'Tennis', 3, 9, 0, 10, 0, { contact: 'c1' }), p: { date: iso(3), startH: 11, startM: 0, endH: 12, endM: 0 } }]), /Je l’envoie \?/.test(ctx.charlyIA.history[0].content)) && vm.runInContext('_tcDeplacementEnAttente !== null', ctx));
+  ctx.charlyIA.history = [];
+  await ctx.tcExecuterDeplacement([{ ev: ev('t', 'Tennis', 3, 9, 0, 10, 0, { contact: 'c1' }), p: { date: iso(3), startH: 11, startM: 0, endH: 12, endM: 0 } }]);
+  {
+    const d1 = ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
+    verifie('profil 1 : décaler un rendez-vous avec un contact demande toujours l accord ; (mission 93) avec la carte simple : « Je te demande avant de noter son choix dans ton agenda. Je lui envoie ? »', /\nJe te demande avant de noter son choix dans ton agenda\.\nJe lui envoie \?$/.test(d1.content || '') && d1._boutonsEnvoi && d1._boutonsEnvoi.oui === 'Oui, envoie' && vm.runInContext('_tcDeplacementEnAttente !== null && _tcDeplacementEnAttente.confiance == null', ctx), d1.content);
+  }
   vm.runInContext('_tcDeplacementEnAttente = null', ctx);
   verifie('le rendez-vous d avant est envoyé avec la proposition (« avant »)', trace.creees.every((c) => /^[a-z]+ \d+ [a-zéû]+ à \d+h(\d\d)?$/.test(c.avant)), JSON.stringify(trace.creees.map((c) => c.avant)));
 

@@ -93,7 +93,9 @@ vm.runInContext((page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).
  'tcConversations', 'tcRdvNommeIntrouvable',
  // Mission 73 : un accord pour le lot, puis des créneaux proposés.
  'tcReponseDecalage', 'tcNomsLisibles', 'tcPropositionTexte', 'tcProposerLesCreneaux', 'tcEnvoyerPropositions', 'tcLignesPropositions',
- 'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcRemplirModele', 'tcValeursDuRdv'
+ 'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcRemplirModele', 'tcValeursDuRdv',
+ // Mission 93 : la carte du profil 1.
+ 'tcDemanderDeplacementProfil2', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcEvenementSurPlusieursJours', 'tcCarteEnvoiCreneaux', 'tcJourLisible'
 ].forEach((n) => { const src = extraire(n); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (bloc) vm.runInContext(bloc, ctx);
 if (ko) { console.log(''); console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -155,7 +157,7 @@ verifie('« anniversaire de Marc » → « Quel jour et à quelle heure, pour «
 verifie('« Dermatologue » → « Quel jour et à quelle heure, pour « Dermatologue » ? »', classer('Dermatologue').question === 'Quel jour et à quelle heure, pour « Dermatologue » ?', classer('Dermatologue').question);
 verifie('« Marc » → « Quel jour et à quelle heure, avec Marc Dupont ? »', classer('Marc').question === 'Quel jour et à quelle heure, avec Marc Dupont ?', classer('Marc').question);
 verifie('« dentiste demain » → « À quelle heure, pour « dentiste » demain ? »', classer('dentiste demain').question === 'À quelle heure, pour « dentiste » demain ?', classer('dentiste demain').question);
-verifie('« dentiste mardi 15h » (objet, jour, heure) passe', classer('dentiste mardi 15h').classe === 'claire' && classer('dentiste mardi 15h').raison === 'objet_moment');
+verifie('« dentiste mardi 15h » (objet, jour, heure) passe ; (mission 93) le détecteur de création le prend (carte directe)', classer('dentiste mardi 15h').classe === 'claire' && classer('dentiste mardi 15h').indices.detecteur === true, JSON.stringify(classer('dentiste mardi 15h')));
 verifie('« retard 10 min » : le détecteur de prévenance le prend (le questionnaire retard demande à qui), il passe', !!ctx.tcDetecterPrevenance('retard 10 min') && ctx.tcDetecterPrevenance('retard 10 min').minutes === 10 && classer('retard 10 min').classe === 'claire', JSON.stringify(ctx.tcDetecterPrevenance('retard 10 min')));
 verifie('« où est mon rdv ? » et « c’est où ? » : question d information (lieu), reconnues et passent', classer('où est mon rdv ?').classe === 'claire' && ctx.detecterConsultationAgenda('où est mon rdv ?') && ctx.detecterConsultationAgenda('où est mon rdv ?').type === 'lieu' && ctx.detecterConsultationAgenda('c’est où ?').type === 'lieu' && ctx.detecterConsultationAgenda('où est mon rdv de demain ?').periode && ctx.detecterConsultationAgenda('où est mon rdv de demain ?').periode.label === 'demain', JSON.stringify(ctx.detecterConsultationAgenda('où est mon rdv ?')));
 (async () => {
@@ -395,8 +397,9 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('« décale le golf à 15h » : le golf (sans contact) est déplacé à 15h-17h, « C’est fait, rendez-vous déplacé », marche arrière possible', golf.startH === 15 && golf.endH === 17 && golf.date === iso(4) && /C'est fait, rendez-vous déplacé/.test(d.content) && vm.runInContext('_tcMarcheArriere', ctx) && vm.runInContext('_tcMarcheArriere', ctx).type === 'deplacement', d.content); }
   ctx.events = agendaDep(); ctx.charlyIA.history = [];
   await ctx.tcGererDeplacementLocal('déplace le dentiste à mercredi à 10h', ctx.tcDeplacementLocal('déplace le dentiste à mercredi à 10h', new DateFixe()));
+  await new Promise((r) => setTimeout(r, 50)); 
   { const d = ctx.charlyIA.history[ctx.charlyIA.history.length - 1]; const att = vm.runInContext('_tcDeplacementEnAttente', ctx);
-    verifie('« déplace le dentiste à mercredi à 10h » (contact Marc Dupont) : (mission 73) un accord, le nouveau créneau et le message montrés, rien n est déplacé avant la réponse', /^Pour Marc Dupont, je ne déplace rien tout de suite : je lui propose le nouveau créneau \(.+\) et deux autres, et je te demande avant de placer son choix\.\nLe message : « Bonjour Marc, je dois décaler .+ » suivi des créneaux à choisir\.\nJe l’envoie \? Si c’est déjà vu avec cette personne, dis « déjà vu » : je déplace sans prévenir\.$/.test(d.content) && d.nature === 'question' && att && att.liste.length === 1 && ctx.events.find((e) => e.id === 'dentiste').date === iso(1), d.content); }
+    verifie('« déplace le dentiste à mercredi à 10h » (contact Marc Dupont) : (mission 73) un accord, le nouveau créneau et le message montrés, rien n est déplacé avant la réponse', /^Je déplace ton rendez-vous « Dentiste » avec Marc\.\n[\s\S]*mercredi 21 octobre :\n10h, [\s\S]*\nJe te demande avant de noter son choix dans ton agenda\.\nJe lui envoie \?$/.test(d.content) && d._boutonsEnvoi && d._boutonsEnvoi.oui === 'Oui, envoie' && d.nature === 'question' && att && att.liste.length === 1 && ctx.events.find((e) => e.id === 'dentiste').date === iso(1), d.content); }
   verifie('charlySendMessage : le déplacement local passe après « rendez-vous introuvable » et avant la demande de créneau ; tcTraiterDeplacement partage tcExecuterDeplacement', csm.indexOf('const _local = tcDeplacementLocal(text, new Date());') > csm.indexOf('const introuvable = tcRdvNommeIntrouvable(') && csm.indexOf('const _local = tcDeplacementLocal(text, new Date());') < csm.indexOf('const _creneau = detecterDemandeCreneau(text);') && /tcExecuterDeplacement\(liste\);\s+return true;\s+\}/.test(extraire('tcTraiterDeplacement') || ''));
   verifie('charlySendMessage : après « Lequel ? », le rendez-vous désigné passe par le « oui / non » (jamais de suppression immédiate)', /if \(_tcSuppressionChoix\) \{\s+const choisi = tcRdvDesigne\(_tcSuppressionChoix, text\);\s+_tcSuppressionChoix = null;\s+if \(choisi\) \{\s+tcPousserMessageUtilisateur\(text\);[\s\S]{0,200}_tcSuppressionEnAttente = \[choisi\];/.test(csm) && !/tcSupprimerRdvs\(\[choisi\]\)/.test(csm));
   verifie('charlySendMessage : l annulation sans cible passe juste après l annulation ciblée', csm.indexOf('if (tcDetecterSuppressionSansCible(text)) {') > csm.indexOf('if (detecterSuppressionRdv(text)) {') && csm.indexOf('if (tcDetecterSuppressionSansCible(text)) {') < csm.indexOf('const _consultation = detecterConsultationAgenda(text);'));
@@ -644,7 +647,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     ctx.tcSyncTour = async () => {}; ctx.saveContacts = () => {};
     const dernier = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1] || {};
     const D = (p, rc) => { poser(rc); return ctx.tcDetecterCreneauPourRecue(p); };
-    const essai = async (p, rc) => { poser(rc); ctx.charlyIA.history = []; envois.length = 0; const d = ctx.tcDetecterCreneauPourRecue(p); if (d) await ctx.tcGererCreneauPourRecue(p, d); return d; };
+    const essai = async (p, rc) => { poser(rc); ctx.charlyIA.history = []; envois.length = 0; const d = ctx.tcDetecterCreneauPourRecue(p); if (d) await ctx.tcGererCreneauPourRecue(p, d); await new Promise((r) => setTimeout(r, 50)); return d; };
     const jh = (d) => d && d.date && d.heure ? iso2(d.date) + ' ' + d.heure.h + 'h' + (d.heure.m || '') : JSON.stringify(d);
     const iso2 = (d) => { d = new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
     // 1. Le cache de la messagerie.
@@ -725,7 +728,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       && JSON.stringify((ctx.tcDeplacementLocal('Repousse Hugo à la semaine prochaine', new DateFixe()) || {}).liste || []).indexOf('"date":"' + iso(8) + '"') > -1,
       ctx.tcRdvNommeIntrouvable('Repousse Hugo à la semaine prochaine', new DateFixe(), ctx.events, 'user') + ' | ' + JSON.stringify(ctx.tcDeplacementLocal('Repousse Hugo à la semaine prochaine', new DateFixe())));
     { const d = D('Plutôt par téléphone avec Hugo vendredi 11h', RC.R1); await essai('Plutôt par téléphone avec Hugo vendredi 11h', RC.R1);
-      verifie('« Plutôt par téléphone avec Hugo vendredi 11h » → le Café existant passe par téléphone et à 11h (déplacement, question « prévenir ? »), rien n’est créé ni proposé', !!d && d.mode === 'modifier' && d.type === 'telephone' && ctx.events.find((e) => e.id === 'cafe').type === 'telephone' && envois.length === 0 && /^Pour Hugo Besnard, je ne déplace rien tout de suite/.test(dernier().content) && ctx.events.length === 4, JSON.stringify(d) + ' | ' + dernier().content); }
+      verifie('« Plutôt par téléphone avec Hugo vendredi 11h » → le Café existant passe par téléphone et à 11h (déplacement, question « prévenir ? »), rien n’est créé ni proposé', !!d && d.mode === 'modifier' && d.type === 'telephone' && ctx.events.find((e) => e.id === 'cafe').type === 'telephone' && envois.length === 0 && /^Je déplace ton rendez-vous « Café » avec Hugo\.\n/.test(dernier().content) && ctx.events.length === 4, JSON.stringify(d) + ' | ' + dernier().content); }
     vm.runInContext('_tcDeplacementEnAttente = null', ctx);
     ctx.events = agenda().concat([ev('cafe', 'Café', 1, 9, 0, 10, 0, { contact: 'h' })]);
     await essai('Plutôt en visio avec Hugo', RC.R1);
@@ -822,8 +825,8 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       const d2 = D('Plutôt par téléphone avec Hugo à 18h', RC.R1); await essai('Plutôt par téléphone avec Hugo à 18h', RC.R1); const m2 = dernier().content;
       vm.runInContext('_tcDeplacementEnAttente = null', ctx);
       verifie('(2e passage) « Plutôt par téléphone avec Hugo lundi » → le Café passe par téléphone ET lundi 19 à la même heure (9h, créneaux proposés à Hugo, mission 73) ; « … à 18h » → le même jour (vendredi 16) à 18h ; jamais « rien d’autre ne change »',
-        !!d1 && d1.mode === 'modifier' && e1.type === 'telephone' && /^Pour Hugo Besnard, je ne déplace rien tout de suite/.test(m1) && /2026-10-19|lundi 19/i.test(m1) && /09h|9h/.test(m1) && m1.indexOf('rien d’autre ne change') < 0
-        && !!d2 && d2.mode === 'modifier' && /^Pour Hugo Besnard, je ne déplace rien tout de suite/.test(m2) && /18h/.test(m2) && /2026-10-16|vendredi 16/i.test(m2) && m2.indexOf('rien d’autre ne change') < 0, m1 + ' || ' + m2); }
+        !!d1 && d1.mode === 'modifier' && e1.type === 'telephone' && /^Je déplace ton rendez-vous « Café » avec Hugo\.\n/.test(m1) && /2026-10-19|lundi 19/i.test(m1) && /09h|9h/.test(m1) && m1.indexOf('rien d’autre ne change') < 0
+        && !!d2 && d2.mode === 'modifier' && /^Je déplace ton rendez-vous « Café » avec Hugo\.\n/.test(m2) && /18h/.test(m2) && /2026-10-16|vendredi 16/i.test(m2) && m2.indexOf('rien d’autre ne change') < 0, m1 + ' || ' + m2); }
     ctx.events = agenda(); envois.length = 0;
     { await essai('Fixe Hugo vendredi 9h et samedi 10h', RC.R1);
       const q = dernier().content, n = envois.length;
@@ -1458,7 +1461,8 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     verifie('la nouvelle place chevauche un autre rendez-vous : la relecture le dit (« À cette heure-là, tu as déjà « Réunion équipe » (14h à 15h). »)', /\n• À cette heure-là, tu as déjà « Réunion équipe » \(14h à 15h\)\.\nRéponds/.test(dernier().content), dernier().content);
     await annonce('le dentiste passe à 17h');
     await ctx.tcRepondreDeplacement('oui');
-    verifie('un rendez-vous avec un contact : après « oui », la question habituelle (mission 73 : créneaux proposés à Marc Dupont, un accord)', /^Pour Marc Dupont, je ne déplace rien tout de suite : je lui propose le nouveau créneau \(vendredi 16 octobre à 17h\) et deux autres/.test(dernier().content) && attente() && !attente().confirmer, dernier().content);
+    await new Promise((r) => setTimeout(r, 50)); 
+    verifie('un rendez-vous avec un contact : après « oui », la question habituelle (mission 73 : créneaux proposés à Marc Dupont, un accord)', /^Je déplace ton rendez-vous « Dentiste » avec Marc\.\n[\s\S]*\nvendredi 16 octobre : 17h\.\n[\s\S]*\nJe lui envoie \?$/.test(dernier().content) && attente() && !attente().confirmer, dernier().content);
     const ratesN = [];
     for (const t of ['La réunion est passée à 15h ?', 'Le train est passé à 15h', 'La réunion est passée', 'la réunion est à 15h', 'elle est passée à 15h', 'Hugo est passé à 15h', 'la réunion est passée à la trappe']) { if (await annonce(t)) ratesN.push(t + ' → ' + dernier().content); }
     verifie('une question, un rendez-vous absent (« le train »), « la réunion est passée », « la réunion est à 15h », « elle / Hugo est passé à 15h » : rien ici (le chemin habituel, puis le modèle)', !ratesN.length && ctx.charlyIA.history.length === 0, ratesN.join(' | '));
@@ -1626,7 +1630,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const c49e = ctx.tcCreationLocale('café Hugo demain 10h', new DateFixe());
     verifie('#49 « déj gaëlle ven 12h30 » → « déjeuner gaëlle vendredi 12h30 » → la carte « Déjeuner avec Gaëlle » vendredi 16, 12h30-13h30 ; « dîner avec Paul jeudi 20h » → « Dîner avec Paul »',
       corr === 'déjeuner gaëlle vendredi 12h30' && /\[AGENDA\]\n2026-10-16 \| 12:30-13:30 \| Déjeuner avec Gaëlle \| rdv\n\[\/AGENDA\]$/.test(c49) && /\| Dîner avec Paul \| rdv/.test(c49b), [corr, c49, c49b].join(' | '));
-    verifie('« déjeuner avec Sophie mardi 12h30 » (déjà prévu), « déjeuner demain 12h » (sans contact), « café Hugo demain 10h » (Hugo inconnu ici) : rien de la page, le chemin habituel', c49c === '' && c49d === '' && c49e === '', [c49c, c49d, c49e].join(' | '));
+    verifie('« déjeuner avec Sophie mardi 12h30 » (déjà prévu), « café Hugo demain 10h » (Hugo inconnu ici) : rien de la page, le chemin habituel ; (mission 93) « déjeuner demain 12h » (quoi, jour, heure) : la carte tout de suite', c49c === '' && /\[AGENDA\]\n2026-10-16 \| 12:00-13:00 \| Déjeuner \| rdv\n\[\/AGENDA\]$/.test(c49d) && c49e === '', [c49c, c49d, c49e].join(' | '));
     ctx.contactsList = contacts0;
 
     // 4. « décale tout lundi » (#96) : la liste et « vers quand ? », puis la relecture, rien ne bouge avant « oui ».
@@ -2077,7 +2081,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
     const imsg = csm.indexOf('await tcRepondreMessageSansTexte(text, texteTape)) return;'), irep = csm.indexOf('tcRepondreFicheContact(text)) return;');
     verifie('charlySendMessage : la réponse attendue avec les autres, le déclencheur juste après les coordonnées ; les cartes dans renderChatMessage ; le bouton au bout de la 2e ligne ; « Ajouter » passe par le formulaire ; la présentation cite la fiche ; la carte de la page Contacts a son repère',
       imsg > -1 && irep > imsg && icoord > -1 && ifiche > icoord && ifiche - icoord < 400
-      && /if \(m && m\._fiches\) return tcRendreFiches\(m\);/.test(page) && /charlyQuickAction\('contact'\)[^>]*>👤 Retrouver un contact<\/button>/.test(page) && /if \(action === 'contact'\) \{ tcDemarrerRetrouverContact\('Retrouver un contact'\); return; \}/.test(page)
+      && /if \(m && m\._fiches\) return tcRendreFiches\(m\);/.test(page) && /charlyQuickAction\('contact'\)[^>]*>👤 Retrouver un contact<\/button>/.test(page) && /\n  contact: 'Pour retrouver un contact, écris-moi ou dis-moi ci-dessous, par exemple : Retrouve Paul\.'\n/.test(page)
       && /function tcFormulaireContact\(contactId, nomPropose\)/.test(page) && /nomPropose \? tcContactDecouperNom\(nomPropose\)/.test(page) && /const TC_CHARLY_CE_QUE_JE_FAIS = /.test(page) && /id="ctFiche_\$\{c\.id\}"/.test(page));
     const b66 = bloc.indexOf('MISSION 66') > -1 ? bloc.slice(bloc.indexOf('MISSION 66')) : '';
     verifie('pas de tiret long, d’assertion arrière ni de « \\b » dans le bloc 66', b66.length > 1000 && !/\(\?<[=!]/.test(b66) && b66.indexOf('—') < 0 && b66.indexOf('\\b') < 0);

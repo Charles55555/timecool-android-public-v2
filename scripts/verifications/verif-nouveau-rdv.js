@@ -37,7 +37,7 @@ function extraire(nom) {
 titre('0. La page et l API');
 verifie('l ancienne question unique « Tu veux créer un nouveau rendez-vous ! » a disparu', page.indexOf('TC_QUESTION_NOUVEAU_RDV') < 0 && page.indexOf('Tu veux créer un nouveau rendez-vous !') < 0);
 const act = extraire('charlyQuickAction') || '';
-verifie('l onglet rdv lance le questionnaire avec sa bulle', /action === 'rdv'\) \{ tcDemarrerNouveauRdv\('Je veux créer un nouveau rendez-vous'\); return; \}/.test(act));
+verifie('(mission 93) le bouton ne lance plus le questionnaire : il donne sa phrase d exemple, mot pour mot', act.indexOf('tcDemarrerNouveauRdv') < 0 && /TC_PHRASES_BOUTONS\[action\]/.test(act) && page.indexOf("\n  rdv: 'Pour créer un nouveau rendez-vous, écris-moi ou dis-moi ci-dessous, par exemple : Dentiste demain à 15h.'") > -1);
 verifie('le serveur : proposerRdvGroupe accepte une période (depuis, jusqua, combien, par_jour), confirmerRdvGroupe un titre et une catégorie',
   /async proposerRdvGroupe\(references, duree, type, options\)/.test(page) && /\['depuis', 'jusqua', 'combien', 'par_jour'\]/.test(page)
   && /async confirmerRdvGroupe\(references, date, heure, duree, type, options\)/.test(page) && /if \(options && options\.titre\) corps\.titre = options\.titre;/.test(page));
@@ -133,7 +133,7 @@ const reinit = (evts) => {
   trace.connecte = true; trace.reponseProposer = null; trace.reponseConfirmer = null;
   vm.runInContext('_tcQuestionnaire = null; _tcMarcheArriere = null;', ctx);
 };
-const bouton = async () => { ctx.charlyQuickAction('rdv'); await new Promise((r) => setTimeout(r, 0)); };
+const bouton = async () => { ctx.tcDemarrerNouveauRdv('Je veux créer un nouveau rendez-vous') /* mission 93 : plus par le bouton */; await new Promise((r) => setTimeout(r, 0)); };
 const nouveaux = () => ctx.events.filter((e) => String(e.id).indexOf('charly_ai_') === 0);
 const DUREE_PLUSIEURS = 'Combien de temps ? À plusieurs, c’est 1 h, 2 h ou 3 h.';
 

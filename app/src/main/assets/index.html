@@ -5817,6 +5817,8 @@ function tcSurnomRefuse(designation) {
  */
 function tcAttenteContact(msg, propositions) {
   if (!Array.isArray(propositions)) return null;
+  // Mission 93 : un compte sans aucun contact : pas de question, la carte du rendez-vous tout de suite.
+  if (typeof contactsList === 'undefined' || !Array.isArray(contactsList) || !contactsList.length) return null;
   for (let i = 0; i < propositions.length; i++) {
     const p = propositions[i];
     const nom = tcDesignationPour(msg, p);
@@ -5844,12 +5846,10 @@ function tcDesignationTutoyee(designation) {
 /**
  * Ce que Charly dit tant qu'il lui manque la personne.
  *
- * La derniere phrase n'est pas une politesse : sans contact, le
- * bouton « Prevenir » du rendez-vous n'aura personne a joindre. Mieux
- * vaut le dire maintenant qu'au moment du retard.
+ * Mission 93 (Charles, 15/11) : une phrase simple, pour un enfant de 10 ans. Les boutons font le reste
+ * (« 👤 Choisir un contact », « Non, personne ») ; taper un nom marche toujours.
  */
 function tcQuestionContact(designation) {
-  const qui = tcDesignationTutoyee(designation);
 
   // Plusieurs homonymes : ce n'est plus « qui est-ce ? » mais
   // « lequel ? ». Un carnet de trois mille fiches en contient
@@ -5860,15 +5860,12 @@ function tcQuestionContact(designation) {
     // « Portent ce nom » etait faux pour « mon dentiste » : ces fiches
     // contiennent le mot, elles ne portent pas un nom. On le dit tel
     // quel, et on montre les candidats quand ils sont peu nombreux.
-    const mot = tcDesignationSansPetitMot(designation) || designation;
-    return 'Je vois ' + homonymes.length + ' contacts avec « ' + mot + ' » — c\'est l\'un d\'eux ?\n'
-      + (homonymes.length <= 3 ? 'Touche le bon, ou note le rendez-vous sans contact.'
-                                : 'Choisis-le dans la liste, ou note le rendez-vous sans contact.');
+    // Mission 93 : deux ou trois, un bouton chacun sous la question. Au-delà, la question générale : « 👤 Choisir un
+    // contact » ouvre la liste, déjà filtrée sur le mot.
+    if (homonymes.length <= 3) return 'C’est l’un d’eux\u00a0?';
   }
 
-  return 'Qui est ' + qui + ' ? Est-ce qu\'il existe dans tes contacts ?\n'
-    + 'Si oui, donne-moi son nom et son prénom.\n'
-    + 'Si non, je ne pourrai ni annuler ce rendez-vous ni prévenir d\'un retard.';
+  return 'C’est avec quelqu’un de tes contacts\u00a0?';
 }
 
 /**
@@ -6022,7 +6019,8 @@ function tcLigneContactProposition(msg, p, tempId) {
       + '📍 <span data-notranslate>' + escapeHTMLSafe(nom) + '</span>'
       + ' — un lieu, pas un contact <span style="color:var(--g-blue);">· relier</span></div>';
   }
-  if (tcSurnomRefuse(nom)) {
+  // Mission 93 : un compte sans aucun contact n'a pas eu de question : la carte dit « sans contact », comme après « Non, personne ».
+  if (tcSurnomRefuse(nom) || typeof contactsList === 'undefined' || !Array.isArray(contactsList) || !contactsList.length) {
     // On ne repose plus la question, mais on ne l'efface pas non plus :
     // sans cette ligne, plus rien n'expliquerait pourquoi ce
     // rendez-vous n'a personne, ni comment y remedier.
@@ -11900,8 +11898,8 @@ function renderChatMessage(m) {
       html += `
           <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
             ${enLigne}
-            <button onclick="tcChoisirContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#fff8e1; color:#8a6500; border:1.5px solid #fbbc04; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">👤 Choisir dans mes contacts</button>
-            <button onclick="tcIgnorerContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:10px; font-size:12px; cursor:pointer;">Noter sans contact</button>
+            <button onclick="tcChoisirContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#fff8e1; color:#8a6500; border:1.5px solid #fbbc04; border-radius:10px; font-size:12px; font-weight:600; cursor:pointer;">👤 Choisir un contact</button>
+            <button onclick="tcIgnorerContactProposition('${idMsg}', ${nomJs})" style="padding:9px 14px; background:#f1f3f4; color:var(--text-sec); border:1.5px solid var(--border); border-radius:10px; font-size:12px; cursor:pointer;">Non, personne</button>
           </div>
       `;
     } else if (displayProposals && displayProposals.length && !m._deplacement) {
@@ -12424,7 +12422,19 @@ function tcCreationLocale(texte, now, forcer) {
   // « Mme Lambert brushing samedi 10h », « M. Dubois vendredi 9h » : un client nomme en tete vaut une demande de rendez-vous (pros, mission 56).
   // « déj gaëlle ven 12h30 », « dîner avec Paul jeudi 20h » : un repas avec un contact connu est un rendez-vous (chef, mission 64).
   const _repasContact = (typeof tcRepasAvecContact === 'function') ? tcRepasAvecContact(brut) : null;
-  if (!_repasContact && !/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|doit m appeler|doit me rappeler|doit me telephoner|doit m ecrire)\b/.test(t)
+  // Mission 93 : « Dentiste demain à 15h », « coiffeur samedi 10h » : quoi + jour + heure, rien d'autre.
+  // Jamais un verbe (« mets le dentiste à jeudi 10h » est un déplacement), ni « à » juste avant le jour.
+  const _mCourt = t.trim().toLowerCase().match(/^([a-z][a-z -]{1,40}?) (?:aujourd hui|demain|apres[ -]demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain)? (?:a |vers )?\d{1,2} ?h(?: ?\d{2})?\.?$/);
+  // Et seulement un objet simple (« dentiste », « mon coiffeur ») : jamais une personne (un nom de contact, une civilité,
+  // « avec »), ni « me rappeler », « a appelé », « plutôt par téléphone » : ceux-là gardent leur chemin habituel.
+  const _motsCourt = _mCourt ? _mCourt[1].trim().split(/\s+/) : [];
+  const _nomsContacts = new Set();
+  if (_mCourt && typeof contactsList !== 'undefined' && Array.isArray(contactsList)) contactsList.forEach(function (c) { tcSansAccents(String((c && c.name) || '')).toLowerCase().split(/[^a-z]+/).forEach(function (w) { if (w.length >= 3) _nomsContacts.add(w); }); });
+  const _motsBruts = brut.trim().split(/\s+/).slice(1, _motsCourt.length);
+  const _court = !!_mCourt && _motsCourt.length <= 3 && !_motsBruts.some(function (w) { return /^[A-ZÀ-Ý]/.test(w); })
+    && !_motsCourt.some(function (w) { return _nomsContacts.has(w) || /^(avec|par|plutot|me|m|mr|mme|mlle|dr|pr|appele|appeler|rappel|rappeler|rappelle|telephone|visio|et)$/.test(w); })
+    && !/\b(mets?|bouge[sz]?|decale[sz]?|deplace[sz]?|change[sz]?|passe[sz]?|avance[sz]?|recule[sz]?|reporte[sz]?|repousse[sz]?|annule[sz]?|supprime[sz]?|efface[sz]?|enleve[sz]?|retire[sz]?)\b/.test(_mCourt[1]) && !/ (a|au|pour)$/.test(_mCourt[1]);
+  if (!_court && !_repasContact && !/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|doit m appeler|doit me rappeler|doit me telephoner|doit m ecrire)\b/.test(t)
       && !((typeof tcCiviliteEnTete === 'function' && tcCiviliteEnTete(brut)) && !/\b(a|ont|est|m a|m ont) (appele|telephone|ecrit|envoye|annule|confirme|demande|dit|rappele|passe|laisse)\b/.test(t))) return '';
   if (/\b(restaurant|resto|hotel|table|billets?|train|vol|avion)\b/.test(t)) return '';
   if (/\b(annule[rsz]?|annulation|supprime[rsz]?|efface[rsz]?|enleve[rsz]?|retire[rsz]?)\b/.test(t)) return '';
@@ -12474,7 +12484,7 @@ function tcCreationLocale(texte, now, forcer) {
   // (« mets le rdv dentiste a jeudi 10h », avec l'article, designe un rendez-vous existant : la garde reste.)
   // « Ajoute dentiste mardi 9h », « crée coach lundi 9h » : un verbe de création en tête ne déplace jamais, c'est un nouveau rendez-vous (chef, mission 58).
   const verbeCreation = /^\s*(?:stp |svp |charly )?(?:ajoute[sz]?|ajouter|rajoute[sz]?|cree[sz]?|creer|planifie[sz]?|programme[sz]?|inscris|enregistre[sz]?)(?:[- ]moi)? /.test(t);
-  if (!forcer && !verbeCreation && !(_repasContact && !_repasContact.dejaPrevu) && (!/\b(rdv|rendez|reunion|seance|consultation)\b/.test(t) || /\b(le|la|l|mon|ma|ce|cette) (rdv|rendez|reunion|seance|consultation)\b/.test(t)) && typeof events !== 'undefined' && Array.isArray(events)) {
+  if (!forcer && !verbeCreation && !_court && !(_repasContact && !_repasContact.dejaPrevu) && (!/\b(rdv|rendez|reunion|seance|consultation)\b/.test(t) || /\b(le|la|l|mon|ma|ce|cette) (rdv|rendez|reunion|seance|consultation)\b/.test(t)) && typeof events !== 'undefined' && Array.isArray(events)) {
     const motsT = tcSansAccents(titre).split(/[^a-z0-9]+/).filter(function (w) {
       if (w.length < 4 || /^(avec|chez|pour|sans|dans|vers)$/.test(w)) return false;
       try { if (typeof tcContactsParMots === 'function' && tcContactsParMots([w]).length) return false; } catch (e) {}
@@ -13694,23 +13704,30 @@ function tcPlageImprevu(text) {
   return { debut: 0, fin: 1440, precise: false, label: '' };
 }
 
+/**
+ * Mission 93 (Charles, 15/11) : un bouton ne lance plus de série de questions à cases. Charly répond par UNE phrase, avec un
+ * exemple à écrire ou à dire. « Créer mon agenda » et « Photo → rendez-vous » ne changent pas.
+ */
+const TC_PHRASES_BOUTONS = {
+  rdv: 'Pour créer un nouveau rendez-vous, écris-moi ou dis-moi ci-dessous, par exemple : Dentiste demain à 15h.',
+  impprevu: 'Pour gérer un imprévu, écris-moi ou dis-moi ci-dessous, par exemple : Décale mon dentiste de demain à vendredi.',
+  retard: 'Pour prévenir d’un retard, écris-moi ou dis-moi ci-dessous, par exemple : Préviens Paul que j’aurai 10 minutes de retard.',
+  groupe: 'Pour un rendez-vous à plusieurs, écris-moi ou dis-moi ci-dessous, par exemple : Dîner avec Paul et Marie samedi soir.',
+  malade: 'Si tu es malade, écris-moi ou dis-moi ci-dessous, par exemple : Je suis malade, décale mes rendez-vous d’aujourd’hui ou de demain.',
+  libre: 'Pour savoir quand tu es libre, écris-moi ou dis-moi ci-dessous, par exemple : Quand suis-je libre mardi, jeudi ou cette semaine ?',
+  contact: 'Pour retrouver un contact, écris-moi ou dis-moi ci-dessous, par exemple : Retrouve Paul.'
+};
+
 function charlyQuickAction(action) {
-  // 2e ligne (mission 22) : chaque bouton lance le parcours existant.
-  // Rendez-vous à plusieurs : le questionnaire guidé (mission 47) : avec qui, pour quoi, quand (créneaux communs), combien de temps, récapitulatif.
-  if (action === 'groupe') { tcDemarrerRdvAPlusieurs('Je veux un rendez-vous à plusieurs'); return; }
-  // Malade : le questionnaire guidé (mission 43) : période, liste de ce qui n a pas commencé, créneaux proposés, qui prévient,
-  // récapitulatif, puis le travail. Le bouton dit déjà « décale » : la question « que fait-on ? » est sautée.
-  if (action === 'malade') { tcDemarrerMalade('Je suis malade, décale tout'); return; }
+  // Mission 93 : la phrase d'exemple, seule (pas de bulle « Je veux… » de l'utilisateur).
+  if (Object.prototype.hasOwnProperty.call(TC_PHRASES_BOUTONS, action)) {
+    if (typeof _tcQuestionnaire !== 'undefined' && _tcQuestionnaire && typeof tcQuestionnaireArreter === 'function') tcQuestionnaireArreter();
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: TC_PHRASES_BOUTONS[action] });
+    renderCharlyChat();
+    return;
+  }
   // Photo : le meme chemin que le trombone.
   if (action === 'photo') { charlyAttachAction('photo'); return; }
-  // Retrouver un contact : Charly demande le nom, la réponse suivante donne la carte (mission 66).
-  if (action === 'contact') { tcDemarrerRetrouverContact('Retrouver un contact'); return; }
-  // Retard : le questionnaire guidé (mission 45) : combien, pour quel rendez-vous, et après, qui prévient, récapitulatif.
-  if (action === 'retard') { tcPrevenirRetard('Je vais être en retard'); return; }
-  // Nouveau rdv : le questionnaire guidé (mission 46) : quoi, avec qui, quand (trois créneaux), combien de temps, récapitulatif.
-  if (action === 'rdv') { tcDemarrerNouveauRdv('Je veux créer un nouveau rendez-vous'); return; }
-  // Imprévu : le questionnaire guidé (mission 44) : ce qui arrive, ce qui est touché, la solution, qui prévient, récapitulatif.
-  if (action === 'impprevu') { tcDemarrerImprevu('J’ai un imprévu'); return; }
   // Agenda : ouvrir la page checklist au lieu d'envoyer un message
   if (action === 'agenda') {
     _agendaChecked = new Set();
@@ -13730,8 +13747,6 @@ function charlyQuickAction(action) {
     tcDemarrerCalculTrajet("J'aimerais calculer un trajet.");
     return;
   }
-  // Quand suis-je libre : le questionnaire guidé (mission 49) : quand, pour combien de temps, la liste, y mettre quelque chose.
-  if (action === 'libre') { tcDemarrerLibre('Quand suis-je libre ?'); return; }
   const prompts = {
     trajet: "J'aimerais calculer un trajet. Demande-moi les adresses de départ et d'arrivée et l'heure du rendez-vous.",
     reserver: "J'aimerais faire une réservation (restaurant ou hôtel). Pose-moi les questions nécessaires."
@@ -15126,7 +15141,8 @@ function tcExecuterDeplacement(liste) {
   }
   // Mission 91 (Charles, 15/11) : au profil 2, rien ne part et rien ne s’écrit avant UN oui, sur la carte du profil 1 ; elle
   // montre les créneaux proposés à chacun, et le oui vaut pour n’importe lequel d’entre eux : le choix sera placé seul.
-  if (profil === 2) return tcDemanderDeplacementProfil2(liste, avec, sans);
+  // Mission 93 : au profil 1 aussi, la carte simple (sa ligne « Je te demande avant de noter… »), une seule question.
+  if (profil === 2 || profil === 1) return tcDemanderDeplacementProfil2(liste, avec, sans, profil);
   _tcDeplacementEnAttente = { liste: liste, avec: avec, sans: sans };
   const contacts = [];
   avec.forEach(function (x) { const c = tcContactDuRdv(x.ev); if (!contacts.some(function (d) { return d.id === c.id; })) contacts.push(c); });
@@ -15145,12 +15161,13 @@ function tcExecuterDeplacement(liste) {
  * Mission 91 : la validation finale du profil 2 pour un décalage avec des contacts. Ce qui se déplace sans contact, les
  * créneaux proposés à chacun (calculés maintenant, envoyés tels quels au oui), le message, et ce qui se passera ensuite.
  */
-async function tcDemanderDeplacementProfil2(liste, avec, sans) {
+async function tcDemanderDeplacementProfil2(liste, avec, sans, profil) {
+  const n = profil === 1 ? 1 : 2;
   // Les places prévues des rendez-vous sans contact (déplacés au oui) sont réservées : aucun créneau montré ne tombe dessus.
   const items = await tcCreneauxDuLot(avec.concat(sans));
-  const carte = tcCarteEnvoiCreneaux({ items: items, deplaces: sans, profil: 2 });
+  const carte = tcCarteEnvoiCreneaux({ items: items, deplaces: sans, profil: n });
   const m = { role: 'assistant', nature: 'question', content: carte.lignes.join('\n'), _boutonsEnvoi: { etat: 'choix', oui: carte.envoi ? 'Oui, envoie' : 'Oui', non: 'Non' } };
-  _tcDeplacementEnAttente = { liste: liste, avec: avec, sans: sans, items: items, confiance: 2, carte: m };
+  _tcDeplacementEnAttente = { liste: liste, avec: avec, sans: sans, items: items, confiance: n === 2 ? 2 : null, carte: m };
   charlyIA.history.push(m);
   renderCharlyChat();
 }
@@ -15209,7 +15226,7 @@ async function tcRepondreDeplacement(text) {
   const lotId = 'lot-' + Date.now();
   if (sans.length && _tcMarcheArriere && _tcMarcheArriere.type === 'deplacement') _tcMarcheArriere.lot = lotId;
   // Mission 91 : au profil 2, les créneaux montrés avant le oui partent tels quels ; le choix du contact sera placé seul.
-  const envoi = await tcProposerLesCreneaux(avec, attente.items ? { lot: lotId, items: attente.items, confiance: attente.confiance } : { lot: lotId });
+  const envoi = await tcProposerLesCreneaux(avec, attente.items ? Object.assign({ lot: lotId, items: attente.items }, attente.confiance ? { confiance: attente.confiance } : {}) : { lot: lotId });
   tcDireBilanPropositions(envoi.lignes, envoi.res.envois);
   return true;
 }
@@ -15589,6 +15606,15 @@ async function charlySendMessage() {
   let text = tcCorrigerAbreviations(texteTape);
   _tcTexteTape = { tape: texteTape, corrige: text };
   if (!text) return;
+  // Mission 93 : la réponse à « À quelle heure ? » complète la demande d'avant (« Dîner avec Paul et Marie samedi » + « 20h »).
+  {
+    const _attenteHeure = typeof _tcHeureEnAttente !== 'undefined' ? _tcHeureEnAttente : null;
+    _tcHeureEnAttente = null;
+    if (_attenteHeure && tcHeureDansTexte(String(text).toLowerCase())) {
+      text = tcComposerAvecHeure(_attenteHeure.texte, text);
+      _tcTexteTape = { tape: texteTape, corrige: text };
+    }
+  }
   if (charlyIA.isLoading) { showToast('Charly réfléchit déjà…'); return; }
   // Mission 77 : « … et attends ma validation », « fais-le directement » : cette demande suit le profil dit, le réglage ne change pas.
   // La phrase est ôtée de ce que lisent les détecteurs et le modèle. Sans elle, une réponse à une question garde le profil du
@@ -16190,6 +16216,14 @@ async function charlySendMessage() {
   inp.value = '';
   inp.style.height = 'auto';
   renderCharlyChat();
+
+  // Mission 93 : « Dîner avec Paul et Marie samedi soir » : il ne manque que l'heure : une seule question, puis la carte.
+  if (typeof tcHeureManquante === 'function' && tcHeureManquante(text)) {
+    _tcHeureEnAttente = { texte: text };
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: 'À quelle heure ?' });
+    renderCharlyChat();
+    return;
+  }
 
   // Show loading
   tcDefinirStatutCharly('⏳ Charly réfléchit…', true);
@@ -17847,6 +17881,27 @@ function tcMontrerDejaInscrit(champ, identifiant, amener) {
     c.focus();
     if (c.scrollIntoView) c.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
+}
+
+/* ══ Mission 93 : une demande à laquelle il ne manque que l'heure ══ */
+var _tcHeureEnAttente = null;
+
+/** « Dîner avec Paul et Marie samedi soir » : quoi + avec quelqu'un + un jour (+ matin, midi, soir), sans heure. */
+function tcHeureManquante(text) {
+  const brut = String(text || '');
+  if (/\?/.test(brut)) return false;
+  const t = tcSansAccents(brut).toLowerCase().replace(/[’']/g, ' ');
+  if (!/\bavec\s+[a-z]{2,}/.test(t) || t.split(/\s+/).filter(Boolean).length > 12) return false;
+  if (tcHeureDansTexte(brut.toLowerCase())) return false;
+  if (/\b(annul|supprim|efface|decal|deplac|report|repouss|retard|malade|libre|dispo|rappel|previen)/.test(t)) return false;
+  return typeof tcJoursCites === 'function' && tcJoursCites(brut, new Date()).length === 1;
+}
+
+/** La demande d'avant, complétée par l'heure donnée (« samedi soir » + « 20h » → « samedi à 20h »). */
+function tcComposerAvecHeure(texte, reponse) {
+  const h = tcHeureDansTexte(String(reponse).toLowerCase());
+  const base = String(texte).replace(/\s+(?:le\s+|en\s+)?(?:matin|midi|soir|soiree|apr[eè]s[- ]midi|aprem)\b/i, '').replace(/[.!]+\s*$/, '').trim();
+  return base + ' à ' + h.h + 'h' + (h.m ? String(h.m).padStart(2, '0') : '');
 }
 
 /** Un nom ou prénom ne contient ni chiffre ni date. */
@@ -25778,13 +25833,15 @@ async function tcQuestionnaireSuivant() {
       if (suite === false) { if (q === _tcQuestionnaire) _tcQuestionnaire = null; return; }
       if (q !== _tcQuestionnaire) return;
     }
+    // Mission 93 : malade et retard : plus de « Qui prévient ? » (Charly prévient, la carte le dit et demande « Je lui envoie ? »).
+    if (etape === TC_ETAPE_PREVENIR && q.def && (q.def.nom === 'malade' || q.def.nom === 'retard') && q.reponses.prevenir === undefined) q.reponses.prevenir = 'charly';
     if (q.reponses[etape.cle] !== undefined) continue;                     // déjà dit dans la phrase
     // Profil 3 (73c) : pas de récapitulatif, un compte rendu (rangé aussi au Journal d’activité). Mission 91 : au profil 2, le
     // récapitulatif est la validation finale, toujours posé.
     if (etape === TC_ETAPE_RECAP && typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3) { q.reponses.recap = 'oui'; q.reponses._seul = true; continue; }
     let choix = typeof etape.choix === 'function' ? etape.choix(q.reponses) : etape.choix;
     // Mission 91 : la carte simple se termine par « Je lui envoie ? » : « Oui, envoie » / « Non ».
-    if (etape === TC_ETAPE_RECAP && tcRecapEnvoi(q.reponses) && Array.isArray(choix) && q.reponses._creneaux.some(function (i) { return i.creneaux && i.creneaux.length; })) {
+    if (etape === TC_ETAPE_RECAP && Array.isArray(choix) && ((tcRecapEnvoi(q.reponses) && q.reponses._creneaux.some(function (i) { return i.creneaux && i.creneaux.length; })) || tcRecapRetard(q.reponses))) {
       choix = choix.map(function (c) { return Object.assign({}, c, { texte: c.cle === 'oui' ? 'Oui, envoie' : 'Non' }); });
     }
     if ((!choix || !choix.length) && typeof etape.libre !== 'function') continue;
@@ -26134,7 +26191,7 @@ const TC_ETAPE_RECAP = {
     r._creneaux = (r.action === 'decaler' && r.prevenir === 'charly' && Array.isArray(r._liste))
       ? await tcCreneauxDuLot(r._liste.filter(function (x) { return !!x.p; })) : null;
   },
-  question: function (r) { return tcRecapEnvoi(r) ? tcQuestionnaireRecap(r) : 'Voici ce que je vais faire :\n' + tcQuestionnaireRecap(r); },
+  question: function (r) { return (tcRecapEnvoi(r) || tcRecapRetard(r)) ? tcQuestionnaireRecap(r) : 'Voici ce que je vais faire :\n' + tcQuestionnaireRecap(r); },
   choix: [
     { cle: 'oui', texte: 'Oui, vas-y', mots: /^(oui|ouais|ok|okay|yes|go|vas y|d accord|daccord|confirme|c est bon)\b/ },
     { cle: 'non', texte: 'Non, j’arrête', mots: /^(non|no|nan|stop|arrete|laisse|annule)\b/, ton: 'gris' }
@@ -26144,6 +26201,11 @@ const TC_ETAPE_RECAP = {
 /** Mission 91 : le récapitulatif est la carte simple (décaler en prévenant les contacts, avec les créneaux calculés). */
 function tcRecapEnvoi(r) {
   return !!r && r.action === 'decaler' && r.prevenir === 'charly' && Array.isArray(r._creneaux) && r._creneaux.length > 0;
+}
+
+/** Mission 93 : un retard que Charly annonce lui-même : la carte simple, puis « Je lui envoie ? ». */
+function tcRecapRetard(r) {
+  return !!r && r.action === 'retard' && r.prevenir === 'charly' && !!r._retardRdv && Array.isArray(r._contacts) && r._contacts.length > 0;
 }
 
 /** « Voici ce que je vais faire : … », ligne par ligne. */
@@ -26157,6 +26219,16 @@ function tcQuestionnaireRecap(r) {
       laisses: r._liste.filter(function (x) { return !x.p; }),
       profil: typeof tcConfianceCharly === 'function' ? tcConfianceCharly() : 1
     }).lignes.join('\n');
+  }
+  // Mission 93 : le retard, pour un enfant de 10 ans : le rendez-vous, l'heure d'arrivée, qui je préviens, le message.
+  if (tcRecapRetard(r)) {
+    const e = r._retardRdv, c = r._contacts[0];
+    const p = String(c.name || '').split(' ')[0];
+    return ['Tu seras en retard de ' + r.minutes + ' minutes à « ' + e.title + ' ».',
+      'Tu arriveras vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes)) + '.',
+      'Je préviens ' + (r._contacts.length > 1 ? tcQuestionnaireNoms(r._contacts) : p) + '.',
+      'Le message : « ' + tcQuestionnaireMessage(r, c, e, e) + ' »',
+      r._contacts.length > 1 ? 'Je leur envoie ?' : 'Je lui envoie ?'].join('\n');
   }
   const lignes = [];
   if (r.action === 'decaler') {
@@ -26602,7 +26674,10 @@ function tcJourLisible(date) {
 function tcCarteEnvoiCreneaux(o) {
   const items = o.items || [], deplaces = o.deplaces || [], laisses = o.laisses || [];
   const lignes = [];
-  const prenom = function (c) { return String((c && c.name) || '').split(' ')[0]; };
+  const prenom = function (c) {
+    const nom = String((c && c.name) || '').trim(), p = nom.split(' ')[0];
+    return /^(dr|docteur|pr|me|maitre|maître|m|mme|mlle)\.?$/i.test(p) ? nom : p;   // mission 93 : « avec Dr Lefèvre », pas « avec Dr »
+  };
   const heure = function (c) { return tcMinutesLisibles(Number(c.startH) * 60 + Number(c.startM || 0)); };
   const ou = function (l) { return l.length > 1 ? l.slice(0, -1).join(', ') + ' ou ' + l[l.length - 1] : l[0]; };
   const parJour = function (cs) {
@@ -27329,6 +27404,8 @@ const TC_MALADE_PERIODES = {
   demain_apresmidi: { texte: 'Demain après-midi',          label: 'demain après-midi',           jours: [1, 1], debut: 720, fin: 1440, mots: /apres.?midi|aprem/ },
   demain:           { texte: 'Demain toute la journée',    label: 'demain',                      jours: [1, 1], debut: 0,   fin: 1440, mots: /^demain$|toute la journee|journee entiere|tout demain/ },
   prochains_jours:  { texte: 'Les 2 ou 3 prochains jours', label: 'pour les 3 prochains jours',  jours: [0, 2], debut: 0,   fin: 1440, mots: /prochains|jours|2 ou 3|deux ou trois/ },
+  // Mission 93 : « aujourd'hui ou demain » dit dans la phrase : les deux jours (pas de bouton de plus).
+  aujourdhui_demain: { texte: 'Aujourd’hui et demain',   label: 'pour aujourd’hui et demain',  jours: [0, 1], debut: 0,   fin: 1440, mots: /aujourd.*demain/, cache: true },
   // « malade après-demain » dit dans la phrase (TESTEURS, 03/11) : pas de bouton de plus.
   apres_demain:     { texte: 'Après-demain',               label: 'après-demain',                jours: [2, 2], debut: 0,   fin: 1440, mots: /apres.?demain/, cache: true }
 };
@@ -27349,7 +27426,9 @@ function tcDetecterMalade(text) {
 function tcMaladeDansLaPhrase(text) {
   const sans = tcSansAccents(String(text || '')).replace(/[’'´]/g, "'");
   const connu = {};
-  if (/apres[- ]?demain/.test(sans)) {
+  if (/aujourd'?hui/.test(sans) && /\bdemain\b/.test(sans) && !/apres[- ]?demain/.test(sans)) {
+    connu.periode = 'aujourdhui_demain';
+  } else if (/apres[- ]?demain/.test(sans)) {
     connu.periode = 'apres_demain';
   } else if (/\bdemain\b/.test(sans)) {
     if (/\bmatin/.test(sans)) connu.periode = 'demain_matin';
@@ -27571,9 +27650,22 @@ async function tcPrevenirRetard(text, rdv) {
   if (text) tcPousserMessageUtilisateur(text);
   // Sans rendez-vous aujourd'hui (et aucun visé par la phrase), inutile de demander le retard (testeurs, 15/10).
   if (!rdv && !tcQuestionnaireRdv(0, 0, 0, 1440).length) { tcQuestionnaireArreter(); tcQuestionnaireDire('Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.'); return; }
+  // Mission 93 : « Préviens Paul que… » : le rendez-vous d'aujourd'hui avec Paul, sans question.
+  if (!rdv) rdv = tcRdvDuJourDuContactNomme(text);
   const connu = tcRetardDansLaPhrase(text);
   if (rdv) { connu.pour = 'autre'; connu._vise = rdv; }
   await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_RETARD, connu);
+}
+
+/** Mission 93 : le rendez-vous d'aujourd'hui avec le contact nommé dans la phrase (un seul), ou null. */
+function tcRdvDuJourDuContactNomme(text) {
+  const mots = tcSansAccents(String(text || '')).toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3; });
+  const contacts = (typeof contactsList !== 'undefined' && Array.isArray(contactsList) ? contactsList : []).filter(function (c) {
+    return c && c.name && tcSansAccents(String(c.name)).toLowerCase().split(/[^a-z0-9]+/).some(function (w) { return w.length >= 3 && mots.indexOf(w) > -1; });
+  });
+  if (!contacts.length) return null;
+  const rdvs = tcQuestionnaireRdv(0, 0, 0, 1440).filter(function (e) { return contacts.some(function (c) { return c.id === e.contact; }); });
+  return rdvs.length === 1 ? rdvs[0] : null;
 }
 
 /** Le parcours, étape par étape : combien, pour quoi, et après, qui prévient, récapitulatif. */
@@ -27616,8 +27708,8 @@ const TC_QUESTIONNAIRE_RETARD = {
         r._liste = [];
         const debut = r._retardRdv.startH * 60 + r._retardRdv.startM;
         r._suivants = tcQuestionnaireRdv(0, 13, 0, 1440).filter(function (e) { return e.date === r._retardRdv.date && e !== r._retardRdv && (e.startH * 60 + e.startM) > debut; });
-        tcQuestionnaireDire('Le rendez-vous : « ' + r._retardRdv.title + ' », ' + tcQuestionnaireQuand(r._retardRdv.date, r._retardRdv) + ' (arrivée vers ' + tcQuestionnaireHeure(debut + Number(r.minutes)) + ').');
-        if (!r._suivants.length) r.suite = 'rattrape';
+        // Mission 93 : plus de question « Et après ? » (les rendez-vous suivants ne bougent pas) ; la carte dit le rendez-vous.
+        if (r.suite === undefined) r.suite = 'rattrape';
       },
       question: 'Et après ?',
       choix: [

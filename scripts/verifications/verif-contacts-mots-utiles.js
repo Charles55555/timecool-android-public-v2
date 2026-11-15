@@ -103,11 +103,11 @@ titre('La liste « Avec qui ? » cherche comme Charly');
 titre('La question dit la verite');
 {
   const q = ctx.tcQuestionContact('mon dentiste');
-  verifie('« Je vois 5 contacts avec « dentiste » »', /Je vois 5 contacts avec « dentiste »/.test(q), q.split('\n')[0]);
+  // Mission 93 (Charles, 15/11) : une phrase simple ; les boutons font le reste.
+  verifie('(mission 93) à 5, la question générale (« 👤 Choisir un contact » ouvre la liste filtrée)', q === 'C’est avec quelqu’un de tes contacts\u00a0?', q);
   verifie('plus de « portent ce nom »', !/portent ce nom/.test(q));
-  verifie('a 5, on renvoie a la liste', /dans la liste/.test(q));
   const q2 = ctx.tcQuestionContact('Michel');
-  verifie('a 2, on invite a toucher le bon', /Je vois 2 contacts avec « Michel »/.test(q2) && /Touche le bon/.test(q2));
+  verifie('(mission 93) à 2, « C’est l’un d’eux ? » (un bouton chacun)', q2 === 'C’est l’un d’eux\u00a0?', q2);
   const q3 = ctx.tcQuestionContact('mon ostéopathe');
   verifie('un seul : pas de question d homonymes', !/Je vois/.test(q3));
 }

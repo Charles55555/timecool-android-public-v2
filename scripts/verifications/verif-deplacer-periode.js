@@ -65,7 +65,7 @@ vm.runInContext('let _tcDeplacementPeriode = null; let _tcDeplacementEnAttente =
  // Mission 73 : un accord pour le lot, puis des créneaux proposés.
  'tcExecuterDeplacement', 'tcConfianceCharly', 'tcRepondreDeplacement', 'tcReponseDecalage', 'tcNomsLisibles', 'tcPropositionTexte', 'tcProposerLesCreneaux', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcCreneauxReproposesPour', 'tcJourLisible', 'tcCarteEnvoiCreneaux', 'tcRendreBoutonsEnvoi', 'tcChoisirEnvoiDeplacement', 'tcRecapEnvoi', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu',
  'tcEnvoyerPropositions', 'tcLignesPropositions', 'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle',
- 'tcMinutesLisibles', 'tcHeureSql', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre'
+ 'tcMinutesLisibles', 'tcHeureSql', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcCreneauxEncoreValables', 'tcGenesDuCreneau', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre'
 ].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
@@ -101,10 +101,10 @@ function scene(contrainte) {
   verifie('reponse prise', pris === true && attente() === null);
   verifie('et signale le chevauchement avec le dentiste', ctx.charlyIA.history.some((m) => /chevauche.*Dentiste/.test(m.content)), ctx.charlyIA.history.map((m) => m.content).join(' | '));
   verifie('plus de fenêtre de confirmation par contact', trace.confirms.length === 0);
-  verifie('Charly montre le plan (le travail jeudi 15h-17h) et le message à Marc (désolé(e), l ancienne date), un seul accord',
-    /^Je déplace :\n• « Travail »/.test(dernier().content) && /Pour Marc Dupont, je ne déplace rien tout de suite : je lui propose le nouveau créneau \(jeudi 8 octobre à 17h\) et deux autres/.test(dernier().content)
-    && /« Bonjour Marc, désolé\(e\), je dois décaler notre rendez-vous du mercredi 7 octobre à 17h00\. Voici ce que je peux te proposer : » suivi des créneaux à choisir/.test(dernier().content)
-    && /Je l’envoie \?/.test(dernier().content), dernier().content);
+  verifie('(mission 93) la carte simple : le travail jeudi 15h, Marc d abord jeudi 17h (à la suite), un seul accord « Je lui envoie ? »',
+    /^Je déplace 2 rendez-vous\.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres\.\n« Travail » : jeudi 8 octobre, 15h\.\n« Coiffeur » avec Marc :[ \n]jeudi 8 octobre, 17h/.test(dernier().content)
+    && /\nMarc choisit celui qui lui convient\.\nJe te demande avant de noter son choix dans ton agenda\.\nJe lui envoie \?$/.test(dernier().content)
+    && dernier()._boutonsEnvoi && dernier()._boutonsEnvoi.oui === 'Oui, envoie', dernier().content);
   verifie('rien n a bougé avant la réponse', horaire(sc.travail) === iso(2) + ' 11:00-13:00' && horaire(sc.coiffeur) === iso(2) + ' 17:00-18:00');
   await ctx.tcRepondreDeplacement('oui');
   verifie('« oui » : le travail (2 h) passe jeudi 15h-17h', horaire(sc.travail) === iso(3) + ' 15:00-17:00', horaire(sc.travail));
