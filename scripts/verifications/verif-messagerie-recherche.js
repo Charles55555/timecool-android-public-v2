@@ -50,7 +50,7 @@ const ctx = {
   tcConversationsAffichables: () => ctx.conversations,
 };
 vm.createContext(ctx);
-['escapeHTMLSafe', 'tcSansAccents', 'tcPrenomPresentable', 'getContactInitials', 'getContactColor', 'tcContactsCherches', 'tcContactsTimeCoolCherches', 'tcTexteRechercheMessagerie', 'renderMessages']
+['escapeHTMLSafe', 'tcSansAccents', 'tcPrenomPresentable', 'getContactInitials', 'getContactColor', 'tcContactsCherches', 'tcContactsTimeCoolCherches', 'tcLangueCourante', 'tcTexteRechercheMessagerie', 'renderMessages']
   .forEach((n) => { const f = fonction(n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 const texte = () => liste.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const chercher = (q) => { champ.value = q; ctx.renderMessages(); return liste.innerHTML; };
@@ -73,6 +73,13 @@ if (!ko) {
   verifie('la recherche dans les messages garde son chemin (« salut » trouve la conversation)', /openConversation\('srv_REFPAUL'\)/.test(h3), h3);
   verifie('(chef) à 390 et 360 px, le texte de Charles dans la case', (ctx.window.innerWidth = 390, chercher(''), champ.placeholder === 'Rechercher un contact TimeCool ou une conversation') && (ctx.window.innerWidth = 360, chercher(''), champ.placeholder === 'Rechercher un contact TimeCool ou une conversation'), champ.placeholder);
   verifie('(chef) sous 340 px, « Rechercher un contact ou une conversation »', (ctx.window.innerWidth = 320, chercher(''), champ.placeholder === 'Rechercher un contact ou une conversation'), champ.placeholder);
+  ctx.currentLanguage = 'es';
+  champ.placeholder = 'Buscar un contacto TimeCool o una conversación';
+  ctx.window.innerWidth = 320; chercher('');
+  const ph1 = champ.placeholder;
+  ctx.window.innerWidth = 390; chercher('a');
+  verifie('(examen) en espagnol, la case garde sa traduction : ni à 320 px, ni en tapant une lettre', ph1 === 'Buscar un contacto TimeCool o una conversación' && champ.placeholder === 'Buscar un contacto TimeCool o una conversación', ph1 + ' / ' + champ.placeholder);
+  ctx.currentLanguage = 'fr';
   ctx.window.innerWidth = 390;
   ctx._msgFilter = 'archived';
   chercher('Marie');

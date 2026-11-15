@@ -7252,6 +7252,8 @@ function tcConversationsAffichables() {
 function tcTexteRechercheMessagerie() {
   const si = document.getElementById('msgSearch');
   if (!si) return;
+  // Examen : seulement en français. Dans une autre langue, la case garde sa traduction (jamais remise en français).
+  if (typeof tcLangueCourante === 'function' && tcLangueCourante() !== 'fr') return;
   const voulu = (window.innerWidth || 390) < 340 ? 'Rechercher un contact ou une conversation' : 'Rechercher un contact TimeCool ou une conversation';
   if (si.placeholder !== voulu) si.placeholder = voulu;
 }
