@@ -17357,7 +17357,7 @@ function hideAuthFlow() {
   const sal = h < 18 ? 'Bonjour' : 'Bonsoir';
   const fname = tcPrenomUtilisateur();
   tcChargerHistoriqueCharly();
-  const _accueil = sal + (fname ? ' ' + fname : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par où on commence ?';
+  const _accueil = sal + (fname ? ' ' + fname : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par exemple, écris-moi ou dis-moi ci-dessous : « Crée-moi un rendez-vous demain à 15h chez mon dentiste ».';
   // appText : texte de l'app (pas une donnee personnelle) -> traduisible
   // L'accueil ne s'ajoute que si la conversation est vide : sinon il
   // s'empilerait a chaque connexion, et elle ne doit plus jamais se vider.
@@ -18439,7 +18439,7 @@ function showWelcomeSplash(firstname) {
   const salG = hG < 18 ? 'Bonjour' : 'Bonsoir';
   const fnameG = tcPrenomUtilisateur();
   tcChargerHistoriqueCharly();
-  const _accueilG = salG + (fnameG ? ' ' + fnameG : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par où on commence ?';
+  const _accueilG = salG + (fnameG ? ' ' + fnameG : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par exemple, écris-moi ou dis-moi ci-dessous : « Crée-moi un rendez-vous demain à 15h chez mon dentiste ».';
   if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueilG, appText: true, fr: _accueilG});
   if (typeof tcSyncCharlyGreeting === 'function') setTimeout(tcSyncCharlyGreeting, 600);
   setTimeout(renderCharlyChat, 300);

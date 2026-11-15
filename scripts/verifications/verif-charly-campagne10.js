@@ -86,6 +86,17 @@ const N = agenda().length;
     const r = ctx.tcCreationLocale(texte, NOW);
     verifie('« ' + texte + ' » → bloc « ' + ligne + ' » et prose « je te propose ceci »', r.indexOf('[AGENDA]\n' + ligne + '\n[/AGENDA]') > -1 && /je te propose ceci\./.test(r), r);
   });
+  {
+    // Mission 92 : la promesse faite au nouvel inscrit. La phrase est lue dans l'accueil lui-même, tapée telle quelle.
+    const m = page.match(/const _accueil = [^\n]*«[ \u00a0]([^»]+?)[ \u00a0]»/);
+    const phrase = m ? m[1] : '';
+    const avant = ctx.events;
+    ctx.events = [];
+    const r = ctx.tcCreationLocale(phrase, NOW);
+    ctx.events = avant;
+    verifie('l exemple de l accueil (« ' + phrase + ' »), sur un agenda vide : la carte « Dentiste », demain (lundi 12 octobre) à 15h', phrase === 'Crée-moi un rendez-vous demain à 15h chez mon dentiste'
+      && r.indexOf('[AGENDA]\n2026-10-12 | 15:00-16:00 | Dentiste | rdv\n[/AGENDA]') > -1 && /je te propose ceci\./.test(r), r);
+  }
   ['annule le dentiste', 'décale mon rdv de mardi à 16h', 'quand suis-je libre vendredi ?', 'qu est-ce que j ai mardi ?', 'rdv dentiste mardi', 'je suis malade', 'supprime tout mardi après-midi', 'rdv dentiste tous les mardis 15h', 'rdv dentiste mardi 15h ?',
    // Examen : duree, plage sans objet ou a l envers, deux demandes, phrase longue, reservation → le modele (la plage « de X a Y » : mission 54).
    'rdv dentiste mardi de 17h à 15h', 'rdv mardi 14h-16h', 'rdv dentiste mardi 15h jusqu’à 17h', 'rdv mardi 15h pendant 2 heures',

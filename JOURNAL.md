@@ -3370,3 +3370,10 @@ Chef, 15/11 (trouvé par EXAMINATEUR).
 - Revu et déjà bon : le texte d'origine d'une traduction, les cartes reçues (demande de rendez-vous, convocation, proposition de créneaux), la carte du demandeur, la page publique des liens (backend/web/rdv.html), les toasts (textContent), le compte rendu au Journal (mission 91).
 - API : les titres et lieux saisis par un compte et écrits chez un autre (demande de rendez-vous, rendez-vous à plusieurs, convocation, liens et propositions) passent par texteSur, comme les noms.
 - Suite verif-messagerie-texte (nouvelle ; Chrome sur le PC). verifier.sh vert.
+
+## 15/11/2026 : mission 92, l'accueil de Charly donne un exemple
+
+Chef, 15/11 (texte validé par Charles).
+- Les deux variantes du message d'accueil de Charly (avec et sans prénom) se terminent par « Par exemple, écris-moi ou dis-moi ci-dessous : « Crée-moi un rendez-vous demain à 15h chez mon dentiste ». » au lieu de « Par où on commence ? ».
+- verif-prenom-charly : texte exact des deux variantes. verif-charly-campagne10 : la phrase d'exemple, tapée telle quelle, donne bien la carte « Dentiste » demain à 15h.
+- verifier.sh vert.
