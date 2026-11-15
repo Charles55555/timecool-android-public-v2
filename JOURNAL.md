@@ -3397,3 +3397,4 @@ Chef, 15/11 (phrases et propositions validées par Charles ; complément « Qui 
   - un rendez-vous laissé en place faute de place libre ne fait plus prévenir personne ;
   - la carte du retard en trois lignes (« Je préviens Paul de ton retard. Voici le message : », le message, « Je lui envoie ? ») ; l'heure d'arrivée sans zéro devant ;
   - « midi » vaut 12h ; « soir » sans heure demande toujours l'heure.
+  - examen : seule la bulle qui répète la carte à l'identique est cachée ; une bulle qui explique un écart (heure déjà prise, date corrigée) reste toujours visible.

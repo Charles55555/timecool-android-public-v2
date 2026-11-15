@@ -11765,8 +11765,9 @@ function tcRepeteLaCarte(texte) {
   if (tcAccuseSeul(texte)) return true;
   const s = String(texte || '').trim();
   if (!s || s.indexOf('?') > -1 || s.indexOf('\n') > -1 || s.length > 160) return false;
-  if (/chevauch|attention|déjà|introuvable|pas trouvé|conflit|occupé|⚠/i.test(s)) return false;
-  return /je te propose (ceci|ça|cela)\s*[.!:]?\s*$/i.test(s);
+  // Examen : seulement la forme exacte « <Titre>, <jour> <date> à <heure> : je te propose ceci. » ; une bulle qui explique
+  // un écart (« Tu es pris à 15h, je l'ai mis à 16h : je te propose ceci. ») reste.
+  return /^[^,:]{1,80}, (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) \d{1,2} [a-zéû]+ \d{4} à \d{1,2}h(\d{2})?[ \u00a0]: je te propose ceci\.$/i.test(s);
 }
 
 /** La suite sur la notification : Charles n'en veut plus. */

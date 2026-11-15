@@ -30,7 +30,18 @@ Object.keys(BOUTONS).forEach((k) => {
   verifie('« ' + BOUTONS[k][0] + ' » : le bouton est toujours là', new RegExp("charlyQuickAction\\('" + k + "'\\)[^>]*>[^<]*" + BOUTONS[k][0]).test(page));
 });
 
-// Ce que l'utilisateur tape : l'exemple de chaque bouton (sans le point final), puis l'exemple de l'accueil (mission 92).
+titre('La bulle qui répète la carte (retouche de Charles, remarque d examen)');
+{
+  const extraire = (nom) => { const d = page.indexOf('function ' + nom + '('); if (d < 0) return ''; let n = 0; for (let j = page.indexOf('{', d); j < page.length; j++) { if (page[j] === '{') n++; else if (page[j] === '}') { n--; if (n === 0) return page.slice(d, j + 1); } } return ''; };
+  let rep = null;
+  try { rep = new Function(extraire('tcAccuseSeul') + '\n' + extraire('tcRepeteLaCarte') + '\nreturn tcRepeteLaCarte;')(); } catch (e) { rep = null; }
+  const cachees = ['Dentiste, lundi 16 novembre 2026 à 15h : je te propose ceci.', 'Déjeuner avec Paul, mardi 3 mars 2027 à 12h30 : je te propose ceci.', 'C’est noté ! 👍'];
+  const gardees = ['Tu es pris à 15h, je l’ai mis à 16h : je te propose ceci.', 'Plutôt jeudi, mardi est plein, je te propose ceci.', 'Attention, ça chevauche ton dentiste : je te propose ceci.', 'Quelle heure te va ?'];
+  verifie('cachée : la forme exacte de la carte locale, et un accusé seul', !!rep && cachees.every((t) => rep(t) === true), rep ? cachees.filter((t) => !rep(t)).join(' | ') : 'tcRepeteLaCarte introuvable');
+  verifie('gardée : une bulle qui explique un écart, prévient ou demande', !!rep && gardees.every((t) => rep(t) === false), rep ? gardees.filter((t) => rep(t)).join(' | ') : '');
+}
+
+// Ce que l'utilisateur tape :l'exemple de chaque bouton (sans le point final), puis l'exemple de l'accueil (mission 92).
 const PHRASES = [
   'Dentiste demain à 15h',
   'Décale mon dentiste de demain à vendredi',
@@ -42,6 +53,8 @@ const PHRASES = [
   'Crée-moi un rendez-vous demain à 15h chez mon dentiste',
   // Retouche de Charles (15/11) : « midi » vaut 12h.
   'Déjeuner avec Paul demain midi',
+  // Chef (remarque d'examen) : une heure déjà prise (compte rempli : Dentiste demain 10h) : la bulle qui l'explique reste.
+  'Coiffeur demain à 10h',
 ];
 // Examen de la 93 : des questions ou des mots qui ne sont pas un rendez-vous : ni carte, ni « À quelle heure ? » (le chemin
 // habituel : la consultation de l'agenda, une question de Charly, ou le modèle).
@@ -140,6 +153,7 @@ if (!exe) {
       { dit: '(complément) compte sans contact : aucune question, la carte tout de suite, « sans contact · relier »', test: (d, tout) => carte(d) && tout.length === 1 && /mon dentiste — sans contact · relier/.test(d.question) && !/C’est avec quelqu’un|qui est-ce/.test(d.question) },
       // Paul n'est pas un contact ici : la demande complétée (« … demain à 12h ») part au modèle, comme avant la mission 93.
       { modele: true, dit: '« midi » vaut 12h : pas de « À quelle heure ? », la demande part complétée', test: (d, tout, x) => x.modele === 1 && x.hm === true && !tout.some((m) => /^À quelle heure/.test(m.texte)) },
+      { dit: 'heure libre : la carte seule (bulle cachée)', test: (d) => d.carte && /\| 10:00-11:00 \| Coiffeur \| rdv/.test(d.texte) && d.bulleCachee === true },
     ],
     rempli: [
       { dit: 'la carte du rendez-vous tout de suite', test: (d) => carte(d) },
@@ -151,6 +165,7 @@ if (!exe) {
       { dit: 'la fiche de Paul Martin, « Ouvrir la fiche »', test: (d) => /^Paul Martin : 0611111111/.test(d.texte) && d.boutons.indexOf('Ouvrir la fiche') > -1 },
       { dit: '(complément) compte avec des contacts : « C’est avec quelqu’un de tes contacts ? », « 👤 Choisir un contact » / « Non, personne »', test: (d) => new RegExp('C’est avec quelqu’un de tes contacts' + Q).test(d.question) && JSON.stringify(d.boutons) === '["👤 Choisir un contact","Non, personne"]' && !/Si non|ni annuler/.test(d.question) },
       { dit: '« midi » vaut 12h : la carte à 12h, pas de « À quelle heure ? »', test: (d, tout) => midi(d) && !tout.some((m) => /^À quelle heure/.test(m.texte)) },
+      { dit: 'heure déjà prise : la bulle qui le dit reste visible au-dessus de la carte', test: (d) => d.carte && /tu as déjà « Dentiste » \(10h-11h\)/.test(d.texte) && d.bulleCachee === false && /tu as déjà « Dentiste »/.test(d.question) },
     ],
   };
   ['neuf', 'rempli'].forEach((compte) => {
