@@ -3313,3 +3313,10 @@ Chef, 15/11 (essai réel de Charles, nuit du 14 au 15) : trois codes SMS validé
 - Dictionnaire de la mission 87 : 3 textes de plus (les deux messages, « Me connecter »), 146 par langue. « Mot de passe oublié » y était déjà.
 - Suite verif-deja-inscrit-e2e (nouvelle) : lecture API et page, limite rejouée, rejeu à faux DOM, e2e contre l'API locale (contrôles, aucune ligne dans verifications, deux 409 aux messages exacts, cas normal 201), et Chrome sur le PC (aucun SMS, champ en évidence, boutons, connexion préremplie, espagnol). verifier.sh vert.
 - Captures (PC, m71/captures89) : adresse déjà inscrite, numéro déjà inscrit.
+
+## 15/11/2026 : mission 90, une phrase sur l'écran des autorisations
+
+Chef, 15/11 (phrase validée mot pour mot par Charles) : sur #permissionsScreen, entre « ✅ Autoriser TimeCool » et « Passer cette étape », la phrase « Vous pourrez modifier ces autorisations à tout moment dans les réglages de votre téléphone. ». Elle est en petit texte gris centré (12 px, #5f6368, comme les sous-titres des quatre lignes). Rien d'autre ne change. Après la connexion, la traduction passe par Google, comme le reste de l'écran.
+- Constat, sans correction : sur le web comme dans l'APK actuel, « Autoriser TimeCool » ne demande aucune permission. acceptPermissions n'agit que si window.Capacitor existe, et le projet n'utilise pas Capacitor (WebView native, pont TimeCoolNatif). La fonction marque l'écran comme vu et affiche toujours « Autorisations accordées ! ». Android demande chaque permission au moment où elle sert : micro pour la dictée, appareil photo, contacts à l'import, position, notifications (MainActivity).
+- Sur un ordinateur, la phrase parle du téléphone (à voir avec Charles, selon le chef).
+- Suite : verif-toast-et-accueil, section 4 (phrase exacte une seule fois, entre les deux boutons, style, quatre lignes et deux boutons intacts) ; elle échoue sur la page d'avant. verifier.sh vert. Capture : m71/captures90.

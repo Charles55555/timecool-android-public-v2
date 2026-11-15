@@ -65,6 +65,17 @@ verifie('l ecran « Commencer » et sa logique ont quitte la page', page.indexOf
   verifie('l inscription (saveUserAccount) ouvre la session ET pose le drapeau', mem.timecool_session_active === 'true' && mem.tc_onboarding_done === '1');
 }
 
+titre('4. Autorisations requises : la phrase qui rassure (mission 90)');
+{
+  const phrase = 'Vous pourrez modifier ces autorisations à tout moment dans les réglages de votre téléphone.';
+  const ecran = (page.match(/<div id="permissionsScreen"[\s\S]*?\n<\/div>\n/) || [''])[0];
+  const iPhrase = ecran.indexOf(phrase), iAutoriser = ecran.indexOf('onclick="acceptPermissions()"'), iPasser = ecran.indexOf('onclick="skipPermissions()"');
+  verifie('la phrase exacte, une seule fois dans la page', page.split(phrase).length === 2);
+  verifie('sur l ecran des autorisations, entre « Autoriser TimeCool » et « Passer cette étape »', iAutoriser > 0 && iPhrase > iAutoriser && iPasser > iPhrase && ecran.indexOf('</button>', iAutoriser) < iPhrase);
+  verifie('petit texte gris centre, comme les sous-titres de l ecran (#5f6368)', /<div style="[^"]*font-size:12px; color:#5f6368;[^"]*text-align:center;[^"]*">Vous pourrez modifier/.test(ecran));
+  verifie('les quatre lignes et les deux boutons restent (Notifications, Contacts, Appareil photo, Agenda)', ['Notifications', 'Contacts', 'Appareil photo', 'Agenda', '✅ Autoriser TimeCool', 'Passer cette étape'].every((t) => ecran.indexOf(t) > 0) && (ecran.match(/<button /g) || []).length === 2);
+}
+
 console.log('');
 console.log(ko + ' anomalie(s).');
 process.exit(ko ? 1 : 0);
