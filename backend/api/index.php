@@ -666,6 +666,35 @@ function smsEnvoisRecents(int $heures, ?string $destEmpreinte, ?string $ipBinair
     return (int) Db::un($sql, $p)['n'];
 }
 
+/**
+ * Mission 89 : un controle d'inscription de plus pour cette adresse IP, dans l'heure. Un fichier par IP et par heure
+ * dans le dossier prive de l'API (a cote des documents), un octet par appel : sa taille est le compte. Aucune table.
+ * Renvoie false au-dela de $max. Sans dossier utilisable, ne bloque personne (et le dit dans le journal du serveur).
+ */
+function inscriptionControleCompter(string $dossier, string $ip, int $max): bool
+{
+    if (!is_dir($dossier) && !@mkdir($dossier, 0700, true) && !is_dir($dossier)) {
+        error_log('controle d inscription : dossier inutilisable ' . $dossier);
+        return true;
+    }
+    $heure = date('YmdH');
+    $f = $dossier . '/inscription-' . hash_hmac('sha256', $ip, (string) Conf::get('poivre', '')) . '-' . $heure;
+    if (@file_put_contents($f, '1', FILE_APPEND | LOCK_EX) === false) {
+        error_log('controle d inscription : compteur illisible ' . $f);
+        return true;
+    }
+    clearstatcache(true, $f);
+    $n = (int) @filesize($f);
+    if (random_int(1, 50) === 1) {   // menage : les heures passees
+        foreach (glob($dossier . '/inscription-*') ?: [] as $vieux) {
+            if (substr($vieux, -10) !== $heure && (int) @filemtime($vieux) < time() - 7200) {
+                @unlink($vieux);
+            }
+        }
+    }
+    return $n <= $max;
+}
+
 /** Le plafond global est atteint : un e-mail aux administrateurs, une fois par jour. */
 function smsAlerterPlafond(int $plafond): void
 {
@@ -3497,6 +3526,30 @@ switch ($route) {
     // ═══════════════════════════════════════════════════════════
     // INSCRIPTION
     // ═══════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════
+    // Mission 89 (Charles, 15/11) : avant tout SMS, ce qui a deja un compte, champ par champ (l adresse e-mail, le
+    // numero, ou les deux). Limite par adresse IP : inscription_controle_ip_heure (20 par defaut).
+    // ═══════════════════════════════════════════════════════════
+    case 'POST /inscription/controler':
+        $ipC = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        $maxC = (int) Conf::get('inscription_controle_ip_heure', 20);
+        if (PHP_SAPI === 'cli-server') {
+            $maxC = max($maxC, 1000);   // API locale : les suites passent souvent ; la limite a sa propre verification
+        }
+        if ($ipC !== '' && !inscriptionControleCompter(
+            rtrim((string) Conf::get('limites_dossier', __DIR__ . '/../private/limites'), '/'), $ipC, $maxC
+        )) {
+            Rep::erreur(429, 'trop_de_demandes', 'Trop de demandes. Réessayez dans une heure.');
+        }
+        $corpsC = Entree::corps();
+        $emailC = is_string($corpsC['email'] ?? null) ? trim(mb_substr($corpsC['email'], 0, 254)) : '';
+        $telC = is_string($corpsC['telephone'] ?? null) ? Empreinte::normaliserTelephone(mb_substr($corpsC['telephone'], 0, 20)) : '';
+        $emailPris = $emailC !== '' && filter_var($emailC, FILTER_VALIDATE_EMAIL) !== false
+            && Db::un('SELECT id FROM comptes WHERE email = ? LIMIT 1', [Empreinte::normaliserEmail($emailC)]) !== null;
+        $telPris = preg_match('/^\+[1-9][0-9]{7,14}$/', $telC) === 1
+            && Db::un('SELECT id FROM comptes WHERE telephone = ? LIMIT 1', [$telC]) !== null;
+        Rep::ok(['email_deja_inscrit' => $emailPris, 'numero_deja_inscrit' => $telPris]);
+
     case 'POST /inscription':
         $email = Entree::requis('email');
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -3611,6 +3664,13 @@ switch ($route) {
         } catch (PDOException $e) {
             // 23000 = violation de contrainte d'unicité.
             if ($e->getCode() === '23000') {
+                // Mission 89 : dire lequel des deux a deja un compte, jamais « cet email ou ce numero ».
+                if (Db::un('SELECT id FROM comptes WHERE email = ? LIMIT 1', [$emailNorm]) !== null) {
+                    Rep::erreur(409, 'email_deja_inscrit', 'Cette adresse e-mail a déjà un compte TimeCool.');
+                }
+                if (Db::un('SELECT id FROM comptes WHERE telephone = ? LIMIT 1', [$telephone]) !== null) {
+                    Rep::erreur(409, 'numero_deja_inscrit', 'Ce numéro de portable a déjà un compte TimeCool.');
+                }
                 Rep::erreur(409, 'compte_existant', 'Un compte existe déjà avec cet email ou ce numéro.');
             }
             throw $e;
