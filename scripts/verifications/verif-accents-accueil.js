@@ -6,12 +6,9 @@ let erreurs = 0;
 function attendu(texte) { if (page.indexOf(texte) === -1) { console.error('MANQUE : ' + texte); erreurs++; } }
 function interdit(texte) { if (page.indexOf(texte) !== -1) { console.error('ENCORE LA : ' + texte); erreurs++; } }
 
-attendu('Crée ton compte gratuitement<br>et commence à gagner du temps');
+// Mission 88 (15/11) : les ecrans « Commencer », « Rejoins TimeCool » et « Charly IA est prêt » ont quitte la page ;
+// leurs textes ne sont plus attendus, les interdits (sans accents) restent.
 attendu('Créer mon compte');
-attendu('J’ai déjà un compte');
-attendu('Charly IA est prêt à t’aider à<br>organiser ton temps.');
-attendu('pour parler à Charly<br>&#x2022; Ou crée ton premier RDV avec +');
-attendu('Découvrir TimeCool');
 attendu('Compte créé !');
 attendu('Sur ton téléphone : touche tes initiales en haut à droite → <b>Lier un nouvel appareil</b>');
 

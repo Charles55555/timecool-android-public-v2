@@ -3293,3 +3293,12 @@ Chef, 15/11 (Charles, 14/11 : « pourquoi il faut s'inscrire pour changer de lan
 - Appels gardés par typeof : quatre simulations de synchronisation (verif-sync, verif-deconnexion, verif-sync-local-gagne, verif-reglages-compte-simule) chargent reglage sans le reste de la page.
 - Suites : verif-langue-accueil (nouvelle ; Node, plus Chrome sur le PC : es sur les six écrans et leurs erreurs, en, fi, retour au français, rechargement ; échoue sur la page d'avant). verif-sms-inscription lit le texte de l'écran du code sous sa forme tcT. verifier.sh vert.
 - Captures (PC, m71/captures87) : bienvenue, inscription, code, connexion en espagnol et en anglais, bienvenue en finnois.
+
+## 15/11/2026 : mission 88, plus d'écran « Commencer »
+
+Chef, 15/11 (Charles, en navigation privée) : un visiteur neuf voyait d'abord « Commencer → ». Ce n'était pas une page, mais un voile (onboardingScreen, z-index 99998) posé par checkOnboarding 500 ms après le chargement, tant que tc_onboarding_done n'existait pas, donc seulement sur un appareil neuf.
+- Derrière « Commencer », un second écran, « Rejoins TimeCool », reprenait Google / Créer mon compte / J'ai déjà un compte ; ob3 (« Charly IA est prêt ») n'était plus atteignable (goToOb3 lisait ob_firstname, qui n'existe plus). Les trois écrans et leurs quatre fonctions sont retirés.
+- Ce qui en dépendait : rien. Ni permission, ni lien d'invitation ou de rendez-vous, ni réglage autre que tc_onboarding_done, que toutes les ouvertures de session posent aussi. Le drapeau reste (TC_ONBOARDING_KEY), sans effet sur l'écran. La phrase « TimeCool est 100% gratuit » d'ob2 disparaît avec lui.
+- Le dictionnaire de la mission 87 ne contenait aucun texte de ces écrans : rien à retirer.
+- Suites : verif-arrivee-visiteur (nouvelle ; échoue sur la page d'avant, où « Commencer » recouvre le titre) ; verif-toast-et-accueil (la partie checkOnboarding devient « l'écran n'existe plus », et l'inscription pose toujours session et drapeau) ; verif-accents-accueil (les 5 textes retirés ne sont plus attendus, les interdits restent). verifier.sh vert.
+- Capture : m71/captures88, l'arrivée d'un visiteur neuf.

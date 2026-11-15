@@ -51,28 +51,18 @@ titre('3. Apres une inscription, recharger ouvre l agenda');
 const ouvertures = page.match(/^[ \t]*localStorage\.setItem\('timecool_session_active', 'true'\);\n[ \t]*localStorage\.setItem\('tc_onboarding_done', '1'\);/gm) || [];
 verifie('chaque ouverture de session pose le drapeau d accueil : inscription/saveUserAccount, connexion, Google, appairage, biometrie (5)', ouvertures.length === 5, ouvertures.length);
 verifie('et c est bien la cle de l accueil', /const TC_ONBOARDING_KEY = 'tc_onboarding_done';/.test(page));
+// Mission 88 : l'ecran d'accueil « Commencer » n'existe plus ; recharger apres une inscription ouvre toujours l'agenda.
+verifie('l ecran « Commencer » et sa logique ont quitte la page', page.indexOf('onboardingScreen') < 0 && !/function (checkOnboarding|goToOb2|goToOb3|finishOnboarding)\(/.test(page));
 {
   const mem = {};
-  const ecran = { style: { display: 'none' } };
   const ctx = { console, JSON, userAccount: null,
     localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } },
-    document: { getElementById: (id) => (id === 'onboardingScreen' ? ecran : null) } };
+    document: { getElementById: () => null } };
   vm.createContext(ctx);
-  vm.runInContext("const TC_ONBOARDING_KEY = 'tc_onboarding_done';", ctx);
-  ['checkOnboarding', 'saveUserAccount'].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
-  vm.runInContext('checkOnboarding()', ctx);
-  verifie('premiere visite, sans session : l accueil s affiche', ecran.style.display === 'block');
-  ecran.style.display = 'none';
+  const f = fonction(page, 'saveUserAccount');
+  if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  saveUserAccount introuvable'); }
   vm.runInContext("saveUserAccount({ firstname: 'Damien', lastname: 'Lefort', reference: 'REFD' })", ctx);
   verifie('l inscription (saveUserAccount) ouvre la session ET pose le drapeau', mem.timecool_session_active === 'true' && mem.tc_onboarding_done === '1');
-  vm.runInContext('checkOnboarding()', ctx);
-  verifie('rechargement : l accueil ne s affiche pas', ecran.style.display === 'none');
-  delete mem.tc_onboarding_done;
-  vm.runInContext('checkOnboarding()', ctx);
-  verifie('session ouverte mais drapeau absent (ancienne inscription) : l accueil ne s affiche pas, le drapeau est pose', ecran.style.display === 'none' && mem.tc_onboarding_done === '1');
-  mem.timecool_session_active = 'false'; delete mem.tc_onboarding_done;
-  vm.runInContext('checkOnboarding()', ctx);
-  verifie('deconnecte et jamais accueilli : l accueil s affiche', ecran.style.display === 'block');
 }
 
 console.log('');
