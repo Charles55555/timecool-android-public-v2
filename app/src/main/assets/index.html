@@ -29905,6 +29905,20 @@ const TC_AIDE = [
     a: 'Dans Charly, touche « 📸 Photo → rendez-vous ». Prends en photo une invitation ou un papier : Charly lit la date et l’heure et te propose le rendez-vous.' },
 ];
 
+/** Mission 96 : les mots qui ne nomment jamais un contact dans une question d'aide : les petits mots, ceux des questions de
+ *  TC_AIDE (« mot », « passe », « langue »…), et les mots creux de la page s'ils existent. Calculés une fois. */
+let _tcMotsIgnoresAide = null;
+function tcMotsIgnoresAide() {
+  if (_tcMotsIgnoresAide) return _tcMotsIgnoresAide;
+  const s = new Set('mon ma mes ton ta tes son sa ses les des une un pour avec chez dans sur par aux the and nos vos leur leurs est sont pas plus que qui quoi comment faire fais fait peux peut veux avoir etre suis tout tous toute toutes'.split(' '));
+  TC_AIDE.forEach(function (x) { tcSansAccents(x.q + ' ' + x.a).toLowerCase().split(/[^a-z]+/).forEach(function (w) { if (w.length >= 3) s.add(w); }); });
+  // Les prénoms des exemples des réponses (Paul, Marie) restent des noms : un contact « Paul » n'est jamais ignoré.
+  ['paul', 'marie'].forEach(function (w) { s.delete(w); });
+  if (typeof TC_MOTS_CREUX !== 'undefined' && TC_MOTS_CREUX && typeof TC_MOTS_CREUX.forEach === 'function') TC_MOTS_CREUX.forEach(function (w) { s.add(String(w)); });
+  _tcMotsIgnoresAide = s;
+  return s;
+}
+
 /** Mission 96 : une question d'aide (« comment… », « c'est quoi… », « où… », « je n'arrive pas à… ») → l'entrée de TC_AIDE, sinon null.
  *  Une vraie demande (un jour, une heure, une date) n'est jamais prise pour une question d'aide. */
 function tcAideCharly(text) {
@@ -29922,8 +29936,11 @@ function tcAideCharly(text) {
   if (typeof tcJoursCites === 'function' && tcJoursCites(brut, new Date()).length) return null;
   if (/\b\d+ ?(min|mn|minutes?|h|heures?)\b/.test(t)) return null;
   if (typeof contactsList !== 'undefined' && Array.isArray(contactsList)) {
-    const motsDuTexte = t.split(' ');
-    const nomme = contactsList.some(function (c) {
+    // Examen : dans un gros carnet (« Mon dentiste », « Pizza pour tous »), les petits mots et les mots de l'aide elle-même
+    // (« mot », « passe », « contact », « langue »…) ne nomment personne.
+    const ignores = tcMotsIgnoresAide();
+    const motsDuTexte = t.split(' ').filter(function (w) { return w.length >= 3 && !ignores.has(w); });
+    const nomme = motsDuTexte.length > 0 && contactsList.some(function (c) {
       return tcSansAccents(String((c && c.name) || '')).toLowerCase().split(/[^a-z]+/).some(function (w) { return w.length >= 3 && motsDuTexte.indexOf(w) > -1; });
     });
     if (nomme) return null;

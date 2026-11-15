@@ -47,7 +47,8 @@ verifie('« moments libres » : toujours « selon tes préférences et tes dispo
 verifie('plus de crayon ✏️ ni de « Nouveau message » (mission 94)', !/✏️|Nouveau message/.test(bloc));
 
 titre('Reconnaître une question d aide (sans le modèle)');
-['tcSansAccents', 'tcAideCharly'].forEach((n) => { const f = fonction(n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
+vm.runInContext('var _tcMotsIgnoresAide = null;', ctx);
+['tcSansAccents', 'tcMotsIgnoresAide', 'tcAideCharly'].forEach((n) => { const f = fonction(n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 // Les détecteurs de jour et d'heure de la page : rejoués dans un vrai Chrome plus bas ; ici, une version simple suffit à tester le tri.
 ctx.tcHeureDansTexte = (t) => (/\b\d{1,2} ?h(\d{2})?\b|\bmidi\b/.test(t) ? { h: 1 } : null);
 ctx.tcPeriodeAgenda = (t) => (/\b(aujourd|demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|\d{1,2} (janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre))/i.test(t) ? {} : null);
@@ -76,6 +77,11 @@ const DEMANDES = [
 ];
 const prises = DEMANDES.filter((d) => ctx.tcAideCharly(d));
 verifie('une vraie demande n est jamais prise pour une question d aide', prises.length === 0, prises.map((d) => d + ' → ' + ctx.tcAideCharly(d).id).join(' | '));
+// Examen : un gros carnet importé (« Mon dentiste », « Pizza pour tous », « Langue Formation ») ne coupe pas l'aide.
+ctx.contactsList = [{ id: 'p1', name: 'Paul Martin' }, { id: 'd1', name: 'Mon dentiste' }, { id: 'z1', name: 'Pizza pour tous' }, { id: 'l1', name: 'Langue Formation' }, { id: 't1', name: 'Taxi des Lilas' }];
+const coupees = QUESTIONS.filter(([q, id]) => { const r = ctx.tcAideCharly(q); return (r ? r.id : null) !== id; }).map(([q, id]) => q + ' → ' + ((ctx.tcAideCharly(q) || {}).id || 'rien'));
+verifie('(examen) avec « Mon dentiste », « Pizza pour tous », « Langue Formation », « Taxi des Lilas » dans le carnet, les questions d aide gardent leur réponse', coupees.length === 0, coupees.join(' | '));
+verifie('(examen) mais un contact vraiment nommé coupe toujours l aide (« Comment j invite Paul ? »)', ctx.tcAideCharly('Comment j’invite Paul ?') === null);
 
 titre('Dans la page');
 const csm = fonction('charlySendMessage') || '';
