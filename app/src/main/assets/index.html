@@ -29848,7 +29848,7 @@ const TC_AIDE = [
   { id: 'contact', q: '👤 Comment j’ajoute un contact ?', mots: ['(ajouter|ajoute|creer|cree|enregistrer|importer|mettre) (un |des |mes |le )?contacts?', 'nouveau contact'],
     ecran: ['Mes contacts', '+ Ajouter', 'Enregistrer', 'Importer mes contacts'],
     a: 'Ouvre le menu ☰, puis « Mes contacts ». Touche le bouton vert « + Ajouter », écris le prénom, le nom et le mobile, puis touche « Enregistrer ». Sur ton téléphone, « 📱 Importer mes contacts » les reprend tous d’un coup.' },
-  { id: 'inviter', q: '💌 Comment j’invite quelqu’un qui n’a pas TimeCool ?', mots: ['invit', 'parrain', 'n a pas timecool', 'sans timecool', 'faire venir'],
+  { id: 'inviter', q: '💌 Comment j’invite quelqu’un qui n’a pas TimeCool ?', mots: ['inviter? (quelqu|un ami|une amie|mes amis|des amis|un contact|une personne|quelqu un)', 'n a pas timecool', 'sans timecool', 'parrain'],
     ecran: ['Mes contacts', 'Inviter sur TimeCool'],
     a: 'Dans « Mes contacts », ouvre la fiche de la personne et touche « 💌 Inviter sur TimeCool ». Un message tout prêt s’ouvre dans tes SMS, avec le lien timecool.fr. Il faut que sa fiche ait un numéro de mobile.' },
   { id: 'dispos', q: '🕘 Comment je règle mes disponibilités ?', mots: ['disponibilites', 'dispos', 'mes horaires', 'heures ou on peut'],
@@ -29873,7 +29873,7 @@ const TC_AIDE = [
   { id: 'sons', q: '🔔 Comment je règle les sons ?', mots: ['sons?', 'sonneries?', 'vibration', 'silencieux', 'bruit'],
     ecran: ['Paramètres', 'Notifications', 'Sonneries', 'Son et vibration', 'Silencieux'],
     a: 'Ouvre « Paramètres », puis « Notifications ». Touche l’interrupteur de la ligne « Sonneries » : elle dit « Son et vibration » ou « Silencieux ».' },
-  { id: 'bloquer', q: '🚫 Comment je bloque un contact ?', mots: ['bloqu', 'debloqu'],
+  { id: 'bloquer', q: '🚫 Comment je bloque un contact ?', mots: ['bloquer? (un |une |ce |cette |le |la )?(contact|personne|quelqu)', 'debloquer? (un |une |ce |cette |le |la )?(contact|personne|quelqu)'],
     ecran: ['Mes contacts', 'Bloquer l\'accès à mon agenda', 'Débloquer l\'accès'],
     a: 'Dans « Mes contacts », touche les trois points ⋮ à droite du contact, puis « Bloquer l’accès à mon agenda ». Cette personne ne peut plus t’écrire ni prendre rendez-vous avec toi, et elle ne le sait pas. Pour revenir en arrière : « Débloquer l’accès ».' },
   { id: 'messagerie', q: '💬 Comment j’écris dans la messagerie ?', mots: ['messagerie', 'envoyer un message', 'ecrire (a|un message)'],
@@ -29885,7 +29885,7 @@ const TC_AIDE = [
   { id: 'malade', q: '🤒 Je suis malade : comment je décale mes rendez-vous ?', mots: ['malade'],
     ecran: ['Ma confiance en Charly'],
     a: 'Écris ou dis à Charly : « Je suis malade, décale mes rendez-vous d’aujourd’hui ou de demain ». Charly te montre les nouveaux moments qu’il propose à chaque personne, selon tes préférences et tes disponibilités enregistrées dans tes paramètres. Il te demande avant d’envoyer, selon ton réglage « Ma confiance en Charly ».' },
-  { id: 'retard', q: '⏱️ Je vais être en retard : comment je préviens ?', mots: ['retard'],
+  { id: 'retard', q: '⏱️ Je vais être en retard : comment je préviens ?', mots: ['(prevenir|previens|previent|signaler) (d un|de mon|mon|un) retard'],
     ecran: ['Oui, envoie'],
     a: 'Écris ou dis à Charly, par exemple : « Préviens Paul que j’aurai 10 minutes de retard ». Charly te montre le message. Touche « Oui, envoie » pour le faire partir.' },
   { id: 'libre', page: false, q:'🕐 Comment je sais quand je suis libre ?', mots: ['libre', 'creneaux? libres?', 'quand je suis dispo'],
@@ -29918,6 +29918,16 @@ function tcAideCharly(text) {
   if (typeof tcPeriodeAgenda === 'function' && tcPeriodeAgenda(brut)) return null;
   // « Je suis malade, comment je fais ? » : une demande, le parcours malade la prend (pas une question sur l'appli).
   if (typeof tcDetecterMalade === 'function' && tcDetecterMalade(brut)) return null;
+  // Examen : une vraie demande cite un jour (« jeudi », « samedi »), un nombre de minutes, ou un contact : jamais l'aide.
+  if (typeof tcJoursCites === 'function' && tcJoursCites(brut, new Date()).length) return null;
+  if (/\b\d+ ?(min|mn|minutes?|h|heures?)\b/.test(t)) return null;
+  if (typeof contactsList !== 'undefined' && Array.isArray(contactsList)) {
+    const motsDuTexte = t.split(' ');
+    const nomme = contactsList.some(function (c) {
+      return tcSansAccents(String((c && c.name) || '')).toLowerCase().split(/[^a-z]+/).some(function (w) { return w.length >= 3 && motsDuTexte.indexOf(w) > -1; });
+    });
+    if (nomme) return null;
+  }
   let meilleure = null, score = 0;
   TC_AIDE.forEach(function (x) {
     const n = x.mots.filter(function (m) { return new RegExp('\\b(' + m + ')').test(t); }).length;

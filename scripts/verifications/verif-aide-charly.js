@@ -52,6 +52,8 @@ titre('Reconnaître une question d aide (sans le modèle)');
 ctx.tcHeureDansTexte = (t) => (/\b\d{1,2} ?h(\d{2})?\b|\bmidi\b/.test(t) ? { h: 1 } : null);
 ctx.tcPeriodeAgenda = (t) => (/\b(aujourd|demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|\d{1,2} (janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre))/i.test(t) ? {} : null);
 if (typeof ctx.tcAideCharly !== 'function') ctx.tcAideCharly = () => null;   // page d'avant : compté KO plus haut, la suite continue
+ctx.tcJoursCites = (t) => (String(t).match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/gi) || []);
+ctx.contactsList = [{ id: 'p1', name: 'Paul Martin' }];
 ctx.tcDetecterMalade = (t) => /\bje suis malade\b/i.test(t) && !/comment prevenir|comment prévenir/i.test(t);
 const QUESTIONS = [
   ['Comment je fais pour prendre un rendez-vous ?', 'rdv'], ['Comment changer la langue ?', 'langue'], ['Comment je change mon mot de passe ?', 'motdepasse'],
@@ -68,6 +70,9 @@ const DEMANDES = [
   'Dentiste demain à 15h', 'Ajoute un contact Paul 0611111111', 'Change la langue en anglais', 'Préviens Paul que j’aurai 10 minutes de retard',
   'Comment je fais pour décaler mon dentiste à jeudi 10h ?', 'Où est mon rendez-vous de demain ?', "C'est quoi mon prochain rendez-vous ?", 'Comment va Paul ?',
   'Je suis malade, décale mes rendez-vous d’aujourd’hui ou de demain', 'Quand suis-je libre jeudi ?', 'mets le thème sombre', 'Bloque Paul',
+  // Examen (15/11) : un contact, des minutes, un jour, ou « invitation » : une vraie demande.
+  "Comment je préviens Paul que j'aurai 10 minutes de retard ?", 'Comment je préviens Paul de mon retard ?', 'Comment bloquer jeudi après-midi ?',
+  'Puis-je inviter Marie à dîner samedi ?', "Comment j'ajoute l'invitation de mariage à mon agenda ?",
 ];
 const prises = DEMANDES.filter((d) => ctx.tcAideCharly(d));
 verifie('une vraie demande n est jamais prise pour une question d aide', prises.length === 0, prises.map((d) => d + ' → ' + ctx.tcAideCharly(d).id).join(' | '));
