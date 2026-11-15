@@ -112,6 +112,8 @@ verifie('titre « 🤝 MA CONFIANCE EN CHARLY » (en capitales à l écran) et s
 verifie('les trois profils, textes exacts, chacun avec sa phrase grise', texte.indexOf('|Charly attend ma validation à chaque étape avant de passer à la suivante.|Pour te rassurer : tu vois tout, tu décides tout.|') > -1
   && texte.indexOf('|Charly réalise toutes les étapes et attend ma validation pour la dernière, avant d’écrire dans mon agenda ou d’envoyer un message ou une demande à mes contacts.|Quand tu seras rassuré : il travaille, tu gardes le dernier mot.|') > -1
   && texte.indexOf('|Charly valide seul toutes les étapes et me laisse travailler tranquillement.|Quand tu seras convaincu de ses compétences : il fait tout et te fait un compte rendu, que tu retrouves aussi dans ton Journal d’activité.|') > -1, texte);
+verifie('chaque choix porte son nom en tête, sur sa ligne : « Profil 1 », « Profil 2 », « Profil 3 » (mission 91, Charles)', texte.indexOf('|Profil 1|Charly attend ma validation') > -1 && texte.indexOf('|Profil 2|Charly réalise toutes les étapes') > -1 && texte.indexOf('|Profil 3|Charly valide seul') > -1
+  && (bloc.match(/font-weight:700[^>]*>Profil \d</g) || []).length === 3, texte.slice(0, 300));
 verifie('un seul choix possible (radiogroup), le profil 1 sélectionné', (bloc.match(/role="radio" aria-checked="true"/g) || []).length === 1 && /aria-checked="true" onclick="tcChoisirConfiance\(1\)"/.test(bloc));
 ctx.tcChoisirConfiance(2);
 verifie('choisir le profil 2 : enregistré dans la clé du compte, synchronisé, sélectionné', stock.tc_confiance_charly === '2' && trace.syncs === 1 && ctx.tcConfianceCharly() === 2 && /aria-checked="true" onclick="tcChoisirConfiance\(2\)"/.test(ctx.tcBlocConfiance()));
