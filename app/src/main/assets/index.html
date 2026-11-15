@@ -1136,14 +1136,13 @@ if (window.pdfjsLib) {
     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
       <div>
         <div class="page-title" data-tc-src="Ma messagerie sécurisée">Ma messagerie sécurisée</div>
-        <div class="page-subtitle">🔒 Confidentielle</div>
+        <div class="page-subtitle" id="msgSousTitre">🔒 Ici, tu écris seulement à tes contacts qui ont déjà TimeCool.</div>
       </div>
-      <button class="msg-topbtn" style="font-size:19px;" onclick="msgAction('new')" title="Nouveau message">✏️</button>
       <button class="msg-topbtn" onclick="toggleMsgMenu(event)" title="Options">⋮</button>
     </div>
     <div class="msg-search">
       <span style="font-size:14px;">🔍</span>
-      <input type="text" id="msgSearch" placeholder="Rechercher une conversation" oninput="renderMessages()">
+      <input type="text" id="msgSearch" placeholder="Rechercher un contact TimeCool ou une conversation" oninput="renderMessages()">
     </div>
     <div class="msg-menu" id="msgMenu">
       <div class="msg-menu-item" onclick="msgAction('newgroup')"><span class="mi-ic">👥</span>Nouveau groupe</div>
@@ -6810,7 +6809,6 @@ function closeMsgMenuOnce() {
 
 async function msgAction(a) {
   closeMsgMenuOnce();
-  if (a === 'new') { navigate('contacts'); showToast('Choisis un contact pour démarrer'); return; }
   if (a === 'newgroup') { openNewGroupSheet(); return; }
   if (a === 'unread')   { _msgFilter = (_msgFilter === 'unread' ? 'all' : 'unread'); renderMessages(); return; }
   if (a === 'archived') { _msgFilter = (_msgFilter === 'archived' ? 'all' : 'archived'); renderMessages(); return; }
@@ -7266,16 +7264,31 @@ function renderMessages() {
     else bar.innerHTML = '';
   }
 
-  if (!msgs.length) {
-    const txt = q ? 'Aucun résultat pour « ' + escapeHTMLSafe(q) + ' »'
-              : _msgFilter === 'unread' ? 'Aucun message non lu'
-              : _msgFilter === 'archived' ? 'Aucune conversation archivée'
-              : 'Aucun message';
-    list.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-sec);">' + txt + '</div>';
+  // Mission 94 : la recherche trouve aussi les contacts TimeCool à qui on n'a pas encore écrit (un toucher ouvre la conversation).
+  const contactsTc = (q && _msgFilter === 'all') ? tcContactsTimeCoolCherches(q, msgs) : [];
+
+  if (!msgs.length && !contactsTc.length) {
+    let txt;
+    if (q) {
+      // Un contact qui n'a pas TimeCool n'est jamais proposé : on le dit, simplement (mission 94).
+      const sansTc = _msgFilter === 'all' ? tcContactsCherches(q).filter(function (c) { return !c.referenceCompte; }) : [];
+      txt = sansTc.length ? escapeHTMLSafe(tcPrenomPresentable(sansTc[0].name)) + ' n’a pas encore TimeCool. Tu ne peux pas lui écrire ici.'
+        : _msgFilter === 'all' ? 'Aucun contact TimeCool à ce nom.' : 'Aucun résultat pour « ' + escapeHTMLSafe(q) + ' »';
+    } else {
+      txt = _msgFilter === 'unread' ? 'Aucun message non lu'
+        : _msgFilter === 'archived' ? 'Aucune conversation archivée'
+        : 'Aucun message pour l’instant. Cherche un contact TimeCool ci-dessus pour lui écrire.';
+    }
+    list.innerHTML = '<div id="msgVide" style="padding:40px 24px; text-align:center; color:var(--text-sec); line-height:1.5;">' + txt + '</div>';
     return;
   }
 
-  list.innerHTML = msgs.map(m => {
+  list.innerHTML = contactsTc.map(function (c) {
+    return '<div class="msg-preview" data-contact-tc="' + escapeHTMLSafe(c.id) + '" onclick="messageContact(\'' + escapeHTMLSafe(c.id) + '\')">'
+      + '<div class="msg-avatar" style="background:' + getContactColor(c.name) + ';">' + escapeHTMLSafe(getContactInitials(c.name)) + '</div>'
+      + '<div class="msg-body"><div class="msg-name">' + escapeHTMLSafe(c.name) + '</div>'
+      + '<div class="msg-text">Écrire un message</div></div></div>';
+  }).join('') + msgs.map(m => {
     const last = m.thread[m.thread.length-1] || { text:'Nouvelle conversation \u2014 aucun message', time:'' };
     return `
     <div class="msg-preview ${m.unread>0?'unread':''} ${m.archived?'arch':''}"
@@ -7291,6 +7304,22 @@ function renderMessages() {
       </div>
       ${m.unread>0?`<div class="card-badge" style="margin-left:8px;">${m.unread}</div>`:''}
     </div>`; }).join('');
+}
+
+/** Mission 94 : les contacts dont le nom contient ce qui est tapé (sans accents, sans majuscules). */
+function tcContactsCherches(q) {
+  const cle = tcSansAccents(String(q || '')).toLowerCase().trim();
+  if (!cle || typeof contactsList === 'undefined' || !Array.isArray(contactsList)) return [];
+  return contactsList.filter(function (c) { return c && c.name && tcSansAccents(String(c.name)).toLowerCase().indexOf(cle) > -1; });
+}
+
+/** Mission 94 : les contacts TimeCool qui correspondent, sauf ceux dont la conversation est déjà dans la liste. */
+function tcContactsTimeCoolCherches(q, conversationsMontrees) {
+  const refs = (conversationsMontrees || []).map(function (m) { return m.reference; }).filter(Boolean);
+  const noms = (conversationsMontrees || []).map(function (m) { return String(m.with || '').trim().toLowerCase(); });
+  return tcContactsCherches(q).filter(function (c) {
+    return !!c.referenceCompte && refs.indexOf(c.referenceCompte) < 0 && noms.indexOf(String(c.name).trim().toLowerCase()) < 0;
+  }).slice(0, 8);
 }
 
 /** Retrouve une conversation, du serveur comme de l'appareil.

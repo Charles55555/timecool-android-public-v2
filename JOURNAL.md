@@ -3398,3 +3398,13 @@ Chef, 15/11 (phrases et propositions validées par Charles ; complément « Qui 
   - la carte du retard en trois lignes (« Je préviens Paul de ton retard. Voici le message : », le message, « Je lui envoie ? ») ; l'heure d'arrivée sans zéro devant ;
   - « midi » vaut 12h ; « soir » sans heure demande toujours l'heure.
   - examen : seule la bulle qui répète la carte à l'identique est cachée ; une bulle qui explique un écart (heure déjà prise, date corrigée) reste toujours visible.
+
+## 15/11/2026 : mission 94, messagerie : chercher un contact TimeCool au lieu du crayon
+
+Chef, 15/11 (validé par Charles).
+- Plus de crayon ✏️ en haut de « Ma messagerie sécurisée » (il ne faisait qu'ouvrir la page Contacts). « Nouveau groupe » reste dans le menu ⋮.
+- La case « Rechercher un contact TimeCool ou une conversation » trouve les conversations (nom, texte) et les contacts TimeCool à qui on n'a pas encore écrit ; un toucher ouvre la conversation (messageContact).
+- Sous le titre, à la place de « Confidentielle » : « 🔒 Ici, tu écris seulement à tes contacts qui ont déjà TimeCool. »
+- Page vide : « Aucun message pour l’instant. Cherche un contact TimeCool ci-dessus pour lui écrire. »
+- Un contact sans TimeCool n'est jamais proposé : « Paul n’a pas encore TimeCool. Tu ne peux pas lui écrire ici. » ; rien ne correspond : « Aucun contact TimeCool à ce nom. »
+- API non touchée. Suite verif-messagerie-recherche (nouvelle ; Chrome sur le PC). verifier.sh vert.
