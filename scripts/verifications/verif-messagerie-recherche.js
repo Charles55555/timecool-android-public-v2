@@ -28,6 +28,7 @@ const entete = (page.match(/<div class="page" id="page-messages">[\s\S]*?<div cl
 verifie('plus de crayon ✏️ (ni « Nouveau message »)', entete.length > 0 && entete.indexOf('✏️') < 0 && entete.indexOf("msgAction('new')") < 0 && page.indexOf("if (a === 'new')") < 0);
 verifie('la phrase sous le titre : « 🔒 Ici, tu écris seulement à tes contacts qui ont déjà TimeCool. »', entete.indexOf('<div class="page-subtitle" id="msgSousTitre">🔒 Ici, tu écris seulement à tes contacts qui ont déjà TimeCool.</div>') > -1);
 verifie('la case : « Rechercher un contact TimeCool ou une conversation »', entete.indexOf('placeholder="Rechercher un contact TimeCool ou une conversation"') > -1);
+verifie('(chef) le texte gris tient sur écran étroit : marges réduites, 13 px sous 420, 11,5 px sous 375, 11 px sous 340, points de suspension au-delà', page.indexOf('@media (max-width:420px) { .msg-search { padding:9px 10px; gap:6px; } .msg-search > span { font-size:13px !important; } .msg-search input::placeholder { font-size:13px; } }') > -1 && page.indexOf('@media (max-width:375px) { .msg-search input::placeholder { font-size:11.5px; } }') > -1 && page.indexOf('@media (max-width:340px) { .msg-search input::placeholder { font-size:11px; } }') > -1 && page.indexOf('.msg-search input { min-width:0; text-overflow:ellipsis; }') > -1);
 verifie('rien ne se perd : « Nouveau groupe » (conversation à plusieurs) reste dans le menu ⋮', page.indexOf(`<div class="msg-menu-item" onclick="msgAction('newgroup')"><span class="mi-ic">👥</span>Nouveau groupe</div>`) > -1);
 
 titre('La liste, rejouée');
