@@ -15135,7 +15135,8 @@ function tcExecuterDeplacement(liste) {
  * créneaux proposés à chacun (calculés maintenant, envoyés tels quels au oui), le message, et ce qui se passera ensuite.
  */
 function tcDemanderDeplacementProfil2(liste, avec, sans) {
-  const items = tcCreneauxDuLot(avec);
+  // Les places prévues des rendez-vous sans contact (déplacés au oui) sont réservées : aucun créneau montré ne tombe dessus.
+  const items = tcCreneauxDuLot(avec.concat(sans));
   _tcDeplacementEnAttente = { liste: liste, avec: avec, sans: sans, items: items, confiance: 2 };
   const contacts = [];
   avec.forEach(function (x) { const c = tcContactDuRdv(x.ev); if (!contacts.some(function (d) { return d.id === c.id; })) contacts.push(c); });
@@ -26117,7 +26118,8 @@ function tcQuestionnaireRecap(r) {
   const lignes = [];
   // Mission 91 : au profil 2, les créneaux de chacun sont calculés ici, montrés, et partiront tels quels au « Oui, vas-y ».
   const profil2 = r.action === 'decaler' && r.prevenir === 'charly' && typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 2;
-  r._creneaux = profil2 ? tcCreneauxDuLot(r._liste.filter(function (x) { return x.p && tcContactDuRdv(x.ev); })) : null;
+  // Les places prévues des rendez-vous sans contact (déplacés au « Oui, vas-y ») sont réservées aussi.
+  r._creneaux = profil2 ? tcCreneauxDuLot(r._liste.filter(function (x) { return !!x.p; })) : null;
   if (r.action === 'decaler') {
     r._liste.forEach(function (x) {
       const c = r.prevenir === 'charly' && x.p ? tcContactDuRdv(x.ev) : null;
@@ -26443,14 +26445,35 @@ async function tcProposerLesCreneaux(liste, options) {
     const debut = Number(x.p.startH) * 60 + Number(x.p.startM || 0);
     return { date: x.p.date, debut: debut, fin: debut + Math.max(15, (Number(x.ev.endH) * 60 + Number(x.ev.endM || 0)) - (Number(x.ev.startH) * 60 + Number(x.ev.startM || 0))) };
   });
-  // Mission 91 : des créneaux déjà montrés (validation finale du profil 2) partent tels quels.
-  const items = (Array.isArray(o.items) ? o.items : tcCreneauxDuLot(liste, occupes)).map(function (it) {
+  // Mission 91 : des créneaux déjà montrés (validation finale du profil 2) partent tels quels, sauf ceux qui sont passés ou
+  // occupés depuis (examen : un oui tardif) ; s'il n'en reste aucun, rien ne part pour ce rendez-vous, et le bilan le dit.
+  const perimes = [];
+  const items = (Array.isArray(o.items) ? tcCreneauxEncoreValables(o.items, perimes) : tcCreneauxDuLot(liste, occupes)).map(function (it) {
     const x = { ev: it.ev, contact: it.contact, creneaux: it.creneaux, lot: lot, apres: o.apres || null };
     if (o.confiance) x.confiance = o.confiance;
     return x;
   });
   const res = await tcEnvoyerPropositions(items);
-  return { res: res, lignes: tcLignesPropositions(res, o.confiance || undefined) };
+  const lignes = tcLignesPropositions(res, o.confiance || undefined);
+  perimes.forEach(function (it) {
+    lignes.splice(Math.max(0, res.details.length), 0, '• « ' + it.ev.title + ' » : les créneaux proposés ne sont plus libres, rien n’est parti à ' + it.contact.name + ' ; il reste à sa place. Redemande-moi de le décaler.');
+  });
+  return { res: res, lignes: lignes };
+}
+
+/** Mission 91 (examen) : les créneaux montrés encore à venir et libres ; les rendez-vous qui n'en ont plus vont dans perimes. */
+function tcCreneauxEncoreValables(items, perimes) {
+  const maintenant = new Date();
+  const garde = [];
+  items.forEach(function (it) {
+    const restent = (it.creneaux || []).filter(function (c) {
+      const debut = new Date(c.date + 'T' + String(c.startH).padStart(2, '0') + ':' + String(c.startM || 0).padStart(2, '0') + ':00');
+      return !isNaN(debut) && debut > maintenant && !tcGenesDuCreneau(it.ev, c).length;
+    });
+    if (restent.length) garde.push(Object.assign({}, it, { creneaux: restent }));
+    else perimes.push(it);
+  });
+  return garde;
 }
 
 /** Les créneaux de chaque rendez-vous avec un contact, sans proposer deux fois le même (mission 91 : calculés avant le oui). */

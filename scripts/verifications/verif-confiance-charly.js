@@ -38,7 +38,7 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
   'tcIdsQuestion', 'tcRetirerQuestionsDe', 'tcPoserLotCreneaux', 'tcReproposerSeul', 'tcExecuterLotCreneaux', 'tcDireSuitesAuxContacts', 'tcExecuterDeplacement', 'tcGenesDuLot',
   'tcPrisTexte', 'tcPrisParentheses', 'tcTraiterSeul', 'tcSuitesEnLignes', 'tcProposerEnvoi', 'tcExecuterEnvoi',
   'tcSauverAClore', 'tcEchecClore', 'tcCloreEnAttente', 'tcNoterPourMarcheArriere', 'tcMaintenirPropositions',
-  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcCreneauxDuLot', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcRepondreDeplacement', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcUneQuestionAttend', 'tcFinirConfianceDuMoment', 'tcEcarterDecalagesEnCours', 'tcFaitRaconte'];
+  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcCreneauxDuLot', 'tcCreneauxEncoreValables', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcRepondreDeplacement', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcUneQuestionAttend', 'tcFinirConfianceDuMoment', 'tcEcarterDecalagesEnCours', 'tcFaitRaconte'];
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -306,6 +306,24 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   verifie('pas de réponse sous 24 h (relance) : rien ne repart, Charly demande', trace.creees.length === nC && q.nature === 'question' && /^Paul Martin n’a pas répondu depuis 24 h pour « Sport »\. Je propose d’autres moments/.test(q.content), q.content);
   await ctx.tcRepondreReponseCreneau('d’autres moments');
   verifie('« d’autres moments » (un nouveau oui) : la nouvelle proposition part, toujours marquée validée', trace.creees.length === nC + 1 && trace.creees[nC].remplace === 's' && ctx.events.find((e) => e.id === 's').decalage.confiance === 2, JSON.stringify(ctx.events.find((e) => e.id === 's').decalage));
+  // Examen : un oui tardif. Un créneau montré devenu occupé ne part pas ; si aucun ne reste, rien ne part et le bilan le dit.
+  ctx.charlyIA.history = [];
+  ctx.events.push(ev('t1', 'Tennis', 5, 8, 0, 9, 0, { contact: 'c1' }), ev('t2', 'Théâtre', 6, 8, 0, 9, 0, { contact: 'c2' }));
+  const t1 = ctx.events.find((e) => e.id === 't1'), t2 = ctx.events.find((e) => e.id === 't2');
+  await ctx.tcExecuterDeplacement([{ ev: t1, p: { date: iso(7), startH: 9, startM: 0, endH: 10, endM: 0 } }, { ev: t2, p: { date: iso(8), startH: 9, startM: 0, endH: 10, endM: 0 } }]);
+  const att3 = vm.runInContext('_tcDeplacementEnAttente', ctx);
+  const m1 = att3.items.find((i) => i.ev === t1), m2 = att3.items.find((i) => i.ev === t2);
+  const occupe = m1.creneaux[0];
+  ctx.events.push(ev('o1', 'Occupé entre-temps', 7, occupe.startH, occupe.startM, occupe.endH, occupe.endM));
+  ctx.events.find((e) => e.id === 'o1').date = occupe.date;
+  m2.creneaux.forEach((c, i) => ctx.events.push(Object.assign(ev('o2' + i, 'Pris', 8, c.startH, c.startM, c.endH, c.endM), { date: c.date })));
+  const nC3 = trace.creees.length;
+  await ctx.tcRepondreDeplacement('oui');
+  const part = trace.creees.slice(nC3);
+  verifie('oui tardif : pour Paul, seuls les créneaux montrés encore libres partent (jamais un autre) ; pour Chloé, plus aucun : rien ne part', part.length === 1 && part[0].remplace === 't1'
+    && part[0].creneaux.length === m1.creneaux.length - 1 && part[0].creneaux.every((c) => m1.creneaux.slice(1).map(ctx.tcPropositionLibelle).indexOf(c.libelle) > -1) && !t2.decalage, JSON.stringify(part.map((p) => p.creneaux)));
+  verifie('le bilan le dit : « Théâtre » : les créneaux proposés ne sont plus libres, rien n’est parti à Chloé Roux', /• « Théâtre » : les créneaux proposés ne sont plus libres, rien n’est parti à Chloé Roux ; il reste à sa place\. Redemande-moi de le décaler\./.test(last().content), last().content);
+  verifie('un créneau passé ne part jamais', ctx.tcCreneauxEncoreValables([{ ev: t1, contact: { name: 'P' }, creneaux: [{ date: iso(-1), startH: 9, startM: 0, endH: 10, endM: 0 }] }], []).length === 0);
   ctx.events.push(ev('v', 'Vieux', 4, 9, 0, 10, 0, { contact: 'c1', decalage: { rdv: 320 } }));
   reponses = [{ rdv_id: 320, titre: 'Vieux', remplace: 'v', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(5) + ' 09:00:00', fin: iso(5) + ' 10:00:00', pris: [] }];
   await ctx.tcSuivrePropositions(true);
