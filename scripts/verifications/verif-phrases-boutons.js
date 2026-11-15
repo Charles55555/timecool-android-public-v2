@@ -40,6 +40,8 @@ const PHRASES = [
   'Quand suis-je libre mardi, jeudi ou cette semaine ?',
   'Retrouve Paul',
   'Crée-moi un rendez-vous demain à 15h chez mon dentiste',
+  // Retouche de Charles (15/11) : « midi » vaut 12h.
+  'Déjeuner avec Paul demain midi',
 ];
 // Examen de la 93 : des questions ou des mots qui ne sont pas un rendez-vous : ni carte, ni « À quelle heure ? » (le chemin
 // habituel : la consultation de l'agenda, une question de Charly, ou le modèle).
@@ -99,7 +101,7 @@ if (!exe) {
             var html = '';
             try { html = renderChatMessage(m) || ''; } catch (e) { html = ''; }
             return { role: m.role, texte: String(m.content || ''), cases: m._questionnaire ? m._questionnaire.choix.map(function (c) { return c.texte; }) : null,
-              envoi: m._boutonsEnvoi ? [m._boutonsEnvoi.oui, m._boutonsEnvoi.non] : null, carte: /\\[AGENDA\\]/.test(m.content || ''),
+              envoi: m._boutonsEnvoi ? [m._boutonsEnvoi.oui, m._boutonsEnvoi.non] : null, carte: /\\[AGENDA\\]/.test(m.content || ''), bulleCachee: /display:none; padding:10px 14px/.test(html),
               boutons: (html.match(/<button[^>]*>[\\s\\S]*?<\\/button>/g) || []).map(function (b) { return b.replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim(); }),
               question: (function () { var d = document.createElement('div'); d.innerHTML = html; var t = d.textContent.replace(/\\s+/g, ' ').trim(); return t.slice(0, 300); })() };
           });
@@ -123,7 +125,9 @@ if (!exe) {
   if (process.env.TC_DUMP) console.log(JSON.stringify(R, null, 1));
   // Ce que chaque phrase doit donner (d : la dernière réponse de Charly ; tout : toutes ses réponses).
   const Q = '[  ]\\?';
-  const carte = (d) => d.carte && /\| Dentiste \| rdv/.test(d.texte) && d.boutons.indexOf('✅ Valider mon agenda') > -1;
+  // Retouche de Charles (15/11) : la carte arrive seule : la bulle « Dentiste, … : je te propose ceci. » est cachée.
+  const carte = (d) => d.carte && /\| Dentiste \| rdv/.test(d.texte) && d.boutons.indexOf('✅ Valider mon agenda') > -1 && d.bulleCachee === true;
+  const midi = (d) => d.carte && /\| 12:00-13:00 \| Déjeuner avec Paul \| rdv/.test(d.texte);
   const attentes = {
     neuf: [
       { dit: 'la carte du rendez-vous tout de suite', test: (d) => carte(d) },
@@ -134,16 +138,19 @@ if (!exe) {
       { dit: 'la liste de ce qui est libre cette semaine', test: (d) => /^Voici ce qui est libre cette semaine/.test(d.texte) },
       { dit: '« Je ne trouve pas « Paul » dans tes contacts. »', test: (d) => d.texte === 'Je ne trouve pas « Paul » dans tes contacts.' },
       { dit: '(complément) compte sans contact : aucune question, la carte tout de suite, « sans contact · relier »', test: (d, tout) => carte(d) && tout.length === 1 && /mon dentiste — sans contact · relier/.test(d.question) && !/C’est avec quelqu’un|qui est-ce/.test(d.question) },
+      // Paul n'est pas un contact ici : la demande complétée (« … demain à 12h ») part au modèle, comme avant la mission 93.
+      { modele: true, dit: '« midi » vaut 12h : pas de « À quelle heure ? », la demande part complétée', test: (d, tout, x) => x.modele === 1 && x.hm === true && !tout.some((m) => /^À quelle heure/.test(m.texte)) },
     ],
     rempli: [
       { dit: 'la carte du rendez-vous tout de suite', test: (d) => carte(d) },
       { dit: 'la carte simple du déplacement (Dr Lefèvre, vendredi), « Oui, envoie » / « Non »', test: (d) => /^Je déplace ton rendez-vous « Dentiste » avec Dr Lefèvre\.\n/.test(d.texte) && new RegExp('\\nJe lui envoie' + Q + '$').test(d.texte) && JSON.stringify(d.envoi) === '["Oui, envoie","Non"]' },
-      { dit: 'la carte du retard pour Paul (Kiné dans l heure qui vient), « Oui, envoie » / « Non »', test: (d) => /^Tu seras en retard de 10 minutes à « Kiné »\.\nTu arriveras vers \d{1,2}h10\.\nJe préviens Paul\.\nLe message : « /.test(d.texte) && JSON.stringify(d.cases) === '["Oui, envoie","Non"]' },
+      { dit: 'la carte du retard en trois lignes (Charles, 15/11) : « Je préviens Paul de ton retard. Voici le message : », le message, « Je lui envoie ? »', test: (d) => /^Je préviens Paul de ton retard\. Voici le message :\n« Bonjour Paul, .*10 minutes de retard.* Je serai là vers [1-9]\d?h10\. »\nJe lui envoie \?$/.test(d.texte) && JSON.stringify(d.cases) === '["Oui, envoie","Non"]' },
       { dit: '« À quelle heure ? »', test: (d) => new RegExp('^À quelle heure' + Q + '$').test(d.texte) },
-      { dit: 'aujourd’hui et demain : trois rendez-vous, puis la carte « Tu es malade. Je déplace 3 rendez-vous. … Je leur envoie ? »', test: (d, tout) => tout.some((m) => /^Voici tes rendez-vous pour aujourd’hui et demain/.test(m.texte)) && /^Tu es malade\. Je déplace 3 rendez-vous\.\n/.test(d.texte) && new RegExp('\\nJe leur envoie' + Q + '$').test(d.texte) && JSON.stringify(d.cases) === '["Oui, envoie","Non"]' },
+      { dit: 'aujourd’hui et demain : la carte seule (ni liste ni « Voici ce que je te propose »), « Tu es malade. Je déplace 3 rendez-vous. … Je leur envoie ? »', test: (d, tout) => !tout.some((m) => /^Voici tes rendez-vous|^Voici ce que je te propose/.test(m.texte)) && /^Tu es malade\. Je déplace 3 rendez-vous\.\n/.test(d.texte) && new RegExp('\\nJe leur envoie' + Q + '$').test(d.texte) && JSON.stringify(d.cases) === '["Oui, envoie","Non"]' },
       { dit: 'la liste de ce qui est libre cette semaine (le dentiste de demain retiré)', test: (d) => /^Voici ce qui est libre cette semaine/.test(d.texte) },
       { dit: 'la fiche de Paul Martin, « Ouvrir la fiche »', test: (d) => /^Paul Martin : 0611111111/.test(d.texte) && d.boutons.indexOf('Ouvrir la fiche') > -1 },
       { dit: '(complément) compte avec des contacts : « C’est avec quelqu’un de tes contacts ? », « 👤 Choisir un contact » / « Non, personne »', test: (d) => new RegExp('C’est avec quelqu’un de tes contacts' + Q).test(d.question) && JSON.stringify(d.boutons) === '["👤 Choisir un contact","Non, personne"]' && !/Si non|ni annuler/.test(d.question) },
+      { dit: '« midi » vaut 12h : la carte à 12h, pas de « À quelle heure ? »', test: (d, tout) => midi(d) && !tout.some((m) => /^À quelle heure/.test(m.texte)) },
     ],
   };
   ['neuf', 'rempli'].forEach((compte) => {
@@ -158,8 +165,8 @@ if (!exe) {
         verifie('« ' + TOUTES[i] + ' » : pas une demande sans heure (tcHeureManquante), ni carte ni « À quelle heure ? » (examen)', x.hm === false && !charly.some((m) => m.carte || /^À quelle heure/.test(m.texte)), JSON.stringify({ hm: x.hm, r: charly.map((m) => m.texte) }));
         return;
       }
-      verifie('« ' + PHRASES[i] + ' » : sans le modèle', x.modele === 0, JSON.stringify(x));
       const a = attentes[compte][i];
+      if (!a.modele) verifie('« ' + PHRASES[i] + ' » : sans le modèle', x.modele === 0, JSON.stringify(x));
       verifie('« ' + PHRASES[i] + ' » : ' + a.dit, a.test(dernier, charly, x), JSON.stringify(charly.map((m) => ({ t: m.texte, b: m.boutons, c: m.cases, e: m.envoi }))));
     });
   });

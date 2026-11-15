@@ -100,9 +100,8 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   const c1 = carte();
   await cliquer(0);
   verifie('la carte est marquée répondue, ses boutons inactifs, le choix en couleur', c1._questionnaire.etat === 'fait' && c1._questionnaire.reponse === 'aujourdhui' && /disabled/.test(ctx.tcRendreQuestionnaire(c1)) && /background:#1a73e8; color:#fff;[^>]*>1️⃣/.test(ctx.tcRendreQuestionnaire(c1)), ctx.tcRendreQuestionnaire(c1).slice(0, 100));
-  const liste = H().filter((m) => /Voici tes rendez-vous/.test(m.content))[0];
-  verifie('la liste : « Pharmacie » seul (11h, 14h, 17h passés, voyage journée entière exclus)', liste && /pour le reste de la journée/.test(liste.content) && /Pharmacie/.test(liste.content) && !/Dentiste|Coach|Kiné|Voyage/.test(liste.content), liste && liste.content);
-  verifie('la question « que fait-on ? » est sautée (le bouton disait « décale ») : les créneaux sont proposés, dès demain, dans les plages ouvertes', /Voici ce que je te propose/.test(textes()) && textes().indexOf('« Pharmacie » : ' + quand(iso(1), { startH: 10, startM: 0, endH: 11, endM: 0 })) > -1, textes());
+  // Retouche de Charles (15/11) : la carte seule ; ni la liste des rendez-vous, ni « Voici ce que je te propose ».
+  verifie('« Pharmacie » seul (11h, 14h, 17h passés, voyage journée entière exclus) ; « que fait-on ? » sautée (le bouton disait « décale ») ; ni liste ni « Voici ce que je te propose » avant la carte', /^Tu es malade\. Je déplace ton rendez-vous « Pharmacie » avec Marc\./.test(carte()._questionnaire.question) && !/Dentiste|Coach|Kiné|Voyage/.test(carte()._questionnaire.question) && !/Que fait-on|Voici tes rendez-vous|Voici ce que je te propose/.test(textes()), textes());
   verifie('(mission 93) plus de « Qui prévient ? » : Charly prévient, droit à la carte', carte()._questionnaire.etape === 'recap' && !/Qui prévient/.test(textes()) && enCours().reponses.prevenir === 'charly', textes());
   verifie('(mission 91) le récapitulatif est la carte simple : « Tu es malade. Je déplace ton rendez-vous « Pharmacie » avec Marc. », les créneaux, « Marc choisit… », boutons « Oui, envoie » / « Non »', carte()._questionnaire.etape === 'recap'
     && /^Tu es malade\. Je déplace ton rendez-vous « Pharmacie » avec Marc\.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres\.\nJe propose à Marc 3 nouveaux rendez-vous/.test(carte()._questionnaire.question)
@@ -157,13 +156,13 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   verifie('« Je ne touche à rien » : « D’accord, je ne touche à rien. Repose-toi. », fin', dc() === 'D’accord, je ne touche à rien. Repose-toi.' && enCours() === null && ctx.events.length === agenda().length, dc());
   reinit([ev('x', 'Formation', 1, 7, 0, 17, 0, { contact: 'c2' }), ev('g', 'Banque', 2, 10, 0, 11, 0)]);
   await ctx.tcDemarrerMalade('je suis malade demain matin, décale');
-  verifie('dix heures d affilée ne tiennent nulle part : « je n’ai pas trouvé de place libre … je le laisse où il est », et le récap le redit', /« Formation » : je n’ai pas trouvé de place libre dans les deux semaines, je le laisse où il est/.test(textes()) && carte()._questionnaire.etape === 'recap', textes());
+  verifie('dix heures d affilée ne tiennent nulle part : le récapitulatif le dit ; (mission 93) rien ne bouge, donc personne à prévenir', /• Je laisse « Formation » où il est \(pas de place libre dans les deux semaines\)/.test(carte()._questionnaire.question) && carte()._questionnaire.etape === 'recap' && !/Je préviens|Le message/.test(carte()._questionnaire.question), carte()._questionnaire.question);
   verifie('récap : « Je laisse « Formation » où il est (pas de place libre dans les deux semaines) »', /• Je laisse « Formation » où il est \(pas de place libre dans les deux semaines\)/.test(carte()._questionnaire.question), carte()._questionnaire.question);
   await taper('ok');
   verifie('rien n est déplacé ni envoyé ; bilan « Laissé en place »', ctx.events.find((e) => e.id === 'x').date === iso(1) && trace.envois.length === 0 && /• Laissé en place : « Formation »/.test(dc()) && !/remets/.test(dc()), dc());
   reinit();
   await ctx.tcDemarrerMalade('je suis malade demain, décale tout');
-  verifie('les créneaux s enchaînent après-demain autour de « Banque » : Réunion 9h-10h, Dentiste 11h-12h30', textes().indexOf('« Réunion » : ' + quand(iso(2), { startH: 9, startM: 0, endH: 10, endM: 0 })) > -1 && textes().indexOf('« Dentiste » : ' + quand(iso(2), { startH: 11, startM: 0, endH: 12, endM: 30 })) > -1, textes());
+  verifie('la carte : après-demain autour de « Banque », Dentiste (sans contact) à 11h, Réunion d abord à 9h pour Sophie', carte()._questionnaire.question.indexOf('« Dentiste » : ' + ctx.tcJourLisible(iso(2)) + ', 11h.') > -1 && new RegExp('« Réunion » avec Sophie :[ \\n]' + ctx.tcJourLisible(iso(2)) + ', 9h').test(carte()._questionnaire.question), carte()._questionnaire.question);
   await taper('vas-y');
   verifie('« Dentiste » sans contact est déplacé ; Réunion (Sophie, SMS) reçoit des créneaux par un lien : rien d ouvert dans la boucle, un bouton « Envoyer à Sophie Anceau » dans le bilan', trace.envois.length === 0 && /• Message prêt, à envoyer toi-même d’un geste \(SMS ou email\) : Sophie Anceau/.test(dc()) && (dc().match(/• Déplacé : /g) || []).length === 1 && /• « Réunion » : je propose à Sophie Anceau /.test(dc()) && dernier()._envois && dernier()._envois.length === 1 && /✉️ Envoyer à Sophie Anceau</.test(ctx.tcRendreBilanQuestionnaire(dernier())), dc());
 

@@ -11756,6 +11756,19 @@ function tcAccuseSeul(texte) {
   return /^(parfait|c['’]est noté|noté|ok|d['’]accord|bien sûr|super|très bien|entendu|voilà|c['’]est fait)( (j['’]ajoute ça( tout de suite)?( dans ton agenda)?|c['’]est (noté|fait)|je (le )?m['’]en occupe|je l['’]ajoute( tout de suite)?|je m['’]en occupe))?$/.test(t);
 }
 
+/**
+ * Mission 93 (Charles, 15/11) : une bulle qui ne fait que répéter la carte qui suit (« Dentiste, lundi 16 novembre 2026 à
+ * 15h : je te propose ceci. ») est retirée : la carte arrive seule. Une bulle qui apporte quelque chose (une question, un
+ * chevauchement, un rendez-vous introuvable, plusieurs lignes) reste.
+ */
+function tcRepeteLaCarte(texte) {
+  if (tcAccuseSeul(texte)) return true;
+  const s = String(texte || '').trim();
+  if (!s || s.indexOf('?') > -1 || s.indexOf('\n') > -1 || s.length > 160) return false;
+  if (/chevauch|attention|déjà|introuvable|pas trouvé|conflit|occupé|⚠/i.test(s)) return false;
+  return /je te propose (ceci|ça|cela)\s*[.!:]?\s*$/i.test(s);
+}
+
 /** La suite sur la notification : Charles n'en veut plus. */
 function tcSuiteSurNotification(texte) {
   return /préviendrai|te rappellerai|notification/i.test(String(texte || ''));
@@ -11873,7 +11886,7 @@ function renderChatMessage(m) {
       <div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">
         <div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>
         <div style="flex:1; max-width:calc(100% - 50px);">
-          <div style="${(displayProposals.length && !contactAttendu && tcAccuseSeul(cleanContent)) ? 'display:none; ' : ''}padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+          <div style="${(displayProposals.length && !contactAttendu && tcRepeteLaCarte(cleanContent)) ? 'display:none; ' : ''}padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
             ${escapeHTML(cleanContent).replace(/\n/g,'<br>') || '...'}
           </div>
     `;
@@ -15612,6 +15625,10 @@ async function charlySendMessage() {
     _tcHeureEnAttente = null;
     if (_attenteHeure && tcHeureDansTexte(String(text).toLowerCase())) {
       text = tcComposerAvecHeure(_attenteHeure.texte, text);
+      _tcTexteTape = { tape: texteTape, corrige: text };
+    } else if (!_attenteHeure && /(^|\s)midi\b/i.test(text) && !/apr[eè]s[- ]?midi/i.test(text) && typeof tcHeureManquante === 'function' && tcHeureManquante(text)) {
+      // Mission 93 (Charles) : « midi » vaut 12h ; « soir » sans heure demande toujours « À quelle heure ? ».
+      text = tcComposerAvecHeure(text, '12h');
       _tcTexteTape = { tape: texteTape, corrige: text };
     }
   }
@@ -26171,7 +26188,9 @@ function tcQuestionnaireActions(r) {
 const TC_ETAPE_PREVENIR = {
   cle: 'prevenir',
   avant: function (r) {
-    r._contacts = tcQuestionnaireContacts(r._rdvs);
+    // Mission 93 : décaler : seuls les rendez-vous qui bougent font prévenir quelqu'un (un rendez-vous laissé en place, faute de
+    // place libre, ne change rien pour son contact).
+    r._contacts = tcQuestionnaireContacts((r.action === 'decaler' && Array.isArray(r._liste)) ? r._liste.filter(function (x) { return !!x.p; }).map(function (x) { return x.ev; }) : r._rdvs);
     const sans = r._rdvs.filter(function (e) { return !tcContactDuRdv(e); });
     if (sans.length === r._rdvs.length) tcQuestionnaireDire('Aucun de ces rendez-vous n’a de contact enregistré : personne à prévenir.');
     else if (sans.length) tcQuestionnaireDire('Sans contact enregistré, donc personne à prévenir : ' + sans.map(function (e) { return '« ' + e.title + ' »'; }).join(', ') + '.');
@@ -26223,14 +26242,13 @@ function tcQuestionnaireRecap(r) {
       profil: typeof tcConfianceCharly === 'function' ? tcConfianceCharly() : 1
     }).lignes.join('\n');
   }
-  // Mission 93 : le retard, pour un enfant de 10 ans : le rendez-vous, l'heure d'arrivée, qui je préviens, le message.
+  // Mission 93 (Charles, 15/11) : le retard en trois lignes : qui je préviens, le message (celui des Paramètres, avec l'heure
+  // d'arrivée), « Je lui envoie ? ». Plusieurs personnes : leurs prénoms, un seul message montré, « Je leur envoie ? ».
   if (tcRecapRetard(r)) {
     const e = r._retardRdv, c = r._contacts[0];
-    const p = String(c.name || '').split(' ')[0];
-    return ['Tu seras en retard de ' + r.minutes + ' minutes à « ' + e.title + ' ».',
-      'Tu arriveras vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes)) + '.',
-      'Je préviens ' + (r._contacts.length > 1 ? tcQuestionnaireNoms(r._contacts) : p) + '.',
-      'Le message : « ' + tcQuestionnaireMessage(r, c, e, e) + ' »',
+    const prenoms = tcQuestionnaireNoms(r._contacts.map(function (x) { return String((x && x.name) || '').split(' ')[0]; }));
+    return ['Je préviens ' + prenoms + ' de ton retard. Voici le message :',
+      '« ' + tcQuestionnaireMessage(r, c, e, e) + ' »',
       r._contacts.length > 1 ? 'Je leur envoie ?' : 'Je lui envoie ?'].join('\n');
   }
   const lignes = [];
@@ -26277,7 +26295,7 @@ function tcQuestionnaireMessage(r, c, ev, ancien) {
     const valeurs = tcValeursDuRdv(c.name, ev);
     valeurs['[minutes]'] = String(r.minutes);
     return tcRemplirModele(tcModeleMessage('retard', tcVouvoiement(c)), valeurs)
-      + ' Je serai là vers ' + tcQuestionnaireHeure(ev.startH * 60 + ev.startM + Number(r.minutes)) + '.';
+      + ' Je serai là vers ' + tcMinutesLisibles(Math.max(0, Math.min(1439, ev.startH * 60 + ev.startM + Number(r.minutes)))) + '.';
   }
   return tcRemplirModele(tcModeleMessage('annule', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien));
 }
@@ -27470,7 +27488,8 @@ const TC_QUESTIONNAIRE_MALADE = {
         const p = TC_MALADE_PERIODES[r.periode];
         r._rdvs = tcMaladeRdv(r.periode);
         if (!r._rdvs.length) { tcQuestionnaireDire('Rien à décaler ' + p.label + '. Repose-toi.'); return false; }
-        tcQuestionnaireDire('Voici tes rendez-vous ' + p.label + ' :\n' + r._rdvs.map(function (e) { return '• « ' + e.title + ' », ' + tcQuestionnaireQuand(e.date, e); }).join('\n'));
+        // Mission 93 (Charles) : la liste seulement quand Charly demande « Que fait-on ? » ; sinon la carte la dit.
+        if (r.action === undefined) tcQuestionnaireDire('Voici tes rendez-vous ' + p.label + ' :\n' + r._rdvs.map(function (e) { return '• « ' + e.title + ' », ' + tcQuestionnaireQuand(e.date, e); }).join('\n'));
       },
       question: function (r) { return r._rdvs.length === 1 ? 'Que fait-on de ce rendez-vous ?' : 'Que fait-on ?'; },
       choix: tcQuestionnaireActions },
@@ -27485,10 +27504,8 @@ const TC_QUESTIONNAIRE_MALADE = {
         const depuisMalade = new Date(now.getFullYear(), now.getMonth(), now.getDate() + p.jours[1] + 1);
         r._depuis = tcISO(depuisMalade);   // la période malade n'est jamais reproposée (TESTEURS, 03/11)
         r._liste = tcQuestionnaireCreneaux(r._rdvs, depuisMalade);
-        tcQuestionnaireDire('Voici ce que je te propose :\n' + r._liste.map(function (x) {
-          return x.p ? '• « ' + x.ev.title + ' » : ' + tcQuestionnaireQuand(x.p.date, x.p)
-            : '• « ' + x.ev.title + ' » : je n’ai pas trouvé de place libre dans les deux semaines, je le laisse où il est';
-        }).join('\n'));
+        // Mission 93 (Charles) : plus de liste « Voici ce que je te propose » : la carte qui suit dit les créneaux (et ce qui
+        // reste en place faute de place libre).
       } },
     TC_ETAPE_PREVENIR,
     TC_ETAPE_RECAP

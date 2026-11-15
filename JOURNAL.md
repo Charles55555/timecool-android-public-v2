@@ -3391,3 +3391,9 @@ Chef, 15/11 (phrases et propositions validées par Charles ; complément « Qui 
 - Contact du rendez-vous : compte sans contact, pas de question (la carte dit « sans contact · relier ») ; sinon « C’est avec quelqu’un de tes contacts ? » (« 👤 Choisir un contact » / « Non, personne »), « C’est l’un d’eux ? » pour deux ou trois.
 - Suite verif-phrases-boutons (nouvelle ; Chrome sur le PC) : les sept phrases, puis chaque exemple tapé sur un compte neuf et un compte rempli. Treize suites adaptées. verifier.sh vert.
 - Examen : une question (« qu’est-ce que j’ai avec Paul samedi », « combien… », « je suis avec… ») n’est jamais une demande sans heure ; « libre / dispo / occupé / rien / pas » ne sont jamais l’objet d’une carte. Suite complétée.
+- Retouches de Charles (15/11) :
+  - une bulle qui ne fait que répéter la carte qui suit est retirée (tcRepeteLaCarte) ; la carte arrive seule ;
+  - malade : la liste seulement quand Charly demande « Que fait-on ? », plus de « Voici ce que je te propose » ;
+  - un rendez-vous laissé en place faute de place libre ne fait plus prévenir personne ;
+  - la carte du retard en trois lignes (« Je préviens Paul de ton retard. Voici le message : », le message, « Je lui envoie ? ») ; l'heure d'arrivée sans zéro devant ;
+  - « midi » vaut 12h ; « soir » sans heure demande toujours l'heure.

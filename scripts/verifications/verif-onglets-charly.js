@@ -128,7 +128,8 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
   verifie('les quatre choix, textes exacts', choixTextes() === '10 min | 20 min | 30 min | Plus (je tape un nombre)', choixTextes());
 
   // Mission 93 : la carte du retard, ligne par ligne.
-  const carteRetard = (min, titreRdv, arrivee, prenom) => 'Tu seras en retard de ' + min + ' minutes à « ' + titreRdv + ' ».\nTu arriveras vers ' + arrivee + '.\nJe préviens ' + prenom + '.\nLe message : « Bonjour ' + prenom + ', je te préviens que j\'aurai environ ' + min + ' minutes de retard. Merci de ta patience ! Je serai là vers ' + arrivee + '. »\nJe lui envoie ?';
+  // Retouche de Charles (15/11) : trois lignes : qui je préviens, le message des Paramètres (avec l heure d arrivée), « Je lui envoie ? ».
+  const carteRetard = (min, titreRdv, arrivee, prenom) => 'Je préviens ' + prenom + ' de ton retard. Voici le message :\n« Bonjour ' + prenom + ', je te préviens que j\'aurai environ ' + min + ' minutes de retard. Merci de ta patience ! Je serai là vers ' + arrivee + '. »\nJe lui envoie ?';
   const fige = () => JSON.stringify(ctx.events.map((x) => x.id + ':' + x.startH + 'h' + x.startM));
   const AGENDA_FIGE = '["a:8h0","v:0h0","b:11h0","p:14h0","c:15h0","k:17h30","d:10h0"]';
 
@@ -136,7 +137,7 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
   await cliquer(1);
   verifie('« Pour quel rendez-vous ? » : le prochain avec son heure (Dentiste à 11h00 ; pas le petit déjeuner passé, ni la fête, ni l agenda pro), ou un autre', carte()._questionnaire.question === 'Pour quel rendez-vous ?' && choixTextes() === 'Le prochain : « Dentiste » aujourd’hui à 11h00 | Un autre', choixTextes());
   await cliquer(0);
-  verifie('la carte : le retard, l heure d arrivée, « Je préviens Marc. », le message, « Je lui envoie ? »', carte()._questionnaire.question === carteRetard(20, 'Dentiste', '11h20', 'Marc'), carte()._questionnaire.question);
+  verifie('la carte : « Je préviens Marc de ton retard. Voici le message : », le message avec l heure d arrivée, « Je lui envoie ? »', carte()._questionnaire.question === carteRetard(20, 'Dentiste', '11h20', 'Marc'), carte()._questionnaire.question);
   verifie('deux choix : « Oui, envoie » / « Non »', choixTextes() === 'Oui, envoie | Non', choixTextes());
   verifie('ni « Et après ? » ni « Qui prévient ? » (les suivants ne bougent pas)', !/Et après|Qui prévient/.test(textes()) && enCours().reponses.suite === 'rattrape' && enCours().reponses.prevenir === 'charly', textes());
   verifie('rien n a bougé ni n est parti avant « oui »', trace.saves === 0 && trace.envois.length === 0 && fige() === AGENDA_FIGE);
@@ -184,7 +185,7 @@ const prevenance = async (t) => ctx.tcGererPrevenance(t, ctx.tcDetecterPrevenanc
   await ctx.tcPrevenirRetard('Je vais être en retard');
   verifie('plus rien aujourd’hui mais un rendez-vous demain : « Tu n’as plus de rendez-vous aujourd’hui… », le contact de demain n est pas prévenu, rien ne part', dc() === 'Tu n’as plus de rendez-vous aujourd’hui : personne à prévenir.' && enCours() === null && trace.envois.length === 0, dc());
   await prevenance('je suis en retard pour la banque'); await taper('10');
-  verifie('mais un rendez-vous visé par la phrase garde son jour : « Banque » demain, arrivée vers 10h10', enCours() && enCours().reponses._retardRdv.id === 'd' && /Tu seras en retard de 10 minutes à « Banque »\.\nTu arriveras vers 10h10\./.test(carte()._questionnaire.question), textes());
+  verifie('mais un rendez-vous visé par la phrase garde son jour : « Banque » demain, arrivée vers 10h10', enCours() && enCours().reponses._retardRdv.id === 'd' && /^Je préviens Marc de ton retard\. Voici le message :\n« .*10 minutes de retard.* Je serai là vers 10h10\. »/.test(carte()._questionnaire.question), textes());
 
   titre('5. Les phrases tapées suivent le même parcours, avec ce qu elles disent déjà');
   reinit();
