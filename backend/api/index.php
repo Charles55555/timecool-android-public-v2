@@ -681,14 +681,14 @@ function inscriptionControleCle(string $ip): string
     return $ip;
 }
 
-function inscriptionControleCompter(string $dossier, string $ip, int $max): bool
+function inscriptionControleCompter(string $dossier, string $ip, int $max, string $prefixe = 'inscription'): bool
 {
     if (!is_dir($dossier) && !@mkdir($dossier, 0700, true) && !is_dir($dossier)) {
         error_log('controle d inscription : dossier inutilisable ' . $dossier);
         return true;
     }
     $heure = date('YmdH');
-    $f = $dossier . '/inscription-' . hash_hmac('sha256', $ip, (string) Conf::get('poivre', '')) . '-' . $heure;
+    $f = $dossier . '/' . $prefixe . '-' . hash_hmac('sha256', $ip, (string) Conf::get('poivre', '')) . '-' . $heure;
     if (@file_put_contents($f, '1', FILE_APPEND | LOCK_EX) === false) {
         error_log('controle d inscription : compteur illisible ' . $f);
         return true;
@@ -696,7 +696,7 @@ function inscriptionControleCompter(string $dossier, string $ip, int $max): bool
     clearstatcache(true, $f);
     $n = (int) @filesize($f);
     if (random_int(1, 50) === 1) {   // menage : les heures passees
-        foreach (glob($dossier . '/inscription-*') ?: [] as $vieux) {
+        foreach (glob($dossier . '/' . $prefixe . '-*') ?: [] as $vieux) {
             if (substr($vieux, -10) !== $heure && (int) @filemtime($vieux) < time() - 7200) {
                 @unlink($vieux);
             }
@@ -5355,6 +5355,12 @@ switch ($route) {
     // Mission 91 : avant de proposer, lesquels de ces créneaux (30 au plus) sont libres chez ce contact aussi ? Lecture seule.
     case 'POST /rdv/proposition/libres':
         $moi = Auth::compte();
+        // Examen de la 91 : une limite par compte et par heure (creneaux_libres_compte_heure, 120 par défaut) ; au-delà, 429,
+        // et l'application envoie ses créneaux tels quels (le serveur refiltre à la création).
+        if (!inscriptionControleCompter(rtrim((string) Conf::get('limites_dossier', __DIR__ . '/../private/limites'), '/'),
+            'compte|' . (int) $moi['id'], (int) Conf::get('creneaux_libres_compte_heure', 120), 'libres')) {
+            Rep::erreur(429, 'trop_de_demandes', 'Trop de demandes. Réessayez dans une heure.');
+        }
         $refL = Entree::requis('reference', 26);
         $listeL = Entree::corps()['creneaux'] ?? null;
         if (!is_array($listeL) || count($listeL) < 1 || count($listeL) > 30) {
@@ -5436,7 +5442,8 @@ switch ($route) {
             }
             throw $e;
         }
-        Rep::ok(['rdv_id' => $rdvId, 'url' => $url], 201);
+        // Mission 91 (examen) : les créneaux vraiment partis (un créneau occupé chez le contact a pu tomber).
+        Rep::ok(['rdv_id' => $rdvId, 'url' => $url, 'creneaux' => array_map(static fn($c) => ['rang' => $c['rang'], 'libelle' => $c['libelle']], $creneaux)], 201);
 
     // Le contact (compte TimeCool) touche un créneau de la carte, ou « Aucun ne me va » (rang -1).
     case 'POST /rdv/proposition/choisir':

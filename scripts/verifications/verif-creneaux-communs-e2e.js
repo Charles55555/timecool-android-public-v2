@@ -56,7 +56,7 @@ const rdv = (uid, h1, h2) => ({ type: 'rdv', uid, contenu: { id: uid, title: 'Oc
   // À la création : Paul (re)classe Ana, occupé à 10h.
   await poser(paul.jeton, [fiche(['travail']), dispo({ travail: [{ jours: tous, debut: '09:00', fin: '18:00' }] })]);
   r = await appel('POST', '/rdv/proposition/creer', { reference: paul.ref, texte: 'On décale ?', titre: 'Kiné', creneaux: [Object.assign(cr(10, 11), { libelle: '10h' }), Object.assign(cr(15, 16), { libelle: '15h' })] }, ana.jeton);
-  dire(r.code === 201 && r.d.rdv_id > 0, 'création avec 10h (occupé) et 15h : acceptée', JSON.stringify(r.d));
+  dire(r.code === 201 && r.d.rdv_id > 0 && JSON.stringify(r.d.creneaux) === '[{"rang":1,"libelle":"15h"}]', 'création avec 10h (occupé) et 15h : acceptée, la réponse dit ce qui est vraiment parti (15h, rang 1)', JSON.stringify(r.d));
   const conv = (await elements(paul.jeton)).find((e) => e.type === 'conversation' && e.uid === ana.ref);
   const carte = conv && conv.contenu.thread.filter((m) => m.genre === 'proposition_creneaux').pop();
   dire(!!carte && carte.creneaux.length === 1 && carte.creneaux[0].libelle === '15h' && carte.creneaux[0].rang === 1, 'chez Paul, la carte ne propose que 15h (rang 1) : 10h est tombé', JSON.stringify(carte && carte.creneaux));
@@ -64,6 +64,8 @@ const rdv = (uid, h1, h2) => ({ type: 'rdv', uid, contenu: { id: uid, title: 'Oc
   dire(r.code === 409 && r.d.erreur === 'aucun_creneau_libre', 'aucun créneau libre pour les deux : 409 aucun_creneau_libre, rien ne part', JSON.stringify(r.d));
   r = await appel('POST', '/rdv/proposition/creer', { prenom_destinataire: 'Zoé', canal: 'sms', texte: 'On décale ?', titre: 'Kiné', creneaux: [Object.assign(cr(10, 11), { libelle: '10h' })] }, ana.jeton);
   dire(r.code === 201 && /\/rdv\/[A-Z2-9]+$/.test(r.d.url || ''), 'contact sans TimeCool : comme avant, un lien, rien n est consulté', JSON.stringify(r.d));
+  // Examen : une limite par compte et par heure sur /libres (120 par défaut) ; un compte neuf n'en est pas gêné.
+  dire(/inscriptionControleCompter\([\s\S]{0,200}'compte\|' \. \(int\) \$moi\['id'\], \(int\) Conf::get\('creneaux_libres_compte_heure', 120\), 'libres'\)/.test(require('fs').readFileSync(process.argv[3], 'utf8')), 'la route /libres a sa limite par compte et par heure (creneaux_libres_compte_heure, 120)');
   console.log('');
   console.log(ko + ' anomalie(s).');
   process.exitCode = ko ? 1 : 0;

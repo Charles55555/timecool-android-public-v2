@@ -26459,7 +26459,9 @@ async function tcEnvoyerPropositions(items) {
     if (_confiance === 1 || _confiance === 2 || _confiance === 3) ev.decalage.confiance = _confiance;   // 2 : validé avant l’envoi (mission 91)
     // Le lot (marche arrière commune) et le premier jour possible (jamais la période d'indisponibilité) : gardés pour les tours suivants.
     if (it.lot) ev.lotDecalage = { id: it.lot, apres: it.apres || null };
-    res.details.push('• « ' + ev.title + ' » : je propose à ' + c.name + ' ' + tcNomsLisibles(it.creneaux.map(tcPropositionLibelle)).replace(/ et ([^,]*)$/, ' ou $1'));
+    // Mission 91 (examen) : les créneaux vraiment partis, tels que le serveur les a gardés.
+    const partis = Array.isArray(d.creneaux) && d.creneaux.length ? d.creneaux.map(function (x) { return x.libelle; }) : it.creneaux.map(tcPropositionLibelle);
+    res.details.push('• « ' + ev.title + ' » : je propose à ' + c.name + ' ' + tcNomsLisibles(partis).replace(/ et ([^,]*)$/, ' ou $1'));
     if (c.referenceCompte) { if (res.proposes.indexOf(c.name) < 0) res.proposes.push(c.name); }
     else res.envois.push({ nom: c.name, phone: c.phone || '', email: c.email || '', titre: ev.title, texte: texte + ' ' + d.url });
   }
