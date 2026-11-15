@@ -3320,3 +3320,21 @@ Chef, 15/11 (phrase validée mot pour mot par Charles) : sur #permissionsScreen,
 - Constat, sans correction : sur le web comme dans l'APK actuel, « Autoriser TimeCool » ne demande aucune permission. acceptPermissions n'agit que si window.Capacitor existe, et le projet n'utilise pas Capacitor (WebView native, pont TimeCoolNatif). La fonction marque l'écran comme vu et affiche toujours « Autorisations accordées ! ». Android demande chaque permission au moment où elle sert : micro pour la dictée, appareil photo, contacts à l'import, position, notifications (MainActivity).
 - Sur un ordinateur, la phrase parle du téléphone (à voir avec Charles, selon le chef).
 - Suite : verif-toast-et-accueil, section 4 (phrase exacte une seule fois, entre les deux boutons, style, quatre lignes et deux boutons intacts) ; elle échoue sur la page d'avant. verifier.sh vert. Capture : m71/captures90.
+
+## 15/11/2026 : mission 91, profils 2 et 3 de « Ma confiance en Charly » au niveau du site
+
+Chef, 15/11 (choix « A » de Charles, forme de la validation tranchée par le chef). Constat confirmé avant de coder : au profil 2, les messages et les propositions de créneaux partaient seuls, une proposition refusée ou restée sans réponse était reproposée seule, et seul le placement attendait un oui.
+- Profil 2, désormais : rien ne part et rien ne s'écrit avant UN oui. C'est la carte du profil 1, posée une fois, à la fin.
+  - Décaler avec un contact : tcDemanderDeplacementProfil2 (ce qui se déplace sans contact, les créneaux de chacun calculés d'avance par tcCreneauxDuLot, le message, « Quand Paul aura choisi, je placerai son créneau dans ton agenda sans te redemander. », Je l'envoie ?).
+  - Malade, imprévu : le récapitulatif « Voici ce que je vais faire » n'est plus sauté, et il liste les créneaux (r._creneaux).
+  - Message seul (retard, annulation, réponse) : « J'envoie ? ».
+  Au oui, les créneaux montrés partent tels quels (tcProposerLesCreneaux options.items) et le rendez-vous est marqué decalage.confiance = 2.
+- Réponse du contact (tcSuivrePropositions) :
+  - marqué 2 et créneau choisi encore libre (tcGenesDuCreneau) : placé seul par tcTraiterSeul, avec un compte rendu ;
+  - refus, silence (relance) ou créneau qui n'est plus libre : question, comme au profil 1 ; rien ne repart sans un nouveau oui ;
+  - profil 2 réglé sans marque (envoi d'avant la mission 91) : traité comme le profil 1.
+  tcReproposerSeul, tcPoserLotCreneaux et tcExecuterLotCreneaux ne sont plus appelés par la sonde ; ils restent pour une question de lot déjà posée, que l'historique garde.
+- Profil 3 : inchangé, et chaque compte rendu va aussi au Journal d'activité (tcJournaliserCompteRendu, catégorie charly, statut « 📋 Compte rendu », texte entier en détail). Cela vaut pour la carte de tcTraiterSeul (profil 3, profil 2 après le oui), le bilan d'un décalage, le bilan du questionnaire sans récapitulatif (r._seul) et un message envoyé seul. Le filtre du Journal s'appelle « Recherches Charly IA » (inchangé).
+- Textes du réglage : profil 2 « … avant d'écrire dans mon agenda ou d'envoyer un message ou une demande à mes contacts. » ; gris du profil 3 « … te fait un compte rendu, que tu retrouves aussi dans ton Journal d'activité. ». Aucun autre texte de l'appli ne décrivait le profil 2. La mission 77 (le profil du moment) est inchangée. API non touchée.
+- Suites : verif-confiance-charly (section 7 réécrite, section 8 sur une question de lot déjà posée, bilan, messages seuls, Journal ; 145 vérifications), verif-questionnaire-malade (section 10 : profil 2, récapitulatif avec créneaux, rien avant le oui, créneaux montrés envoyés tels quels ; profil 3, compte rendu au Journal), verif-charly-deplacement et verif-deplacer-periode (nouvelles fonctions extraites). verifier.sh vert.
+- Captures (PC, m71/captures91) : le réglage, la validation finale au profil 2 (parcours malade), le compte rendu au Journal.

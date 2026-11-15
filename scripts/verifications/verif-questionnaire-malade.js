@@ -37,14 +37,14 @@ function agenda() {
   ];
 }
 
-const trace = { saves: 0, toasts: [], envois: [], demarches: [], rendus: 0, propositions: [] };
+const trace = { saves: 0, toasts: [], envois: [], demarches: [], rendus: 0, propositions: [], complet: [] };
 const ctx = {
   console, String, Number, Array, Object, RegExp, Promise, JSON, Math, parseInt, Date: DateFixe,
   mode: 'user', currentPage: 'chat', events: [], charlyIA: { history: [], config: {} },
   contactsList: [{ id: 'c1', name: 'Marc Dupont', referenceCompte: 'REF1' }, { id: 'c2', name: 'Sophie Anceau', phone: '06' }, { id: 'c3', name: 'Paul Martin', email: 'paul@exemple.fr' }],
   _dispoData: {}, loadDispo() {},
   renderCharlyChat() { trace.rendus++; }, render() {}, showToast(t) { trace.toasts.push(t); }, saveEventsToStorage() { trace.saves++; },
-  addDemarche(d) { trace.demarches.push(d.title); },
+  addDemarche(d) { trace.demarches.push(d.title); trace.complet.push(d); },
   tcPousserMessageUtilisateur: (t) => { ctx.charlyIA.history.push({ role: 'user', content: t }); },
   tcVouvoiement: () => false, tcDirePrevenance() {},
   tcModeleMessage: (action) => action === 'decale'
@@ -230,6 +230,37 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   await taper('tu les préviens'); await taper('oui');
   verifie('Marc Dupont (TimeCool) reçoit deux messages, un par rendez-vous supprimé (09h00 et 14h00)', trace.envois.length === 2 && trace.envois.every((x) => x[0] === 'Marc Dupont') && /15 octobre à 09h00/.test(trace.envois[0][1]) && /15 octobre à 14h00/.test(trace.envois[1][1]) && /annuler notre rendez-vous/.test(trace.envois[1][1]), JSON.stringify(trace.envois));
   verifie('le bilan : deux « Supprimé », « Prévenu par la messagerie TimeCool : Marc Dupont » une fois, pas de bouton', (dc().match(/• Supprimé : /g) || []).length === 2 && (dc().match(/Prévenu par la messagerie TimeCool : Marc Dupont/g) || []).length === 1 && !dernier()._envois, dc());
+
+  titre('10. Mission 91 : au profil 2, le récapitulatif est la validation finale (créneaux montrés, rien avant le oui) ; au profil 3, le compte rendu va au Journal');
+  ctx.tcConfianceCharly = () => 2;
+  reinit();
+  const nProp = trace.propositions.length;
+  ctx.charlyQuickAction('malade');
+  await new Promise((r) => setTimeout(r, 0));
+  await cliquer(0); await cliquer(1);
+  const rec = carte()._questionnaire;
+  const montres = enCours() && enCours().reponses._creneaux;
+  verifie('profil 2 : le récapitulatif est posé, « Oui, vas-y » / « Non, j’arrête »', rec.etape === 'recap' && choixTextes() === 'Oui, vas-y | Non, j’arrête', rec.question);
+  verifie('il montre les créneaux proposés à Marc et dit la suite : « Quand Marc aura choisi, je placerai son créneau dans ton agenda sans te redemander. »', Array.isArray(montres) && montres.length === 1 && montres[0].creneaux.length >= 2
+    && montres[0].creneaux.every((c) => rec.question.indexOf(ctx.tcPropositionLibelle(c)) > -1) && /\nQuand Marc aura choisi, je placerai son créneau dans ton agenda sans te redemander\.$/.test(rec.question), rec.question);
+  verifie('rien n est parti, rien n est écrit avant le oui', trace.propositions.length === nProp && trace.envois.length === 0 && trace.saves === 0 && !ctx.events.find((e) => e.id === 'd').decalage);
+  await cliquer(0);
+  const pm2 = trace.propositions[nProp] || { creneaux: [] };
+  verifie('« Oui, vas-y » : la proposition part avec exactement les créneaux montrés ; le rendez-vous est marqué validé (confiance 2)', trace.propositions.length === nProp + 1
+    && pm2.creneaux.map((c) => c.libelle).join('|') === montres[0].creneaux.map(ctx.tcPropositionLibelle).join('|') && ctx.events.find((e) => e.id === 'd').decalage.confiance === 2, JSON.stringify(pm2.creneaux));
+  verifie('le bilan dit que le choix sera placé, avec un compte rendu', /Quand elle arrive, je place le créneau choisi dans ton agenda et je te fais un compte rendu\./.test(dc()), dc());
+  reinit();
+  await ctx.tcDemarrerMalade('je suis malade, annule tout demain');
+  await taper('tu les préviens');
+  verifie('profil 2, « annule tout » : le récapitulatif attend « Oui, vas-y » ; rien n est supprimé ni envoyé', carte()._questionnaire.etape === 'recap' && trace.envois.length === 0 && !!ctx.events.find((e) => e.id === 'e'));
+  await taper('non');
+  ctx.tcConfianceCharly = () => 3;
+  reinit(); trace.complet.length = 0;
+  await ctx.tcDemarrerMalade('je suis malade, annule tout demain');
+  await taper('tu les préviens');
+  verifie('profil 3 : pas de récapitulatif, c’est fait, et le compte rendu est rangé au Journal d’activité (Charly)', enCours() === null && !ctx.events.find((e) => e.id === 'e')
+    && trace.complet.some((d) => d.categorie === 'charly' && d.title === 'Compte rendu de Charly' && /Supprimé : « Réunion »/.test(d.detail)), JSON.stringify(trace.complet.map((d) => d.title)));
+  delete ctx.tcConfianceCharly;
 
   console.log('');
   console.log(ko + ' anomalie(s).');
