@@ -28,7 +28,8 @@ const entete = (page.match(/<div class="page" id="page-messages">[\s\S]*?<div cl
 verifie('plus de crayon ✏️ (ni « Nouveau message »)', entete.length > 0 && entete.indexOf('✏️') < 0 && entete.indexOf("msgAction('new')") < 0 && page.indexOf("if (a === 'new')") < 0);
 verifie('la phrase sous le titre : « 🔒 Ici, tu écris seulement à tes contacts qui ont déjà TimeCool. »', entete.indexOf('<div class="page-subtitle" id="msgSousTitre">🔒 Ici, tu écris seulement à tes contacts qui ont déjà TimeCool.</div>') > -1);
 verifie('la case : « Rechercher un contact TimeCool ou une conversation »', entete.indexOf('placeholder="Rechercher un contact TimeCool ou une conversation"') > -1);
-verifie('(chef) le texte gris tient sur écran étroit : marges réduites, 13 px sous 420, 11,5 px sous 375, 11 px sous 340, points de suspension au-delà', page.indexOf('@media (max-width:420px) { .msg-search { padding:9px 10px; gap:6px; } .msg-search > span { font-size:13px !important; } .msg-search input::placeholder { font-size:13px; } }') > -1 && page.indexOf('@media (max-width:375px) { .msg-search input::placeholder { font-size:11.5px; } }') > -1 && page.indexOf('@media (max-width:340px) { .msg-search input::placeholder { font-size:11px; } }') > -1 && page.indexOf('.msg-search input { min-width:0; text-overflow:ellipsis; }') > -1);
+verifie('(chef) « ci‑dessus » ne se coupe pas en fin de ligne (trait d union insécable)', page.indexOf('Cherche un contact TimeCool ci‑dessus pour lui écrire.') > -1 && page.indexOf('Cherche un contact TimeCool ci-dessus') < 0);
+verifie('(chef) le texte gris tient sur écran étroit : marges réduites, 12,5 px sous 420, 11,5 px sous 375, 12 px sous 340 (texte court)', page.indexOf('@media (max-width:420px) { .msg-search { padding:9px 10px; gap:6px; } .msg-search > span { font-size:13px !important; } .msg-search input::placeholder { font-size:12.5px; } }') > -1 && page.indexOf('@media (max-width:375px) { .msg-search input::placeholder { font-size:11.5px; } }') > -1 && page.indexOf('@media (max-width:340px) { .msg-search input::placeholder { font-size:12px; } }') > -1 && page.indexOf('.msg-search input { min-width:0; text-overflow:ellipsis; }') > -1);
 verifie('rien ne se perd : « Nouveau groupe » (conversation à plusieurs) reste dans le menu ⋮', page.indexOf(`<div class="msg-menu-item" onclick="msgAction('newgroup')"><span class="mi-ic">👥</span>Nouveau groupe</div>`) > -1);
 
 titre('La liste, rejouée');
@@ -38,6 +39,7 @@ const ctx = {
   console, String, Array, Object, JSON,
   _msgFilter: 'all',
   document: { getElementById: (id) => (id === 'messagesList' ? liste : id === 'msgSearch' ? champ : null) },
+  window: { innerWidth: 390 },
   contactsList: [
     { id: 'p1', name: 'Paul Martin', referenceCompte: 'REFPAUL' },
     { id: 'm1', name: 'Marie Dupont' },
@@ -48,13 +50,13 @@ const ctx = {
   tcConversationsAffichables: () => ctx.conversations,
 };
 vm.createContext(ctx);
-['escapeHTMLSafe', 'tcSansAccents', 'tcPrenomPresentable', 'getContactInitials', 'getContactColor', 'tcContactsCherches', 'tcContactsTimeCoolCherches', 'renderMessages']
+['escapeHTMLSafe', 'tcSansAccents', 'tcPrenomPresentable', 'getContactInitials', 'getContactColor', 'tcContactsCherches', 'tcContactsTimeCoolCherches', 'tcTexteRechercheMessagerie', 'renderMessages']
   .forEach((n) => { const f = fonction(n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 const texte = () => liste.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const chercher = (q) => { champ.value = q; ctx.renderMessages(); return liste.innerHTML; };
 if (!ko) {
   chercher('');
-  verifie('page vide : « Aucun message pour l’instant. Cherche un contact TimeCool ci-dessus pour lui écrire. »', texte() === 'Aucun message pour l’instant. Cherche un contact TimeCool ci-dessus pour lui écrire.', texte());
+  verifie('page vide : « Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire. »', texte() === 'Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire.', texte());
   const h = chercher('paul');
   verifie('« paul » : Paul Martin (TimeCool) proposé, « Écrire un message », un toucher ouvre sa conversation (messageContact)', /onclick="messageContact\('p1'\)"/.test(h) && /Paul Martin/.test(texte()) && /Écrire un message/.test(texte()), h);
   verifie('« helene » sans accent trouve Hélène Roux', /messageContact\('h1'\)/.test(chercher('helene')), texte());
@@ -69,6 +71,9 @@ if (!ko) {
   verifie('Paul a déjà une conversation : elle seule est montrée (pas de doublon « Écrire un message »)', (h2.match(/Paul Martin/g) || []).length === 1 && /openConversation\('srv_REFPAUL'\)/.test(h2) && h2.indexOf('messageContact') < 0, h2);
   const h3 = chercher('salut');
   verifie('la recherche dans les messages garde son chemin (« salut » trouve la conversation)', /openConversation\('srv_REFPAUL'\)/.test(h3), h3);
+  verifie('(chef) à 390 et 360 px, le texte de Charles dans la case', (ctx.window.innerWidth = 390, chercher(''), champ.placeholder === 'Rechercher un contact TimeCool ou une conversation') && (ctx.window.innerWidth = 360, chercher(''), champ.placeholder === 'Rechercher un contact TimeCool ou une conversation'), champ.placeholder);
+  verifie('(chef) sous 340 px, « Rechercher un contact ou une conversation »', (ctx.window.innerWidth = 320, chercher(''), champ.placeholder === 'Rechercher un contact ou une conversation'), champ.placeholder);
+  ctx.window.innerWidth = 390;
   ctx._msgFilter = 'archived';
   chercher('Marie');
   verifie('dans les archives, la recherche ne propose pas de contact', liste.innerHTML.indexOf('messageContact') < 0 && /Aucun résultat/.test(texte()), texte());
@@ -113,7 +118,7 @@ if (!exe) {
   const m = (r.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);
   let res = null;
   try { res = m ? JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')) : null; } catch (e) { res = null; }
-  verifie('page vide : la phrase qui dit quoi faire', !!res && res.vide === 'Aucun message pour l’instant. Cherche un contact TimeCool ci-dessus pour lui écrire.', JSON.stringify(res));
+  verifie('page vide : la phrase qui dit quoi faire', !!res && res.vide === 'Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire.', JSON.stringify(res));
   verifie('« Paul » : la ligne de Paul Martin ; un toucher ouvre sa conversation, rattachée à son compte TimeCool', !!res && res.ligne && res.ouverte && res.conv.length === 1 && res.conv[0].with === 'Paul Martin' && res.conv[0].reference === 'REFPAUL', JSON.stringify(res));
   try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
 }

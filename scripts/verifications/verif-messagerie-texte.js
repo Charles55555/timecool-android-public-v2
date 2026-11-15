@@ -39,11 +39,12 @@ titre('La liste des conversations, rejouée');
   const ctx = {
     console, String, Array,
     _msgFilter: 'all',
+    window: { innerWidth: 390 },
     document: { getElementById: (id) => (id === 'messagesList' ? liste : id === 'msgSearch' ? { value: '' } : null) },
     tcConversationsAffichables: () => [{ id: 'srv_X', with: 'Eve <b>Pirate</b>', avatar: '<i', icon: '', color: '#123', unread: 0, archived: false, thread: [{ from: 'them', text: PIEGE, time: '<12:00>' }] }],
   };
   vm.createContext(ctx);
-  vm.runInContext(fonction('escapeHTMLSafe') + '\n' + rm, ctx);
+  vm.runInContext(fonction('escapeHTMLSafe') + '\n' + (fonction('tcTexteRechercheMessagerie') || '') + '\n' + rm, ctx);
   ctx.renderMessages();
   verifie('le message piégé, le nom et l heure restent du texte (aucune balise)', liste.innerHTML.indexOf('<img') < 0 && liste.innerHTML.indexOf('&lt;img src=x') > -1 && liste.innerHTML.indexOf('<b>Pirate') < 0 && liste.innerHTML.indexOf('&lt;12:00&gt;') > -1, liste.innerHTML);
 }
