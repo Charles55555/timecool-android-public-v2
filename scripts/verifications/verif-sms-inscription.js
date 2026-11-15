@@ -39,7 +39,8 @@ verifie('le parcours lit verification_sms_inscription', page.includes('verificat
 verifie('avec le SMS exigé, le code part dès le formulaire', /if \(params\.verification_sms_inscription\) \{\s*pendingSignup\.smsSeul = true;\s*await chooseVerifyMethod\('sms'\);/.test(page));
 verifie('l envoi reprend un code encore valable, le compte créé l oublie', /const deja = tcCodeEncoreValable\(method, destination\);\s*if \(deja\) \{/.test(page) && (page.match(/tcRetenirCode\(method, destination, r\);/g) || []).length === 2 && page.includes('  _tcCodeEnCours = null;\n  // La preuve Google'));
 verifie('la demande de code dit « inscription » (envoi et renvoi)', (page.match(/demanderVerification\(method, destination, 'inscription'\)/g) || []).length === 2);
-verifie('le texte de l écran dit l étape et la durée', page.includes("'Étape 2 sur 2 : un'") && page.includes("' code à 6 chiffres vient de partir par SMS au <b style=\"white-space:nowrap;\">' + phoneDisplay + '</b>.<br>Il est valable '"));
+// Mission 87 : meme texte, passe par tcT (modele {n}) pour suivre la langue choisie avant connexion.
+verifie('le texte de l écran dit l étape et la durée', page.includes("? 'Étape 2 sur 2 : un code à 6 chiffres vient de partir par SMS au {n}.' : 'Un code à 6 chiffres vient de partir par SMS au {n}.',") && page.includes("'<b style=\"white-space:nowrap;\">' + phoneDisplay + '</b>') + '<br>' + tcT('Il est valable {n} minutes.', Number(pendingSignup.codeMinutes) || 10);"));
 verifie('messages du code : faux, expiré, trop d essais', page.includes('Ce code ne correspond pas : vérifie les 6 chiffres.') && page.includes('Ce code a expiré : demande un nouveau code.') && page.includes('Trop d’essais : demande un nouveau code.'));
 verifie('Configuration IA : identifiant, jeton, expéditeur Twilio', page.includes("id: 'twilio_jeton'") && page.includes("id: 'twilio_expediteur'") && page.includes('ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (Account SID)') && !page.includes('SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'));
 
@@ -63,6 +64,8 @@ verifie('Configuration IA : identifiant, jeton, expéditeur Twilio', page.includ
     pendingSignup: null,
   };
   vm.createContext(ctx);
+  // Mission 87 : les textes passent par tcT ; en francais, il rend le texte tel quel, {n} remplace.
+  vm.runInContext('function tcT(t, n) { return n === undefined ? t : String(t).split("{n}").join(String(n)); }', ctx);
   vm.runInContext('let _tcRenvoiMinuteur = null;\n' + ['handleCodeInput', 'tcRenvoiAttendre', 'tcRetourDepuisCode'].map((f) => fonction(page, f)).join('\n') + '\nthis.handleCodeInput = handleCodeInput; this.tcRenvoiAttendre = tcRenvoiAttendre; this.tcRetourDepuisCode = tcRetourDepuisCode;', ctx);
   cases[0].value = '482913';
   ctx.handleCodeInput(cases[0], 0);
