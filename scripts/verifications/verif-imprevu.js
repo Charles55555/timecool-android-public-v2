@@ -93,7 +93,7 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
   await new Promise((r) => setTimeout(r, 0));
   verifie('la bulle « J’ai un imprévu » puis la carte', H().length === 2 && H()[0].role === 'user' && H()[0].content === 'J’ai un imprévu' && carte() && carte()._questionnaire.question === 'Qu’est-ce qui t’arrive ?', textes());
   verifie('les quatre cas, textes exacts', choixTextes() === 'Je suis en retard | Je dois partir plus tôt | Un rendez-vous s’ajoute | Je ne peux pas venir', choixTextes());
-  verifie('rien n est connu d avance', enCours() && Object.keys(enCours().reponses).length === 0);
+  verifie('rien n est connu d avance', enCours() && Object.keys(enCours().reponses).filter((k) => k.charAt(0) !== '_').length === 0);
 
   titre('2. En retard, le prochain rendez-vous, 15 minutes, Charly prévient : la nouvelle heure part, l agenda ne bouge pas');
   await cliquer(0);
@@ -130,10 +130,9 @@ const memoire = () => vm.runInContext('_tcMarcheArriere', ctx);
   verifie('les créneaux dès demain, autour de « Banque » : Dentiste 9h-10h, Coach 11h-12h', textes().indexOf('« Dentiste » : ' + quand(iso(1), { startH: 9, startM: 0, endH: 10, endM: 0 })) > -1 && textes().indexOf('« Coach » : ' + quand(iso(1), { startH: 11, startM: 0, endH: 12, endM: 0 })) > -1, textes());
   verifie('« Qui prévient Marc Dupont et Sophie Anceau ? » (« et » avant le dernier nom)', carte()._questionnaire.question === 'Qui prévient Marc Dupont et Sophie Anceau ?');
   await taper('tu les préviens');
-  verifie('(mission 73) le récapitulatif : des créneaux proposés à Marc et à Sophie, le rendez-vous reste à sa place, le message montré',
-    /• Pour « Dentiste », je propose à Marc Dupont le .+ ou deux autres moments ; il reste à sa place jusqu’à la réponse/.test(carte()._questionnaire.question)
-    && /• Pour « Coach », je propose à Sophie Anceau le /.test(carte()._questionnaire.question)
-    && /\nLe message pour Marc : « Bonjour Marc, je dois décaler notre rendez-vous du .*15 octobre à 11h00\. Voici ce que je peux te proposer : » suivi des créneaux à choisir$/.test(carte()._questionnaire.question), carte()._questionnaire.question);
+  verifie('(mission 91) le récapitulatif est la carte simple : deux rendez-vous, les créneaux de chacun, Sophie sans TimeCool : « Chacun choisit celui qui lui convient. »',
+    /^Je déplace 2 rendez-vous\.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres\.\n« Dentiste » avec Marc : \S+ \d+ \S+, 9h.*\.\n« Coach » avec Sophie : .+\.\nChacun choisit celui qui lui convient\.\nJe te demande avant de noter leurs choix dans ton agenda\.\nJe leur envoie \?$/.test(carte()._questionnaire.question)
+    && choixTextes() === 'Oui, envoie | Non', carte()._questionnaire.question);
   await taper('vas-y');
   const bilan3 = dernier();
   verifie('(mission 73) rien ne bouge : Dentiste et Coach restent à leur place, marqués en attendant la réponse', ctx.events.find((e) => e.id === 'b').date === iso(0) && ctx.events.find((e) => e.id === 'c').date === iso(0)

@@ -2105,6 +2105,58 @@ function creneauxLibres(int $titulaireId, int $combien = 3, array $categories = 
 }
 
 /**
+ * Mission 91 (Charles, 15/11) : parmi des créneaux proposés à un contact qui a TimeCool, ceux qui sont libres chez lui aussi.
+ * Seul un oui ou un non par créneau sort d'ici, jamais son agenda. Libre : rien dans son agenda à ce moment, et, si sa fiche de
+ * l'utilisateur est classée, dans les plages ouvertes à ces catégories ; sinon hors de son temps libre protégé. Un contact
+ * qui a bloqué l'utilisateur n'est pas consulté : tous les créneaux reviennent, comme pour quelqu'un de libre, et rien
+ * ne trahit le blocage. Un compte clos, ou soi-même : rien n'est consulté non plus.
+ * $creneaux : [ ['debut' => 'Y-m-d H:i:s', 'fin' => ...], ... ] ; rend les indices gardés, dans l'ordre.
+ */
+function creneauxLibresPourContact(array $moi, array $cible, array $creneaux): array
+{
+    $tous = array_keys($creneaux);
+    if ((int) $cible['id'] === (int) $moi['id'] || ($cible['cloture_le'] ?? null) !== null || demandeurBloque((int) $cible['id'], $moi)) {
+        return $tous;
+    }
+    $categories = categoriesPourPrendreRdv((int) $cible['id'], $moi);
+    $occupes = rdvOccupation((int) $cible['id']);
+    $dispo = $categories === [] ? [] : dispoDuCompte((int) $cible['id']);
+    $garde = [];
+    foreach ($creneaux as $i => $cr) {
+        $d = strtotime((string) ($cr['debut'] ?? ''));
+        $f = strtotime((string) ($cr['fin'] ?? ''));
+        if ($d === false || $f === false || $f <= $d || date('Y-m-d', $d) !== date('Y-m-d', $f - 1)) {
+            continue;
+        }
+        $jour = date('Y-m-d', $d);
+        $debut = (int) date('G', $d) * 60 + (int) date('i', $d);
+        $fin = (int) date('G', $f) * 60 + (int) date('i', $f);
+        if ($fin <= $debut) {
+            $fin = 1440;
+        }
+        if (!creneauEstLibre($occupes, $jour, $debut, $fin)) {
+            continue;
+        }
+        if ($categories !== []) {
+            $dedans = false;
+            foreach (dispoPlagesDuJour($dispo, $categories, (int) date('N', $d)) as [$pa, $pb]) {
+                if ($debut >= $pa && $fin <= $pb) {
+                    $dedans = true;
+                    break;
+                }
+            }
+            if (!$dedans) {
+                continue;
+            }
+        } elseif (creneauDansTempsProtege((int) $cible['id'], [], date('Y-m-d H:i:s', $d), date('Y-m-d H:i:s', $f))) {
+            continue;
+        }
+        $garde[] = $i;
+    }
+    return $garde;
+}
+
+/**
  * Le message envoyé quand l'agenda du destinataire ne peut pas être
  * consulté — plein, pas encore configuré, ou accès non accordé.
  *
@@ -5300,6 +5352,21 @@ switch ($route) {
 
     // Mission 73 : Charly propose 1 à 3 créneaux à un contact pour remplacer un rendez-vous.
     // reference : le contact a TimeCool, la proposition arrive dans sa messagerie (boutons) ; sinon un lien (url).
+    // Mission 91 : avant de proposer, lesquels de ces créneaux (30 au plus) sont libres chez ce contact aussi ? Lecture seule.
+    case 'POST /rdv/proposition/libres':
+        $moi = Auth::compte();
+        $refL = Entree::requis('reference', 26);
+        $listeL = Entree::corps()['creneaux'] ?? null;
+        if (!is_array($listeL) || count($listeL) < 1 || count($listeL) > 30) {
+            Rep::erreur(400, 'creneaux_invalides', 'Fournir de 1 à 30 créneaux, chacun avec un début et une fin.');
+        }
+        $propres = [];
+        foreach (array_values($listeL) as $cr) {
+            $propres[] = ['debut' => is_array($cr) ? (string) ($cr['debut'] ?? '') : '', 'fin' => is_array($cr) ? (string) ($cr['fin'] ?? '') : ''];
+        }
+        $cibleL = compteParReference($refL);
+        Rep::ok(['libres' => $cibleL === null ? array_keys($propres) : creneauxLibresPourContact($moi, $cibleL, $propres)]);
+
     case 'POST /rdv/proposition/creer':
         $moi = Auth::compte();
         $creneaux = propositionCreneaux(Entree::corps()['creneaux'] ?? null);
@@ -5318,6 +5385,15 @@ switch ($route) {
             }
             if ((int) $cible['id'] === (int) $moi['id']) {
                 Rep::erreur(400, 'soi_meme', 'Vous ne pouvez pas vous proposer un rendez-vous.');
+            }
+            // Mission 91 : la même vérification qu'avant l'envoi (un créneau a pu se remplir chez le contact entre-temps).
+            $gardes = creneauxLibresPourContact($moi, $cible, $creneaux);
+            if ($gardes === []) {
+                Rep::erreur(409, 'aucun_creneau_libre', 'Aucun de ces moments n’est libre pour vous deux.');
+            }
+            $creneaux = array_values(array_map(static fn($i) => $creneaux[$i], $gardes));
+            foreach ($creneaux as $k => $cr) {
+                $creneaux[$k]['rang'] = $k + 1;
             }
         }
         $canal = Entree::texte('canal', 10) ?? 'sms';

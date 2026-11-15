@@ -22,7 +22,7 @@ const noms = ['tcEstDeplacement', 'tcVerbeConjugue', 'tcDeplacementsProposes', '
   'extractAgendaProposals', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'escapeHTMLSafe',
   'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv',
   // Mission 73 : les propositions de créneaux.
-  'tcNomsLisibles', 'tcPropositionTexte', 'tcReponseDecalage', 'tcProposerLesCreneaux', 'tcCreneauxDuLot', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcEnvoyerPropositions', 'tcLignesPropositions',
+  'tcNomsLisibles', 'tcPropositionTexte', 'tcReponseDecalage', 'tcProposerLesCreneaux', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcCreneauxReproposesPour', 'tcJourLisible', 'tcCarteEnvoiCreneaux', 'tcRendreBoutonsEnvoi', 'tcChoisirEnvoiDeplacement', 'tcRecapEnvoi', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcEnvoyerPropositions', 'tcLignesPropositions',
   'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcClasseNormaliser',
   'tcReponseOuiNon', 'tcISO', 'tcEstBandeau', 'tcEvenementSurPlusieursJours',
   // Mission 73b : le profil (1 ici : aucune clé, « Je l’envoie ? » est posé).

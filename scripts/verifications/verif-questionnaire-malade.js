@@ -105,9 +105,11 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   verifie('la question « que fait-on ? » est sautée (le bouton disait « décale ») : les créneaux sont proposés, dès demain, dans les plages ouvertes', /Voici ce que je te propose/.test(textes()) && textes().indexOf('« Pharmacie » : ' + quand(iso(1), { startH: 10, startM: 0, endH: 11, endM: 0 })) > -1, textes());
   verifie('puis « Qui prévient Marc Dupont ? », trois choix exacts', carte()._questionnaire.etape === 'prevenir' && carte()._questionnaire.question === 'Qui prévient Marc Dupont ?' && choixTextes() === 'Je préviens les contacts moi-même | Tu les préviens | Personne', carte()._questionnaire.question + ' / ' + choixTextes());
   await cliquer(1);
-  verifie('le récapitulatif : « Voici ce que je vais faire : », les créneaux proposés (mission 73), la prévenance, le message montré, boutons « Oui, vas-y » / « Non, j’arrête »', carte()._questionnaire.etape === 'recap'
-    && carte()._questionnaire.question.indexOf('Voici ce que je vais faire :\n• Pour « Pharmacie », je propose à Marc Dupont le ' + quand(iso(1), { startH: 10, startM: 0, endH: 11, endM: 0 }) + ' ou deux autres moments ; il reste à sa place jusqu’à la réponse\n• Je préviens Marc Dupont\nLe message : « Bonjour Marc, ') === 0
-    && / » suivi des créneaux à choisir$/.test(carte()._questionnaire.question) && choixTextes() === 'Oui, vas-y | Non, j’arrête', carte()._questionnaire.question);
+  verifie('(mission 91) le récapitulatif est la carte simple : « Tu es malade. Je déplace ton rendez-vous « Pharmacie » avec Marc. », les créneaux, « Marc choisit… », boutons « Oui, envoie » / « Non »', carte()._questionnaire.etape === 'recap'
+    && /^Tu es malade\. Je déplace ton rendez-vous « Pharmacie » avec Marc\.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres\.\nJe propose à Marc 3 nouveaux rendez-vous/.test(carte()._questionnaire.question)
+    && carte()._questionnaire.question.indexOf(ctx.tcJourLisible(iso(1)) + ' :\n10h') > -1
+    && /\nMarc choisit, selon ses préférences et ses disponibilités enregistrées\.\nJe te demande avant de noter son choix dans ton agenda\.\nJe lui envoie \?$/.test(carte()._questionnaire.question)
+    && choixTextes() === 'Oui, envoie | Non', carte()._questionnaire.question);
   verifie('rien n a encore bougé', ctx.events.find((e) => e.id === 'd').date === iso(0) && trace.saves === 0 && trace.envois.length === 0);
   await cliquer(0);
   const d = ctx.events.find((e) => e.id === 'd');
@@ -240,9 +242,9 @@ const quand = (d, h) => ctx.tcQuestionnaireQuand(d, h);
   await cliquer(0); await cliquer(1);
   const rec = carte()._questionnaire;
   const montres = enCours() && enCours().reponses._creneaux;
-  verifie('profil 2 : le récapitulatif est posé, « Oui, vas-y » / « Non, j’arrête »', rec.etape === 'recap' && choixTextes() === 'Oui, vas-y | Non, j’arrête', rec.question);
-  verifie('il montre les créneaux proposés à Marc et dit la suite : « Quand Marc aura choisi, je placerai son créneau dans ton agenda sans te redemander. »', Array.isArray(montres) && montres.length === 1 && montres[0].creneaux.length >= 2
-    && montres[0].creneaux.every((c) => rec.question.indexOf(ctx.tcPropositionLibelle(c)) > -1) && /\nQuand Marc aura choisi, je placerai son créneau dans ton agenda sans te redemander\.$/.test(rec.question), rec.question);
+  verifie('profil 2 : la carte est posée, « Oui, envoie » / « Non »', rec.etape === 'recap' && choixTextes() === 'Oui, envoie | Non', rec.question);
+  verifie('elle montre les heures proposées à Marc et dit la suite : « Je note son choix dans ton agenda. »', Array.isArray(montres) && montres.length === 1 && montres[0].creneaux.length >= 2
+    && montres[0].creneaux.every((x) => rec.question.indexOf(ctx.tcMinutesLisibles(x.startH * 60 + x.startM)) > -1) && /\nJe note son choix dans ton agenda\.\nJe lui envoie \?$/.test(rec.question), rec.question);
   verifie('rien n est parti, rien n est écrit avant le oui', trace.propositions.length === nProp && trace.envois.length === 0 && trace.saves === 0 && !ctx.events.find((e) => e.id === 'd').decalage);
   await cliquer(0);
   const pm2 = trace.propositions[nProp] || { creneaux: [] };

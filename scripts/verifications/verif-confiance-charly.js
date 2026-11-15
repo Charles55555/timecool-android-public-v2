@@ -38,7 +38,7 @@ const noms = ['tcConfianceCharly', 'tcChoisirConfiance', 'tcBlocConfiance', 'tcM
   'tcIdsQuestion', 'tcRetirerQuestionsDe', 'tcPoserLotCreneaux', 'tcReproposerSeul', 'tcExecuterLotCreneaux', 'tcDireSuitesAuxContacts', 'tcExecuterDeplacement', 'tcGenesDuLot',
   'tcPrisTexte', 'tcPrisParentheses', 'tcTraiterSeul', 'tcSuitesEnLignes', 'tcProposerEnvoi', 'tcExecuterEnvoi',
   'tcSauverAClore', 'tcEchecClore', 'tcCloreEnAttente', 'tcNoterPourMarcheArriere', 'tcMaintenirPropositions',
-  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcCreneauxDuLot', 'tcCreneauxEncoreValables', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcRepondreDeplacement', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcUneQuestionAttend', 'tcFinirConfianceDuMoment', 'tcEcarterDecalagesEnCours', 'tcFaitRaconte'];
+  'tcCreneauxReproposes', 'tcDeplacerDansLeLot', 'tcCreneauxDuLot', 'tcCreneauxEncoreValables', 'tcCreneauxPourContact', 'tcCreneauxReproposesPour', 'tcJourLisible', 'tcCarteEnvoiCreneaux', 'tcRendreBoutonsEnvoi', 'tcChoisirEnvoiDeplacement', 'tcRecapEnvoi', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcRepondreDeplacement', 'tcNomsDeFiche', 'tcConfianceDemandee', 'tcDireConfianceDuMoment', 'tcUneQuestionAttend', 'tcFinirConfianceDuMoment', 'tcEcarterDecalagesEnCours', 'tcFaitRaconte'];
 const absentes = noms.filter((n) => !extraire(n));
 verifie('les fonctions de la mission 73 existent, chacune une fois', !absentes.length && noms.every((n) => page.split('function ' + n + '(').length === 2), absentes.join(', '));
 if (absentes.length) { console.log(ko + ' anomalie(s).'); process.exit(1); }
@@ -59,7 +59,7 @@ const FIXE = new Date(2026, 9, 15, 10, 0, 0);
 class DateFixe extends Date { constructor(...a) { if (a.length) super(...a); else super(FIXE.getTime()); } static now() { return FIXE.getTime(); } }
 const iso = (n) => { const d = new Date(2026, 9, 15 + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const stock = {};
-const trace = { panne: null, maintenus: [], prevenances: [], syncs: 0, saves: 0, toasts: [], creees: [], traitees: [], choisies: [], deplaces: [], decisions: [] };
+const trace = { libres: [], occupesContact: [], panne: null, maintenus: [], prevenances: [], syncs: 0, saves: 0, toasts: [], creees: [], traitees: [], choisies: [], deplaces: [], decisions: [] };
 let reponses = [];
 const ctx = {
   console, Date: DateFixe, mode: 'user', currentPage: 'assistant', events: [], charlyIA: { history: [] },
@@ -92,6 +92,7 @@ const ctx = {
       reponses = reponses.filter((x) => x.rdv_id !== id);
       return { traite: true, messagerie: !!p.reference, message: decision === 'place' ? 'Rendez-vous déplacé : ici.' : (decision === 'laisse' ? 'Finalement, le rendez-vous reste en place.' : null) };
     },
+    propositionLibres: async (ref, cr) => { trace.libres.push(ref); const pris = trace.occupesContact || []; return { libres: cr.map((x, i) => i).filter((i) => pris.indexOf(cr[i].debut) < 0) }; },
     propositionCreer: async (corps) => { trace.creees.push(corps); return { rdv_id: 100 + trace.creees.length, url: corps.reference ? null : 'https://timecool.fr/rdv/ABCD2345' }; },
     propositionChoisir: async (rdv, rang) => { trace.choisies.push([rdv, rang]); if (rang === 9) { const e = new Error('pris'); e.code = 'creneau_pris'; throw e; } if (rang === 8) { const e = new Error('deja'); e.code = 'deja_repondu'; throw e; } if (rang === 7) { const e = new Error('ferme'); e.code = 'plus_valable'; throw e; } return { enregistre: true }; }
   }
@@ -260,6 +261,7 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   const last = () => ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
   const journal = [];
   ctx.addDemarche = (d) => journal.push(d);
+  trace.libres = [];
   const heureSql = (h, m) => String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':00';
   stock.tc_confiance_charly = '2';
   ctx.charlyIA.history = [];
@@ -270,10 +272,18 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   const attente2 = vm.runInContext('_tcDeplacementEnAttente', ctx);
   const montres = attente2 && attente2.items ? attente2.items : [];
   const libelles = (it) => it.creneaux.map(ctx.tcPropositionLibelle);
-  verifie('une seule question, à la fin (« Je l’envoie aux 2 ? ») : rien n est parti, rien n est écrit (Gym, Avocat, Kiné à leur place)', dern.nature === 'question' && /Je l’envoie aux 2 \?/.test(dern.content)
+  const hr = (x) => ctx.tcMinutesLisibles(x.startH * 60 + x.startM);
+  const ou = (l) => (l.length > 1 ? l.slice(0, -1).join(', ') + ' ou ' + l[l.length - 1] : l[0]);
+  const lignesCarte = (it) => { const jours = []; it.creneaux.forEach((x) => { let j = jours.find((y) => y.d === x.date); if (!j) { j = { d: x.date, h: [] }; jours.push(j); } j.h.push(hr(x)); });
+    return jours.length === 1 ? ' : ' + ctx.tcJourLisible(jours[0].d) + ', ' + ou(jours[0].h) + '.' : ' :\n' + jours.map((j) => ctx.tcJourLisible(j.d) + ', ' + ou(j.h) + '.').join('\n'); };
+  verifie('une seule carte, à la fin : rien n est parti, rien n est écrit (Gym, Avocat, Kiné à leur place) ; boutons « Oui, envoie » / « Non »', dern.nature === 'question' && dern._boutonsEnvoi && dern._boutonsEnvoi.oui === 'Oui, envoie'
+    && /tcChoisirEnvoiDeplacement\('oui'\)"[^>]*>Oui, envoie</.test(ctx.tcRendreBoutonsEnvoi(dern)) && /tcChoisirEnvoiDeplacement\('non'\)"[^>]*>Non</.test(ctx.tcRendreBoutonsEnvoi(dern))
     && trace.creees.length === nCreees && trace.deplaces.length === nDepl && trace.prevenances.length === nPrev && ctx.events[2].date === iso(0) && !ctx.events[0].decalage && !ctx.events[1].decalage, dern.content);
-  verifie('la carte montre les créneaux proposés à chacun, et « Quand Paul et Chloé auront choisi, je placerai leur créneau dans ton agenda sans te redemander. »', montres.length === 2
-    && montres.every((it) => libelles(it).length >= 2 && libelles(it).every((l) => dern.content.indexOf(l) > -1)) && /\nQuand Paul et Chloé auront choisi, je placerai leur créneau dans ton agenda sans te redemander\.\n/.test(dern.content) && /^Je déplace :\n• « Gym »/.test(dern.content), dern.content);
+  const attendu = 'Je déplace 3 rendez-vous.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres.\n« Gym » : ' + ctx.tcJourLisible(iso(2)) + ', 18h.\n'
+    + '« Avocat » avec Paul' + (montres[0] ? lignesCarte(montres[0]) : '') + '\n« Kiné » avec Chloé' + (montres[1] ? lignesCarte(montres[1]) : '') + '\n'
+    + 'Chacun choisit celui qui lui convient.\nJe note leurs choix dans ton agenda.\nJe leur envoie ?';
+  verifie('le texte exact de la carte à plusieurs (Chloé sans TimeCool : « Chacun choisit celui qui lui convient. »), une idée par ligne, sans point-virgule', montres.length === 2 && montres.every((it) => it.creneaux.length >= 2) && dern.content === attendu && dern.content.indexOf(';') < 0, dern.content + ' ≠ ' + attendu);
+  verifie('les créneaux de Paul (TimeCool) passent par le serveur, ceux de Chloé (sans TimeCool) non', trace.libres.join() === 'REFP', JSON.stringify(trace.libres));
   await ctx.tcRepondreDeplacement('oui');
   const creees2 = trace.creees.slice(nCreees);
   verifie('« oui » : tout part, avec exactement les créneaux montrés ; Gym se déplace ; Avocat et Kiné restent ⏳, marqués validés (confiance 2)', creees2.length === 2
@@ -322,7 +332,7 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   const part = trace.creees.slice(nC3);
   verifie('oui tardif : pour Paul, seuls les créneaux montrés encore libres partent (jamais un autre) ; pour Chloé, plus aucun : rien ne part', part.length === 1 && part[0].remplace === 't1'
     && part[0].creneaux.length === m1.creneaux.length - 1 && part[0].creneaux.every((c) => m1.creneaux.slice(1).map(ctx.tcPropositionLibelle).indexOf(c.libelle) > -1) && !t2.decalage, JSON.stringify(part.map((p) => p.creneaux)));
-  verifie('le bilan le dit : « Théâtre » : les créneaux proposés ne sont plus libres, rien n’est parti à Chloé Roux', /• « Théâtre » : les créneaux proposés ne sont plus libres, rien n’est parti à Chloé Roux ; il reste à sa place\. Redemande-moi de le décaler\./.test(last().content), last().content);
+  verifie('le bilan le dit : « « Théâtre » avec Chloé : les moments proposés ne sont plus libres. Rien n’est parti. Il reste à sa place. »', /• « Théâtre » avec Chloé : les moments proposés ne sont plus libres\. Rien n’est parti\. Il reste à sa place\./.test(last().content), last().content);
   verifie('un créneau passé ne part jamais', ctx.tcCreneauxEncoreValables([{ ev: t1, contact: { name: 'P' }, creneaux: [{ date: iso(-1), startH: 9, startM: 0, endH: 10, endM: 0 }] }], []).length === 0);
   ctx.events.push(ev('v', 'Vieux', 4, 9, 0, 10, 0, { contact: 'c1', decalage: { rdv: 320 } }));
   reponses = [{ rdv_id: 320, titre: 'Vieux', remplace: 'v', etat: 'choisi', qui: 'Paul Martin', reference: 'REFP', tours: 1, debut: iso(5) + ' 09:00:00', fin: iso(5) + ' 10:00:00', pris: [] }];
@@ -480,7 +490,7 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   await ctx.tcEnvoyerPropositions([{ ev: el, contact: ctx.contactsList[0], creneaux: ctx.tcCreneauxReproposes(el) }]);
   verifie('un nouveau tour garde le lot ; ses créneaux restent après le premier jour', el.lotDecalage.id === 'L7' && trace.creees[trace.creees.length - 1].creneaux.every((c) => c.debut.slice(0, 10) >= iso(3)), JSON.stringify(trace.creees[trace.creees.length - 1].creneaux));
   const ex = extraire('tcExecuterReponseCreneau') || '', ts = extraire('tcTraiterSeul') || '', qe = extraire('tcQuestionnaireExecuter') || '';
-  verifie('les nouveaux tours (profils 1, 2 et 3) passent par tcCreneauxReproposes ; le questionnaire donne au lot son premier jour', ex.indexOf('tcCreneauxReproposes(ev)') > -1 && ts.indexOf('tcCreneauxReproposes(x.ev)') > -1 && qe.indexOf('await tcProposerLesCreneaux(aProposer, montres ? { apres: r._depuis || null, lot: lotId, items: montres, confiance: 2 } : { apres: r._depuis || null, lot: lotId })') > -1 && page.indexOf('r._depuis = tcISO(depuisMalade);') > -1);
+  verifie('les nouveaux tours (profils 1, 2 et 3) passent par tcCreneauxReproposes ; le questionnaire donne au lot son premier jour', ex.indexOf('tcCreneauxReproposesPour(ev, contact)') > -1 && ts.indexOf('tcCreneauxReproposesPour(x.ev, contact)') > -1 && qe.indexOf('const optionsEnvoi = { apres: r._depuis || null, lot: lotId };') > -1 && qe.indexOf('await tcProposerLesCreneaux(aProposer, optionsEnvoi)') > -1 && page.indexOf('r._depuis = tcISO(depuisMalade);') > -1);
   ctx.addDemarche = () => {};
   vm.runInContext(extraire('tcAppliquerDeplacement'), ctx);
   const a1 = ev('a1', 'A1', 2, 9, 0, 10, 0, { contact: 'c1', lotDecalage: { id: 'L9' } }), a2 = ev('a2', 'A2', 2, 11, 0, 12, 0, { contact: 'c2', lotDecalage: { id: 'L9' } }), sp = ev('sp', 'Sport', 2, 17, 0, 18, 0);
@@ -652,6 +662,40 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
     ctx.tcFaitRaconte('Paul a annulé sans me demander, note-le') && ctx.tcFaitRaconte('le dentiste a été décalé') && !ctx.tcFaitRaconte('annule le dentiste') && !ctx.tcFaitRaconte('j ai annulé le dentiste, remets-le') && !ctx.tcFaitRaconte('décale le rdv qui a lieu demain'));
   verifie('les deux « je ne trouve pas de rendez-vous » laissent passer un fait raconté', /function tcRdvViseIntrouvable\(texte, now, events, mode\) \{\n  const t = tcSansAccents\(texte\);\n  \/\/ [^\n]*\n  if \(typeof tcFaitRaconte === 'function' && tcFaitRaconte\(t\)\) return null;/.test(page) && /function tcRdvNommeIntrouvable\(texte, now, events, mode\) \{\n  const t = tcSansAccents\(texte\);\n  \/\/ [^\n]*\n  if \(typeof tcFaitRaconte === 'function' && tcFaitRaconte\(t\)\) return null;/.test(page));
   vm.runInContext('_tcConfianceMoment = null', ctx);
+
+  titre('12. Mission 91 élargie : les créneaux dans les plages de l utilisateur, filtrés chez un contact qui a TimeCool ; la carte simple');
+  stock.tc_confiance_charly = '2'; ctx.charlyIA.history = [];
+  ctx.tcPlagesDuJour = () => ({ plages: [{ debut: 540, fin: 720 }], defaut: false });
+  ctx.events = [ev('pl', 'Pilates', 0, 15, 0, 16, 0, { contact: 'c1' })];
+  const cand = ctx.tcCreneauxPourDecalage(ctx.events[0], null, [], { date: iso(1), minutes: 480 }, 12);
+  verifie('les créneaux restent dans les plages de l utilisateur (ici 9h-12h), jamais ailleurs', cand.length >= 3 && cand.every((x) => x.startH * 60 + x.startM >= 540 && x.endH * 60 + x.endM <= 720), JSON.stringify(cand));
+  trace.libres = [];
+  trace.occupesContact = [cand[0].date + ' ' + String(cand[0].startH).padStart(2, '0') + ':' + String(cand[0].startM).padStart(2, '0') + ':00'];
+  const pour = await ctx.tcCreneauxPourContact(ctx.events[0], ctx.contactsList[0], null, [], { date: iso(1), minutes: 480 });
+  verifie('Paul (TimeCool) est occupé sur un créneau : il n est jamais proposé, un autre le remplace (3 au total)', pour.length === 3 && !pour.some((x) => x.date === cand[0].date && x.startH === cand[0].startH && x.startM === cand[0].startM) && trace.libres.join() === 'REFP', JSON.stringify(pour));
+  trace.occupesContact = [];
+  const chloe = await ctx.tcCreneauxPourContact(ctx.events[0], ctx.contactsList[1], null, [], { date: iso(1), minutes: 480 });
+  verifie('Chloé (sans TimeCool) : rien n est demandé au serveur, les 3 premiers créneaux de l utilisateur', chloe.length === 3 && trace.libres.length === 1);
+  const sur = (j, h) => ({ date: iso(j), startH: h, startM: 0, endH: h + 1, endM: 0 });
+  const k1 = ctx.tcCarteEnvoiCreneaux({ malade: true, items: [{ ev: ctx.events[0], contact: ctx.contactsList[0], creneaux: [sur(1, 9), sur(1, 11), sur(1, 13)] }], profil: 2 });
+  verifie('carte (Paul a TimeCool, parcours malade) : le texte exact validé par Charles', k1.envoi && k1.lignes.join('\n') === 'Tu es malade. Je déplace ton rendez-vous « Pilates » avec Paul.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres.\nJe propose à Paul 3 nouveaux rendez-vous, ' + ctx.tcJourLisible(iso(1)) + ' :\n9h, 11h ou 13h.\nPaul choisit, selon ses préférences et ses disponibilités enregistrées.\nJe note son choix dans ton agenda.\nJe lui envoie ?', k1.lignes.join(' | '));
+  const k2 = ctx.tcCarteEnvoiCreneaux({ items: [{ ev: ctx.events[0], contact: ctx.contactsList[1], creneaux: [sur(1, 9), sur(2, 11)] }], profil: 1 });
+  verifie('carte (Chloé sans TimeCool, deux jours, profil 1) : « Chloé choisit celui qui lui convient. », une ligne par jour, « 2 nouveaux rendez-vous »', k2.lignes.join('\n') === 'Je déplace ton rendez-vous « Pilates » avec Chloé.\nJe regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres.\nJe propose à Chloé 2 nouveaux rendez-vous :\n' + ctx.tcJourLisible(iso(1)) + ' : 9h.\n' + ctx.tcJourLisible(iso(2)) + ' : 11h.\nChloé choisit celui qui lui convient.\nJe te demande avant de noter son choix dans ton agenda.\nJe lui envoie ?', k2.lignes.join(' | '));
+  const k3 = ctx.tcCarteEnvoiCreneaux({ items: [{ ev: ctx.events[0], contact: ctx.contactsList[0], creneaux: [] }], profil: 2 });
+  verifie('aucun moment libre pour vous deux : Charly le dit simplement et ne propose rien', !k3.envoi && k3.lignes.slice(2).join('\n') === 'Je ne trouve pas de moment libre pour vous deux.\n« Pilates » reste à sa place.', k3.lignes.join(' | '));
+  verifie('aucun point-virgule dans les cartes', [k1, k2, k3].every((k) => k.lignes.join(' ').indexOf(';') < 0));
+  const creerAvant = ctx.TC_BACKEND.propositionCreer;
+  ctx.TC_BACKEND.propositionCreer = async () => { const e = new Error('aucun'); e.code = 'aucun_creneau_libre'; throw e; };
+  const envoiR = await ctx.tcProposerLesCreneaux([{ ev: ctx.events[0], p: null }], { lot: 'L12' });
+  ctx.TC_BACKEND.propositionCreer = creerAvant;
+  verifie('le serveur refuse à l envoi (« aucun_creneau_libre ») : rien ne part, « • « Pilates » avec Paul : pas de moment libre pour vous deux. Il reste à sa place. »', envoiR.res.details.length === 0 && envoiR.lignes.indexOf('• « Pilates » avec Paul : pas de moment libre pour vous deux. Il reste à sa place.') > -1 && !ctx.events[0].decalage, envoiR.lignes.join(' | '));
+  {
+    // Mission 91 : la messagerie (liste des conversations du serveur) garde les créneaux d'une proposition : sans eux, Paul ne
+    // voyait jamais les boutons.
+    const bloc = (page.match(/const duServeur = tcConversations\(\)\.map\(function \(c\) \{[\s\S]*?\n  \}\);/) || [''])[0];
+    verifie('chez le contact, la messagerie garde les créneaux, le rendez-vous d avant, le choix, la suite et les créneaux pris', ['creneaux: Array.isArray(t.creneaux)', "avant: typeof t.avant === 'string'", "choix: typeof t.choix === 'number'", "suite: typeof t.suite === 'string'", 'pris: Array.isArray(t.pris)'].every((x) => bloc.indexOf(x) > -1), bloc.slice(0, 200));
+  }
+  delete ctx.tcPlagesDuJour; delete stock.tc_confiance_charly;
 
   console.log('');
   console.log(ko ? ko + ' anomalie(s).' : ok + ' vérifications, aucune anomalie.');

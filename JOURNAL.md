@@ -3338,3 +3338,27 @@ Chef, 15/11 (choix « A » de Charles, forme de la validation tranchée par le c
 - Textes du réglage : profil 2 « … avant d'écrire dans mon agenda ou d'envoyer un message ou une demande à mes contacts. » ; gris du profil 3 « … te fait un compte rendu, que tu retrouves aussi dans ton Journal d'activité. ». Aucun autre texte de l'appli ne décrivait le profil 2. La mission 77 (le profil du moment) est inchangée. API non touchée.
 - Suites : verif-confiance-charly (section 7 réécrite, section 8 sur une question de lot déjà posée, bilan, messages seuls, Journal ; 145 vérifications), verif-questionnaire-malade (section 10 : profil 2, récapitulatif avec créneaux, rien avant le oui, créneaux montrés envoyés tels quels ; profil 3, compte rendu au Journal), verif-charly-deplacement et verif-deplacer-periode (nouvelles fonctions extraites). verifier.sh vert.
 - Captures (PC, m71/captures91) : le réglage, la validation finale au profil 2 (parcours malade), le compte rendu au Journal.
+
+## 15/11/2026 : mission 91, suite : créneaux communs et carte pour un enfant de 10 ans
+
+Chef, 15/11 : Charles refuse la première carte du profil 2 (« trop compliqué ») et élargit la 91. Règle, valable pour toutes les missions : écrire comme pour un enfant de 10 ans (phrases courtes, une idée par ligne, pas de point-virgule).
+- Créneaux, tous profils :
+  - tcCreneauxPourDecalage ne garde que des moments dans les plages de l'utilisateur (tcPlagesDuJour) et libres entre 8h et 19h (12 candidats au plus, TC_PROPOSITION_CANDIDATS).
+  - tcCreneauxPourContact : pour un contact qui a TimeCool, le serveur ne garde que ceux qui sont libres chez lui aussi (POST /rdv/proposition/libres), 3 au plus.
+  - tcCreneauxDuLot est asynchrone ; il sert à décaler, au questionnaire (calcul dans TC_ETAPE_RECAP.avant, au profil 3 aussi) et aux nouveaux tours (tcCreneauxReproposesPour).
+- API (touchée, sans migration) :
+  - creneauxLibresPourContact : agenda du contact (rdvOccupation) ; s'il a classé l'utilisateur, ses plages (dispoPlagesDuJour) ; sinon son temps libre protégé. Un contact qui a bloqué l'utilisateur n'est pas consulté : tout revient, rien ne trahit le blocage. Seuls des indices sortent.
+  - Route POST /rdv/proposition/libres (lecture seule, 30 créneaux au plus).
+  - /rdv/proposition/creer refiltre et renumérote les rangs ; s'il ne reste rien : 409 aucun_creneau_libre, et le bilan le dit.
+- Carte : tcCarteEnvoiCreneaux, texte validé par Charles.
+  - Un rendez-vous : « Tu es malade. » (parcours malade seulement), « Je regarde… », « Je propose à Paul 3 nouveaux rendez-vous, mardi 17 novembre : / 9h, 11h ou 13h. », « Paul choisit, selon ses préférences… » (sans TimeCool : « … celui qui lui convient. »), « Je note son choix dans ton agenda. » (profil 1 : « Je te demande avant de noter… »), « Je lui envoie ? ».
+  - Plusieurs rendez-vous : la forme validée par le chef.
+  - Boutons « Oui, envoie » / « Non » : questionnaire (profils 1 et 2), décaler au profil 2 (_boutonsEnvoi, tcRendreBoutonsEnvoi). Aucun moment commun : Charly le dit, rien n'est proposé.
+- Trouvé en faisant la capture « ce que voit Paul » : la liste des conversations du serveur ne gardait pas les créneaux d'une proposition (creneaux, avant, choix, suite, pris). La carte à boutons ne s'affichait donc jamais chez un contact TimeCool, depuis la 73. C'est corrigé (ajoutés après « statut » dans le passage de la messagerie).
+- Suites :
+  - verif-creneaux-communs-e2e (nouvelle, 3 comptes jetables : classé, non classé, bloqué, référence inconnue, sans session, création refiltrée, 409, contact sans TimeCool) ;
+  - verif-confiance-charly (158 vérifications) ;
+  - verif-questionnaire-malade et verif-imprevu (carte simple) ;
+  - verif-charly-deplacement et verif-deplacer-periode (nouvelles fonctions).
+  verifier.sh vert.
+- Captures (PC, m71/captures91b) : carte avec TimeCool, sans TimeCool, à plusieurs, ce que voit Paul.
