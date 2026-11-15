@@ -41,6 +41,18 @@ const PHRASES = [
   'Retrouve Paul',
   'Crée-moi un rendez-vous demain à 15h chez mon dentiste',
 ];
+// Examen de la 93 : des questions ou des mots qui ne sont pas un rendez-vous : ni carte, ni « À quelle heure ? » (le chemin
+// habituel : la consultation de l'agenda, une question de Charly, ou le modèle).
+const AU_MODELE = [
+  "Qu'est-ce que j'ai avec Paul samedi",
+  'Combien de rendez-vous avec Paul lundi',
+  'Je suis avec Paul samedi',
+  'libre demain 15h',
+  'pas dispo demain 15h',
+  'occupé demain 15h',
+  'rien demain 15h',
+];
+const TOUTES = PHRASES.concat(AU_MODELE);
 
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
 const exe = candidats.find((c) => { try { return fs.existsSync(c); } catch (e) { return false; } });
@@ -59,7 +71,7 @@ if (!exe) {
     tcRelais = async function () { window.__modele++; throw new Error('modele'); };
     TC_BACKEND.propositionLibres = async function (r, c) { return { libres: c.map(function (x, i) { return i; }) }; };
     hideAuthFlow();
-    var PHRASES = ${JSON.stringify(PHRASES)};
+    var PHRASES = ${JSON.stringify(TOUTES)};
     var j = function (n) { var x = new Date(); x.setDate(x.getDate() + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
     function remettre() {
       events.length = 0; contactsList.length = 0;
@@ -79,6 +91,7 @@ if (!exe) {
       if (i >= PHRASES.length) { var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre); return; }
       remettre();
       var avant = window.__modele;
+      var hm = typeof tcHeureManquante === 'function' ? tcHeureManquante(PHRASES[i]) : false;
       document.getElementById('charlyInput').value = PHRASES[i];
       Promise.resolve(charlySendMessage()).catch(function (e) { res.push({ erreur: String(e) }); }).then(function () {
         setTimeout(function () {
@@ -90,7 +103,7 @@ if (!exe) {
               boutons: (html.match(/<button[^>]*>[\\s\\S]*?<\\/button>/g) || []).map(function (b) { return b.replace(/<[^>]+>/g, '').replace(/\\s+/g, ' ').trim(); }),
               question: (function () { var d = document.createElement('div'); d.innerHTML = html; var t = d.textContent.replace(/\\s+/g, ' ').trim(); return t.slice(0, 300); })() };
           });
-          res.push({ phrase: PHRASES[i], modele: window.__modele - avant, h: h, nbEvents: events.length });
+          res.push({ phrase: PHRASES[i], modele: window.__modele - avant, hm: hm, h: h, nbEvents: events.length });
           i++;
           suivante();
         }, 1500);
@@ -136,11 +149,15 @@ if (!exe) {
   ['neuf', 'rempli'].forEach((compte) => {
     titre('Compte ' + (compte === 'neuf' ? 'neuf (aucun contact, aucun rendez-vous)' : 'rempli (Paul, Marie, Dr Lefèvre ; Dentiste demain 10h, Réunion demain 14h)'));
     const liste = R[compte];
-    verifie('les ' + PHRASES.length + ' phrases ont été jouées', Array.isArray(liste) && liste.length === PHRASES.length, JSON.stringify(liste));
+    verifie('les ' + TOUTES.length + ' phrases ont été jouées', Array.isArray(liste) && liste.length === TOUTES.length, JSON.stringify(liste));
     if (!Array.isArray(liste)) return;
     liste.forEach((x, i) => {
       const charly = (x.h || []).filter((m) => m.role !== 'user');
       const dernier = charly[charly.length - 1] || { texte: '', boutons: [] };
+      if (i >= PHRASES.length) {
+        verifie('« ' + TOUTES[i] + ' » : pas une demande sans heure (tcHeureManquante), ni carte ni « À quelle heure ? » (examen)', x.hm === false && !charly.some((m) => m.carte || /^À quelle heure/.test(m.texte)), JSON.stringify({ hm: x.hm, r: charly.map((m) => m.texte) }));
+        return;
+      }
       verifie('« ' + PHRASES[i] + ' » : sans le modèle', x.modele === 0, JSON.stringify(x));
       const a = attentes[compte][i];
       verifie('« ' + PHRASES[i] + ' » : ' + a.dit, a.test(dernier, charly, x), JSON.stringify(charly.map((m) => ({ t: m.texte, b: m.boutons, c: m.cases, e: m.envoi }))));

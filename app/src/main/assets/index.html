@@ -12432,7 +12432,7 @@ function tcCreationLocale(texte, now, forcer) {
   if (_mCourt && typeof contactsList !== 'undefined' && Array.isArray(contactsList)) contactsList.forEach(function (c) { tcSansAccents(String((c && c.name) || '')).toLowerCase().split(/[^a-z]+/).forEach(function (w) { if (w.length >= 3) _nomsContacts.add(w); }); });
   const _motsBruts = brut.trim().split(/\s+/).slice(1, _motsCourt.length);
   const _court = !!_mCourt && _motsCourt.length <= 3 && !_motsBruts.some(function (w) { return /^[A-ZÀ-Ý]/.test(w); })
-    && !_motsCourt.some(function (w) { return _nomsContacts.has(w) || /^(avec|par|plutot|me|m|mr|mme|mlle|dr|pr|appele|appeler|rappel|rappeler|rappelle|telephone|visio|et)$/.test(w); })
+    && !_motsCourt.some(function (w) { return _nomsContacts.has(w) || /^(avec|par|plutot|me|m|mr|mme|mlle|dr|pr|appele|appeler|rappel|rappeler|rappelle|telephone|visio|et|libre|libres|dispo|dispos|disponible|disponibles|occupe|occupee|rien|pas|quoi|qui|quand|ou|quel|quelle|combien)$/.test(w); })
     && !/\b(mets?|bouge[sz]?|decale[sz]?|deplace[sz]?|change[sz]?|passe[sz]?|avance[sz]?|recule[sz]?|reporte[sz]?|repousse[sz]?|annule[sz]?|supprime[sz]?|efface[sz]?|enleve[sz]?|retire[sz]?)\b/.test(_mCourt[1]) && !/ (a|au|pour)$/.test(_mCourt[1]);
   if (!_court && !_repasContact && !/\b(rdv|rendez|reunion|seance|consultation|ajoute[rsz]?|cree[rsz]?|mets?|note[rsz]?|planifie[rsz]?|bloque[rsz]?|prends?|programme[rsz]?|cale[rsz]?|organise[rsz]?|doit m appeler|doit me rappeler|doit me telephoner|doit m ecrire)\b/.test(t)
       && !((typeof tcCiviliteEnTete === 'function' && tcCiviliteEnTete(brut)) && !/\b(a|ont|est|m a|m ont) (appele|telephone|ecrit|envoye|annule|confirme|demande|dit|rappele|passe|laisse)\b/.test(t))) return '';
@@ -17894,6 +17894,9 @@ function tcHeureManquante(text) {
   if (!/\bavec\s+[a-z]{2,}/.test(t) || t.split(/\s+/).filter(Boolean).length > 12) return false;
   if (tcHeureDansTexte(brut.toLowerCase())) return false;
   if (/\b(annul|supprim|efface|decal|deplac|report|repouss|retard|malade|libre|dispo|rappel|previen)/.test(t)) return false;
+  // Examen de la 93 : une question ou une consultation, même sans « ? » (« qu'est-ce que j'ai avec Paul samedi »,
+  // « combien de rendez-vous avec Paul lundi », « je suis avec Paul samedi ») garde son chemin habituel.
+  if (/\b(qu est ce|est ce|combien|quand|quels?|quelles?|qui|ou|comment|pourquoi|ai je|qu ai je|j ai|je suis|suis je|y a t il|il y a|liste|montre|affiche|dis moi|rappelle moi)\b/.test(t)) return false;
   return typeof tcJoursCites === 'function' && tcJoursCites(brut, new Date()).length === 1;
 }
 

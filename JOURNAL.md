@@ -3390,3 +3390,4 @@ Chef, 15/11 (phrases et propositions validées par Charles ; complément « Qui 
   - « Dîner avec Paul et Marie samedi soir » : « À quelle heure ? » puis la carte.
 - Contact du rendez-vous : compte sans contact, pas de question (la carte dit « sans contact · relier ») ; sinon « C’est avec quelqu’un de tes contacts ? » (« 👤 Choisir un contact » / « Non, personne »), « C’est l’un d’eux ? » pour deux ou trois.
 - Suite verif-phrases-boutons (nouvelle ; Chrome sur le PC) : les sept phrases, puis chaque exemple tapé sur un compte neuf et un compte rempli. Treize suites adaptées. verifier.sh vert.
+- Examen : une question (« qu’est-ce que j’ai avec Paul samedi », « combien… », « je suis avec… ») n’est jamais une demande sans heure ; « libre / dispo / occupé / rien / pas » ne sont jamais l’objet d’une carte. Suite complétée.
