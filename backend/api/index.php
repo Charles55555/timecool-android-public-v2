@@ -671,6 +671,16 @@ function smsEnvoisRecents(int $heures, ?string $destEmpreinte, ?string $ipBinair
  * dans le dossier prive de l'API (a cote des documents), un octet par appel : sa taille est le compte. Aucune table.
  * Renvoie false au-dela de $max. Sans dossier utilisable, ne bloque personne (et le dit dans le journal du serveur).
  */
+/** Ce que compte la limite : l'adresse IPv4 exacte ; en IPv6, son prefixe /64 (une seule box en a un entier). */
+function inscriptionControleCle(string $ip): string
+{
+    $bin = @inet_pton($ip);
+    if ($bin !== false && strlen($bin) === 16) {
+        return bin2hex(substr($bin, 0, 8)) . '::/64';
+    }
+    return $ip;
+}
+
 function inscriptionControleCompter(string $dossier, string $ip, int $max): bool
 {
     if (!is_dir($dossier) && !@mkdir($dossier, 0700, true) && !is_dir($dossier)) {
@@ -3537,7 +3547,7 @@ switch ($route) {
             $maxC = max($maxC, 1000);   // API locale : les suites passent souvent ; la limite a sa propre verification
         }
         if ($ipC !== '' && !inscriptionControleCompter(
-            rtrim((string) Conf::get('limites_dossier', __DIR__ . '/../private/limites'), '/'), $ipC, $maxC
+            rtrim((string) Conf::get('limites_dossier', __DIR__ . '/../private/limites'), '/'), inscriptionControleCle($ipC), $maxC
         )) {
             Rep::erreur(429, 'trop_de_demandes', 'Trop de demandes. Réessayez dans une heure.');
         }

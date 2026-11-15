@@ -54,6 +54,15 @@ verifie('le 409 de la création dit lequel est pris (email_deja_inscrit, numero_
     try { sortie = cp.execFileSync(php, [fichier, path.join(dossier, 'limites')], { encoding: 'utf8' }).trim(); } catch (e) { sortie = String(e.message); }
     const noms = fs.existsSync(path.join(dossier, 'limites')) ? fs.readdirSync(path.join(dossier, 'limites')) : [];
     verifie('limite rejouée : 3 appels passent, le 4e est refusé ; une autre IP passe', sortie === '1,1,1,0,1', sortie);
+    // Examen : en IPv6, deux adresses du meme /64 comptent ensemble ; un autre /64 et l IPv4 a part.
+    const cle = fonction(api, 'inscriptionControleCle');
+    let cles = '';
+    if (cle) {
+      const fc = path.join(dossier, 'cle.php');
+      fs.writeFileSync(fc, '<?php ' + cle + '\necho implode(" ", [inscriptionControleCle("2001:db8:1:2::5"), inscriptionControleCle("2001:db8:1:2:ffff::9"), inscriptionControleCle("2001:db8:1:3::5"), inscriptionControleCle("203.0.113.7")]);');
+      try { cles = cp.execFileSync(php, [fc], { encoding: 'utf8' }).trim(); } catch (e) { cles = String(e.message); }
+    }
+    verifie('IPv6 : la limite compte le préfixe /64 (une box en a un entier) ; IPv4 : l adresse exacte', cles === '20010db800010002::/64 20010db800010002::/64 20010db800010003::/64 203.0.113.7' && /inscriptionControleCle\(\$ipC\)/.test(route), cles);
     verifie('le compteur ne garde pas l adresse IP en clair (empreinte)', noms.length === 2 && noms.every((n) => /^inscription-[0-9a-f]{64}-\d{10}$/.test(n) && n.indexOf('203') < 0), noms.join(' '));
   }
   try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
