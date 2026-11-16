@@ -3223,6 +3223,8 @@ Si l'utilisateur veut un RDV avec une personne de ses contacts, crée-le immédi
 Propose aussi d'envoyer un rappel à cette personne (fonctionnalité à venir).
 
 ═══ CAS 7 — GESTION DES CONTACTS ET PERMISSIONS ═══
+Tu n'as PAS le carnet de contacts de l'utilisateur : ne dis jamais qu'un contact n'existe pas ou est introuvable, et ne propose jamais de l'ajouter.
+Pour retrouver quelqu'un, réponds seulement : « Écris-moi : Retrouve <son nom>. » Un nom seul n'est jamais un rendez-vous : aucun bloc [AGENDA].
 Blocage, déblocage, changement de niveau de protection d'un contact → exécution directe, confirmation sobre.
 "Qui a accès à mon agenda ?" → liste les contacts autorisés et leur niveau, sans détailler leurs créneaux.
 Révocation d'un accès → silencieuse côté contact (message neutre, sans indication de downgrade) ; confirmation uniquement à l'utilisateur.
@@ -13254,6 +13256,16 @@ function tcPlusieursDatesOuRelatif(texteSansAccents) {
   return n > 1;
 }
 
+/** Mission 99 : le bloc propose un début à 00:00 (hors journée entière 00:00-23:59) et la phrase n'a ni heure, ni « minuit », ni « 0h ». */
+function tcCarteMinuitSansHeure(reply, texte) {
+  const bloc = String(reply || '').match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
+  if (!bloc) return false;
+  const minuit = bloc[1].split('\n').some(function (l) { return /\|\s*0?0:00\s*-\s*(?!23:59)\d{1,2}:\d{2}\s*\|/.test(l); });
+  if (!minuit) return false;
+  const t = tcSansAccents(texte);
+  return !tcHeureDansTexte(t) && !/\bminuit\b/.test(t);
+}
+
 function tcCorrigerPropositionsCharly(reply, texte, now) {
   const r = String(reply || '');
   const bloc = r.match(/\[AGENDA\]([\s\S]*?)\[\/AGENDA\]/);
@@ -13800,7 +13812,10 @@ function charlyQuickAction(action) {
   // Mission 93 : la phrase d'exemple, seule (pas de bulle « Je veux… » de l'utilisateur).
   if (Object.prototype.hasOwnProperty.call(TC_PHRASES_BOUTONS, action)) {
     if (typeof _tcQuestionnaire !== 'undefined' && _tcQuestionnaire && typeof tcQuestionnaireArreter === 'function') tcQuestionnaireArreter();
-    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: TC_PHRASES_BOUTONS[action] });
+    const _phrase = { role: 'assistant', nature: 'reponse', content: TC_PHRASES_BOUTONS[action] };
+    // Mission 99 : après « Retrouver un contact », la réponse (« William ») est un nom, cherché sur place, sans le modèle.
+    if (action === 'contact') _phrase._ficheAttente = { etape: 'nom' };
+    charlyIA.history.push(_phrase);
     renderCharlyChat();
     return;
   }
@@ -15983,6 +15998,11 @@ async function charlySendMessage() {
     // « La Banane Dr Sellam tu peux me retrouver dans mes contacts » : le nom est n'importe où dans la phrase (mission 69).
     const _ficheLibre = tcDetecterFicheLibre(text);
     if (_ficheLibre && tcGererFicheLibre(text, _ficheLibre)) return;
+    // « William » tout seul : les fiches de ce nom, sans le modèle (mission 99).
+    if (typeof tcDetecterNomSeul === 'function') {
+      const _nomSeul = tcDetecterNomSeul(text);
+      if (_nomSeul) { tcGererNomSeul(text, _nomSeul); return; }
+    }
   }
   if (typeof tcDetecterCreneauPourRecue === 'function') {
     const _recueCreneau = tcDetecterCreneauPourRecue(text);
@@ -16393,8 +16413,12 @@ async function charlySendMessage() {
 
     // L'aide figée (« Pour le supprimer, écris-moi par exemple… ») ne sort jamais : « Lequel ? » avec les prochains rendez-vous (mission 52).
     reply = tcRemplacerAideFigee(reply, text);
+    // Mission 99 : une carte à 0h alors que la phrase ne dit ni heure ni « minuit » : « À quelle heure ? », jamais un rendez-vous à 0h.
+    const _minuitInvente = typeof tcCarteMinuitSansHeure === 'function' && tcCarteMinuitSansHeure(reply, text);
+    if (_minuitInvente) { _tcHeureEnAttente = { texte: text }; reply = 'À quelle heure ?'; }
     const tempId = 'msg_' + Date.now();
     charlyIA.history.push({role:'assistant', content:tcReplyOuRepli(reply), tempId, nature: tcNatureReponse(reply)});
+    if (_minuitInvente) charlyIA.history[charlyIA.history.length - 1].nature = 'question';
     // Un déplacement compris s'exécute (ou pose sa seule question),
     // sans carte « Valider » à cliquer.
     tcTraiterDeplacement(charlyIA.history[charlyIA.history.length - 1], text);
@@ -24992,17 +25016,22 @@ function tcFicheTexte(c, rang) {
 }
 
 /** Une carte par fiche (5 au plus), puis « Lequel ? » : la réponse suivante choisit. */
-function tcPousserFiches(fiches, avant, finDemandee) {
-  const vues = fiches.slice(0, 5);
+/* Mission 99 (Charles, 16/11) : toutes les fiches jusqu'à 10 ; au-delà, les 10 premières et le bouton « Voir les N », qui ouvre « Mes contacts »
+   sur ces N fiches exactement. */
+function tcPousserFiches(fiches, avant, finDemandee, nomVoir) {
+  const TC_FICHES_MAX = 10;
+  const vues = fiches.slice(0, TC_FICHES_MAX);
   const plusieurs = vues.length > 1;
+  const trop = fiches.length > TC_FICHES_MAX;
   let intro = avant || '';
-  if (!intro && plusieurs) intro = fiches.length > 5 ? 'Tu as ' + fiches.length + ' contacts à ce nom. Voici les 5 plus probables :' : 'Tu as ' + fiches.length + ' contacts à ce nom :';
+  if (!intro && plusieurs) intro = trop ? 'Tu as ' + fiches.length + ' contacts à ce nom. Voici les ' + TC_FICHES_MAX + ' premiers :' : 'Tu as ' + fiches.length + ' contacts à ce nom :';
   const fin = finDemandee || (plusieurs ? 'Lequel ?' : '');
   const m = {
     role: 'assistant', nature: fin ? 'question' : 'reponse',
     content: (intro ? intro + '\n' : '') + vues.map(function (c, i) { return tcFicheTexte(c, plusieurs ? i + 1 : 0); }).join('\n') + (fin ? '\n' + fin : ''),
     _fiches: { intro: intro, ids: vues.map(function (c) { return c.id; }), fin: fin }
   };
+  if (trop) m._fiches.voir = { nom: String(nomVoir || ''), ids: fiches.map(function (c) { return c.id; }) };
   if (plusieurs) m._ficheAttente = { etape: 'choix', ids: m._fiches.ids };
   charlyIA.history.push(m);
   return m;
@@ -25031,7 +25060,7 @@ function tcGererFicheContact(text, d) {
   const fiches = tcClasserContacts(tcContactsParMots(tcMotsUtiles(d.nom)));
   if (!fiches.length && !d.propose && !d.simple) return false;
   tcPousserMessageUtilisateur(text);
-  if (fiches.length) tcPousserFiches(fiches);
+  if (fiches.length) tcPousserFiches(fiches, '', '', tcFicheNomJoli(tcDesignationSansPetitMot(d.affiche)));
   else {
     // Prénom et nom ne correspondent pas ensemble. Une seule fiche porte l'un des deux : Charly la montre et demande, jamais à la place de la personne cherchée.
     const nomJoli = tcFicheNomJoli(tcDesignationSansPetitMot(d.affiche));
@@ -25109,8 +25138,8 @@ function tcRepondreFicheContact(text) {
   const parId = function (id) { return (Array.isArray(contactsList) ? contactsList : []).find(function (c) { return c && c.id === id; }); };
   const liste = a.ids.map(parId).filter(Boolean);
   const n = norm.replace(/^((le|la|numero|no) )+/, '').replace(/ (stp|svp|merci)$/, '');
-  const rangs = { premier: 1, premiere: 1, deuxieme: 2, second: 2, seconde: 2, troisieme: 3, quatrieme: 4, cinquieme: 5, dernier: a.ids.length, derniere: a.ids.length };
-  const m = n.match(/^([1-5])( ?(er|ere|e|eme))?$/);
+  const rangs = { premier: 1, premiere: 1, deuxieme: 2, second: 2, seconde: 2, troisieme: 3, quatrieme: 4, cinquieme: 5, sixieme: 6, septieme: 7, huitieme: 8, neuvieme: 9, dixieme: 10, dernier: a.ids.length, derniere: a.ids.length };
+  const m = n.match(/^(10|[1-9])( ?(er|ere|e|eme))?$/);
   const rang = m ? Number(m[1]) : rangs[n];
   let choisi = null;
   if (rang) {
@@ -25135,6 +25164,19 @@ function tcDemarrerRetrouverContact(bulle) {
   renderCharlyChat();
 }
 
+/** « Voir les 25 » : « Mes contacts », la recherche remplie avec le nom, et ces fiches-là exactement (mission 99). */
+let _tcContactsCharly = null;
+function tcOuvrirContactsNom(nom, ids) {
+  _contactsTimeCool = false;
+  _contactsRecents = false;
+  _contactsCategorie = '';
+  _contactsLettre = '';
+  contactsSearchQuery = String(nom || '');
+  _tcContactsCharly = { q: contactsSearchQuery, ids: Array.isArray(ids) ? ids.slice() : [] };
+  navigate('contacts');
+  renderContacts();
+}
+
 /** « Ajouter Hugo » : le formulaire « Nouveau contact », pré-rempli avec le nom. */
 function tcFicheAjouter(nom) {
   tcFormulaireContact(null, nom);
@@ -25155,6 +25197,33 @@ function tcOuvrirFicheContact(id) {
     const carte = document.getElementById('ctFiche_' + id);
     if (carte && carte.scrollIntoView) carte.scrollIntoView({ block: 'center' });
   }, 80);
+}
+
+/**
+ * Mission 99 (Charles, 16/11) : un message de 1 à 3 mots qui sont le nom d'un ou plusieurs contacts (« William », « william ayache ») :
+ * les fiches, sans le modèle. Jamais quand une question ou une carte attend, ni avec un jour, une heure, un chiffre, un petit mot
+ * (« super », « merci ») ou le titre d'un de ses rendez-vous (« Sport »). { nom, affiche, fiches } ; null sinon.
+ */
+function tcDetecterNomSeul(text) {
+  const brut = String(text || '').replace(/œ/g, 'oe').replace(/Œ/g, 'Oe').replace(/æ/g, 'ae').trim().replace(/[\s?!.]+$/, '');
+  if (!brut || /\d/.test(brut) || !Array.isArray(contactsList) || !contactsList.length) return null;
+  const nom = tcClasseNormaliser(brut);
+  const mots = nom ? nom.split(' ') : [];
+  if (!mots.length || mots.length > 3 || mots.some(function (w) { return w.length < 2 || tcFicheLibreOutil(w); })) return null;
+  if (tcUneQuestionAttend() || (typeof tcPropositionEnAttente === 'function' && tcPropositionEnAttente()) || (typeof tcConflitEnAttente === 'function' && tcConflitEnAttente())) return null;
+  // Le titre d'un de ses rendez-vous : c'est de lui qu'on parle, pas d'un contact.
+  const dansMots = function (texte) { const t = ' ' + tcClasseNormaliser(texte) + ' '; return mots.every(function (w) { return t.indexOf(' ' + w + ' ') > -1; }); };
+  if ((Array.isArray(events) ? events : []).some(function (e) { return e && tcEstDeLUtilisateur(e) && dansMots(e.title || ''); })) return null;
+  const fiches = tcContactsParMots(mots);
+  // Au moins une fiche porte ces mots en entier (« Will » ne suffit pas, « William » oui).
+  if (!fiches.some(function (c) { return dansMots(c.name || ''); })) return null;
+  return { nom: nom, affiche: tcFicheNomTape(brut, nom), fiches: fiches };
+}
+
+function tcGererNomSeul(text, d) {
+  tcPousserMessageUtilisateur(text);
+  tcPousserFiches(tcClasserContacts(d.fiches.slice()), '', '', tcFicheNomJoli(d.affiche));
+  renderCharlyChat();
 }
 
 /** Les cartes dans le chat, dessinées avec la fiche d'aujourd'hui (une fiche supprimée entre-temps disparaît). */
@@ -25179,7 +25248,10 @@ function tcRendreFiches(m) {
       + (cats.length ? '<div style="font-size:12px; color:var(--text-sec); margin-top:2px;">' + escapeHTMLSafe(cats.join(', ')) + '</div>' : '')
       + '<button onclick="tcOuvrirFicheContact(' + escapeHTMLSafe(JSON.stringify(c.id)) + ')" style="' + bouton + '">Ouvrir la fiche</button></div>';
   }).join('');
-  return tcBulleCharly((f.intro ? escapeHTMLSafe(f.intro) : '') + cartes + (f.fin ? '<div style="margin-top:8px;">' + escapeHTMLSafe(f.fin) + '</div>' : ''));
+  const voir = (f.voir && f.voir.ids && f.voir.ids.length > liste.length)
+    ? '<div><button onclick="tcOuvrirContactsNom(' + escapeHTMLSafe(JSON.stringify(f.voir.nom)) + ', ' + escapeHTMLSafe(JSON.stringify(f.voir.ids)) + ')" style="' + bouton + '">Voir les ' + f.voir.ids.length + '</button></div>'
+    : '';
+  return tcBulleCharly((f.intro ? escapeHTMLSafe(f.intro) : '') + cartes + voir + (f.fin ? '<div style="margin-top:8px;">' + escapeHTMLSafe(f.fin) + '</div>' : ''));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -30882,7 +30954,11 @@ function tcContactsAffiches() {
   }
   const q = contactsSearchQuery.trim().toLowerCase();
   let liste;
-  if (q) {
+  if (q && typeof _tcContactsCharly !== 'undefined' && _tcContactsCharly && _tcContactsCharly.q === contactsSearchQuery) {
+    // « Voir les N » de Charly (mission 99) : ces N fiches, tant que la recherche n'est pas changée.
+    const voulus = new Set(_tcContactsCharly.ids);
+    liste = contactsList.filter(function (c) { return c && voulus.has(c.id); });
+  } else if (q) {
     liste = contactsList.filter(function (c) {
       return (c.name && c.name.toLowerCase().includes(q))
         || (c.phone && c.phone.toLowerCase().includes(q))

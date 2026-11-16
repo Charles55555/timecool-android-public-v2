@@ -3433,3 +3433,14 @@ Chef, 16/11 (rien ne change à l'écran).
 - Carte des comptes (onglets « Utilisateurs » et « Tests ») et export CSV de la page administrateur rendus plus robustes.
 - API : inscription et précision de provenance alignées sur les autres champs texte (backend/api/index.php, à déployer).
 - Suite verif-admin-champs (nouvelle). verifier.sh vert.
+
+## 16/11/2026 : mission 99, Charly retrouve un contact par son prénom seul
+
+Chef, 16/11 (validé par Charles : « William » ne trouvait rien alors que 8 William sont dans ses contacts).
+- Cause : depuis la mission 93, la phrase du bouton « Retrouver un contact » n'attendait plus de nom ; « William » partait au modèle, qui n'a pas le carnet et répondait « je ne trouve pas, je l'ajoute ? », puis proposait un rendez-vous à 0h.
+- La phrase du bouton attend de nouveau un nom : la réponse est cherchée sur place (« Je ne trouve pas « X » dans tes contacts. Tu veux l’ajouter ? » si personne).
+- Hors bouton, 1 à 3 mots qui sont le nom d'un contact (« William », « william ayache ») montrent les fiches, sans le modèle (tcDetecterNomSeul). Jamais quand une question ou une carte attend, ni avec un chiffre, un petit mot (« super »), un mot de moment ou le titre d'un de ses rendez-vous ; il faut au moins une fiche qui porte le mot en entier (« Will » ne suffit pas).
+- Jusqu'à 10 fiches ; au-delà, « Tu as N contacts à ce nom. Voici les 10 premiers : » et le bouton « Voir les N », qui ouvre « Mes contacts » sur ces N fiches exactement. « Lequel ? » se répond de 1 à 10.
+- Modèle : la consigne lui dit qu'il n'a pas le carnet (jamais « absent », jamais « je l'ajoute ») et le renvoie vers « Retrouve <son nom> ». Une carte à 00:00 sans heure ni « minuit » dans la phrase devient « À quelle heure ? » (tcCarteMinuitSansHeure). Consigne dans la page (TC_DEFAULT_SYSTEM_PROMPT) : API non touchée.
+- Fluidité : carnet de 3 316 contacts, environ 1 ms par message, 2,5 ms avec l'affichage (Chrome).
+- Suite verif-charly-nom-seul (nouvelle ; Chrome sur le PC) ; verif-classement-charly suit la nouvelle règle (7 fiches, puis 12 → 10 et « Voir les 12 »). verifier.sh vert, banc-charly vert.

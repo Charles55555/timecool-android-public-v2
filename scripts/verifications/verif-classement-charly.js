@@ -426,7 +426,7 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
   { const r = ctx.tcRemplacerAideFigee('Pour le supprimer, écris-moi par exemple : supprime le rdv de lundi 26 octobre à 10h. Ou touche le rendez-vous dans ton agenda, puis 🗑️ Supprimer.');
     verifie('tcRemplacerAideFigee : « Lequel ? » numéroté avec les trois prochains, le choix gardé, nature question', /^Lequel \?\n1\. Dentiste : .*\n2\. Partie de golf : .*\n3\. Déjeuner avec Sophie : .*\nDis-moi son numéro, son heure ou son nom\.$/.test(r) && vm.runInContext('_tcSuppressionChoix', ctx).length === 3 && ctx.tcNatureReponse(r) === 'question', r);
     verifie('une autre réponse du modèle n est pas touchée', ctx.tcRemplacerAideFigee('Tu as un rendez-vous demain à 15h.') === 'Tu as un rendez-vous demain à 15h.'); }
-  verifie('charlySendMessage applique tcRemplacerAideFigee à la réponse du modèle avant de l afficher', /reply = tcRemplacerAideFigee\(reply(, text)?\);\s+const tempId = 'msg_' \+ Date\.now\(\);/.test(csm));
+  verifie('charlySendMessage applique tcRemplacerAideFigee à la réponse du modèle avant de l afficher', /reply = tcRemplacerAideFigee\(reply(, text)?\);\s+(\/\/[^\n]*\n\s*const _minuitInvente = [^\n]*\n\s*if \(_minuitInvente\) [^\n]*\n\s*)?const tempId = 'msg_' \+ Date\.now\(\);/.test(csm));
   verifie('« Mets Paul de côté » n’est plus une annulation sans cible (le classement demande ce qu’il veut dire, mission 55) ; « rdv annulé », « Je vais pas y aller », « j’y vais pas » non plus (annulation douteuse, mission 53)', !ctx.tcDetecterSuppressionSansCible('Mets Paul de côté') && ['rdv annulé', 'Je vais pas y aller', 'j’y vais pas'].every((p) => !ctx.tcDetecterSuppressionSansCible(p)), ['rdv annulé', 'Je vais pas y aller', 'j’y vais pas', 'Mets Paul de côté'].map((p) => ctx.tcDetecterSuppressionSansCible(p)).join(' '));
   verifie('« je peux plus aller au dentiste lundi » → information d annulation ciblée (« dentiste lundi »)', ctx.tcDetecterInfoAnnulation('je peux plus aller au dentiste lundi') === 'dentiste lundi' && ctx.tcDetecterInfoAnnulation('je ne pourrai pas venir au rdv de mardi') === 'mardi');
   ctx.charlyIA.history = []; vm.runInContext('_tcSuppressionEnAttente = null;', ctx);
@@ -1997,16 +1997,25 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
       && r1.der.content === 'Hugo Besnard : 0655507777, hugo@exemple.fr, Mon travail' && r1.der.nature === 'reponse' && !r1.der._ficheAttente
       && r2.der.content === 'Gaëlle Perrin : 0655509999' && (h2.match(/data-notranslate/g) || []).length === 2, h2);
 
-    // 4. Plusieurs fiches : une carte par fiche, 5 au plus, « Lequel ? », la réponse choisit.
+    // 4. Plusieurs fiches : une carte par fiche, 10 au plus (mission 99), « Lequel ? », la réponse choisit.
     const r3 = fiches('retrouve Paul');
     const h3 = ctx.tcRendreFiches(r3.der);
     ctx.contactsList = carnet().concat([1, 2, 3, 4, 5].map((i) => ({ id: 'x' + i, name: 'Paul Numero' + i })));
     ctx.charlyIA.history = [];
     ctx.tcGererFicheContact('retrouve Paul', ctx.tcDetecterFicheContact('retrouve Paul'));
     const r4 = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
-    verifie('deux Paul : deux cartes numérotées puis « Lequel ? » ; sept Paul : « Tu as 7 contacts à ce nom. Voici les 5 plus probables : », 5 cartes',
+    verifie('deux Paul : deux cartes numérotées puis « Lequel ? » ; sept Paul : « Tu as 7 contacts à ce nom : », les 7 cartes (mission 99)',
       (h3.match(/Ouvrir la fiche/g) || []).length === 2 && /1\. Paul Fictif/.test(h3) && /Lequel \?/.test(h3) && r3.der.nature === 'question'
-      && r4._fiches.ids.length === 5 && /^Tu as 7 contacts à ce nom\. Voici les 5 plus probables :/.test(r4.content), r4.content);
+      && r4._fiches.ids.length === 7 && !r4._fiches.voir && /^Tu as 7 contacts à ce nom :/.test(r4.content), r4.content);
+    ctx.contactsList = carnet().concat([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => ({ id: 'x' + i, name: 'Paul Numero' + i })));
+    ctx.charlyIA.history = [];
+    ctx.tcGererFicheContact('retrouve Paul', ctx.tcDetecterFicheContact('retrouve Paul'));
+    const r12 = ctx.charlyIA.history[ctx.charlyIA.history.length - 1];
+    const h12 = ctx.tcRendreFiches(r12);
+    verifie('douze Paul : « Tu as 12 contacts à ce nom. Voici les 10 premiers : », 10 cartes, puis « Voir les 12 » (mission 99)',
+      r12._fiches.ids.length === 10 && r12._fiches.voir && r12._fiches.voir.ids.length === 12 && /^Tu as 12 contacts à ce nom\. Voici les 10 premiers :/.test(r12.content)
+      && (h12.match(/Ouvrir la fiche/g) || []).length === 10 && /Voir les 12<\/button>/.test(h12), r12.content);
+    ctx.contactsList = carnet().concat([1, 2, 3, 4, 5].map((i) => ({ id: 'x' + i, name: 'Paul Numero' + i })));
     const choix = (rep) => { const a = fiches('retrouve Paul'); const pris = ctx.tcRepondreFicheContact(rep); const der = ctx.charlyIA.history[ctx.charlyIA.history.length - 1]; return { pris, ids: der._fiches ? der._fiches.ids.join() : '', c: der.content }; };
     const c2 = choix('2'), cn = choix('Martin'), cd = choix('le deuxième'), cp = choix('la première'), c9 = choix('annule mon rdv'), cnon = choix('non');
     const finChoix = (fiches('retrouve Paul'), ctx.charlyIA.history.push({ role: 'user', content: 'autre' }), ctx.tcRepondreFicheContact('2'));
