@@ -35,21 +35,39 @@ verifie('aucune réponse ne promet la lecture des photos', !/Charly lit la date 
 verifie('la réponse « photo » de la base d aide (96) dit ce que le code fait aujourd hui', /id: 'photo'[\s\S]{0,700}Charly ne sait pas encore lire les photos/.test(page) && !/Prends en photo une invitation ou un papier : Charly lit la date/.test(page));
 
 // ── Les fonctions, exécutées ──
-const ctx = { console, Set, Math, JSON, Array, Object, String, document: { getElementById: (id) => (id === 'tcFicheHotline' && m ? { textContent: m[1] } : null) }, TC_AIDE: [{ q: 'aide 96', a: 'réponse 96' }] };
+const ctx = { console, Set, Math, JSON, Array, Object, String, document: { getElementById: (id) => (id === 'tcFicheHotline' && m ? { textContent: m[1] } : null) }, userAccount: { firstname: 'Charles' }, TC_AIDE: [{ q: 'aide 96', a: 'réponse 96' }] };
 vm.createContext(ctx);
 try {
-  vm.runInContext([constante('TC_HOTLINE_FIN'), constante('TC_HOTLINE_DESOLE'), constante('TC_HOTLINE_MOTS_VIDES'), 'var _tcFicheHotline = null;',
+  vm.runInContext([constante('TC_HOTLINE_FIN'), constante('TC_HOTLINE_DESOLE'), constante('TC_HOTLINE_TANT_MIEUX'), fonction('tcCavaHotline'), fonction('tcReponseCavaHotline'), constante('TC_HOTLINE_MOTS_VIDES'), 'var _tcFicheHotline = null;',
     ...['tcSansAccents', 'tcPhraseHotline', 'tcMotsHotline', 'tcFicheHotline', 'tcChercherFicheHotline', 'tcReponseDirecteHotline', 'tcSocialHotline', 'tcConsigneConvCharly'].map(fonction)].join('\n'), ctx);
 } catch (e) { verifie('les fonctions se chargent', false, e.message); }
 const appel = (code) => { try { return vm.runInContext(code, ctx); } catch (e) { return 'erreur ' + e.message; } };
 
 const social = (t) => appel('tcSocialHotline(' + JSON.stringify(t) + ')');
 const FIN = 'Pose-moi ta question sur TimeCool.';
-[['Salut comment ca va ?', 'Très bien, merci !'], ['Bonjour', 'Bonjour !'], ['Bonsoir Charly', 'Bonjour !'], ['Merci beaucoup', 'Avec plaisir !'],
+[['Bonjour', 'Bonjour !'], ['Bonsoir Charly', 'Bonjour !'], ['Merci beaucoup', 'Avec plaisir !'],
  ['Au revoir', 'À bientôt !'], ['Tu es un robot ?', 'intelligence artificielle'], ['T’es humain ?', 'intelligence artificielle'], ['Qui es-tu ?', 'Charly']].forEach(([q, debut]) => {
   const r = social(q);
   verifie('« ' + q + ' » : réponse courte et aimable, puis « ' + FIN + ' »', typeof r === 'string' && r.includes(debut) && r.endsWith(FIN) && !/Je ne sais pas encore/.test(r), r);
 });
+// Mission 105 (Charles, 16/11) : « Ça va ? » reçoit « Très bien, merci Charles ! 😊 Et toi, ça va ? », avec le prénom du compte.
+['Ça va ?', 'comment ça va ?', 'salut ça va', 'tu vas bien ?', 'Salut comment ca va ?', 'Ca va'].forEach((q) => {
+  verifie('« ' + q + ' » : « Très bien, merci Charles ! 😊 Et toi, ça va ? »', social(q) === 'Très bien, merci Charles ! 😊 Et toi, ça va ?', social(q));
+});
+ctx.userAccount = { firstname: '' };
+verifie('sans prénom : « Très bien, merci ! 😊 Et toi, ça va ? »', social('Ça va ?') === 'Très bien, merci ! 😊 Et toi, ça va ?', social('Ça va ?'));
+ctx.userAccount = { firstname: 'Charles' };
+const cava = (t) => appel('tcReponseCavaHotline(' + JSON.stringify(t) + ')');
+['oui', 'Oui ça va', 'bien', 'super', 'très bien et toi ?', 'ça va merci', 'pas mal', 'nickel'].forEach((q) => {
+  verifie('après « Et toi, ça va ? », « ' + q + ' » : « Tant mieux ! Pose-moi ta question sur TimeCool. »', cava(q) === 'Tant mieux ! Pose-moi ta question sur TimeCool.', cava(q));
+});
+['non', 'bof', 'pas trop', 'ça va pas', 'pas du tout', 'mal'].forEach((q) => {
+  verifie('après « Et toi, ça va ? », « ' + q + ' » : « Mince. Dis-moi ce qui ne va pas avec TimeCool, je t’aide. »', cava(q) === 'Mince. Dis-moi ce qui ne va pas avec TimeCool, je t’aide.', cava(q));
+});
+['Comment je change la langue ?', 'oui, comment j’ajoute un contact ?', 'Annule mon dentiste demain'].forEach((q) => {
+  verifie('après « Et toi, ça va ? », « ' + q + ' » : traitement normal', cava(q) === null, cava(q));
+});
+verifie('« Ok super merci » (remarque de la 104) : « Avec plaisir ! 😊 », sans le modèle', /^Avec plaisir ! /.test(social('Ok super merci') || ''), social('Ok super merci'));
 // Examen : un mécontentement n'est jamais une politesse gaie.
 ['Ça va pas', 'Ça va pas du tout', 'Pas super', 'Pas top'].forEach((q) => {
   const r = social(q);
@@ -79,6 +97,7 @@ const consigne = appel('tcConsigneConvCharly("Comment je passe en mode sombre ?"
 verifie('la consigne du modèle porte les entrées proches du manuel (12 au plus)', typeof consigne === 'string' && /Sombre/.test(consigne) && (consigne.match(/\n- /g) || []).length <= 12, (consigne.match(/\n- /g) || []).length);
 verifie('la consigne : une question (même sur l agenda, un retard) reçoit une réponse, jamais [PAGE_CHARLY]', /reçoit une réponse, jamais \[PAGE_CHARLY\]/.test(consigne));
 verifie('la consigne : jamais où sont gardées les données', /Ne dis jamais où sont gardées les données/.test(consigne));
+verifie('la consigne : le vocabulaire calme (« prendre rendez-vous directement »)', /écris « prendre rendez-vous directement », avec ces mots-là/.test(consigne));
 verifie('la fiche n est lue qu une fois, à la première question', /function tcFicheHotline\(\) \{\s*if \(_tcFicheHotline\) return _tcFicheHotline;/.test(page));
 
 // L'ordre dans la conversation d'aide.
@@ -89,5 +108,11 @@ verifie('la base d aide (96) ne répond plus avant la fiche dans la hotline (ses
 verifie('« Tu fais quoi » (que des petits mots) trouve sa réponse mot pour mot', appel('(tcReponseDirecteHotline("Tu fais quoi") || {}).id') === 'Q1.4');
 verifie('« je trouve pas mes contacts » : l entrée « Mes contacts », pas une autre qui partage ses mots forts', appel('(tcReponseDirecteHotline("je trouve pas mes contacts") || {}).id') === 'Q5.1');
 
+// Mission 105 : les cinq exemples (textes validés), touchables, une seule fois par fil.
+verifie('les cinq exemples, mot pour mot', /const TC_HOTLINE_EXEMPLES_INTRO = 'Je peux t’expliquer comment faire dans TimeCool\. Par exemple :';/.test(page)
+  && ['changer la langue', 'régler tes notifications', 'ajouter un contact', 'changer le message envoyé en cas de retard', 'relier ton agenda Google'].every((x) => page.includes("['" + x + "', ")));
+const exemples = (page.match(/const TC_HOTLINE_EXEMPLES = \[([\s\S]*?)\n\];/) || [])[1] || '';
+const questions = (exemples.match(/, '([^']+)'\]/g) || []).map((x) => x.slice(3, -2));
+verifie('chaque exemple touché trouve sa réponse dans la fiche, sans le modèle', questions.length === 5 && questions.every((q) => typeof appel('(tcReponseDirecteHotline(' + JSON.stringify(q) + ') || {}).id') === 'string' && /^Q/.test(appel('(tcReponseDirecteHotline(' + JSON.stringify(q) + ') || {}).id'))), JSON.stringify(questions.map((q) => appel('(tcReponseDirecteHotline(' + JSON.stringify(q) + ') || {}).id'))));
 console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');
 process.exit(ko ? 1 : 0);

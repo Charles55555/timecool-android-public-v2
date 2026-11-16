@@ -17,7 +17,7 @@ verifie('la conversation d aide a sa propre clé sur l appareil (pas celle de la
 verifie('la page Charly IA n a plus de mode « conversation » (mission 100 retirée)', !/tc-charly-conv|tc-nom-conv|_tcCharlyEnConv|_tcPileConv/.test(page) && page.includes('<div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">'));
 verifie('fond bleu ciel, en clair et en sombre', /'--tc-charly-ligne':'#cdeafc'/.test(page) && /'--tc-charly-ligne':'#b9dff7'/.test(page) && /#msgCharly, #msgCharly:hover \{ background:var\(--tc-charly-ligne/.test(page));
 verifie('le modèle ne lit que les 10 derniers messages de la conversation d aide, 100 gardés', /const TC_CONV_CHARLY_MAX = 100;/.test(page) && /const TC_CONV_CHARLY_MODELE_MAX = 10;/.test(page));
-verifie('aucune carte de rendez-vous dans la conversation d aide : les blocs [AGENDA] du modèle sont retirés', /function tcEnvoyerConvCharly[\s\S]{0,3000}replace\(\/\\\[AGENDA\\\]/.test(page));
+verifie('aucune carte de rendez-vous dans la conversation d aide : les blocs [AGENDA] du modèle sont retirés', /function tcEnvoyerConvCharly[\s\S]{0,6000}replace\(\/\\\[AGENDA\\\]/.test(page));
 
 titre('Dans la vraie page (Chrome)');
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
@@ -54,8 +54,11 @@ if (!exe) {
       res.vide = body().innerText;
       envoyer('Comment changer la langue ?', function () {
         res.aide = body().innerText; res.modeleAide = window.__modele.length;
+        // Mission 105 : au premier message, les cinq exemples touchables, après la réponse.
+        res.exemples1 = Array.prototype.map.call(body().querySelectorAll('.tc-aide-exemple'), function (b) { return b.innerText; });
         envoyer('Dentiste demain à 15h', function () {
           res.agendaTexte = body().innerText;
+          res.exemples2 = body().querySelectorAll('.tc-aide-exemple').length;   // toujours un seul bloc d'exemples
           res.agendaBouton = Array.prototype.some.call(body().querySelectorAll('button'), function (b) { return b.textContent === 'Ouvrir Charly IA'; });
           res.modeleAgenda = window.__modele.length;
           res.pageIntacte = charlyIA.history.length === 2;
@@ -109,6 +112,17 @@ if (!exe) {
                           'Préviens Paul que j’aurai 10 minutes de retard', 'Trouve-moi un créneau jeudi avec Paul', 'Dentiste demain à 15h'].filter(function (q) { return !tcDemandeAgendaConvCharly(q); });
                         // Mission 104 : « Salut comment ca va ? » (essai de Charles) : une réponse aimable, jamais « Je ne sais pas encore répondre ».
                         res.salut = typeof tcSocialHotline === 'function' ? tcSocialHotline('Salut comment ca va ?') : null;
+                        // Mission 105 : toucher un exemple pose sa question ; un compte qui a déjà un fil reçoit les exemples à son prochain message, une fois.
+                        _tcConvCharly = [{ from: 'me', text: 'Ancienne question', time: '09:00' }, { from: 'charly', text: 'Ancienne réponse', time: '09:00' }];
+                        tcSauverConvCharly();
+                        try { localStorage.removeItem('timecool_charly_aide_exemples'); } catch (e) {}
+                        res.apercuAvantExemples = tcApercuCharly();
+                        tcExempleHotline(0);
+                        var f2 = tcFilConvCharly();
+                        res.exempleTouche = [f2[2] && f2[2].text, f2[3] && f2[3].fiche, f2.filter(function (m) { return m.exemples; }).length];
+                        res.apercuApresExemples = tcApercuCharly();
+                        tcExempleHotline(2);
+                        res.exemplesUneFois = tcFilConvCharly().filter(function (m) { return m.exemples; }).length;
                         // Examen : le ménage du compte vide aussi le fil en mémoire (le compte suivant ne le récupère pas).
                         tcViderDonneesDuCompte();
                         res.apresMenage = [tcFilConvCharly().length, tcApercuCharly(), localStorage.getItem('timecool_charly_aide')];
@@ -145,12 +159,17 @@ if (!exe) {
   verifie('le modèle qui répond [PAGE_CHARLY] : la même phrase et le bouton', R.pageCharlyModele === 2, R.pageCharlyModele);
   verifie('une carte écrite par le modèle n apparaît jamais : la phrase et le bouton à la place', R.sansCarte === true && /Pour ton agenda/.test(R.apercu || ''), R.apercu);
   verifie('la flèche ramène à la messagerie ; l aperçu montre le dernier message de cette conversation', R.retourMessagerie === true && R.apercu.length > 0 && !/Je te propose/.test(R.apercu), JSON.stringify([R.retourMessagerie, R.apercu]));
-  verifie('le fil reste sur l appareil et se relit en rouvrant', R.gardes === 10 && R.apercuRelu === R.apercu && R.reluConv === true, JSON.stringify([R.gardes, R.apercuRelu, R.reluConv]));
+  verifie('le fil reste sur l appareil et se relit en rouvrant', R.gardes === 11 && R.apercuRelu === R.apercu && R.reluConv === true, JSON.stringify([R.gardes, R.apercuRelu, R.reluConv]));
   verifie('« Ouvrir Charly IA » : la page Charly IA, comme avant, avec son histoire à elle', R.surPageCharly === true && R.pageHisto === true && R.pageBoutons === true, JSON.stringify([R.surPageCharly, R.pageHisto, R.pageBoutons]));
   verifie('100 messages gardés, 10 envoyés au modèle', R.gardes100 === 100 && R.auModele === 10, JSON.stringify([R.gardes100, R.auModele]));
   verifie('une vraie question sur l appli (« Ça sert à quoi la fiche contact ? », « …je dois faire quoi ? »…) reçoit une réponse, pas la page Charly IA', Array.isArray(R.questionsAgenda) && R.questionsAgenda.length === 0, JSON.stringify(R.questionsAgenda));
   verifie('une vraie demande (« Ajoute dentiste mardi 10h », « Je suis malade »…) va à la page Charly IA', Array.isArray(R.demandesRatees) && R.demandesRatees.length === 0, JSON.stringify(R.demandesRatees));
-  verifie('« Salut comment ca va ? » : réponse aimable puis « Pose-moi ta question sur TimeCool. » (mission 104)', /^Très bien, merci ! .* Pose-moi ta question sur TimeCool\.$/.test(R.salut || ''), R.salut);
+  verifie('« Salut comment ca va ? » : « Très bien, merci Charles ! 😊 Et toi, ça va ? » (missions 104, 105)', R.salut === 'Très bien, merci Charles ! 😊 Et toi, ça va ?', R.salut);
+  verifie('premier message : la réponse, puis les cinq exemples (mission 105, textes validés)', JSON.stringify(R.exemples1) === JSON.stringify(['changer la langue', 'régler tes notifications', 'ajouter un contact', 'changer le message envoyé en cas de retard', 'relier ton agenda Google']), JSON.stringify(R.exemples1));
+  verifie('les exemples ne reviennent pas aux messages suivants', R.exemples2 === 5, R.exemples2);
+  verifie('un compte qui a déjà un fil : toucher « changer la langue » pose « Comment changer la langue ? », répondu par la fiche, puis les exemples une fois', Array.isArray(R.exempleTouche) && R.exempleTouche[0] === 'Comment changer la langue ?' && R.exempleTouche[1] === 'Q2.7' && R.exempleTouche[2] === 1, JSON.stringify(R.exempleTouche));
+  verifie('un seul bloc d exemples par fil, même après un autre exemple touché', R.exemplesUneFois === 1, R.exemplesUneFois);
+  verifie('l aperçu de la ligne montre la vraie réponse, jamais les exemples', R.apercuAvantExemples === 'Ancienne réponse' && /^Ouvre le menu/.test(R.apercuApresExemples || ''), JSON.stringify([R.apercuAvantExemples, R.apercuApresExemples]));
   verifie('le ménage du compte vide aussi la conversation d aide en mémoire', Array.isArray(R.apresMenage) && R.apresMenage[0] === 0 && R.apresMenage[1] === '' && R.apresMenage[2] === null, JSON.stringify(R.apresMenage));
 }
 console.log('');
