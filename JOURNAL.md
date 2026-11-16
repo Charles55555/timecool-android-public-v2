@@ -3474,3 +3474,4 @@ Chef, 16/11 (Charles : « une messagerie indépendante de la page charly … com
 - Ligne sur fond bleu ciel (#cdeafc ; #b9dff7 en sombre, où les lignes de la messagerie restent claires), toujours en tête ; aperçu = dernier message de cette conversation.
 - La page Charly IA redevient celle d'avant la 100 (plus de mode « conversation », plus de pile qui retient son allure).
 - Suites : verif-charly-conversation réécrite (Chrome sur le PC ; échoue sur la page d'avant), verif-aide-charly suit la nouvelle ouverture. verifier.sh vert.
+- Examen (EXAMINATEUR) : le ménage du compte vide aussi le fil d'aide en mémoire (sinon le compte suivant le récupérait, comme en campagne 10) ; une vraie question sur l'appli (« Ça sert à quoi la fiche contact ? », « TimeCool marche le dimanche ? ») va au modèle : seule une demande d'action (ajoute, annule, décale…), un jour ou une heure sans « ? », ou « je suis malade » va à la page Charly IA. Contrôles ajoutés.

@@ -98,6 +98,13 @@ if (!exe) {
                       envoyer('Est-ce que je peux changer le fond ?', function () {
                         var mm = window.__modele[0] || [];
                         res.auModele = mm.slice(1).filter(function (x) { return x.content !== '(début de la conversation)'; }).length;
+                        // Examen : les vraies questions sur l'appli vont au modèle ; les vraies demandes à la page Charly IA.
+                        res.questionsAgenda = ['Est-ce que TimeCool synchronise mon agenda Google ?', 'Ça sert à quoi la fiche contact ?', 'Le rappel arrive combien de temps avant le rendez-vous ?',
+                          'TimeCool marche le dimanche ?', 'Quelle est la différence entre agenda perso et pro ?'].filter(function (q) { return tcDemandeAgendaConvCharly(q); });
+                        res.demandesRatees = ['Ajoute dentiste mardi 10h', 'Annule mon rendez-vous de demain', 'Je suis malade', 'Retrouve le numéro de Paul', 'Peux-tu décaler mon rdv de jeudi ?'].filter(function (q) { return !tcDemandeAgendaConvCharly(q); });
+                        // Examen : le ménage du compte vide aussi le fil en mémoire (le compte suivant ne le récupère pas).
+                        tcViderDonneesDuCompte();
+                        res.apresMenage = [tcFilConvCharly().length, tcApercuCharly(), localStorage.getItem('timecool_charly_aide')];
                         var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre);
                       });
                     }, 400);
@@ -134,6 +141,9 @@ if (!exe) {
   verifie('le fil reste sur l appareil et se relit en rouvrant', R.gardes === 10 && R.apercuRelu === R.apercu && R.reluConv === true, JSON.stringify([R.gardes, R.apercuRelu, R.reluConv]));
   verifie('« Ouvrir Charly IA » : la page Charly IA, comme avant, avec son histoire à elle', R.surPageCharly === true && R.pageHisto === true && R.pageBoutons === true, JSON.stringify([R.surPageCharly, R.pageHisto, R.pageBoutons]));
   verifie('100 messages gardés, 10 envoyés au modèle', R.gardes100 === 100 && R.auModele === 10, JSON.stringify([R.gardes100, R.auModele]));
+  verifie('une vraie question sur l appli (« Ça sert à quoi la fiche contact ? »…) va au modèle, pas à la page Charly IA', Array.isArray(R.questionsAgenda) && R.questionsAgenda.length === 0, JSON.stringify(R.questionsAgenda));
+  verifie('une vraie demande (« Ajoute dentiste mardi 10h », « Je suis malade »…) va à la page Charly IA', Array.isArray(R.demandesRatees) && R.demandesRatees.length === 0, JSON.stringify(R.demandesRatees));
+  verifie('le ménage du compte vide aussi la conversation d aide en mémoire', Array.isArray(R.apresMenage) && R.apresMenage[0] === 0 && R.apresMenage[1] === '' && R.apresMenage[2] === null, JSON.stringify(R.apresMenage));
 }
 console.log('');
 console.log(ko + ' anomalie(s).');

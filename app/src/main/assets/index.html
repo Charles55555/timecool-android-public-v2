@@ -7441,10 +7441,15 @@ function tcOuvrirConvCharly() {
  *  Une question « comment… » reste une question d'aide (« Comment je décale un rendez-vous ? »). */
 function tcDemandeAgendaConvCharly(text) {
   const brut = String(text || '').trim();
-  const t = tcSansAccents(brut).toLowerCase().replace(/[’'«»"]/g, ' ').replace(/\s+/g, ' ').trim();
+  const t = tcSansAccents(brut).toLowerCase().replace(/[’'«»"]/g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t) return false;
-  if (/^(comment|c est quoi|qu est ce|ou |a quoi|pourquoi|je n arrive pas|j arrive pas|je ne trouve pas|je trouve pas|je ne sais pas|je sais pas|est ce que (je|on) peu|peut on|puis je|on fait comment|je fais comment|aide moi a|explique)/.test(t)) return false;
   if (typeof tcDetecterMalade === 'function' && tcDetecterMalade(brut)) return true;
+  // Une question sur l'appli (« comment… », « ça sert à quoi… », « est-ce que… », « quel… ») : le modèle, qui a [PAGE_CHARLY] pour trancher.
+  if (/^(comment|c est quoi|qu est ce|ou |a quoi|ca sert a quoi|sert a quoi|pourquoi|quand|combien|quel|quels|quelle|quelles|est ce que|est ce qu|je n arrive pas|j arrive pas|je ne trouve pas|je trouve pas|je ne sais pas|je sais pas|peut on|puis je|on fait comment|je fais comment|aide moi a|explique)\b/.test(t)) return false;
+  // Une phrase qui finit par « ? » sans verbe d'action (ajoute, annule, décale…) : aussi une question pour le modèle.
+  const action = /\b(ajoute|ajouter|ajoutes|annule|annuler|annules|decale|decaler|decales|deplace|deplacer|deplaces|reporte|reporter|cree|creer|crees|note|noter|programme|programmer|reserve|reserver|previens|prevenir|retrouve|retrouver|cherche|chercher|mets|mettre|supprime|supprimer|efface|effacer|bloque|bloquer)\b/.test(t);
+  if (/\?\s*$/.test(brut) && !action) return false;
+  if (action) return true;
   if (/\b(rdv|rendez vous|rendez-vous|reunion|creneau|agenda|planning|annule|annuler|decale|decaler|deplace|deplacer|reporte|reporter|retard|ajoute|ajouter|cree|creer|note|noter|programme|programmer|reserve|reserver|previens|prevenir|retrouve|retrouver|cherche|chercher|contact|fiche|malade)\b/.test(t)) return true;
   if (typeof tcHeureDansTexte === 'function' && tcHeureDansTexte(brut.toLowerCase())) return true;
   if (typeof tcJoursCites === 'function' && tcJoursCites(brut, new Date()).length) return true;
@@ -7501,7 +7506,7 @@ async function tcEnvoyerConvCharly(txt) {
   reponse = reponse.replace(/\[AGENDA\][\s\S]*?(\[\/AGENDA\]|$)/g, '').trim();
   if (/\[PAGE_CHARLY\]/.test(reponse) || _carte) tcAjouterConvCharly('charly', TC_CONV_CHARLY_AGENDA, { bouton: 'charly' });
   else if (/\[JE_NE_SAIS_PAS\]/.test(reponse)) tcAjouterConvCharly('charly', TC_CONV_CHARLY_INCONNU);
-  else tcAjouterConvCharly('charly', reponse.replace(/\[[A-Z_]+\]/g, '').trim() || TC_CONV_CHARLY_PANNE);
+  else tcAjouterConvCharly('charly', reponse.replace(/\[[A-Z_]+\]/g, '').replace(/[ \t]{2,}/g, ' ').trim() || TC_CONV_CHARLY_PANNE);
   if (currentPage === 'conv' && _currentConvId === TC_CONV_CHARLY_ID) tcOuvrirConvCharly();
   else if (currentPage === 'messages' && typeof renderMessages === 'function') renderMessages();
 }
@@ -34425,6 +34430,8 @@ function tcViderDonneesDuCompte() {
   tasksList = [];
   birthdays = [];
   if (typeof contactsList !== 'undefined') contactsList = [];
+  // Mission 102 : la conversation d'aide en mémoire (sa clé est déjà effacée plus haut).
+  if (typeof _tcConvCharly !== 'undefined') { _tcConvCharly = null; _tcConvCharlyEnvois = 0; _tcConvCharlyAttente = false; }
   messages = { user: [], pro: [] };
   // Les convocations des groupes appartiennent aussi au compte (mission 27c) : la synchro du compte suivant rapporte les siennes.
   if (typeof groupConvocations !== 'undefined') groupConvocations = [];
