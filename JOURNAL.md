@@ -3452,3 +3452,13 @@ Chef, 16/11 (validé par Charles : « Je veux faire comme WhatsApp »).
 - Même moteur, même fil : les réponses d'aide (mission 96), les fiches, les cartes et leurs boutons marchent comme sur la page ; une seule histoire avec Charly (charlyIA.history, gardée sur l'appareil, les 10 derniers messages comme avant). Une flèche retour depuis une fiche ramène à la conversation, puis à la messagerie.
 - La ligne reste en tête de la messagerie ; son aperçu montre le dernier message (sans carte ni balise ; l'accueil automatique ne compte pas), sinon la phrase de la mission 96. Conversation vide : cette même phrase.
 - API non touchée. Suite verif-charly-conversation (nouvelle ; Chrome sur le PC). verifier.sh vert.
+
+## 16/11/2026 : mission 101, l'histoire avec Charly garde 100 messages
+
+Chef, 16/11 (Charles : « comme WhatsApp »). Rien ne change à l'écran.
+- L'appareil garde les 100 derniers messages avec Charly (TC_CHARLY_HISTORIQUE_MAX, 10 avant) ; le modèle n'en lit que les 10 derniers (TC_CHARLY_MODELE_MAX, dans tcHistoriquePourIA ; les bulles d'application ne comptent pas). Avant, il lisait toute la conversation de la session.
+- La limite de 50 messages par session ne compte plus les messages relus de l'appareil (marque _relu, jamais enregistrée) : sinon, avec 100 messages gardés, Charly aurait refusé d'écrire dès l'ouverture.
+- Fluidité : 100 messages avec fiches et cartes, 3 316 contacts : la conversation se dessine en 2 à 10 ms (Chrome, temps réel, comme avec 10 messages).
+- Remarque de la 100 : la pile des écrans retient l'allure de la page de Charly (_tcPileConv) ; page de Charly → messagerie → ligne → flèche → flèche rend la page d'origine.
+- Remarque de la 99 : tcDetecterNomSeul cherche les contacts avant de parcourir les rendez-vous (même résultat).
+- Suites : verif-historique-charly (100 gardés, 10 au modèle, limite) et verif-charly-conversation (double retour, 100 messages) ; échouent sur la page d'avant. verifier.sh vert.

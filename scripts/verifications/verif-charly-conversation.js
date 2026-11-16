@@ -77,7 +77,37 @@ if (!exe) {
                   navigate('calendar'); navigate('assistant');
                   setTimeout(function () {
                     res.pageNormale = pa.classList.contains('active') && !pa.classList.contains('tc-charly-conv') && vu('charlyQuickActions') && vu('charlyResetBtn') && /Charly IA/.test((pa.querySelector('.conv-name') || {}).innerText || '');
-                    var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre);
+                    // Mission 101 : page de Charly -> messagerie -> ligne -> flèche -> flèche : la page retrouve son allure d'origine.
+                    navigate('messages');
+                    document.getElementById('msgCharly').click();
+                    setTimeout(function () {
+                      res.doubleConv = pa.classList.contains('tc-charly-conv');
+                      tcRetour();
+                      setTimeout(function () {
+                        res.doubleMessagerie = document.getElementById('page-messages').classList.contains('active');
+                        tcRetour();
+                        setTimeout(function () {
+                          res.doublePage = pa.classList.contains('active') && !pa.classList.contains('tc-charly-conv') && vu('charlyQuickActions') && vu('charlyResetBtn');
+                          // Mission 101 : 100 messages avec des fiches et des cartes, la conversation s'ouvre vite.
+                          var h = [];
+                          for (var i = 0; i < 50; i++) {
+                            h.push({ role: 'user', content: 'Message ' + i });
+                            h.push(i % 3 === 0 ? { role: 'assistant', content: 'Voici les contacts à ce nom :', _fiches: { ids: ['w1', 'w2'] } }
+                              : (i % 3 === 1 ? { role: 'assistant', content: 'Je te propose :\\n[AGENDA]{"title":"Dentiste","date":"2026-11-20","time":"15:00","duration":30}[/AGENDA]', tempId: 't' + i }
+                              : { role: 'assistant', content: 'Réponse ' + i }));
+                          }
+                          charlyIA.history = h;
+                          tcSauverHistoriqueCharly();
+                          res.gardes = JSON.parse(localStorage.getItem('timecool_charly_historique') || '[]').length;
+                          navigate('messages');
+                          var t0 = performance.now();
+                          renderCharlyChat();
+                          res.msRendu = Math.round(performance.now() - t0);
+                          res.bulles = document.getElementById('charlyChatBody').children.length;
+                          var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre);
+                        }, 300);
+                      }, 300);
+                    }, 300);
                   }, 300);
                 }, 300);
               }, 300);
@@ -106,6 +136,10 @@ if (!exe) {
   verifie('la ligne de Charly reste en tête ; son aperçu montre le dernier message', R.premier === 'msgCharly' && /contacts à ce nom/.test(R.apercu || ''), JSON.stringify([R.premier, R.apercu]));
   verifie('l histoire reste sur l appareil : aperçu et échanges relus en rouvrant', /contacts à ce nom/.test(R.apercuApresRechargement || '') && R.historiqueRelu === true, JSON.stringify([R.apercuApresRechargement, R.historiqueRelu]));
   verifie('ouverte autrement, la page de Charly est comme avant (boutons, « Recommencer », « Charly IA »)', R.pageNormale === true, JSON.stringify(R.pageNormale));
+  verifie('page de Charly -> messagerie -> ligne -> flèche -> flèche : la page retrouve son allure d origine (mission 101)', R.doubleConv === true && R.doubleMessagerie === true && R.doublePage === true, JSON.stringify([R.doubleConv, R.doubleMessagerie, R.doublePage]));
+  verifie('100 messages gardés sur l appareil (mission 101)', R.gardes === 100, R.gardes);
+  // Le temps se mesure hors de cette suite (temps virtuel de Chrome) : 2 à 10 ms pour 100 messages et 3 316 contacts, le 16/11.
+  verifie('100 messages avec fiches et cartes : les 100 bulles se dessinent', R.bulles >= 100, JSON.stringify([R.bulles, R.msRendu]));
 }
 console.log('');
 console.log(ko + ' anomalie(s).');

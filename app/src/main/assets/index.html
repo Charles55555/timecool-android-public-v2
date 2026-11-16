@@ -10427,6 +10427,9 @@ let _tcPagePrecedente = 'calendar';   // le sommet de la pile : la derniere page
 const TC_PILE_MAX = 10;
 let _tcPileEcrans = [];
 let _tcRetourEnCours = false;
+/* Mission 101 : pour chaque écran de la pile, la page de Charly était-elle en conversation ? Un retour lui rend son allure. */
+let _tcPileConv = [];
+let _tcRetourConvCharly = null;
 
 /** Retient l'ecran que l'on quitte pour aller vers `vers`. */
 function tcNoterDepart(vers) {
@@ -10434,9 +10437,14 @@ function tcNoterDepart(vers) {
   const quittee = (typeof currentPage === 'string') ? currentPage : '';
   if (!quittee || quittee === vers || quittee === 'conv') return;
   if (typeof document !== 'undefined' && !document.getElementById('page-' + quittee)) return;
+  const _pa = quittee === 'assistant' && typeof document !== 'undefined' ? document.getElementById('page-assistant') : null;
+  const conv = !!(_pa && _pa.classList && _pa.classList.contains('tc-charly-conv'));
   if (_tcPileEcrans[_tcPileEcrans.length - 1] !== quittee) {
     _tcPileEcrans.push(quittee);
-    if (_tcPileEcrans.length > TC_PILE_MAX) _tcPileEcrans.shift();
+    _tcPileConv.push(conv);
+    if (_tcPileEcrans.length > TC_PILE_MAX) { _tcPileEcrans.shift(); _tcPileConv.shift(); }
+  } else {
+    _tcPileConv[_tcPileEcrans.length - 1] = conv;
   }
   _tcPagePrecedente = quittee;
 }
@@ -10447,8 +10455,10 @@ function tcNoterDepart(vers) {
  */
 function tcRetour() {
   let cible = 'calendar';
+  let conv = null;
   while (_tcPileEcrans.length) {
     const p = _tcPileEcrans.pop();
+    conv = _tcPileConv.length ? !!_tcPileConv.pop() : null;
     if (p === currentPage) continue;   // on y est deja : on remonte d'un cran de plus
     cible = (typeof document === 'undefined' || document.getElementById('page-' + p)) ? p : 'calendar';
     break;
@@ -10456,7 +10466,8 @@ function tcRetour() {
   _tcPagePrecedente = _tcPileEcrans.length ? _tcPileEcrans[_tcPileEcrans.length - 1] : 'calendar';
   // Revenir en arriere n'empile pas l'ecran que l'on quitte : sinon la fleche ferait des allers-retours.
   _tcRetourEnCours = true;
-  try { navigate(cible); } finally { _tcRetourEnCours = false; }
+  _tcRetourConvCharly = cible === 'assistant' ? conv : null;
+  try { navigate(cible); } finally { _tcRetourEnCours = false; _tcRetourConvCharly = null; }
 }
 
 /**
@@ -11788,16 +11799,19 @@ function addDemarche(d) {
 /* La conversation, gardee sur l'appareil. Pas de prefixe « tc_ » :
    la synchronisation ignore cette cle, et ne la purge pas. */
 const TC_CHARLY_HISTORIQUE_CLE = 'timecool_charly_historique';
-const TC_CHARLY_HISTORIQUE_MAX = 10;
+/* Mission 101 (Charles : « comme WhatsApp ») : les 100 derniers messages restent sur l'appareil ;
+   seuls les 10 derniers partent au modèle (TC_CHARLY_MODELE_MAX, tcHistoriquePourIA). */
+const TC_CHARLY_HISTORIQUE_MAX = 100;
+const TC_CHARLY_MODELE_MAX = 10;
 
-/** Les dix derniers echanges, sans ce qui ne se rejoue pas (boutons d'un conflit). */
+/** Les cent derniers echanges, sans ce qui ne se rejoue pas (boutons d'un conflit). */
 function tcSauverHistoriqueCharly() {
   try {
     const liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
       .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system_info'); })
       .slice(-TC_CHARLY_HISTORIQUE_MAX);
     localStorage.setItem(TC_CHARLY_HISTORIQUE_CLE, JSON.stringify(liste, function (k, v) {
-      return (k === 'conflictData' || k === 'touches') ? undefined : v;
+      return (k === 'conflictData' || k === 'touches' || k === '_relu') ? undefined : v;
     }));
   } catch (e) {}
 }
@@ -11810,7 +11824,8 @@ function tcChargerHistoriqueCharly() {
   try {
     const brut = localStorage.getItem(TC_CHARLY_HISTORIQUE_CLE);
     const liste = brut ? JSON.parse(brut) : null;
-    if (Array.isArray(liste) && liste.length) charlyIA.history = liste;
+    // Relus de l'appareil : ils ne comptent pas dans la limite de messages de la session (mission 101).
+    if (Array.isArray(liste) && liste.length) charlyIA.history = liste.map(function (m) { if (m && typeof m === 'object') m._relu = true; return m; });
   } catch (e) {}
 }
 
@@ -11820,7 +11835,7 @@ function tcEffacerHistoriqueCharly() {
 }
 
 function renderCharlyChat() {
-  // A chaque affichage, les dix derniers messages sont enregistres :
+  // A chaque affichage, les cent derniers messages sont enregistres :
   // tout ce qui change la conversation finit par un affichage.
   tcChargerHistoriqueCharly();
   tcSauverHistoriqueCharly();
@@ -15384,6 +15399,8 @@ function tcHistoriquePourIA() {
     // Les bulles d application (accueil, « C'est noté », question de suite remise par la page) ne partent pas :
     // le modele les prenait pour ses propres mots et les recopiait (mission 34).
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && !m.appText && !m._app)
+    // Mission 101 : l'appareil garde 100 messages, le modèle n'en lit que les 10 derniers.
+    .slice(-(typeof TC_CHARLY_MODELE_MAX !== 'undefined' ? TC_CHARLY_MODELE_MAX : 10))
     .map(m => ({
       role: m.role,
       // Seules les cartes VALIDEES sont effacees : leurs rendez-vous sont
@@ -15911,7 +15928,7 @@ async function charlySendMessage() {
     showToast('⚠️ Charly n’est pas encore prêt sur cet appareil. Réessaie dans un instant.');
     return;
   }
-  if (charlyIA.history.filter(m => m.role==='user').length >= charlyIA.config.maxMessages) {
+  if (charlyIA.history.filter(m => m.role==='user' && !m._relu).length >= charlyIA.config.maxMessages) {
     showToast('⚠️ Limite de messages atteinte pour cette session');
     return;
   }
@@ -17249,7 +17266,10 @@ navigate = function(page) {
   else if (page === 'assistant') {
     // Mission 100 : en conversation si l'on vient de la ligne de la messagerie ; un retour (flèche) garde l'allure d'avant.
     const pa = document.getElementById('page-assistant');
-    if (pa && !(typeof _tcRetourEnCours !== 'undefined' && _tcRetourEnCours)) pa.classList.toggle('tc-charly-conv', typeof _tcCharlyEnConv !== 'undefined' && !!_tcCharlyEnConv);
+    const _retour = typeof _tcRetourEnCours !== 'undefined' && _tcRetourEnCours;
+    if (pa && !_retour) pa.classList.toggle('tc-charly-conv', typeof _tcCharlyEnConv !== 'undefined' && !!_tcCharlyEnConv);
+    // Mission 101 : la flèche rend à la page l'allure qu'elle avait quand on l'a quittée.
+    else if (pa && typeof _tcRetourConvCharly !== 'undefined' && _tcRetourConvCharly !== null) pa.classList.toggle('tc-charly-conv', !!_tcRetourConvCharly);
     if (typeof _tcCharlyEnConv !== 'undefined') _tcCharlyEnConv = false;
     setTimeout(() => renderCharlyChat(), 50);
   }
@@ -25258,10 +25278,11 @@ function tcDetecterNomSeul(text) {
   if (tcUneQuestionAttend() || (typeof tcPropositionEnAttente === 'function' && tcPropositionEnAttente()) || (typeof tcConflitEnAttente === 'function' && tcConflitEnAttente())) return null;
   // Le titre d'un de ses rendez-vous : c'est de lui qu'on parle, pas d'un contact.
   const dansMots = function (texte) { const t = ' ' + tcClasseNormaliser(texte) + ' '; return mots.every(function (w) { return t.indexOf(' ' + w + ' ') > -1; }); };
-  if ((Array.isArray(events) ? events : []).some(function (e) { return e && !tcEstDemonstration(e) && dansMots(e.title || ''); })) return null;
   const fiches = tcContactsParMots(mots);
   // Au moins une fiche porte ces mots en entier (« Will » ne suffit pas, « William » oui).
   if (!fiches.some(function (c) { return dansMots(c.name || ''); })) return null;
+  // Les rendez-vous ensuite : on ne les parcourt que si un contact porte le nom (mission 101).
+  if ((Array.isArray(events) ? events : []).some(function (e) { return e && !tcEstDemonstration(e) && dansMots(e.title || ''); })) return null;
   return { nom: nom, affiche: tcFicheNomTape(brut, nom), fiches: fiches };
 }
 

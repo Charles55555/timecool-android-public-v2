@@ -2,7 +2,7 @@
 //
 // Elle n'etait enregistree nulle part, et la connexion la vidait expres.
 // Charles, 04/10 : « Ne plus vider jamais les echanges avec charly et
-// garder les 10 derniers messages ».
+// garder les 10 derniers messages ». Mission 101 (16/11, « comme WhatsApp ») : 100 gardes, 10 envoyes au modele.
 //
 // On execute les vraies fonctions sur un faux stockage, et on verifie
 // dans la source que plus rien ne vide la conversation sauf le bouton
@@ -58,14 +58,14 @@ vm.createContext(ctx);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
 
-titre('Dix messages, pas un de plus, les derniers');
+titre('Cent messages, pas un de plus, les derniers (mission 101)');
 {
   ctx.charlyIA.history = [];
-  for (let i = 1; i <= 25; i++) ctx.charlyIA.history.push({ role: i % 2 ? 'user' : 'assistant', content: 'message ' + i });
+  for (let i = 1; i <= 125; i++) ctx.charlyIA.history.push({ role: i % 2 ? 'user' : 'assistant', content: 'message ' + i });
   ctx.tcSauverHistoriqueCharly();
   const garde = JSON.parse(memoire[ctx.TC_CHARLY_HISTORIQUE_CLE]);
-  verifie('dix messages enregistres', garde.length === 10, 'trouve ' + garde.length);
-  verifie('ce sont les dix derniers, dans l ordre', garde[0].content === 'message 16' && garde[9].content === 'message 25');
+  verifie('cent messages enregistres', garde.length === 100, 'trouve ' + garde.length);
+  verifie('ce sont les cent derniers, dans l ordre', garde[0].content === 'message 26' && garde[99].content === 'message 125');
   verifie('la cle n a pas le prefixe tc_ (ni synchronisee ni purgee)', !/^tc_/.test(ctx.TC_CHARLY_HISTORIQUE_CLE), ctx.TC_CHARLY_HISTORIQUE_CLE);
 }
 
@@ -73,9 +73,28 @@ titre('Ce qui revient apres une mise a jour');
 {
   ctx.charlyIA = { history: [] };           // la page repart a zero
   ctx.tcChargerHistoriqueCharly();
-  verifie('la conversation revient', ctx.charlyIA.history.length === 10);
-  verifie('avec son contenu', ctx.charlyIA.history[9].content === 'message 25');
-  verifie('une seule fois : un second chargement ne double rien', (ctx.tcChargerHistoriqueCharly(), ctx.charlyIA.history.length === 10));
+  verifie('la conversation revient', ctx.charlyIA.history.length === 100);
+  verifie('avec son contenu', (ctx.charlyIA.history[99] || {}).content === 'message 125');
+  verifie('une seule fois : un second chargement ne double rien', (ctx.tcChargerHistoriqueCharly(), ctx.charlyIA.history.length === 100));
+  verifie('les messages relus sont marques : ils ne comptent pas dans la limite de la session', ctx.charlyIA.history.every((m) => m._relu === true));
+  ctx.tcSauverHistoriqueCharly();
+  verifie('la marque ne s enregistre pas', JSON.parse(memoire[ctx.TC_CHARLY_HISTORIQUE_CLE]).every((m) => !('_relu' in m)));
+  verifie('la limite de la session ne compte que les messages tapes depuis l ouverture', /filter\(m => m\.role==='user' && !m\._relu\)\.length >= charlyIA\.config\.maxMessages/.test(page));
+}
+
+titre('Le modele ne lit que les dix derniers (mission 101)');
+{
+  const src = extraire('tcHistoriquePourIA');
+  const c2 = { String, Array, charlyIA: { history: [] } };
+  vm.createContext(c2);
+  const cst = extraireConst('TC_CHARLY_MODELE_MAX');
+  if (cst) vm.runInContext(cst.replace('const ', 'var '), c2);
+  if (src) vm.runInContext(src, c2);
+  for (let i = 1; i <= 100; i++) c2.charlyIA.history.push({ role: i % 2 ? 'user' : 'assistant', content: 'message ' + i });
+  c2.charlyIA.history.push({ role: 'assistant', _app: true, content: 'bulle d application' });
+  const envoye = src && cst ? c2.tcHistoriquePourIA() : [];
+  verifie('dix messages partent au modele', envoye.length === 10, 'trouve ' + envoye.length);
+  verifie('ce sont les dix derniers (les bulles d application ne comptent pas)', envoye.length === 10 && envoye[0].content === 'message 91' && envoye[9].content === 'message 100', JSON.stringify(envoye.slice(0, 1)));
 }
 
 titre('Une conversation en cours n est pas ecrasee par l enregistrement');
