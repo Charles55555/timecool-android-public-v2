@@ -3484,3 +3484,15 @@ Chef, 16/11 (validé par Charles : il voyait encore des comptes de test dans « 
 - Fiche de « Utilisateurs » : bouton « 🧪 Ranger dans Tests » sous la rangée Bloquer / Supprimer (inchangée) ; dans « Tests », « ↩️ Remettre dans Utilisateurs » pour un compte rangé à la main, rien pour un compte reconnu par son adresse. Pas de bouton sur sa propre fiche. Référence nettoyée (mission 98).
 - Classement d'affichage : aucun droit, aucune donnée du compte, ni la purge (scripts/purger-comptes-test.sh ne lit que l'adresse) ni comptes-test-a-garder.txt ne changent. Compteurs, tris, export CSV suivent l'onglet (97).
 - Suite verif-admin-ranger-tests (nouvelle, page + API + migration ; échoue sur la version d'avant). verifier.sh vert.
+
+## 16/11/2026 : mission 104, le manuel branché sur la hotline « Charly, ton aide TimeCool »
+
+Chef, 16/11 (validé par Charles : « répondre à toutes les questions techniques » ; essais de 13h : « Salut comment ca va ? » → « Je ne sais pas encore répondre », une question sur le mot d'excuse renvoyée à tort vers Charly IA).
+- Fiche de l'adjointe (MANUEL-UTILISATEUR/hotline, 278 questions) relue dans le code : 154 entrées à vérifier → 113 gardées, 40 corrigées, 1 exclue (où sont gardées les données, gardé pour Charles) ; ajout « lien public » (« Cette fonction n'existe pas dans TimeCool. ») ; vocabulaire calme appliqué.
+- La fiche vit dans la page, en bloc de données (script type application/json, 124 Ko, ~36 Ko compressés), jamais lue au chargement : tcFicheHotline() la lit à la première question (31 ms), une recherche prend 0,13 ms.
+- Ordre de la hotline : politesses (tcSocialHotline : réponse courte puis « Pose-moi ta question sur TimeCool. ») → base d'aide (96) → vraie demande d'action → question écrite comme dans la fiche (tcReponseDirecteHotline, sans le modèle) → modèle avec les 12 entrées les plus proches (tcChercherFicheHotline).
+- Renvoi vers Charly IA (tcDemandeAgendaConvCharly) : impératif (« Annule… », « Préviens… »), demande polie (« Peux-tu décaler… »), « je suis malade », ou un rendez-vous et un moment (« Dentiste demain à 15h ») ; une question ou un infinitif seul (« Créer un compte ») reçoit une réponse.
+- Réponse « photo » de la base d'aide corrigée : Charly ne lit pas encore les photos (ce que fait le code).
+- API (remarques de l'examen de la 103) : POST /admin/ranger-tests répond ok quand l'état voulu est déjà là ; apostrophe du message 503 ; commentaire Twilio remis à sa place.
+- Banc des 100 questions d'essai, vrai modèle, copie de la page (compte de test) : 100/100 avec la fiche (16/100 avant ; 85/100 si tout passe par le modèle ; jugé sur les 5 critères de l adjointe). Fichiers du banc : m71/m104 sur le PC du CODEUR.
+- Suites : verif-hotline-manuel (nouvelle, échoue sur la page d'avant), verif-charly-conversation complétée. verifier.sh vert.

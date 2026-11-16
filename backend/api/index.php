@@ -399,7 +399,6 @@ function cleDuService(int $compteId, string $service): ?string
 const SMS_PREFIXES_DEFAUT = ['+336', '+337', '+262', '+590', '+594', '+596', '+508', '+681', '+687', '+689',
     '+32', '+41', '+352', '+377', '+49', '+34', '+39', '+351', '+31', '+44', '+1'];
 
-/** Les identifiants Twilio : ceux de l'administrateur (Configuration IA), sinon config.php ; null si rien n'est posé. */
 /** Mission 103 : la colonne comptes.range_tests_le existe-t-elle (migration 020 jouée) ? Lu une fois par requête. */
 function colonneRangeTests(): bool
 {
@@ -412,6 +411,7 @@ function colonneRangeTests(): bool
     return $oui;
 }
 
+/** Les identifiants Twilio : ceux de l'administrateur (Configuration IA), sinon config.php ; null si rien n'est posé. */
 function smsIdentifiants(): ?array
 {
     $lire = static function (string $service): ?string {
@@ -5100,17 +5100,18 @@ switch ($route) {
             Rep::erreur(400, 'champ_manquant', 'Champ tests attendu : true ou false.');
         }
         if (!colonneRangeTests()) {
-            Rep::erreur(503, 'migration_manquante', 'Le rangement des comptes de test n est pas encore installé sur le serveur.');
+            Rep::erreur(503, 'migration_manquante', 'Le rangement des comptes de test n’est pas encore installé sur le serveur.');
         }
-        $maj = Db::req(
+        // Examen de la 103 : déjà dans l état voulu (un autre administrateur l a rangé), c est ok ; seul un compte inconnu est une erreur.
+        if (Db::un('SELECT id FROM comptes WHERE reference = ?', [$ref]) === null) {
+            Rep::erreur(404, 'compte_introuvable', 'Compte inconnu.');
+        }
+        Db::req(
             $tests
                 ? 'UPDATE comptes SET range_tests_le = NOW() WHERE reference = ? AND range_tests_le IS NULL'
                 : 'UPDATE comptes SET range_tests_le = NULL WHERE reference = ? AND range_tests_le IS NOT NULL',
             [$ref]
         );
-        if ($maj->rowCount() === 0) {
-            Rep::erreur(404, 'compte_introuvable', 'Compte inconnu, ou déjà dans cet état.');
-        }
         Rep::ok(['tests' => $tests]);
 
     // ═══════════════════════════════════════════════════════════

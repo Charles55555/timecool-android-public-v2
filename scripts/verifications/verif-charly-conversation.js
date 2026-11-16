@@ -100,8 +100,14 @@ if (!exe) {
                         res.auModele = mm.slice(1).filter(function (x) { return x.content !== '(début de la conversation)'; }).length;
                         // Examen : les vraies questions sur l'appli vont au modèle ; les vraies demandes à la page Charly IA.
                         res.questionsAgenda = ['Est-ce que TimeCool synchronise mon agenda Google ?', 'Ça sert à quoi la fiche contact ?', 'Le rappel arrive combien de temps avant le rendez-vous ?',
-                          'TimeCool marche le dimanche ?', 'Quelle est la différence entre agenda perso et pro ?'].filter(function (q) { return tcDemandeAgendaConvCharly(q); });
-                        res.demandesRatees = ['Ajoute dentiste mardi 10h', 'Annule mon rendez-vous de demain', 'Je suis malade', 'Retrouve le numéro de Paul', 'Peux-tu décaler mon rdv de jeudi ?'].filter(function (q) { return !tcDemandeAgendaConvCharly(q); });
+                          'TimeCool marche le dimanche ?', 'Quelle est la différence entre agenda perso et pro ?',
+                          // Mission 104 : les essais de Charles (16/11, 13h) et les règles du chef.
+                          'Et si je veux changer le mot d’excuse que tu vas envoyer en cas de retard je dois faire quoi ?', 'Où je vois mes rendez-vous de demain',
+                          'Comment je préviens un contact de mon retard', 'Le bouton Supprimer ne marche pas ?', 'Je veux changer la photo de ma fiche contact', 'Est-ce que je peux annuler un rendez-vous jeudi ?'].filter(function (q) { return tcDemandeAgendaConvCharly(q); });
+                        res.demandesRatees = ['Ajoute dentiste mardi 10h', 'Annule mon rendez-vous de demain', 'Je suis malade', 'Retrouve le numéro de Paul', 'Peux-tu décaler mon rdv de jeudi ?',
+                          'Préviens Paul que j’aurai 10 minutes de retard', 'Trouve-moi un créneau jeudi avec Paul', 'Dentiste demain à 15h'].filter(function (q) { return !tcDemandeAgendaConvCharly(q); });
+                        // Mission 104 : « Salut comment ca va ? » (essai de Charles) : une réponse aimable, jamais « Je ne sais pas encore répondre ».
+                        res.salut = typeof tcSocialHotline === 'function' ? tcSocialHotline('Salut comment ca va ?') : null;
                         // Examen : le ménage du compte vide aussi le fil en mémoire (le compte suivant ne le récupère pas).
                         tcViderDonneesDuCompte();
                         res.apresMenage = [tcFilConvCharly().length, tcApercuCharly(), localStorage.getItem('timecool_charly_aide')];
@@ -141,8 +147,9 @@ if (!exe) {
   verifie('le fil reste sur l appareil et se relit en rouvrant', R.gardes === 10 && R.apercuRelu === R.apercu && R.reluConv === true, JSON.stringify([R.gardes, R.apercuRelu, R.reluConv]));
   verifie('« Ouvrir Charly IA » : la page Charly IA, comme avant, avec son histoire à elle', R.surPageCharly === true && R.pageHisto === true && R.pageBoutons === true, JSON.stringify([R.surPageCharly, R.pageHisto, R.pageBoutons]));
   verifie('100 messages gardés, 10 envoyés au modèle', R.gardes100 === 100 && R.auModele === 10, JSON.stringify([R.gardes100, R.auModele]));
-  verifie('une vraie question sur l appli (« Ça sert à quoi la fiche contact ? »…) va au modèle, pas à la page Charly IA', Array.isArray(R.questionsAgenda) && R.questionsAgenda.length === 0, JSON.stringify(R.questionsAgenda));
+  verifie('une vraie question sur l appli (« Ça sert à quoi la fiche contact ? », « …je dois faire quoi ? »…) reçoit une réponse, pas la page Charly IA', Array.isArray(R.questionsAgenda) && R.questionsAgenda.length === 0, JSON.stringify(R.questionsAgenda));
   verifie('une vraie demande (« Ajoute dentiste mardi 10h », « Je suis malade »…) va à la page Charly IA', Array.isArray(R.demandesRatees) && R.demandesRatees.length === 0, JSON.stringify(R.demandesRatees));
+  verifie('« Salut comment ca va ? » : réponse aimable puis « Pose-moi ta question sur TimeCool. » (mission 104)', /^Très bien, merci ! .* Pose-moi ta question sur TimeCool\.$/.test(R.salut || ''), R.salut);
   verifie('le ménage du compte vide aussi la conversation d aide en mémoire', Array.isArray(R.apresMenage) && R.apresMenage[0] === 0 && R.apresMenage[1] === '' && R.apresMenage[2] === null, JSON.stringify(R.apresMenage));
 }
 console.log('');
