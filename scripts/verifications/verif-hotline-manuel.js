@@ -38,7 +38,7 @@ verifie('la réponse « photo » de la base d aide (96) dit ce que le code fait 
 const ctx = { console, Set, Math, JSON, Array, Object, String, document: { getElementById: (id) => (id === 'tcFicheHotline' && m ? { textContent: m[1] } : null) }, TC_AIDE: [{ q: 'aide 96', a: 'réponse 96' }] };
 vm.createContext(ctx);
 try {
-  vm.runInContext([constante('TC_HOTLINE_FIN'), constante('TC_HOTLINE_MOTS_VIDES'), 'var _tcFicheHotline = null;',
+  vm.runInContext([constante('TC_HOTLINE_FIN'), constante('TC_HOTLINE_DESOLE'), constante('TC_HOTLINE_MOTS_VIDES'), 'var _tcFicheHotline = null;',
     ...['tcSansAccents', 'tcPhraseHotline', 'tcMotsHotline', 'tcFicheHotline', 'tcChercherFicheHotline', 'tcReponseDirecteHotline', 'tcSocialHotline', 'tcConsigneConvCharly'].map(fonction)].join('\n'), ctx);
 } catch (e) { verifie('les fonctions se chargent', false, e.message); }
 const appel = (code) => { try { return vm.runInContext(code, ctx); } catch (e) { return 'erreur ' + e.message; } };
@@ -49,6 +49,11 @@ const FIN = 'Pose-moi ta question sur TimeCool.';
  ['Au revoir', 'À bientôt !'], ['Tu es un robot ?', 'intelligence artificielle'], ['T’es humain ?', 'intelligence artificielle'], ['Qui es-tu ?', 'Charly']].forEach(([q, debut]) => {
   const r = social(q);
   verifie('« ' + q + ' » : réponse courte et aimable, puis « ' + FIN + ' »', typeof r === 'string' && r.includes(debut) && r.endsWith(FIN) && !/Je ne sais pas encore/.test(r), r);
+});
+// Examen : un mécontentement n'est jamais une politesse gaie.
+['Ça va pas', 'Ça va pas du tout', 'Pas super', 'Pas top'].forEach((q) => {
+  const r = social(q);
+  verifie('« ' + q + ' » : « Mince. Dis-moi ce qui ne va pas avec TimeCool, je t’aide. », jamais une réponse gaie', r === 'Mince. Dis-moi ce qui ne va pas avec TimeCool, je t’aide.', r);
 });
 ['Salut, comment je change la langue ?', 'Merci, et comment je supprime un contact ?', 'Bonjour, je veux importer mon agenda'].forEach((q) => {
   verifie('« ' + q + ' » : une vraie question derrière la politesse, pas seulement « bonjour »', social(q) === null, social(q));
@@ -61,6 +66,9 @@ verifie('la question de la fiche, telle quelle, trouve son entrée', directe(e0[
 verifie('une autre façon de la poser aussi (majuscules, accents, ponctuation à part)', directe(e0[2][1].toUpperCase() + ' ?') === e0[0], e0[2][1] + ' → ' + directe(e0[2][1]));
 verifie('une question hors fiche ne trouve rien sans le modèle', directe('Quelle est la recette des crêpes ?') === undefined);
 
+// Chef, 16/11 : le prix avec les mots du site ; « Tu peux supprimer mon compte ? » reçoit le chemin dans Paramètres (Charly ne supprime jamais un compte).
+verifie('« Ça coûte combien » : « Oui, TimeCool est gratuit. Aucune carte bancaire ne te sera demandée. »', appel('(tcReponseDirecteHotline("Ça coûte combien") || {}).r') === 'Oui, TimeCool est gratuit. Aucune carte bancaire ne te sera demandée.');
+verifie('« Tu peux supprimer mon compte ? » : la réponse de la fiche (Paramètres), sans le modèle', appel('(tcReponseDirecteHotline("Tu peux supprimer mon compte ?") || {}).id') === 'Q10.31');
 // Le modèle reçoit les entrées les plus proches.
 const proches = (t) => appel('tcChercherFicheHotline(' + JSON.stringify(t) + ', 12).map(function (e) { return e.id; })');
 const contient = (q, re) => { const ids = proches(q); const textes = (Array.isArray(ids) ? ids : []).map((id) => (fiche.find((e) => e[0] === id) || [])[3] || ''); return textes.slice(0, 5).some((t) => re.test(t)); };

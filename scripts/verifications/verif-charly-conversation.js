@@ -103,7 +103,8 @@ if (!exe) {
                           'TimeCool marche le dimanche ?', 'Quelle est la différence entre agenda perso et pro ?',
                           // Mission 104 : les essais de Charles (16/11, 13h) et les règles du chef.
                           'Et si je veux changer le mot d’excuse que tu vas envoyer en cas de retard je dois faire quoi ?', 'Où je vois mes rendez-vous de demain',
-                          'Comment je préviens un contact de mon retard', 'Le bouton Supprimer ne marche pas ?', 'Je veux changer la photo de ma fiche contact', 'Est-ce que je peux annuler un rendez-vous jeudi ?'].filter(function (q) { return tcDemandeAgendaConvCharly(q); });
+                          'Comment je préviens un contact de mon retard', 'Le bouton Supprimer ne marche pas ?', 'Je veux changer la photo de ma fiche contact', 'Est-ce que je peux annuler un rendez-vous jeudi ?',
+                          'Tu peux supprimer mon compte ?', 'Peux-tu trouver le bouton pour la langue ?', 'Je ne vois plus mes rendez-vous de lundi'].filter(function (q) { return tcDemandeAgendaConvCharly(q); });
                         res.demandesRatees = ['Ajoute dentiste mardi 10h', 'Annule mon rendez-vous de demain', 'Je suis malade', 'Retrouve le numéro de Paul', 'Peux-tu décaler mon rdv de jeudi ?',
                           'Préviens Paul que j’aurai 10 minutes de retard', 'Trouve-moi un créneau jeudi avec Paul', 'Dentiste demain à 15h'].filter(function (q) { return !tcDemandeAgendaConvCharly(q); });
                         // Mission 104 : « Salut comment ca va ? » (essai de Charles) : une réponse aimable, jamais « Je ne sais pas encore répondre ».
