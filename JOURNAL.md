@@ -3416,3 +3416,13 @@ Chef, 15/11 (tranché ; liste de l'adjointe du 15/11, revue et vérifiée dans l
 - La page « Aide et commentaires » montre la même liste en tête, puis ses autres questions ; Google, rappels et créneaux libres gardent leur réponse de la page (page: false dans TC_AIDE).
 - Ma messagerie sécurisée : « Charly, ton aide TimeCool » toujours en tête (« Une question ? Demande-moi : « Comment changer la langue ? » ») ; ce n'est pas une conversation (ni supprimable, ni archivable, jamais dans les non-lus) ; un toucher ouvre Charly IA, la flèche retour ramène à la messagerie.
 - Suite verif-aide-charly (nouvelle ; Chrome sur le PC) ; messagerie-recherche et messagerie-texte connaissent la ligne de Charly. verifier.sh vert.
+
+## 16/11/2026 : mission 97, page administrateur : onglet « Tests »
+
+Chef, 16/11 (validé par Charles : il ne distinguait pas les comptes des testeurs des vrais inscrits).
+- Mode Administrateur : un troisième onglet « 🧪 Tests », à droite de « Utilisateurs », même allure. Les trois onglets passent par tcOngletsAdmin (les deux bandeaux écrits à la main sont remplacés) ; ils tiennent sur une ligne à 390, 360 et 320 px (mesuré dans Chrome).
+- Compte de test = e-mail finissant par @exemple-timecool.fr : une seule règle, tcEstCompteTest, écrite une seule fois dans la page.
+- « Utilisateurs » : les autres comptes seulement ; « N utilisateurs enregistrés » ne compte plus les comptes de test. « Tests » : mêmes cartes, tris et boutons ; titre « Comptes de test », compteur « N comptes de test ». Chaque onglet est numéroté de #1 à #N.
+- « Export CSV » exporte la liste de l'onglet ouvert (fichier TimeCool_Comptes_de_test_… pour « Tests »). Actualiser garde l'onglet ouvert.
+- Rangement à l'écran seulement : aucun compte modifié, aucun droit changé, API non touchée. Textes en français, comme toute la page administrateur (aucune de ses phrases n'est traduite).
+- Suite verif-admin-tests (nouvelle). verifier.sh vert.

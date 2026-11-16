@@ -10561,10 +10561,7 @@ function renderAIConfig() {
         <span style="font-size:14px; font-weight:600;">🔐 Mode Administrateur</span>
         <button onclick="exitAdminMode()" style="background:white; color:#1a73e8; border:none; border-radius:8px; padding:6px 14px; font-size:13px; font-weight:600; cursor:pointer;">🔒 Quitter</button>
       </div>
-      <div style="display:flex; gap:8px;">
-        <button onclick="adminShowTab('config')" id="adminTabConfig" style="flex:1; padding:8px; background:white; color:#1a73e8; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;">⚙️ Config IA</button>
-        <button onclick="adminShowTab('users')" id="adminTabUsers" style="flex:1; padding:8px; background:rgba(255,255,255,0.2); color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">👥 Utilisateurs</button>
-      </div>
+      ${tcOngletsAdmin('config')}
     </div>
   ` : '';
 
@@ -36176,9 +36173,39 @@ async function tcChargerUtilisateurs() {
 
 let _adminCurrentTab = 'config';
 
+/* Mission 97 (Charles, 16/11) : un compte de test est un compte dont l'e-mail finit par
+   @exemple-timecool.fr. La règle est écrite ici, et nulle part ailleurs dans la page. L'onglet
+   « Tests » est un rangement à l'écran : aucun compte n'est modifié, aucun droit ne change. */
+function tcEstCompteTest(u) {
+  return /@exemple-timecool\.fr$/.test(String((u && u.email) || '').trim().toLowerCase());
+}
+
+/** Les comptes de l'onglet ouvert : « Tests » ne montre que les comptes de test, « Utilisateurs » tous les autres. */
+function tcUsersDeLOnglet() {
+  const tests = _adminCurrentTab === 'tests';
+  return _tcUsersServeur.map(tcUserDepuisServeur)
+    .filter(u => tcEstCompteTest(u) === tests)
+    .map((u, k) => { u.id = k + 1; return u; });   // #1 à #N dans chaque onglet.
+}
+
+/** Les trois onglets du mode administrateur ; « actif » est en blanc. */
+function tcOngletsAdmin(actif) {
+  const onglets = [
+    { id: 'config', dom: 'adminTabConfig', texte: '⚙️ Config IA' },
+    { id: 'users',  dom: 'adminTabUsers',  texte: '👥 Utilisateurs' },
+    { id: 'tests',  dom: 'adminTabTests',  texte: '🧪 Tests' }
+  ];
+  return '<div style="display:flex; gap:4px;">' + onglets.map(o => {
+    const oui = o.id === actif;
+    return '<button onclick="adminShowTab(\'' + o.id + '\')" id="' + o.dom + '" style="flex:1 1 auto; min-width:0; padding:8px 4px; '
+      + (oui ? 'background:white; color:#1a73e8; font-weight:700;' : 'background:rgba(255,255,255,0.2); color:white; font-weight:600;')
+      + ' border:none; border-radius:8px; font-size:13px; white-space:nowrap; cursor:pointer;">' + o.texte + '</button>';
+  }).join('') + '</div>';
+}
+
 function adminShowTab(tab) {
-  _adminCurrentTab = tab === 'users' ? 'users' : 'config';
-  if (_adminCurrentTab === 'users') {
+  _adminCurrentTab = (tab === 'users' || tab === 'tests') ? tab : 'config';
+  if (_adminCurrentTab !== 'config') {
     tcChargerUtilisateurs();
   } else {
     renderAIConfig();
@@ -36189,7 +36216,7 @@ function adminShowTab(tab) {
 function refreshAiconfigPage() {
   const main = document.querySelector('#page-aiconfig .main');
   const scrollTop = main ? main.scrollTop : 0;
-  if (_adminCurrentTab === 'users') {
+  if (_adminCurrentTab !== 'config') {
     tcChargerUtilisateurs();
   } else {
     renderAIConfig();
@@ -36247,7 +36274,8 @@ function renderUsersTab() {
   const c = document.getElementById('aiconfigContent');
   if (!c) return;
 
-  const users = _tcUsersServeur.map(tcUserDepuisServeur);
+  const users = tcUsersDeLOnglet();
+  const tests = _adminCurrentTab === 'tests';
 
   const banner = window._adminAccess ? `
     <div style="background:#1a73e8; color:white; padding:12px 16px; border-radius:12px; margin-bottom:12px;">
@@ -36255,10 +36283,7 @@ function renderUsersTab() {
         <span style="font-size:14px; font-weight:600;">🔐 Mode Administrateur</span>
         <button onclick="exitAdminMode()" style="background:white; color:#1a73e8; border:none; border-radius:8px; padding:6px 14px; font-size:13px; font-weight:600; cursor:pointer;">🔒 Quitter</button>
       </div>
-      <div style="display:flex; gap:8px;">
-        <button onclick="adminShowTab('config')" style="flex:1; padding:8px; background:rgba(255,255,255,0.2); color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">⚙️ Config IA</button>
-        <button onclick="adminShowTab('users')" style="flex:1; padding:8px; background:white; color:#1a73e8; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;">👥 Utilisateurs</button>
-      </div>
+      ${tcOngletsAdmin(_adminCurrentTab)}
     </div>
   ` : '';
 
@@ -36272,7 +36297,7 @@ function renderUsersTab() {
         + 'La liste des inscrits est réservée au compte désigné sur le serveur.')
     : _tcUsersEtat === 'erreur' ? vide('❌ ' + escapeHTMLSafe(_tcUsersMessage)
         + '<br><span onclick="tcChargerUtilisateurs()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">Réessayer</span>')
-    : users.length === 0 ? vide('Aucun utilisateur inscrit pour le moment')
+    : users.length === 0 ? vide(tests ? 'Aucun compte de test pour le moment' : 'Aucun utilisateur inscrit pour le moment')
     : tcTrierUsers(users).map(u => {
         const d = new Date(u.registeredAt);
         const paris = tcDateHeureParis(d);
@@ -36313,7 +36338,7 @@ function renderUsersTab() {
   c.innerHTML = banner + `
     <div style="padding:0 0 8px;">
       <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px;">
-        <div style="font-size:18px; font-weight:700; color:#1a1a2e;">👥 Utilisateurs inscrits</div>
+        <div style="font-size:18px; font-weight:700; color:#1a1a2e;">${tests ? '🧪 Comptes de test' : '👥 Utilisateurs inscrits'}</div>
         <div style="display:flex; gap:6px; flex-shrink:0;">
           <button onclick="tcChargerUtilisateurs()" style="padding:8px 12px; background:#fff; color:#5f6368; border:1px solid #e8eaed; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">↻ Actualiser</button>
           <button onclick="exportUsersCsv()" style="padding:8px 12px; background:#e8f0fe; color:#1a73e8; border:1px solid #c6dafc; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">⬇️ Export CSV</button>
@@ -36321,7 +36346,9 @@ function renderUsersTab() {
       </div>
       <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">${
         _tcUsersEtat === 'pret'
-          ? users.length + ' utilisateur' + (users.length > 1 ? 's' : '') + ' enregistré' + (users.length > 1 ? 's' : '')
+          ? (tests
+              ? users.length + ' compte' + (users.length > 1 ? 's' : '') + ' de test'
+              : users.length + ' utilisateur' + (users.length > 1 ? 's' : '') + ' enregistré' + (users.length > 1 ? 's' : ''))
           : _tcUsersEtat === 'chargement' ? '…' : '—'
       }</div>
       ${_tcUsersEtat === 'pret' && users.length > 1 ? `
@@ -36349,8 +36376,10 @@ function renderUsersTab() {
  * corrompus.
  */
 async function exportUsersCsv() {
-  const users = _tcUsersServeur.map(tcUserDepuisServeur);
-  if (!users.length) { showToast('Aucun utilisateur à exporter'); return; }
+  // Mission 97 : la liste de l'onglet ouvert (« Utilisateurs » ou « Tests »).
+  const users = tcUsersDeLOnglet();
+  const tests = _adminCurrentTab === 'tests';
+  if (!users.length) { showToast(tests ? 'Aucun compte de test à exporter' : 'Aucun utilisateur à exporter'); return; }
 
   const echapperCsv = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const colonnes = ['Nom', 'Prénom', 'Email', 'Téléphone', 'Code postal', 'Ville', 'Provenance', 'Date d\'inscription'];
@@ -36373,8 +36402,8 @@ async function exportUsersCsv() {
 
   const contenu = '\uFEFF' + lignes.join('\r\n');
   const dateFichier = new Date().toISOString().slice(0, 10);
-  const ok = await tcTelechargerFichier('TimeCool_Utilisateurs_' + dateFichier + '.csv', contenu, 'text/csv');
-  showToast(ok ? '✅ Export CSV créé — ' + users.length + ' utilisateur(s)' : '❌ Échec de l\'export CSV');
+  const ok = await tcTelechargerFichier((tests ? 'TimeCool_Comptes_de_test_' : 'TimeCool_Utilisateurs_') + dateFichier + '.csv', contenu, 'text/csv');
+  showToast(ok ? '✅ Export CSV créé — ' + users.length + (tests ? ' compte(s) de test' : ' utilisateur(s)') : '❌ Échec de l\'export CSV');
 }
 
 
