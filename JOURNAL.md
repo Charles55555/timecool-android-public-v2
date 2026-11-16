@@ -3426,3 +3426,10 @@ Chef, 16/11 (validé par Charles : il ne distinguait pas les comptes des testeur
 - « Export CSV » exporte la liste de l'onglet ouvert (fichier TimeCool_Comptes_de_test_… pour « Tests »). Actualiser garde l'onglet ouvert.
 - Rangement à l'écran seulement : aucun compte modifié, aucun droit changé, API non touchée. Textes en français, comme toute la page administrateur (aucune de ses phrases n'est traduite).
 - Suite verif-admin-tests (nouvelle). verifier.sh vert.
+
+## 16/11/2026 : mission 98, page administrateur : robustesse des fiches
+
+Chef, 16/11 (rien ne change à l'écran).
+- Carte des comptes (onglets « Utilisateurs » et « Tests ») et export CSV de la page administrateur rendus plus robustes.
+- API : inscription et précision de provenance alignées sur les autres champs texte (backend/api/index.php, à déployer).
+- Suite verif-admin-champs (nouvelle). verifier.sh vert.

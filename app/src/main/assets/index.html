@@ -36299,6 +36299,9 @@ function renderUsersTab() {
         + '<br><span onclick="tcChargerUtilisateurs()" style="color:var(--g-blue); font-weight:600; cursor:pointer;">Réessayer</span>')
     : users.length === 0 ? vide(tests ? 'Aucun compte de test pour le moment' : 'Aucun utilisateur inscrit pour le moment')
     : tcTrierUsers(users).map(u => {
+        // Mission 98 : tout ce qui vient d'un compte passe par escapeHTMLSafe ; la référence ne garde que lettres et chiffres.
+        const h = escapeHTMLSafe;
+        const ref = String(u.reference || '').replace(/[^A-Za-z0-9_-]/g, '');
         const d = new Date(u.registeredAt);
         const paris = tcDateHeureParis(d);
         const dateStr = paris.date + ' ' + paris.heure;
@@ -36311,23 +36314,23 @@ function renderUsersTab() {
               ${u.admin ? '<span style="background:#fff4e0; color:#a56a00; font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px;">⭐ ADMIN</span>' : ''}
               <span style="font-size:11px; color:#9aa0a6;">${dateStr}</span>
             </div>
-            <div style="font-size:15px; font-weight:600; color:#1a1a2e; margin-bottom:4px;">${u.firstname} ${u.lastname}</div>
-            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📧 ${u.email || '—'}</div>
-            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📱 ${u.phone || '—'}</div>
-            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📍 ${u.zip ? (u.zip + ' ' + (u.city || '')).trim() : '<span style="opacity:.7;">Non renseigné</span>'}</div>
+            <div style="font-size:15px; font-weight:600; color:#1a1a2e; margin-bottom:4px;">${h(u.firstname)} ${h(u.lastname)}</div>
+            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📧 ${h(u.email) || '—'}</div>
+            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📱 ${h(u.phone) || '—'}</div>
+            <div style="font-size:13px; color:#5f6368; margin-bottom:2px;">📍 ${u.zip ? h((u.zip + ' ' + (u.city || '')).trim()) : '<span style="opacity:.7;">Non renseigné</span>'}</div>
             <div style="font-size:13px; color:#5f6368; margin-bottom:10px;">🧭 ${escapeHTMLSafe(tcLibelleProvenance(u))}</div>
             ${u.estMoi ? `
               <div style="text-align:center; padding:9px; background:#e8f0fe; color:#1a73e8; border-radius:8px; font-size:12.5px; font-weight:600;">C’est votre compte</div>
             ` : `
               <div style="display:flex; gap:8px;">
-                <button onclick="toggleBlockUser('${u.reference}', ${!u.blocked})" style="flex:1; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fef7f6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+                <button onclick="toggleBlockUser('${ref}', ${!u.blocked})" style="flex:1; padding:8px; background:${isBlocked ? '#e8f5e9' : '#fef7f6'}; color:${isBlocked ? '#2e7d32' : '#ea4335'}; border:1px solid ${isBlocked ? '#a8d5b0' : '#f5b8b3'}; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
                   ${isBlocked ? '✅ Débloquer' : '🚫 Bloquer'}
                 </button>
-                <button onclick="supprimerUtilisateur('${u.reference}')" style="flex:1; padding:8px; background:#fce8e6; color:#c5221f; border:1px solid #f5b8b3; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;">
+                <button onclick="supprimerUtilisateur('${ref}')" style="flex:1; padding:8px; background:#fce8e6; color:#c5221f; border:1px solid #f5b8b3; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;">
                   🗑️ Supprimer
                 </button>
               </div>
-              <div onclick="tcDesignerAdmin('${u.reference}', ${!u.admin})" style="text-align:center; margin-top:9px; font-size:12px; font-weight:600; color:${u.admin ? '#9aa0a6' : 'var(--g-blue)'}; cursor:pointer;">
+              <div onclick="tcDesignerAdmin('${ref}', ${!u.admin})" style="text-align:center; margin-top:9px; font-size:12px; font-weight:600; color:${u.admin ? '#9aa0a6' : 'var(--g-blue)'}; cursor:pointer;">
                 ${u.admin ? 'Retirer l’accès administrateur' : '⭐ Donner l’accès administrateur'}
               </div>
             `}
@@ -36381,7 +36384,13 @@ async function exportUsersCsv() {
   const tests = _adminCurrentTab === 'tests';
   if (!users.length) { showToast(tests ? 'Aucun compte de test à exporter' : 'Aucun utilisateur à exporter'); return; }
 
-  const echapperCsv = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  // Mission 98 : une case qui commence par = @ ou une tabulation, ou par + - suivi d'autre chose qu'un numéro,
+  // est précédée d'une apostrophe : le tableur l'affiche comme du texte, sans la calculer.
+  const echapperCsv = v => {
+    let t = String(v == null ? '' : v);
+    if (/^[=@\t\r]/.test(t) || /^[+\-](?![\d\s().]*$)/.test(t)) t = "'" + t;
+    return '"' + t.replace(/"/g, '""') + '"';
+  };
   const colonnes = ['Nom', 'Prénom', 'Email', 'Téléphone', 'Code postal', 'Ville', 'Provenance', 'Date d\'inscription'];
   const lignes = [colonnes.map(echapperCsv).join(';')];
 

@@ -3706,8 +3706,8 @@ switch ($route) {
             'mot_de_passe_hash'   => password_hash($motDePasse, algoMotDePasse()),
             'prenom'              => texteSur(Entree::requis('prenom', 100)),
             'nom'                 => texteSur((string) Entree::requis('nom', 100)),
-            'ville'               => Entree::requis('ville', 120),
-            'code_postal'         => Entree::requis('code_postal', 16),
+            'ville'               => texteSur(Entree::requis('ville', 120)),
+            'code_postal'         => texteSur(Entree::requis('code_postal', 16)),
             'pays'                => Entree::texte('pays', 2) ?? 'FR',
             'langue'              => Entree::texte('langue', 5) ?? 'fr',
             'fuseau'              => Entree::texte('fuseau', 64) ?? 'Europe/Paris',
@@ -6099,7 +6099,7 @@ switch ($route) {
             if (!is_string($detail)) {
                 Rep::erreur(400, 'detail_invalide', 'Précision invalide.');
             }
-            $detail = mb_substr(trim($detail), 0, 200);
+            $detail = mb_substr(texteSur($detail), 0, 200);
             if ($detail === '') {
                 $detail = null;
             }
