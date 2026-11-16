@@ -44,6 +44,7 @@ const m0 = (r, t) => { try { return vm.runInContext('tcCarteMinuitSansHeure', ct
 verifie('« William ayache » et une carte à 00:00 : question', m0(bloc('00:00-01:00'), 'William ayache') === true);
 verifie('« 0h », « minuit », « 00h30 » dans la phrase : la carte reste', m0(bloc('00:00-01:00'), 'fête à 0h') === false && m0(bloc('00:00-01:00'), 'fête à minuit') === false && m0(bloc('00:00-01:00'), 'fête à 00h') === false);
 verifie('une journée entière (00:00-23:59) : la carte reste', m0(bloc('00:00-23:59'), 'Vacances lundi') === false);
+verifie('« toute la journée » ou « journée entière » dans la phrase : la carte reste', m0(bloc('00:00-23:00'), 'salon demain toute la journée') === false && m0(bloc('00:00-23:00'), 'salon demain, journée entière') === false);
 verifie('une carte à 14h : la carte reste', m0(bloc('14:00-15:00'), 'William ayache') === false);
 verifie('sans carte : rien', m0('Bonjour', 'William') === false);
 
@@ -54,8 +55,8 @@ if (!exe) {
   console.log('  (non joué : pas de Chrome sur ce poste ; à rejouer avec TC_CHROME sur un poste qui en a un)');
 } else {
   const ESSAIS = [
-    ['bouton', 'William'], ['', 'William'], ['', 'william ayache'], ['', 'Hélène'], ['', 'helene'], ['', 'Sport'], ['', 'Super'], ['', 'Will'],
-    ['', 'Paul demain'], ['', 'Retrouve William'], ['bouton', 'Gaston'], ['question', 'William'], ['', 'Dentiste demain à 15h']
+    ['bouton', 'William'], ['', 'William'], ['', 'william ayache'], ['', 'Hélène'], ['', 'helene'], ['', 'Sport'], ['', 'Super'], ['', 'Golf'], ['', 'Will'],
+    ['', 'Paul demain'], ['', 'annule'], ['', 'rappel'], ['', 'Bureau'], ['', 'Retrouve William'], ['bouton', 'Gaston'], ['question', 'William'], ['', 'Dentiste demain à 15h']
   ];
   const js = `<script>window.addEventListener('load', function () { setTimeout(function () {
     document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
@@ -65,7 +66,8 @@ if (!exe) {
     contactsList = [];
     for (var i = 0; i < 3290; i++) contactsList.push({ id: 'k' + i, name: prenoms[i % 12] + ' ' + noms[(i * 7) % 10] + ' ' + i, phone: '06' + String(10000000 + i) });
     for (var j = 0; j < 25; j++) contactsList.push({ id: 'w' + j, name: 'William ' + (j === 0 ? 'Ayache' : noms[j % 10] + j), phone: '07' + String(10000000 + j) });
-    contactsList.push({ id: 'cs', name: 'Sport Club Lilas', phone: '0100000000' });
+    contactsList.push({ id: 'cs', name: 'Sport Club Lilas', phone: '0100000000' }, { id: 'an', name: 'Annie Annule' }, { id: 'ra', name: 'Rappel Auto' }, { id: 'bu', name: 'Bureau Vallée' }, { id: 'go', name: 'Golf Club' });
+    events.push({ id: 'g_golf', title: 'Golf', date: '2026-11-21', start: '10:00', end: '12:00' });
     events.push({ id: 'charly_ai_sport', mode: 'user', title: 'Sport', date: '2026-11-20', start: '18:00', end: '19:00' });
     window.__modele = 0;
     tcCharlyPret = function () { return true; };
@@ -100,6 +102,10 @@ if (!exe) {
         setTimeout(function () {
           res.pageContacts = document.querySelectorAll('[id^=ctFiche_]').length;
           res.recherche = contactsSearchQuery;
+          contactsSearchQuery = 'Willia'; renderContactsList();
+          contactsList.push({ id: 'wnew', name: 'William Nouveau' });
+          contactsSearchQuery = 'William'; renderContactsList();
+          res.apresChangement = document.querySelectorAll('[id^=ctFiche_]').length;
           var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre);
         }, 800);
       }, 1500); });
@@ -120,6 +126,9 @@ if (!exe) {
   verifie('« william ayache » : sa fiche, sans le modèle', e('william ayache').fiches === 1 && e('william ayache').modele === 0, JSON.stringify(e('william ayache')));
   verifie('« helene » sans accent et « Hélène » : les mêmes fiches', e('helene').voir > 10 && e('helene').voir === e('Hélène').voir, JSON.stringify([e('helene'), e('Hélène')]));
   verifie('« Sport », titre d un rendez-vous : pas de fiches', e('Sport').fiches === 0, JSON.stringify(e('Sport')));
+  verifie('« annule », « rappel », « Bureau » (mots courants, même portés par un contact) : pas de fiches', e('annule').fiches === 0 && e('rappel').fiches === 0 && e('Bureau').fiches === 0, JSON.stringify([e('annule'), e('rappel'), e('Bureau')]));
+  verifie('« Golf », titre d un rendez-vous importé : pas de fiches', e('Golf').fiches === 0, JSON.stringify(e('Golf')));
+  verifie('la recherche changée puis retapée : la liste de Charly est oubliée, le nouveau William apparaît', !!res && res.apresChangement === 26, JSON.stringify(res && res.apresChangement));
   verifie('« Super », « Will », « Paul demain » : pas de fiches', e('Super').fiches === 0 && e('Will').fiches === 0 && e('Paul demain').fiches === 0, JSON.stringify([e('Super'), e('Will'), e('Paul demain')]));
   verifie('« Retrouve William » : 10 fiches et « Voir les 25 »', e('Retrouve William').fiches === 10 && e('Retrouve William').voir === 25, JSON.stringify(e('Retrouve William')));
   verifie('après le bouton, « Gaston » absent du carnet : « Je ne trouve pas « Gaston » dans tes contacts. Tu veux l’ajouter ? »', e('Gaston', 'bouton').texte === 'Je ne trouve pas « Gaston » dans tes contacts. Tu veux l’ajouter ?', JSON.stringify(e('Gaston', 'bouton')));

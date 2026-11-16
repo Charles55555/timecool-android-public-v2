@@ -13263,7 +13263,7 @@ function tcCarteMinuitSansHeure(reply, texte) {
   const minuit = bloc[1].split('\n').some(function (l) { return /\|\s*0?0:00\s*-\s*(?!23:59)\d{1,2}:\d{2}\s*\|/.test(l); });
   if (!minuit) return false;
   const t = tcSansAccents(texte);
-  return !tcHeureDansTexte(t) && !/\bminuit\b/.test(t);
+  return !tcHeureDansTexte(t) && !/\bminuit\b/.test(t) && !/\b(toute la journee|journee entiere|jour entier|toute la journee)\b/.test(t);
 }
 
 function tcCorrigerPropositionsCharly(reply, texte, now) {
@@ -25210,10 +25210,12 @@ function tcDetecterNomSeul(text) {
   const nom = tcClasseNormaliser(brut);
   const mots = nom ? nom.split(' ') : [];
   if (!mots.length || mots.length > 3 || mots.some(function (w) { return w.length < 2 || tcFicheLibreOutil(w); })) return null;
+  // Un mot d'action ou de lieu courant (« annule », « rappel », « bureau ») garde son chemin, même si un contact le porte (examen).
+  if (TC_FICHE_LIBRE_AUTRE.test(nom) || /(^| )(rappel|rappels|travail|bureau|centre|gare|maison|ecole|sport|cours|aide|libre|reunion)( |$)/.test(nom)) return null;
   if (tcUneQuestionAttend() || (typeof tcPropositionEnAttente === 'function' && tcPropositionEnAttente()) || (typeof tcConflitEnAttente === 'function' && tcConflitEnAttente())) return null;
   // Le titre d'un de ses rendez-vous : c'est de lui qu'on parle, pas d'un contact.
   const dansMots = function (texte) { const t = ' ' + tcClasseNormaliser(texte) + ' '; return mots.every(function (w) { return t.indexOf(' ' + w + ' ') > -1; }); };
-  if ((Array.isArray(events) ? events : []).some(function (e) { return e && tcEstDeLUtilisateur(e) && dansMots(e.title || ''); })) return null;
+  if ((Array.isArray(events) ? events : []).some(function (e) { return e && !tcEstDemonstration(e) && dansMots(e.title || ''); })) return null;
   const fiches = tcContactsParMots(mots);
   // Au moins une fiche porte ces mots en entier (« Will » ne suffit pas, « William » oui).
   if (!fiches.some(function (c) { return dansMots(c.name || ''); })) return null;
@@ -30954,7 +30956,9 @@ function tcContactsAffiches() {
   }
   const q = contactsSearchQuery.trim().toLowerCase();
   let liste;
-  if (q && typeof _tcContactsCharly !== 'undefined' && _tcContactsCharly && _tcContactsCharly.q === contactsSearchQuery) {
+  // La recherche a changé depuis « Voir les N » : la liste de Charly est oubliée, pour de bon (examen).
+  if (typeof _tcContactsCharly !== 'undefined' && _tcContactsCharly && _tcContactsCharly.q !== contactsSearchQuery) _tcContactsCharly = null;
+  if (q && typeof _tcContactsCharly !== 'undefined' && _tcContactsCharly) {
     // « Voir les N » de Charly (mission 99) : ces N fiches, tant que la recherche n'est pas changée.
     const voulus = new Set(_tcContactsCharly.ids);
     liste = contactsList.filter(function (c) { return c && voulus.has(c.id); });
