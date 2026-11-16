@@ -15394,27 +15394,28 @@ async function tcRepondreDeplacement(text) {
  * le modele preferait sa memoire a l'agenda reel. Son seul souvenir des
  * rendez-vous doit etre la liste relue a chaque message.
  */
-/* Mission 101 (examen) : le modèle lit les 10 derniers messages, mais un fil en cours n'est jamais coupé.
-   - Charly pose ses questions une par une (checklist « vie quotidienne », « Pose-moi les questions… ») : tant qu'aucune
-     carte [AGENDA] n'a suivi, la demande et tout ce qui la suit partent.
-   - Une réponse à une question de Charly part avec la question, et ainsi de suite en remontant le fil. */
+/* Mission 101 (examen) : le modèle lit les 10 derniers messages, mais un fil en cours n'est pas coupé, dans une limite dure.
+   - Jamais plus de TC_CHARLY_FIL_MAX (30) messages.
+   - Charly pose ses questions une par une (checklist « vie quotidienne », « Pose-moi les questions… ») : si la demande est
+     dans ces 30 derniers et qu'aucune carte [AGENDA] ne l'a suivie, elle et sa suite partent.
+   - Une réponse à une question qui attend (nature 'question') part avec la question, en remontant le fil, sans entrer
+     dans une session passée (messages relus de l'appareil, _relu). Un simple « ? » final ne suffit pas. */
+const TC_CHARLY_FIL_MAX = 30;
 function tcEstQuestionCharly(m) {
-  if (!m || m.role !== 'assistant') return false;
-  if (m.nature === 'question') return true;
-  const t = String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, '').trim();
-  return /\?[\s\u00a0»"')\u{1F300}-\u{1FAFF}\u2600-\u27BF]*$/u.test(t);
+  return !!(m && m.role === 'assistant' && m.nature === 'question');
 }
 function tcDebutFilPourIA(liste) {
   const max = typeof TC_CHARLY_MODELE_MAX !== 'undefined' ? TC_CHARLY_MODELE_MAX : 10;
-  let debut = Math.max(0, liste.length - max);
-  // Une demande guidée sans carte après elle : elle et sa suite restent.
-  for (let i = liste.length - 1; i >= 0; i--) {
+  const plafond = Math.max(0, liste.length - (typeof TC_CHARLY_FIL_MAX !== 'undefined' ? TC_CHARLY_FIL_MAX : 30));
+  let debut = Math.max(plafond, liste.length - max);
+  // Une demande guidée encore ouverte (sans carte après elle), parmi les 30 derniers : elle et sa suite restent.
+  for (let i = liste.length - 1; i >= plafond; i--) {
     const m = liste[i];
     if (m.role === 'assistant' && /\[AGENDA\]/.test(String(m.content || ''))) break;
     if (m.role === 'user' && /vie quotidienne|Voici ce que j|Pose-moi les questions/.test(String(m._corrige || m.content || ''))) { debut = Math.min(debut, i); break; }
   }
-  // Le fil des questions et réponses : on remonte tant que l'on coupe au milieu d'un échange.
-  while (debut > 0) {
+  // Le fil des questions qui attendent : on remonte tant que l'on coupe au milieu d'un échange, sans entrer dans une session passée.
+  while (debut > plafond && !liste[debut - 1]._relu) {
     const m = liste[debut];
     if (m.role === 'user' && tcEstQuestionCharly(liste[debut - 1])) { debut--; continue; }
     if (tcEstQuestionCharly(m) && liste[debut - 1].role === 'user') { debut--; continue; }

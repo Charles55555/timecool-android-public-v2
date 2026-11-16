@@ -89,6 +89,8 @@ titre('Le modele ne lit que les dix derniers (mission 101)');
   vm.createContext(c2);
   const cst = extraireConst('TC_CHARLY_MODELE_MAX');
   if (cst) vm.runInContext(cst.replace('const ', 'var '), c2);
+  const cfil = extraireConst('TC_CHARLY_FIL_MAX');
+  if (cfil) vm.runInContext(cfil.replace('const ', 'var '), c2);
   ['tcEstQuestionCharly', 'tcDebutFilPourIA'].forEach((n) => { const x = extraire(n); if (x) vm.runInContext(x, c2); });
   if (src) vm.runInContext(src, c2);
   for (let i = 1; i <= 100; i++) c2.charlyIA.history.push({ role: i % 2 ? 'user' : 'assistant', content: 'message ' + i });
@@ -98,7 +100,7 @@ titre('Le modele ne lit que les dix derniers (mission 101)');
   verifie('ce sont les dix derniers (les bulles d application ne comptent pas)', envoye.length === 10 && envoye[0].content === 'message 91' && envoye[9].content === 'message 100', JSON.stringify(envoye.slice(0, 1)));
 
   // Examen : la checklist (CAS 2B) pose ses questions une par une ; le fil ne doit jamais être coupé avant la carte finale.
-  const fil = [{ role: 'user', content: 'Bonjour' }, { role: 'assistant', content: 'Salut Charles.' }];
+  const fil = [{ role: 'user', content: 'Bonjour' }, { role: 'assistant', content: 'Salut Charles ! Que puis-je faire pour toi ?' }];
   fil.push({ role: 'user', content: "Voici ce que j'ai dans ma vie quotidienne : Travail, Sport, Courses, Enfants, Lecture, Cuisine. Aide-moi à organiser mon agenda en me posant les questions nécessaires, une par une, pour chaque élément." });
   const qr = [['Quels jours travailles-tu ?', 'Du lundi au vendredi'], ['À quelles heures ?', 'De 9h à 18h'], ['Le sport, quel jour ?', 'Mardi et jeudi'], ['À quelle heure ?', '19h'],
     ['Les courses, plutôt quand ?', 'Samedi matin'], ['Les enfants, à quelle heure les récupères-tu ?', '16h30'], ['La lecture, le soir ? 📚', 'Oui, 22h']];
@@ -117,11 +119,33 @@ titre('Le modele ne lit que les dix derniers (mission 101)');
   // Un échange de questions ordinaire n'est pas coupé au milieu.
   c2.charlyIA.history = [];
   for (let i = 0; i < 6; i++) c2.charlyIA.history.push({ role: 'user', content: 'Info ' + i }, { role: 'assistant', content: 'Noté ' + i });
-  c2.charlyIA.history.push({ role: 'user', content: 'Ajoute un rendez-vous chez le dentiste' }, { role: 'assistant', content: 'Quel jour ?' }, { role: 'user', content: 'Jeudi' },
-    { role: 'assistant', content: 'À quelle heure ?', nature: 'question' }, { role: 'user', content: '15h' }, { role: 'assistant', content: 'Combien de temps ?' }, { role: 'user', content: '30 minutes' },
-    { role: 'assistant', content: 'Un titre ?' }, { role: 'user', content: 'Contrôle' }, { role: 'assistant', content: 'Et une note ?' }, { role: 'user', content: 'Non' });
+  c2.charlyIA.history.push({ role: 'user', content: 'Ajoute un rendez-vous chez le dentiste' }, { role: 'assistant', content: 'Quel jour ?', nature: 'question' }, { role: 'user', content: 'Jeudi' },
+    { role: 'assistant', content: 'À quelle heure ?', nature: 'question' }, { role: 'user', content: '15h' }, { role: 'assistant', content: 'Combien de temps ?', nature: 'question' }, { role: 'user', content: '30 minutes' },
+    { role: 'assistant', content: 'Un titre ?', nature: 'question' }, { role: 'user', content: 'Contrôle' }, { role: 'assistant', content: 'Et une note ?', nature: 'question' }, { role: 'user', content: 'Non' });
   e2 = c2.tcHistoriquePourIA();
   verifie('questions ordinaires : la demande de départ part avec tout son fil', e2[0].content === 'Ajoute un rendez-vous chez le dentiste' && e2.length === 11, e2.length + ' : ' + txt(e2).slice(0, 120));
+
+  // 2e examen : un « ? » final ne fait pas remonter (« Autre chose ? » à chaque réponse).
+  c2.charlyIA.history = [];
+  for (let i = 0; i < 50; i++) c2.charlyIA.history.push({ role: 'user', content: 'Ajoute ' + i }, { role: 'assistant', content: 'C est fait. Autre chose ?' });
+  e2 = c2.tcHistoriquePourIA();
+  verifie('100 réponses qui finissent par « Autre chose ? » : 10 envoyés, pas toute l histoire', e2.length === 10, 'trouve ' + e2.length);
+  // Une checklist abandonnée, puis 80 messages sans carte : elle ne rouvre pas tout.
+  c2.charlyIA.history = [{ role: 'user', content: "Voici ce que j'ai dans ma vie quotidienne : Travail." }, { role: 'assistant', content: 'Quels jours ?' }];
+  for (let i = 0; i < 40; i++) c2.charlyIA.history.push({ role: 'user', content: 'Autre sujet ' + i }, { role: 'assistant', content: 'Réponse ' + i });
+  e2 = c2.tcHistoriquePourIA();
+  verifie('checklist abandonnée puis 80 messages : 10 envoyés', e2.length === 10 && !/vie quotidienne/.test(txt(e2)), 'trouve ' + e2.length);
+  // Plafond dur : une chaîne de 50 questions qui attendent n en envoie jamais plus de 30.
+  c2.charlyIA.history = [];
+  for (let i = 0; i < 50; i++) c2.charlyIA.history.push({ role: 'assistant', content: 'Question ' + i + ' ?', nature: 'question' }, { role: 'user', content: 'Réponse ' + i });
+  e2 = c2.tcHistoriquePourIA();
+  verifie('jamais plus de 30 messages, même au milieu d un long fil', e2.length <= 31 && e2.length >= 29, 'trouve ' + e2.length);
+  // Pas de remontée dans une session passée (messages relus de l appareil).
+  c2.charlyIA.history = [];
+  for (let i = 0; i < 10; i++) c2.charlyIA.history.push({ role: 'assistant', content: 'Ancienne question ' + i + ' ?', nature: 'question', _relu: true }, { role: 'user', content: 'Ancienne réponse ' + i, _relu: true });
+  for (let i = 0; i < 5; i++) c2.charlyIA.history.push({ role: 'assistant', content: 'Question ' + i + ' ?', nature: 'question' }, { role: 'user', content: 'Réponse ' + i });
+  e2 = c2.tcHistoriquePourIA();
+  verifie('le fil ne remonte pas dans une session passée', !/Ancienne/.test(txt(e2).split(' | ').slice(1).join(' | ')) && e2.length <= 11, e2.length + ' : ' + txt(e2).slice(0, 120));
 }
 
 titre('Une conversation en cours n est pas ecrasee par l enregistrement');
