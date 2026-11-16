@@ -15394,13 +15394,46 @@ async function tcRepondreDeplacement(text) {
  * le modele preferait sa memoire a l'agenda reel. Son seul souvenir des
  * rendez-vous doit etre la liste relue a chaque message.
  */
+/* Mission 101 (examen) : le modèle lit les 10 derniers messages, mais un fil en cours n'est jamais coupé.
+   - Charly pose ses questions une par une (checklist « vie quotidienne », « Pose-moi les questions… ») : tant qu'aucune
+     carte [AGENDA] n'a suivi, la demande et tout ce qui la suit partent.
+   - Une réponse à une question de Charly part avec la question, et ainsi de suite en remontant le fil. */
+function tcEstQuestionCharly(m) {
+  if (!m || m.role !== 'assistant') return false;
+  if (m.nature === 'question') return true;
+  const t = String(m.content || '').replace(/\[AGENDA\][\s\S]*?\[\/AGENDA\]/g, '').trim();
+  return /\?[\s\u00a0»"')\u{1F300}-\u{1FAFF}\u2600-\u27BF]*$/u.test(t);
+}
+function tcDebutFilPourIA(liste) {
+  const max = typeof TC_CHARLY_MODELE_MAX !== 'undefined' ? TC_CHARLY_MODELE_MAX : 10;
+  let debut = Math.max(0, liste.length - max);
+  // Une demande guidée sans carte après elle : elle et sa suite restent.
+  for (let i = liste.length - 1; i >= 0; i--) {
+    const m = liste[i];
+    if (m.role === 'assistant' && /\[AGENDA\]/.test(String(m.content || ''))) break;
+    if (m.role === 'user' && /vie quotidienne|Voici ce que j|Pose-moi les questions/.test(String(m._corrige || m.content || ''))) { debut = Math.min(debut, i); break; }
+  }
+  // Le fil des questions et réponses : on remonte tant que l'on coupe au milieu d'un échange.
+  while (debut > 0) {
+    const m = liste[debut];
+    if (m.role === 'user' && tcEstQuestionCharly(liste[debut - 1])) { debut--; continue; }
+    if (tcEstQuestionCharly(m) && liste[debut - 1].role === 'user') { debut--; continue; }
+    break;
+  }
+  return debut;
+}
+
 function tcHistoriquePourIA() {
+  let _debutFil = 0;
   let liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
     // Les bulles d application (accueil, « C'est noté », question de suite remise par la page) ne partent pas :
     // le modele les prenait pour ses propres mots et les recopiait (mission 34).
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && !m.appText && !m._app)
-    // Mission 101 : l'appareil garde 100 messages, le modèle n'en lit que les 10 derniers.
-    .slice(-(typeof TC_CHARLY_MODELE_MAX !== 'undefined' ? TC_CHARLY_MODELE_MAX : 10))
+    // Mission 101 : l'appareil garde 100 messages, le modèle lit les 10 derniers, sans couper un fil en cours.
+    .filter((m, i, tous) => {
+      if (i === 0) _debutFil = typeof tcDebutFilPourIA === 'function' ? tcDebutFilPourIA(tous) : Math.max(0, tous.length - (typeof TC_CHARLY_MODELE_MAX !== 'undefined' ? TC_CHARLY_MODELE_MAX : 10));
+      return i >= _debutFil;
+    })
     .map(m => ({
       role: m.role,
       // Seules les cartes VALIDEES sont effacees : leurs rendez-vous sont

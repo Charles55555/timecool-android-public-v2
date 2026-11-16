@@ -85,16 +85,43 @@ titre('Ce qui revient apres une mise a jour');
 titre('Le modele ne lit que les dix derniers (mission 101)');
 {
   const src = extraire('tcHistoriquePourIA');
-  const c2 = { String, Array, charlyIA: { history: [] } };
+  const c2 = { String, Array, Math, charlyIA: { history: [] } };
   vm.createContext(c2);
   const cst = extraireConst('TC_CHARLY_MODELE_MAX');
   if (cst) vm.runInContext(cst.replace('const ', 'var '), c2);
+  ['tcEstQuestionCharly', 'tcDebutFilPourIA'].forEach((n) => { const x = extraire(n); if (x) vm.runInContext(x, c2); });
   if (src) vm.runInContext(src, c2);
   for (let i = 1; i <= 100; i++) c2.charlyIA.history.push({ role: i % 2 ? 'user' : 'assistant', content: 'message ' + i });
   c2.charlyIA.history.push({ role: 'assistant', _app: true, content: 'bulle d application' });
   const envoye = src && cst ? c2.tcHistoriquePourIA() : [];
   verifie('dix messages partent au modele', envoye.length === 10, 'trouve ' + envoye.length);
   verifie('ce sont les dix derniers (les bulles d application ne comptent pas)', envoye.length === 10 && envoye[0].content === 'message 91' && envoye[9].content === 'message 100', JSON.stringify(envoye.slice(0, 1)));
+
+  // Examen : la checklist (CAS 2B) pose ses questions une par une ; le fil ne doit jamais être coupé avant la carte finale.
+  const fil = [{ role: 'user', content: 'Bonjour' }, { role: 'assistant', content: 'Salut Charles.' }];
+  fil.push({ role: 'user', content: "Voici ce que j'ai dans ma vie quotidienne : Travail, Sport, Courses, Enfants, Lecture, Cuisine. Aide-moi à organiser mon agenda en me posant les questions nécessaires, une par une, pour chaque élément." });
+  const qr = [['Quels jours travailles-tu ?', 'Du lundi au vendredi'], ['À quelles heures ?', 'De 9h à 18h'], ['Le sport, quel jour ?', 'Mardi et jeudi'], ['À quelle heure ?', '19h'],
+    ['Les courses, plutôt quand ?', 'Samedi matin'], ['Les enfants, à quelle heure les récupères-tu ?', '16h30'], ['La lecture, le soir ? 📚', 'Oui, 22h']];
+  qr.forEach(([q, r]) => { fil.push({ role: 'assistant', content: q }); fil.push({ role: 'user', content: r }); });
+  c2.charlyIA.history = fil.slice();
+  let e2 = c2.tcHistoriquePourIA();
+  const txt = (l) => l.map((m) => m.content).join(' | ');
+  verifie('checklist en cours, 7 questions-réponses : la checklist part au modèle', /vie quotidienne/.test(txt(e2)), txt(e2).slice(0, 200));
+  verifie('et les premières réponses aussi (« Du lundi au vendredi », « De 9h à 18h »)', /Du lundi au vendredi/.test(txt(e2)) && /De 9h à 18h/.test(txt(e2)));
+  verifie('ce qui précède la checklist ne part pas', !/Bonjour/.test(txt(e2)) && !/Salut Charles/.test(txt(e2)), txt(e2).slice(0, 120));
+  // Une fois la carte posée, le fil est fini : retour aux 10 derniers.
+  c2.charlyIA.history = fil.concat([{ role: 'assistant', content: 'Parfait ! 🎉 Voici ton agenda de la semaine !\n[AGENDA]{"title":"Travail"}[/AGENDA]' }]);
+  for (let i = 0; i < 6; i++) c2.charlyIA.history.push({ role: 'user', content: 'Merci ' + i }, { role: 'assistant', content: 'Avec plaisir ' + i });
+  e2 = c2.tcHistoriquePourIA();
+  verifie('après la carte finale : de nouveau les 10 derniers', e2.length === 10 && !/vie quotidienne/.test(txt(e2)), e2.length + ' : ' + txt(e2).slice(0, 120));
+  // Un échange de questions ordinaire n'est pas coupé au milieu.
+  c2.charlyIA.history = [];
+  for (let i = 0; i < 6; i++) c2.charlyIA.history.push({ role: 'user', content: 'Info ' + i }, { role: 'assistant', content: 'Noté ' + i });
+  c2.charlyIA.history.push({ role: 'user', content: 'Ajoute un rendez-vous chez le dentiste' }, { role: 'assistant', content: 'Quel jour ?' }, { role: 'user', content: 'Jeudi' },
+    { role: 'assistant', content: 'À quelle heure ?', nature: 'question' }, { role: 'user', content: '15h' }, { role: 'assistant', content: 'Combien de temps ?' }, { role: 'user', content: '30 minutes' },
+    { role: 'assistant', content: 'Un titre ?' }, { role: 'user', content: 'Contrôle' }, { role: 'assistant', content: 'Et une note ?' }, { role: 'user', content: 'Non' });
+  e2 = c2.tcHistoriquePourIA();
+  verifie('questions ordinaires : la demande de départ part avec tout son fil', e2[0].content === 'Ajoute un rendez-vous chez le dentiste' && e2.length === 11, e2.length + ' : ' + txt(e2).slice(0, 120));
 }
 
 titre('Une conversation en cours n est pas ecrasee par l enregistrement');
