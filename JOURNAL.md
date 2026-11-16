@@ -3475,3 +3475,12 @@ Chef, 16/11 (Charles : « une messagerie indépendante de la page charly … com
 - La page Charly IA redevient celle d'avant la 100 (plus de mode « conversation », plus de pile qui retient son allure).
 - Suites : verif-charly-conversation réécrite (Chrome sur le PC ; échoue sur la page d'avant), verif-aide-charly suit la nouvelle ouverture. verifier.sh vert.
 - Examen (EXAMINATEUR) : le ménage du compte vide aussi le fil d'aide en mémoire (sinon le compte suivant le récupérait, comme en campagne 10) ; une vraie question sur l'appli (« Ça sert à quoi la fiche contact ? », « TimeCool marche le dimanche ? ») va au modèle : seule une demande d'action (ajoute, annule, décale…), un jour ou une heure sans « ? », ou « je suis malade » va à la page Charly IA. Contrôles ajoutés.
+
+## 16/11/2026 : mission 103, onglet « Tests » de la page administrateur complété
+
+Chef, 16/11 (validé par Charles : il voyait encore des comptes de test dans « Utilisateurs »).
+- Règle (tcEstCompteTest, un seul endroit) : e-mail en @exemple-timecool.fr, @exemple-test.fr ou @exemple-timecool.test (base, lecture seule : 10 + 5 « TestTrad » + 5 « Testeur Jetable »), ou compte rangé à la main.
+- Rangement à la main, côté serveur pour tous les administrateurs : colonne comptes.range_tests_le (migration 020, rejouable, à jouer par le chef), route POST /admin/ranger-tests (administrateurs seulement ; 503 « migration_manquante » tant que la colonne n'existe pas ; ne touche que range_tests_le). GET /admin/utilisateurs rend range_tests_le (NULL avant la migration, sans erreur).
+- Fiche de « Utilisateurs » : bouton « 🧪 Ranger dans Tests » sous la rangée Bloquer / Supprimer (inchangée) ; dans « Tests », « ↩️ Remettre dans Utilisateurs » pour un compte rangé à la main, rien pour un compte reconnu par son adresse. Pas de bouton sur sa propre fiche. Référence nettoyée (mission 98).
+- Classement d'affichage : aucun droit, aucune donnée du compte, ni la purge (scripts/purger-comptes-test.sh ne lit que l'adresse) ni comptes-test-a-garder.txt ne changent. Compteurs, tris, export CSV suivent l'onglet (97).
+- Suite verif-admin-ranger-tests (nouvelle, page + API + migration ; échoue sur la version d'avant). verifier.sh vert.

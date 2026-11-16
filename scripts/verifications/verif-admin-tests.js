@@ -45,7 +45,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 try {
-  vm.runInContext(['tcEstCompteTest', 'tcUsersDeLOnglet', 'tcOngletsAdmin', 'tcUserDepuisServeur', 'tcDateServeurUTC',
+  vm.runInContext(['tcEstAdresseDeTest', 'tcEstCompteTest', 'tcUsersDeLOnglet', 'tcOngletsAdmin', 'tcUserDepuisServeur', 'tcDateServeurUTC',
     'tcDateHeureParis', 'tcTrierUsers', 'escapeHTMLSafe', 'renderUsersTab', 'exportUsersCsv', 'adminShowTab']
     .map(fonction).join('\n') + '\n' + constante('TC_TRIS_USERS'), ctx);
 } catch (e) { verifie('les fonctions se chargent', false, e.message); }

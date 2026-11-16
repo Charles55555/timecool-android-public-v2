@@ -400,6 +400,18 @@ const SMS_PREFIXES_DEFAUT = ['+336', '+337', '+262', '+590', '+594', '+596', '+5
     '+32', '+41', '+352', '+377', '+49', '+34', '+39', '+351', '+31', '+44', '+1'];
 
 /** Les identifiants Twilio : ceux de l'administrateur (Configuration IA), sinon config.php ; null si rien n'est posé. */
+/** Mission 103 : la colonne comptes.range_tests_le existe-t-elle (migration 020 jouée) ? Lu une fois par requête. */
+function colonneRangeTests(): bool
+{
+    static $oui = null;
+    if ($oui === null) {
+        $l = Db::un("SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+                      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'comptes' AND COLUMN_NAME = 'range_tests_le'");
+        $oui = (int) ($l['n'] ?? 0) > 0;
+    }
+    return $oui;
+}
+
 function smsIdentifiants(): ?array
 {
     $lire = static function (string $service): ?string {
@@ -4941,10 +4953,11 @@ switch ($route) {
             Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
         }
         Rep::ok([
+            // Mission 103 : range_tests_le (rangé à la main dans l onglet « Tests ») ; NULL tant que la migration 020 n est pas jouée.
             'utilisateurs' => Db::tous(
                 'SELECT reference, prenom, nom, email, telephone, ville, code_postal,
                         provenance, provenance_detail, cree_le, derniere_connexion,
-                        bloque_le, admin
+                        bloque_le, admin, ' . (colonneRangeTests() ? 'range_tests_le' : 'NULL AS range_tests_le') . '
                    FROM comptes
                   ORDER BY cree_le DESC'
             ),
@@ -5067,6 +5080,38 @@ switch ($route) {
                 'Compte inconnu, clôturé, ou déjà dans cet état.');
         }
         Rep::ok(['administrateur' => $donner]);
+
+    /*
+     * Mission 103 : ranger un compte dans l onglet « Tests » de la page administrateur, ou l en sortir.
+     * Un classement d affichage, partagé par tous les administrateurs : aucun droit, aucune donnée du
+     * compte ne change, et la purge des comptes de test (qui ne lit que l e-mail) ne le voit pas.
+     */
+    case 'POST /admin/ranger-tests':
+        $moi = Auth::compte();
+        if ((int) ($moi['admin'] ?? 0) !== 1) {
+            Rep::erreur(403, 'acces_refuse', 'Accès réservé à l administrateur.');
+        }
+        $ref = Entree::requis('reference', 26);
+        if (!preg_match('/^[0-9A-Z]{12,26}$/', $ref)) {
+            Rep::erreur(400, 'reference_invalide', 'Référence de compte invalide.');
+        }
+        $tests = Entree::corps()['tests'] ?? null;
+        if (!is_bool($tests)) {
+            Rep::erreur(400, 'champ_manquant', 'Champ tests attendu : true ou false.');
+        }
+        if (!colonneRangeTests()) {
+            Rep::erreur(503, 'migration_manquante', 'Le rangement des comptes de test n est pas encore installé sur le serveur.');
+        }
+        $maj = Db::req(
+            $tests
+                ? 'UPDATE comptes SET range_tests_le = NOW() WHERE reference = ? AND range_tests_le IS NULL'
+                : 'UPDATE comptes SET range_tests_le = NULL WHERE reference = ? AND range_tests_le IS NOT NULL',
+            [$ref]
+        );
+        if ($maj->rowCount() === 0) {
+            Rep::erreur(404, 'compte_introuvable', 'Compte inconnu, ou déjà dans cet état.');
+        }
+        Rep::ok(['tests' => $tests]);
 
     // ═══════════════════════════════════════════════════════════
     // APPAIRAGE D'APPAREILS — TC_BACKEND.createPairingSession

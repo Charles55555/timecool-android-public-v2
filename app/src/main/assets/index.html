@@ -32811,6 +32811,12 @@ const TC_BACKEND = {
     return !!d.administrateur;
   },
 
+  /** Mission 103 : ranger un compte dans l'onglet « Tests » de la page administrateur, ou l'en sortir. */
+  async rangerDansTests(reference, tests) {
+    const d = await tcAppel('POST', '/admin/ranger-tests', { reference: reference, tests: !!tests });
+    return !!d.tests;
+  },
+
   async bloquerUtilisateur(reference, bloquer) {
     const d = await tcAppel('POST', '/admin/bloquer',
       { reference: reference, bloquer: !!bloquer });
@@ -36439,6 +36445,7 @@ function tcUserDepuisServeur(u, i) {
     // affichée en hiver, deux en été).
     registeredAt: tcDateServeurUTC(u.cree_le),
     blocked: !!u.bloque_le,
+    rangeTests: !!u.range_tests_le,   // mission 103 : rangé à la main dans « Tests »
     admin: !!Number(u.admin),
     estMoi: !!_tcUsersMoi && u.reference === _tcUsersMoi
   };
@@ -36466,11 +36473,29 @@ async function tcChargerUtilisateurs() {
 
 let _adminCurrentTab = 'config';
 
-/* Mission 97 (Charles, 16/11) : un compte de test est un compte dont l'e-mail finit par
-   @exemple-timecool.fr. La règle est écrite ici, et nulle part ailleurs dans la page. L'onglet
-   « Tests » est un rangement à l'écran : aucun compte n'est modifié, aucun droit ne change. */
+/* Mission 97, puis 103 (Charles, 16/11) : un compte de test est un compte dont l'e-mail finit par
+   @exemple-timecool.fr, @exemple-test.fr ou @exemple-timecool.test, ou un compte qu'un administrateur a
+   rangé à la main dans « Tests » (côté serveur : range_tests_le, le même pour tous les administrateurs).
+   La règle est écrite ici, et nulle part ailleurs dans la page. L'onglet « Tests » est un rangement à
+   l'écran : aucun droit ne change, aucune donnée du compte non plus. */
+function tcEstAdresseDeTest(u) {
+  return /@(exemple-timecool\.fr|exemple-test\.fr|exemple-timecool\.test)$/.test(String((u && u.email) || '').trim().toLowerCase());
+}
 function tcEstCompteTest(u) {
-  return /@exemple-timecool\.fr$/.test(String((u && u.email) || '').trim().toLowerCase());
+  return tcEstAdresseDeTest(u) || !!(u && u.rangeTests);
+}
+
+/** Mission 103 : range un compte dans « Tests », ou le remet dans « Utilisateurs » (sur le serveur, pour tous les administrateurs). */
+async function tcRangerDansTests(reference, tests) {
+  const ref = String(reference || '').replace(/[^A-Za-z0-9_-]/g, '');
+  if (!ref) return;
+  try {
+    await TC_BACKEND.rangerDansTests(ref, !!tests);
+    showToast(tests ? '🧪 Rangé dans Tests' : '↩️ Remis dans Utilisateurs');
+  } catch (e) {
+    showToast('❌ ' + (e.message || 'Action impossible'));
+  }
+  tcChargerUtilisateurs();
 }
 
 /** Les comptes de l'onglet ouvert : « Tests » ne montre que les comptes de test, « Utilisateurs » tous les autres. */
@@ -36623,6 +36648,11 @@ function renderUsersTab() {
                   🗑️ Supprimer
                 </button>
               </div>
+              ${tests
+                ? (u.rangeTests && !tcEstAdresseDeTest(u)
+                    ? `<button onclick="tcRangerDansTests('${ref}', false)" style="width:100%; margin-top:8px; padding:8px; background:#f1f3f4; color:#3c4043; border:1px solid #dadce0; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">↩️ Remettre dans Utilisateurs</button>`
+                    : '')
+                : `<button onclick="tcRangerDansTests('${ref}', true)" style="width:100%; margin-top:8px; padding:8px; background:#f1f3f4; color:#3c4043; border:1px solid #dadce0; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">🧪 Ranger dans Tests</button>`}
               <div onclick="tcDesignerAdmin('${ref}', ${!u.admin})" style="text-align:center; margin-top:9px; font-size:12px; font-weight:600; color:${u.admin ? '#9aa0a6' : 'var(--g-blue)'}; cursor:pointer;">
                 ${u.admin ? 'Retirer l’accès administrateur' : '⭐ Donner l’accès administrateur'}
               </div>
