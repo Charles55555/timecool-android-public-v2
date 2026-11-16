@@ -3444,3 +3444,11 @@ Chef, 16/11 (validé par Charles : « William » ne trouvait rien alors que 8 Wi
 - Modèle : la consigne lui dit qu'il n'a pas le carnet (jamais « absent », jamais « je l'ajoute ») et le renvoie vers « Retrouve <son nom> ». Une carte à 00:00 sans heure ni « minuit » dans la phrase devient « À quelle heure ? » (tcCarteMinuitSansHeure). Consigne dans la page (TC_DEFAULT_SYSTEM_PROMPT) : API non touchée.
 - Fluidité : carnet de 3 316 contacts, environ 1 ms par message, 2,5 ms avec l'affichage (Chrome).
 - Suite verif-charly-nom-seul (nouvelle ; Chrome sur le PC) ; verif-classement-charly suit la nouvelle règle (7 fiches, puis 12 → 10 et « Voir les 12 »). verifier.sh vert, banc-charly vert.
+
+## 16/11/2026 : mission 100, Charly comme une conversation de la messagerie
+
+Chef, 16/11 (validé par Charles : « Je veux faire comme WhatsApp »).
+- Toucher « Charly, ton aide TimeCool » ouvre la page de Charly en conversation : en-tête « Charly, ton aide TimeCool » avec la flèche retour et l'avatar, bulles, case d'écriture et bouton d'envoi en bas ; sans les deux rangées de boutons ni « Recommencer » (classe tc-charly-conv). Ouverte autrement (menu, boutons), la page de Charly ne change pas.
+- Même moteur, même fil : les réponses d'aide (mission 96), les fiches, les cartes et leurs boutons marchent comme sur la page ; une seule histoire avec Charly (charlyIA.history, gardée sur l'appareil, les 10 derniers messages comme avant). Une flèche retour depuis une fiche ramène à la conversation, puis à la messagerie.
+- La ligne reste en tête de la messagerie ; son aperçu montre le dernier message (sans carte ni balise ; l'accueil automatique ne compte pas), sinon la phrase de la mission 96. Conversation vide : cette même phrase.
+- API non touchée. Suite verif-charly-conversation (nouvelle ; Chrome sur le PC). verifier.sh vert.

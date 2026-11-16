@@ -610,6 +610,14 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 .conv-composer input { flex:1; padding:11px 16px; border:none; background:#f1f3f4; border-radius:99px; font-size:14px; outline:none; font-family:inherit; color:var(--text); }
 .conv-composer button { width:42px; height:42px; border-radius:50%; border:none; background:var(--g-blue); color:#fff; font-size:17px; cursor:pointer; flex-shrink:0; }
 .conv-composer button:active { transform:scale(.93); }
+/* Mission 100 : la page de Charly ouverte depuis la messagerie, comme une conversation (sans les rangées de boutons). */
+#page-assistant .tc-nom-conv { display:none; }
+#page-assistant.tc-charly-conv .tc-nom-conv { display:inline; }
+#page-assistant.tc-charly-conv .tc-nom-page,
+#page-assistant.tc-charly-conv #charlyQuickIntro,
+#page-assistant.tc-charly-conv #charlyQuickActions,
+#page-assistant.tc-charly-conv #charlyQuickActions2,
+#page-assistant.tc-charly-conv #charlyResetBtn { display:none !important; }
 
 .ct-actions { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
 .ct-act { display:flex; align-items:center; justify-content:center; gap:7px; padding:11px 8px; border-radius:10px;
@@ -1781,8 +1789,8 @@ if (window.pdfjsLib) {
   <div class="conv-header">
     <button class="back-btn" onclick="tcRetour()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
-    <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">🔒 Votre Assistant Intelligent</div></div>
-    <button onclick="resetCharlyChat()" title="Nouvelle conversation" style="background:transparent; border:none; cursor:pointer; padding:8px; color:var(--text-sec);">
+    <div class="conv-info"><div class="conv-name"><span class="tc-nom-page">Charly IA</span><span class="tc-nom-conv">Charly, ton aide TimeCool</span></div><div class="conv-sub" id="charlyStatus">🔒 Votre Assistant Intelligent</div></div>
+    <button onclick="resetCharlyChat()" id="charlyResetBtn" title="Nouvelle conversation" style="background:transparent; border:none; cursor:pointer; padding:8px; color:var(--text-sec);">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
     </button>
   </div>
@@ -7334,14 +7342,40 @@ function tcLigneCharlyMessagerie(q) {
   if (typeof _msgFilter !== 'undefined' && _msgFilter !== 'all') return '';
   const cle = tcSansAccents(String(q || '')).toLowerCase().trim();
   if (cle && 'charly, ton aide timecool'.indexOf(cle) < 0 && !/^aide/.test(cle)) return '';
+  // Mission 100 : une fois qu'on a parlé à Charly, l'aperçu montre le dernier message, comme une conversation.
+  const apercu = typeof tcApercuCharly === 'function' ? tcApercuCharly() : '';
   return '<div class="msg-preview" id="msgCharly" onclick="tcOuvrirCharlyAide()">'
     + '<div class="msg-avatar" style="background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>'
     + '<div class="msg-body"><div class="msg-name">Charly, ton aide TimeCool</div>'
-    + '<div class="msg-text" style="white-space:normal;">Une question\u00a0? Demande-moi\u00a0: «\u00a0Comment changer la langue\u00a0?\u00a0»</div></div></div>';
+    + (apercu
+      ? '<div class="msg-text">' + escapeHTMLSafe(apercu) + '</div></div></div>'
+      : '<div class="msg-text" style="white-space:normal;">Une question\u00a0? Demande-moi\u00a0: «\u00a0Comment changer la langue\u00a0?\u00a0»</div></div></div>');
+}
+
+/** Mission 100 : le dernier message de la conversation avec Charly, en texte simple (sans carte ni balise) ; '' s'il n'y en a pas. */
+function tcApercuCharly() {
+  if (typeof charlyIA === 'undefined' || !charlyIA) return '';
+  if (typeof tcChargerHistoriqueCharly === 'function') tcChargerHistoriqueCharly();
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  for (let i = h.length - 1; i >= 0; i--) {
+    const m = h[i];
+    // L'accueil automatique (« Bonjour Charles ! Je suis Charly… ») n'est pas un échange : la ligne garde sa phrase.
+    if (!m || (m.role !== 'user' && m.role !== 'assistant') || m.appText || m._app) continue;
+    let t = String(m.content || '');
+    const avantCarte = t.split('[AGENDA]')[0];
+    t = (avantCarte.trim() ? avantCarte : (t.indexOf('[AGENDA]') > -1 ? 'Proposition de rendez-vous' : t));
+    t = t.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    if (t) return t.length > 90 ? t.slice(0, 89) + '…' : t;
+  }
+  return '';
 }
 
 /** Mission 96 : la ligne de Charly ouvre la page Charly IA ; sa flèche retour ramène à la messagerie (pile des écrans). */
+/* Mission 100 (Charles, 16/11 : « comme WhatsApp ») : la même page, en conversation. Une seule histoire avec Charly : le fil est le
+   même que celui de la page de Charly (charlyIA.history, gardé sur l'appareil). Ouverte autrement, la page reste comme avant. */
+let _tcCharlyEnConv = false;
 function tcOuvrirCharlyAide() {
+  _tcCharlyEnConv = true;
   navigate('assistant');
 }
 
@@ -11791,6 +11825,11 @@ function renderCharlyChat() {
   tcChargerHistoriqueCharly();
   tcSauverHistoriqueCharly();
   const body = document.getElementById('charlyChatBody');
+  const _enConv = !!(document.getElementById('page-assistant') && document.getElementById('page-assistant').classList.contains('tc-charly-conv'));
+  if (!charlyIA.history.length && _enConv) {
+    body.innerHTML = '<div style="text-align:center; padding:36px 20px; color:var(--text-sec); font-size:13px; line-height:1.6;">Une question\u00a0? Demande-moi\u00a0: «\u00a0Comment changer la langue\u00a0?\u00a0»</div>';
+    return;
+  }
   if (!charlyIA.history.length) {
     // Welcome message
     body.innerHTML = `
@@ -17208,6 +17247,10 @@ navigate = function(page) {
   else if (page === 'documents') renderDocumentsPage();
   else if (page === 'aiconfig') { _adminCurrentTab = 'config'; renderAIConfig(); }
   else if (page === 'assistant') {
+    // Mission 100 : en conversation si l'on vient de la ligne de la messagerie ; un retour (flèche) garde l'allure d'avant.
+    const pa = document.getElementById('page-assistant');
+    if (pa && !(typeof _tcRetourEnCours !== 'undefined' && _tcRetourEnCours)) pa.classList.toggle('tc-charly-conv', typeof _tcCharlyEnConv !== 'undefined' && !!_tcCharlyEnConv);
+    if (typeof _tcCharlyEnConv !== 'undefined') _tcCharlyEnConv = false;
     setTimeout(() => renderCharlyChat(), 50);
   }
 };
