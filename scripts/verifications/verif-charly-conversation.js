@@ -1,6 +1,7 @@
-// Mission 100 (Charles, 16/11 : « comme WhatsApp ») : « Charly, ton aide TimeCool » s'ouvre comme une conversation de la messagerie
-// (en-tête au nom de Charly, flèche retour, bulles, case d'écriture), Charly y répond comme sur sa page (aide sans le modèle,
-// fiches, cartes), l'histoire reste et son dernier message s'affiche dans la liste ; la page de Charly ouverte autrement ne change pas.
+// Mission 100, puis 102 (Charles, 16/11 : « je veux une messagerie indépendante de la page charly … comme le fait WhatsApp … qui
+// pourrait servir de hotline ») : « Charly, ton aide TimeCool » s'ouvre dans l'écran de conversation de la messagerie, avec son fil à
+// elle (jamais l'histoire de la page Charly IA). Les réponses d'aide d'abord, sans le modèle ; le modèle pour les autres questions
+// sur l'appli ; une demande d'agenda renvoie à la page Charly IA avec un bouton, sans carte. La ligne a un fond bleu ciel.
 // Usage : node verif-charly-conversation.js <index.html>   (Chrome du poste, ou TC_CHROME ; sans Chrome, la partie Chrome est sautée)
 const fs = require('fs');
 const os = require('os');
@@ -12,10 +13,11 @@ function verifie(l, c, d) { if (!c) ko++; console.log('  ' + (c ? 'OK ' : 'KO ')
 function titre(t) { console.log(''); console.log('-- ' + t + ' --'); }
 
 titre('Dans la page');
-verifie('l en-tête de la page de Charly porte les deux noms (page / conversation)', page.includes('<span class="tc-nom-page">Charly IA</span><span class="tc-nom-conv">Charly, ton aide TimeCool</span>'));
-verifie('le mode conversation cache les rangées de boutons et « Recommencer »', /#page-assistant\.tc-charly-conv #charlyQuickActions2,\n#page-assistant\.tc-charly-conv #charlyResetBtn \{ display:none !important; \}/.test(page));
-verifie('l accueil automatique de Charly n est pas un échange : l aperçu l ignore', /function tcApercuCharly\(\)[\s\S]{0,700}m\.appText \|\| m\._app\) continue;/.test(page));
-verifie('une seule histoire : la conversation utilise charlyIA.history (pas de second fil)', !/charlyConvHistory|_tcFilCharlyConv/.test(page) && page.includes('function tcApercuCharly()'));
+verifie('la conversation d aide a sa propre clé sur l appareil (pas celle de la page Charly IA)', /const TC_CONV_CHARLY_CLE = 'timecool_charly_aide';/.test(page) && !/TC_CONV_CHARLY_CLE = 'timecool_charly_historique'/.test(page));
+verifie('la page Charly IA n a plus de mode « conversation » (mission 100 retirée)', !/tc-charly-conv|tc-nom-conv|_tcCharlyEnConv|_tcPileConv/.test(page) && page.includes('<div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">'));
+verifie('fond bleu ciel, en clair et en sombre', /'--tc-charly-ligne':'#cdeafc'/.test(page) && /'--tc-charly-ligne':'#b9dff7'/.test(page) && /#msgCharly, #msgCharly:hover \{ background:var\(--tc-charly-ligne/.test(page));
+verifie('le modèle ne lit que les 10 derniers messages de la conversation d aide, 100 gardés', /const TC_CONV_CHARLY_MAX = 100;/.test(page) && /const TC_CONV_CHARLY_MODELE_MAX = 10;/.test(page));
+verifie('aucune carte de rendez-vous dans la conversation d aide : les blocs [AGENDA] du modèle sont retirés', /function tcEnvoyerConvCharly[\s\S]{0,3000}replace\(\/\\\[AGENDA\\\]/.test(page));
 
 titre('Dans la vraie page (Chrome)');
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
@@ -26,93 +28,84 @@ if (!exe) {
   const js = `<script>window.addEventListener('load', function () { setTimeout(function () {
     document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
     userAccount = { firstname: 'Charles', lastname: 'Haddad', reference: 'REFTEST' };
-    window.__modele = 0;
+    window.__modele = []; window.__reponse = 'Oui. TimeCool garde ton agenda sur ton téléphone, même sans internet.';
     tcCharlyPret = function () { return true; };
-    tcRelais = async function () { window.__modele++; throw new Error('modele'); };
+    callAI = async function (msgs) { window.__modele.push(msgs); return window.__reponse; };
     hideAuthFlow();
-    try { localStorage.removeItem('timecool_charly_historique'); } catch (e) {}
-    charlyIA.history = [];
-    contactsList = [{ id: 'w1', name: 'William Ayache', phone: '0611223344' }, { id: 'w2', name: 'William Cohen', phone: '0655667788' }];
+    // L'histoire de la page Charly IA (comme sur la capture de Charles : un rendez-vous à 0h).
+    var histoPage = [{ role: 'user', content: 'Dentiste demain' }, { role: 'assistant', content: 'Je te propose :\\n[AGENDA]{"title":"Dentiste","date":"2026-11-16","time":"00:00","duration":30}[/AGENDA]', tempId: 'p0' }];
+    try { localStorage.setItem('timecool_charly_historique', JSON.stringify(histoPage)); localStorage.removeItem('timecool_charly_aide'); } catch (e) {}
+    charlyIA.history = histoPage.slice(); charlyIA._historiqueCharge = true;
+    contactsList = [{ id: 'w1', name: 'William Ayache', phone: '0611223344' }];
     messages[mode] = [{ id: 'c1', with: 'Paul Martin', avatar: 'PM', color: '#123', icon: '', unread: 0, archived: false, thread: [{ from: 'them', text: 'Salut', time: '10:00' }] }];
     var res = {};
-    var pa = document.getElementById('page-assistant');
-    var vu = function (id) { var e = document.getElementById(id); return !!(e && e.offsetParent !== null && getComputedStyle(e).display !== 'none'); };
-    var envoyer = function (t, k) { document.getElementById('charlyInput').value = t; Promise.resolve(charlySendMessage()).catch(function () {}).then(function () { setTimeout(k, 900); }); };
+    var body = function () { return document.getElementById('convBody'); };
+    var envoyer = function (t, k) { document.getElementById('convInput').value = t; Promise.resolve(sendConvMessage()).catch(function () {}).then(function () { setTimeout(k, 400); }); };
     navigate('calendar'); navigate('messages');
+    var ligne = document.getElementById('msgCharly');
+    res.premier = (document.getElementById('messagesList').firstElementChild || {}).id || '';
+    res.fond = ligne ? getComputedStyle(ligne).backgroundColor : '';
     res.apercuVide = (document.querySelector('#msgCharly .msg-text') || {}).innerText || '';
-    document.getElementById('msgCharly').click();
+    ligne.click();
     setTimeout(function () {
-      res.ouverte = pa.classList.contains('active') && pa.classList.contains('tc-charly-conv');
-      res.nom = (pa.querySelector('.conv-name') || {}).innerText || '';
-      res.boutonsCaches = !vu('charlyQuickActions') && !vu('charlyQuickActions2') && !vu('charlyQuickIntro') && !vu('charlyResetBtn');
-      res.caseVisible = vu('charlyInput') && vu('charlySendBtn');
-      res.videTexte = (document.getElementById('charlyChatBody') || {}).innerText || '';
+      res.surConv = document.getElementById('page-conv').classList.contains('active') && !document.getElementById('page-assistant').classList.contains('active');
+      res.nom = document.getElementById('convName').innerText;
+      res.caseVisible = !!document.getElementById('convInput').offsetParent;
+      res.vide = body().innerText;
       envoyer('Comment changer la langue ?', function () {
-        var d = charlyIA.history[charlyIA.history.length - 1] || {};
-        res.aide = !!d._aide; res.modeleAide = window.__modele;
-        envoyer('William', function () {
-          var body = document.getElementById('charlyChatBody');
-          res.fiches = (body.innerHTML.match(/Ouvrir la fiche/g) || []).length;
-          // Ouvrir la fiche puis revenir : la conversation garde son allure.
-          var b = Array.prototype.find.call(body.querySelectorAll('button'), function (x) { return /Ouvrir la fiche/.test(x.textContent); });
-          if (b) b.click();
-          setTimeout(function () {
-            res.surContacts = document.getElementById('page-contacts').classList.contains('active');
-            tcRetour();
-            setTimeout(function () {
-              res.retourConv = pa.classList.contains('active') && pa.classList.contains('tc-charly-conv');
-              tcRetour();
-              setTimeout(function () {
-                res.retourMessagerie = document.getElementById('page-messages').classList.contains('active');
-                var l = document.getElementById('messagesList');
-                res.premier = l && l.firstElementChild ? l.firstElementChild.id : '';
-                res.apercu = (document.querySelector('#msgCharly .msg-text') || {}).innerText || '';
-                // L'histoire reste : la page rechargée la relit sur l'appareil.
-                charlyIA.history = []; charlyIA._historiqueCharge = false;
-                res.apercuApresRechargement = tcApercuCharly();
-                document.getElementById('msgCharly').click();
+        res.aide = body().innerText; res.modeleAide = window.__modele.length;
+        envoyer('Dentiste demain à 15h', function () {
+          res.agendaTexte = body().innerText;
+          res.agendaBouton = Array.prototype.some.call(body().querySelectorAll('button'), function (b) { return b.textContent === 'Ouvrir Charly IA'; });
+          res.modeleAgenda = window.__modele.length;
+          res.pageIntacte = charlyIA.history.length === 2;
+          envoyer('Est-ce que TimeCool marche sans internet ?', function () {
+            res.modeleLibre = window.__modele.length;
+            var m = window.__modele[0] || [];
+            res.consigne = (m[0] && m[0].role === 'system' && /hotline/.test(m[0].content) && /\\[PAGE_CHARLY\\]/.test(m[0].content)) || false;
+            res.histoModele = m.slice(1).map(function (x) { return x.content; }).join(' | ');
+            res.reponseLibre = body().innerText;
+            window.__reponse = '[PAGE_CHARLY]';
+            envoyer('Mets-moi un truc pour la semaine pro', function () {
+              res.pageCharlyModele = (body().innerText.match(/Pour ton agenda, va sur la page Charly IA\\./g) || []).length;
+              window.__reponse = 'Voici :\\n[AGENDA]{"title":"X","date":"2026-11-20","time":"10:00"}[/AGENDA]';
+              envoyer('Est-ce que je peux mettre une couleur ?', function () {
+                res.sansCarte = !/\\[AGENDA\\]|"title"/.test(body().innerHTML);
+                tcRetourDepuisConversation();
                 setTimeout(function () {
-                  res.historiqueRelu = /William Ayache/.test(document.getElementById('charlyChatBody').innerHTML) && /changer la langue/i.test(document.getElementById('charlyChatBody').innerText);
-                  // Ouverte autrement (menu, bouton) : la page de Charly comme avant.
-                  navigate('calendar'); navigate('assistant');
+                  res.retourMessagerie = document.getElementById('page-messages').classList.contains('active');
+                  res.apercu = (document.querySelector('#msgCharly .msg-text') || {}).innerText || '';
+                  // Rechargement : le fil se relit sur l'appareil.
+                  _tcConvCharly = null;
+                  res.gardes = JSON.parse(localStorage.getItem('timecool_charly_aide') || '[]').length;
+                  res.apercuRelu = tcApercuCharly();
+                  document.getElementById('msgCharly').click();
                   setTimeout(function () {
-                    res.pageNormale = pa.classList.contains('active') && !pa.classList.contains('tc-charly-conv') && vu('charlyQuickActions') && vu('charlyResetBtn') && /Charly IA/.test((pa.querySelector('.conv-name') || {}).innerText || '');
-                    // Mission 101 : page de Charly -> messagerie -> ligne -> flèche -> flèche : la page retrouve son allure d'origine.
-                    navigate('messages');
-                    document.getElementById('msgCharly').click();
+                    res.reluConv = /changer la langue/i.test(body().innerText) && !/Dentiste demain\\s*$/m.test(body().innerText.split('Dentiste demain à 15h').join(''));
+                    // Le bouton mène à la page Charly IA, qui retrouve son histoire à elle.
+                    var b = Array.prototype.find.call(body().querySelectorAll('button'), function (x) { return x.textContent === 'Ouvrir Charly IA'; });
+                    if (b) b.click();
                     setTimeout(function () {
-                      res.doubleConv = pa.classList.contains('tc-charly-conv');
-                      tcRetour();
-                      setTimeout(function () {
-                        res.doubleMessagerie = document.getElementById('page-messages').classList.contains('active');
-                        tcRetour();
-                        setTimeout(function () {
-                          res.doublePage = pa.classList.contains('active') && !pa.classList.contains('tc-charly-conv') && vu('charlyQuickActions') && vu('charlyResetBtn');
-                          // Mission 101 : 100 messages avec des fiches et des cartes, la conversation s'ouvre vite.
-                          var h = [];
-                          for (var i = 0; i < 50; i++) {
-                            h.push({ role: 'user', content: 'Message ' + i });
-                            h.push(i % 3 === 0 ? { role: 'assistant', content: 'Voici les contacts à ce nom :', _fiches: { ids: ['w1', 'w2'] } }
-                              : (i % 3 === 1 ? { role: 'assistant', content: 'Je te propose :\\n[AGENDA]{"title":"Dentiste","date":"2026-11-20","time":"15:00","duration":30}[/AGENDA]', tempId: 't' + i }
-                              : { role: 'assistant', content: 'Réponse ' + i }));
-                          }
-                          charlyIA.history = h;
-                          tcSauverHistoriqueCharly();
-                          res.gardes = JSON.parse(localStorage.getItem('timecool_charly_historique') || '[]').length;
-                          navigate('messages');
-                          var t0 = performance.now();
-                          renderCharlyChat();
-                          res.msRendu = Math.round(performance.now() - t0);
-                          res.bulles = document.getElementById('charlyChatBody').children.length;
-                          var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre);
-                        }, 300);
-                      }, 300);
-                    }, 300);
+                      res.surPageCharly = document.getElementById('page-assistant').classList.contains('active');
+                      res.pageHisto = /Je te propose/.test(document.getElementById('charlyChatBody').innerText);
+                      res.pageBoutons = !!document.getElementById('charlyQuickActions').offsetParent;
+                      // 100 gardés, 10 au modèle.
+                      _tcConvCharly = []; for (var i = 0; i < 60; i++) { _tcConvCharly.push({ from: 'me', text: 'Q' + i, time: '10:00' }, { from: 'charly', text: 'R' + i, time: '10:00' }); }
+                      tcSauverConvCharly();
+                      res.gardes100 = JSON.parse(localStorage.getItem('timecool_charly_aide') || '[]').length;
+                      window.__modele = []; window.__reponse = 'Réponse';
+                      navigate('messages'); document.getElementById('msgCharly').click();
+                      envoyer('Est-ce que je peux changer le fond ?', function () {
+                        var mm = window.__modele[0] || [];
+                        res.auModele = mm.slice(1).filter(function (x) { return x.content !== '(début de la conversation)'; }).length;
+                        var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre);
+                      });
+                    }, 400);
                   }, 300);
                 }, 300);
-              }, 300);
-            }, 300);
-          }, 300);
+              });
+            });
+          });
         });
       });
     }, 300);
@@ -126,20 +119,21 @@ if (!exe) {
   try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
   const R = res || {};
   const norm = (t) => String(t || '').replace(/\u00a0/g, ' ').replace(/&nbsp;/g, ' ');
-  verifie('avant tout échange, la ligne garde sa phrase : « Une question ? Demande-moi : « Comment changer la langue ? » »', /Une question \? Demande-moi : « Comment changer la langue \? »/.test(norm(R.apercuVide)), R.apercuVide);
-  verifie('un toucher ouvre la conversation : en-tête « Charly, ton aide TimeCool »', R.ouverte === true && R.nom === 'Charly, ton aide TimeCool', JSON.stringify([R.ouverte, R.nom]));
-  verifie('pas de rangées de boutons ni de « Recommencer » ; la case d écriture et le bouton d envoi sont là', R.boutonsCaches === true && R.caseVisible === true, JSON.stringify([R.boutonsCaches, R.caseVisible]));
-  verifie('conversation vide : la même phrase, au milieu', /Une question \? Demande-moi/.test(norm(R.videTexte)) && !/Bonjour, je suis Charly IA/.test(R.videTexte || ''), R.videTexte);
-  verifie('une question d aide reçoit sa réponse (mission 96), sans le modèle', R.aide === true && R.modeleAide === 0, JSON.stringify([R.aide, R.modeleAide]));
-  verifie('« William » : les fiches et leurs boutons, dans la conversation', R.fiches === 2, R.fiches);
-  verifie('« Ouvrir la fiche » mène aux contacts ; la flèche retour ramène à la conversation, puis à la messagerie', R.surContacts === true && R.retourConv === true && R.retourMessagerie === true, JSON.stringify([R.surContacts, R.retourConv, R.retourMessagerie]));
-  verifie('la ligne de Charly reste en tête ; son aperçu montre le dernier message', R.premier === 'msgCharly' && /contacts à ce nom/.test(R.apercu || ''), JSON.stringify([R.premier, R.apercu]));
-  verifie('l histoire reste sur l appareil : aperçu et échanges relus en rouvrant', /contacts à ce nom/.test(R.apercuApresRechargement || '') && R.historiqueRelu === true, JSON.stringify([R.apercuApresRechargement, R.historiqueRelu]));
-  verifie('ouverte autrement, la page de Charly est comme avant (boutons, « Recommencer », « Charly IA »)', R.pageNormale === true, JSON.stringify(R.pageNormale));
-  verifie('page de Charly -> messagerie -> ligne -> flèche -> flèche : la page retrouve son allure d origine (mission 101)', R.doubleConv === true && R.doubleMessagerie === true && R.doublePage === true, JSON.stringify([R.doubleConv, R.doubleMessagerie, R.doublePage]));
-  verifie('100 messages gardés sur l appareil (mission 101)', R.gardes === 100, R.gardes);
-  // Le temps se mesure hors de cette suite (temps virtuel de Chrome) : 2 à 10 ms pour 100 messages et 3 316 contacts, le 16/11.
-  verifie('100 messages avec fiches et cartes : les 100 bulles se dessinent', R.bulles >= 100, JSON.stringify([R.bulles, R.msRendu]));
+  verifie('la ligne est en tête, sur fond bleu ciel', R.premier === 'msgCharly' && R.fond === 'rgb(205, 234, 252)', JSON.stringify([R.premier, R.fond]));
+  verifie('avant tout échange, la ligne garde sa phrase (et pas l histoire de la page Charly IA)', /Une question \? Demande-moi : « Comment changer la langue \? »/.test(norm(R.apercuVide)), R.apercuVide);
+  verifie('un toucher ouvre l écran de conversation de la messagerie, pas la page Charly IA', R.surConv === true && R.nom === 'Charly, ton aide TimeCool' && R.caseVisible === true, JSON.stringify([R.surConv, R.nom, R.caseVisible]));
+  verifie('conversation vide : la phrase d accueil, rien de la page Charly IA (ni le rendez-vous à 0h)', /Une question \? Demande-moi/.test(norm(R.vide)) && !/Dentiste|Je te propose/.test(R.vide || ''), R.vide);
+  verifie('question d aide : la réponse de la base d aide, sans le modèle', /Paramètres/.test(R.aide || '') && /langue/i.test(R.aide || '') && R.modeleAide === 0, JSON.stringify([R.aide, R.modeleAide]));
+  verifie('demande d agenda : « Pour ton agenda, va sur la page Charly IA. » et le bouton « Ouvrir Charly IA », sans le modèle', /Pour ton agenda, va sur la page Charly IA\./.test(R.agendaTexte || '') && R.agendaBouton === true && R.modeleAgenda === 0, JSON.stringify([R.agendaBouton, R.modeleAgenda]));
+  verifie('rien n est ajouté à l histoire de la page Charly IA', R.pageIntacte === true);
+  verifie('autre question sur l appli : le modèle répond, avec la consigne de la hotline', R.modeleLibre === 1 && R.consigne === true && /même sans internet/.test(R.reponseLibre || ''), JSON.stringify([R.modeleLibre, R.consigne]));
+  verifie('le modèle ne reçoit que ce fil (rien de la page Charly IA)', !/Dentiste demain\b(?! à 15h)|Je te propose/.test(R.histoModele || '') && /changer la langue/.test(R.histoModele || ''), R.histoModele);
+  verifie('le modèle qui répond [PAGE_CHARLY] : la même phrase et le bouton', R.pageCharlyModele === 2, R.pageCharlyModele);
+  verifie('une carte écrite par le modèle n apparaît jamais : la phrase et le bouton à la place', R.sansCarte === true && /Pour ton agenda/.test(R.apercu || ''), R.apercu);
+  verifie('la flèche ramène à la messagerie ; l aperçu montre le dernier message de cette conversation', R.retourMessagerie === true && R.apercu.length > 0 && !/Je te propose/.test(R.apercu), JSON.stringify([R.retourMessagerie, R.apercu]));
+  verifie('le fil reste sur l appareil et se relit en rouvrant', R.gardes === 10 && R.apercuRelu === R.apercu && R.reluConv === true, JSON.stringify([R.gardes, R.apercuRelu, R.reluConv]));
+  verifie('« Ouvrir Charly IA » : la page Charly IA, comme avant, avec son histoire à elle', R.surPageCharly === true && R.pageHisto === true && R.pageBoutons === true, JSON.stringify([R.surPageCharly, R.pageHisto, R.pageBoutons]));
+  verifie('100 messages gardés, 10 envoyés au modèle', R.gardes100 === 100 && R.auModele === 10, JSON.stringify([R.gardes100, R.auModele]));
 }
 console.log('');
 console.log(ko + ' anomalie(s).');

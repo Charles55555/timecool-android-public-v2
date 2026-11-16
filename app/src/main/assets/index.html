@@ -610,14 +610,9 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 .conv-composer input { flex:1; padding:11px 16px; border:none; background:#f1f3f4; border-radius:99px; font-size:14px; outline:none; font-family:inherit; color:var(--text); }
 .conv-composer button { width:42px; height:42px; border-radius:50%; border:none; background:var(--g-blue); color:#fff; font-size:17px; cursor:pointer; flex-shrink:0; }
 .conv-composer button:active { transform:scale(.93); }
-/* Mission 100 : la page de Charly ouverte depuis la messagerie, comme une conversation (sans les rangées de boutons). */
-#page-assistant .tc-nom-conv { display:none; }
-#page-assistant.tc-charly-conv .tc-nom-conv { display:inline; }
-#page-assistant.tc-charly-conv .tc-nom-page,
-#page-assistant.tc-charly-conv #charlyQuickIntro,
-#page-assistant.tc-charly-conv #charlyQuickActions,
-#page-assistant.tc-charly-conv #charlyQuickActions2,
-#page-assistant.tc-charly-conv #charlyResetBtn { display:none !important; }
+/* Mission 102 : la ligne « Charly, ton aide TimeCool » a un fond bleu ciel, pour la distinguer des autres conversations. */
+#msgCharly, #msgCharly:hover { background:var(--tc-charly-ligne, #cdeafc); }
+.tc-aide-bouton { margin-top:8px; padding:8px 12px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
 
 .ct-actions { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
 .ct-act { display:flex; align-items:center; justify-content:center; gap:7px; padding:11px 8px; border-radius:10px;
@@ -1789,7 +1784,7 @@ if (window.pdfjsLib) {
   <div class="conv-header">
     <button class="back-btn" onclick="tcRetour()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
     <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
-    <div class="conv-info"><div class="conv-name"><span class="tc-nom-page">Charly IA</span><span class="tc-nom-conv">Charly, ton aide TimeCool</span></div><div class="conv-sub" id="charlyStatus">🔒 Votre Assistant Intelligent</div></div>
+    <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">🔒 Votre Assistant Intelligent</div></div>
     <button onclick="resetCharlyChat()" id="charlyResetBtn" title="Nouvelle conversation" style="background:transparent; border:none; cursor:pointer; padding:8px; color:var(--text-sec);">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
     </button>
@@ -7342,7 +7337,7 @@ function tcLigneCharlyMessagerie(q) {
   if (typeof _msgFilter !== 'undefined' && _msgFilter !== 'all') return '';
   const cle = tcSansAccents(String(q || '')).toLowerCase().trim();
   if (cle && 'charly, ton aide timecool'.indexOf(cle) < 0 && !/^aide/.test(cle)) return '';
-  // Mission 100 : une fois qu'on a parlé à Charly, l'aperçu montre le dernier message, comme une conversation.
+  // Mission 102 : l'aperçu montre le dernier message de la conversation d'aide (pas celui de la page Charly IA).
   const apercu = typeof tcApercuCharly === 'function' ? tcApercuCharly() : '';
   return '<div class="msg-preview" id="msgCharly" onclick="tcOuvrirCharlyAide()">'
     + '<div class="msg-avatar" style="background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>'
@@ -7352,31 +7347,163 @@ function tcLigneCharlyMessagerie(q) {
       : '<div class="msg-text" style="white-space:normal;">Une question\u00a0? Demande-moi\u00a0: «\u00a0Comment changer la langue\u00a0?\u00a0»</div></div></div>');
 }
 
-/** Mission 100 : le dernier message de la conversation avec Charly, en texte simple (sans carte ni balise) ; '' s'il n'y en a pas. */
+/** Mission 100, puis 102 : le dernier message de la conversation d'aide, en texte simple ; '' s'il n'y en a pas. */
 function tcApercuCharly() {
-  if (typeof charlyIA === 'undefined' || !charlyIA) return '';
-  if (typeof tcChargerHistoriqueCharly === 'function') tcChargerHistoriqueCharly();
-  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
-  for (let i = h.length - 1; i >= 0; i--) {
-    const m = h[i];
-    // L'accueil automatique (« Bonjour Charles ! Je suis Charly… ») n'est pas un échange : la ligne garde sa phrase.
-    if (!m || (m.role !== 'user' && m.role !== 'assistant') || m.appText || m._app) continue;
-    let t = String(m.content || '');
-    const avantCarte = t.split('[AGENDA]')[0];
-    t = (avantCarte.trim() ? avantCarte : (t.indexOf('[AGENDA]') > -1 ? 'Proposition de rendez-vous' : t));
-    t = t.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  // Mission 102 : le dernier message de la conversation d'aide, jamais celui de la page Charly IA.
+  const fil = typeof tcFilConvCharly === 'function' ? tcFilConvCharly() : [];
+  for (let i = fil.length - 1; i >= 0; i--) {
+    const t = String((fil[i] && fil[i].text) || '').replace(/\s+/g, ' ').trim();
     if (t) return t.length > 90 ? t.slice(0, 89) + '…' : t;
   }
   return '';
 }
 
-/** Mission 96 : la ligne de Charly ouvre la page Charly IA ; sa flèche retour ramène à la messagerie (pile des écrans). */
-/* Mission 100 (Charles, 16/11 : « comme WhatsApp ») : la même page, en conversation. Une seule histoire avec Charly : le fil est le
-   même que celui de la page de Charly (charlyIA.history, gardé sur l'appareil). Ouverte autrement, la page reste comme avant. */
-let _tcCharlyEnConv = false;
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 102 (Charles, 16/11) : « Charly, ton aide TimeCool », une conversation de la messagerie, indépendante de la page Charly IA
+   « je veux une messagerie indépendante de la page charly … comme le fait WhatsApp … qui pourrait servir de hotline ».
+   - Même écran que la conversation avec un contact (page-conv) ; son fil à elle (TC_CONV_CHARLY_CLE), jamais celui de la page
+     Charly IA (charlyIA.history). Nouvelle clé : rien de l'histoire de la page n'y apparaît, même pour qui l'a ouverte en 100.
+   - Hotline : les réponses de la base d'aide (mission 96) d'abord, sans le modèle ; puis le modèle, pour les autres questions sur
+     l'appli (tcConsigneConvCharly). Une demande d'agenda reçoit « Pour ton agenda, va sur la page Charly IA. » et un bouton.
+   - 100 messages gardés sur l'appareil, les 10 derniers envoyés au modèle ; aucune carte de rendez-vous ici.
+   ═══════════════════════════════════════════════════════════════ */
+const TC_CONV_CHARLY_ID = 'charly-aide';
+const TC_CONV_CHARLY_CLE = 'timecool_charly_aide';
+const TC_CONV_CHARLY_MAX = 100;
+const TC_CONV_CHARLY_MODELE_MAX = 10;
+const TC_CONV_CHARLY_ACCUEIL = 'Une question\u00a0? Demande-moi\u00a0: «\u00a0Comment changer la langue\u00a0?\u00a0»';
+const TC_CONV_CHARLY_AGENDA = 'Pour ton agenda, va sur la page Charly IA.';
+const TC_CONV_CHARLY_INCONNU = 'Je ne sais pas encore répondre à ça. Essaie de poser ta question autrement.';
+const TC_CONV_CHARLY_PANNE = 'Je n’arrive pas à répondre pour le moment. Réessaie dans un instant.';
+let _tcConvCharly = null;
+let _tcConvCharlyAttente = false;
+let _tcConvCharlyEnvois = 0;
+
+/** Le fil de la conversation d'aide, lu une fois sur l'appareil. */
+function tcFilConvCharly() {
+  if (Array.isArray(_tcConvCharly)) return _tcConvCharly;
+  _tcConvCharly = [];
+  try {
+    const l = JSON.parse(localStorage.getItem(TC_CONV_CHARLY_CLE) || '[]');
+    if (Array.isArray(l)) _tcConvCharly = l.filter(function (m) { return m && (m.from === 'me' || m.from === 'charly') && typeof m.text === 'string'; });
+  } catch (e) {}
+  return _tcConvCharly;
+}
+function tcSauverConvCharly() {
+  const fil = tcFilConvCharly();
+  if (fil.length > TC_CONV_CHARLY_MAX) fil.splice(0, fil.length - TC_CONV_CHARLY_MAX);
+  try { localStorage.setItem(TC_CONV_CHARLY_CLE, JSON.stringify(fil)); } catch (e) {}
+}
+function tcAjouterConvCharly(from, text, extra) {
+  const d = new Date();
+  const m = Object.assign({ from: from, text: String(text || ''), time: ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) }, extra || {});
+  tcFilConvCharly().push(m);
+  tcSauverConvCharly();
+  return m;
+}
+
 function tcOuvrirCharlyAide() {
-  _tcCharlyEnConv = true;
-  navigate('assistant');
+  if (currentPage !== 'conv' && typeof tcNoterDepart === 'function') tcNoterDepart('conv');
+  tcOuvrirConvCharly();
+}
+
+/** Ouvre (ou redessine) la conversation d'aide dans l'écran de conversation de la messagerie. */
+function tcOuvrirConvCharly() {
+  if (currentPage !== 'conv' || _currentConvId !== TC_CONV_CHARLY_ID) _convOrigine = currentPage === 'conv' ? 'messages' : currentPage;
+  _currentConvId = TC_CONV_CHARLY_ID;
+  const av = document.getElementById('convAvatar');
+  av.style.background = 'linear-gradient(135deg, var(--g-blue), var(--g-yellow))';
+  av.textContent = '⚡';
+  document.getElementById('convName').textContent = 'Charly, ton aide TimeCool';
+  const convoqBtn = document.getElementById('convConvoqBtn');
+  if (convoqBtn) convoqBtn.style.display = 'none';
+  const body = document.getElementById('convBody');
+  const fil = tcFilConvCharly();
+  body.innerHTML = (fil.length
+    ? fil.map(function (t) {
+        return '<div class="conv-msg ' + (t.from === 'me' ? 'sent' : 'received') + '">' + escapeHTMLSafe(t.text).replace(/\n/g, '<br>')
+          + (t.bouton === 'charly' ? '<div><button class="tc-aide-bouton" onclick="navigate(\'assistant\')">Ouvrir Charly IA</button></div>' : '')
+          + '<div class="conv-time">' + escapeHTMLSafe(t.time || '') + '</div></div>';
+      }).join('')
+    : '<div style="text-align:center; padding:36px 20px; color:var(--text-sec); font-size:13px; line-height:1.6;">' + TC_CONV_CHARLY_ACCUEIL + '</div>')
+    + (_tcConvCharlyAttente ? '<div class="conv-msg received" style="color:var(--text-sec);">Charly écrit…</div>' : '');
+  body.scrollTop = body.scrollHeight;
+  currentPage = 'conv';
+  document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+  document.getElementById('page-conv').classList.add('active');
+  if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
+  if (currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
+    setTimeout(function () { translatePageWithGoogle(currentLanguage, true); }, 120);
+  }
+}
+
+/** Une demande sur l'agenda ou les contacts (créer, décaler, annuler, retard, malade, retrouver un contact) : pas pour la hotline.
+ *  Une question « comment… » reste une question d'aide (« Comment je décale un rendez-vous ? »). */
+function tcDemandeAgendaConvCharly(text) {
+  const brut = String(text || '').trim();
+  const t = tcSansAccents(brut).toLowerCase().replace(/[’'«»"]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!t) return false;
+  if (/^(comment|c est quoi|qu est ce|ou |a quoi|pourquoi|je n arrive pas|j arrive pas|je ne trouve pas|je trouve pas|je ne sais pas|je sais pas|est ce que (je|on) peu|peut on|puis je|on fait comment|je fais comment|aide moi a|explique)/.test(t)) return false;
+  if (typeof tcDetecterMalade === 'function' && tcDetecterMalade(brut)) return true;
+  if (/\b(rdv|rendez vous|rendez-vous|reunion|creneau|agenda|planning|annule|annuler|decale|decaler|deplace|deplacer|reporte|reporter|retard|ajoute|ajouter|cree|creer|note|noter|programme|programmer|reserve|reserver|previens|prevenir|retrouve|retrouver|cherche|chercher|contact|fiche|malade)\b/.test(t)) return true;
+  if (typeof tcHeureDansTexte === 'function' && tcHeureDansTexte(brut.toLowerCase())) return true;
+  if (typeof tcJoursCites === 'function' && tcJoursCites(brut, new Date()).length) return true;
+  return false;
+}
+
+/** La consigne du modèle dans la conversation d'aide : la base d'aide de la mission 96 sert de référence. */
+function tcConsigneConvCharly() {
+  const base = (typeof TC_AIDE !== 'undefined' && Array.isArray(TC_AIDE) ? TC_AIDE : []).map(function (x) { return '- ' + x.q + ' → ' + x.a; }).join('\n');
+  return 'Tu es Charly, l’aide de l’application TimeCool (un agenda intelligent). Ici, tu es la hotline : tu réponds seulement aux questions sur l’utilisation de TimeCool (où trouver un bouton, comment faire quelque chose, à quoi sert un écran).\n'
+    + 'Écris comme pour un enfant de 10 ans : phrases courtes, mots simples, tutoiement, 4 phrases au plus, pas de liste à puces.\n'
+    + 'Tu ne crées, ne décales et n’annules jamais de rendez-vous ici, et tu n’écris jamais de bloc [AGENDA].\n'
+    + 'Si la personne demande d’agir sur son agenda ou ses contacts (créer, décaler ou annuler un rendez-vous, prévenir d’un retard, dire qu’elle est malade, retrouver un contact), réponds seulement : [PAGE_CHARLY]\n'
+    + 'Appuie-toi sur ces réponses connues. Ne cite jamais un bouton ou un écran qui n’y est pas. Si tu ne sais pas, réponds seulement : [JE_NE_SAIS_PAS]\n'
+    + base + (typeof tcLangInstruction === 'function' ? tcLangInstruction() : '');
+}
+
+/** Envoi dans la conversation d'aide. */
+async function tcEnvoyerConvCharly(txt) {
+  const input = document.getElementById('convInput');
+  if (input) input.value = '';
+  tcAjouterConvCharly('me', txt);
+  // 1. La base d'aide (mission 96), sans le modèle.
+  const aide = typeof tcAideCharly === 'function' ? tcAideCharly(txt) : null;
+  if (aide) { tcAjouterConvCharly('charly', aide.a, { aide: aide.id }); tcOuvrirConvCharly(); return; }
+  // 2. Une demande d'agenda : la page Charly IA.
+  if (tcDemandeAgendaConvCharly(txt)) { tcAjouterConvCharly('charly', TC_CONV_CHARLY_AGENDA, { bouton: 'charly' }); tcOuvrirConvCharly(); return; }
+  // 3. Le modèle, pour les autres questions sur l'appli.
+  if (!tcCharlyPret() || _tcConvCharlyEnvois >= ((charlyIA && charlyIA.config && charlyIA.config.maxMessages) || 50)) {
+    tcAjouterConvCharly('charly', TC_CONV_CHARLY_PANNE); tcOuvrirConvCharly(); return;
+  }
+  _tcConvCharlyEnvois++;
+  _tcConvCharlyAttente = true;
+  tcOuvrirConvCharly();
+  let reponse = '';
+  try {
+    const fil = tcFilConvCharly().slice(-TC_CONV_CHARLY_MODELE_MAX);
+    const histo = [];
+    fil.forEach(function (m) {
+      const role = m.from === 'me' ? 'user' : 'assistant';
+      const c = String(m.text || '').trim();
+      if (!c) return;
+      const prec = histo[histo.length - 1];
+      if (prec && prec.role === role) prec.content += '\n' + c; else histo.push({ role: role, content: c });
+    });
+    if (histo.length && histo[0].role === 'assistant') histo.unshift({ role: 'user', content: '(début de la conversation)' });
+    reponse = String(await callAI([{ role: 'system', content: tcConsigneConvCharly() }].concat(histo)) || '');
+  } catch (e) {
+    reponse = '';
+  }
+  _tcConvCharlyAttente = false;
+  // Une carte écrite par le modèle : c'était une demande d'agenda. La phrase et le bouton, jamais la carte.
+  const _carte = /\[AGENDA\]/.test(reponse);
+  reponse = reponse.replace(/\[AGENDA\][\s\S]*?(\[\/AGENDA\]|$)/g, '').trim();
+  if (/\[PAGE_CHARLY\]/.test(reponse) || _carte) tcAjouterConvCharly('charly', TC_CONV_CHARLY_AGENDA, { bouton: 'charly' });
+  else if (/\[JE_NE_SAIS_PAS\]/.test(reponse)) tcAjouterConvCharly('charly', TC_CONV_CHARLY_INCONNU);
+  else tcAjouterConvCharly('charly', reponse.replace(/\[[A-Z_]+\]/g, '').trim() || TC_CONV_CHARLY_PANNE);
+  if (currentPage === 'conv' && _currentConvId === TC_CONV_CHARLY_ID) tcOuvrirConvCharly();
+  else if (currentPage === 'messages' && typeof renderMessages === 'function') renderMessages();
 }
 
 /** Mission 94 : les contacts dont le nom contient ce qui est tapé (sans accents, sans majuscules). */
@@ -7450,6 +7577,7 @@ function tcRetourDepuisConversation() {
 }
 
 function openConversation(id, origine) {
+  if (id === TC_CONV_CHARLY_ID) return tcOuvrirConvCharly();   // mission 102 : redessins (synchronisation, envoi)
   const msg = tcConversationParId(id);
   if (!msg) return;
   _currentConvId = id;
@@ -10427,9 +10555,6 @@ let _tcPagePrecedente = 'calendar';   // le sommet de la pile : la derniere page
 const TC_PILE_MAX = 10;
 let _tcPileEcrans = [];
 let _tcRetourEnCours = false;
-/* Mission 101 : pour chaque écran de la pile, la page de Charly était-elle en conversation ? Un retour lui rend son allure. */
-let _tcPileConv = [];
-let _tcRetourConvCharly = null;
 
 /** Retient l'ecran que l'on quitte pour aller vers `vers`. */
 function tcNoterDepart(vers) {
@@ -10437,14 +10562,9 @@ function tcNoterDepart(vers) {
   const quittee = (typeof currentPage === 'string') ? currentPage : '';
   if (!quittee || quittee === vers || quittee === 'conv') return;
   if (typeof document !== 'undefined' && !document.getElementById('page-' + quittee)) return;
-  const _pa = quittee === 'assistant' && typeof document !== 'undefined' ? document.getElementById('page-assistant') : null;
-  const conv = !!(_pa && _pa.classList && _pa.classList.contains('tc-charly-conv'));
   if (_tcPileEcrans[_tcPileEcrans.length - 1] !== quittee) {
     _tcPileEcrans.push(quittee);
-    _tcPileConv.push(conv);
-    if (_tcPileEcrans.length > TC_PILE_MAX) { _tcPileEcrans.shift(); _tcPileConv.shift(); }
-  } else {
-    _tcPileConv[_tcPileEcrans.length - 1] = conv;
+    if (_tcPileEcrans.length > TC_PILE_MAX) _tcPileEcrans.shift();
   }
   _tcPagePrecedente = quittee;
 }
@@ -10455,10 +10575,8 @@ function tcNoterDepart(vers) {
  */
 function tcRetour() {
   let cible = 'calendar';
-  let conv = null;
   while (_tcPileEcrans.length) {
     const p = _tcPileEcrans.pop();
-    conv = _tcPileConv.length ? !!_tcPileConv.pop() : null;
     if (p === currentPage) continue;   // on y est deja : on remonte d'un cran de plus
     cible = (typeof document === 'undefined' || document.getElementById('page-' + p)) ? p : 'calendar';
     break;
@@ -10466,8 +10584,7 @@ function tcRetour() {
   _tcPagePrecedente = _tcPileEcrans.length ? _tcPileEcrans[_tcPileEcrans.length - 1] : 'calendar';
   // Revenir en arriere n'empile pas l'ecran que l'on quitte : sinon la fleche ferait des allers-retours.
   _tcRetourEnCours = true;
-  _tcRetourConvCharly = cible === 'assistant' ? conv : null;
-  try { navigate(cible); } finally { _tcRetourEnCours = false; _tcRetourConvCharly = null; }
+  try { navigate(cible); } finally { _tcRetourEnCours = false; }
 }
 
 /**
@@ -11840,11 +11957,6 @@ function renderCharlyChat() {
   tcChargerHistoriqueCharly();
   tcSauverHistoriqueCharly();
   const body = document.getElementById('charlyChatBody');
-  const _enConv = !!(document.getElementById('page-assistant') && document.getElementById('page-assistant').classList.contains('tc-charly-conv'));
-  if (!charlyIA.history.length && _enConv) {
-    body.innerHTML = '<div style="text-align:center; padding:36px 20px; color:var(--text-sec); font-size:13px; line-height:1.6;">Une question\u00a0? Demande-moi\u00a0: «\u00a0Comment changer la langue\u00a0?\u00a0»</div>';
-    return;
-  }
   if (!charlyIA.history.length) {
     // Welcome message
     body.innerHTML = `
@@ -17298,13 +17410,6 @@ navigate = function(page) {
   else if (page === 'documents') renderDocumentsPage();
   else if (page === 'aiconfig') { _adminCurrentTab = 'config'; renderAIConfig(); }
   else if (page === 'assistant') {
-    // Mission 100 : en conversation si l'on vient de la ligne de la messagerie ; un retour (flèche) garde l'allure d'avant.
-    const pa = document.getElementById('page-assistant');
-    const _retour = typeof _tcRetourEnCours !== 'undefined' && _tcRetourEnCours;
-    if (pa && !_retour) pa.classList.toggle('tc-charly-conv', typeof _tcCharlyEnConv !== 'undefined' && !!_tcCharlyEnConv);
-    // Mission 101 : la flèche rend à la page l'allure qu'elle avait quand on l'a quittée.
-    else if (pa && typeof _tcRetourConvCharly !== 'undefined' && _tcRetourConvCharly !== null) pa.classList.toggle('tc-charly-conv', !!_tcRetourConvCharly);
-    if (typeof _tcCharlyEnConv !== 'undefined') _tcCharlyEnConv = false;
     setTimeout(() => renderCharlyChat(), 50);
   }
 };
@@ -19221,6 +19326,7 @@ const DARK_VARS = {
   '--bg':'#202124','--bg-soft':'#292a2d','--bg-hover':'#35363a',
   '--menu-active':'#2b3a55',  // entree active du menu : bleu nuit (mission 25)
   '--menu-charly':'#3a3222',  // mise en avant « Charly IA » : ambre sombre
+  '--tc-charly-ligne':'#b9dff7', // ligne de Charly : bleu ciel un peu plus soutenu (les lignes de la messagerie restent claires en sombre, mission 102)
   '--violet':'#c58af9'        // liens violets (Importer) lisibles sur sombre
 };
 const LIGHT_VARS = {
@@ -19228,6 +19334,7 @@ const LIGHT_VARS = {
   '--bg':'#fff','--bg-soft':'#f8f9fa','--bg-hover':'#f1f3f4',
   '--menu-active':'#e8f0fe',
   '--menu-charly':'#fff4e0',
+  '--tc-charly-ligne':'#cdeafc', // ligne de Charly dans la messagerie : bleu ciel (mission 102)
   '--violet':'#8430ce'
 };
 
@@ -33105,6 +33212,7 @@ async function sendConvMessage() {
   if (!input) return;
   const txt = input.value.trim();
   if (!txt) return;
+  if (_currentConvId === TC_CONV_CHARLY_ID) return tcEnvoyerConvCharly(txt);   // mission 102
 
   const conv = tcConversationParId(_currentConvId);
   if (!conv) return;
