@@ -48,7 +48,7 @@ function monde(jour) {
   const ctx = {
     console, JSON, Array, Object, String, Number, Math, Promise, RegExp, Storage, localStorage, Date: FauxDate, TypeError, Error,
     setTimeout: (f) => { Promise.resolve().then(f); return 0; },
-    document: { getElementById: (id) => elements[id] || null, createElement: () => ({ style: {}, setAttribute() {}, set id(v) { elements[v] = this; }, remove() { Object.keys(elements).forEach((k) => { if (elements[k] === this) delete elements[k]; }); } }), body: { style: {}, appendChild() {} }, querySelectorAll: () => [] },
+    document: { getElementById: (id) => elements[id] || null, createElement: () => ({ style: {}, setAttribute() {}, set id(v) { elements[v] = this; }, remove() { Object.keys(elements).forEach((k) => { if (elements[k] === this) delete elements[k]; }); } }), body: { style: {}, appendChild() {} }, querySelectorAll: () => [], querySelector: () => null },
     escapeHTML: (s) => String(s).replace(/</g, '&lt;'), tcBulleCharly: (h) => '<bulle>' + h + '</bulle>', tcSansAccents: (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(),
     tcPrenomUtilisateur: () => 'Charles', currentLanguage: 'fr', TC_TRANSLATE_CACHE: {}, translateText: async (t) => t,
     events: [{ id: 'vrai_1', mode: 'user', date: '2026-11-18', startH: 9, startM: 0, endH: 10, endM: 0, title: 'VRAI Kiné' }],
@@ -70,7 +70,8 @@ function monde(jour) {
     .map((n) => 'function ' + n + '() { _sorties.push("' + n + '"); return "' + n + '"; }').join('\n'), ctx);
   vm.runInContext('function tcISO(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }', ctx);
   const code = [objet('const TC_DEMO_PHRASES = ['), objet('const TC_DEMO_TEXTES = {'), 'let _tcDemo = null;'].concat(['tcDemoActive', 'tcDemoClesLisibles', 'tcDemoJour', 'tcDemoVendredi', 'tcDemoDimanche', 'tcDemoRdv', 'tcDemoDonnees', 'tcDemoLibre',
-    'tcDemoOccupationsMoi', 'tcDemoServeur', 'tcDemoBandeau', 'tcDemoTexte', 'tcDemoTraduire', 'tcDemoMessagePhrases', 'tcDemoRemplacer', 'tcOuvrirDemo', 'tcQuitterDemo'].map(fonction));
+    'tcDemoOccupationsMoi', 'tcDemoServeur', 'tcDemoBandeau', 'tcDemoTexte', 'tcDemoTraduire', 'tcDemoMessagePhrases', 'tcDemoRemplacer', 'tcOuvrirDemo', 'tcQuitterDemo',
+    'tcDemoAttendre', 'tcDemoLibere', 'tcDemoApres', 'tcDemoQuestionEnCours'].map(fonction));
   if (code.some((c) => !c)) { verifie('les fonctions de la démonstration sont dans la page', false, code.map((c) => !!c).join(',')); return null; }
   vm.runInContext(code.join('\n'), ctx);
   return ctx;
@@ -137,6 +138,45 @@ function monde(jour) {
     const cafe = d.events.filter((e) => /Café/.test(e.title))[0];
     verifie(nom + ' : le vendredi et le dimanche d exemple ne sont jamais passés, le café jamais la nuit', ven.date >= j.slice(0, 10) && dim.date >= j.slice(0, 10) && cafe.startH >= 8 && cafe.startH <= 21, JSON.stringify(d.events.map((e) => e.date + ' ' + e.startH + ' ' + e.title)));
   });
+
+  console.log('-- 6 bis. Examen : se déconnecter, supprimer son compte, changer de page, « Quitter » pendant que Charly travaille --');
+  {
+    const w = monde('2026-11-17T14:20:00');
+    vm.runInContext(`
+      function logoutUser() { localStorage.removeItem('tc_user_events'); _sorties.push('logout ' + (tcDemoActive() ? 'demo' : 'vrai') + ' ' + (_vraiStock.tc_user_events === undefined ? 'efface' : 'garde')); }
+      function tcSupprimerMonCompte() { _sorties.push('suppression ' + (tcDemoActive() ? 'demo' : 'vrai') + ' ' + (TC_BACKEND.envoyerMessage.toString().indexOf('serveur') > -1 ? 'vrai-serveur' : 'faux-serveur')); }
+      function showAuthFlow() { _sorties.push('connexion ' + (tcDemoActive() ? 'demo' : 'vrai')); }
+      function tcRepondreTypeGroupe() { return 'type'; }
+      var _liberer = null;
+      charlySendMessage = function () { return new Promise(function (r) { _liberer = r; }); };`, w);
+    await vm.runInContext('tcOuvrirDemo()', w);
+    vm.runInContext('navigate("calendar"); navigate("contacts")', w);
+    verifie('l agenda et les contacts : la démonstration reste ouverte', vm.runInContext('tcDemoActive()', w) === true);
+    w._sorties.length = 0;
+    await vm.runInContext('logoutUser()', w);
+    verifie('« Se déconnecter » : la démonstration se ferme d abord, puis la vraie déconnexion efface vraiment', w._sorties.join() === 'logout vrai efface' && vm.runInContext('tcDemoActive()', w) === false, w._sorties.join());
+    await vm.runInContext('tcOuvrirDemo()', w);
+    w._sorties.length = 0;
+    await vm.runInContext('tcSupprimerMonCompte()', w);
+    verifie('« Supprimer mon compte » : hors démonstration, avec le vrai serveur', w._sorties.join() === 'suppression vrai vrai-serveur', w._sorties.join());
+    await vm.runInContext('tcOuvrirDemo()', w);
+    w._sorties.length = 0;
+    vm.runInContext('navigate("settings")', w);
+    verifie('une autre page (Paramètres) : la démonstration se ferme', vm.runInContext('tcDemoActive()', w) === false);
+    await vm.runInContext('tcOuvrirDemo()', w);
+    vm.runInContext('showAuthFlow()', w);
+    verifie('l écran de connexion : jamais en démonstration', w._sorties.join() === 'connexion vrai', w._sorties.join());
+    await vm.runInContext('tcOuvrirDemo()', w);
+    const enCours = vm.runInContext('charlySendMessage()', w);
+    vm.runInContext('tcQuitterDemo()', w);
+    verifie('« Quitter » pendant que Charly travaille : la démonstration attend la fin du message', vm.runInContext('tcDemoActive() && _tcDemo.quitterApres === true', w) === true);
+    const deconnexion = vm.runInContext('logoutUser()', w);
+    verifie('se déconnecter pendant que Charly travaille : rien avant la fin du message', !w._sorties.some((x) => /logout/.test(x)));
+    vm.runInContext('_liberer()', w);
+    await enCours; await deconnexion;
+    verifie('le message fini : la démonstration se ferme, puis la déconnexion se fait pour de vrai', vm.runInContext('tcDemoActive()', w) === false && w._sorties.indexOf('logout vrai efface') > -1, w._sorties.join());
+    verifie('ce qui a été écrit pendant le message n est pas resté (vraies données intactes)', vm.runInContext('events[0].title === "VRAI Kiné" && charlyIA.history[0].content === "VRAIE question"', w));
+  }
 
   console.log('-- 7. La page --');
   verifie('le bouton « Voir la démonstration » ouvre la démonstration', /<button id="tcBoutonDemo" onclick="tcOuvrirDemo\(\)"/.test(page));

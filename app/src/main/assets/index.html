@@ -12512,12 +12512,15 @@ function tcDemoRemplacer(nom, f) {
 /** « Voir la démonstration » : les vraies données de côté, les données d'exemple, le stockage et le réseau coupés. */
 async function tcOuvrirDemo() {
   if (_tcDemo) return;
+  // Examen : dans une autre langue, la traduction des textes peut prendre quelques secondes : le bouton le montre.
+  const bouton = document.getElementById('tcBoutonDemo');
+  if (bouton && typeof currentLanguage !== 'undefined' && currentLanguage && currentLanguage !== 'fr') { bouton.disabled = true; bouton.style.opacity = '0.6'; bouton.textContent = '⏳ ' + bouton.textContent; }
   await tcDemoTraduire();
   if (_tcDemo) return;
   const donnees = tcDemoDonnees();
   const S = Storage.prototype;
   const etat = {
-    faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(),
+    faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(), occupe: 0, attentes: [], quitterApres: false,
     vrai: {
       events: events, contactsList: contactsList, history: charlyIA.history, historiqueCharge: charlyIA._historiqueCharge,
       messages: (typeof messages !== 'undefined') ? messages : null, conv: (typeof _tcConvCharly !== 'undefined') ? _tcConvCharly : null,
@@ -12561,11 +12564,30 @@ async function tcOuvrirDemo() {
     try { etat.fonctions[n] = (0, eval)(n); } catch (e) { return; }
     tcDemoRemplacer(n, neutres[n]);
   });
-  // Chaque réponse de Charly finit par les phrases qui restent.
-  etat.fonctions.charlySendMessage = charlySendMessage;
-  etat.fonctions.tcConfirmerRdvGroupe = tcConfirmerRdvGroupe;
-  charlySendMessage = async function () { await etat.fonctions.charlySendMessage.apply(this, arguments); tcDemoApres(); };
-  tcConfirmerRdvGroupe = async function () { await etat.fonctions.tcConfirmerRdvGroupe.apply(this, arguments); tcDemoApres(); };
+  // Chaque réponse de Charly finit par les phrases qui restent. Examen : tant que Charly travaille, la démonstration ne se
+  // ferme pas (« Quitter » attend la fin) : un message commencé ici ne se termine jamais dans la vraie vie.
+  ['charlySendMessage', 'tcConfirmerRdvGroupe', 'tcRepondreTypeGroupe'].forEach(function (n) {
+    try { etat.fonctions[n] = (0, eval)(n); } catch (e) { return; }
+    tcDemoRemplacer(n, async function () {
+      etat.occupe++;
+      try { return await etat.fonctions[n].apply(this, arguments); } finally {
+        etat.occupe--;
+        if (n !== 'tcRepondreTypeGroupe' && _tcDemo === etat && !etat.quitterApres) tcDemoApres();
+        tcDemoLibere(etat);
+      }
+    });
+  });
+  // Examen : se déconnecter, supprimer son compte, ouvrir une autre page que Charly, l'agenda ou les contacts : la démonstration
+  // se ferme d'abord (après le message en cours), puis le geste se fait pour de vrai.
+  ['logoutUser', 'tcSupprimerMonCompte', 'showAuthFlow', 'navigate'].forEach(function (n) {
+    try { etat.fonctions[n] = (0, eval)(n); } catch (e) { return; }
+    tcDemoRemplacer(n, function () {
+      const self = this, args = arguments;
+      if (n === 'navigate' && ['assistant', 'calendar', 'contacts'].indexOf(args[0]) > -1) return etat.fonctions.navigate.apply(self, args);
+      const faire = function () { if (_tcDemo === etat) tcQuitterDemo({ sansRetour: true }); return (0, eval)(n).apply(self, args); };
+      return etat.occupe > 0 ? tcDemoAttendre(etat).then(faire) : faire();
+    });
+  });
   // 5. Les données d'exemple.
   events = donnees.events;
   contactsList = donnees.contacts;
@@ -12581,10 +12603,29 @@ async function tcOuvrirDemo() {
   renderCharlyChat();
 }
 
-/** « Quitter » : tout revient comme avant, puis « importe tes contacts ». */
-function tcQuitterDemo() {
+/** Une promesse tenue quand Charly a fini le message en cours de la démonstration. */
+function tcDemoAttendre(etat) {
+  return etat.occupe > 0 ? new Promise(function (r) { etat.attentes.push(r); }) : Promise.resolve();
+}
+
+/** Charly a fini : ceux qui attendaient repartent ; un « Quitter » touché entre-temps se fait maintenant. */
+function tcDemoLibere(etat) {
+  if (etat.occupe > 0) return;
+  const attentes = etat.attentes.splice(0);
+  if (etat.quitterApres && _tcDemo === etat) tcQuitterDemo();
+  attentes.forEach(function (r) { r(); });
+}
+
+/** « Quitter » : tout revient comme avant, puis « importe tes contacts ». Charly au travail : après son message. */
+function tcQuitterDemo(options) {
   const etat = _tcDemo;
   if (!etat) return;
+  if (etat.occupe > 0) {
+    etat.quitterApres = true;
+    const b = document.querySelector('#tcDemoBandeau button');
+    if (b) { b.disabled = true; b.style.opacity = '0.6'; }
+    return;
+  }
   const S = Storage.prototype;
   S.getItem = etat.stockage.getItem; S.setItem = etat.stockage.setItem; S.removeItem = etat.stockage.removeItem; S.clear = etat.stockage.clear;
   window.fetch = etat.fetch;
@@ -12602,7 +12643,7 @@ function tcQuitterDemo() {
   _tcDemo = null;
   tcDemoBandeau(false);
   charlyIA.history.push({ role: 'assistant', content: TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
-  navigate('assistant');
+  if (!(options && options.sansRetour)) navigate('assistant');
   renderCharlyChat();
   try { if (typeof render === 'function') render(); } catch (e) {}
 }
