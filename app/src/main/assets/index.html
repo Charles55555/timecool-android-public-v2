@@ -429,16 +429,31 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 @keyframes tcPointPulse { 0%,60%,100% { transform:scale(0.75); opacity:0.25; } 30% { transform:scale(1.3); opacity:1; } }
 /* Un telephone regle pour limiter les animations les voit fixes. */
 @media (prefers-reduced-motion: reduce) { .tc-points span { animation:none; opacity:1; transform:none; } }
-/* Mission 108 : un message part (ou arrive) : trois petites feuilles glissent dans la bulle, à la place des points. Doux, gris. */
-.tc-feuilles { position:relative; display:block; width:56px; height:18px; overflow:hidden; }
-.tc-feuilles span { position:absolute; top:5px; left:0; width:9px; height:7px; background:#eef0f4; border:1px solid #c3c8d2; border-radius:1.5px; opacity:0; animation:tcFeuilleEnvoi 1.4s linear infinite; }
-.tc-feuilles span:nth-child(2) { animation-delay:0.47s; }
-.tc-feuilles span:nth-child(3) { animation-delay:0.94s; }
+/* Mission 109 : un message part (ou arrive) : trois feuilles de papier bleues glissent dans la bulle, à la place des points.
+   La zone a toujours la même hauteur : la bulle ne saute pas quand les points deviennent des feuilles. */
+.tc-attente-anim { height:22px; display:flex; align-items:center; }
+.tc-feuilles { position:relative; display:block; width:96px; height:22px; overflow:hidden; }
+.tc-feuilles span { position:absolute; top:2px; left:0; width:14px; height:18px; box-sizing:border-box; border:1.5px solid var(--g-blue); border-radius:2px;
+  background:linear-gradient(#8ab4f8,#8ab4f8) 2px 6px/7px 1.5px no-repeat, linear-gradient(#8ab4f8,#8ab4f8) 2px 9.5px/7px 1.5px no-repeat,
+  linear-gradient(#8ab4f8,#8ab4f8) 2px 13px/5px 1.5px no-repeat, #fff; opacity:0; animation:tcFeuilleEnvoi 1.8s ease-in-out infinite; }
+/* Le coin plié en haut à droite : c'est une feuille de papier. */
+.tc-feuilles span::after { content:""; position:absolute; top:-1.5px; right:-1.5px; border-top:5px solid #fff; border-left:5px solid #8ab4f8; }
+.tc-feuilles span:nth-child(2) { animation-delay:0.6s; }
+.tc-feuilles span:nth-child(3) { animation-delay:1.2s; }
 .tc-feuilles.retour span { animation-name:tcFeuilleRetour; }
-@keyframes tcFeuilleEnvoi { 0% { transform:translateX(0) rotate(-8deg); opacity:0; } 15%, 85% { opacity:0.9; } 100% { transform:translateX(46px) rotate(8deg); opacity:0; } }
-@keyframes tcFeuilleRetour { 0% { transform:translateX(46px) rotate(8deg); opacity:0; } 15%, 85% { opacity:0.9; } 100% { transform:translateX(0) rotate(-8deg); opacity:0; } }
-/* « Réduire les animations » : le texte seul. */
-@media (prefers-reduced-motion: reduce) { .tc-feuilles { display:none; } }
+@keyframes tcFeuilleEnvoi { 0% { transform:translateX(0) rotate(-8deg); opacity:0; } 12%, 85% { opacity:1; } 100% { transform:translateX(82px) rotate(8deg); opacity:0; } }
+@keyframes tcFeuilleRetour { 0% { transform:translateX(82px) rotate(8deg); opacity:0; } 12%, 85% { opacity:1; } 100% { transform:translateX(0) rotate(-8deg); opacity:0; } }
+/* « Réduire les animations » : les feuilles restent, immobiles, avec une flèche qui dit le sens (→ envoi, ← réponse). */
+@media (prefers-reduced-motion: reduce) {
+  .tc-feuilles span { animation:none; opacity:1; transform:none; }
+  .tc-feuilles span:nth-child(2) { left:19px; }
+  .tc-feuilles span:nth-child(3) { left:38px; }
+  .tc-feuilles::after { content:"→"; position:absolute; left:60px; top:0; line-height:22px; font-size:18px; font-weight:700; color:var(--g-blue); }
+  .tc-feuilles.retour span:nth-child(1) { left:44px; }
+  .tc-feuilles.retour span:nth-child(2) { left:63px; }
+  .tc-feuilles.retour span:nth-child(3) { left:82px; }
+  .tc-feuilles.retour::after { content:"←"; left:18px; }
+}
 .ai-text { font-size:13px; color:var(--g-blue); font-weight:500; }
 
 /* Dashboard */
@@ -12858,13 +12873,15 @@ async function tcDemanderRdvContact107(text) {
    feuilles glissent à la place des quatre points. Aucune attente ajoutée en vrai : la bulle reste le temps de l'action, au
    moins une seconde pour qu'on la lise ; dans la démonstration, environ 1,5 seconde par étape.
    ═══════════════════════════════════════════════════════════════ */
-/** Le temps minimum d'une étape de la bulle, en millisecondes : une ligne par contexte. */
-const TC_ATTENTE_DUREES = { demo: 1500, vrai: 1000 };
+/** Le temps minimum d'une étape de la bulle, en millisecondes : une ligne par contexte ; « feuilles » : une étape où un
+ * message part ou arrive (mission 109 : 5 s, dans la démonstration comme en vrai). */
+const TC_ATTENTE_DUREES = { demo: 1500, vrai: 1000, feuilles: 5000 };
 /** Le sous-titre de Charly au repos. */
 const TC_STATUT_REPOS = '🔒 Votre Assistant Intelligent';
 let _tcEtape = null;
 
-function tcAttenteDuree() {
+function tcAttenteDuree(e) {
+  if (e && e.sorte && typeof TC_ATTENTE_DUREES.feuilles === 'number') return TC_ATTENTE_DUREES.feuilles;
   return (typeof tcDemoActive === 'function' && tcDemoActive()) ? TC_ATTENTE_DUREES.demo : TC_ATTENTE_DUREES.vrai;
 }
 
@@ -12910,7 +12927,7 @@ function tcTexteAppTraduit(fr) {
 /** Une étape de la bulle : la précédente reste au moins son temps minimum, puis la bulle dit la nouvelle. sorte : 'envoi' | 'reception'. */
 async function tcEtapeAttente(texte, sorte) {
   if (_tcEtape) await tcMinEtape(_tcEtape);
-  const e = { debut: Date.now() };
+  const e = { debut: Date.now(), sorte: sorte || null };
   // Filet : une étape jamais refermée (erreur en route) ne bloque pas Charly plus de 30 s.
   e.garde = setTimeout(function () { if (_tcEtape === e) { _tcEtape = null; tcDefinirStatutCharly(TC_STATUT_REPOS, false); } }, 30000);
   _tcEtape = e;
@@ -12918,7 +12935,7 @@ async function tcEtapeAttente(texte, sorte) {
 }
 
 function tcMinEtape(e) {
-  const reste = tcAttenteDuree() - (Date.now() - e.debut);
+  const reste = tcAttenteDuree(e) - (Date.now() - e.debut);
   return reste > 0 ? new Promise(function (r) { setTimeout(r, reste); }) : Promise.resolve();
 }
 

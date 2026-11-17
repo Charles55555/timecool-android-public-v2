@@ -3568,3 +3568,11 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Étapes : tcEtapeAttente / tcFinEtapes, au moins TC_ATTENTE_DUREES = { demo: 1500, vrai: 1000 } par étape ; filet de 30 s. Ordre gardé : envoi, « C est fait », réponse (la réponse d exemple attend la fin de la scène). Textes de l appli traduits par le cache (tcTexteAppTraduit). Appels protégés par typeof (suites qui extraient les fonctions seules).
 - Création d un rendez-vous par la carte « Ajouter » : instantanée, pas de bulle (rien à attendre).
 - Suites : verif-bulle-attente (nouvelle) ; verif-demo-charly, verif-invites-groupe, verif-attente-charly suivent. verifier.sh vert. Captures : m71\captures108.
+
+## 17/11/2026 — Mission 109 : les feuilles de la bulle d'attente se voient (CODEUR)
+
+- Constat de Charles (PC, démonstration, « Préviens Paul… ») : aucune feuille vue (9 × 7 px, gris pâle, 1,5 s, cachées avec « Réduire les animations »).
+- Feuilles de papier 14 × 18 px, contour bleu TimeCool, trois lignes et un coin plié ; elles glissent sur 82 px dans une zone de 96 × 22 px, toujours dans la même bulle. La zone d'animation a toujours 22 px de haut : la bulle ne saute pas quand les points deviennent des feuilles (elle passe de 62 à 66 px de haut).
+- TC_ATTENTE_DUREES = { demo: 1500, vrai: 1000, feuilles: 5000 } : une étape à feuilles (envoi, réponse) dure 5 s, dans la démonstration et en vrai ; les autres étapes ne changent pas.
+- « Réduire les animations » : les feuilles restent, immobiles, avec une flèche bleue → (envoi) ou ← (réponse).
+- Suites : verif-bulle-attente refaite (24 contrôles, film de la bulle à 390 et 1280 sur retard et malade, 5 s mesurées, vrai, calme) ; verif-demo-charly (feuilles: 150) et verif-invites-groupe (attente 7 s) adaptées. Captures : m71/captures109.
