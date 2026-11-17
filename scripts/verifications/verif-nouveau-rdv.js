@@ -39,7 +39,7 @@ verifie('l ancienne question unique « Tu veux créer un nouveau rendez-vous ! �
 const act = extraire('charlyQuickAction') || '';
 verifie('(mission 93) le bouton ne lance plus le questionnaire : il donne sa phrase d exemple, mot pour mot', act.indexOf('tcDemarrerNouveauRdv') < 0 && /TC_PHRASES_BOUTONS\[action\]/.test(act) && page.indexOf("\n  rdv: 'Pour créer un nouveau rendez-vous, écris-moi ou dis-moi ci-dessous, par exemple : Dentiste demain à 15h.'") > -1);
 verifie('le serveur : proposerRdvGroupe accepte une période (depuis, jusqua, combien, par_jour), confirmerRdvGroupe un titre et une catégorie',
-  /async proposerRdvGroupe\(references, duree, type, options\)/.test(page) && /\['depuis', 'jusqua', 'combien', 'par_jour'\]/.test(page)
+  /async proposerRdvGroupe\(references, duree, type, options\)/.test(page) && /\['depuis', 'jusqua', 'combien', 'par_jour'(?:, 'des')?\]/.test(page)
   && /async confirmerRdvGroupe\(references, date, heure, duree, type, options\)/.test(page) && /if \(options && options\.titre\) corps\.titre = options\.titre;/.test(page));
 verifie('la durée est demandée avant les créneaux, dans les deux parcours (mission 48)', /TC_ETAPE_NRDV_DUREE,\s+TC_ETAPE_NRDV_DUREE_AUTRE,\s+\{ cle: 'creneau',/.test(page) && /TC_ETAPE_NRDV_DUREE,\s+\{ cle: 'creneau',/.test(page));
 if (api) {

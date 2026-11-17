@@ -127,7 +127,7 @@ echo json_encode($res);
 titre('2. Les routes : autorisation, verrous, verification a la confirmation');
 const prop = api.slice(api.indexOf("case 'POST /rdv/groupe/proposer':"), api.indexOf("case 'POST /rdv/groupe/confirmer':"));
 const conf = api.slice(api.indexOf("case 'POST /rdv/groupe/confirmer':"), api.indexOf('/* Message libre d un compte'));
-verifie('proposer : passe par invitesRdvGroupe (autorisation par fiche) et creneauxCommuns', /invitesRdvGroupe\(\$moi/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, \$combien, \$depuis, \$jusqua, \$parJour\)/.test(prop) && /\$combien = \(\$combien !== null && \$combien >= 1 && \$combien <= 40\) \? \$combien : 3;/.test(prop) && /\$parJour = \(\$parJour !== null && \$parJour >= 1 && \$parJour <= 12\) \? \$parJour : 1;/.test(prop));
+verifie('proposer : passe par invitesRdvGroupe (autorisation par fiche) et creneauxCommuns', /invitesRdvGroupe\(\$moi/.test(prop) && /creneauxCommuns\(\(int\) \$moi\['id'\], \$invites, \$duree, \$combien, \$depuis, \$jusqua, \$parJour(?:, \$des)?\)/.test(prop) && /\$combien = \(\$combien !== null && \$combien >= 1 && \$combien <= 40\) \? \$combien : 3;/.test(prop) && /\$parJour = \(\$parJour !== null && \$parJour >= 1 && \$parJour <= 12\) \? \$parJour : 1;/.test(prop));
 verifie('proposer : duree bornee a 1-3 heures', /\$duree < 1 \|\| \$duree > 3/.test(prop));
 const inv = fonction(api, 'invitesRdvGroupe') || '';
 verifie('de 1 a 12 personnes, refus sinon', /count\(\$references\) > 12/.test(inv) && /Rep::erreur\(400, 'participants_invalides'/.test(inv));

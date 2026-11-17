@@ -1833,8 +1833,10 @@ function personneDisponible(array $occupes, array $permises, string $jour, int $
  *
  * $invites : [ [ 'id' => int, 'prenom' => string, 'categories' => string[] ], ... ]
  */
-function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $combien = 3, ?string $depuis = null, ?string $jusqua = null, int $parJour = 1): array
+function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $combien = 3, ?string $depuis = null, ?string $jusqua = null, int $parJour = 1, int $des = 8): array
 {
+    // Mission 110 : « après le boulot » : pas avant 18h ($des, de 8 à 19).
+    $des = max(8, min(19, $des));
     $occOrg = rdvOccupation($organisateurId);
     $occupes = [];
     $dispos = [];
@@ -1873,7 +1875,7 @@ function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $c
             $permises[$inv['id']] = heuresPermisesDuJour($dispos[$inv['id']], $inv['categories'], $jsem);
         }
         $duJour = [];
-        for ($h = 8; $h + $duree <= 20; $h++) {
+        for ($h = $des; $h + $duree <= 20; $h++) {
             if ($date === $aujourdhui && $h <= $heureActuelle) {
                 continue;
             }
@@ -4228,7 +4230,9 @@ switch ($route) {
         $combien = ($combien !== null && $combien >= 1 && $combien <= 40) ? $combien : 3;
         $parJour = Entree::entier('par_jour');
         $parJour = ($parJour !== null && $parJour >= 1 && $parJour <= 12) ? $parJour : 1;
-        $creneaux = $invites === [] ? [] : creneauxCommuns((int) $moi['id'], $invites, $duree, $combien, $depuis, $jusqua, $parJour);
+        $des = Entree::entier('des');
+        $des = ($des !== null && $des >= 8 && $des <= 19) ? $des : 8;
+        $creneaux = $invites === [] ? [] : creneauxCommuns((int) $moi['id'], $invites, $duree, $combien, $depuis, $jusqua, $parJour, $des);
         Rep::ok([
             'creneaux'   => $creneaux,
             'invites'    => array_column($invites, 'prenom'),

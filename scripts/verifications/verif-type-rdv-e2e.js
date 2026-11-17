@@ -118,6 +118,14 @@ const derniers = (conv) => (conv ? conv.contenu.thread : []).map((m) => m.texte)
     dire(false, 'un créneau commun était attendu pour le test de groupe');
   }
 
+  console.log('\nRendez-vous à plusieurs « après le boulot » (mission 110) : pas avant l’heure « des » :');
+  const g3 = await appel('POST', '/rdv/groupe/proposer', { references: [t.ref], duree: 1, des: 17, combien: 3 }, d.jeton);
+  dire(g3.code === 200 && (g3.d.creneaux || []).length > 0 && g3.d.creneaux.every((x) => x.heure === 17), 'des = 17 : seulement 17h (Tania finit à 18h)', JSON.stringify(g3.d.creneaux));
+  const g4 = await appel('POST', '/rdv/groupe/proposer', { references: [t.ref], duree: 1, des: 18 }, d.jeton);
+  dire(g4.code === 200 && (g4.d.creneaux || []).length === 0, 'des = 18 : rien (Tania n’est pas libre le soir)', JSON.stringify(g4.d.creneaux));
+  const g5 = await appel('POST', '/rdv/groupe/proposer', { references: [t.ref], duree: 1, des: 3 }, d.jeton);
+  dire(g5.code === 200 && (g5.d.creneaux || []).some((x) => x.heure < 17), 'des hors bornes : comme avant', JSON.stringify(g5.d.creneaux));
+
   console.log('\nÀ supprimer : ' + [t, a, b, c, d].map((x) => x.ref).join(', '));
   console.log(`\n${ko} anomalie(s).`);
   process.exit(ko ? 1 : 0);

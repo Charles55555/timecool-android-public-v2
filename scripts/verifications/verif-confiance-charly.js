@@ -650,7 +650,7 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
     /\['charlySendMessage', 'tcQuestionnaireRepondre', 'tcQuestionnaireValider'\]\.forEach\(function \(nom\) \{/.test(page) && /try \{ return await f\.apply\(this, arguments\); \} finally \{ tcFinirConfianceDuMoment\(\); \}/.test(page));
   // 3. Après-demain.
   verifie('« je suis malade après-demain, décale tout » : la période est comprise (après-demain), pas de « pour quand ? »', JSON.stringify(ctx.tcMaladeDansLaPhrase('je suis malade après-demain, décale tout')) === '{"periode":"apres_demain","action":"decaler"}' && ctx.tcMaladeDansLaPhrase('malade apres demain').periode === 'apres_demain' && ctx.tcMaladeDansLaPhrase('malade demain').periode === 'demain');
-  verifie('après-demain : jour + 2, toute la journée, sans bouton de plus dans « pour quand ? »', /apres_demain: +\{ texte: 'Après-demain', +label: 'après-demain', +jours: \[2, 2\], debut: 0, +fin: 1440, mots: \/apres\.\?demain\/, cache: true \}/.test(page) && page.indexOf('choix: Object.keys(TC_MALADE_PERIODES).filter(function (k) { return !TC_MALADE_PERIODES[k].cache; })') > -1);
+  verifie('après-demain : jour + 2, toute la journée, sans bouton de plus dans « pour quand ? »', /apres_demain: +\{ texte: 'Après-demain', +label: 'après-demain', +jours: \[2, 2\], debut: 0, +fin: 1440, mots: \/apres\.\?demain\/, cache: true \}/.test(page) && page.indexOf('Object.keys(TC_MALADE_PERIODES).filter(function (k) { return !TC_MALADE_PERIODES[k].cache; })') > -1);
   // 4. Un rendez-vous ⏳ n'est pas reproposé.
   const dits_78 = [], direAvant_78 = ctx.tcQuestionnaireDire;
   ctx.tcQuestionnaireDire = (t) => dits_78.push(t);

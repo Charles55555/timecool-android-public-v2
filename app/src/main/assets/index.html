@@ -12437,7 +12437,7 @@ function tcDemoServeur() {
       const moi = tcDemoOccupationsMoi(), now = new Date(), candidats = [];
       jours.forEach(function (d) {
         const date = tcISO(d), duJour = [];
-        for (let h = 8; h + duree <= 20; h++) {
+        for (let h = Math.max(8, Math.min(19, o.des || 8)); h + duree <= 20; h++) {
           if (date === tcISO(now) && h <= now.getHours()) continue;
           if (!tcDemoLibre(moi, date, h * 60, (h + duree) * 60)) continue;
           const manquants = refs.filter(function (r) { return !tcDemoLibre(_tcDemo.agendas[r], date, h * 60, (h + duree) * 60); }).map(prenomDe);
@@ -12844,7 +12844,7 @@ function tcQuitterDemo(options) {
  * Un autre contact, plusieurs, ou aucun : la phrase suit son chemin d'avant.
  */
 async function tcDemanderRdvContact107(text) {
-  try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64()) return false; } catch (e) { return false; }
+  try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64(true)) return false; } catch (e) { return false; }
   const norm = tcClasseNormaliser(text);
   const m = norm.match(/^(?:stp |svp |charly )?(?:demande|demandes|demander)(?: moi)? (?:un |une )?(?:rendez vous|rdv|creneau)( .*)? (?:a|avec) (.+)$/);
   if (!m || typeof tcContactsParMots !== 'function' || typeof tcGererRdvGroupe !== 'function') return false;
@@ -12853,7 +12853,22 @@ async function tcDemanderRdvContact107(text) {
   if (!mots.length) return false;
   let c = [];
   try { c = tcContactsParMots(mots); } catch (e) { c = []; }
+  // Mission 110 : personne de ce nom : jamais un questionnaire, la solution (ajouter la fiche, ou importer ses contacts).
+  if (!c.length && mots.length <= 2) {
+    tcLaisserTomberCarte110();
+    tcPousserMessageUtilisateur(text);
+    const _bruts = String(text || '').split(/[\s,.;:!?«»"()]+/).filter(Boolean);
+    const nom = tcFicheNomJoli(mots.map(function (w) { const b = _bruts.filter(function (x) { return tcClasseNormaliser(x) === w; }).pop(); return b || w; }).join(' '));
+    charlyIA.history.push({
+      role: 'assistant', nature: 'question',
+      content: 'Je m’en occupe. Je ne trouve pas ' + nom + ' dans tes contacts.\nAjoute sa fiche avec le bouton, ou importe tes contacts. Ensuite, redemande-moi : je regarde vos créneaux communs.',
+      _fiches: { ajouter: nom, ids: [] }, _ficheAttente: { etape: 'ajouter', nom: nom }
+    });
+    renderCharlyChat();
+    return true;
+  }
   if (c.length !== 1 || !c[0].referenceCompte || c[0].isTimeCool === false) return false;
+  tcLaisserTomberCarte110();
   const prenom = String(c[0].name || '').split(' ')[0];
   const periode = (typeof tcPeriodeAgenda === 'function') ? tcPeriodeAgenda(text) : null;
   const options = periode && periode.debut ? { depuis: tcISO(periode.debut), jusqua: tcISO(periode.fin || periode.debut), combien: 3, par_jour: periode.fin ? 1 : 3 } : null;
@@ -12874,8 +12889,9 @@ async function tcDemanderRdvContact107(text) {
    moins une seconde pour qu'on la lise ; dans la démonstration, environ 1,5 seconde par étape.
    ═══════════════════════════════════════════════════════════════ */
 /** Le temps minimum d'une étape de la bulle, en millisecondes : une ligne par contexte ; « feuilles » : une étape où un
- * message part ou arrive (mission 109 : 5 s, dans la démonstration comme en vrai). */
-const TC_ATTENTE_DUREES = { demo: 1500, vrai: 1000, feuilles: 5000 };
+ * message part ou arrive (mission 109 : 5 s, dans la démonstration comme en vrai). Mission 110 : dans la démonstration, toutes
+ * les étapes durent 5 s (le nouvel utilisateur voit Charly chercher, étape par étape). */
+const TC_ATTENTE_DUREES = { demo: 5000, vrai: 1000, feuilles: 5000 };
 /** Le sous-titre de Charly au repos. */
 const TC_STATUT_REPOS = '🔒 Votre Assistant Intelligent';
 let _tcEtape = null;
@@ -13512,7 +13528,8 @@ function tcDateEnLettres(d) {
  *
  * @returns {{date: Date, libelle: string}|{invalide: true}|null} null si la phrase ne dit aucun jour.
  */
-function tcDateDemandee(texte, now) {
+/** opts.suivantSiPasse (mission 110) : un jour de la semaine qui est aujourd’hui, à une heure déjà passée : la semaine suivante. */
+function tcDateDemandee(texte, now, opts) {
   const t = ' ' + tcSansAccents(texte).replace(/[’']/g, ' ').replace(/\s+/g, ' ') + ' ';
   const ref = now ? new Date(now) : new Date();
   const jour0 = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
@@ -13561,6 +13578,11 @@ function tcDateDemandee(texte, now) {
     }
     let diff = (idx - jour0.getDay() + 7) % 7;
     if (diff === 0 && prochain) diff = 7;
+    // Mission 110 : pour créer un rendez-vous, aujourd'hui mais l'heure dite est déjà passée : la semaine suivante.
+    if (diff === 0 && !prochain && opts && opts.suivantSiPasse && typeof tcHeureDansTexte === 'function') {
+      const hd = tcHeureDansTexte(String(texte || '').toLowerCase());
+      if (hd && hd.h * 60 + (hd.m || 0) <= ref.getHours() * 60 + ref.getMinutes()) diff = 7;
+    }
     return { date: plus(diff), libelle: m[1] + (prochain ? ' prochain' : '') };
   }
   // « le 19 » seul
@@ -13577,10 +13599,11 @@ function tcDateDemandee(texte, now) {
  * « rdv aujourd hui 10h avec le plombier » → « Plombier ». Vide si la demande ne dit vraiment rien.
  */
 function tcTitreDepuisDemande(texte) {
-  const VIDES = /^(jusqu|jusque|rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|change[sz]?|changer|modifie[sz]?|modifier|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
+  const VIDES = /^(jusqu|jusque|rdv|rendez-?vous|rendez|vous|saisis|saisir|inscris|inscrire|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|change[sz]?|changer|modifie[sz]?|modifier|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
   // Les apostrophes separent les mots : « aujourd'hui », « m'ajouter », « s'il te plait » (apostrophe droite ou typographique).
   // Mission 106 : « un nouveau rendez-vous chez mon dentiste » donne « Dentiste » (« nouveau » devant « rendez-vous » n'est pas le titre).
-  const mots = String(texte || '').replace(/(^|[^A-Za-zÀ-ÿ])(?:nouveau|nouvel|autre)\s+(?=(?:rdv|rendez[\s-]?vous)(?![A-Za-zÀ-ÿ]))/gi, '$1').replace(/[’']/g, ' ').split(/\s+/).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); });
+  // Mission 110 : « dans mon agenda », « sur mon calendrier » ne sont pas le titre.
+  const mots = String(texte || '').replace(/(^|[^A-Za-zÀ-ÿ])(?:dans|sur|à|a)\s+(?:mon|ton|l['’]|le)\s*(?:agenda|calendrier|planning)(?![A-Za-zÀ-ÿ])/gi, '$1').replace(/(^|[^A-Za-zÀ-ÿ])(?:nouveau|nouvel|autre)\s+(?=(?:rdv|rendez[\s-]?vous)(?![A-Za-zÀ-ÿ]))/gi, '$1').replace(/[’']/g, ' ').split(/\s+/).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); });
   const utile = mots.map(function (w) {
     const brut = tcSansAccents(w);
     if (!brut) return false;
@@ -13695,7 +13718,7 @@ function tcCreationLocale(texte, now, forcer) {
   if (tcJoursCites(brut, now).length > 1 || /\b(puis|ensuite)\b/.test(t)) return '';
   const heure = plage ? { h: Number(plage[1]), m: plage[2] ? Number(plage[2]) : null } : tcHeureDansTexte(brut.toLowerCase());
   if (!heure) return '';
-  const demande = tcDateDemandee(brut, now);
+  const demande = tcDateDemandee(brut, now, { suivantSiPasse: true });
   if (!demande || demande.invalide || !demande.date) return '';
   const titre = tcTitreDepuisDemande(brut);
   if (!titre) return '';
@@ -13724,7 +13747,7 @@ function tcCreationLocale(texte, now, forcer) {
   // « rdv chez le dentiste a 17 heures demain » est un nouveau rendez-vous, meme avec un Dentiste un autre jour (mission 55).
   // (« mets le rdv dentiste a jeudi 10h », avec l'article, designe un rendez-vous existant : la garde reste.)
   // « Ajoute dentiste mardi 9h », « crée coach lundi 9h » : un verbe de création en tête ne déplace jamais, c'est un nouveau rendez-vous (chef, mission 58).
-  const verbeCreation = /^\s*(?:stp |svp |charly )?(?:ajoute[sz]?|ajouter|rajoute[sz]?|cree[sz]?|creer|planifie[sz]?|programme[sz]?|inscris|enregistre[sz]?)(?:[- ]moi)? /.test(t);
+  const verbeCreation = /^\s*(?:stp |svp |charly )?(?:ajoute[sz]?|ajouter|rajoute[sz]?|cree[sz]?|creer|planifie[sz]?|programme[sz]?|inscris|saisis|enregistre[sz]?)(?:[- ]moi)? /.test(t);
   if (!forcer && !verbeCreation && !_court && !(_repasContact && !_repasContact.dejaPrevu) && (!/\b(rdv|rendez|reunion|seance|consultation)\b/.test(t) || /\b(le|la|l|mon|ma|ce|cette) (rdv|rendez|reunion|seance|consultation)\b/.test(t)) && typeof events !== 'undefined' && Array.isArray(events)) {
     const motsT = tcSansAccents(titre).split(/[^a-z0-9]+/).filter(function (w) {
       if (w.length < 4 || /^(avec|chez|pour|sans|dans|vers)$/.test(w)) return false;
@@ -14438,7 +14461,7 @@ function tcCorrigerPropositionsCharly(reply, texte, now) {
   const m = lignes[0].match(/^\s*(\d{4}-\d{2}-\d{2})(\s*>\s*\d{4}-\d{2}-\d{2})?\s*\|\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*\|\s*([^|]*?)\s*((?:\|[^|]*)*)$/);
   if (!m) return reply;
   const ref = now ? new Date(now) : new Date();
-  const demande = tcDateDemandee(texte, ref);
+  const demande = tcDateDemandee(texte, ref, { suivantSiPasse: true });
   if (demande && demande.invalide) return reply;
   let date = m[1];
   let titre = m[7].trim();
@@ -15549,6 +15572,11 @@ function tcJoursFermes(periode) {
 
 async function tcGererDemandeCreneau(text, intent) {
   tcPousserMessageUtilisateur(text);
+  if (typeof tcDemoActive === 'function' && tcDemoActive() && typeof TC_ATTENTE_DUREES !== 'undefined') {
+    tcDefinirStatutCharly('Charly cherche dans ton agenda…', true);
+    await new Promise(function (r) { setTimeout(r, TC_ATTENTE_DUREES.demo); });
+    tcDefinirStatutCharly(typeof TC_STATUT_REPOS !== 'undefined' ? TC_STATUT_REPOS : '', false);
+  }
   let periode = intent && intent.periode;
   // Un seul jour demande (« vendredi », « aujourd'hui ») : la reponse s y limite, jamais les deux semaines (mission 19).
   if (periode && periode.debut && !periode.fin) periode = { debut: periode.debut, fin: periode.debut, label: periode.label, jours: periode.jours };
@@ -15649,7 +15677,7 @@ function detecterConsultationAgenda(text) {
 async function tcGererConsultationAgenda(text, intent) {
   tcPousserMessageUtilisateur(text);
   tcDefinirStatutCharly('Charly cherche dans ton agenda…', true);
-  await new Promise(r => setTimeout(r, 350));
+  await new Promise(r => setTimeout(r, (typeof tcDemoActive === 'function' && tcDemoActive() && typeof TC_ATTENTE_DUREES !== 'undefined') ? TC_ATTENTE_DUREES.demo : 350));
 
   const evs = events.filter(e => e.mode === mode);
   let reply;
@@ -15925,7 +15953,7 @@ function tcBorneDeFin(t, maintenant) {
 async function tcGererSuppressionRdv(text) {
   tcPousserMessageUtilisateur(text);
   tcDefinirStatutCharly('Charly cherche dans ton agenda…', true);
-  await new Promise(r => setTimeout(r, 350));
+  await new Promise(r => setTimeout(r, (typeof tcDemoActive === 'function' && tcDemoActive() && typeof TC_ATTENTE_DUREES !== 'undefined') ? TC_ATTENTE_DUREES.demo : 350));
 
   const t = text.toLowerCase();
   let candidats = events.filter(e => e.mode === mode);
@@ -17542,6 +17570,7 @@ async function charlySendMessage() {
   // Show loading
   // Mission 108 : ce qu'il fait, deviné d'après la phrase (agenda, contacts), sinon « Charly cherche… ».
   tcDefinirStatutCharly(typeof tcTexteAttente === 'function' ? tcTexteAttente(tcDevinerAttente(text)) : 'Charly cherche…', true);
+  if (typeof tcDemoActive === 'function' && tcDemoActive() && typeof TC_ATTENTE_DUREES !== 'undefined') await new Promise(function (r) { setTimeout(r, TC_ATTENTE_DUREES.demo); });
 
   try {
     let reply;
@@ -17553,8 +17582,8 @@ async function charlySendMessage() {
     const _creationLocale = ((typeof tcCarteInvitation === 'function') ? tcCarteInvitation(text, new Date()) : '') || (_rappelHeure && _rappelHeure.carte) || tcCreationLocale(text, new Date());
     if (_creationLocale) {
       reply = _creationLocale;
-    } else if (charlyIA.config.demoMode) {
-      // Mode démo : réponse simulée intelligente
+    } else if (charlyIA.config.demoMode && !(typeof tcDemoActive === 'function' && tcDemoActive())) {
+      // Mode démo : réponse simulée intelligente (la démonstration de Charly, mission 110 : le modèle neutralisé, plus bas)
       reply = await simulateDemoReply(text);
     } else {
       // Vrai appel API : la date, l'heure et le calendrier des 14 prochains jours (campagne 4, 11/10).
@@ -18121,7 +18150,7 @@ async function simulateDemoReply(userText) {
   if (t.includes('trajet') || t.includes('itinérair') || t.includes('départ')) {
     return `Pour calculer ton trajet, j'ai besoin de :\n\n1. Adresse de départ\n2. Adresse d'arrivée\n3. Heure du rendez-vous\n\nJe te proposerai l'heure de départ optimale.`;
   }
-  if (t.includes('rdv') || t.includes('rendez') || t.includes('médecin') || t.includes('docteur')) {
+  if ((t.includes('rdv') || t.includes('rendez') || t.includes('médecin') || t.includes('docteur')) && !(typeof tcPhraseNommeUnContact110 === 'function' && tcPhraseNommeUnContact110(userText))) {
     return `Parfait. Pour préparer ta demande de rendez-vous, peux-tu me dire :\n\n1. Quel type de professionnel ? (médecin, dentiste, kiné…)\n2. Le motif du RDV\n3. Tes disponibilités préférées (matin, après-midi, jours)`;
   }
   if (t.includes('réserv') || t.includes('restaurant') || t.includes('hôtel')) {
@@ -25837,14 +25866,34 @@ function tcRelireDeplacementPeriode(liste, text) {
 
 /* ─── 5. « Même heure la semaine prochaine », sans rien avant ─── */
 
-/** Une réponse est-elle attendue (vers quand, type, questionnaire, déplacement, annulation, conflit, carte proposée) ? */
-function tcUneReponseAttendueM64() {
+/**
+ * Une réponse est-elle attendue (vers quand, type, questionnaire, déplacement, annulation, conflit, carte proposée) ?
+ * sansCartes (mission 110) : la carte proposée et le conflit ne comptent pas (une nouvelle demande claire les laisse tomber).
+ */
+function tcUneReponseAttendueM64(sansCartes) {
   const vrai = function (f) { try { return !!f(); } catch (e) { return false; } };
   return vrai(function () { return _tcDeplacementPeriode; }) || vrai(function () { return _tcQuestionnaire; })
     || vrai(function () { return _tcDeplacementEnAttente; }) || vrai(function () { return _tcSuppressionEnAttente; }) || vrai(function () { return _tcSuppressionChoix; })
     || vrai(function () { return typeof tcQuestionTypeEnAttente === 'function' && tcQuestionTypeEnAttente(); })
-    || vrai(function () { return typeof tcConflitEnAttente === 'function' && tcConflitEnAttente(); })
-    || vrai(function () { return typeof tcPropositionEnAttente === 'function' && tcPropositionEnAttente(); });
+    || (!sansCartes && vrai(function () { return typeof tcConflitEnAttente === 'function' && tcConflitEnAttente(); }))
+    || (!sansCartes && vrai(function () { return typeof tcPropositionEnAttente === 'function' && tcPropositionEnAttente(); }));
+}
+
+/** Mission 110 : une nouvelle demande claire : la carte proposée (ou le conflit) qui attendait tombe, et Charly le dit. */
+function tcLaisserTomberCarte110() {
+  let conflit = null, proposition = null;
+  try { conflit = typeof tcConflitEnAttente === 'function' ? tcConflitEnAttente() : null; } catch (e) { conflit = null; }
+  try { proposition = conflit ? null : (typeof tcPropositionEnAttente === 'function' ? tcPropositionEnAttente() : null); } catch (e) { proposition = null; }
+  if (!conflit && !proposition) return;
+  if (conflit) conflit._resolu = true; else proposition._validated = true;
+  tcAbandonnerAttente(conflit ? 'ajout' : 'proposition', conflit ? conflit.conflictData.msg : proposition);
+}
+
+/** Mission 110 : un prénom de contact est-il dans la phrase ? */
+function tcPhraseNommeUnContact110(texte) {
+  if (typeof tcContactsParMots !== 'function') return false;
+  const mots = tcSansAccents(String(texte || '')).toLowerCase().replace(/[’']/g, ' ').split(/[^a-z-]+/).filter(function (w) { return w.length >= 3; });
+  return mots.some(function (w) { try { return tcContactsParMots([w]).length > 0; } catch (e) { return false; } });
 }
 
 /**
@@ -28806,7 +28855,9 @@ const TC_MALADE_PERIODES = {
   // Mission 93 : « aujourd'hui ou demain » dit dans la phrase : les deux jours (pas de bouton de plus).
   aujourdhui_demain: { texte: 'Aujourd’hui et demain',   label: 'pour aujourd’hui et demain',  jours: [0, 1], debut: 0,   fin: 1440, mots: /aujourd.*demain/, cache: true },
   // « malade après-demain » dit dans la phrase (TESTEURS, 03/11) : pas de bouton de plus.
-  apres_demain:     { texte: 'Après-demain',               label: 'après-demain',                jours: [2, 2], debut: 0,   fin: 1440, mots: /apres.?demain/, cache: true }
+  apres_demain:     { texte: 'Après-demain',               label: 'après-demain',                jours: [2, 2], debut: 0,   fin: 1440, mots: /apres.?demain/, cache: true },
+  // Mission 110 : « cette semaine » : d'aujourd'hui à dimanche.
+  semaine:          { texte: 'Toute la semaine',           label: 'cette semaine',               get jours() { const j = new Date().getDay(); return [0, j === 0 ? 0 : 7 - j]; }, debut: 0, fin: 1440, mots: /semaine/, cache: true }
 };
 
 /** « Malade » dans la phrase : le questionnaire guidé, jamais le modèle. Une question (« comment… ? ») n'en est pas une. */
@@ -28825,7 +28876,18 @@ function tcDetecterMalade(text) {
 function tcMaladeDansLaPhrase(text) {
   const sans = tcSansAccents(String(text || '')).replace(/[’'´]/g, "'");
   const connu = {};
-  if (/aujourd'?hui/.test(sans) && /\bdemain\b/.test(sans) && !/apres[- ]?demain/.test(sans)) {
+  // Mission 110 : plusieurs moments au choix (« demain, d'après-demain ou de cette semaine ») : Charly demande lequel, avec eux seuls.
+  const _dits = [];
+  if (/aujourd'?hui/.test(sans)) _dits.push('aujourdhui');
+  if (/(^|[^-a-z])demain\b/.test(sans.replace(/apres[- ]?demain/g, ' '))) _dits.push('demain');
+  if (/apres[- ]?demain/.test(sans)) _dits.push('apres_demain');
+  const _semaine = /\b(?:cette|la|ma|toute la) semaine\b(?! prochaine)/.test(sans);
+  if (_semaine) _dits.push('semaine');
+  if (_dits.length >= 2 && /\bou\b/.test(sans) && !(_dits.length === 2 && _dits[0] === 'aujourdhui' && _dits[1] === 'demain')) {
+    connu._periodesDites = _dits;
+  } else if (_semaine && _dits.length === 1) {
+    connu.periode = 'semaine';
+  } else if (/aujourd'?hui/.test(sans) && /\bdemain\b/.test(sans) && !/apres[- ]?demain/.test(sans)) {
     connu.periode = 'aujourdhui_demain';
   } else if (/apres[- ]?demain/.test(sans)) {
     connu.periode = 'apres_demain';
@@ -28860,7 +28922,12 @@ const TC_QUESTIONNAIRE_MALADE = {
   nom: 'malade',
   etapes: [
     { cle: 'periode', question: 'Je m’occupe de ton agenda pour quand ?',
-      choix: Object.keys(TC_MALADE_PERIODES).filter(function (k) { return !TC_MALADE_PERIODES[k].cache; }).map(function (k) { return { cle: k, texte: TC_MALADE_PERIODES[k].texte, mots: TC_MALADE_PERIODES[k].mots }; }) },
+      // Mission 110 : les moments dits dans la phrase (« demain, après-demain ou cette semaine ») ; sinon les boutons habituels.
+      choix: function (r) {
+        const cles = (r && Array.isArray(r._periodesDites) && r._periodesDites.length) ? r._periodesDites
+          : Object.keys(TC_MALADE_PERIODES).filter(function (k) { return !TC_MALADE_PERIODES[k].cache; });
+        return cles.map(function (k) { const p = TC_MALADE_PERIODES[k]; return { cle: k, texte: k === 'demain' && r && r._periodesDites ? 'Demain' : p.texte, mots: p.mots }; });
+      } },
     { cle: 'action',
       avant: function (r) {
         const p = TC_MALADE_PERIODES[r.periode];
@@ -32823,8 +32890,25 @@ function tcDetecterRdvGroupe(texte) {
   return { contacts: contacts, duree: Math.min(3, Math.max(1, duree)) };
 }
 
+/**
+ * Mission 110 : la période et le moment dits dans la phrase : « cette semaine », « demain »… (depuis, jusqua) ; « après le
+ * boulot », « ce soir », « en soirée » : à partir de 18h (des). null si la phrase ne dit rien.
+ */
+function tcOptionsGroupeDepuisTexte(texte, options) {
+  const o = options ? Object.assign({}, options) : {};
+  const t = ' ' + tcSansAccents(String(texte || '')).toLowerCase().replace(/[’']/g, ' ').replace(/\s+/g, ' ') + ' ';
+  if (!o.depuis && !o.jusqua && typeof tcPeriodeAgenda === 'function') {
+    let p = null;
+    try { p = tcPeriodeAgenda(texte); } catch (e) { p = null; }
+    if (p && p.debut) { o.depuis = tcISO(p.debut); o.jusqua = tcISO(p.fin || p.debut); o.combien = o.combien || 3; o.par_jour = o.par_jour || (p.fin ? 1 : 3); }
+  }
+  if (!o.des && / (apres (le |la |mon |ma )?(boulot|travail|taf|bureau|job|journee)|ce soir|le soir|en soiree|en fin de journee|apres 18 ?h) /.test(t)) o.des = 18;
+  return Object.keys(o).length ? o : null;
+}
+
 async function tcGererRdvGroupe(texte, intention) {
   tcPousserMessageUtilisateur(texte);
+  if (typeof tcOptionsGroupeDepuisTexte === 'function') intention = Object.assign({}, intention, { options: tcOptionsGroupeDepuisTexte(texte, intention.options) });
   const references = intention.contacts.map(function (c) { return c.referenceCompte; });
   const type = tcTypeDansTexte(texte);
   if (type) {
@@ -32870,6 +32954,14 @@ async function tcProposerRdvGroupe(references, duree, preambule, type, options) 
   typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('agendaDe', _noms));
   try {
     r = await TC_BACKEND.proposerRdvGroupe(references, duree, type, options || undefined);
+    if (options && options.des && r && Array.isArray(r.creneaux) && !r.creneaux.length) {
+      const sansSoir = Object.assign({}, options), _des = options.des; delete sansSoir.des;
+      const r2 = await TC_BACKEND.proposerRdvGroupe(references, duree, type, sansSoir);
+      if (r2 && Array.isArray(r2.creneaux) && r2.creneaux.length) {
+        r = r2; options = sansSoir;
+        preambule = 'Personne n’est libre après ' + _des + 'h sur cette période. Voici les autres créneaux communs :';
+      }
+    }
     typeof tcFinEtapes === 'function' && await tcFinEtapes();
   } catch (e) {
     typeof tcFinEtapes === 'function' && await tcFinEtapes();
@@ -33767,7 +33859,7 @@ const TC_BACKEND = {
     const corps = { references: references, duree: duree };
     if (tcTypeRdvValide(type)) corps.type = type;
     // Mission 46 : la période (depuis, jusqua), le nombre voulu et le nombre par jour ; sans eux, comme avant (demain + 14 jours, un par jour).
-    if (options) ['depuis', 'jusqua', 'combien', 'par_jour'].forEach(function (k) { if (options[k] !== undefined && options[k] !== null) corps[k] = options[k]; });
+    if (options) ['depuis', 'jusqua', 'combien', 'par_jour', 'des'].forEach(function (k) { if (options[k] !== undefined && options[k] !== null) corps[k] = options[k]; });
     return tcAppel('POST', '/rdv/groupe/proposer', corps);
   },
 

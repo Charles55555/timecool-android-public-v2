@@ -27,7 +27,7 @@ function fonction(nom) {
 console.log('-- 1. Plus d avion, ni de bandeau, ni de « réfléchit » --');
 verifie('l avion en papier et son bandeau sont retirés', !/tcAvion|TC_AVION|Demande envoyée à |avion en papier traverse/.test(page));
 verifie('le mot « réfléchit » a disparu des textes de Charly', !/'[^'\n]*réfléchit[^'\n]*'/.test(page), (page.match(/'[^'\n]*réfléchit[^'\n]*'/) || [])[0]);
-verifie('une constante réglable : 1,5 s (démonstration), 1 s (vrai), 5 s pour une étape à feuilles', /const TC_ATTENTE_DUREES = \{ demo: 1500, vrai: 1000, feuilles: 5000 \};/.test(page));
+verifie('une constante réglable : 5 s par étape dans la démonstration (mission 110), 1 s en vrai, 5 s pour une étape à feuilles', /const TC_ATTENTE_DUREES = \{ demo: 5000, vrai: 1000, feuilles: 5000 \};/.test(page));
 verifie('les feuilles : 14 × 18 px, contour bleu, coin plié, dans la bulle (zone de hauteur fixe)',
   /\.tc-attente-anim \{ height:22px; display:flex; align-items:center; \}/.test(page)
   && /\.tc-feuilles \{ position:relative; display:block; width:96px; height:22px; overflow:hidden; \}/.test(page)
@@ -35,13 +35,13 @@ verifie('les feuilles : 14 × 18 px, contour bleu, coin plié, dans la bulle (zo
   && /\.tc-feuilles span::after \{/.test(page));
 verifie('« Réduire les animations » : les feuilles ne sont plus cachées', !/\.tc-feuilles \{ display:none; \}/.test(page));
 verifie('l appel au modèle : ce qu il fait, deviné d après la phrase', /tcDefinirStatutCharly\(typeof tcTexteAttente === 'function' \? tcTexteAttente\(tcDevinerAttente\(text\)\) : 'Charly cherche…', true\);/.test(page)
-  && (page.match(/tcDefinirStatutCharly\('Charly cherche dans ton agenda…', true\);/g) || []).length === 2);
+  && (page.match(/tcDefinirStatutCharly\('Charly cherche dans ton agenda…', true\);/g) || []).length === 3);   // consultation, suppression, et « vendredi » dans la démonstration (mission 110)
 
 console.log('-- 2. Les mots et les durées --');
 const ctx = { String, Array, Date, tcSansAccents: (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
 vm.createContext(ctx);
 vm.runInContext(['tcAttentePrenoms', 'tcTexteAttente', 'tcDevinerAttente', 'tcAttenteDuree'].map(fonction).join('\n')
-  + '\nvar TC_ATTENTE_DUREES = { demo: 1500, vrai: 1000, feuilles: 5000 }; var _demo = false; function tcDemoActive() { return _demo; }', ctx);
+  + '\nvar TC_ATTENTE_DUREES = { demo: 5000, vrai: 1000, feuilles: 5000 }; var _demo = false; function tcDemoActive() { return _demo; }', ctx);
 const T = (q, n) => vm.runInContext('tcTexteAttente(' + JSON.stringify(q) + ', ' + JSON.stringify(n || []) + ')', ctx);
 const vus = [T('agenda'), T('contacts'), T('agendaDe', ['Michel Virtuel']), T('agendaDe', ['Alice', 'Chloé']), T('agendaDe', ['Éric Durand']), T('envoi', ['Paul Virtuel']), T('reponse', ['Paul Virtuel']), T('reponse', ['Alice', 'Chloé']), T('range'), T(''), T('envoi', [])];
 verifie('chaque mot suit l action', JSON.stringify(vus) === JSON.stringify(['Charly cherche dans ton agenda…', 'Charly cherche dans tes contacts…', 'Charly regarde l’agenda de Michel…', 'Charly regarde les agendas…', 'Charly regarde l’agenda d’Éric…', 'Charly envoie à Paul…', 'Paul répond…', 'Alice et Chloé répondent…', 'Charly range ton agenda…', 'Charly cherche…', 'Charly cherche…']), JSON.stringify(vus));
@@ -49,7 +49,7 @@ const D = (t) => vm.runInContext('tcDevinerAttente(' + JSON.stringify(t) + ')', 
 const devines = [D('Qu’est-ce que j’ai demain ?'), D('donne-moi le numéro de Hugo'), D('Préviens Paul que j’arrive'), D('Raconte-moi une blague')];
 verifie('deviné : agenda, contacts ; jamais « envoie » sans envoi ; sinon « Charly cherche… »', JSON.stringify(devines) === JSON.stringify(['agenda', 'contacts', '', '']), JSON.stringify(devines));
 const du = vm.runInContext('[tcAttenteDuree({}), tcAttenteDuree({ sorte: "envoi" }), tcAttenteDuree({ sorte: "reception" }), (_demo = true, tcAttenteDuree({})), tcAttenteDuree({ sorte: "envoi" })]', ctx);
-verifie('durées : 1 s, 5 s, 5 s en vrai ; 1,5 s et 5 s dans la démonstration', JSON.stringify(du) === '[1000,5000,5000,1500,5000]', JSON.stringify(du));
+verifie('durées : 1 s, 5 s, 5 s en vrai ; 5 s pour tout dans la démonstration (mission 110)', JSON.stringify(du) === '[1000,5000,5000,5000,5000]', JSON.stringify(du));
 
 console.log('-- 3. Dans la vraie page (Chrome) --');
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
@@ -93,7 +93,7 @@ if (!exe) {
     }, 1200); });</script>`;
     const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-bulle-'));
     fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('</body>', () => js + '</body>'));
-    const args = ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=' + (taille || '390,844'), '--virtual-time-budget=120000', '--dump-dom'];
+    const args = ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=' + (taille || '390,844'), '--virtual-time-budget=200000', '--dump-dom'];
     if (calme) args.push('--force-prefers-reduced-motion');
     const r = spawnSync(exe, args.concat(['file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')]), { encoding: 'utf8', timeout: 300000, maxBuffer: 1 << 28 });
     try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
@@ -111,12 +111,16 @@ if (!exe) {
         R.debutMalade = film.length;
         tcDemoJouer('malade'); await attendre(900);
         cliquer('Oui, envoie');
-        await attendre(16000);
+        await attendre(30000);
         R.finMalade = film.length;
+        // Mission 110 : « Quand suis-je libre ce vendredi ? » : « Charly cherche dans ton agenda… » reste 5 s dans la démonstration.
+        R.debutVendredi = film.length;
+        tcDemoJouer('vendredi'); await attendre(7000);
+        R.finVendredi = film.length;
         tcDemoJouer('michel'); await attendre(900);
         cliquer('En personne'); await attendre(400);
         R.agenda = bulle();
-        await attendre(2500);
+        await attendre(12000);
         // La bulle des quatre points (référence de taille) : le même cadre.
         tcDefinirStatutCharly(tcTexteAttente(''), true); await attendre(100); R.points = bulle(); tcDefinirStatutCharly(TC_STATUT_REPOS, false);`;
   const bleu = 'rgb(26, 115, 232)';
@@ -137,6 +141,10 @@ if (!exe) {
     verifie(nom + ' — malade : « Charly envoie à … » 5 s, puis « … répond… » 5 s',
       envM && envM.ms >= 4800 && envM.b.feuillesVisibles && repM && repM.ms >= 4800 && repM.b.feuillesVisibles,
       JSON.stringify(plage(S.debutMalade, S.finMalade).map((e) => [e.texte, e.anim, e.ms])));
+    const cherche = etape(plage(S.debutVendredi, S.finVendredi), /^Charly cherche dans ton agenda…$/, 'points');
+    verifie(nom + ' — vendredi : « Charly cherche dans ton agenda… » reste 5 s (démonstration)', cherche && cherche.ms >= 4800 && cherche.ms < 6500, JSON.stringify(plage(S.debutVendredi, S.finVendredi).map((e) => [e.texte, e.anim, e.ms])));
+    const lecture = etape(plage(S.finVendredi), /^Charly regarde l’agenda de Michel…$/, 'points');
+    verifie(nom + ' — Michel : « Charly regarde l’agenda de Michel… » reste 5 s (démonstration)', lecture && lecture.ms >= 4800 && lecture.ms < 6500, JSON.stringify(plage(S.finVendredi).map((e) => [e.texte, e.anim, e.ms])));
     verifie(nom + ' — agenda d un contact : « Charly regarde l’agenda de Michel… », les quatre points', S.agenda && S.agenda.texte === 'Charly regarde l’agenda de Michel…' && S.agenda.anim === 'points', JSON.stringify(S.agenda));
     verifie(nom + ' — la bulle garde sa hauteur avec les feuilles, s élargit à peine', S.envoi && S.points && Math.abs(S.envoi.h - S.points.h) <= 2 && S.envoi.l <= 280, JSON.stringify([S.envoi && [S.envoi.l, S.envoi.h], S.points && [S.points.l, S.points.h]]));
   });
