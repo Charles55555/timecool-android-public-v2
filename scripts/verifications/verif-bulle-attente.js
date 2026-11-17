@@ -120,6 +120,9 @@ if (!exe) {
         R.fini = bulle(); R.repondu = charlyIA.history.some(function (m) { return /^Paul a répondu/.test(m.content || ''); });
         R.debutMalade = film.length;
         tcDemoJouer('malade'); await attendre(4500);   // mission 113 : Michel consulté 3 s avant la carte
+        // Mission 117 : le soir, Paul est consulté aussi (3 s de plus) : on attend la consultation de Michel, puis sa carte.
+        for (var _k = 0; _k < 30 && !film.slice(R.debutMalade).some(function (e) { return /de Michel…$/.test(e.texte || ''); }); _k++) await attendre(500);
+        await attendre(3500);
         cliquer('Oui, envoie');
         await attendre(30000);
         R.finMalade = film.length;

@@ -286,6 +286,8 @@ function monde(jour) {
           var placer = function (n) { return cliquer('Oui, place-le').then(function () { return attendre(1800); }).then(function () { var d = charlyIA.history[charlyIA.history.length - 1]; return (n < 4 && d && d._reponseCreneau && !d._reponseCreneau._resolu) ? placer(n + 1) : null; }); };
           return placer(0);
         }).then(function () { return attendre(900); }).then(function () {
+          // Mission 117 : le soir, Paul choisit d'abord ; la carte de Michel suit (« Oui, place-le » les place l'une après l'autre).
+          R.michelChoisit = R.michelChoisit || charlyIA.history.some(function (m) { return m._reponseCreneau && /^Michel Virtuel a choisi/.test(m.content || ''); });
           R.personneAPrevenir = charlyIA.history.filter(function (m) { return /personne à prévenir/.test(m.content || ''); }).map(function (m) { return m.content; });
           var dej = events.filter(function (e) { return e.id === 'demo_dejeuner'; })[0];
           var demain = new Date(); demain.setDate(demain.getDate() + 1);

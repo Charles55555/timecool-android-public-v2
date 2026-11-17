@@ -3625,3 +3625,11 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Plus de « bientôt » pour la photo et le PDF scanné ; bouton périmé sans bulle orpheline.
 - Garde-fou : phrases-charles.txt (35 phrases) + verif-phrases-charles (206 essais, moteur local), dans verifier.sh. Page d'avant : 79 échecs dont 42 par le modèle ; maintenant 0.
 - À savoir : verif-demo-charly (malade) et verif-bulle-attente (malade) échouent après 22h, déjà sur la page publiée 116 : défaut d'heure, hors 117.
+
+## 17/11/2026 (soir) — Mission 117, renvoi de l'EXAMINATEUR (CODEUR)
+
+- Corrigé : un mot qui répond à une question de Charly n'est plus une consultation ; « Et toi ? » garde son « et » ; « le week-end du 28 novembre » = 28 et 29. Cas ajoutés à phrases-charles.txt (40 phrases, 228 essais).
+- Le serveur a maintenant un Chrome sans tête (~/outils-tc, installer-chrome-serveur.sh, sans root) : les 18 suites à navigateur de verifier.sh y jouent pour de bon ; « non joué » ou « 0 vérification » = ÉCHEC.
+- Le serveur joue la vraie largeur du téléphone (390 px) ; seuil de la « petite bulle » passé de 75 % à 90 % du rang.
+- Le soir, deux suites de la démonstration (malade) regardaient trop tôt (Paul puis Michel) : elles attendent la carte.
+- Hors 117, à signaler : « Qu'est-ce que j'ai le 25 novembre ? » (« libre sur cette période ») et « mercredi 25 novembre » (lu comme ce mercredi) ; « j'avais lundi » lu au présent.

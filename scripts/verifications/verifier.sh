@@ -13,6 +13,8 @@ set -u
 PAGE=app/src/main/assets/index.html
 API=backend/api/index.php
 D=${TC_SUITES:-$(cd "$(dirname "$0")" && pwd)}
+# Mission 117 : le Chrome du serveur (installer-chrome-serveur.sh, dans ~/outils-tc) ; les suites qui ouvrent la page le prennent.
+if [ -z "${TC_CHROME:-}" ] && [ -x "$HOME/outils-tc/chrome" ]; then export TC_CHROME="$HOME/outils-tc/chrome"; fi
 
 rouge=0
 
@@ -26,7 +28,12 @@ lancer() {
   local sortie
   sortie=$(node "$D/$nom.js" "$@" 2>&1)
   local code=${PIPESTATUS[0]}
-  if [ "$code" -eq 0 ]; then
+  # Mission 117 : une suite qui n a rien rejoué (pas de Chrome, 0 vérification) n est jamais verte.
+  if [ "$code" -eq 0 ] && printf '%s\n' "$sortie" | grep -qiE 'non jou|(^|[^0-9])0 v.rifications?\b'; then
+    rouge=1
+    printf '%-26s ECHEC (NON JOUÉ)\n' "$nom"
+    printf '%s\n' "$sortie" | grep -iE 'non jou|(^|[^0-9])0 v.rifications?\b' | head -3
+  elif [ "$code" -eq 0 ]; then
     printf '%-26s %s\n' "$nom" "$(printf '%s\n' "$sortie" | tail -1)"
   else
     rouge=1

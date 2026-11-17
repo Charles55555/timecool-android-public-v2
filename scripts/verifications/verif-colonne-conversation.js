@@ -107,7 +107,7 @@ if (!exe) {
   // Mission 115 : les bulles de Charly à la taille de leur texte.
   function bulles(S, nom, max) {
     const B = (S.sortes && S.sortes.bulles) || [];
-    verifie(nom + 'une réponse courte : une petite bulle (« Paul a répondu… »)', B[0] && B[0].l < B[0].rang * 0.75 && B[0].l < 420, JSON.stringify(B[0]));
+    verifie(nom + 'une réponse courte : une petite bulle (« Paul a répondu… »)', B[0] && B[0].l < B[0].rang * 0.9 && B[0].l < 420, JSON.stringify(B[0]));
     verifie(nom + 'une réponse longue : la largeur maximum (' + Math.round(max * 100) + ' %), le texte passe à la ligne', B[1] && B[1].l <= B[1].rang * max + 2 && B[1].l >= B[1].rang * max - 30, JSON.stringify(B[1]));
     verifie(nom + 'les trois boutons de choix : dans la bulle, au moins 44 px de haut, texte jamais coupé', S.sortes && S.sortes.choix.length === 3 && S.sortes.choix.every(function (c) { return c.h >= 44 && !c.coupe; }) && B[2] && B[2].l <= B[2].rang * max + 2, JSON.stringify([S.sortes && S.sortes.choix, B[2]]));
     verifie(nom + 'la carte d’un rendez-vous proposé garde toute la colonne', B[3] && B[3].large && B[3].l >= B[3].rang - 52, JSON.stringify(B[3]));

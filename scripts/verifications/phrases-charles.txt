@@ -51,3 +51,12 @@ Je suis malade, décale ma journée de demain |  | texte:malade
 Trouve un rendez-vous commun avec Alice, Chloé et Virginie |  | texte:Par téléphone, en personne ou en visio
 Quand suis-je libre demain ? |  | jour:+1 && texte:libre
 Annule le sport de vendredi |  | texte:Sport
+
+# --- Examen 117 (EXAMINATEUR, 17/11) : un mot qui répond à une question de Charly n'est pas une nouvelle consultation ---
+demain | Qu'est-ce que j'ai demain ? ⏎ Ajoute dentiste à 15h | sans:Tu es libre && sans:Voici ce que tu
+jeudi | Qu'est-ce que j'ai demain ? ⏎ Ajoute un rendez-vous avec Paul | sans:Tu es libre && sans:Voici ce que tu
+# --- Examen 117 : « Et toi ? » garde son « et » ---
+Et toi ? | Ça va ? | sans:Qu.est-ce que tu veux que je fasse && modele
+Et Paul ? |  | sans:Qu.est-ce que tu veux que je fasse && modele
+# --- Examen 117 : un week-end daté ---
+Qu'est-ce que j'ai le week-end du 28 novembre ? |  | texte:samedi 28 et dimanche 29 novembre

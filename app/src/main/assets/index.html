@@ -15627,7 +15627,20 @@ function tcPeriodeAgenda(text) {
   if (/avant[- ]?hier/.test(t)) return { debut: ajouterJours(debutJour, -2), fin: null, label: 'avant-hier' };
   if (/\bhier\b/.test(t)) return { debut: ajouterJours(debutJour, -1), fin: null, label: 'hier' };
   // Mission 117 : « ce week-end » : le samedi et le dimanche qui viennent (le jour même s'il en fait partie).
-  if (/week-?end/.test(t)) {
+  // Examen 117 : « le week-end du 28 novembre » : le samedi 28 et le dimanche 29, pas le week-end qui vient.
+  const _weDu = t.match(/week-?end du (\d{1,2})(?:er)?(?:\s+(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre))?/);
+  if (_weDu) {
+    const _M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    const _sa = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mois = _weDu[2] ? _M.map(_sa).indexOf(_sa(_weDu[2])) : now.getMonth();
+    let d = new Date(now.getFullYear(), mois, Number(_weDu[1]));
+    if (d < ajouterJours(debutJour, -7)) d = _weDu[2] ? new Date(now.getFullYear() + 1, mois, Number(_weDu[1])) : new Date(now.getFullYear(), mois + 1, Number(_weDu[1]));
+    const sam = d.getDay() === 0 ? ajouterJours(d, -1) : ajouterJours(d, (6 - d.getDay() + 7) % 7);
+    const dim = ajouterJours(sam, 1);
+    return { debut: (sam < debutJour && dim >= debutJour) ? debutJour : sam, fin: dim,
+      label: 'le week-end du samedi ' + (sam.getDate() === 1 ? '1er' : sam.getDate()) + (sam.getMonth() !== dim.getMonth() ? ' ' + _M[sam.getMonth()] : '') + ' et dimanche ' + (dim.getDate() === 1 ? '1er' : dim.getDate()) + ' ' + _M[dim.getMonth()] };
+  }
+  if (/week-?end/.test(t) && !/\b\d{1,2}(?:er)?\s+(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)/.test(t)) {
     const j = debutJour.getDay();
     const sam = j === 6 ? debutJour : (j === 0 ? ajouterJours(debutJour, -1) : ajouterJours(debutJour, 6 - j));
     const prochain = /prochain/.test(t) && j !== 6 && j !== 0 ? 7 : (/prochain/.test(t) ? 7 : 0);
@@ -16071,7 +16084,7 @@ async function tcGererConsultationAgenda(text, intent) {
     }
   }
 
-  charlyIA.history.push({role: 'assistant', content: reply});
+  charlyIA.history.push({role: 'assistant', content: reply, _consulte117: true});
   tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
   renderCharlyChat();
 }
@@ -22152,12 +22165,23 @@ const TC_ABREVIATIONS_PHRASES = [[/\bpeu pas\b/gi, 'peux pas'], [/\brendez vous\
    ═══════════════════════════════════════════════════════════════ */
 let _tcDernierJourConsulte117 = null;
 let _tcConsultationRecente117 = 0;   // l'heure de la dernière réponse sur l'agenda (« et après-demain » qui suit est une question)
+// Examen 117 : le dernier message de Charly est-il la réponse sur l'agenda (et non une question qui attend sa réponse) ?
+function tcDerniereReponseConsultation117() {
+  const h = (typeof charlyIA !== 'undefined' && charlyIA && Array.isArray(charlyIA.history)) ? charlyIA.history : [];
+  for (let i = h.length - 1; i >= 0; i--) {
+    const m = h[i];
+    if (!m || m.role === 'user' || (m._demo && m._demo.phrases)) continue;
+    return !!m._consulte117;
+  }
+  return false;
+}
+
 function tcNormaliserMoments117(texte) {
   let t = String(texte || '');
   t = t.replace(/\bapr[eèéêÈÉ]s[\s-]*demain\b/gi, 'après-demain')
     .replace(/\bavant[\s-]*hier\b/gi, 'avant-hier')
     .replace(/\bweek[\s-]*end(s?)\b/gi, 'week-end$1')
-    .replace(/\bqu['’]?\s*est[\s-]+ce\s+(que|qu['’])/gi, function (x, y) { return 'qu’est-ce ' + y; })
+    .replace(/\bqu['’]?\s*est[\s-]+ce\s+(que|qu['’])/gi, function (x, y) { return (x.charAt(0) === 'Q' ? 'Q' : 'q') + 'u’est-ce ' + y; })
     .replace(/\bsuis[\s-]+je\b/gi, 'suis-je')
     .replace(/\brendez[\s-]+vous\b/gi, 'rendez-vous')
     .replace(/\baujourd\s*['’]?\s*hui\b/gi, 'aujourd’hui');
@@ -22166,11 +22190,12 @@ function tcNormaliserMoments117(texte) {
     const m = t.match(/^\s*(?:stp|svp|s['’ ]?il te pla[iî]t|s['’ ]?il vous pla[iî]t|et|charly)[\s,]+/i);
     if (!m) break;
     const reste = t.slice(m[0].length);
-    if (reste.trim().split(/\s+/).length < 2 && !/\?\s*$/.test(reste)) break;
+    const _mots = reste.replace(/[?!.,;:\u00a0]/g, ' ').trim().split(/\s+/).filter(Boolean);
+    if (_mots.length < 2 && !/^(aujourd’hui|demain|après-demain|hier|avant-hier|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)$/i.test(_mots[0] || '')) break;
     t = reste.charAt(0).toUpperCase() + reste.slice(1);
   }
   // « et après-demain », « et ce week-end » sans « ? », juste après une réponse sur l'agenda : c'est encore une question.
-  if (_tcConsultationRecente117 && Date.now() - _tcConsultationRecente117 < 10 * 60000 && !/\?\s*$/.test(t)
+  if (_tcConsultationRecente117 && Date.now() - _tcConsultationRecente117 < 10 * 60000 && !/\?\s*$/.test(t) && tcDerniereReponseConsultation117()
     && /^\s*(?:et\s+)?(?:pour\s+)?(?:aujourd’hui|demain|après-demain|hier|avant-hier|ce soir|ce week-end|le week-end prochain|cette semaine|la semaine prochaine|(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain| en huit)?)\s*$/i.test(t)) t = t.trim() + ' ?';
   // « le lendemain ? », « le jour d'après ? », « le surlendemain ? » juste après une question sur un jour.
   const suite = t.match(/^\s*(?:et\s+)?(?:pour\s+)?(le lendemain|le jour d['’ ]?apr[eè]s|le surlendemain)\s*\??\s*$/i);
@@ -22186,7 +22211,7 @@ function tcNormaliserMoments117(texte) {
   // sont aujourd'hui (ailleurs, « où aller manger ce soir ? » reste hors agenda).
   if (/\b(ce soir|ce matin|cet apr[eè]s[\s-]?midi|cette apr[eè]s[\s-]?midi|cette nuit)\b/i.test(t)
     && !/\b(aujourd|demain|hier|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|week-end)/i.test(t)
-    && /^\s*(?:qu’est-ce (?:que|qu’)\s*j[’']?\s*(?:ai|avais)|j[’']?\s*ai (?:quoi|des|un|une|rien|du monde)|(?:je suis|suis-je|est-ce que je suis) (?:libre|pris|prise|occupée?|dispo)|(?:quel(?:le)?s? (?:est|sont) )?mon (?:agenda|programme|planning)|(?:tu peux me dire |montre[- ]moi |donne[- ]moi )?(?:mes|les) (?:rdv|rendez-vous))\b/i.test(t))
+    && /^\s*(?:qu’est-ce (?:que|qu’)\s*j[’']?\s*(?:ai|avais)|j[’']?\s*ai (?:quoi|(?:des|un|une) (?:rdv|rendez-vous))|(?:je suis|suis-je|est-ce que je suis) (?:libre|pris|prise|occupée?|dispo)|(?:quel(?:le)?s? (?:est|sont) )?mon (?:agenda|programme|planning)|(?:tu peux me dire |montre[- ]moi |donne[- ]moi )?(?:mes|les) (?:rdv|rendez-vous))\b/i.test(t))
     t = t.replace(/\b(ce soir|ce matin|cet apr[eè]s[\s-]?midi|cette apr[eè]s[\s-]?midi|cette nuit)\b/i, 'aujourd’hui $1');
   return t;
 }

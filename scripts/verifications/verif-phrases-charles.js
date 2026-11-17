@@ -60,7 +60,8 @@ function juger(c, r) {
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
 const exe = candidats.find((x) => { try { return fs.existsSync(x); } catch (e) { return false; } });
 if (!exe) {
-  console.log('  (non joué : pas de Chrome sur ce poste ; à rejouer avec TC_CHROME sur un poste qui en a un)');
+  console.log('NON JOUÉ : pas de Chrome sur ce poste (sur le serveur : bash scripts/verifications/installer-chrome-serveur.sh, puis TC_CHROME=~/outils-tc/chrome)');
+  process.exit(1);
 } else {
   const js = `<script>window.addEventListener('load', function () { setTimeout(async function () {
     var attendre = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
@@ -113,5 +114,7 @@ if (!exe) {
   });
 }
 
+if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification (' + cas.length + ' phrases, ' + essais.length + ' essais)'); process.exit(1); }
+if (ok + ko < essais.length) ko++;   // chaque essai doit avoir été jugé
 console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications (' + cas.length + ' phrases, ' + essais.length + ' essais)');
 process.exit(ko ? 1 : 0);
