@@ -12255,10 +12255,13 @@ let _tcDemo = null;
 /** La démonstration est-elle ouverte ? */
 function tcDemoActive() { return !!_tcDemo; }
 
-/** Les phrases de la démonstration (107a : les deux premières ; les trois autres arrivent avec la 107b). */
+/** Les phrases de la démonstration (Mission 107b : les cinq, dans l'ordre du chef). */
 const TC_DEMO_PHRASES = [
   { id: 'michel', texte: 'Demande un rendez-vous demain à mon ami Michel' },
-  { id: 'vendredi', texte: 'Quand suis-je libre ce vendredi ?' }
+  { id: 'retard', texte: 'Préviens Paul que j’aurai 10 minutes de retard' },
+  { id: 'vendredi', texte: 'Quand suis-je libre ce vendredi ?' },
+  { id: 'groupe', texte: 'Trouve un rendez-vous commun avec Alice, Chloé et Virginie' },
+  { id: 'malade', texte: 'Je suis malade, décale ma journée de demain' }
 ];
 const TC_DEMO_TEXTES = {
   bandeau: 'Démonstration',
@@ -12309,9 +12312,10 @@ function tcDemoDonnees() {
   const vendredi = tcDemoVendredi();
   const dimanche = tcDemoDimanche();
   const evs = [
-    tcDemoRdv('cafe', jCafe, hCafe, 0, 60, 'Café avec Paul Virtuel', 'perso'),
+    // Mission 107b : relié au contact d'exemple, comme un vrai rendez-vous (le retard et la maladie préviennent cette personne).
+    Object.assign(tcDemoRdv('cafe', jCafe, hCafe, 0, 60, 'Café avec Paul Virtuel', 'perso'), { contact: 'demo_paul' }),
     tcDemoRdv('coiffeur', demain, 10, 0, 60, 'Coiffeur', 'perso'),
-    tcDemoRdv('dejeuner', demain, 12, 30, 60, 'Déjeuner avec Michel Virtuel', 'perso'),
+    Object.assign(tcDemoRdv('dejeuner', demain, 12, 30, 60, 'Déjeuner avec Michel Virtuel', 'perso'), { contact: 'demo_michel' }),
     // « Quand suis-je libre ce vendredi ? » montre du pris et du libre : une réunion le matin, le sport en fin de journée.
     tcDemoRdv('reunion', vendredi, 10, 0, 60, 'Réunion d’équipe', 'travail'),
     tcDemoRdv('sport', vendredi, 18, 0, 60, 'Sport', 'sport'),
@@ -12404,7 +12408,57 @@ function tcDemoServeur() {
       _tcDemo.cale = true;
       return { ok: true, libelle: libelle(jourDe(date)), heure: String(heure).padStart(2, '0') + ':00', inclus: prenoms, exclus: [] };
     },
-    async propositions() { return []; },
+    estConnecte() { return true; },
+    async propositions() {
+      return _tcDemo ? _tcDemo.propositions.filter(function (p) { return !p.traite && p.etat !== 'attente'; }).map(function (p) { return Object.assign({}, p); }) : [];
+    },
+    // Mission 107b : un message à un contact d'exemple : il part dans la messagerie d'exemple, le contact répond tout seul.
+    async envoyerMessage(reference, texte) {
+      const reponse = /retard/i.test(String(texte || '')) ? 'Pas de souci, à tout à l’heure !' : 'Merci, c’est noté !';
+      tcDemoReponseDe(reference, reponse);
+      return { ok: true };
+    },
+    // Les créneaux proposés à un contact d'exemple : ceux où son agenda d'exemple est libre.
+    async propositionLibres(reference, creneaux) {
+      const agenda = (_tcDemo && _tcDemo.agendas[reference]) || [];
+      const libres = [];
+      (Array.isArray(creneaux) ? creneaux : []).forEach(function (c, i) {
+        const d = String(c.debut || ''), f = String(c.fin || '');
+        if (tcDemoLibre(agenda, d.slice(0, 10), Number(d.slice(11, 13)) * 60 + Number(d.slice(14, 16)), Number(f.slice(11, 13)) * 60 + Number(f.slice(14, 16)))) libres.push(i);
+      });
+      return { libres: libres };
+    },
+    // Comme /rdv/proposition/creer : la proposition part ; le contact d'exemple choisit le premier créneau libre, en une seconde.
+    async propositionCreer(corps) {
+      const etat = _tcDemo;
+      const id = etat.prochainId++;
+      const c = contactsList.find(function (x) { return x.referenceCompte === corps.reference; });
+      const p = { rdv_id: id, titre: corps.titre || null, remplace: corps.remplace || null, etat: 'attente', qui: c ? c.name : (corps.prenom_destinataire || ''), reference: corps.reference || null, debut: null, fin: null, libelle: null, avant: corps.avant || null, tours: 1, pris: [], tous_pris: false };
+      etat.propositions.push(p);
+      const creneaux = Array.isArray(corps.creneaux) ? corps.creneaux : [];
+      const agenda = etat.agendas[corps.reference] || [];
+      const choisi = creneaux.find(function (x) {
+        const d = String(x.debut || ''), f = String(x.fin || '');
+        return tcDemoLibre(agenda, d.slice(0, 10), Number(d.slice(11, 13)) * 60 + Number(d.slice(14, 16)), Number(f.slice(11, 13)) * 60 + Number(f.slice(14, 16)));
+      }) || creneaux[0];
+      if (choisi) {
+        tcDemoReponseDe(corps.reference, 'C’est bon pour ' + (choisi.libelle || '') + '.', function () {
+          p.etat = 'choisi'; p.debut = choisi.debut; p.fin = choisi.fin; p.libelle = choisi.libelle || null;
+          return typeof tcSuivrePropositions === 'function' ? tcSuivrePropositions(true) : null;
+        });
+      }
+      return { rdv_id: id, creneaux: creneaux };
+    },
+    async propositionTraiter(id) {
+      const p = _tcDemo && _tcDemo.propositions.find(function (x) { return x.rdv_id === Number(id); });
+      if (p) p.traite = true;
+      return { traite: true, message: null, messagerie: false };
+    },
+    async propositionMaintenir(id) {
+      const p = _tcDemo && _tcDemo.propositions.find(function (x) { return x.rdv_id === Number(id); });
+      if (p) p.traite = true;
+      return { traite: true, message: null, messagerie: false };
+    },
     async detecterContactsInscrits() { return []; },
     async syncTirer() { return { elements: [], version: 0, suite: false }; },
     async syncVersionServeur() { return { version: 0 }; },
@@ -12455,7 +12509,8 @@ function tcDemoMessagePhrases(texte) {
 function tcRendreDemo(m) {
   const d = m._demo || {};
   let h = escapeHTML(tcDemoTexte(m.content || '')).replace(/\n/g, '<br>');
-  if (d.phrases && _tcDemo) {
+  const derniers = charlyIA.history.filter(function (x) { return x && x._demo && x._demo.phrases; }).pop();
+  if (d.phrases && _tcDemo && m === derniers) {
     const restent = TC_DEMO_PHRASES.filter(function (p) { return !_tcDemo.faites[p.id]; });
     h += '<div style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">' + restent.map(function (p) {
       return '<button class="tc-demo-phrase" onclick="tcDemoJouer(\'' + p.id + '\')" style="text-align:left; padding:10px 12px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:12px; font-size:13.5px; font-weight:600; cursor:pointer;">« ' + escapeHTML(tcDemoTexte(p.texte)) + ' »</button>';
@@ -12466,11 +12521,53 @@ function tcRendreDemo(m) {
   return tcBulleCharly(h);
 }
 
+/**
+ * Mission 107b : un contact d'exemple répond tout seul, une seconde après : sa réponse dans la messagerie d'exemple, et Charly
+ * le dit (« Paul a répondu : … »). « apres » fait ce que la réponse change (une proposition choisie). La démonstration fermée
+ * entre-temps : rien.
+ */
+function tcDemoReponseDe(reference, texte, apres) {
+  const etat = _tcDemo;
+  if (!etat) return;
+  const c = contactsList.find(function (x) { return x.referenceCompte === reference; });
+  if (!c) return;
+  etat.reponsesAttendues++;
+  setTimeout(async function () {
+    if (_tcDemo !== etat) return;
+    try {
+      const liste = (typeof messages !== 'undefined' && messages && Array.isArray(messages.user)) ? messages.user : null;
+      if (liste) {
+        let conv = liste.find(function (x) { return x && x.with === c.name; });
+        if (!conv) { conv = { id: Date.now(), with: c.name, avatar: String(c.name).split(' ').map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase(), color: '#ff9800', icon: '👤', unread: 0, archived: false, thread: [] }; liste.unshift(conv); }
+        const t = new Date();
+        conv.thread.push({ from: 'them', text: texte, time: String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') });
+      }
+      charlyIA.history.push({ role: 'assistant', content: String(c.name).split(' ')[0] + ' a répondu : « ' + texte + ' »', appText: true, _app: true, _demo: {} });
+      renderCharlyChat();
+      if (typeof apres === 'function') await apres();
+    } catch (e) {} finally {
+      etat.reponsesAttendues--;
+      if (_tcDemo === etat && etat.occupe === 0) tcDemoApres();
+    }
+  }, 1200);
+}
+
+/** La phrase tapée (ou dictée) est une des phrases de la démonstration : elle compte comme touchée. */
+function tcDemoMarquer() {
+  const inp = document.getElementById('charlyInput');
+  const t = tcClasseNormaliser(inp ? inp.value : '');
+  TC_DEMO_PHRASES.forEach(function (p) { if (t && tcClasseNormaliser(p.texte) === t) _tcDemo.faites[p.id] = true; });
+}
+
 /** Une question attend-elle encore un geste (carte à choix, boutons) ? Alors les phrases ne reviennent pas encore. */
 function tcDemoQuestionEnCours() {
   const h = charlyIA.history, m = h[h.length - 1];
-  if (!m || m.role !== 'assistant') return true;
-  if (m._demo) return true;
+  if (!m) return true;
+  if (m.role === 'user') return 'attendre';
+  if (m.role !== 'assistant' && m.role !== 'system_info') return true;
+  if (m._demo) return !!m._demo.phrases;
+  if (m._questionnaire && m._questionnaire.etat === 'choix') return true;
+  if (m._reponseCreneau && !m._reponseCreneau._resolu) return true;
   if (m._groupe && m._groupe.etat !== 'fait') return true;
   if (m._questionType && m._questionType.etat === 'choix') return true;
   // Une question de Charly (« C’est avec quelqu’un de tes contacts ? ») attend sa réponse.
@@ -12480,13 +12577,15 @@ function tcDemoQuestionEnCours() {
 }
 
 /** Après chaque réponse de Charly dans la démonstration : « C'est calé », puis les phrases qui restent. */
-function tcDemoApres() {
+function tcDemoApres(essai) {
   if (!_tcDemo) return;
   if (_tcDemo.cale) {
     _tcDemo.cale = false;
     charlyIA.history.push({ role: 'assistant', content: TC_DEMO_TEXTES.cale, appText: true, _app: true, _demo: { agenda: true } });
   }
-  if (tcDemoQuestionEnCours()) { renderCharlyChat(); return; }
+  const enCours = _tcDemo.reponsesAttendues > 0 || tcDemoQuestionEnCours();
+  if (enCours === 'attendre' && (essai || 0) < 5) { const etat = _tcDemo; setTimeout(function () { if (_tcDemo === etat && etat.occupe === 0) tcDemoApres((essai || 0) + 1); }, 400); return; }
+  if (enCours) { renderCharlyChat(); return; }
   const restent = TC_DEMO_PHRASES.filter(function (p) { return !_tcDemo.faites[p.id]; });
   charlyIA.history.push(tcDemoMessagePhrases(restent.length ? TC_DEMO_TEXTES.suite : TC_DEMO_TEXTES.fini));
   renderCharlyChat();
@@ -12521,6 +12620,7 @@ async function tcOuvrirDemo() {
   const S = Storage.prototype;
   const etat = {
     faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(), occupe: 0, attentes: [], quitterApres: false,
+    propositions: [], prochainId: 1, reponsesAttendues: 0,
     vrai: {
       events: events, contactsList: contactsList, history: charlyIA.history, historiqueCharge: charlyIA._historiqueCharge,
       messages: (typeof messages !== 'undefined') ? messages : null, conv: (typeof _tcConvCharly !== 'undefined') ? _tcConvCharly : null,
@@ -12550,7 +12650,7 @@ async function tcOuvrirDemo() {
   // 3. Le serveur : les agendas d'exemple répondent ; tout autre appel répond « fait », sans rien envoyer.
   const faux = tcDemoServeur();
   Object.keys(TC_BACKEND).forEach(function (k) {
-    if (typeof TC_BACKEND[k] !== 'function' || k === 'estConnecte') return;
+    if (typeof TC_BACKEND[k] !== 'function') return;
     etat.backend[k] = TC_BACKEND[k];
     TC_BACKEND[k] = faux[k] || async function () { return {}; };
   });
@@ -12566,9 +12666,10 @@ async function tcOuvrirDemo() {
   });
   // Chaque réponse de Charly finit par les phrases qui restent. Examen : tant que Charly travaille, la démonstration ne se
   // ferme pas (« Quitter » attend la fin) : un message commencé ici ne se termine jamais dans la vraie vie.
-  ['charlySendMessage', 'tcConfirmerRdvGroupe', 'tcRepondreTypeGroupe'].forEach(function (n) {
+  ['charlySendMessage', 'tcConfirmerRdvGroupe', 'tcRepondreTypeGroupe', 'tcQuestionnaireRepondre', 'tcQuestionnaireValider', 'tcQuestionnaireEnvoyer', 'tcChoisirReponseCreneau'].forEach(function (n) {
     try { etat.fonctions[n] = (0, eval)(n); } catch (e) { return; }
     tcDemoRemplacer(n, async function () {
+      if (n === 'charlySendMessage') tcDemoMarquer();
       etat.occupe++;
       try { return await etat.fonctions[n].apply(this, arguments); } finally {
         etat.occupe--;

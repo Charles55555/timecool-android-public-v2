@@ -26,7 +26,7 @@ verifie('l accueil : un seul exemple, puis l invitation et le bouton', /const TC
   && page.indexOf("const TC_CHARLY_ACCUEIL_DEMO = [\n  'Tu veux voir tout ce dont je suis capable" + NB + "?',\n  'Je te montre avec un agenda d’exemple et des contacts d’exemple.',\n  'Voir la démonstration'\n];") > -1);
 verifie('les cinq autres exemples ont quitté l accueil', page.indexOf("'Excuse-moi auprès de Paul et préviens-le que j’aurai 10 minutes de retard'") < 0 && page.indexOf("'Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine") < 0);
 ['Voici un agenda d’exemple.\\nTouche une phrase pour voir ce que je fais.', 'C’est calé. Regarde dans l’agenda.', 'Pour le faire avec tes vrais amis, importe tes contacts.', "importer: 'Importer mes contacts'", "bandeau: 'Démonstration'", "quitter: 'Quitter'"].forEach((t) => verifie('texte : ' + t, page.indexOf(t) > -1));
-verifie('107a : les deux phrases prêtes (Michel, vendredi)', /const TC_DEMO_PHRASES = \[\n  \{ id: 'michel', texte: 'Demande un rendez-vous demain à mon ami Michel' \},\n  \{ id: 'vendredi', texte: 'Quand suis-je libre ce vendredi(?: |\\u00a0)\?' \}\n\];/.test(page));
+verifie('107b : les cinq phrases, dans l ordre du chef', /const TC_DEMO_PHRASES = \[\n  \{ id: 'michel', texte: 'Demande un rendez-vous demain à mon ami Michel' \},\n  \{ id: 'retard', texte: 'Préviens Paul que j’aurai 10 minutes de retard' \},\n  \{ id: 'vendredi', texte: 'Quand suis-je libre ce vendredi(?: |\\u00a0)\?' \},\n  \{ id: 'groupe', texte: 'Trouve un rendez-vous commun avec Alice, Chloé et Virginie' \},\n  \{ id: 'malade', texte: 'Je suis malade, décale ma journée de demain' \}\n\];/.test(page));
 verifie('jamais « je ne peux pas » dans les textes de la démonstration', !/peux pas|impossible|pas encore/i.test(objet('const TC_DEMO_TEXTES = {')));
 
 // ── Un petit monde : le stockage (vrai prototype partagé), le réseau, le serveur, la page ──
@@ -47,7 +47,7 @@ function monde(jour) {
   const el = (id) => elements[id] || (elements[id] = { id, style: {}, innerHTML: '', value: '', remove() { delete elements[id]; }, setAttribute() {}, appendChild() {} });
   const ctx = {
     console, JSON, Array, Object, String, Number, Math, Promise, RegExp, Storage, localStorage, Date: FauxDate, TypeError, Error,
-    setTimeout: (f) => { Promise.resolve().then(f); return 0; },
+    setTimeout: (f) => { setTimeout(f, 0); return 0; },
     document: { getElementById: (id) => elements[id] || null, createElement: () => ({ style: {}, setAttribute() {}, set id(v) { elements[v] = this; }, remove() { Object.keys(elements).forEach((k) => { if (elements[k] === this) delete elements[k]; }); } }), body: { style: {}, appendChild() {} }, querySelectorAll: () => [], querySelector: () => null },
     escapeHTML: (s) => String(s).replace(/</g, '&lt;'), tcBulleCharly: (h) => '<bulle>' + h + '</bulle>', tcSansAccents: (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(),
     tcPrenomUtilisateur: () => 'Charles', currentLanguage: 'fr', TC_TRANSLATE_CACHE: {}, translateText: async (t) => t,
@@ -55,13 +55,13 @@ function monde(jour) {
     contactsList: [{ id: 'vrai_c', name: 'Gaëlle Vraie', referenceCompte: 'REF-VRAIE', isTimeCool: true }],
     messages: { user: [{ t: 'VRAI' }], pro: [] }, _tcConvCharly: [{ text: 'VRAI' }], tasksList: ['VRAI'], birthdays: ['VRAI'],
     charlyIA: { history: [{ role: 'user', content: 'VRAIE question' }], config: { demoMode: false }, _historiqueCharge: true },
-    navigate: () => {}, renderCharlyChat: () => {}, render: () => {},
+    navigate: () => {}, renderCharlyChat: () => {}, render: () => {}, tcClasseNormaliser: (t) => String(t || '').toLowerCase(),
     _sorties: sorties, _vraiStock: vraiStock
   };
   ctx.window = ctx;
   ctx.fetch = async (u) => { sorties.push('fetch ' + u); return { ok: true, json: async () => ({}) }; };
   ctx.TC_BACKEND = { estConnecte: () => true };
-  ['proposerRdvGroupe', 'confirmerRdvGroupe', 'envoyerMessage', 'demanderRdv', 'syncPousser', 'syncTirer', 'propositions', 'propositionCreer', 'envoyerConvocation', 'createRdvLink'].forEach((k) => {
+  ['proposerRdvGroupe', 'confirmerRdvGroupe', 'envoyerMessage', 'demanderRdv', 'syncPousser', 'syncTirer', 'propositions', 'propositionCreer', 'propositionLibres', 'propositionTraiter', 'propositionMaintenir', 'envoyerConvocation', 'createRdvLink'].forEach((k) => {
     ctx.TC_BACKEND[k] = async () => { sorties.push('serveur ' + k); return {}; };
   });
   vm.createContext(ctx);
@@ -71,7 +71,7 @@ function monde(jour) {
   vm.runInContext('function tcISO(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }', ctx);
   const code = [objet('const TC_DEMO_PHRASES = ['), objet('const TC_DEMO_TEXTES = {'), 'let _tcDemo = null;'].concat(['tcDemoActive', 'tcDemoClesLisibles', 'tcDemoJour', 'tcDemoVendredi', 'tcDemoDimanche', 'tcDemoRdv', 'tcDemoDonnees', 'tcDemoLibre',
     'tcDemoOccupationsMoi', 'tcDemoServeur', 'tcDemoBandeau', 'tcDemoTexte', 'tcDemoTraduire', 'tcDemoMessagePhrases', 'tcDemoRemplacer', 'tcOuvrirDemo', 'tcQuitterDemo',
-    'tcDemoAttendre', 'tcDemoLibere', 'tcDemoApres', 'tcDemoQuestionEnCours'].map(fonction));
+    'tcDemoAttendre', 'tcDemoLibere', 'tcDemoApres', 'tcDemoQuestionEnCours', 'tcDemoReponseDe', 'tcDemoMarquer'].map(fonction));
   if (code.some((c) => !c)) { verifie('les fonctions de la démonstration sont dans la page', false, code.map((c) => !!c).join(',')); return null; }
   vm.runInContext(code.join('\n'), ctx);
   return ctx;
@@ -116,7 +116,25 @@ function monde(jour) {
   verifie('confirmé : dans l agenda d exemple, chez Michel aussi, la réponse comme celle de l API', c.heure === '17:00' && c.libelle === 'mercredi 18 novembre' && JSON.stringify(c.inclus) === '["Michel"]'
     && vm.runInContext('events.some(function (e) { return e.date === "2026-11-18" && e.startH === 17 && /Michel Virtuel/.test(e.title); }) && _tcDemo.agendas["DEMO-MICHEL"].length === 2 && _tcDemo.cale === true', ctx), JSON.stringify(c));
   const r2 = await vm.runInContext('TC_BACKEND.proposerRdvGroupe(["DEMO-ALICE", "DEMO-CHLOE", "DEMO-VIRGINIE"], 1, "physique")', ctx);
-  verifie('Alice, Chloé et Virginie : des créneaux communs où tout le monde est libre (pour la 107b)', r2.creneaux.length === 3 && r2.creneaux.every((x) => !x.manquants.length), JSON.stringify(r2.creneaux));
+  verifie('Alice, Chloé et Virginie : des créneaux communs où tout le monde est libre', r2.creneaux.length === 3 && r2.creneaux.every((x) => !x.manquants.length), JSON.stringify(r2.creneaux));
+
+  console.log('-- 4 bis. Mission 107b : les contacts d exemple répondent tout seuls --');
+  verifie('le café est relié à Paul, le déjeuner à Michel (comme un vrai rendez-vous)', vm.runInContext('events.filter(function (e) { return e.contact; }).map(function (e) { return e.id + ">" + e.contact; }).join()', ctx) === 'demo_cafe>demo_paul,demo_dejeuner>demo_michel');
+  vm.runInContext('messages.user = [{ with: "Paul Virtuel", thread: [{ from: "me", text: "retard" }] }]; charlyIA.history = [];', ctx);
+  await vm.runInContext('TC_BACKEND.envoyerMessage("DEMO-PAUL", "Bonjour Paul, j aurai 10 minutes de retard")', ctx);
+  verifie('un message envoyé : une réponse attendue, les phrases attendent', vm.runInContext('_tcDemo.reponsesAttendues', ctx) === 1);
+  await new Promise((r) => setTimeout(r, 30));
+  verifie('Paul répond tout seul : dans la messagerie d exemple, et Charly le dit', vm.runInContext('messages.user[0].thread[1].from === "them" && /^Pas de souci, à tout à l’heure/.test(messages.user[0].thread[1].text) && /^Paul a répondu/.test(charlyIA.history[0].content) && _tcDemo.reponsesAttendues === 0', ctx) === true, vm.runInContext('JSON.stringify([messages.user, charlyIA.history])', ctx));
+  const libres = await vm.runInContext('TC_BACKEND.propositionLibres("DEMO-MICHEL", [{ debut: "2026-11-18 10:00:00", fin: "2026-11-18 11:00:00" }, { debut: "2026-11-18 16:00:00", fin: "2026-11-18 17:00:00" }])', ctx);
+  verifie('les créneaux proposés à Michel : ceux où son agenda d exemple est libre', JSON.stringify(libres.libres) === '[1]', JSON.stringify(libres));
+  vm.runInContext('tcSuivrePropositions = function () { _sorties.push("releve"); return Promise.resolve(); };', ctx);
+  const cree = await vm.runInContext('TC_BACKEND.propositionCreer({ titre: "Déjeuner", remplace: "demo_dejeuner", reference: "DEMO-MICHEL", creneaux: [{ debut: "2026-11-18 10:00:00", fin: "2026-11-18 11:00:00", libelle: "mercredi 18 novembre à 10h" }, { debut: "2026-11-19 10:00:00", fin: "2026-11-19 11:00:00", libelle: "jeudi 19 novembre à 10h" }] })', ctx);
+  verifie('la proposition part (sans réponse encore)', cree.rdv_id >= 1 && (await vm.runInContext('TC_BACKEND.propositions()', ctx)).length === 0);
+  await new Promise((r) => setTimeout(r, 30));
+  const choix = await vm.runInContext('TC_BACKEND.propositions()', ctx);
+  verifie('Michel choisit tout seul le premier créneau libre pour lui, et Charly relève la réponse', choix.length === 1 && choix[0].etat === 'choisi' && choix[0].debut === '2026-11-19 10:00:00' && choix[0].qui === 'Michel Virtuel' && choix[0].remplace === 'demo_dejeuner' && ctx._sorties.indexOf('releve') > -1, JSON.stringify(choix));
+  await vm.runInContext('TC_BACKEND.propositionTraiter(' + cree.rdv_id + ', "place")', ctx);
+  verifie('traitée : elle ne revient plus', (await vm.runInContext('TC_BACKEND.propositions()', ctx)).length === 0);
 
   console.log('-- 5. Quitter : tout revient --');
   vm.runInContext('tcQuitterDemo()', ctx);
@@ -197,6 +215,8 @@ function monde(jour) {
       document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
       var lireVrai = Storage.prototype.getItem;
       var tout = function () { var o = {}; for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); o[k] = lireVrai.call(localStorage, k); } return o; };
+      var attendre = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+      var cliquer = function (t) { var b = Array.prototype.filter.call(document.querySelectorAll('#charlyChatBody button'), function (x) { return !x.disabled && x.innerText.indexOf(t) > -1; }).pop(); if (b) b.click(); return attendre(600); };
       var fin = function (res) { var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre); };
       if (sessionStorage.getItem('tc_banc_demo')) {
         // 2e chargement : l'appli « tuée » en pleine démonstration revient.
@@ -241,6 +261,31 @@ function monde(jour) {
           return tcDemoJouer('vendredi');
         }).then(function () {
           R.vendredi = document.getElementById('charlyChatBody').innerText.indexOf('Voici ce qui est libre ce vendredi') > -1;
+          // Mission 107b : le retard (Paul répond), à plusieurs (trois agendas lus), malade (Michel choisit, on place).
+          return tcDemoJouer('retard');
+        }).then(function () { return cliquer('Oui, envoie'); }).then(function () { return attendre(1800); }).then(function () {
+          R.paul = charlyIA.history.some(function (m) { return /^Paul a répondu/.test(m.content || ''); }) && messages.user.some(function (c) { return c.with === 'Paul Virtuel' && c.thread.some(function (t) { return t.from === 'them'; }); });
+          return tcDemoJouer('groupe');
+        }).then(function () {
+          var q = charlyIA.history.filter(function (m) { return m._questionType; }).pop();
+          return tcRepondreTypeGroupe(q._questionType.id, 'physique');
+        }).then(function () {
+          var g = charlyIA.history.filter(function (m) { return m._groupe; }).pop();
+          R.groupe = g ? g._groupe.creneaux.map(function (c) { return c.manquants.length; }) : null;
+          R.groupeInvites = g ? g._groupe.invites : null;
+          return tcConfirmerRdvGroupe(g._groupe.id, 0);
+        }).then(function () {
+          R.groupeAgenda = events.filter(function (e) { return /Alice Virtuelle/.test(e.title) && /Chloé Virtuelle/.test(e.title) && /Virginie Virtuelle/.test(e.title); }).length;
+          return tcDemoJouer('malade');
+        }).then(function () { return cliquer('Oui, envoie'); }).then(function () { return attendre(1800); }).then(function () {
+          R.michelChoisit = charlyIA.history.some(function (m) { return m._reponseCreneau && /^Michel Virtuel a choisi/.test(m.content || ''); });
+          return cliquer('Oui, place-le');
+        }).then(function () { return attendre(900); }).then(function () {
+          var dej = events.filter(function (e) { return e.id === 'demo_dejeuner'; })[0];
+          var demain = new Date(); demain.setDate(demain.getDate() + 1);
+          var iso = demain.getFullYear() + '-' + String(demain.getMonth() + 1).padStart(2, '0') + '-' + String(demain.getDate()).padStart(2, '0');
+          R.maladeDemainVide = events.filter(function (e) { return e.date === iso && e.demo; }).length;
+          R.dejeunerDeplace = !!dej && dej.date !== iso;
           R.fini = charlyIA.history[charlyIA.history.length - 1].content;
           var t = tout();
           R.ecrit = Object.keys(Object.assign({}, avant, t)).filter(function (k) { return avant[k] !== t[k]; });
@@ -259,9 +304,12 @@ function monde(jour) {
     try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
     const P = (R2 && R2.phase1) || {};
     verifie('la page a été jouée puis rechargée', R2 && R2.phase === 2, JSON.stringify(R2).slice(0, 600));
-    verifie('accueil : le bouton ; démonstration : le bandeau et les deux phrases', P.accueilBouton === true && P.bandeau === true && JSON.stringify((P.phrases || []).map((x) => x.replace(/&nbsp;| /g, ' '))) === JSON.stringify(['« Demande un rendez-vous demain à mon ami Michel »', '« Quand suis-je libre ce vendredi ? »']), JSON.stringify(P.phrases));
+    verifie('accueil : le bouton ; démonstration : le bandeau et les cinq phrases', P.accueilBouton === true && P.bandeau === true && JSON.stringify((P.phrases || []).map((x) => x.replace(/&nbsp;| /g, ' '))) === JSON.stringify(['« Demande un rendez-vous demain à mon ami Michel »', '« Préviens Paul que j’aurai 10 minutes de retard »', '« Quand suis-je libre ce vendredi ? »', '« Trouve un rendez-vous commun avec Alice, Chloé et Virginie »', '« Je suis malade, décale ma journée de demain »']), JSON.stringify(P.phrases));
     verifie('Michel : « Michel a TimeCool… », puis 16h, 17h, 18h demain ; 17h touché : « C’est calé », dans l agenda d exemple', /^Michel a TimeCool/.test(P.question || '') && JSON.stringify(P.creneaux) === '[16,17,18]' && P.cale === true && P.agenda === 1, JSON.stringify([P.question, P.creneaux, P.cale, P.agenda]));
-    verifie('vendredi : ce qui est libre, puis « Tu as tout vu. »', P.vendredi === true && /^Tu as tout vu\./.test(P.fini || ''), JSON.stringify([P.vendredi, P.fini]));
+    verifie('vendredi : ce qui est libre', P.vendredi === true);
+    verifie('retard : le message part à Paul (messagerie d exemple), Paul répond tout seul', P.paul === true);
+    verifie('à plusieurs : les trois agendas lus, des créneaux où tout le monde est libre ; touché : dans l agenda d exemple', JSON.stringify(P.groupeInvites) === JSON.stringify(['Alice', 'Chloé', 'Virginie']) && Array.isArray(P.groupe) && P.groupe.length === 3 && P.groupe.every(function (n) { return n === 0; }) && P.groupeAgenda === 1, JSON.stringify([P.groupeInvites, P.groupe, P.groupeAgenda]));
+    verifie('malade : la journée de demain est vidée, Michel choisit tout seul, « Oui, place-le » le déplace ; puis « Tu as tout vu. »', P.michelChoisit === true && P.maladeDemainVide === 0 && P.dejeunerDeplace === true && /^Tu as tout vu\./.test(P.fini || ''), JSON.stringify([P.michelChoisit, P.maladeDemainVide, P.dejeunerDeplace, P.fini]));
     verifie('pendant la démonstration : rien écrit dans le stockage, aucun appel réseau', Array.isArray(P.ecrit) && P.ecrit.length === 0 && Array.isArray(P.reseau) && P.reseau.length === 0, JSON.stringify([P.ecrit, P.reseau]));
     verifie('rechargée en pleine démonstration : le stockage est celui d avant, octet pour octet', R2 && Array.isArray(R2.diff) && R2.diff.length === 0, R2 && JSON.stringify(R2.diff));
     verifie('au retour : plus de démonstration, ni bandeau ; stockage et réseau d origine ; vraies données là', R2 && R2.demo === false && R2.bandeau === false && R2.natif === true && R2.vrai && R2.vrai.agenda === 'VRAI Kiné', JSON.stringify(R2 && [R2.demo, R2.bandeau, R2.natif, R2.vrai]));

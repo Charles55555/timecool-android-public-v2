@@ -3529,3 +3529,14 @@ Chef, 17/11 (ok de Charles ; découpage 107a / 107b / 107c accepté). Captiver u
 - Vraie vie aussi : « Demande un rendez-vous [moment] à [un contact qui a TimeCool] » prend le chemin de « demande à Hugo quand il est dispo » (mission 65), avec la période jusqu'au serveur (depuis, jusqua, trois créneaux le même jour) ; un autre contact, plusieurs ou aucun : le chemin d'avant.
 - Suites : verif-demo-charly (nouvelle ; vm + Chrome : jouée puis page rechargée en pleine démonstration, stockage identique octet pour octet, aucun appel réseau) ; verif-accueil-charly, verif-type-rdv, verif-historique-charly, verif-rdv-groupe suivent. verifier.sh vert. Captures : m71\captures107.
 - Examen 107a : se déconnecter, supprimer son compte, l écran de connexion ou une autre page (hors Charly, agenda, contacts) ferment d abord la démonstration ; « Quitter » et ces gestes attendent la fin du message en cours (compteur occupe, tcDemoAttendre / tcDemoLibere) ; bouton grisé avec ⏳ pendant la traduction. verif-demo-charly : 54 contrôles.
+
+## 17/11/2026 : mission 107b, les cinq phrases de la démonstration
+
+Chef, 17/11 (suite de la 107a, publiée en v2.0.433).
+- Les cinq phrases, dans l'ordre du chef : Michel demain, le retard de Paul, vendredi, Alice-Chloé-Virginie, malade demain.
+- « Préviens Paul que j’aurai 10 minutes de retard » : le café est relié au contact d'exemple (champ contact, comme un vrai rendez-vous ; le déjeuner à Michel) ; le message relu part dans la messagerie d'exemple ; Paul répond tout seul une seconde après (« Pas de souci, à tout à l’heure ! », dans sa conversation et « Paul a répondu : … » chez Charly).
+- « Trouve un rendez-vous commun avec Alice, Chloé et Virginie » : les trois agendas d'exemple lus (créneaux où tout le monde est libre), puis dans l'agenda.
+- « Je suis malade, décale ma journée de demain » : le coiffeur est déplacé, le déjeuner est proposé à Michel (créneaux libres chez lui, propositionLibres), Michel choisit tout seul le premier créneau libre (propositionCreer, relève par tcSuivrePropositions), « Oui, place-le » le déplace.
+- Serveur d'exemple : envoyerMessage, propositionLibres, propositionCreer, propositions, propositionTraiter, propositionMaintenir ; estConnecte vrai pendant la démonstration (la relève des réponses en dépend). Une réponse ne s'écrit que si la démonstration est encore ouverte.
+- Les phrases reviennent après chaque scène : boutons du questionnaire et de la réponse d'un contact suivis comme les envois ; une réponse de contact attendue fait patienter ; seuls les derniers boutons restent ; une phrase tapée ou dictée compte comme touchée.
+- Suite verif-demo-charly : 64 contrôles (vm + Chrome : les cinq phrases jouées jusqu'au bout, puis page rechargée en pleine démonstration). verifier.sh vert. Captures : m71\captures107b.
