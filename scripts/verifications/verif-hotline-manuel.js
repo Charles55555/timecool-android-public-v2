@@ -46,7 +46,7 @@ const appel = (code) => { try { return vm.runInContext(code, ctx); } catch (e) {
 const social = (t) => appel('tcSocialHotline(' + JSON.stringify(t) + ')');
 const FIN = 'Pose-moi ta question sur TimeCool.';
 [['Bonjour', 'Bonjour !'], ['Bonsoir Charly', 'Bonjour !'], ['Merci beaucoup', 'Avec plaisir !'],
- ['Au revoir', 'À bientôt !'], ['Tu es un robot ?', 'intelligence artificielle'], ['T’es humain ?', 'intelligence artificielle'], ['Qui es-tu ?', 'Charly']].forEach(([q, debut]) => {
+ ['Au revoir', 'À bientôt !'], ['Tu es un robot ?', 'intelligence artificielle'], ['T’es humain ?', 'intelligence artificielle'], ['Qui es-tu ?', 'Je m’appelle Maya']].forEach(([q, debut]) => {
   const r = social(q);
   verifie('« ' + q + ' » : réponse courte et aimable, puis « ' + FIN + ' »', typeof r === 'string' && r.includes(debut) && r.endsWith(FIN) && !/Je ne sais pas encore/.test(r), r);
 });

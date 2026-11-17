@@ -3642,3 +3642,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Boutons du haut : bulle de l'utilisateur.
 - Préalables : dates écrites et passé dans la consultation ; verif-phrases-boutons sans heure rouge ; petite bulle à 0,75.
 - Non couvert : e2e-rdv-groupe (hors verifier.sh) ne trouve plus de créneau depuis la fin des disponibilités par défaut ; le lieu côté API est vérifié par lecture et php -l. « Café avec Paul demain à 10h » part au modèle (avant 118 aussi).
+
+## 18/11/2026 (nuit) — Mission 119 : Maya, l'aide de la messagerie (CODEUR)
+
+- « Charly, ton aide TimeCool » devient « Maya, ton aide TimeCool » : ligne, en-tête, rond rose avec M blanc, « Maya écrit… », réponses courtes, fiche du manuel (14 entrées), consigne du modèle, au féminin. Charly IA inchangé.
+- Le nom ne vient ni de l'API ni de la base (fil sur l'appareil, réponses de la fiche puis du modèle par le relais).

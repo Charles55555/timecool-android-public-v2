@@ -149,7 +149,7 @@ if (!exe) {
   const norm = (t) => String(t || '').replace(/\u00a0/g, ' ').replace(/&nbsp;/g, ' ');
   verifie('la ligne est en tête, sur fond bleu ciel', R.premier === 'msgCharly' && R.fond === 'rgb(205, 234, 252)', JSON.stringify([R.premier, R.fond]));
   verifie('avant tout échange, la ligne garde sa phrase (et pas l histoire de la page Charly IA)', /Une question \? Demande-moi : « Comment changer la langue \? »/.test(norm(R.apercuVide)), R.apercuVide);
-  verifie('un toucher ouvre l écran de conversation de la messagerie, pas la page Charly IA', R.surConv === true && R.nom === 'Charly, ton aide TimeCool' && R.caseVisible === true, JSON.stringify([R.surConv, R.nom, R.caseVisible]));
+  verifie('un toucher ouvre l écran de conversation de la messagerie, pas la page Charly IA', R.surConv === true && R.nom === 'Maya, ton aide TimeCool' && R.caseVisible === true, JSON.stringify([R.surConv, R.nom, R.caseVisible]));
   verifie('conversation vide : la phrase d accueil, rien de la page Charly IA (ni le rendez-vous à 0h)', /Une question \? Demande-moi/.test(norm(R.vide)) && !/Dentiste|Je te propose/.test(R.vide || ''), R.vide);
   verifie('question d aide : la réponse de la base d aide, sans le modèle', /Paramètres/.test(R.aide || '') && /langue/i.test(R.aide || '') && R.modeleAide === 0, JSON.stringify([R.aide, R.modeleAide]));
   verifie('demande d agenda : « Pour ton agenda, va sur la page Charly IA. » et le bouton « Ouvrir Charly IA », sans le modèle', /Pour ton agenda, va sur la page Charly IA\./.test(R.agendaTexte || '') && R.agendaBouton === true && R.modeleAgenda === 0, JSON.stringify([R.agendaBouton, R.modeleAgenda]));

@@ -115,7 +115,7 @@ if (!exe) {
     res.conversations = (messages[mode] || []).length;
     document.getElementById('msgCharly').click();
     // Mission 102 : la ligne ouvre l'écran de conversation de la messagerie (plus la page Charly IA).
-    res.ouverte = document.getElementById('page-conv').classList.contains('active') && document.getElementById('convName').innerText === 'Charly, ton aide TimeCool';
+    res.ouverte = document.getElementById('page-conv').classList.contains('active') && document.getElementById('convName').innerText === 'Maya, ton aide TimeCool';
     tcRetourDepuisConversation();
     res.retour = document.getElementById('page-messages').classList.contains('active');
     // L'aide : chaque question, une à la fois.
@@ -143,8 +143,8 @@ if (!exe) {
   let res = null;
   try { res = m ? JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')) : null; } catch (e) { res = null; }
   try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
-  verifie('la messagerie : « Charly, ton aide TimeCool » en tête, avec son exemple ; ce n est pas une conversation', !!res && res.premier === 'msgCharly' && /Charly, ton aide TimeCool/.test(res.texteCharly) && /Comment changer la langue/.test(res.texteCharly) && res.conversations === 1, JSON.stringify(res && { premier: res.premier, t: res.texteCharly, n: res.conversations }));
-  verifie('un toucher ouvre la conversation « Charly, ton aide TimeCool » (mission 102) ; la flèche retour ramène à la messagerie', !!res && res.ouverte === true && res.retour === true, JSON.stringify(res && { o: res.ouverte, r: res.retour }));
+  verifie('la messagerie : « Maya, ton aide TimeCool » en tête, avec son exemple ; ce n est pas une conversation', !!res && res.premier === 'msgCharly' && /Maya, ton aide TimeCool/.test(res.texteCharly) && /Comment changer la langue/.test(res.texteCharly) && res.conversations === 1, JSON.stringify(res && { premier: res.premier, t: res.texteCharly, n: res.conversations }));
+  verifie('un toucher ouvre la conversation « Maya, ton aide TimeCool » (missions 102, 119) ; la flèche retour ramène à la messagerie', !!res && res.ouverte === true && res.retour === true, JSON.stringify(res && { o: res.ouverte, r: res.retour }));
   const attendu = Object.fromEntries(QUESTIONS.filter((q) => q[1]));
   const fausses = res ? res.reponses.filter((x) => attendu[x.q] ? (x.aide !== attendu[x.q] || x.modele !== 0) : x.aide !== null) : [];
   verifie('dans la vraie page, chaque question d aide reçoit sa réponse sans le modèle ; « Dentiste demain à 15h » et « mets le thème sombre » gardent leur chemin', !!res && res.reponses.length === Object.keys(attendu).length + 2 && fausses.length === 0, JSON.stringify(fausses.length ? fausses : res && res.reponses.length));

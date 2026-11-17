@@ -59,7 +59,7 @@ const chercher = (q) => { champ.value = q; ctx.renderMessages(); return liste.in
 if (!ko) {
   chercher('');
   verifie('page vide : « Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire. »', texte() === 'Aucun message pour l’instant. Cherche un contact TimeCool ci‑dessus pour lui écrire.', texte());
-  verifie('(mission 96) page vide : la ligne de Charly en tête, au-dessus de la phrase', /^<div class="msg-preview" id="msgCharly" onclick="tcOuvrirCharlyAide\(\)">/.test(liste.innerHTML) && /Charly, ton aide TimeCool/.test(liste.innerHTML), liste.innerHTML.slice(0, 200));
+  verifie('(mission 96, 119) page vide : la ligne de Maya en tête, au-dessus de la phrase', /^<div class="msg-preview" id="msgCharly" onclick="tcOuvrirCharlyAide\(\)">/.test(liste.innerHTML) && /Maya, ton aide TimeCool/.test(liste.innerHTML), liste.innerHTML.slice(0, 200));
   const h = chercher('paul');
   verifie('« paul » : Paul Martin (TimeCool) proposé, « Écrire un message », un toucher ouvre sa conversation (messageContact)', /onclick="messageContact\('p1'\)"/.test(h) && /Paul Martin/.test(texte()) && /Écrire un message/.test(texte()), h);
   verifie('« helene » sans accent trouve Hélène Roux', /messageContact\('h1'\)/.test(chercher('helene')), texte());
