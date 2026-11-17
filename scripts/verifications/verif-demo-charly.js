@@ -47,7 +47,7 @@ function monde(jour) {
   const el = (id) => elements[id] || (elements[id] = { id, style: {}, innerHTML: '', value: '', remove() { delete elements[id]; }, setAttribute() {}, appendChild() {} });
   const ctx = {
     console, JSON, Array, Object, String, Number, Math, Promise, RegExp, Storage, localStorage, Date: FauxDate, TypeError, Error,
-    setTimeout: (f) => { setTimeout(f, 0); return 0; },
+    setTimeout: (f) => { setTimeout(f, 0); return 0; }, clearTimeout: () => {},
     document: { getElementById: (id) => elements[id] || null, createElement: () => ({ style: {}, setAttribute() {}, set id(v) { elements[v] = this; }, remove() { Object.keys(elements).forEach((k) => { if (elements[k] === this) delete elements[k]; }); } }), body: { style: {}, appendChild() {} }, querySelectorAll: () => [], querySelector: () => null },
     escapeHTML: (s) => String(s).replace(/</g, '&lt;'), tcBulleCharly: (h) => '<bulle>' + h + '</bulle>', tcSansAccents: (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(),
     tcPrenomUtilisateur: () => 'Charles', currentLanguage: 'fr', TC_TRANSLATE_CACHE: {}, translateText: async (t) => t,
@@ -69,9 +69,9 @@ function monde(jour) {
   vm.runInContext(['tcSyncBientot', 'tcSyncTour', 'tcProgrammerRappels', 'tcOuvrirAilleurs', 'callAI', 'charlySendMessage', 'tcConfirmerRdvGroupe']
     .map((n) => 'function ' + n + '() { _sorties.push("' + n + '"); return "' + n + '"; }').join('\n'), ctx);
   vm.runInContext('function tcISO(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }', ctx);
-  const code = [objet('const TC_DEMO_PHRASES = ['), objet('const TC_DEMO_TEXTES = {'), 'let _tcDemo = null;'].concat(['tcDemoActive', 'tcDemoClesLisibles', 'tcDemoJour', 'tcDemoVendredi', 'tcDemoDimanche', 'tcDemoRdv', 'tcDemoDonnees', 'tcDemoLibre',
+  const code = [objet('const TC_DEMO_PHRASES = ['), objet('const TC_DEMO_TEXTES = {'), 'let _tcDemo = null;', 'var TC_ATTENTE_DUREES = { demo: 0, vrai: 0 }; var TC_STATUT_REPOS = "repos"; var _tcEtape = null; function tcDefinirStatutCharly() {}'].concat(['tcDemoActive', 'tcDemoClesLisibles', 'tcDemoJour', 'tcDemoVendredi', 'tcDemoDimanche', 'tcDemoRdv', 'tcDemoDonnees', 'tcDemoLibre',
     'tcDemoOccupationsMoi', 'tcDemoServeur', 'tcDemoBandeau', 'tcDemoTexte', 'tcDemoTraduire', 'tcDemoMessagePhrases', 'tcDemoRemplacer', 'tcOuvrirDemo', 'tcQuitterDemo',
-    'tcDemoAttendre', 'tcDemoLibere', 'tcDemoApres', 'tcDemoQuestionEnCours', 'tcDemoReponseDe', 'tcDemoMarquer'].map(fonction));
+    'tcDemoAttendre', 'tcDemoLibere', 'tcDemoApres', 'tcDemoQuestionEnCours', 'tcDemoReponseDe', 'tcDemoMarquer', 'tcAttenteDuree', 'tcAttentePrenoms', 'tcTexteAttente', 'tcEtapeAttente', 'tcMinEtape', 'tcFinEtapes'].map(fonction));
   if (code.some((c) => !c)) { verifie('les fonctions de la démonstration sont dans la page', false, code.map((c) => !!c).join(',')); return null; }
   vm.runInContext(code.join('\n'), ctx);
   return ctx;
@@ -237,8 +237,8 @@ function monde(jour) {
       window.__reseau = [];
       var f0 = window.fetch;
       window.fetch = function (u) { window.__reseau.push(String(u)); return Promise.reject(new Error('hors ligne (banc)')); };
-      // Mission 107c : l avion en papier vole vite dans la suite (la durée réelle est contrôlée par verif-avion-papier).
-      if (typeof TC_AVION_DUREES !== 'undefined') { TC_AVION_DUREES.demo = 150; TC_AVION_DUREES.vrai = 150; }
+      // Mission 108 : les étapes de la bulle passent vite dans la suite (la durée réelle est contrôlée par verif-bulle-attente).
+      if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 150; TC_ATTENTE_DUREES.vrai = 150; }
       userAccount = { firstname: 'Charles', lastname: 'Haddad', reference: 'REFTEST' };
       tcCharlyPret = function () { return true; };
       charlyIA.history = []; charlyIA._historiqueCharge = true;

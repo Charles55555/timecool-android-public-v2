@@ -90,6 +90,7 @@ if (!exe) {
       var R = { recap: charlyIA.history.map(function (m) { return String(m.content || ''); }).join('\\n') };
       await cliquer('Tu les préviens');
       await cliquer('Oui');
+      await attendre(2500);   // mission 108 : la bulle, au moins 1 s par étape
       R.bilan = String(charlyIA.history[charlyIA.history.length - 1].content || '');
       R.envois = window.__envois.slice();
       R.groupe = events.filter(function (e) { return e.id === 'tc_grp_1'; }).map(function (e) { return e.date === iso && e.startH === 18; });

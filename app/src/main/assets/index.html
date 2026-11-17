@@ -429,6 +429,16 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 @keyframes tcPointPulse { 0%,60%,100% { transform:scale(0.75); opacity:0.25; } 30% { transform:scale(1.3); opacity:1; } }
 /* Un telephone regle pour limiter les animations les voit fixes. */
 @media (prefers-reduced-motion: reduce) { .tc-points span { animation:none; opacity:1; transform:none; } }
+/* Mission 108 : un message part (ou arrive) : trois petites feuilles glissent dans la bulle, à la place des points. Doux, gris. */
+.tc-feuilles { position:relative; display:block; width:56px; height:18px; overflow:hidden; }
+.tc-feuilles span { position:absolute; top:5px; left:0; width:9px; height:7px; background:#eef0f4; border:1px solid #c3c8d2; border-radius:1.5px; opacity:0; animation:tcFeuilleEnvoi 1.4s linear infinite; }
+.tc-feuilles span:nth-child(2) { animation-delay:0.47s; }
+.tc-feuilles span:nth-child(3) { animation-delay:0.94s; }
+.tc-feuilles.retour span { animation-name:tcFeuilleRetour; }
+@keyframes tcFeuilleEnvoi { 0% { transform:translateX(0) rotate(-8deg); opacity:0; } 15%, 85% { opacity:0.9; } 100% { transform:translateX(46px) rotate(8deg); opacity:0; } }
+@keyframes tcFeuilleRetour { 0% { transform:translateX(46px) rotate(8deg); opacity:0; } 15%, 85% { opacity:0.9; } 100% { transform:translateX(0) rotate(-8deg); opacity:0; } }
+/* « Réduire les animations » : le texte seul. */
+@media (prefers-reduced-motion: reduce) { .tc-feuilles { display:none; } }
 .ai-text { font-size:13px; color:var(--g-blue); font-weight:500; }
 
 /* Dashboard */
@@ -12570,8 +12580,11 @@ function tcDemoReponseDe(reference, texte, apres) {
   setTimeout(async function () {
     if (_tcDemo !== etat) return;
     try {
-      // Mission 107c : l'avion revient d'abord ; la démonstration fermée pendant le vol : rien.
-      if (typeof tcAvionPapier === 'function') await tcAvionPapier({ sens: 'retour', noms: [c.name] });
+      // Mission 108 : après la scène en cours (« C'est fait » d'abord), la bulle dit « Paul répond… », puis la réponse.
+      await tcDemoAttendre(etat);
+      if (_tcDemo !== etat) return;
+      typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('reponse', [c.name]), 'reception');
+      typeof tcFinEtapes === 'function' && await tcFinEtapes();
       if (_tcDemo !== etat) return;
       const liste = (typeof messages !== 'undefined' && messages && Array.isArray(messages.user)) ? messages.user : null;
       if (liste) {
@@ -12803,7 +12816,7 @@ function tcQuitterDemo(options) {
   charlyIA._historiqueCharge = etat.vrai.historiqueCharge;
   _tcDemo = null;
   tcDemoBandeau(false);
-  { const avion = document.getElementById('tcAvion'); if (avion) avion.remove(); }
+  if (_tcEtape) { clearTimeout(_tcEtape.garde); _tcEtape = null; tcDefinirStatutCharly(TC_STATUT_REPOS, false); }
   charlyIA.history.push({ role: 'assistant', content: TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
   if (!(options && options.sansRetour)) navigate('assistant');
   renderCharlyChat();
@@ -12840,100 +12853,84 @@ async function tcDemanderRdvContact107(text) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MISSION 107c (Charles, 17/11) : l'avion en papier. Quand Charly écrit à quelqu'un (ou lit son agenda), un avion en papier
-   traverse la zone de conversation, de la pastille de Charly vers le rond aux initiales ; dessous : « Message envoyé à Paul ».
-   Quand la réponse arrive, il revient : « Paul répond… », puis la réponse s'affiche. Rien ne se touche pendant le vol (le
-   bandeau laisse passer les doigts). « Réduire les animations » : pas de vol, le texte seul.
+   MISSION 108 (Charles, 17/11, après essai : l'avion « complètement nul ») : tout se passe dans la petite bulle d'attente.
+   Elle dit en clair ce que Charly fait (le sous-titre sous « Charly IA » aussi) ; quand un message part ou arrive, de petites
+   feuilles glissent à la place des quatre points. Aucune attente ajoutée en vrai : la bulle reste le temps de l'action, au
+   moins une seconde pour qu'on la lise ; dans la démonstration, environ 1,5 seconde par étape.
    ═══════════════════════════════════════════════════════════════ */
-/** Durée d'un vol, en millisecondes : une ligne par contexte (Charles : 5 s dans la démonstration ; le chef : 2 s en vrai). */
-const TC_AVION_DUREES = { demo: 5000, vrai: 2000 };
-let _tcAvionFile = Promise.resolve();
+/** Le temps minimum d'une étape de la bulle, en millisecondes : une ligne par contexte. */
+const TC_ATTENTE_DUREES = { demo: 1500, vrai: 1000 };
+/** Le sous-titre de Charly au repos. */
+const TC_STATUT_REPOS = '🔒 Votre Assistant Intelligent';
+let _tcEtape = null;
 
-/** La durée du vol, selon qu'on est dans la démonstration ou non. */
-function tcAvionDuree() {
-  return (typeof tcDemoActive === 'function' && tcDemoActive()) ? TC_AVION_DUREES.demo : TC_AVION_DUREES.vrai;
+function tcAttenteDuree() {
+  return (typeof tcDemoActive === 'function' && tcDemoActive()) ? TC_ATTENTE_DUREES.demo : TC_ATTENTE_DUREES.vrai;
 }
 
-/** « Paul », « Paul et Michel », « Alice, Chloé et Virginie » : les prénoms. */
-function tcAvionPrenoms(noms) {
+/** « Paul », « Alice, Chloé et Virginie ». */
+function tcAttentePrenoms(noms) {
   const p = (noms || []).map(function (n) { return String(n || '').trim().split(' ')[0]; }).filter(Boolean);
   return p.length > 1 ? p.slice(0, -1).join(', ') + ' et ' + p[p.length - 1] : (p[0] || '');
 }
 
-/** Le texte sous l'avion. sens : 'aller' | 'retour' ; quoi : 'message' | 'demande' | 'agenda' (lecture d'agenda, personne n'est écrit). */
-function tcAvionTexte(sens, noms, quoi) {
-  const p = tcAvionPrenoms(noms);
-  // Décision du chef (17/11), mots de Charles : « Je demande à l’agenda de Michel », « L’agenda de Michel a répondu ».
-  if (quoi === 'agenda') {
-    const de = /^[aeiouyhàâéèêëîïôöûüœ]/i.test(p) ? 'd’' : 'de ';
-    const plusieurs = (noms || []).length > 1;
-    if (sens === 'retour') return plusieurs ? 'Les agendas ont répondu' : 'L’agenda ' + de + p + ' a répondu';
-    return plusieurs ? 'Je demande aux agendas ' + de + p : 'Je demande à l’agenda ' + de + p;
-  }
-  if (sens === 'retour') return p + ((noms || []).length > 1 ? ' répondent…' : ' répond…');
-  return (quoi === 'demande' ? 'Demande envoyée à ' : 'Message envoyé à ') + p;
-}
-
 /**
- * Un vol : { sens, noms, quoi }. Rend une promesse tenue à l'atterrissage. Les vols se suivent, jamais deux à la fois.
- * Hors de la page Charly IA, ou sans zone de conversation : pas de vol.
+ * Le texte de la bulle, toujours vrai : 'agenda' (son agenda), 'contacts', 'agendaDe' (l'agenda d'un contact ou de plusieurs),
+ * 'envoi' (un message part), 'reponse' (une réponse arrive), 'range' (créer, déplacer, supprimer), sinon « Charly cherche… ».
  */
-function tcAvionPapier(o) {
-  const vol = _tcAvionFile.then(function () { return tcAvionVoler(o || {}); });
-  _tcAvionFile = vol.catch(function () {});
-  return vol;
+function tcTexteAttente(quoi, noms) {
+  const p = tcAttentePrenoms(noms), plusieurs = (noms || []).length > 1;
+  if (quoi === 'agenda') return 'Charly cherche dans ton agenda…';
+  if (quoi === 'contacts') return 'Charly cherche dans tes contacts…';
+  if (quoi === 'agendaDe') return plusieurs || !p ? 'Charly regarde les agendas…' : 'Charly regarde l’agenda ' + (/^[aeiouyhàâéèêëîïôöûüœ]/i.test(p) ? 'd’' : 'de ') + p + '…';
+  if (quoi === 'envoi' && p) return 'Charly envoie à ' + p + '…';
+  if (quoi === 'reponse' && p) return p + (plusieurs ? ' répondent…' : ' répond…');
+  if (quoi === 'range') return 'Charly range ton agenda…';
+  return 'Charly cherche…';
 }
 
-function tcAvionVoler(o) {
-  return new Promise(function (fini) {
-    const corps = document.getElementById('charlyChatBody');
-    const pageCharly = document.getElementById('page-assistant');
-    if (!corps || !pageCharly || !pageCharly.classList.contains('active') || !(o.noms || []).length) { fini(); return; }
-    const duree = tcAvionDuree();
-    const calme = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    const ancien = document.getElementById('tcAvion');
-    if (ancien) ancien.remove();
-    if (getComputedStyle(pageCharly).position === 'static') pageCharly.style.position = 'relative';
-    const initiales = String(o.noms[0] || '').split(' ').map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
-    const autres = o.noms.length > 1 ? '<span style="position:absolute; right:-6px; bottom:-4px; background:#1a73e8; color:#fff; border-radius:10px; font-size:10px; font-weight:700; padding:1px 5px;">+' + (o.noms.length - 1) + '</span>' : '';
-    const rond = function (html, fond) { return '<div style="position:relative; flex-shrink:0; width:48px; height:48px; border-radius:50%; background:' + fond + '; display:flex; align-items:center; justify-content:center; color:#fff; font-size:17px; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,0.15);">' + html + '</div>'; };
-    const charly = rond('⚡', 'linear-gradient(135deg, var(--g-blue), var(--g-yellow))');
-    const contact = rond(escapeHTML(initiales) + autres, '#5f6bd6');
-    const aller = o.sens !== 'retour';
-    const bande = document.createElement('div');
-    bande.id = 'tcAvion';
-    bande.setAttribute('role', 'status');
-    bande.setAttribute('aria-live', 'polite');
-    const r = corps.getBoundingClientRect(), rp = pageCharly.getBoundingClientRect();
-    // Juste au-dessus de la barre de saisie (fixe en bas, par-dessus la zone de conversation).
-    const saisie = document.getElementById('charlyInput');
-    const bas = saisie ? Math.min(r.bottom, saisie.getBoundingClientRect().top - 22) : r.bottom;
-    const haut = Math.max(0, bas - rp.top - 112);
-    bande.style.cssText = 'position:absolute; left:' + Math.max(8, r.left - rp.left + 8) + 'px; width:' + Math.max(200, r.width - 16) + 'px; top:' + haut + 'px; z-index:60; pointer-events:none;'
-      + ' background:rgba(255,255,255,0.96); border:1px solid var(--border); border-radius:18px; box-shadow:0 6px 22px rgba(0,0,0,0.12); padding:12px 14px 10px; box-sizing:border-box;';
-    bande.innerHTML = '<div style="position:relative; display:flex; align-items:center; justify-content:space-between; height:56px;">'
-      + (aller ? charly + contact : contact + charly)
-      + '<div class="tc-avion-piste" style="position:absolute; left:56px; right:56px; top:27px; border-top:2px dashed #c6dafc;"></div>'
-      + '<svg class="tc-avion-svg" viewBox="0 0 24 24" width="38" height="38" style="position:absolute; left:52px; top:8px;' + (calme ? ' display:none;' : '') + '"><path fill="#1a73e8" d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>'
-      + '</div><div style="text-align:center; font-size:14px; font-weight:600; color:var(--text); margin-top:6px;">' + escapeHTML(tcAvionTexte(o.sens, o.noms, o.quoi)) + '</div>';
-    pageCharly.appendChild(bande);
-    let fait = false;
-    const finir = function () { if (fait) return; fait = true; try { bande.remove(); } catch (e) {} fini(); };
-    const avion = bande.querySelector('.tc-avion-svg');
-    if (!calme && avion && typeof avion.animate === 'function') {
-      const course = Math.max(40, bande.clientWidth - 28 - 52 - 52 - 38);
-      // De la pastille de Charly vers le rond du contact (retour : l'inverse, l'avion tourné), en arc.
-      const de = aller ? 0 : course, a = aller ? course : 0, tourne = aller ? '' : ' scaleX(-1)';
-      avion.animate([
-        { transform: 'translate(' + de + 'px, 0) rotate(-8deg)' + tourne, opacity: 0.2 },
-        { transform: 'translate(' + (de + (a - de) * 0.15) + 'px, -10px) rotate(-12deg)' + tourne, opacity: 1, offset: 0.15 },
-        { transform: 'translate(' + ((de + a) / 2) + 'px, -22px) rotate(0deg)' + tourne, opacity: 1, offset: 0.5 },
-        { transform: 'translate(' + (de + (a - de) * 0.85) + 'px, -8px) rotate(10deg)' + tourne, opacity: 1, offset: 0.85 },
-        { transform: 'translate(' + a + 'px, 0) rotate(14deg)' + tourne, opacity: 0.3 }
-      ], { duration: duree, easing: 'ease-in-out', fill: 'forwards' });
-    }
-    setTimeout(finir, duree);
-  });
+/** Avant la réponse du modèle : la meilleure idée d'après la phrase (jamais « envoie » : rien ne part sans le dire). */
+function tcDevinerAttente(texte) {
+  const t = ' ' + tcSansAccents(String(texte || '')).replace(/[^a-z0-9]+/g, ' ') + ' ';
+  if (/ (contact|contacts|numero|telephone|mail|email|fiche|carnet|adresse) /.test(t)) return 'contacts';
+  if (/ (rdv|rendez vous|agenda|planning|libre|libres|dispo|disponible|occupe|semaine|demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|matin|soir|midi|\d{1,2}h\d{0,2}|heure|journee|creneau|creneaux) /.test(t)) return 'agenda';
+  return '';
+}
+
+/** Un texte de l'appli dans la langue de l'appli : la traduction connue, sinon le français (et elle est demandée pour la suite). */
+function tcTexteAppTraduit(fr) {
+  const l = (typeof currentLanguage !== 'undefined') ? currentLanguage : 'fr';
+  if (!l || l === 'fr' || !fr) return fr;
+  const c = (typeof TC_TRANSLATE_CACHE !== 'undefined' && TC_TRANSLATE_CACHE) || {};
+  if (c[l + ':' + fr]) return c[l + ':' + fr];
+  try { if (typeof translateText === 'function') translateText(fr, l); } catch (e) {}
+  return fr;
+}
+
+/** Une étape de la bulle : la précédente reste au moins son temps minimum, puis la bulle dit la nouvelle. sorte : 'envoi' | 'reception'. */
+async function tcEtapeAttente(texte, sorte) {
+  if (_tcEtape) await tcMinEtape(_tcEtape);
+  const e = { debut: Date.now() };
+  // Filet : une étape jamais refermée (erreur en route) ne bloque pas Charly plus de 30 s.
+  e.garde = setTimeout(function () { if (_tcEtape === e) { _tcEtape = null; tcDefinirStatutCharly(TC_STATUT_REPOS, false); } }, 30000);
+  _tcEtape = e;
+  tcDefinirStatutCharly(texte, true, sorte || null);
+}
+
+function tcMinEtape(e) {
+  const reste = tcAttenteDuree() - (Date.now() - e.debut);
+  return reste > 0 ? new Promise(function (r) { setTimeout(r, reste); }) : Promise.resolve();
+}
+
+/** La dernière étape a eu son temps : la bulle s'en va, le sous-titre revient au repos. */
+async function tcFinEtapes() {
+  const e = _tcEtape;
+  if (!e) return;
+  await tcMinEtape(e);
+  if (_tcEtape !== e) return;
+  clearTimeout(e.garde);
+  _tcEtape = null;
+  tcDefinirStatutCharly(TC_STATUT_REPOS, false);
 }
 
 function renderCharlyChat() {
@@ -15149,10 +15146,12 @@ function tcPousserMessageUtilisateur(text) {
   renderCharlyChat();
 }
 
-function tcDefinirStatutCharly(texte, chargement) {
+function tcDefinirStatutCharly(texte, chargement, sorte) {
   const statut = document.getElementById('charlyStatus');
-  if (statut) statut.textContent = texte;
+  // Mission 108 : le texte dans la langue de l'appli ; la sorte (envoi, réception) choisit les feuilles ou les points.
+  if (statut) statut.textContent = (typeof tcTexteAppTraduit === 'function') ? tcTexteAppTraduit(texte) : texte;
   charlyIA.isLoading = !!chargement;
+  charlyIA.attenteSorte = chargement ? (sorte || null) : null;
   const btn = document.getElementById('charlySendBtn');
   if (btn) btn.style.opacity = chargement ? '0.5' : '1';
   tcMajAttenteCharly();
@@ -15178,14 +15177,14 @@ function tcMajAttenteCharly() {
   }
 
   const statut = document.getElementById('charlyStatus');
-  const texte = (statut && statut.textContent) || 'Recherche en cours…';
+  const texte = (statut && statut.textContent) || 'Charly cherche…';
 
   if (!bulle) {
     corps.insertAdjacentHTML('beforeend',
       '<div id="charlyAttente" style="display:flex; margin-bottom:10px;">' +
         '<div style="padding:12px 16px; background:white; border:1px solid var(--border);' +
         ' border-radius:16px 16px 16px 4px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">' +
-          '<div class="tc-points"><span></span><span></span><span></span><span></span></div>' +
+          '<div class="tc-attente-anim" data-sorte=""><div class="tc-points"><span></span><span></span><span></span><span></span></div></div>' +
           '<div class="tc-attente-texte" style="font-size:11px; color:var(--text-sec); margin-top:6px;"></div>' +
         '</div>' +
       '</div>');
@@ -15195,6 +15194,14 @@ function tcMajAttenteCharly() {
   // du bleu a chaque changement de texte, et l'animation sauterait.
   const ligne = bulle && bulle.querySelector('.tc-attente-texte');
   if (ligne) ligne.textContent = texte;
+  // Mission 108 : un message part ou arrive : de petites feuilles à la place des points (et l'inverse). La bulle ne change pas.
+  const sorte = charlyIA.attenteSorte || '';
+  const anim = bulle && bulle.querySelector('.tc-attente-anim');
+  if (anim && anim.getAttribute('data-sorte') !== sorte) {
+    anim.setAttribute('data-sorte', sorte);
+    anim.innerHTML = sorte ? '<div class="tc-feuilles' + (sorte === 'reception' ? ' retour' : '') + '"><span></span><span></span><span></span></div>'
+      : '<div class="tc-points"><span></span><span></span><span></span><span></span></div>';
+  }
   corps.scrollTop = corps.scrollHeight;
 }
 
@@ -15624,7 +15631,7 @@ function detecterConsultationAgenda(text) {
 
 async function tcGererConsultationAgenda(text, intent) {
   tcPousserMessageUtilisateur(text);
-  tcDefinirStatutCharly('📅 Consultation de ton agenda…', true);
+  tcDefinirStatutCharly('Charly cherche dans ton agenda…', true);
   await new Promise(r => setTimeout(r, 350));
 
   const evs = events.filter(e => e.mode === mode);
@@ -15900,7 +15907,7 @@ function tcBorneDeFin(t, maintenant) {
 
 async function tcGererSuppressionRdv(text) {
   tcPousserMessageUtilisateur(text);
-  tcDefinirStatutCharly('🗑️ Recherche du rendez-vous…', true);
+  tcDefinirStatutCharly('Charly cherche dans ton agenda…', true);
   await new Promise(r => setTimeout(r, 350));
 
   const t = text.toLowerCase();
@@ -16895,7 +16902,7 @@ async function charlySendMessage() {
       _tcTexteTape = { tape: texteTape, corrige: text };
     }
   }
-  if (charlyIA.isLoading) { showToast('Charly réfléchit déjà…'); return; }
+  if (charlyIA.isLoading) { showToast('Charly cherche déjà…'); return; }
   // Mission 77 : « … et attends ma validation », « fais-le directement » : cette demande suit le profil dit, le réglage ne change pas.
   // La phrase est ôtée de ce que lisent les détecteurs et le modèle. Sans elle, une réponse à une question garde le profil du
   // moment ; une nouvelle demande revient au réglage.
@@ -17516,7 +17523,8 @@ async function charlySendMessage() {
   }
 
   // Show loading
-  tcDefinirStatutCharly('⏳ Charly réfléchit…', true);
+  // Mission 108 : ce qu'il fait, deviné d'après la phrase (agenda, contacts), sinon « Charly cherche… ».
+  tcDefinirStatutCharly(typeof tcTexteAttente === 'function' ? tcTexteAttente(tcDevinerAttente(text)) : 'Charly cherche…', true);
 
   try {
     let reply;
@@ -27645,6 +27653,8 @@ async function tcQuestionnaireExecuter(r, fin) {
   const present = function (e) { return presents.some(function (x) { return e && x.id === e.id; }); };
   const anciens = presents.map(function (e) { return { id: e.id, date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM }; });
   let deplaces = [], laisses = [], supprimes = [], groupes = [];
+  // Mission 108 : la bulle dit ce que Charly fait, une étape après l'autre.
+  if (r.action === 'decaler' || r.action === 'supprimer' || (r.action === 'retard' && Array.isArray(r._liste) && r._liste.length)) typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('range'));
   let aProposer = [];
   if (r.action === 'decaler') {
     // Mission 73 : « Tu les préviens » → un rendez-vous avec un contact reste en place, Charly lui propose des créneaux.
@@ -27667,6 +27677,11 @@ async function tcQuestionnaireExecuter(r, fin) {
   if ((deplaces.length || supprimes.length) && _tcMarcheArriere) _tcMarcheArriere.prevenus = [];
   const touches = r.action === 'decaler' ? deplaces.map(function (x) { return x.ev; }).concat(groupes) : (r.action === 'retard' ? presents : supprimes);
   const contacts = tcQuestionnaireContacts(touches);
+  // Mission 108 : ceux à qui Charly écrit vraiment (messagerie TimeCool) : « Charly envoie à Paul… » pendant les envois.
+  const _destinataires = [];
+  if (r.prevenir === 'charly') contacts.forEach(function (c) { if (c && c.referenceCompte && _destinataires.indexOf(c.name) < 0) _destinataires.push(c.name); });
+  aProposer.forEach(function (x) { const c = tcContactDuRdv(x.ev); if (c && c.referenceCompte && _destinataires.indexOf(c.name) < 0) _destinataires.push(c.name); });
+  if (_destinataires.length) typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('envoi', _destinataires), 'envoi');
   const prevenus = [], envois = [], sansMoyen = [];
   if (r.prevenir === 'charly') {
     for (const c of contacts) {
@@ -27720,10 +27735,8 @@ async function tcQuestionnaireExecuter(r, fin) {
   if (r.prevenir === 'moi' && contacts.length) lignes.push('• À prévenir toi-même : ' + tcQuestionnaireNoms(contacts));
   if (deplaces.length || supprimes.length) lignes.push('Pour revenir en arrière, dis-moi « remets-' + (deplaces.length + supprimes.length > 1 ? 'les' : 'le') + ' ».');
   if (r._seul) tcJournaliserCompteRendu(lignes);   // profil 3 : le compte rendu est rangé au Journal d’activité (mission 91)
-  // Mission 107c : l'avion en papier vers ceux à qui Charly vient d'écrire, puis « C'est fait ».
-  const _envoles = prevenus.map(function (c) { return c.name; });
-  if (propositions && propositions.res && Array.isArray(propositions.res.proposes)) propositions.res.proposes.forEach(function (n) { if (_envoles.indexOf(n) < 0) _envoles.push(n); });
-  if (_envoles.length && typeof tcAvionPapier === 'function') await tcAvionPapier({ sens: 'aller', noms: _envoles, quoi: 'message' });
+  // Mission 108 : la bulle s'en va, puis « C'est fait ».
+  typeof tcFinEtapes === 'function' && await tcFinEtapes();
   if (!envois.length) { tcQuestionnaireDire(lignes.join('\n')); return; }
   charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero) });
   renderCharlyChat();
@@ -28388,12 +28401,12 @@ async function tcSuivrePropositions(toujours) {
     const libre = function (x) { const e = tcRdvDeProposition(x); return x.etat === 'choisi' && !!e && !tcGenesDuCreneau(e, tcCreneauDeProposition(x)).length; };
     const seuls = nouvelles.filter(function (x) { return profilDe(x) === 3 || (profilDe(x) === 2 && libre(x)); });
     const aDemander = nouvelles.filter(function (x) { return seuls.indexOf(x) < 0; });
-    // Mission 107c : l'avion revient de ceux qui ont répondu (la démonstration a déjà joué le sien).
-    if ((seuls.length || aDemander.length) && typeof tcAvionPapier === 'function' && !(typeof tcDemoActive === 'function' && tcDemoActive())
+    // Mission 108 : la bulle dit « Paul répond… » (la démonstration a déjà joué la sienne).
+    if ((seuls.length || aDemander.length) && !(typeof tcDemoActive === 'function' && tcDemoActive())
       && typeof currentPage !== 'undefined' && currentPage === 'assistant') {
       const qui = [];
       seuls.concat(aDemander.slice(0, 1)).forEach(function (x) { if (x && x.qui && qui.indexOf(x.qui) < 0) qui.push(x.qui); });
-      if (qui.length) await tcAvionPapier({ sens: 'retour', noms: qui });
+      if (qui.length) { typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('reponse', qui), 'reception'); typeof tcFinEtapes === 'function' && await tcFinEtapes(); }
     }
     if (seuls.length) await tcTraiterSeul(seuls);
     if (aDemander.length) tcPoserReponseCreneau(aDemander[0]);
@@ -32835,18 +32848,14 @@ async function tcProposerRdvGroupe(references, duree, preambule, type, options) 
   charlyIA.history.push(attente);
   renderCharlyChat();
   let r;
-  // Mission 107c : l'avion part vers eux pendant que la demande est lue ; il revient avec leur réponse.
+  // Mission 108 : la bulle dit « Charly regarde l'agenda de Michel… » le temps de la lecture (personne n'est écrit).
   const _noms = (references || []).map(function (ref) { const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; }); return c ? c.name : ''; }).filter(Boolean);
-  // Décision du chef : lire un agenda n'écrit à personne. L'avion ne vole que dans la démonstration ; en vrai, la recherche
-  // reste immédiate (fluidité avant tout).
-  const _avion = _noms.length && typeof tcAvionPapier === 'function' && typeof tcDemoActive === 'function' && tcDemoActive();
-  const _vol = _avion ? tcAvionPapier({ sens: 'aller', noms: _noms, quoi: 'agenda' }) : Promise.resolve();
+  typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('agendaDe', _noms));
   try {
     r = await TC_BACKEND.proposerRdvGroupe(references, duree, type, options || undefined);
-    await _vol;
-    if (_avion) await tcAvionPapier({ sens: 'retour', noms: _noms, quoi: 'agenda' });
+    typeof tcFinEtapes === 'function' && await tcFinEtapes();
   } catch (e) {
-    await _vol;
+    typeof tcFinEtapes === 'function' && await tcFinEtapes();
     charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
     charlyIA.history.push({ role: 'assistant', content: '❌ ' + (e && e.message ? e.message : 'Je n’arrive pas à interroger les agendas pour le moment.') });
     renderCharlyChat();
@@ -32925,9 +32934,13 @@ async function tcConfirmerRdvGroupe(id, i) {
   g.etat = 'envoi';
   renderCharlyChat();
   let r;
+  // Mission 108 : la bulle le temps de l'inscription.
+  typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('range'));
   try {
     r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree, g.type);
+    typeof tcFinEtapes === 'function' && await tcFinEtapes();
   } catch (e) {
+    typeof tcFinEtapes === 'function' && await tcFinEtapes();
     if (e && e.code === 'creneau_pris') {
       g.etat = 'perdu';
       charlyIA.history.splice(charlyIA.history.indexOf(m), 1);

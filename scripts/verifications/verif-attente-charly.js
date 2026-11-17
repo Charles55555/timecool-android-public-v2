@@ -180,7 +180,7 @@ titre('Les couleurs du logo, dans l ordre');
 
 titre('Le branchement');
 verifie('changer l etat de Charly met la bulle a jour',
-  /function tcDefinirStatutCharly\([\s\S]{0,400}tcMajAttenteCharly\(\);/.test(page));
+  /function tcDefinirStatutCharly\([\s\S]{0,800}tcMajAttenteCharly\(\);/.test(page));
 verifie('et le redessin de la conversation la remet',
   /body\.innerHTML = charlyIA\.history[\s\S]{0,300}tcMajAttenteCharly\(\);/.test(page),
   'innerHTML efface tout, y compris la bulle');
