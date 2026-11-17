@@ -3596,3 +3596,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Feuilles de la bulle : quatre, bleu, rouge, jaune, vert du logo en pastel (fond pastel, contour plus soutenu).
 - Suites : verif-voir-agenda (nouvelle, 27 contrôles, PC et 390, calme) ; verif-bulle-attente (couleurs) ; verif-demo-charly, verif-type-rdv, verif-qui-ecrit, verif-rdv-e2e, verif-validation-rdv-e2e adaptées. Essai en vrai (API d'essai, comptes neufs) : bouton sous chaque création et décalage ; « RDV Michel », « RDV Alice, Chloé, Virginie : boire un verre » (« RDV Charlotte Essai, Chloé, Virginie : … » chez Alice). Captures : m71/captures111.
 - Examen : un moment après « pour » (mardi, 18h, une heure, le 25, la fin du mois) n est pas un motif (tcMotifEstUnMoment111).
+
+## 17/11/2026 — Mission 112 : la pastille « Démonstration » (CODEUR)
+
+- Plus de bande jaune : une pastille bleu roi #1a47d6 centrée (texte blanc, « Quitter » blanc à texte bleu, ombre légère), fond transparent autour, même place qu en 111. verif-voir-agenda vérifie couleurs, taille et centrage (PC, 390). Captures : m71/captures112.

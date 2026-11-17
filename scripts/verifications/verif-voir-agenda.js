@@ -44,7 +44,10 @@ if (!exe) {
           cases: document.querySelectorAll('.week-event[data-ev-id="' + CSS.escape(String(id)) + '"]').length, doigts: document.querySelectorAll('.tc-doigt').length, toutes: document.querySelectorAll('.week-event').length, avecId: document.querySelectorAll('.week-event[data-ev-id]').length, ids: Array.prototype.slice.call(document.querySelectorAll('.week-event[data-ev-id]'), 0, 30).map(function (x) { return x.getAttribute('data-ev-id'); }).join(','), cherche: String(id) };
       };
       var bandeau = function () { var b = document.getElementById('tcDemoBandeau'); if (!b) return null; var r = b.getBoundingClientRect();
-        return { avant: b.nextElementSibling ? b.nextElementSibling.id : null, apres: b.previousElementSibling ? (b.previousElementSibling.tagName + '.' + b.previousElementSibling.className) : null, haut: Math.round(r.top), visible: r.height > 30 && r.top >= 0 && r.bottom <= window.innerHeight }; };
+        return { avant: b.nextElementSibling ? b.nextElementSibling.id : null, apres: b.previousElementSibling ? (b.previousElementSibling.tagName + '.' + b.previousElementSibling.className) : null, haut: Math.round(r.top), visible: r.height > 30 && r.top >= 0 && r.bottom <= window.innerHeight,
+          // Mission 112 : une pastille bleu roi centrée, rien autour.
+          fond: getComputedStyle(b).backgroundColor, pastille: (function () { var p = b.querySelector('.tc-demo-pastille'); if (!p) return null; var q = p.getBoundingClientRect(), cs = getComputedStyle(p), bt = p.querySelector('button');
+            return { fond: cs.backgroundColor, texte: cs.color, l: Math.round(q.width), h: Math.round(q.height), centre: Math.abs((q.left + q.right) / 2 - (r.left + r.right) / 2) <= 2, quitter: bt ? [bt.innerText.trim(), getComputedStyle(bt).backgroundColor, getComputedStyle(bt).color] : null }; })() }; };
       try {
         document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
         localStorage.setItem('tc_permissions_shown', '1');
@@ -120,6 +123,10 @@ if (!exe) {
     const S = jouer(scenario, false, x[0]), nom = x[1] + ' — ';
     if (S.erreur) { verifie(nom + 'le parcours a joué', false, S.erreur); return; }
     verifie(nom + 'page Charly : le bandeau juste au-dessus de la conversation, visible, plus en haut de l’écran', S.bandeauCharly && S.bandeauCharly.avant === 'charlyChatBody' && S.bandeauCharly.visible && S.bandeauCharly.haut > 100, JSON.stringify(S.bandeauCharly));
+    const P = S.bandeauCharly && S.bandeauCharly.pastille;
+    verifie(nom + 'mission 112 : plus de bande ; une pastille bleu roi centrée (≤ 260 × 40), texte blanc, « Quitter » blanc à texte bleu',
+      S.bandeauCharly && S.bandeauCharly.fond === 'rgba(0, 0, 0, 0)' && P && P.fond === 'rgb(26, 71, 214)' && P.texte === 'rgb(255, 255, 255)' && P.l <= 260 && P.h === 40 && P.centre
+      && P.quitter && P.quitter[0] === 'Quitter' && P.quitter[1] === 'rgb(255, 255, 255)' && P.quitter[2] === 'rgb(26, 71, 214)', JSON.stringify(S.bandeauCharly));
     verifie(nom + 'Michel : « RDV Michel Virtuel », un bouton « Voir dans mon agenda »', S.michelVoir && S.michelVoir.length === 1 && S.michelTitre === 'RDV Michel Virtuel', JSON.stringify([S.michelVoir, S.michelTitre]));
     verifie(nom + 'le bouton : l’agenda en Semaine au bon jour, la case à l’écran, le doigt collé à gauche', S.michelAgenda && S.michelAgenda.page === 'calendar' && S.michelAgenda.vue === 'week' && S.michelAgenda.jour === S.michelJour && S.michelAgenda.caseVue && S.michelAgenda.doigt && S.michelAgenda.colle && S.michelAgenda.mouvement === 'tcDoigt', JSON.stringify([S.michelAgenda, S.michelJour]));
     verifie(nom + 'agenda : le bandeau sous l’en-tête TimeCool', S.bandeauAgenda && /^HEADER\.header/.test(S.bandeauAgenda.apres || '') && S.bandeauAgenda.visible, JSON.stringify(S.bandeauAgenda));

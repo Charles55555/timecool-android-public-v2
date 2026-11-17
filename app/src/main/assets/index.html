@@ -12554,9 +12554,11 @@ function tcDemoBandeau(montrer) {
     b.id = 'tcDemoBandeau';
     b.setAttribute('role', 'status');
     // Mission 111 : dans la page, plus en haut de l'écran (tcDemoPlacerBandeau le pose à sa place).
-    b.style.cssText = 'position:relative; z-index:5; flex-shrink:0; display:flex; align-items:center; justify-content:center; gap:12px; padding:6px 12px; background:#fff4e0; border-top:1px solid #fbd784; border-bottom:1px solid #fbd784; color:#8a6500; font-size:14px; font-weight:700; box-sizing:border-box; height:42px;';
-    b.innerHTML = '<span>🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.bandeau)) + '</span>'
-      + '<button onclick="tcQuitterDemo()" style="padding:6px 16px; background:#fff; color:#8a6500; border:1.5px solid #f0b429; border-radius:16px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.quitter)) + '</button>';
+    // Mission 112 : plus de bande : une pastille bleu roi centrée (le bleu du stylo de Charles), le reste transparent.
+    b.style.cssText = 'position:relative; z-index:5; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:6px 12px; background:transparent; box-sizing:border-box;';
+    b.innerHTML = '<div class="tc-demo-pastille" style="display:inline-flex; align-items:center; gap:10px; height:40px; box-sizing:border-box; padding:0 5px 0 14px; background:#1a47d6; color:#fff; border-radius:20px; box-shadow:0 2px 6px rgba(26,71,214,0.28); font-size:14px; font-weight:700; white-space:nowrap;">'
+      + '<span>🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.bandeau)) + '</span>'
+      + '<button onclick="tcQuitterDemo()" style="padding:6px 14px; background:#fff; color:#1a47d6; border:none; border-radius:15px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.quitter)) + '</button></div>';
     document.body.appendChild(b);
   }
   document.body.style.paddingTop = '';
