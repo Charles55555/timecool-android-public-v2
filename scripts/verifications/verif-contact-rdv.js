@@ -83,7 +83,7 @@ ctx.localStorage = {
 });
 
 ['tcSansAccents', 'tcEstUnLieu', 'tcMotsUtiles', 'tcDesignationSansPetitMot', 'tcContactsParMots', 'tcRessembleAUneDemande', 'tcDitSansContact', 'tcDernierRdvParContact', 'tcClasserContacts', 'tcResoudreContact',
- 'tcContactsPourRdv', 'tcContactDuRdv', 'tcCleSurnom', 'tcSurnoms', 'tcRetenirSurnom',
+ 'tcContactsPourRdv', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites', 'tcCleSurnom', 'tcSurnoms', 'tcRetenirSurnom',
  'tcContactDuSurnom', 'tcContactDeProposition', 'tcLigneContactProposition',
  'tcAttenteContact', 'tcDesignationTutoyee', 'tcQuestionContact',
  'tcDesignationDuMessage', 'tcDesignationPour', 'tcSurnomRefuse',

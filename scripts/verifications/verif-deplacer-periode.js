@@ -60,7 +60,7 @@ vm.runInContext('let _tcDeplacementPeriode = null; let _tcDeplacementEnAttente =
   + (page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).join('\n'), ctx);
 ['tcSansAccents', 'tcISO', 'tcHeureDansTexte', 'tcHorairePlage', 'tcFormaterHeure', 'tcComparerEvenements',
  'tcPeriodeAgenda', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'parseFrenchDateFromText', 'tcPhraseNonCompris',
- 'tcContactDuRdv', 'tcRemplirModele', 'tcValeursDuRdv', '_tcLigneRdv', 'tcAppliquerDeplacement',
+ 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites', 'tcRemplirModele', 'tcValeursDuRdv', '_tcLigneRdv', 'tcAppliquerDeplacement',
  'tcPeriodeContexte', 'tcPeriodeDeplacer', 'tcRepondreDeplacementPeriode', 'tcChoixPeriode',
  // Mission 73 : un accord pour le lot, puis des créneaux proposés.
  'tcExecuterDeplacement', 'tcConfianceCharly', 'tcRepondreDeplacement', 'tcReponseDecalage', 'tcNomsLisibles', 'tcPropositionTexte', 'tcProposerLesCreneaux', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcCreneauxReproposesPour', 'tcJourLisible', 'tcCarteEnvoiCreneaux', 'tcRendreBoutonsEnvoi', 'tcChoisirEnvoiDeplacement', 'tcRecapEnvoi', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu',

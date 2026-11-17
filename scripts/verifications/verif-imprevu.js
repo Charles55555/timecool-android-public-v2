@@ -63,7 +63,7 @@ vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null
 ['tcSansAccents', 'tcISO', 'tcComparerEvenements', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'tcEvenementFin', 'tcEvenementCouvre',
  'tcEvenementSurPlusieursJours', 'tcEstBandeau', 'tcMinutesDeHeure', 'tcSansTempsProtege', 'tcDesPlagesDeclarees', 'tcPlagesDuJour', 'tcOccupationsDuJour',
  'tcCreneauxDisponibles', 'tcRemplirModele', 'tcValeursDuRdv', '_tcLigneRdv', 'tcAppliquerDeplacement', 'tcMemoriserSuppression',
- 'tcSupprimerRdvs', 'tcPhraseNonCompris', 'tcRessembleAUneDemande', 'tcContactDuRdv', 'tcBulleCharly', 'charlyQuickAction',
+ 'tcSupprimerRdvs', 'tcPhraseNonCompris', 'tcRessembleAUneDemande', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites', 'tcBulleCharly', 'charlyQuickAction',
  'tcCleModele', 'tcModeleMessage', 'tcHeureDansTexte', 'tcDetecterMarcheArriere', 'tcMarcheArriere', 'tcHeureLisible', 'tcJoursFermes', 'tcGererDemandeCreneau'
 ].forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 const debutBloc = page.indexOf('   QUESTIONNAIRE GUIDÉ DE CHARLY (mission 43');

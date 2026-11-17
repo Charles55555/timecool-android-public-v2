@@ -37,7 +37,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 vm.runInContext('let _tcMarcheArriere = null; let _tcSuppressionEnAttente = null;', ctx);
-['tcSansAccents', 'tcHeureDansTexte', 'tcFormaterHeure', 'tcContactDuRdv', '_tcLigneRdv', 'tcQuestionnaireNoms',
+['tcSansAccents', 'tcHeureDansTexte', 'tcFormaterHeure', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites', '_tcLigneRdv', 'tcQuestionnaireNoms',
  'tcMemoriserSuppression', 'tcDetecterMarcheArriere', 'tcMarcheArriere', 'tcSupprimerRdvs', 'tcAppliquerDeplacement'
 ].forEach((n) => {
   const src = extraire(n);

@@ -20,7 +20,7 @@ function source(nom) {
 const noms = ['tcEstDeplacement', 'tcVerbeConjugue', 'tcDeplacementsProposes', '_tcLigneRdv', 'tcAppliquerDeplacement', 'tcExecuterDeplacement',
   'tcTraiterDeplacement', 'tcDeplacementHorsJour', 'tcJoursCites', 'tcEvenementFin', 'tcEvenementCouvre', 'tcReponsePrevenir', 'tcRepondreDeplacement', 'tcRdvRemplace', 'tcSansAccents',
   'extractAgendaProposals', 'tcFormaterDateHumaine', 'tcFormaterHeure', 'escapeHTMLSafe',
-  'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv',
+  'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites',
   // Mission 73 : les propositions de créneaux.
   'tcNomsLisibles', 'tcPropositionTexte', 'tcReponseDecalage', 'tcProposerLesCreneaux', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcCreneauxReproposesPour', 'tcJourLisible', 'tcCarteEnvoiCreneaux', 'tcRendreBoutonsEnvoi', 'tcChoisirEnvoiDeplacement', 'tcRecapEnvoi', 'tcDemanderDeplacementProfil2', 'tcJournaliserCompteRendu', 'tcEnvoyerPropositions', 'tcLignesPropositions',
   'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcClasseNormaliser',

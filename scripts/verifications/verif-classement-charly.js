@@ -80,7 +80,7 @@ vm.runInContext((page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).
 });
 ['tcSansAccents', 'tcPrenomUtilisateur', 'tcISO', 'tcContientMot', 'tcHeureDansTexte', 'tcHorairePlage', 'tcFormaterHeure', 'tcComparerEvenements',
  'tcPeriodeAgenda', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'tcPeriodeCoherente', 'tcBorneDeFin', 'tcJoursDansTexte',
- 'parseFrenchDateFromText', 'tcContactDuRdv', 'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
+ 'parseFrenchDateFromText', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites', 'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
  'tcDetecterMalade', 'tcDetecterContrainte', 'detecterSuppressionRdv', 'tcDetecterPrevenance', 'tcReponseOuiNon',
  'detecterConsultationAgenda', 'tcGererConsultationAgenda', 'detecterDemandeCreneau',
  'extraireLieuDuTexte', 'detecterRechercheProfessionnel', 'extraireAdresseDuTexte', 'detecterDemandeTrajet', 'detecterRechercheWeb',

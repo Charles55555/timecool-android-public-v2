@@ -101,7 +101,7 @@ verifie('le bloc de constantes du deplacement est trouve', debutBloc > 0 && finB
 vm.runInContext('var _prevenirContact = null, _prevenirName = "", _prevenirEventRef = null, _prevenirCible = null, currentEvent = null;', ctx);
 vm.runInContext(page.slice(debutBloc, finBloc + 'let _tcCliqueIgnoreJusqua = 0;'.length), ctx);
 
-const noms = ['fmt', 'sameDay', 'isProClosed', 'escapeHTMLSafe', 'tcEvenementFin', 'tcEvenementSurPlusieursJours', 'tcEstBandeau', 'tcContactDuRdv',
+const noms = ['fmt', 'sameDay', 'isProClosed', 'escapeHTMLSafe', 'tcEvenementFin', 'tcEvenementSurPlusieursJours', 'tcEstBandeau', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites',
   'tcRemplirModele', 'tcValeursDuRdv', 'tcRdvAvecAutreCompte', 'tcRdvDeplacable', 'tcCibleDeplacement', 'tcMemeCreneau', 'tcLibelleCreneau',
   'tcEcrireDeplacementDoigt', 'tcMontrerDeplacement', 'tcCacherBarreDeplacement', 'tcAnnulerDeplacement', 'tcTerminerDeplacement',
   'tcDecalerVers', 'tcPreRemplirCreneau', 'tcRendreDeplacable', 'tcDeplacerDebut', 'tcDeplacerNettoyer', 'tcDeplacerSoulever',

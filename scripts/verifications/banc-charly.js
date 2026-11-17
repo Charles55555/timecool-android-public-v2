@@ -103,7 +103,7 @@ if (modeles) vm.runInContext(modeles, ctx); else { ko++; console.log('  KO  TC_M
 });
 ['tcSansAccents', 'tcISO', 'tcContientMot', 'tcHeureDansTexte', 'tcHorairePlage', 'tcFormaterHeure', 'tcComparerEvenements',
  'tcPeriodeAgenda', 'tcJoursNommes', 'tcPeriodeContrainte', 'tcPeriodeJourNomme', 'tcPeriodeCoherente', 'tcBorneDeFin', 'tcJoursDansTexte',
- 'tcPhraseNonCompris', 'parseFrenchDateFromText', 'tcContactDuRdv', 'tcRemplirModele', 'tcValeursDuRdv', 'tcModeleMessage',
+ 'tcPhraseNonCompris', 'parseFrenchDateFromText', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites', 'tcRemplirModele', 'tcValeursDuRdv', 'tcModeleMessage',
  'tcMotsDeRdv', 'tcTitreContient', 'tcMotDeLAgenda', 'tcPlageImprevu',
  'tcDetecterMalade', 'tcDetecterContrainte', 'tcRdvDeLaPeriode', 'tcGererContrainte',
  'detecterSuppressionRdv', 'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcMemoriserSuppression', 'tcSupprimerRdvs', 'tcRdvDesigne',

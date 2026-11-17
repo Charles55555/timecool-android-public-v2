@@ -101,7 +101,7 @@ vm.createContext(ctx);
 const constantes = (page.match(/^const TC_(PROPOSITION_[A-Z_]+|CONFIANCE_VISIBLE) = [^;\n]+;$/gm) || []).join('\n');
 const profils = (page.match(/const TC_CONFIANCE_PROFILS = \[[\s\S]*?\n\];/) || [''])[0];
 vm.runInContext('let _tcQuestionnaireNumero = 0; let _tcPropositionsEnCours = false; let _tcDeplacementEnAttente = null; var _tcPropositionsRepondues = {}; var _tcPropositionsPris = {}; var _tcAClore = []; var TC_A_CLORE_KEY = \'tc_propositions_a_clore\'; let _tcMarcheArriere = null; var _tcConfianceMoment = null;\nvar TC_CONFIANCE_KEY = \'tc_confiance_charly\';\n' + constantes + '\n' + profils + '\n'
-  + ['tcSansAccents', 'tcISO', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre']
+  + ['tcSansAccents', 'tcISO', 'tcClasseNormaliser', 'tcReponseOuiNon', 'tcRemplirModele', 'tcValeursDuRdv', 'tcContactDuRdv', 'tcContactsDuRdv', 'tcEstRdvAPlusieurs', 'tcPrenomsInvites', 'tcEstBandeau', 'tcEvenementSurPlusieursJours', 'tcEvenementFin', 'tcEvenementCouvre']
     .concat(noms).map(extraire).join('\n'), ctx);
 
 titre('1. Le réglage « Ma confiance en Charly »');

@@ -6110,6 +6110,36 @@ function tcContactDuRdv(e) {
   return contactsList.find(function (c) { return c.id === e.contact; }) || null;
 }
 
+/**
+ * Mission 107d : les personnes d'un rendez-vous : son contact, sinon les invités d'un rendez-vous à plusieurs (champ invites,
+ * posé par le serveur : référence et prénom). Un invité absent du carnet reste joignable par la messagerie TimeCool (sa
+ * référence), sous son prénom.
+ */
+function tcContactsDuRdv(e) {
+  const c = tcContactDuRdv(e);
+  if (c) return [c];
+  if (!e || !Array.isArray(e.invites)) return [];
+  const carnet = Array.isArray(contactsList) ? contactsList : [];
+  const liste = [];
+  e.invites.forEach(function (i) {
+    if (!i || typeof i.reference !== 'string' || !i.reference) return;
+    const fiche = carnet.find(function (x) { return x && x.referenceCompte === i.reference; });
+    const p = fiche || { id: 'ref:' + i.reference, name: String(i.prenom || '').trim() || 'Ton invité', referenceCompte: i.reference, isTimeCool: true };
+    if (!liste.some(function (x) { return x.id === p.id; })) liste.push(p);
+  });
+  return liste;
+}
+
+/** Un rendez-vous à plusieurs : pas de contact unique, mais des invités. */
+function tcEstRdvAPlusieurs(e) {
+  return !tcContactDuRdv(e) && tcContactsDuRdv(e).length > 0;
+}
+
+/** « Alice, Chloé et Virginie » : les prénoms des invités. */
+function tcPrenomsInvites(e) {
+  return tcQuestionnaireNoms(tcContactsDuRdv(e).map(function (c) { return String(c.name || '').split(' ')[0]; }));
+}
+
 /** Sans accents ni majuscules : « Michele » doit trouver « Michèle ». */
 function tcSansAccents(t) {
   return String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -12406,6 +12436,8 @@ function tcDemoServeur() {
       if (type) ev.type = type;
       // Examen 107b : pris avec une seule personne, il lui est relié (« malade » la prévient ensuite).
       if (refs.length === 1) { const seul = contactsList.find(function (x) { return x.referenceCompte === refs[0]; }); if (seul) ev.contact = seul.id; }
+      // Mission 107d : à plusieurs, les invités (comme /rdv/groupe/confirmer).
+      else ev.invites = refs.map(function (r) { return { reference: r, prenom: prenomDe(r) }; });
       events.push(ev);
       refs.forEach(function (r) { _tcDemo.agendas[r].push({ date: date, debut: heure * 60, fin: (heure + duree) * 60 }); });
       _tcDemo.cale = true;
@@ -27280,8 +27312,8 @@ function tcQuestionnaireNoms(liste) {
 function tcQuestionnaireContacts(rdvs) {
   const vus = {}, liste = [];
   rdvs.forEach(function (e) {
-    const c = tcContactDuRdv(e);
-    if (c && !vus[c.id]) { vus[c.id] = true; liste.push(c); }
+    // Mission 107d : un rendez-vous à plusieurs compte tous ses invités.
+    tcContactsDuRdv(e).forEach(function (c) { if (c && !vus[c.id]) { vus[c.id] = true; liste.push(c); } });
   });
   return liste;
 }
@@ -27380,7 +27412,7 @@ const TC_ETAPE_PREVENIR = {
     // Mission 93 : décaler : seuls les rendez-vous qui bougent font prévenir quelqu'un (un rendez-vous laissé en place, faute de
     // place libre, ne change rien pour son contact).
     r._contacts = tcQuestionnaireContacts((r.action === 'decaler' && Array.isArray(r._liste)) ? r._liste.filter(function (x) { return !!x.p; }).map(function (x) { return x.ev; }) : r._rdvs);
-    const sans = r._rdvs.filter(function (e) { return !tcContactDuRdv(e); });
+    const sans = r._rdvs.filter(function (e) { return !tcContactsDuRdv(e).length; });
     if (sans.length === r._rdvs.length) tcQuestionnaireDire('Aucun de ces rendez-vous n’a de contact enregistré : personne à prévenir.');
     else if (sans.length) tcQuestionnaireDire('Sans contact enregistré, donc personne à prévenir : ' + sans.map(function (e) { return '« ' + e.title + ' »'; }).join(', ') + '.');
     if (!r._contacts.length) r.prevenir = 'personne';
@@ -27426,7 +27458,8 @@ function tcQuestionnaireRecap(r) {
     return tcCarteEnvoiCreneaux({
       malade: r._parcours === 'malade',
       items: r._creneaux,
-      deplaces: r._liste.filter(function (x) { return x.p && !tcContactDuRdv(x.ev); }),
+      deplaces: r._liste.filter(function (x) { return x.p && !tcContactDuRdv(x.ev) && !tcEstRdvAPlusieurs(x.ev); }),
+      groupes: r._liste.filter(function (x) { return x.p && tcEstRdvAPlusieurs(x.ev); }).map(function (x) { return x.ev; }),
       laisses: r._liste.filter(function (x) { return !x.p; }),
       profil: typeof tcConfianceCharly === 'function' ? tcConfianceCharly() : 1
     }).lignes.join('\n');
@@ -27444,6 +27477,7 @@ function tcQuestionnaireRecap(r) {
   if (r.action === 'decaler') {
     r._liste.forEach(function (x) {
       const c = r.prevenir === 'charly' && x.p ? tcContactDuRdv(x.ev) : null;
+      if (r.prevenir === 'charly' && x.p && tcEstRdvAPlusieurs(x.ev)) { lignes.push('• « ' + x.ev.title + ' » reste à sa place : je préviens ' + tcPrenomsInvites(x.ev)); return; }
       lignes.push(!x.p ? '• Je laisse « ' + x.ev.title + ' » où il est (pas de place libre dans les deux semaines)'
         : c ? '• Pour « ' + x.ev.title + ' », je propose à ' + c.name + ' le ' + tcQuestionnaireQuand(x.p.date, x.p) + ' ou deux autres moments ; il reste à sa place jusqu’à la réponse'
         : '• Je décale « ' + x.ev.title + ' » au ' + tcQuestionnaireQuand(x.p.date, x.p));
@@ -27461,10 +27495,10 @@ function tcQuestionnaireRecap(r) {
     if (r.prevenir === 'charly') {
       lignes.push('• Je préviens ' + noms);
       // Le message montré avant l'envoi (mission 73) : celui du premier contact, les autres suivent le même modèle.
-      const ev = r._rdvs.filter(function (e) { return tcContactDuRdv(e); })[0];
-      const c = ev ? tcContactDuRdv(ev) : null;
+      const ev = r._rdvs.filter(function (e) { return tcContactsDuRdv(e).length; })[0];
+      const c = ev ? tcContactsDuRdv(ev)[0] : null;
       if (c) lignes.push('Le message' + (r._contacts.length > 1 ? ' pour ' + String(c.name).split(' ')[0] : '') + ' : « '
-        + (r.action === 'decaler' ? tcPropositionTexte(c, ev) + ' » suivi des créneaux à choisir' : tcQuestionnaireMessage(r, c, ev, ev) + ' »'));
+        + (r.action === 'decaler' && !tcEstRdvAPlusieurs(ev) ? tcPropositionTexte(c, ev) + ' » suivi des créneaux à choisir' : tcQuestionnaireMessage(r, c, ev, ev) + ' »'));
     }
     else if (r.prevenir === 'moi') lignes.push('• Tu préviens ' + noms + ' toi-même');
     else lignes.push('• Je ne préviens personne');
@@ -27475,6 +27509,12 @@ function tcQuestionnaireRecap(r) {
 /** Le message à un contact pour un rendez-vous, avec les modèles des Paramètres (« Je décale », « J’annule », « Je serai en retard »). */
 function tcQuestionnaireMessage(r, c, ev, ancien) {
   const enRetard = r.action === 'retard' && (!r._retardRdv || r._retardRdv.id === ev.id);
+  // Mission 107d : décaler un rendez-vous à plusieurs : il reste à sa place pour tout le monde, chacun est prévenu.
+  if (r.action === 'decaler' && tcEstRdvAPlusieurs(ev)) {
+    const v = tcValeursDuRdv(c.name, ancien || ev), vous = tcVouvoiement(c);
+    return 'Bonjour ' + v['[Prénom]'] + ',\nÀ cause d’un imprévu, je dois décaler notre rendez-vous du ' + v['[date]'] + ' à ' + v['[heure]']
+      + '. Je reviens vers ' + (vous ? 'vous' : 'toi') + ' très vite avec un autre moment.';
+  }
   if (r.action === 'decaler' || (r.action === 'retard' && !enRetard)) {
     const nouveau = tcValeursDuRdv(c.name, ev);
     return tcRemplirModele(tcModeleMessage('decale', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien))
@@ -27503,13 +27543,16 @@ async function tcQuestionnaireExecuter(r, fin) {
   const presents = r._rdvs.map(frais).filter(Boolean);
   const present = function (e) { return presents.some(function (x) { return e && x.id === e.id; }); };
   const anciens = presents.map(function (e) { return { id: e.id, date: e.date, startH: e.startH, startM: e.startM, endH: e.endH, endM: e.endM }; });
-  let deplaces = [], laisses = [], supprimes = [];
+  let deplaces = [], laisses = [], supprimes = [], groupes = [];
   let aProposer = [];
   if (r.action === 'decaler') {
     // Mission 73 : « Tu les préviens » → un rendez-vous avec un contact reste en place, Charly lui propose des créneaux.
     const propose = function (x) { return r.prevenir === 'charly' && !!tcContactDuRdv(x.ev); };
     aProposer = r._liste.filter(function (x) { return x.p && present(x.ev) && propose(x); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
-    deplaces = r._liste.filter(function (x) { return x.p && present(x.ev) && !propose(x); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
+    // Mission 107d : un rendez-vous à plusieurs, quand Charly prévient : il reste à sa place, chaque invité reçoit un message.
+    const aPlusieurs = function (x) { return r.prevenir === 'charly' && tcEstRdvAPlusieurs(x.ev); };
+    groupes = r._liste.filter(function (x) { return x.p && present(x.ev) && aPlusieurs(x); }).map(function (x) { return frais(x.ev); });
+    deplaces = r._liste.filter(function (x) { return x.p && present(x.ev) && !propose(x) && !aPlusieurs(x); }).map(function (x) { return { ev: frais(x.ev), p: x.p }; });
     laisses = r._liste.filter(function (x) { return !x.p && present(x.ev); }).map(function (x) { return frais(x.ev); });
     if (deplaces.length) tcAppliquerDeplacement(deplaces, { silencieux: true });
   } else if (r.action === 'retard' && Array.isArray(r._liste) && r._liste.length) {
@@ -27521,12 +27564,12 @@ async function tcQuestionnaireExecuter(r, fin) {
     if (supprimes.length) tcSupprimerRdvs(supprimes, { silencieux: true });
   }
   if ((deplaces.length || supprimes.length) && _tcMarcheArriere) _tcMarcheArriere.prevenus = [];
-  const touches = r.action === 'decaler' ? deplaces.map(function (x) { return x.ev; }) : (r.action === 'retard' ? presents : supprimes);
+  const touches = r.action === 'decaler' ? deplaces.map(function (x) { return x.ev; }).concat(groupes) : (r.action === 'retard' ? presents : supprimes);
   const contacts = tcQuestionnaireContacts(touches);
   const prevenus = [], envois = [], sansMoyen = [];
   if (r.prevenir === 'charly') {
     for (const c of contacts) {
-      const siens = touches.filter(function (e) { return e.contact === c.id; });
+      const siens = touches.filter(function (e) { return tcContactsDuRdv(e).some(function (x) { return x.id === c.id; }); });
       for (const ev of siens) {
         const ancien = anciens.filter(function (a) { return a.id === ev.id; })[0] || ev;
         const texte = tcQuestionnaireMessage(r, c, ev, ancien);
@@ -27563,6 +27606,7 @@ async function tcQuestionnaireExecuter(r, fin) {
   // Le retard d'abord, puis ce qui a bougé à cause de lui (testeurs, 15/10).
   if (r.action === 'retard') presents.filter(function (e) { return !r._retardRdv || e.id === r._retardRdv.id; }).forEach(function (e) { lignes.push('• Retard d’environ ' + r.minutes + ' minutes pour « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + '), arrivée vers ' + tcQuestionnaireHeure(e.startH * 60 + e.startM + Number(r.minutes))); });
   deplaces.forEach(function (x) { lignes.push('• Déplacé : « ' + x.ev.title + ' », ' + tcQuestionnaireQuand(x.ev.date, x.ev)); });
+  groupes.forEach(function (e) { lignes.push('• « ' + e.title + ' » reste à sa place. Pour un nouveau moment ensemble, dis-moi « Trouve un rendez-vous commun avec ' + tcPrenomsInvites(e) + ' ».'); });
   laisses.forEach(function (e) { lignes.push('• Laissé en place : « ' + e.title + ' », ' + tcQuestionnaireQuand(e.date, e)); });
   if (propositions) propositions.lignes.forEach(function (l) { if (!/^• Message prêt avec le lien/.test(l)) lignes.push(l); });
   supprimes.forEach(function (e) { lignes.push('• Supprimé : « ' + e.title + ' » (' + tcQuestionnaireQuand(e.date, e) + ')'); });
@@ -27901,7 +27945,9 @@ function tcCarteEnvoiCreneaux(o) {
   const avec = items.filter(function (it) { return it.creneaux && it.creneaux.length; });
   const noter = o.profil === 1 ? 'Je te demande avant de noter ' : 'Je note ';
   const total = items.length + deplaces.length + laisses.length;
-  if (total === 1 && items.length === 1) {
+  // Mission 107d : un rendez-vous à plusieurs reste à sa place, ses invités sont prévenus.
+  const groupes = o.groupes || [];
+  if (total === 1 && items.length === 1 && !groupes.length) {
     const it = items[0], p = prenom(it.contact);
     lignes.push(debut + 'Je déplace ton rendez-vous « ' + it.ev.title + ' » avec ' + p + '.');
     lignes.push(libre);
@@ -27922,6 +27968,7 @@ function tcCarteEnvoiCreneaux(o) {
   lignes.push(debut + 'Je déplace ' + total + ' rendez-vous.');
   lignes.push(libre);
   deplaces.forEach(function (x) { lignes.push('« ' + x.ev.title + ' » : ' + tcJourLisible(x.p.date) + ', ' + heure(x.p) + '.'); });
+  groupes.forEach(function (e) { lignes.push('« ' + e.title + ' » avec ' + tcPrenomsInvites(e) + ' : je les préviens. Il reste à sa place.'); });
   items.forEach(function (it) {
     const tete = '« ' + it.ev.title + ' » avec ' + prenom(it.contact);
     if (!it.creneaux || !it.creneaux.length) { lignes.push(tete + ' : pas de moment libre ' + aucun(it) + '. Il reste à sa place.'); return; }

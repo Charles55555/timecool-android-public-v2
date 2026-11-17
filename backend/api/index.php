@@ -4300,9 +4300,12 @@ switch ($route) {
 
             $uid = 'tc_grp_' . bin2hex(random_bytes(8));
             $moiNom = texteSur(trim($moi['prenom'] . ' ' . $moi['nom']));
-            $entree = static function (string $noms) use ($jour, $heure, $duree, $uid, $typeRdv, $titreDonne, $catDonnee): array {
+            // Mission 107d : les invités (référence, prénom) restent dans le rendez-vous de chacun : « Je suis malade » les
+            // retrouve pour les prévenir (un rendez-vous à plusieurs n'a pas de fiche contact unique).
+            $entree = static function (string $noms, array $avec = []) use ($jour, $heure, $duree, $uid, $typeRdv, $titreDonne, $catDonnee): array {
                 $titre = $titreDonne !== null ? $titreDonne . ' avec ' . $noms : $noms;
                 return [
+                    'invites' => $avec,
                     'id'     => $uid,
                     'type'   => $typeRdv,
                     'date'   => $jour,
@@ -4314,15 +4317,19 @@ switch ($route) {
                 ];
             };
             $prenomsInclus = array_column($inclus, 'prenom');
+            $personne = static fn(array $compte, string $prenom): array => ['reference' => (string) $compte['reference'], 'prenom' => $prenom];
+            $tous = array_map(static fn(array $inv): array => $personne($inv['compte'], $inv['prenom']), $inclus);
             $ecritures = [[
                 'compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => $uid,
-                'contenu'   => $entree(implode(', ', $prenomsInclus)),
+                'contenu'   => $entree(implode(', ', $prenomsInclus), $tous),
             ]];
             foreach ($inclus as $inv) {
                 $autres = array_values(array_filter($prenomsInclus, static fn(string $p): bool => $p !== $inv['prenom']));
+                $avec = array_merge([$personne($moi, texteSur((string) $moi['prenom']))],
+                    array_values(array_filter($tous, static fn(array $t): bool => $t['reference'] !== (string) $inv['compte']['reference'])));
                 $ecritures[] = [
                     'compte_id' => $inv['id'], 'type' => 'rdv', 'uid' => $uid,
-                    'contenu'   => $entree(implode(', ', array_merge([$moiNom], $autres))),
+                    'contenu'   => $entree(implode(', ', array_merge([$moiNom], $autres)), $avec),
                 ];
             }
             elementsPoser($ecritures);
@@ -4551,8 +4558,10 @@ switch ($route) {
                 $pdo->rollBack();
                 Rep::erreur(409, 'creneau_pris', 'Ce créneau vient d’être pris dans ton agenda : rien n’est inscrit.');
             }
-            $entree = static function (string $noms) use ($jour, $debutTs, $finTs, $uid, $titre, $cat): array {
+            // Mission 107d : les invités, comme /rdv/groupe/confirmer.
+            $entree = static function (string $noms, array $avec = []) use ($jour, $debutTs, $finTs, $uid, $titre, $cat): array {
                 return [
+                    'invites' => $avec,
                     'id'     => $uid,
                     'type'   => 'physique',
                     'date'   => $jour,
@@ -4563,15 +4572,18 @@ switch ($route) {
                     'mode'   => 'user',
                 ];
             };
+            $personne = static fn(array $compte): array => ['reference' => (string) $compte['reference'], 'prenom' => texteSur((string) $compte['prenom'])];
+            $tous = array_map($personne, $presents);
             $ecritures = [[
                 'compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => $uid,
-                'contenu'   => $entree(implode(', ', $prenoms)),
+                'contenu'   => $entree(implode(', ', $prenoms), $tous),
             ]];
             foreach ($presents as $m) {
                 $autres = array_values(array_filter($prenoms, static fn(string $p): bool => $p !== texteSur((string) $m['prenom'])));
+                $avec = array_merge([$personne($moi)], array_values(array_filter($tous, static fn(array $t): bool => $t['reference'] !== (string) $m['reference'])));
                 $ecritures[] = [
                     'compte_id' => (int) $m['id'], 'type' => 'rdv', 'uid' => $uid,
-                    'contenu'   => $entree(implode(', ', array_merge([$moiNom], $autres))),
+                    'contenu'   => $entree(implode(', ', array_merge([$moiNom], $autres)), $avec),
                 ];
             }
             elementsPoser($ecritures);
