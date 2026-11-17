@@ -13189,7 +13189,46 @@ if (typeof document !== 'undefined' && document.addEventListener) {
   document.addEventListener('click', function (ev) {
     const t = ev && ev.target;
     if (t && t.closest && t.closest('#charlyChatBody button') && !t.closest('[data-voir]')) tcGesteCharly111();
+    // Mission 116 : le choix touché devient une bulle de l'utilisateur.
+    try { if (typeof tcNoterChoix116 === 'function') tcNoterChoix116(t); } catch (e) {}
   }, true);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 116 : « Oui, envoie », « En personne », un créneau… touchés dans une réponse de Charly : une bulle bleue de
+   l'utilisateur, avec le libellé affiché du bouton (sans « 1️⃣ » ni icône), placée juste après la réponse touchée, avant la
+   suite de Charly. Si le chemin du bouton écrit déjà une bulle de l'utilisateur (une phrase à toucher, une réponse tapée),
+   on n'en ajoute pas. Pas de bulle pour ce qui n'est pas un choix de conversation (« Voir dans mon agenda », l'accueil,
+   « Modifier », « Recommencer »).
+   ═══════════════════════════════════════════════════════════════ */
+const TC_CHOIX_SANS_BULLE = /^(?:modifier|recommencer|voir dans mon agenda|voir l.agenda|importer mes contacts|quitter)$/i;
+
+/** Le texte d'un bouton tel qu'il s'affiche, sans le chiffre ni l'icône du début. */
+function tcLibelleChoix116(bouton) {
+  let t = String((bouton && (bouton.innerText || bouton.textContent)) || '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/^(?:[\d#*]\uFE0F?\u20E3\s*)+/u, '');                                   // 1️⃣ 2️⃣
+  t = t.replace(/^[^\p{L}\p{N}«"(]+/u, '').trim();                                           // 🤝 📞 🕐 ✅ ✏️
+  return t;
+}
+
+function tcNoterChoix116(cible) {
+  const b = cible && cible.closest ? cible.closest('#charlyChatBody button') : null;
+  if (!b || b.disabled || b.closest('[data-voir]') || b.closest('#tcAccueilCharly') || b.id === 'tcBoutonDemo') return;
+  // Seulement un bouton DANS une réponse de Charly (sa bulle).
+  if (!b.closest('.tc-bulle-col')) return;
+  const libelle = tcLibelleChoix116(b);
+  if (!libelle || TC_CHOIX_SANS_BULLE.test(libelle)) return;
+  const h0 = charlyIA.history, n = Array.isArray(h0) ? h0.length : 0;
+  setTimeout(function () { tcBulleDuChoix116(h0, n, libelle); }, 0);
+}
+
+/** Juste après le geste : la bulle, sauf si le chemin du bouton en a déjà écrit une. */
+function tcBulleDuChoix116(h0, n, libelle) {
+  const h = charlyIA.history;
+  if (h !== h0 || !Array.isArray(h) || h.length < n) return;          // une autre conversation (démonstration ouverte ou fermée)
+  if (h.slice(n).some(function (m) { return m && m.role === 'user'; })) return;
+  h.splice(n, 0, { role: 'user', content: libelle, _choix: true });
+  try { renderCharlyChat(); } catch (e) {}
 }
 
 /** Cette réponse de Charly annonce-t-elle un rendez-vous créé, déplacé ou modifié ? */

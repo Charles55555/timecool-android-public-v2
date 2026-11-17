@@ -3612,3 +3612,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 17/11/2026 — Mission 115 : les bulles de Charly à la taille de leur texte (CODEUR)
 
 - .tc-bulle-col sur les deux gabarits (tcBulleCharly, réponse de Charly) : flex 0 1 auto, max-width --tc-bulle-max (85% téléphone, 80% au PC) ; tc-bulle-large (carte proposée) : largeur d avant (100% - 50 px) ; boutons 44 px au moins. TC_CONV_COLONNE.vrai = true (choix du chef). Premier essai : la carte large à 100% - 40 px et min-width:0 faisaient sortir « Recommencer » au téléphone : corrigé. Suite verif-colonne-conversation (34). Captures : m71/captures115.
+
+## 17/11/2026 — Mission 116 : la bulle du choix touché (CODEUR)
+
+- Écouteur de clics (capture) de #charlyChatBody : tcNoterChoix116 retient le libellé (tcLibelleChoix116, sans chiffre ni icône) d un bouton DANS une bulle de Charly (.tc-bulle-col) ; juste après (setTimeout 0), tcBulleDuChoix116 insère { role: user, _choix: true } à la place du geste, sauf si le chemin a déjà écrit une bulle utilisateur ou si la conversation a changé. Exclus : Voir dans mon agenda, accueil, Modifier, Recommencer, Quitter. Suite verif-bulle-choix. Captures : m71/captures116.
