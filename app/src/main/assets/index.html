@@ -12339,9 +12339,10 @@ function tcDemoDonnees() {
   const agendas = {
     'DEMO-MICHEL': [occ(demain, 8, 16)],
     'DEMO-PAUL': [occ(tcDemoJour(0), 8, 12)],
-    'DEMO-ALICE': [occ(demain, 9, 12), occ(tcDemoJour(2), 14, 18)],
-    'DEMO-CHLOE': [occ(demain, 13, 17), occ(tcDemoJour(3), 8, 11)],
-    'DEMO-VIRGINIE': [occ(demain, 8, 10), occ(tcDemoJour(2), 9, 13)]
+    // Examen 107b : toutes les trois prises demain, toute la journée : le rendez-vous à plusieurs tombe après demain.
+    'DEMO-ALICE': [occ(demain, 8, 20), occ(tcDemoJour(2), 14, 18)],
+    'DEMO-CHLOE': [occ(demain, 8, 20), occ(tcDemoJour(3), 8, 11)],
+    'DEMO-VIRGINIE': [occ(demain, 8, 20), occ(tcDemoJour(2), 9, 13)]
   };
   return { events: evs, contacts: contacts, agendas: agendas };
 }
@@ -12403,6 +12404,8 @@ function tcDemoServeur() {
       const titre = (options && options.titre ? options.titre + ' avec ' : '') + noms.join(', ');
       const ev = tcDemoRdv('grp_' + Date.now(), jourDe(date), heure, 0, duree * 60, titre, (options && options.cat) || 'travail');
       if (type) ev.type = type;
+      // Examen 107b : pris avec une seule personne, il lui est relié (« malade » la prévient ensuite).
+      if (refs.length === 1) { const seul = contactsList.find(function (x) { return x.referenceCompte === refs[0]; }); if (seul) ev.contact = seul.id; }
       events.push(ev);
       refs.forEach(function (r) { _tcDemo.agendas[r].push({ date: date, debut: heure * 60, fin: (heure + duree) * 60 }); });
       _tcDemo.cale = true;

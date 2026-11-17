@@ -119,7 +119,9 @@ function monde(jour) {
   verifie('Alice, Chloé et Virginie : des créneaux communs où tout le monde est libre', r2.creneaux.length === 3 && r2.creneaux.every((x) => !x.manquants.length), JSON.stringify(r2.creneaux));
 
   console.log('-- 4 bis. Mission 107b : les contacts d exemple répondent tout seuls --');
-  verifie('le café est relié à Paul, le déjeuner à Michel (comme un vrai rendez-vous)', vm.runInContext('events.filter(function (e) { return e.contact; }).map(function (e) { return e.id + ">" + e.contact; }).join()', ctx) === 'demo_cafe>demo_paul,demo_dejeuner>demo_michel');
+  verifie('le café est relié à Paul, le déjeuner à Michel (comme un vrai rendez-vous)', vm.runInContext('events.filter(function (e) { return e.contact && /^demo_(cafe|dejeuner)$/.test(e.id); }).map(function (e) { return e.id + ">" + e.contact; }).join()', ctx) === 'demo_cafe>demo_paul,demo_dejeuner>demo_michel');
+  verifie('examen 107b : le rendez-vous pris avec Michel dans la démonstration lui est relié (« malade » le prévient)', vm.runInContext('events.filter(function (e) { return /^demo_grp_/.test(e.id) && e.startH === 17; }).every(function (e) { return e.contact === "demo_michel"; }) && events.some(function (e) { return /^demo_grp_/.test(e.id); })', ctx) === true);
+  verifie('examen 107b : Alice, Chloé et Virginie prises toute la journée de demain (le rendez-vous à plusieurs tombe après)', r2.creneaux.every((x) => x.date > '2026-11-18'), JSON.stringify(r2.creneaux.map((x) => x.date)));
   vm.runInContext('messages.user = [{ with: "Paul Virtuel", thread: [{ from: "me", text: "retard" }] }]; charlyIA.history = [];', ctx);
   await vm.runInContext('TC_BACKEND.envoyerMessage("DEMO-PAUL", "Bonjour Paul, j aurai 10 minutes de retard")', ctx);
   verifie('un message envoyé : une réponse attendue, les phrases attendent', vm.runInContext('_tcDemo.reponsesAttendues', ctx) === 1);
@@ -279,8 +281,10 @@ function monde(jour) {
           return tcDemoJouer('malade');
         }).then(function () { return cliquer('Oui, envoie'); }).then(function () { return attendre(1800); }).then(function () {
           R.michelChoisit = charlyIA.history.some(function (m) { return m._reponseCreneau && /^Michel Virtuel a choisi/.test(m.content || ''); });
-          return cliquer('Oui, place-le');
+          var placer = function (n) { return cliquer('Oui, place-le').then(function () { return attendre(1800); }).then(function () { var d = charlyIA.history[charlyIA.history.length - 1]; return (n < 4 && d && d._reponseCreneau && !d._reponseCreneau._resolu) ? placer(n + 1) : null; }); };
+          return placer(0);
         }).then(function () { return attendre(900); }).then(function () {
+          R.personneAPrevenir = charlyIA.history.filter(function (m) { return /personne à prévenir/.test(m.content || ''); }).map(function (m) { return m.content; });
           var dej = events.filter(function (e) { return e.id === 'demo_dejeuner'; })[0];
           var demain = new Date(); demain.setDate(demain.getDate() + 1);
           var iso = demain.getFullYear() + '-' + String(demain.getMonth() + 1).padStart(2, '0') + '-' + String(demain.getDate()).padStart(2, '0');
@@ -309,7 +313,7 @@ function monde(jour) {
     verifie('vendredi : ce qui est libre', P.vendredi === true);
     verifie('retard : le message part à Paul (messagerie d exemple), Paul répond tout seul', P.paul === true);
     verifie('à plusieurs : les trois agendas lus, des créneaux où tout le monde est libre ; touché : dans l agenda d exemple', JSON.stringify(P.groupeInvites) === JSON.stringify(['Alice', 'Chloé', 'Virginie']) && Array.isArray(P.groupe) && P.groupe.length === 3 && P.groupe.every(function (n) { return n === 0; }) && P.groupeAgenda === 1, JSON.stringify([P.groupeInvites, P.groupe, P.groupeAgenda]));
-    verifie('malade : la journée de demain est vidée, Michel choisit tout seul, « Oui, place-le » le déplace ; puis « Tu as tout vu. »', P.michelChoisit === true && P.maladeDemainVide === 0 && P.dejeunerDeplace === true && /^Tu as tout vu\./.test(P.fini || ''), JSON.stringify([P.michelChoisit, P.maladeDemainVide, P.dejeunerDeplace, P.fini]));
+    verifie('malade : la journée de demain est vidée, Michel choisit tout seul, « Oui, place-le » le déplace ; puis « Tu as tout vu. »', P.michelChoisit === true && JSON.stringify(P.personneAPrevenir) === JSON.stringify(['Sans contact enregistré, donc personne à prévenir : « Coiffeur ».']) && P.maladeDemainVide === 0 && P.dejeunerDeplace === true && /^Tu as tout vu\./.test(P.fini || ''), JSON.stringify([P.michelChoisit, P.personneAPrevenir, P.maladeDemainVide, P.dejeunerDeplace, P.fini]));
     verifie('pendant la démonstration : rien écrit dans le stockage, aucun appel réseau', Array.isArray(P.ecrit) && P.ecrit.length === 0 && Array.isArray(P.reseau) && P.reseau.length === 0, JSON.stringify([P.ecrit, P.reseau]));
     verifie('rechargée en pleine démonstration : le stockage est celui d avant, octet pour octet', R2 && Array.isArray(R2.diff) && R2.diff.length === 0, R2 && JSON.stringify(R2.diff));
     verifie('au retour : plus de démonstration, ni bandeau ; stockage et réseau d origine ; vraies données là', R2 && R2.demo === false && R2.bandeau === false && R2.natif === true && R2.vrai && R2.vrai.agenda === 'VRAI Kiné', JSON.stringify(R2 && [R2.demo, R2.bandeau, R2.natif, R2.vrai]));
