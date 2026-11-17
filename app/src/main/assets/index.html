@@ -467,6 +467,10 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 /* « Réduire les animations » : le doigt reste fixe. */
 @media (prefers-reduced-motion: reduce) { .tc-doigt { animation:none; } }
 
+/* Mission 114 : la conversation dans une colonne centrée de 700 px au plus (Charly à gauche, l'utilisateur à droite de la
+   colonne). La marge suit la largeur : sous 700 px de large, elle reste celle d'avant (12 px). */
+#charlyChatBody.tc-conv-colonne { --tc-conv-largeur:700px; padding-left:max(12px, calc((100% - var(--tc-conv-largeur)) / 2)) !important; padding-right:max(12px, calc((100% - var(--tc-conv-largeur)) / 2)) !important; }
+
 /* Dashboard */
 .dash-hero { padding:20px 16px; background:linear-gradient(135deg, #e8f0fe 0%, #e0f2f1 100%); }
 .dash-month-nav { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
@@ -13066,6 +13070,7 @@ function renderCharlyChat() {
   }
   tcSauverHistoriqueCharly();
   if (typeof tcAttacherVoir111 === 'function') { try { tcSuivreRdvBouges(); tcAttacherVoir111(); } catch (e) {} }   // mission 111
+  if (typeof tcMajColonneConversation === 'function') tcMajColonneConversation();   // mission 114
   const body = document.getElementById('charlyChatBody');
   // Mission 106 : conversation vide, ou rien que l'accueil : l'accueil au milieu de la page.
   if (!charlyIA.history.length) { body.innerHTML = tcRendreAccueilCharlyVide(); return; }
@@ -13134,6 +13139,15 @@ function tcDemandePrecedente(m) {
    (« C'est noté », « C'est fait », « C'est calé », la carte d'un rendez-vous à plusieurs inscrit) reçoit le bouton. Un rendez-vous
    annulé ou supprimé n'est plus là : pas de bouton.
    ═══════════════════════════════════════════════════════════════ */
+/** Mission 114 : la conversation en colonne centrée ; la démonstration seulement pour l'instant (vrai: true l'étend partout). */
+const TC_CONV_COLONNE = { demo: true, vrai: false };
+function tcMajColonneConversation() {
+  const corps = document.getElementById('charlyChatBody');
+  if (!corps || !corps.classList) return;
+  const demo = typeof tcDemoActive === 'function' && tcDemoActive();
+  corps.classList.toggle('tc-conv-colonne', !!(demo ? TC_CONV_COLONNE.demo : TC_CONV_COLONNE.vrai));
+}
+
 /** Combien de temps le doigt (et le contour des autres) reste, en millisecondes. */
 const TC_VOIR_AGENDA_MS = 5000;
 let _tcSuiviRdv = null;

@@ -3604,3 +3604,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 17/11/2026 — Mission 113 : Charly dit chaque agenda qu il consulte (CODEUR)
 
 - tcEtapesConsultation113 : une étape « Charly consulte les préférences et les disponibilités d’Alice… » par personne (prénom, élision), puis « Charly compare les agendas… » (deux ou plus) ; TC_ATTENTE_DUREES.consulte = 3000 en démonstration, 1 s en vrai (tcEtapeAttente prend une durée). La demande au serveur part avant les étapes (tcProposerRdvGroupe, tcNouveauRdvCommuns) ; malade et décalage : tcCreneauxDuLot et tcCreneauxReproposesPour. Phrase de la conversation alignée. Suites : verif-bulle-attente (32), verif-demo-charly, verif-phrases-tiktok, verif-voir-agenda adaptées. Captures : m71/captures113.
+
+## 17/11/2026 — Mission 114 : la conversation de la démonstration en colonne centrée (CODEUR)
+
+- #charlyChatBody.tc-conv-colonne : marges max(12px, (100% - 700px)/2) (passent devant le style en ligne) ; tcMajColonneConversation à chaque affichage, réglage TC_CONV_COLONNE { demo: true, vrai: false }. Sous 700 px : 12 px comme avant. Suite verif-colonne-conversation (1920, 1366, téléphone). Captures : m71/captures114.
