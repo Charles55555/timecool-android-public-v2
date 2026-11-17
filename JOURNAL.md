@@ -3608,3 +3608,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 17/11/2026 — Mission 114 : la conversation de la démonstration en colonne centrée (CODEUR)
 
 - #charlyChatBody.tc-conv-colonne : marges max(12px, (100% - 700px)/2) (passent devant le style en ligne) ; tcMajColonneConversation à chaque affichage, réglage TC_CONV_COLONNE { demo: true, vrai: false }. Sous 700 px : 12 px comme avant. Suite verif-colonne-conversation (1920, 1366, téléphone). Captures : m71/captures114.
+
+## 17/11/2026 — Mission 115 : les bulles de Charly à la taille de leur texte (CODEUR)
+
+- .tc-bulle-col sur les deux gabarits (tcBulleCharly, réponse de Charly) : flex 0 1 auto, max-width --tc-bulle-max (85% téléphone, 80% au PC) ; tc-bulle-large (carte proposée) : largeur d avant (100% - 50 px) ; boutons 44 px au moins. TC_CONV_COLONNE.vrai = true (choix du chef). Premier essai : la carte large à 100% - 40 px et min-width:0 faisaient sortir « Recommencer » au téléphone : corrigé. Suite verif-colonne-conversation (34). Captures : m71/captures115.

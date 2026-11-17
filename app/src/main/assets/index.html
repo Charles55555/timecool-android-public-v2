@@ -471,6 +471,15 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
    colonne). La marge suit la largeur : sous 700 px de large, elle reste celle d'avant (12 px). */
 #charlyChatBody.tc-conv-colonne { --tc-conv-largeur:700px; padding-left:max(12px, calc((100% - var(--tc-conv-largeur)) / 2)) !important; padding-right:max(12px, calc((100% - var(--tc-conv-largeur)) / 2)) !important; }
 
+/* Mission 115 : la bulle de Charly à la taille de son texte (comme une conversation WhatsApp), jusqu'à 85 % au téléphone,
+   80 % de la colonne au PC ; une carte de rendez-vous proposée (tc-bulle-large) peut prendre toute la colonne. Les boutons
+   de choix : au moins 44 px de haut. */
+#charlyChatBody { --tc-bulle-max:85%; }
+@media (min-width:700px) { #charlyChatBody { --tc-bulle-max:80%; } }
+#charlyChatBody .tc-bulle-col { flex:0 1 auto !important; max-width:var(--tc-bulle-max) !important; }
+#charlyChatBody .tc-bulle-col.tc-bulle-large { flex:1 1 auto !important; max-width:calc(100% - 50px) !important; }
+#charlyChatBody .tc-bulle-col button, #charlyChatBody .tc-voir-agenda { min-height:44px; }
+
 /* Dashboard */
 .dash-hero { padding:20px 16px; background:linear-gradient(135deg, #e8f0fe 0%, #e0f2f1 100%); }
 .dash-month-nav { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
@@ -13114,7 +13123,7 @@ function tcSuiteSurNotification(texte) {
 function tcBulleCharly(interieur) {
   return '<div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">'
     + '<div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>'
-    + '<div style="flex:1; max-width:calc(100% - 50px);">'
+    + '<div class="tc-bulle-col" style="flex:1; max-width:calc(100% - 50px);">'
     + '<div style="padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">'
     + interieur + '</div></div></div>';
 }
@@ -13140,7 +13149,7 @@ function tcDemandePrecedente(m) {
    annulé ou supprimé n'est plus là : pas de bouton.
    ═══════════════════════════════════════════════════════════════ */
 /** Mission 114 : la conversation en colonne centrée ; la démonstration seulement pour l'instant (vrai: true l'étend partout). */
-const TC_CONV_COLONNE = { demo: true, vrai: false };
+const TC_CONV_COLONNE = { demo: true, vrai: true };   // mission 115 : la vraie conversation aussi
 function tcMajColonneConversation() {
   const corps = document.getElementById('charlyChatBody');
   if (!corps || !corps.classList) return;
@@ -13360,7 +13369,7 @@ function renderChatMessage(m) {
     let html = `
       <div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">
         <div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>
-        <div style="flex:1; max-width:calc(100% - 50px);">
+        <div class="tc-bulle-col${displayProposals.length && !contactAttendu ? ' tc-bulle-large' : ''}" style="flex:1; max-width:calc(100% - 50px);">
           <div style="${(displayProposals.length && !contactAttendu && tcRepeteLaCarte(cleanContent)) ? 'display:none; ' : ''}padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
             ${escapeHTML(cleanContent).replace(/\n/g,'<br>') || '...'}
           </div>
