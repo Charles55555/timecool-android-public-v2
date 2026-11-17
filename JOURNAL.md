@@ -3600,3 +3600,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 17/11/2026 — Mission 112 : la pastille « Démonstration » (CODEUR)
 
 - Plus de bande jaune : une pastille bleu roi #1a47d6 centrée (texte blanc, « Quitter » blanc à texte bleu, ombre légère), fond transparent autour, même place qu en 111. verif-voir-agenda vérifie couleurs, taille et centrage (PC, 390). Captures : m71/captures112.
+
+## 17/11/2026 — Mission 113 : Charly dit chaque agenda qu il consulte (CODEUR)
+
+- tcEtapesConsultation113 : une étape « Charly consulte les préférences et les disponibilités d’Alice… » par personne (prénom, élision), puis « Charly compare les agendas… » (deux ou plus) ; TC_ATTENTE_DUREES.consulte = 3000 en démonstration, 1 s en vrai (tcEtapeAttente prend une durée). La demande au serveur part avant les étapes (tcProposerRdvGroupe, tcNouveauRdvCommuns) ; malade et décalage : tcCreneauxDuLot et tcCreneauxReproposesPour. Phrase de la conversation alignée. Suites : verif-bulle-attente (32), verif-demo-charly, verif-phrases-tiktok, verif-voir-agenda adaptées. Captures : m71/captures113.

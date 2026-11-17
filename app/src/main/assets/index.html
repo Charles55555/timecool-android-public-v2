@@ -12948,12 +12948,13 @@ async function tcDemanderRdvContact107(text) {
 /** Le temps minimum d'une étape de la bulle, en millisecondes : une ligne par contexte ; « feuilles » : une étape où un
  * message part ou arrive (mission 109 : 5 s, dans la démonstration comme en vrai). Mission 110 : dans la démonstration, toutes
  * les étapes durent 5 s (le nouvel utilisateur voit Charly chercher, étape par étape). */
-const TC_ATTENTE_DUREES = { demo: 5000, vrai: 1000, feuilles: 5000 };
+const TC_ATTENTE_DUREES = { demo: 5000, vrai: 1000, feuilles: 5000, consulte: 3000 };
 /** Le sous-titre de Charly au repos. */
 const TC_STATUT_REPOS = '🔒 Votre Assistant Intelligent';
 let _tcEtape = null;
 
 function tcAttenteDuree(e) {
+  if (e && typeof e.duree === 'number') return e.duree;   // mission 113 : une étape qui a sa propre durée (consulter un agenda)
   if (e && e.sorte && typeof TC_ATTENTE_DUREES.feuilles === 'number') return TC_ATTENTE_DUREES.feuilles;
   return (typeof tcDemoActive === 'function' && tcDemoActive()) ? TC_ATTENTE_DUREES.demo : TC_ATTENTE_DUREES.vrai;
 }
@@ -12972,11 +12973,41 @@ function tcTexteAttente(quoi, noms) {
   const p = tcAttentePrenoms(noms), plusieurs = (noms || []).length > 1;
   if (quoi === 'agenda') return 'Charly cherche dans ton agenda…';
   if (quoi === 'contacts') return 'Charly cherche dans tes contacts…';
+  // Mission 113 : une personne à la fois, puis la comparaison.
+  if (quoi === 'consulte' && p) return 'Charly consulte les préférences et les disponibilités ' + (/^[aeiouyhàâéèêëîïôöûüœ]/i.test(p) ? 'd’' : 'de ') + p + '…';
+  if (quoi === 'compare') return 'Charly compare les agendas…';
   if (quoi === 'agendaDe') return plusieurs || !p ? 'Charly regarde les agendas…' : 'Charly regarde l’agenda ' + (/^[aeiouyhàâéèêëîïôöûüœ]/i.test(p) ? 'd’' : 'de ') + p + '…';
   if (quoi === 'envoi' && p) return 'Charly envoie à ' + p + '…';
   if (quoi === 'reponse' && p) return p + (plusieurs ? ' répondent…' : ' répond…');
   if (quoi === 'range') return 'Charly range ton agenda…';
   return 'Charly cherche…';
+}
+
+/** Mission 113 : le temps d'une étape « consulte » : 3 s dans la démonstration, le temps de lire en vrai. */
+function tcDureeConsulte113() {
+  return (typeof tcDemoActive === 'function' && tcDemoActive()) ? TC_ATTENTE_DUREES.consulte : TC_ATTENTE_DUREES.vrai;
+}
+
+/** Les prénoms, dans l'ordre, une seule fois chacun. */
+function tcPrenomsConsultes113(noms) {
+  const vus = [];
+  (noms || []).forEach(function (n) { const p = String(n || '').trim().split(' ')[0]; if (p && vus.indexOf(p) < 0) vus.push(p); });
+  return vus;
+}
+
+/** « Charly consulte … d'Alice… », « … de Chloé… », puis « Charly compare les agendas… » (deux personnes ou plus). */
+async function tcEtapesConsultation113(noms, sansComparer) {
+  const p = tcPrenomsConsultes113(noms);
+  for (const n of p) await tcEtapeAttente(tcTexteAttente('consulte', [n]), null, tcDureeConsulte113());
+  if (p.length >= 2 && !sansComparer) await tcEtapeAttente(tcTexteAttente('compare'), null, tcDureeConsulte113());
+}
+
+/** « d’Alice, Chloé et Virginie » : pour la phrase de la conversation. */
+function tcListeConsultes113(noms) {
+  const p = tcPrenomsConsultes113(noms);
+  if (!p.length) return '';
+  const liste = p.length > 1 ? p.slice(0, -1).join(', ') + ' et ' + p[p.length - 1] : p[0];
+  return (/^[aeiouyhàâéèêëîïôöûüœ]/i.test(liste) ? 'd’' : 'de ') + liste;
 }
 
 /** Avant la réponse du modèle : la meilleure idée d'après la phrase (jamais « envoie » : rien ne part sans le dire). */
@@ -12998,9 +13029,10 @@ function tcTexteAppTraduit(fr) {
 }
 
 /** Une étape de la bulle : la précédente reste au moins son temps minimum, puis la bulle dit la nouvelle. sorte : 'envoi' | 'reception'. */
-async function tcEtapeAttente(texte, sorte) {
+async function tcEtapeAttente(texte, sorte, duree) {
   if (_tcEtape) await tcMinEtape(_tcEtape);
   const e = { debut: Date.now(), sorte: sorte || null };
+  if (typeof duree === 'number') e.duree = duree;
   // Filet : une étape jamais refermée (erreur en route) ne bloque pas Charly plus de 30 s.
   e.garde = setTimeout(function () { if (_tcEtape === e) { _tcEtape = null; tcDefinirStatutCharly(TC_STATUT_REPOS, false); } }, 30000);
   _tcEtape = e;
@@ -28244,11 +28276,15 @@ async function tcCreneauxDuLot(liste, occupesDeja) {
     return { date: x.p.date, debut: debut, fin: debut + Math.max(15, (Number(x.ev.endH) * 60 + Number(x.ev.endM || 0)) - (Number(x.ev.startH) * 60 + Number(x.ev.startM || 0))) };
   });
   const items = [];
+  // Mission 113 : chaque contact qui a TimeCool est dit dans la bulle pendant que ses disponibilités sont lues.
+  const _lance = typeof _tcEtape !== 'undefined' && !_tcEtape;
   for (const x of liste) {
     const c = tcContactDuRdv(x.ev);
     if (!c) continue;
+    if (c.referenceCompte && typeof tcEtapesConsultation113 === 'function') await tcEtapesConsultation113([c.name], true);
     items.push({ ev: x.ev, contact: c, creneaux: await tcCreneauxPourContact(x.ev, c, x.p || null, occupes) });
   }
+  if (_lance && typeof _tcEtape !== 'undefined' && _tcEtape && typeof tcFinEtapes === 'function') await tcFinEtapes();
   return items;
 }
 
@@ -28282,7 +28318,12 @@ async function tcCreneauxReproposesPour(ev, contact) {
   const apres = ev && ev.lotDecalage && ev.lotDecalage.apres;
   if (apres && apres > depuis) depuis = apres;
   const debut = Number(ev.startH) * 60 + Number(ev.startM || 0), fin = Number(ev.endH) * 60 + Number(ev.endM || 0);
-  return tcCreneauxPourContact(ev, contact, null, [{ date: ev.date, debut: debut, fin: Math.max(fin, debut + 15) }], { date: depuis, minutes: TC_PROPOSITION_DEBUT });
+  // Mission 113 : son agenda est consulté : la bulle le dit.
+  const _lance = typeof _tcEtape !== 'undefined' && !_tcEtape;
+  if (contact && contact.referenceCompte && typeof tcEtapesConsultation113 === 'function') await tcEtapesConsultation113([contact.name], true);
+  const res = await tcCreneauxPourContact(ev, contact, null, [{ date: ev.date, debut: debut, fin: Math.max(fin, debut + 15) }], { date: depuis, minutes: TC_PROPOSITION_DEBUT });
+  if (_lance && typeof _tcEtape !== 'undefined' && _tcEtape && typeof tcFinEtapes === 'function') await tcFinEtapes();
+  return res;
 }
 
 /** « mardi 17 novembre » */
@@ -29593,9 +29634,16 @@ async function tcNouveauRdvCommuns(r) {
   if (typeof TC_BACKEND === 'undefined' || !TC_BACKEND.estConnecte()) return { etat: 'erreur' };
   const jours = r._jours;
   const dureeH = Math.min(3, Math.max(1, Math.ceil((r._dureeMin || r._dureeCherchee || 60) / 60)));
+  // Mission 113 : la bulle dit chaque personne consultée pendant que la demande part.
+  const _lance = typeof _tcEtape !== 'undefined' && !_tcEtape;
+  const _demande = Promise.resolve().then(function () { return TC_BACKEND.proposerRdvGroupe(r._invites.map(function (c) { return c.referenceCompte; }), dureeH, 'physique',
+    { depuis: jours[0], jusqua: jours[jours.length - 1], combien: 40, par_jour: 12 }); }).then(function (v) { return { v: v }; }, function (e) { return { e: e }; });
+  if (typeof tcEtapesConsultation113 === 'function') await tcEtapesConsultation113((r._invites || []).map(function (c) { return c && c.name; }));
+  const _rep = await _demande;
+  if (_lance && typeof tcFinEtapes === 'function') await tcFinEtapes();
   try {
-    const res = await TC_BACKEND.proposerRdvGroupe(r._invites.map(function (c) { return c.referenceCompte; }), dureeH, 'physique',
-      { depuis: jours[0], jusqua: jours[jours.length - 1], combien: 40, par_jour: 12 });
+    if (_rep.e) throw _rep.e;
+    const res = _rep.v;
     return {
       etat: 'ok',
       creneaux: (Array.isArray(res.creneaux) ? res.creneaux : []).map(function (c) {
@@ -33152,15 +33200,22 @@ async function tcRepondreTypeGroupe(id, type) {
 
 /** Interroge le serveur et pose la carte de choix dans la conversation. */
 async function tcProposerRdvGroupe(references, duree, preambule, type, options) {
-  const attente = { role: 'assistant', content: '🔎 Je regarde les agendas pour trouver un créneau commun…' };
+  const _noms = (references || []).map(function (ref) { const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; }); return c ? c.name : ''; }).filter(Boolean);
+  // Mission 113 : la phrase de la conversation dit les mêmes personnes que la bulle.
+  const _qui = typeof tcListeConsultes113 === 'function' ? tcListeConsultes113(_noms) : '';
+  const attente = { role: 'assistant', content: _qui ? '🔎 Je consulte les préférences et les disponibilités ' + _qui + '…' : '🔎 Je regarde les agendas pour trouver un créneau commun…' };
   charlyIA.history.push(attente);
   renderCharlyChat();
   let r;
-  // Mission 108 : la bulle dit « Charly regarde l'agenda de Michel… » le temps de la lecture (personne n'est écrit).
-  const _noms = (references || []).map(function (ref) { const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; }); return c ? c.name : ''; }).filter(Boolean);
-  typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('agendaDe', _noms));
+  // Mission 113 : la demande part tout de suite ; pendant ce temps, la bulle dit chaque personne consultée, puis la comparaison.
+  const _demande = Promise.resolve().then(function () { return TC_BACKEND.proposerRdvGroupe(references, duree, type, options || undefined); })
+    .then(function (v) { return { v: v }; }, function (e) { return { e: e }; });
+  if (typeof tcEtapesConsultation113 === 'function') await tcEtapesConsultation113(_noms);
+  else typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('agendaDe', _noms));
   try {
-    r = await TC_BACKEND.proposerRdvGroupe(references, duree, type, options || undefined);
+    const _rep = await _demande;
+    if (_rep.e) throw _rep.e;
+    r = _rep.v;
     if (options && options.des && r && Array.isArray(r.creneaux) && !r.creneaux.length) {
       const sansSoir = Object.assign({}, options), _des = options.des; delete sansSoir.des;
       const r2 = await TC_BACKEND.proposerRdvGroupe(references, duree, type, sansSoir);

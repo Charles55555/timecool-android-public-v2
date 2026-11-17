@@ -59,7 +59,7 @@ if (!exe) {
         navigate('assistant');
         await attendre(900);
         document.querySelectorAll('#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
-        if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 100; TC_ATTENTE_DUREES.vrai = 100; TC_ATTENTE_DUREES.feuilles = 100; }
+        if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 100; TC_ATTENTE_DUREES.vrai = 100; TC_ATTENTE_DUREES.feuilles = 100; TC_ATTENTE_DUREES.consulte = 100; }
         var R = {};
         ${corps}
         fin(R);

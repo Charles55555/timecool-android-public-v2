@@ -202,7 +202,7 @@ function monde(jour) {
   verifie('le bouton « Voir la démonstration » ouvre la démonstration', /<button id="tcBoutonDemo" onclick="tcOuvrirDemo\(\)"/.test(page));
   verifie('les messages de la démonstration ont leur dessin', /if \(m && m\._demo\) return tcRendreDemo\(m\);/.test(page));
   verifie('« Demande un rendez-vous … à Michel » passe avant le classement et le modèle', page.indexOf('await tcDemanderRdvContact107(text)) return;') > page.indexOf('await tcDemanderDispoContactM65(text)) return;') && page.indexOf('await tcDemanderRdvContact107(text)) return;') < page.indexOf('const _prevenance = tcDetecterPrevenance(text);'));
-  verifie('la période (« demain ») va jusqu au serveur', /r = await TC_BACKEND\.proposerRdvGroupe\(references, duree, type, options \|\| undefined\);/.test(page) && /await tcProposerRdvGroupe\(q\.references, q\.duree, '', type, q\.options\);/.test(page));
+  verifie('la période (« demain ») va jusqu au serveur', /(?:r = await|return) TC_BACKEND\.proposerRdvGroupe\(references, duree, type, options \|\| undefined\);/.test(page) && /await tcProposerRdvGroupe\(q\.references, q\.duree, '', type, q\.options\);/.test(page));
   verifie('rien de la démonstration au chargement (données fabriquées à l ouverture seulement)', !/tcDemoDonnees\(\)/.test(page.replace(fonction('tcOuvrirDemo'), '').replace(fonction('tcDemoDonnees'), '')));
 
   console.log('-- 8. Dans la vraie page (Chrome) : jouée, puis page rechargée en pleine démonstration --');

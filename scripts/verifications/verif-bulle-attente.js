@@ -27,7 +27,7 @@ function fonction(nom) {
 console.log('-- 1. Plus d avion, ni de bandeau, ni de « réfléchit » --');
 verifie('l avion en papier et son bandeau sont retirés', !/tcAvion|TC_AVION|Demande envoyée à |avion en papier traverse/.test(page));
 verifie('le mot « réfléchit » a disparu des textes de Charly', !/'[^'\n]*réfléchit[^'\n]*'/.test(page), (page.match(/'[^'\n]*réfléchit[^'\n]*'/) || [])[0]);
-verifie('une constante réglable : 5 s par étape dans la démonstration (mission 110), 1 s en vrai, 5 s pour une étape à feuilles', /const TC_ATTENTE_DUREES = \{ demo: 5000, vrai: 1000, feuilles: 5000 \};/.test(page));
+verifie('une constante réglable : 5 s par étape dans la démonstration (mission 110), 1 s en vrai, 5 s pour une étape à feuilles, 3 s pour consulter un agenda (mission 113)', /const TC_ATTENTE_DUREES = \{ demo: 5000, vrai: 1000, feuilles: 5000, consulte: 3000 \};/.test(page));
 verifie('les feuilles : 14 × 18 px, contour de leur couleur, coin plié, dans la bulle (zone de hauteur fixe)',
   /\.tc-attente-anim \{ height:22px; display:flex; align-items:center; \}/.test(page)
   && /\.tc-feuilles \{ position:relative; display:block; width:96px; height:22px; overflow:hidden; \}/.test(page)
@@ -46,9 +46,14 @@ console.log('-- 2. Les mots et les durées --');
 const ctx = { String, Array, Date, tcSansAccents: (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
 vm.createContext(ctx);
 vm.runInContext(['tcAttentePrenoms', 'tcTexteAttente', 'tcDevinerAttente', 'tcAttenteDuree'].map(fonction).join('\n')
-  + '\nvar TC_ATTENTE_DUREES = { demo: 5000, vrai: 1000, feuilles: 5000 }; var _demo = false; function tcDemoActive() { return _demo; }', ctx);
+  + '\nvar TC_ATTENTE_DUREES = { demo: 5000, vrai: 1000, feuilles: 5000, consulte: 3000 }; var _demo = false; function tcDemoActive() { return _demo; }', ctx);
 const T = (q, n) => vm.runInContext('tcTexteAttente(' + JSON.stringify(q) + ', ' + JSON.stringify(n || []) + ')', ctx);
 const vus = [T('agenda'), T('contacts'), T('agendaDe', ['Michel Virtuel']), T('agendaDe', ['Alice', 'Chloé']), T('agendaDe', ['Éric Durand']), T('envoi', ['Paul Virtuel']), T('reponse', ['Paul Virtuel']), T('reponse', ['Alice', 'Chloé']), T('range'), T(''), T('envoi', [])];
+// Mission 113 : une personne à la fois, élision juste, prénom seul ; puis la comparaison.
+const consult = [T('consulte', ['Alice Virtuelle']), T('consulte', ['Chloé']), T('consulte', ['Hugo Martin']), T('consulte', ['Éric']), T('compare')];
+verifie('« Charly consulte les préférences et les disponibilités d’Alice… », « … de Chloé… », « … d’Hugo… », puis « Charly compare les agendas… »',
+  JSON.stringify(consult) === JSON.stringify(['Charly consulte les préférences et les disponibilités d’Alice…', 'Charly consulte les préférences et les disponibilités de Chloé…',
+    'Charly consulte les préférences et les disponibilités d’Hugo…', 'Charly consulte les préférences et les disponibilités d’Éric…', 'Charly compare les agendas…']), JSON.stringify(consult));
 verifie('chaque mot suit l action', JSON.stringify(vus) === JSON.stringify(['Charly cherche dans ton agenda…', 'Charly cherche dans tes contacts…', 'Charly regarde l’agenda de Michel…', 'Charly regarde les agendas…', 'Charly regarde l’agenda d’Éric…', 'Charly envoie à Paul…', 'Paul répond…', 'Alice et Chloé répondent…', 'Charly range ton agenda…', 'Charly cherche…', 'Charly cherche…']), JSON.stringify(vus));
 const D = (t) => vm.runInContext('tcDevinerAttente(' + JSON.stringify(t) + ')', ctx);
 const devines = [D('Qu’est-ce que j’ai demain ?'), D('donne-moi le numéro de Hugo'), D('Préviens Paul que j’arrive'), D('Raconte-moi une blague')];
@@ -114,7 +119,7 @@ if (!exe) {
         await attendre(14000);
         R.fini = bulle(); R.repondu = charlyIA.history.some(function (m) { return /^Paul a répondu/.test(m.content || ''); });
         R.debutMalade = film.length;
-        tcDemoJouer('malade'); await attendre(900);
+        tcDemoJouer('malade'); await attendre(4500);   // mission 113 : Michel consulté 3 s avant la carte
         cliquer('Oui, envoie');
         await attendre(30000);
         R.finMalade = film.length;
@@ -148,9 +153,10 @@ if (!exe) {
       JSON.stringify(plage(S.debutMalade, S.finMalade).map((e) => [e.texte, e.anim, e.ms])));
     const cherche = etape(plage(S.debutVendredi, S.finVendredi), /^Charly cherche dans ton agenda…$/, 'points');
     verifie(nom + ' — vendredi : « Charly cherche dans ton agenda… » reste 5 s (démonstration)', cherche && cherche.ms >= 4800 && cherche.ms < 6500, JSON.stringify(plage(S.debutVendredi, S.finVendredi).map((e) => [e.texte, e.anim, e.ms])));
-    const lecture = etape(plage(S.finVendredi), /^Charly regarde l’agenda de Michel…$/, 'points');
-    verifie(nom + ' — Michel : « Charly regarde l’agenda de Michel… » reste 5 s (démonstration)', lecture && lecture.ms >= 4800 && lecture.ms < 6500, JSON.stringify(plage(S.finVendredi).map((e) => [e.texte, e.anim, e.ms])));
-    verifie(nom + ' — agenda d un contact : « Charly regarde l’agenda de Michel… », les quatre points', S.agenda && S.agenda.texte === 'Charly regarde l’agenda de Michel…' && S.agenda.anim === 'points', JSON.stringify(S.agenda));
+    const lecture = etape(plage(S.finVendredi), /^Charly consulte les préférences et les disponibilités de Michel…$/, 'points');
+    verifie(nom + ' — Michel : « Charly consulte les préférences et les disponibilités de Michel… » 3 s (démonstration, mission 113)', lecture && lecture.ms >= 2800 && lecture.ms < 4500, JSON.stringify(plage(S.finVendredi).map((e) => [e.texte, e.anim, e.ms])));
+    verifie(nom + ' — agenda d un contact : « Charly consulte … de Michel… », les quatre points ; une seule personne : pas de « compare »', S.agenda && S.agenda.texte === 'Charly consulte les préférences et les disponibilités de Michel…' && S.agenda.anim === 'points'
+      && !plage(S.finVendredi).some((e) => /compare/.test(e.texte || '')), JSON.stringify(S.agenda));
     verifie(nom + ' — la bulle garde sa hauteur avec les feuilles, s élargit à peine', S.envoi && S.points && Math.abs(S.envoi.h - S.points.h) <= 2 && S.envoi.l <= 280, JSON.stringify([S.envoi && [S.envoi.l, S.envoi.h], S.points && [S.points.l, S.points.h]]));
   });
   const V = jouer(`
@@ -161,8 +167,21 @@ if (!exe) {
         await attendre(200); R.pendant = bulle();
         await p; R.ms = Date.now() - t0; R.apres = bulle();
         t0 = Date.now(); await tcEtapeAttente(tcTexteAttente('envoi', ['Paul']), 'envoi'); await attendre(100); R.calme = bulle(); await tcFinEtapes(); R.msEnvoi = Date.now() - t0;
-        await tcEtapeAttente(tcTexteAttente('reponse', ['Paul']), 'reception'); await attendre(100); R.calmeRetour = bulle(); await tcFinEtapes();`, true);
-  verifie('en vrai : lire un agenda, au moins 1 s, pas plus', V.pendant && V.pendant.texte === 'Charly regarde l’agenda de Michel…' && V.ms >= 950 && V.ms < 1600 && V.apres === null, JSON.stringify([V.pendant, V.ms, V.apres, V.erreur]));
+        await tcEtapeAttente(tcTexteAttente('reponse', ['Paul']), 'reception'); await attendre(100); R.calmeRetour = bulle(); await tcFinEtapes();
+        // Mission 113, en vrai : trois personnes, une à la fois (le temps de lire), puis « compare » ; la phrase de la conversation pareil.
+        contactsList = [{ id: 'a', name: 'Alice Martin', referenceCompte: 'REF-A', isTimeCool: true }, { id: 'c', name: 'Chloé Durand', referenceCompte: 'REF-C', isTimeCool: true }, { id: 'h', name: 'Hugo Petit', referenceCompte: 'REF-H', isTimeCool: true }];
+        var phrase = '';
+        TC_BACKEND.proposerRdvGroupe = async function () { phrase = charlyIA.history.map(function (m) { return m.content; }).filter(function (t) { return /^🔎/.test(t || ''); }).pop() || ''; return { creneaux: [], invites: ['Alice', 'Chloé', 'Hugo'], sans_acces: [], duree: 1 }; };
+        R.debutTrois = film.length; t0 = Date.now();
+        await tcProposerRdvGroupe(['REF-A', 'REF-C', 'REF-H'], 1, '', 'physique');
+        R.msTrois = Date.now() - t0; R.finTrois = film.length; R.phraseTrois = phrase;`, true);
+  verifie('en vrai : lire un agenda, au moins 1 s, pas plus', V.pendant && V.pendant.texte === 'Charly consulte les préférences et les disponibilités de Michel…' && V.ms >= 950 && V.ms < 1600 && V.apres === null, JSON.stringify([V.pendant, V.ms, V.apres, V.erreur]));
+  const trois = (V.film || []).slice(V.debutTrois, V.finTrois).filter((e) => e.texte).map((e) => e.texte);
+  verifie('en vrai : « … d’Alice… », « … de Chloé… », « … d’Hugo… », puis « Charly compare les agendas… », environ 1 s chacun',
+    JSON.stringify(trois) === JSON.stringify(['Charly consulte les préférences et les disponibilités d’Alice…', 'Charly consulte les préférences et les disponibilités de Chloé…',
+      'Charly consulte les préférences et les disponibilités d’Hugo…', 'Charly compare les agendas…']) && V.msTrois >= 3900 && V.msTrois < 5500, JSON.stringify([trois, V.msTrois]));
+  verifie('la phrase de la conversation dit les mêmes personnes : « 🔎 Je consulte les préférences et les disponibilités d’Alice, Chloé et Hugo… »',
+    V.phraseTrois === '🔎 Je consulte les préférences et les disponibilités d’Alice, Chloé et Hugo…', JSON.stringify(V.phraseTrois));
   verifie('en vrai : une étape à feuilles dure 5 s', V.msEnvoi >= 4950 && V.msEnvoi < 5600, V.msEnvoi);
   verifie('« Réduire les animations » : les feuilles restent, immobiles, avec la flèche → (envoi) et ← (réponse)',
     V.calme && V.calme.texte === 'Charly envoie à Paul…' && V.calme.feuillesVisibles === true && V.calme.mouvement === 'none' && V.calme.opacite === '1' && V.calme.fleche === '"→"'
