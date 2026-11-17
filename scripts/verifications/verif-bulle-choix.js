@@ -29,6 +29,9 @@ const L = (t) => { try { return vm.runInContext('tcLibelleChoix116({ innerText: 
 const vus = [L('1️⃣ Oui, envoie'), L('2️⃣ Non'), L('🤝 En personne'), L('📞 Par téléphone'), L('🕐 Mercredi 18 novembre · 17h–18h'), L('✅ Valider mon agenda'), L('Ajouter Gérard'), L('1️⃣ Demain')];
 verifie('sans chiffre ni icône : « Oui, envoie », « Non », « En personne »…', JSON.stringify(vus) === JSON.stringify(['Oui, envoie', 'Non', 'En personne', 'Par téléphone', 'Mercredi 18 novembre · 17h–18h', 'Valider mon agenda', 'Ajouter Gérard', 'Demain']), JSON.stringify(vus));
 
+// Examen : ce qui relit la demande de l'utilisateur (désignation, type, correction, sujets) saute les bulles de choix.
+verifie('la désignation, le type, la correction et les sujets ne lisent jamais une bulle de choix', (page.match(/role === 'user' && !(?:avant\[i\]|h\[k\])\._choix/g) || []).length === 4);
+
 console.log('-- 2. Dans la vraie page (Chrome) --');
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
 const exe = candidats.find((x) => { try { return fs.existsSync(x); } catch (e) { return false; } });
@@ -78,6 +81,16 @@ if (!exe) {
       renderCharlyChat(); await attendre(200);
       await cliquer('En visio'); await attendre(1500);
       R.vrai = conv();
+      // Examen : la carte de conflit (hors bulle) : « Ajouter quand même » donne sa bulle, avant « C'est noté ».
+      var demain = new Date(); demain.setDate(demain.getDate() + 1);
+      contactsList = [{ id: 'c_paul', name: 'Paul Martin', phone: '0600000000' }];
+      events.push({ id: 'ev_reu', mode: 'user', date: tcISO(demain), startH: 15, startM: 0, endH: 16, endM: 0, title: 'Réunion', cat: 'travail' });
+      charlyIA.history = []; renderCharlyChat();
+      var i = document.getElementById('charlyInput'); i.value = 'Ajoute un rendez-vous avec Paul demain à 15h'; await charlySendMessage(); await attendre(2500);
+      await cliquer('Valider mon agenda'); await attendre(1000);
+      R.conflitCarte = !!Array.prototype.filter.call(document.querySelectorAll('#charlyChatBody button'), function (x) { return /Ajouter quand même/.test(x.innerText); }).length;
+      await cliquer('Ajouter quand même'); await attendre(1000);
+      R.conflit = conv();
       fin(R);
     } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
   }, 1200); });</script>`;
@@ -100,6 +113,8 @@ if (!exe) {
   verifie('le bouton touché reste visible, plus touchable ; la bulle est à droite', S.boutonsMarques && S.boutonsMarques.length && S.boutonsMarques.every(Boolean) && S.aDroite === true, JSON.stringify([S.boutonsMarques, S.aDroite]));
   const V = S.vrai || [];
   verifie('en vrai : « En visio » touché, une bulle, puis la carte des créneaux', V[2] === '>> En visio' && V.length >= 4 && !/^>/.test(V[3]), JSON.stringify(V));
+  const C = S.conflit || [], iq = C.indexOf('>> Ajouter quand même');
+  verifie('la carte de conflit : « Ajouter quand même » donne sa bulle, juste avant la réponse', S.conflitCarte === true && iq > 0 && C[iq + 1] && !/^>/.test(C[iq + 1]), JSON.stringify([S.conflitCarte, C]));
 }
 
 console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');

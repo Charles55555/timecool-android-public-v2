@@ -5856,7 +5856,7 @@ function tcDesignationPour(msg, p) {
   const rang = charlyIA.history.indexOf(msg);
   const avant = rang > -1 ? charlyIA.history.slice(0, rang) : charlyIA.history;
   for (let i = avant.length - 1; i >= 0; i--) {
-    if (avant[i] && avant[i].role === 'user') return tcDesignationDuMessage(avant[i].content);
+    if (avant[i] && avant[i].role === 'user' && !avant[i]._choix) return tcDesignationDuMessage(avant[i].content);   // mission 116 : pas une bulle de choix
   }
   return null;
 }
@@ -8121,7 +8121,7 @@ function tcTypeDeProposition(msg, p) {
   const rang = charlyIA.history.indexOf(msg);
   const avant = rang > -1 ? charlyIA.history.slice(0, rang) : charlyIA.history;
   for (let i = avant.length - 1; i >= 0; i--) {
-    if (avant[i] && avant[i].role === 'user') return tcTypeDansTexte(avant[i].content);
+    if (avant[i] && avant[i].role === 'user' && !avant[i]._choix) return tcTypeDansTexte(avant[i].content);   // mission 116 : pas une bulle de choix
   }
   return '';
 }
@@ -13214,8 +13214,7 @@ function tcLibelleChoix116(bouton) {
 function tcNoterChoix116(cible) {
   const b = cible && cible.closest ? cible.closest('#charlyChatBody button') : null;
   if (!b || b.disabled || b.closest('[data-voir]') || b.closest('#tcAccueilCharly') || b.id === 'tcBoutonDemo') return;
-  // Seulement un bouton DANS une réponse de Charly (sa bulle).
-  if (!b.closest('.tc-bulle-col')) return;
+  // Un bouton d'une réponse de Charly : sa bulle, ou une carte posée à part (la carte de conflit).
   const libelle = tcLibelleChoix116(b);
   if (!libelle || TC_CHOIX_SANS_BULLE.test(libelle)) return;
   const h0 = charlyIA.history, n = Array.isArray(h0) ? h0.length : 0;
@@ -14640,7 +14639,7 @@ function tcSujetsOuverts(history) {
     const question = tcDerniereQuestion(m.content);
     if (!question || m._validated) return;
     let suivant = null;
-    for (let k = i + 1; k < h.length; k++) { if (h[k] && h[k].role === 'user') { suivant = h[k]; break; } }
+    for (let k = i + 1; k < h.length; k++) { if (h[k] && h[k].role === 'user' && !h[k]._choix) { suivant = h[k]; break; } }   // mission 116
     if (!suivant) return;
     if (suivant.hidden || tcEstHorsSujet(suivant.content)) sujets.push({ libelle: tcLibelleSujet(question), question: question, msg: m, proposition: false });
   });
@@ -21212,7 +21211,7 @@ function tcEstUneCorrection(msg) {
   let i = h.indexOf(msg);
   if (i < 0) i = h.length;
   let demande = null;
-  for (let k = i - 1; k >= 0; k--) { if (h[k] && h[k].role === 'user') { demande = h[k]; break; } }
+  for (let k = i - 1; k >= 0; k--) { if (h[k] && h[k].role === 'user' && !h[k]._choix) { demande = h[k]; break; } }   // mission 116
   if (!demande) return false;
   const t = tcSansAccents(demande.content).replace(/[’']/g, ' ');
   return /\b(deplace[rsz]?|decale[rsz]?|modifie[rsz]?|change[rsz]?|repousse[rsz]?|avance[rsz]?|trompee?|corrige[rsz]?|erreur)\b|\bpas a\b/.test(t);

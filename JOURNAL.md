@@ -3616,3 +3616,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 17/11/2026 — Mission 116 : la bulle du choix touché (CODEUR)
 
 - Écouteur de clics (capture) de #charlyChatBody : tcNoterChoix116 retient le libellé (tcLibelleChoix116, sans chiffre ni icône) d un bouton DANS une bulle de Charly (.tc-bulle-col) ; juste après (setTimeout 0), tcBulleDuChoix116 insère { role: user, _choix: true } à la place du geste, sauf si le chemin a déjà écrit une bulle utilisateur ou si la conversation a changé. Exclus : Voir dans mon agenda, accueil, Modifier, Recommencer, Quitter. Suite verif-bulle-choix. Captures : m71/captures116.
+- Examen : carte de conflit (hors bulle) avec ses bulles ; tcDesignationPour, tcTypeDeProposition, tcEstUneCorrection et le repérage des sujets sautent les bulles _choix.
