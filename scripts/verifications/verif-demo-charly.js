@@ -237,6 +237,8 @@ function monde(jour) {
       window.__reseau = [];
       var f0 = window.fetch;
       window.fetch = function (u) { window.__reseau.push(String(u)); return Promise.reject(new Error('hors ligne (banc)')); };
+      // Mission 107c : l avion en papier vole vite dans la suite (la durée réelle est contrôlée par verif-avion-papier).
+      if (typeof TC_AVION_DUREES !== 'undefined') { TC_AVION_DUREES.demo = 150; TC_AVION_DUREES.vrai = 150; }
       userAccount = { firstname: 'Charles', lastname: 'Haddad', reference: 'REFTEST' };
       tcCharlyPret = function () { return true; };
       charlyIA.history = []; charlyIA._historiqueCharge = true;

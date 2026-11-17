@@ -12570,6 +12570,9 @@ function tcDemoReponseDe(reference, texte, apres) {
   setTimeout(async function () {
     if (_tcDemo !== etat) return;
     try {
+      // Mission 107c : l'avion revient d'abord ; la démonstration fermée pendant le vol : rien.
+      if (typeof tcAvionPapier === 'function') await tcAvionPapier({ sens: 'retour', noms: [c.name] });
+      if (_tcDemo !== etat) return;
       const liste = (typeof messages !== 'undefined' && messages && Array.isArray(messages.user)) ? messages.user : null;
       if (liste) {
         let conv = liste.find(function (x) { return x && x.with === c.name; });
@@ -12800,6 +12803,7 @@ function tcQuitterDemo(options) {
   charlyIA._historiqueCharge = etat.vrai.historiqueCharge;
   _tcDemo = null;
   tcDemoBandeau(false);
+  { const avion = document.getElementById('tcAvion'); if (avion) avion.remove(); }
   charlyIA.history.push({ role: 'assistant', content: TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
   if (!(options && options.sansRetour)) navigate('assistant');
   renderCharlyChat();
@@ -12833,6 +12837,96 @@ async function tcDemanderRdvContact107(text) {
     renderCharlyChat();
   }
   return true;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 107c (Charles, 17/11) : l'avion en papier. Quand Charly écrit à quelqu'un (ou lit son agenda), un avion en papier
+   traverse la zone de conversation, de la pastille de Charly vers le rond aux initiales ; dessous : « Message envoyé à Paul ».
+   Quand la réponse arrive, il revient : « Paul répond… », puis la réponse s'affiche. Rien ne se touche pendant le vol (le
+   bandeau laisse passer les doigts). « Réduire les animations » : pas de vol, le texte seul.
+   ═══════════════════════════════════════════════════════════════ */
+/** Durée d'un vol, en millisecondes : une ligne par contexte (Charles : 5 s dans la démonstration ; le chef : 2 s en vrai). */
+const TC_AVION_DUREES = { demo: 5000, vrai: 2000 };
+let _tcAvionFile = Promise.resolve();
+
+/** La durée du vol, selon qu'on est dans la démonstration ou non. */
+function tcAvionDuree() {
+  return (typeof tcDemoActive === 'function' && tcDemoActive()) ? TC_AVION_DUREES.demo : TC_AVION_DUREES.vrai;
+}
+
+/** « Paul », « Paul et Michel », « Alice, Chloé et Virginie » : les prénoms. */
+function tcAvionPrenoms(noms) {
+  const p = (noms || []).map(function (n) { return String(n || '').trim().split(' ')[0]; }).filter(Boolean);
+  return p.length > 1 ? p.slice(0, -1).join(', ') + ' et ' + p[p.length - 1] : (p[0] || '');
+}
+
+/** Le texte sous l'avion. sens : 'aller' | 'retour' ; quoi : 'message' | 'demande'. */
+function tcAvionTexte(sens, noms, quoi) {
+  const p = tcAvionPrenoms(noms);
+  if (sens === 'retour') return p + ((noms || []).length > 1 ? ' répondent…' : ' répond…');
+  return (quoi === 'demande' ? 'Demande envoyée à ' : 'Message envoyé à ') + p;
+}
+
+/**
+ * Un vol : { sens, noms, quoi }. Rend une promesse tenue à l'atterrissage. Les vols se suivent, jamais deux à la fois.
+ * Hors de la page Charly IA, ou sans zone de conversation : pas de vol.
+ */
+function tcAvionPapier(o) {
+  const vol = _tcAvionFile.then(function () { return tcAvionVoler(o || {}); });
+  _tcAvionFile = vol.catch(function () {});
+  return vol;
+}
+
+function tcAvionVoler(o) {
+  return new Promise(function (fini) {
+    const corps = document.getElementById('charlyChatBody');
+    const pageCharly = document.getElementById('page-assistant');
+    if (!corps || !pageCharly || !pageCharly.classList.contains('active') || !(o.noms || []).length) { fini(); return; }
+    const duree = tcAvionDuree();
+    const calme = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const ancien = document.getElementById('tcAvion');
+    if (ancien) ancien.remove();
+    if (getComputedStyle(pageCharly).position === 'static') pageCharly.style.position = 'relative';
+    const initiales = String(o.noms[0] || '').split(' ').map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+    const autres = o.noms.length > 1 ? '<span style="position:absolute; right:-6px; bottom:-4px; background:#1a73e8; color:#fff; border-radius:10px; font-size:10px; font-weight:700; padding:1px 5px;">+' + (o.noms.length - 1) + '</span>' : '';
+    const rond = function (html, fond) { return '<div style="position:relative; flex-shrink:0; width:48px; height:48px; border-radius:50%; background:' + fond + '; display:flex; align-items:center; justify-content:center; color:#fff; font-size:17px; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,0.15);">' + html + '</div>'; };
+    const charly = rond('⚡', 'linear-gradient(135deg, var(--g-blue), var(--g-yellow))');
+    const contact = rond(escapeHTML(initiales) + autres, '#5f6bd6');
+    const aller = o.sens !== 'retour';
+    const bande = document.createElement('div');
+    bande.id = 'tcAvion';
+    bande.setAttribute('role', 'status');
+    bande.setAttribute('aria-live', 'polite');
+    const r = corps.getBoundingClientRect(), rp = pageCharly.getBoundingClientRect();
+    // Juste au-dessus de la barre de saisie (fixe en bas, par-dessus la zone de conversation).
+    const saisie = document.getElementById('charlyInput');
+    const bas = saisie ? Math.min(r.bottom, saisie.getBoundingClientRect().top - 22) : r.bottom;
+    const haut = Math.max(0, bas - rp.top - 112);
+    bande.style.cssText = 'position:absolute; left:' + Math.max(8, r.left - rp.left + 8) + 'px; width:' + Math.max(200, r.width - 16) + 'px; top:' + haut + 'px; z-index:60; pointer-events:none;'
+      + ' background:rgba(255,255,255,0.96); border:1px solid var(--border); border-radius:18px; box-shadow:0 6px 22px rgba(0,0,0,0.12); padding:12px 14px 10px; box-sizing:border-box;';
+    bande.innerHTML = '<div style="position:relative; display:flex; align-items:center; justify-content:space-between; height:56px;">'
+      + (aller ? charly + contact : contact + charly)
+      + '<div class="tc-avion-piste" style="position:absolute; left:56px; right:56px; top:27px; border-top:2px dashed #c6dafc;"></div>'
+      + '<svg class="tc-avion-svg" viewBox="0 0 24 24" width="38" height="38" style="position:absolute; left:52px; top:8px;' + (calme ? ' display:none;' : '') + '"><path fill="#1a73e8" d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>'
+      + '</div><div style="text-align:center; font-size:14px; font-weight:600; color:var(--text); margin-top:6px;">' + escapeHTML(tcAvionTexte(o.sens, o.noms, o.quoi)) + '</div>';
+    pageCharly.appendChild(bande);
+    let fait = false;
+    const finir = function () { if (fait) return; fait = true; try { bande.remove(); } catch (e) {} fini(); };
+    const avion = bande.querySelector('.tc-avion-svg');
+    if (!calme && avion && typeof avion.animate === 'function') {
+      const course = Math.max(40, bande.clientWidth - 28 - 52 - 52 - 38);
+      // De la pastille de Charly vers le rond du contact (retour : l'inverse, l'avion tourné), en arc.
+      const de = aller ? 0 : course, a = aller ? course : 0, tourne = aller ? '' : ' scaleX(-1)';
+      avion.animate([
+        { transform: 'translate(' + de + 'px, 0) rotate(-8deg)' + tourne, opacity: 0.2 },
+        { transform: 'translate(' + (de + (a - de) * 0.15) + 'px, -10px) rotate(-12deg)' + tourne, opacity: 1, offset: 0.15 },
+        { transform: 'translate(' + ((de + a) / 2) + 'px, -22px) rotate(0deg)' + tourne, opacity: 1, offset: 0.5 },
+        { transform: 'translate(' + (de + (a - de) * 0.85) + 'px, -8px) rotate(10deg)' + tourne, opacity: 1, offset: 0.85 },
+        { transform: 'translate(' + a + 'px, 0) rotate(14deg)' + tourne, opacity: 0.3 }
+      ], { duration: duree, easing: 'ease-in-out', fill: 'forwards' });
+    }
+    setTimeout(finir, duree);
+  });
 }
 
 function renderCharlyChat() {
@@ -27619,6 +27713,10 @@ async function tcQuestionnaireExecuter(r, fin) {
   if (r.prevenir === 'moi' && contacts.length) lignes.push('• À prévenir toi-même : ' + tcQuestionnaireNoms(contacts));
   if (deplaces.length || supprimes.length) lignes.push('Pour revenir en arrière, dis-moi « remets-' + (deplaces.length + supprimes.length > 1 ? 'les' : 'le') + ' ».');
   if (r._seul) tcJournaliserCompteRendu(lignes);   // profil 3 : le compte rendu est rangé au Journal d’activité (mission 91)
+  // Mission 107c : l'avion en papier vers ceux à qui Charly vient d'écrire, puis « C'est fait ».
+  const _envoles = prevenus.map(function (c) { return c.name; });
+  if (propositions && propositions.res && Array.isArray(propositions.res.proposes)) propositions.res.proposes.forEach(function (n) { if (_envoles.indexOf(n) < 0) _envoles.push(n); });
+  if (_envoles.length && typeof tcAvionPapier === 'function') await tcAvionPapier({ sens: 'aller', noms: _envoles, quoi: 'message' });
   if (!envois.length) { tcQuestionnaireDire(lignes.join('\n')); return; }
   charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero) });
   renderCharlyChat();
@@ -28283,6 +28381,13 @@ async function tcSuivrePropositions(toujours) {
     const libre = function (x) { const e = tcRdvDeProposition(x); return x.etat === 'choisi' && !!e && !tcGenesDuCreneau(e, tcCreneauDeProposition(x)).length; };
     const seuls = nouvelles.filter(function (x) { return profilDe(x) === 3 || (profilDe(x) === 2 && libre(x)); });
     const aDemander = nouvelles.filter(function (x) { return seuls.indexOf(x) < 0; });
+    // Mission 107c : l'avion revient de ceux qui ont répondu (la démonstration a déjà joué le sien).
+    if ((seuls.length || aDemander.length) && typeof tcAvionPapier === 'function' && !(typeof tcDemoActive === 'function' && tcDemoActive())
+      && typeof currentPage !== 'undefined' && currentPage === 'assistant') {
+      const qui = [];
+      seuls.concat(aDemander.slice(0, 1)).forEach(function (x) { if (x && x.qui && qui.indexOf(x.qui) < 0) qui.push(x.qui); });
+      if (qui.length) await tcAvionPapier({ sens: 'retour', noms: qui });
+    }
     if (seuls.length) await tcTraiterSeul(seuls);
     if (aDemander.length) tcPoserReponseCreneau(aDemander[0]);
   } finally {
@@ -32723,9 +32828,15 @@ async function tcProposerRdvGroupe(references, duree, preambule, type, options) 
   charlyIA.history.push(attente);
   renderCharlyChat();
   let r;
+  // Mission 107c : l'avion part vers eux pendant que la demande est lue ; il revient avec leur réponse.
+  const _noms = (references || []).map(function (ref) { const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; }); return c ? c.name : ''; }).filter(Boolean);
+  const _vol = (_noms.length && typeof tcAvionPapier === 'function') ? tcAvionPapier({ sens: 'aller', noms: _noms, quoi: 'demande' }) : Promise.resolve();
   try {
     r = await TC_BACKEND.proposerRdvGroupe(references, duree, type, options || undefined);
+    await _vol;
+    if (_noms.length && typeof tcAvionPapier === 'function') await tcAvionPapier({ sens: 'retour', noms: _noms });
   } catch (e) {
+    await _vol;
     charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
     charlyIA.history.push({ role: 'assistant', content: '❌ ' + (e && e.message ? e.message : 'Je n’arrive pas à interroger les agendas pour le moment.') });
     renderCharlyChat();
