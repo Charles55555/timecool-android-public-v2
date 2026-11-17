@@ -611,7 +611,7 @@ function fin() {
   verifie('et l enregistre',
     page.indexOf("if (champContact.value) e.contact = champContact.value;") > -1);
   verifie('le rendez-vous affiche la personne',
-    page.indexOf('${tcContactDuRdv(e) ? `<div class="event-detail-row"') > -1);
+    (page.indexOf('${tcContactDuRdv(e) ? `<div class="event-detail-row"') > -1 || page.indexOf('${tcAvecDuRdv118(e).length ? `<div class="event-detail-row"') > -1));   // mission 118 : tous les invités
   verifie('« Prévenir » part du contact, plus du titre',
     page.indexOf('openPrevenirSheet(currentEvent.title, currentEvent)') === -1,
     'il proposait de prevenir quelqu un nomme « Rendez-vous dentiste »');

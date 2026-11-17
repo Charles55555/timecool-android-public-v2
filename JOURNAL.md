@@ -3633,3 +3633,12 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Le serveur joue la vraie largeur du téléphone (390 px) ; seuil de la « petite bulle » passé de 75 % à 90 % du rang.
 - Le soir, deux suites de la démonstration (malade) regardaient trop tôt (Paul puis Michel) : elles attendent la carte.
 - Hors 117, à signaler : « Qu'est-ce que j'ai le 25 novembre ? » (« libre sur cette période ») et « mercredi 25 novembre » (lu comme ce mercredi) ; « j'avais lundi » lu au présent.
+
+## 18/11/2026 (nuit) — Mission 118 : avec qui et où (CODEUR)
+
+- Fiche : « Avec » = tous les invités ; lieu de la phrase gardé (fiche, invités via /rdv/groupe/confirmer) et rappelé (📍).
+- Démonstration : adresses d'exemple à Paris ; trajet d'exemple par le bouton « Combien de temps ? » de la fiche (le vrai calcule en voiture à la demande ; rien n'est calculé tout seul, ni en vrai ni en démonstration).
+- Doigt : 18 px, fixe, s'en va au toucher / changement de vue / sortie ; 👇 puis 👈 si la place est prise.
+- Boutons du haut : bulle de l'utilisateur.
+- Préalables : dates écrites et passé dans la consultation ; verif-phrases-boutons sans heure rouge ; petite bulle à 0,75.
+- Non couvert : e2e-rdv-groupe (hors verifier.sh) ne trouve plus de créneau depuis la fin des disponibilités par défaut ; le lieu côté API est vérifié par lecture et php -l. « Café avec Paul demain à 10h » part au modèle (avant 118 aussi).

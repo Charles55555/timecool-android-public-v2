@@ -77,6 +77,11 @@ if (!exe) {
 } else {
   // Une page par compte ; les phrases s'y suivent, chacune sur un agenda remis à neuf. Rien n'est envoyé : le modèle et le
   // serveur sont remplacés (un appel au modèle est compté).
+  // Lot 118 (chef : « pas d'heure où je ne peux pas publier ») : la page croit qu'il est 10h aujourd'hui ; le temps avance ensuite.
+  const HORLOGE_10H = '<script>(function () { var V = Date, d = new V(), base = new V(d.getFullYear(), d.getMonth(), d.getDate(), 10, 0, 0).getTime(), t0 = V.now();'
+    + ' function F() { if (!(this instanceof F)) return new V(base + V.now() - t0).toString(); if (!arguments.length) return new V(base + V.now() - t0);'
+    + ' return new (Function.prototype.bind.apply(V, [null].concat([].slice.call(arguments))))(); }'
+    + ' F.prototype = V.prototype; F.now = function () { return base + V.now() - t0; }; F.UTC = V.UTC; F.parse = V.parse; window.Date = F; })();</script>';
   const js = (compte) => `<script>window.addEventListener('load', function () { setTimeout(function () {
     document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
     try { localStorage.setItem('tc_permissions_shown', '1'); } catch (e) {}
@@ -128,7 +133,7 @@ if (!exe) {
   }, 1200); });</script>`;
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-phrases-'));
   const lire = (compte) => {
-    fs.writeFileSync(path.join(dossier, compte + '.html'), page.replace('</body>', () => js(compte) + '</body>'));
+    fs.writeFileSync(path.join(dossier, compte + '.html'), page.replace('<head>', () => '<head>' + HORLOGE_10H).replace('</body>', () => js(compte) + '</body>'));
     const r = spawnSync(exe, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr-' + compte), '--window-size=390,844', '--virtual-time-budget=60000', '--dump-dom', 'file:///' + path.join(dossier, compte + '.html').replace(/\\/g, '/')], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 300000 });
     const m = (r.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);
     try { return m ? JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')) : null; } catch (e) { return null; }

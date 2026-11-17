@@ -9,11 +9,11 @@ const ctx = {
   document: { getElementById: (id) => el[id] || (el[id] = { style: {} }) },
   escapeHTML: (t) => String(t), tcPeriodeLisible: () => 'mercredi 7 octobre', currentEvent: null,
   tcContactDuRdv: (e) => (e.contact ? { name: 'Marc Dupont' } : null),
-  tcRappelDuRdv: () => 0, TC_DELAIS_RAPPEL: [], tcLigneContactHTML: () => '', tcEstPrevenable: () => false
+  tcRappelDuRdv: () => 0, TC_DELAIS_RAPPEL: [], tcLigneContactHTML: () => '', tcEstPrevenable: () => false, contactsList: []
 };
 vm.createContext(ctx);
 vm.runInContext(page.match(/const TC_TYPES_RDV = \[[\s\S]*?\n\];/)[0], ctx);
-vm.runInContext(['tcCrayonFiche', 'tcLigneVideFiche', 'tcTypeRdvValide', 'tcIconeType', 'tcMarqueDecalage'].map(extraire).join('\n'), ctx);
+vm.runInContext(['tcCrayonFiche', 'tcLigneVideFiche', 'tcTypeRdvValide', 'tcIconeType', 'tcMarqueDecalage', 'tcAvecDuRdv118', 'tcContactsDuRdv', 'tcLieuSansTrajet118'].filter(function (n) { return page.indexOf('function ' + n + '(') > -1; }).map(extraire).join('\n'), ctx);
 const corps = extraire('openEventModal');
 verifie('openEventModal trouvée', !!corps);
 let rendu = '';
@@ -28,6 +28,9 @@ verifie('vide : le crayon mène au bon champ', /openEditEventModal\('lieu'\)/.te
 const plein = fiche({ title: 'Dentiste', date: '2026-10-07', startH: 11, startM: 0, endH: 13, endM: 0, lieu: '12 rue des Lilas', contact: 'c1' });
 verifie('rempli : le lieu et le contact sont montrés', /12 rue des Lilas/.test(plein) && /Marc Dupont/.test(plein));
 verifie('rempli : plus d invitation', !/Ajouter un lieu/.test(plein) && !/Ajouter un contact/.test(plein));
+// Mission 118 : un rendez-vous à plusieurs montre tous ses invités dans « Avec ».
+const groupe = fiche({ title: 'RDV Marc, Lou', date: '2026-10-07', startH: 11, startM: 0, endH: 12, endM: 0, invites: [{ reference: 'R1', prenom: 'Marc' }, { reference: 'R2', prenom: 'Lou' }] });
+verifie('à plusieurs : « Avec » montre tous les invités (mission 118)', /Marc, Lou/.test(groupe) && !/Ajouter un contact/.test(groupe), groupe.slice(0, 120));
 verifie('rempli : plus de phrase d aide non plus', !/Si tu précises/.test(plein));
 verifie('rempli : un crayon sur chaque ligne modifiable (date, horaire, lieu, avec)', (plein.match(/✏️/g) || []).length === 4);
 verifie('rempli : « Y aller » est toujours là', /Y aller/.test(plein));

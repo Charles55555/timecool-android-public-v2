@@ -4263,6 +4263,9 @@ switch ($route) {
         if ($catDonnee !== null && !in_array($catDonnee, ['travail', 'sante', 'famille', 'amis', 'sport', 'voyages', 'personnel', 'perso'], true)) {
             $catDonnee = null;
         }
+        // Mission 118 : le lieu dit dans la phrase (« au 25 avenue de Wagram à Paris »), inscrit chez tout le monde.
+        $lieuDonne = Entree::texte('lieu', 255);
+        $lieuDonne = $lieuDonne === null || trim($lieuDonne) === '' ? null : texteSur(trim($lieuDonne));
         $sansAcces = [];
         $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
         if ($invites === []) {
@@ -4306,7 +4309,7 @@ switch ($route) {
             $moiNom = texteSur(trim($moi['prenom'] . ' ' . $moi['nom']));
             // Mission 107d : les invités (référence, prénom) restent dans le rendez-vous de chacun : « Je suis malade » les
             // retrouve pour les prévenir (un rendez-vous à plusieurs n'a pas de fiche contact unique).
-            $entree = static function (string $noms, array $avec = []) use ($jour, $heure, $duree, $uid, $typeRdv, $titreDonne, $catDonnee): array {
+            $entree = static function (string $noms, array $avec = []) use ($jour, $heure, $duree, $uid, $typeRdv, $titreDonne, $catDonnee, $lieuDonne): array {
                 // Mission 111 : « RDV Michel Martin », « RDV Alice, Chloé : boire un verre ».
                 $titre = 'RDV ' . $noms . ($titreDonne !== null ? ' : ' . $titreDonne : '');
                 return [
@@ -4319,7 +4322,7 @@ switch ($route) {
                     'title'  => mb_substr($titre, 0, 120),
                     'cat'    => $catDonnee ?? 'travail',
                     'mode'   => 'user',
-                ];
+                ] + ($lieuDonne !== null ? ['lieu' => $lieuDonne] : []);
             };
             $prenomsInclus = array_column($inclus, 'prenom');
             $personne = static fn(array $compte, string $prenom): array => ['reference' => (string) $compte['reference'], 'prenom' => $prenom];

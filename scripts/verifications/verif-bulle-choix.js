@@ -96,6 +96,25 @@ if (!exe) {
       R.perimeActif = !!perime;
       if (perime) { perime.click(); await attendre(4000); }
       R.apresPerime = conv();
+      // Mission 118 : les boutons du haut, en vrai puis en démonstration.
+      var haut = async function () {
+        var res = [];
+        var bs = Array.prototype.slice.call(document.querySelectorAll('#charlyQuickActions button, #charlyQuickActions2 button'));
+        for (var k = 0; k < bs.length; k++) {
+          var act = (String(bs[k].getAttribute('onclick') || '').match(/charlyQuickAction\\('(\\w+)'\\)/) || [])[1];
+          if (!act || act === 'agenda' || act === 'photo') continue;
+          try { if (_tcQuestionnaire) tcQuestionnaireArreter(); } catch (e) {}
+          var n = charlyIA.history.length;
+          bs[k].click(); await attendre(700);
+          res.push([act, String(bs[k].innerText || '').replace(/\\s+/g, ' ').trim(), charlyIA.history.slice(n).map(function (m) { return (m.role === 'user' ? (m._choix ? '>> ' : '> ') : '') + String(m.content || '').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').slice(0, 50); })]);
+        }
+        return res;
+      };
+      if (typeof _tcDemo !== 'undefined' && _tcDemo) { tcQuitterDemo({ sansRetour: true }); await attendre(300); }
+      navigate('assistant'); await attendre(300);
+      R.hautVrai = await haut();
+      await tcOuvrirDemo(); await attendre(300);
+      R.hautDemo = await haut();
       fin(R);
     } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
   }, 1200); });</script>`;
@@ -120,6 +139,9 @@ if (!exe) {
   verifie('en vrai : « En visio » touché, une bulle, puis la carte des créneaux', V[2] === '>> En visio' && V.length >= 4 && !/^>/.test(V[3]), JSON.stringify(V));
   const C = S.conflit || [], iq = C.indexOf('>> Ajouter quand même');
   const P = S.apresPerime || [];
+  const hautOk = (L) => Array.isArray(L) && L.length >= 7 && L.every((x) => x[2].length >= 2 && x[2][0] === '>> ' + x[1].replace(/^[^\p{L}\p{N}«(]+/u, '').trim().slice(0, 50) && !/^>/.test(x[2][1]) && x[2].filter((y) => /^>/.test(y)).length === 1);
+  verifie('les boutons du haut (vrai) : une bulle avec le libellé sans l’icône, puis la réponse de Charly (mission 118)', hautOk(S.hautVrai), JSON.stringify(S.hautVrai));
+  verifie('les boutons du haut (démonstration) : pareil', hautOk(S.hautDemo), JSON.stringify(S.hautDemo));
   verifie('un bouton périmé encore actif : pas de bulle laissée sans réponse (mission 117)', P.length && !/^>/.test(P[P.length - 1]) && P.length === C.length, JSON.stringify([S.perimeActif, P]));
   verifie('la carte de conflit : « Ajouter quand même » donne sa bulle, juste avant la réponse', S.conflitCarte === true && iq > 0 && C[iq + 1] && !/^>/.test(C[iq + 1]), JSON.stringify([S.conflitCarte, C]));
 }

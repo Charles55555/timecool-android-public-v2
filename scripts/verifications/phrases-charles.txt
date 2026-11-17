@@ -60,3 +60,13 @@ Et toi ? | Ça va ? | sans:Qu.est-ce que tu veux que je fasse && modele
 Et Paul ? |  | sans:Qu.est-ce que tu veux que je fasse && modele
 # --- Examen 117 : un week-end daté ---
 Qu'est-ce que j'ai le week-end du 28 novembre ? |  | texte:samedi 28 et dimanche 29 novembre
+
+# --- Défauts anciens signalés à la 117 (chef, 17/11 23h15), corrigés au lot 118 ---
+Qu'est-ce que j'ai le {date:+8} ? |  | jour:+8 && sans:sur cette période
+Qu'est-ce que j'ai {jourdate:+8} ? |  | jour:+8
+Qu'est-ce que j'avais lundi ? |  | jour:lundi- && sans:Tu es libre
+
+# --- Mission 118 (Charles, 17/11 19h45) : un lieu dit dans la phrase est gardé et rappelé ---
+Dentiste demain à 15h au 12 rue de Rivoli à Paris |  | jour:+1 && texte:📍 12 rue de Rivoli, Paris && texte:\s\S\s12 rue de Rivoli, Paris
+Dîner chez moi samedi à 20h |  | texte:📍 Chez moi && jour:samedi
+Réunion demain à 10h au café de la gare |  | texte:📍 Caf. de la gare

@@ -462,6 +462,11 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 
 /* Mission 111 : « Voir dans mon agenda » : un petit doigt clignote à côté du rendez-vous, les autres ont un contour bleu doux. */
 .tc-doigt { position:absolute; z-index:6; font-size:18px; line-height:18px; pointer-events:none; animation:tcDoigt 0.8s ease-in-out infinite; }
+.tc-doigt.tc-doigt-fixe { animation:none; }
+.tc-doigt.tc-doigt-haut { animation-name:tcDoigtBas; }
+.tc-doigt.tc-doigt-droite { animation-name:tcDoigtGauche; }
+@keyframes tcDoigtGauche { 0%, 100% { transform:translateX(0); } 50% { transform:translateX(-4px); } }
+@keyframes tcDoigtBas { 0%, 100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
 @keyframes tcDoigt { 0%, 100% { opacity:1; transform:translateX(0); } 50% { opacity:0.25; transform:translateX(-3px); } }
 .week-event.tc-voir-autre { outline:2px solid #8ab4f8; outline-offset:1px; }
 /* « Réduire les animations » : le doigt reste fixe. */
@@ -5576,6 +5581,7 @@ async function tcTempsDeTrajet(lieu) {
     : '';
   zone.innerHTML = '<span style="color:var(--g-blue); font-weight:600;">\u23f1\ufe0f ' + duree + ' de trajet</span>'
     + (r.distanceKm ? '<span style="color:var(--text-sec);"> \u00b7 ' + r.distanceKm + ' km</span>' : '')
+    + (r.depuisDemo ? '<div style="color:var(--text-sec); font-size:11px; margin-top:2px;">Depuis ' + escapeHTMLSafe(r.depuisDemo) + ' (exemple de la démonstration)</div>' : '')
     + flou;
 }
 
@@ -5585,6 +5591,13 @@ function tcCrayonFiche(champ) {
 }
 
 /** Une ligne « Lieu » ou « Avec » encore vide : elle invite à la remplir. */
+/** Mission 118 : les personnes de la fiche (« Avec ») : le contact, ou tous les invités d'un rendez-vous à plusieurs. */
+function tcAvecDuRdv118(e) {
+  if (typeof tcContactsDuRdv === 'function') return tcContactsDuRdv(e);
+  const c = typeof tcContactDuRdv === 'function' ? tcContactDuRdv(e) : null;
+  return c ? [c] : [];
+}
+
 function tcLigneVideFiche(champ) {
   const lieu = champ === 'lieu';
   const icone = lieu
@@ -5614,14 +5627,14 @@ function openEventModal(e) {
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Date${tcCrayonFiche('date')}</div><div class="event-detail-value">${dateStr}</div></div></div>
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Horaire${tcCrayonFiche('horaire')}</div><div class="event-detail-value">${timeStr}</div></div></div>
     ${e.lieu ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Lieu${tcCrayonFiche('lieu')}</div><div class="event-detail-value">${escapeHTML(e.lieu)}</div>
-      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+      <div style="display:${typeof tcLieuSansTrajet118 === 'function' && tcLieuSansTrajet118(e) ? 'none' : 'flex'}; gap:8px; margin-top:10px; flex-wrap:wrap;">
         <button onclick="tcYAller(${JSON.stringify(e.lieu).replace(/"/g, '&quot;')})" style="padding:8px 14px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\ud83d\uddfa\ufe0f Y aller</button>
         <button onclick="tcTempsDeTrajet(${JSON.stringify(e.lieu).replace(/"/g, '&quot;')})" style="padding:8px 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue); border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer;">\u23f1\ufe0f Combien de temps ?</button>
         <span id="emTrajet" style="font-size:12px; align-self:center; flex:1 1 auto; min-width:0;"></span>
       </div>
 
     </div></div>` : tcLigneVideFiche('lieu')}
-    ${tcContactDuRdv(e) ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Avec${tcCrayonFiche('contact')}</div><div class="event-detail-value" data-notranslate>${escapeHTML(tcContactDuRdv(e).name || '')}</div></div></div>` : tcLigneVideFiche('contact')}
+    ${tcAvecDuRdv118(e).length ? `<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><div style="flex:1;"><div class="event-detail-label" style="display:flex; justify-content:space-between; align-items:center;">Avec${tcCrayonFiche('contact')}</div><div class="event-detail-value" data-notranslate>${escapeHTML(tcAvecDuRdv118(e).map(function (c) { return c.name || ''; }).filter(Boolean).join(', '))}</div></div></div>` : tcLigneVideFiche('contact')}
     ${typeof tcLigneDocumentsFiche === 'function' ? tcLigneDocumentsFiche(e) : ''}
     <div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg><div><div class="event-detail-label">Confidentialité</div><div class="event-detail-value" style="color:var(--g-green);">✓ Sur votre appareil</div></div></div>
   `;
@@ -12407,6 +12420,8 @@ function tcDemoDonnees() {
     tcDemoRdv('sport', vendredi, 18, 0, 60, 'Sport', 'sport'),
     tcDemoRdv('famille', dimanche, 12, 30, 120, 'RDV famille', 'perso')
   ];
+  // Mission 118 : chaque rendez-vous d'exemple a son adresse à Paris.
+  if (typeof TC_DEMO_LIEUX118 !== 'undefined') evs.forEach(function (e) { const k = String(e.id).replace(/^demo_/, ''); if (TC_DEMO_LIEUX118[k]) e.lieu = TC_DEMO_LIEUX118[k]; });
   const contact = function (id, prenom, nom, n, timecool) {
     const c = { id: 'demo_' + id, name: prenom + ' ' + nom, firstname: prenom, lastname: nom, phone: '06 39 98 00 ' + n, email: id + '.' + tcSansAccents(nom.toLowerCase()) + '@exemple-timecool.fr', isTimeCool: timecool, categories: [], demo: true };
     if (timecool) c.referenceCompte = 'DEMO-' + id.toUpperCase();
@@ -12491,6 +12506,8 @@ function tcDemoServeur() {
       const titre = 'RDV ' + noms.join(', ') + (options && options.titre ? ' : ' + options.titre : '');
       const ev = tcDemoRdv('grp_' + Date.now(), jourDe(date), heure, 0, duree * 60, titre, (options && options.cat) || 'travail');
       if (type) ev.type = type;
+      // Mission 118 : le lieu dit, sinon l'adresse d'exemple ; « En visio », « Par téléphone » sans adresse.
+      if (typeof tcLieuDemo118 === 'function') ev.lieu = tcLieuDemo118(type, options && options.lieu);
       // Examen 107b : pris avec une seule personne, il lui est relié (« malade » la prévient ensuite).
       if (refs.length === 1) { const seul = contactsList.find(function (x) { return x.referenceCompte === refs[0]; }); if (seul) ev.contact = seul.id; }
       // Mission 107d : à plusieurs, les invités (comme /rdv/groupe/confirmer).
@@ -12498,7 +12515,7 @@ function tcDemoServeur() {
       events.push(ev);
       refs.forEach(function (r) { _tcDemo.agendas[r].push({ date: date, debut: heure * 60, fin: (heure + duree) * 60 }); });
       _tcDemo.cale = true;
-      return { ok: true, libelle: libelle(jourDe(date)), heure: String(heure).padStart(2, '0') + ':00', inclus: prenoms, exclus: [] };
+      return { ok: true, libelle: libelle(jourDe(date)), heure: String(heure).padStart(2, '0') + ':00', inclus: prenoms, exclus: [], lieu: ev.lieu };
     },
     estConnecte() { return true; },
     async propositions() {
@@ -13071,6 +13088,7 @@ async function tcFinEtapes() {
 function renderCharlyChat() {
   // A chaque affichage, les cent derniers messages sont enregistres :
   // tout ce qui change la conversation finit par un affichage.
+  if (typeof tcPoserLieu118 === 'function') tcPoserLieu118();
   tcChargerHistoriqueCharly();
   // Missions 106 et 107 : une conversation qui n'a qu'un accueil d'avant (d'une ligne, ou celui de la 106) reçoit le nouveau.
   if (charlyIA.history.length === 1 && tcEstAccueilCharly(charlyIA.history[0]) && charlyIA.history[0].v !== 107) {
@@ -13308,6 +13326,161 @@ function tcCaseDuRdv111(id) {
 }
 
 /** Le doigt 👉 juste à gauche du rendez-vous, TC_VOIR_AGENDA_MS ; les autres : un contour bleu doux, le même temps. */
+// ===== Mission 118 =====
+const TC_DOIGT_ECART_118 = 18;   // ≈ 5 mm à 390 px entre le bout du doigt et la case
+const TC_DEMO_DEPART_118 = '12 rue du Commerce, 75015 Paris';
+const TC_DEMO_LIEU_DEFAUT_118 = '25 avenue de Wagram, 75017 Paris';
+const TC_DEMO_LIEUX118 = {
+  cafe: '8 rue Cler, 75007 Paris', coiffeur: '40 rue de la Convention, 75015 Paris', dejeuner: '15 rue Montorgueil, 75002 Paris',
+  reunion: '10 avenue de l’Opéra, 75001 Paris', sport: '18 rue Saint-Charles, 75015 Paris', famille: '6 place des Vosges, 75004 Paris'
+};
+// Depuis le 12 rue du Commerce (15e), en voiture comme le vrai calcul : des valeurs d'exemple fixes, une par adresse.
+const TC_DEMO_TRAJETS_118 = [
+  [/wagram/i, 18, 26, 6.8], [/cler/i, 9, 13, 2.6], [/convention/i, 5, 8, 1.4], [/montorgueil/i, 20, 28, 7.1],
+  [/op[ée]ra/i, 18, 25, 6.2], [/saint-charles/i, 4, 7, 1.1], [/vosges/i, 24, 33, 8.4]
+];
+let _tcLieu118 = null;   // { lieu, depuis (rang dans la conversation), quand }
+
+/** « En visio », « Par téléphone » : pas d'adresse, donc ni « Y aller » ni trajet. */
+function tcLieuSansTrajet118(e) {
+  return !!e && (/^(en visio|par t[ée]l[ée]phone)$/i.test(String(e.lieu || '').trim()) || e.type === 'visio' || e.type === 'telephone');
+}
+
+function tcLieuDemo118(type, donne) {
+  if (type === 'visio') return 'En visio';
+  if (type === 'telephone') return 'Par téléphone';
+  return donne || TC_DEMO_LIEU_DEFAUT_118;
+}
+
+async function tcTrajetDemo118(destination) {
+  await new Promise(function (r) { setTimeout(r, 900); });
+  const t = TC_DEMO_TRAJETS_118.find(function (x) { return x[0].test(String(destination || '')); });
+  return { basseMin: t ? t[1] : 15, hauteMin: t ? t[2] : 25, distanceKm: t ? t[3] : 5, precisionDepart: null, depuisDemo: TC_DEMO_DEPART_118 };
+}
+
+/**
+ * Le lieu d'une demande de rendez-vous : { lieu (pour la fiche), reste (la phrase sans lui) }, ou null.
+ * Une adresse (« au 25 avenue de Wagram à Paris »), un endroit (« au café de la gare », « à la piscine »), « chez moi ».
+ * Seulement dans une demande qui crée un rendez-vous : « préviens Paul que je suis au café » garde sa phrase.
+ */
+function tcExtraireLieu118(texte) {
+  const t = String(texte || '');
+  if (/\b(pr[ée]viens|pr[ée]venir|retard|annule|annuler|d[ée]cale|d[ée]caler|d[ée]place|supprime|malade|o[uù] aller|o[uù] est|o[uù] se trouve|trajet|itin[ée]raire)\b/i.test(t)) return null;
+  const fin = '(?=\\s+(?:demain|apr[eè]s-demain|aujourd[’\']hui|ce soir|ce matin|cet apr[eè]s-midi|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|cette semaine|la semaine|le week-end|ce week-end|le \\d|(?:à|a|vers|de|entre)\\s+\\d|pour\\s|avec\\s|stp|svp)\\b|\\s*[,.;!?]|\\s*$)';
+  const coupe = function (m, lieu) {
+    const reste = (t.slice(0, m.index) + ' ' + t.slice(m.index + m[0].length)).replace(/\s{2,}/g, ' ').replace(/\s+([,.;!?])/g, '$1').trim();
+    return { lieu: lieu.charAt(0).toUpperCase() + lieu.slice(1), reste: reste };
+  };
+  // Une adresse : un numéro, un mot de voie, la suite jusqu'au moment ou à la ponctuation ; « à Paris » devient « , Paris ».
+  let m = t.match(new RegExp('(?:^|\\s)(?:au|à|a|chez)?\\s*(\\d{1,4}(?:\\s*(?:bis|ter))?,?\\s+(?:rue|avenue|av\\.?|boulevard|bd|place|all[ée]e|impasse|quai|chemin|route|cours|square|passage|villa)\\s+[^,.;!?]*?(?:,\\s*\\d{5}\\s+[A-ZÀ-Ý][\\wÀ-ÿ\\-]+)?)' + fin, 'i'));
+  if (m) return coupe(m, m[1].trim().replace(/\s+(?:à|a)\s+([A-Za-zÀ-ÿ][\wÀ-ÿ\-' ]*)$/, function (x, ville) { return ', ' + ville.charAt(0).toUpperCase() + ville.slice(1); }));
+  // Un endroit nommé.
+  m = t.match(new RegExp('(?:^|\\s)(?:au|à la|a la|à l[’\']|a l[’\']|dans le|dans la)\\s*((?:caf[ée]|restaurant|resto|bar|bureau|cabinet|parc|gare|cin[ée]ma|th[ée][âa]tre|piscine|gymnase|stade|club|march[ée]|centre|salle|h[ôo]tel|mus[ée]e|biblioth[èe]que|[ée]cole|mairie|[ée]glise|boulangerie|brasserie|pizzeria|bistrot|plage|jardin)(?![\\wÀ-ÿ])[^,.;!?]*?)' + fin, 'i'));
+  if (m) return coupe(m, m[1].trim());
+  // Chez soi.
+  m = t.match(/(?:^|\s)(chez (?:moi|toi|nous|vous|lui|elle|eux))(?=\s|[,.;!?]|$)/i);
+  if (m) return coupe(m, m[1].trim());
+  return null;
+}
+
+/** À l'entrée de charlySendMessage : le lieu est noté, la phrase continue sans lui. */
+function tcLieuALEntree118(text) {
+  const l = tcExtraireLieu118(text);
+  const n = (typeof charlyIA !== 'undefined' && charlyIA && Array.isArray(charlyIA.history)) ? charlyIA.history.length : 0;
+  if (l && l.reste.split(/\s+/).length >= 2) { _tcLieu118 = { lieu: l.lieu, depuis: n, quand: Date.now() }; return l.reste; }
+  // Une nouvelle demande sans lieu : le lieu d'avant ne la suit pas ; une réponse courte (« En personne », « jeudi ») le garde.
+  if (String(text || '').trim().split(/\s+/).length >= 4) _tcLieu118 = null;
+  return text;
+}
+
+/** Une proposition [AGENDA] reçoit le lieu (5e champ) ; la réponse le rappelle. */
+function tcLieuDansAgenda118(content, lieu) {
+  let c = String(content).replace(/(\[AGENDA\]\n?)([\s\S]*?)(\[\/AGENDA\])/, function (x, a, corps, b) {
+    return a + corps.split('\n').map(function (ligne) {
+      if (!/^\s*\d{4}-\d{2}-\d{2}/.test(ligne)) return ligne;
+      const p = ligne.split(' | ');
+      if (p.length === 4) p.push(lieu);
+      else if (p.length > 4 && (!p[4].trim() || p[4].trim() === '-')) p[4] = lieu;
+      return p.join(' | ');
+    }).join('\n') + b;
+  });
+  if (c.indexOf('📍') < 0) c = /je te propose ceci\./.test(c) ? c.replace(/(je te propose ceci\.)/, '$1\n📍 ' + lieu) : c.replace(/\n?\[AGENDA\]/, '\n📍 ' + lieu + '\n[AGENDA]');
+  return c;
+}
+
+/** À chaque affichage : le lieu demandé rejoint la proposition ou le rendez-vous à plusieurs qui vient d'arriver. */
+function tcPoserLieu118() {
+  const h = (typeof charlyIA !== 'undefined' && charlyIA) ? charlyIA.history : null;
+  if (!Array.isArray(h)) return;
+  const demo = typeof tcDemoActive === 'function' && tcDemoActive();
+  const L = _tcLieu118 && Date.now() - _tcLieu118.quand < 30 * 60000 ? _tcLieu118 : null;
+  if (!L && !demo) return;
+  for (let i = L ? L.depuis : Math.max(0, h.length - 4); i < h.length; i++) {
+    const m = h[i];
+    if (!m || m.role !== 'assistant' || m._lieu118) continue;
+    if (m._groupe) {
+      if (L && m._groupe.etat !== 'fait') { m._groupe.options = Object.assign({}, m._groupe.options || {}, { lieu: L.lieu }); m._lieu118 = true; }
+      continue;
+    }
+    if (typeof m.content === 'string' && /\[AGENDA\][\s\S]*\[\/AGENDA\]/.test(m.content) && !m._valide && !m._validated) {
+      const lieu = L ? L.lieu : TC_DEMO_LIEU_DEFAUT_118;
+      m.content = tcLieuDansAgenda118(m.content, lieu);
+      m._lieu118 = true;
+    }
+  }
+}
+
+function tcOptionsConfirmerGroupe118(g) {
+  const o = {};
+  if (g.options && g.options.titre) o.titre = g.options.titre;
+  if (g.options && g.options.lieu) o.lieu = g.options.lieu;
+  return Object.keys(o).length ? o : undefined;
+}
+
+/** La place à gauche de la case est-elle prise par un autre rendez-vous ? */
+function tcPlacePrise118(el, x, y) {
+  const p = el.parentNode;
+  if (!p) return false;
+  const kids = p.querySelectorAll('.week-event');
+  for (let i = 0; i < kids.length; i++) {
+    const k = kids[i];
+    if (k === el || k.offsetParent === null) continue;
+    if (k.offsetLeft < x + 22 && k.offsetLeft + k.offsetWidth > x && k.offsetTop < y + 22 && k.offsetTop + k.offsetHeight > y) return true;
+  }
+  return false;
+}
+
+/** Le doigt s'en va quand on touche le rendez-vous, change de vue ou de semaine (la grille est redessinée), ou quitte l'agenda. */
+function tcDoigtSEnVa118(d, el) {
+  const zone = el.parentNode;
+  const partir = function (ev) {
+    if (!d.isConnected) { document.removeEventListener('click', partir, true); return; }
+    const cible = ev && ev.target;
+    if (cible && zone && zone.contains(cible) && !el.contains(cible)) return;   // ailleurs dans la grille : il reste
+    d.remove();
+    document.removeEventListener('click', partir, true);
+  };
+  document.addEventListener('click', partir, true);
+  if (!window._tcNavDoigt118 && typeof window.navigate === 'function') {
+    window._tcNavDoigt118 = true;
+    const avant = window.navigate;
+    window.navigate = function () { document.querySelectorAll('.tc-doigt').forEach(function (x) { x.remove(); }); return avant.apply(this, arguments); };
+  }
+}
+
+/** La bulle du bouton du haut touché : son libellé affiché (traduit), sans l'icône ; jamais deux. */
+function tcBulleBoutonHaut118(action) {
+  const ev = typeof window !== 'undefined' ? window.event : null;
+  if (ev && ev.target && ev.target.closest && ev.target.closest('#charlyChatBody')) return;   // un bouton dans une bulle : la 116 s'en charge
+  const b = document.querySelector('#charlyQuickActions button[onclick="charlyQuickAction(\'' + action + '\')"], #charlyQuickActions2 button[onclick="charlyQuickAction(\'' + action + '\')"]');
+  if (!b) return;
+  const libelle = String(b.textContent || '').replace(/\s+/g, ' ').replace(/^[^\p{L}\p{N}«(]+/u, '').trim();
+  if (!libelle) return;
+  charlyIA.history.push({ role: 'user', content: libelle, _choix: true, _bouton118: action });
+  if (action === 'photo' || action === 'agenda') renderCharlyChat();
+}
+// ===== fin mission 118 =====
+
 function tcMontrerDoigt111(premier, autres, essai) {
   const el = tcCaseDuRdv111(premier.id);
   if (!el || !el.parentNode) {
@@ -13320,12 +13493,25 @@ function tcMontrerDoigt111(premier, autres, essai) {
   d.className = 'tc-doigt';
   d.textContent = '👉';
   d.setAttribute('aria-hidden', 'true');
-  d.style.left = Math.max(0, el.offsetLeft - 21) + 'px';
-  d.style.top = (el.offsetTop + Math.max(0, Math.min(4, el.offsetHeight / 2 - 9))) + 'px';
+  // Mission 118 : un vrai espace (≈ 18 px) entre le bout du doigt et la case ; au-dessus (👇) si la place à gauche est prise.
+  const _g = el.offsetLeft - 21 - TC_DOIGT_ECART_118, _h = el.offsetTop + Math.max(0, Math.min(4, el.offsetHeight / 2 - 9));
+  const _hx = Math.max(0, el.offsetLeft + Math.min(el.offsetWidth / 2, 24) - 10), _hy = el.offsetTop - 21 - TC_DOIGT_ECART_118;
+  const _dx = el.offsetLeft + el.offsetWidth + TC_DOIGT_ECART_118;
+  const _largeur = el.parentNode ? el.parentNode.scrollWidth : 0;
+  if (_g >= 0 && !tcPlacePrise118(el, _g, _h)) { d.style.left = _g + 'px'; d.style.top = _h + 'px'; }
+  else if (_hy >= 0 && !tcPlacePrise118(el, _hx, _hy)) {
+    d.textContent = '👇'; d.classList.add('tc-doigt-haut');
+    d.style.left = _hx + 'px'; d.style.top = _hy + 'px';
+  } else if (_dx + 22 <= _largeur && !tcPlacePrise118(el, _dx, _h)) {
+    d.textContent = '👈'; d.classList.add('tc-doigt-droite');
+    d.style.left = _dx + 'px'; d.style.top = _h + 'px';
+  } else { d.style.left = Math.max(0, _g) + 'px'; d.style.top = _h + 'px'; }
   el.parentNode.appendChild(d);
+  tcDoigtSEnVa118(d, el);
   const halos = (autres || []).map(function (e) { return tcCaseDuRdv111(e.id); }).filter(function (x) { return x && x !== el; });
   halos.forEach(function (x) { x.classList.add('tc-voir-autre'); });
-  setTimeout(function () { d.remove(); halos.forEach(function (x) { x.classList.remove('tc-voir-autre'); }); }, TC_VOIR_AGENDA_MS);
+  // Mission 118 : après les 5 s, le doigt reste, fixe ; les contours s'en vont.
+  setTimeout(function () { d.classList.add('tc-doigt-fixe'); halos.forEach(function (x) { x.classList.remove('tc-voir-autre'); }); }, TC_VOIR_AGENDA_MS);
 }
 
 /** Sous la réponse qui l'annonce : « Voir dans mon agenda » (la démonstration le met dans sa bulle « C'est calé »). */
@@ -15296,6 +15482,8 @@ const TC_PHRASES_BOUTONS = {
 };
 
 function charlyQuickAction(action) {
+  // Mission 118 : le bouton touché laisse une bulle de l'utilisateur (son libellé, sans l'icône), comme un choix (116).
+  if (action !== 'trajet' && action !== 'reserver' && typeof tcBulleBoutonHaut118 === 'function') tcBulleBoutonHaut118(action);
   // Mission 93 : la phrase d'exemple, seule (pas de bulle « Je veux… » de l'utilisateur).
   if (Object.prototype.hasOwnProperty.call(TC_PHRASES_BOUTONS, action)) {
     if (typeof _tcQuestionnaire !== 'undefined' && _tcQuestionnaire && typeof tcQuestionnaireArreter === 'function') tcQuestionnaireArreter();
@@ -15611,6 +15799,25 @@ function tcPeriodeAgenda(text) {
   const ajouterJours = (d, n) => { const r = new Date(d); r.setDate(r.getDate()+n); return r; };
   // Semaine calendaire Lundi(0)..Dimanche(6), cohérent avec DAYS_SHORT/DAYS_FULL de l'app.
   const indexSemaineLundi = (d) => (d.getDay() + 6) % 7;
+
+  // Lot 118 (défaut ancien signalé à la 117) : une date écrite dit le jour, avant tout « ce mercredi » ou « ce week-end ».
+  // « du 3 au 5 décembre », « entre le 3 et le 5 » : laissés aux règles d'avant.
+  {
+    const _de = t.match(/\b(?:(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+)?(1er|\d{1,2})\s+(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)(?:\s+(\d{4}))?\b/);
+    if (_de && !/week-?end du|\bdu\s+(?:1er|\d{1,2})\b.*\bau\s+|\bentre\b/.test(t)) {
+      const _M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      const _J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+      const _sa = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const mois = _M.map(_sa).indexOf(_sa(_de[3]));
+      const jour = _de[2] === '1er' ? 1 : Number(_de[2]);
+      let d = new Date(_de[4] ? Number(_de[4]) : now.getFullYear(), mois, jour);
+      // Sans année : une date passée de plus de deux mois est celle de l'an prochain (« le 3 janvier », dit en novembre).
+      if (!_de[4] && d < ajouterJours(debutJour, -60)) d = new Date(now.getFullYear() + 1, mois, jour);
+      if (d.getMonth() === mois && d.getDate() === jour) {
+        return { debut: d, fin: null, label: 'le ' + _J[d.getDay()] + ' ' + (jour === 1 ? '1er' : jour) + ' ' + _M[mois] + (d.getFullYear() !== now.getFullYear() ? ' ' + d.getFullYear() : '') };
+      }
+    }
+  }
 
   // Mission 117 : « lundi en huit » : le lundi qui vient, plus une semaine.
   const _enHuit = t.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) en huit\b/);
@@ -17276,7 +17483,7 @@ async function charlySendMessage() {
   // l'utilisateur montre toujours ce qu'il a tapé (tcBulleTapee ; décision du chef, 24/10).
   const texteTape = inp.value.trim();
   let text = tcCorrigerAbreviations(texteTape);
-  if (typeof tcNormaliserMoments117 === 'function') text = tcNormaliserMoments117(text);   // mission 117
+  if (typeof tcNormaliserMoments117 === 'function') text = tcNormaliserMoments117(text); if (typeof tcLieuALEntree118 === 'function') text = tcLieuALEntree118(text);   // missions 117 et 118
   _tcTexteTape = { tape: texteTape, corrige: text };
   if (!text) return;
   // Mission 93 : la réponse à « À quelle heure ? » complète la demande d'avant (« Dîner avec Paul et Marie samedi » + « 20h »).
@@ -18375,6 +18582,8 @@ async function tcRecherchePlaces(requete, opts) {
  */
 async function tcEstimerTrajet(destination, opts) {
   opts = opts || {};
+  // Mission 118 : la démonstration n'a pas de réseau : des durées d'exemple depuis le 15e, jamais d'appel extérieur.
+  if (typeof tcDemoActive === 'function' && tcDemoActive()) return tcTrajetDemo118(destination);
   if (!tcGooglePret()) throw new Error('Connecte-toi pour utiliser cette recherche.');
 
   // Routes attend un objet, pas une chaine : des coordonnees quand on
@@ -22206,6 +22415,18 @@ function tcNormaliserMoments117(texte) {
     const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
     const quand = n === 0 ? 'aujourd’hui' : n === 1 ? 'demain' : n === 2 ? 'après-demain' : n === -1 ? 'hier' : (n > 2 && n < 7 ? JOURS[d.getDay()] : null);
     if (quand) t = 'Qu’est-ce que j’ai ' + quand + ' ?';
+  }
+  // Lot 118 : « Qu'est-ce que j'avais lundi ? », « j'ai eu quoi mardi dernier ? » : le jour passé, avec sa date.
+  if (/\bj[’']?\s*(?:avais|ai eu)\b/i.test(t) && !/\d/.test(t)) {
+    const mp = t.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(\s+dernier)?\b(?!\s+(?:prochain|en huit))/i);
+    if (mp) {
+      const JP = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+      const MP = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      const k = JP.indexOf(mp[1].toLowerCase());
+      const d = new Date(); d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - (((d.getDay() - k + 7) % 7) || 7));
+      t = t.replace(mp[0], mp[1] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + MP[d.getMonth()]);
+    }
   }
   // « Qu'est-ce que j'ai ce soir ? » : dans une question sur l'agenda, « ce soir », « ce matin », « cet après-midi »
   // sont aujourd'hui (ailleurs, « où aller manger ce soir ? » reste hors agenda).
@@ -33446,7 +33667,8 @@ function tcRendreGroupe(m) {
   if (g.etat === 'fait' && g.resultat) {
     const r = g.resultat;
     h += '✅ C’est noté : <b>' + escapeHTMLSafe(r.libelle || '') + ' à ' + escapeHTMLSafe((r.heure || '').replace(':', 'h'))
-      + '</b>, avec ' + tcListeDePrenoms(r.inclus) + '. Chacun l’a dans son agenda.';
+      + '</b>, avec ' + tcListeDePrenoms(r.inclus) + '. Chacun l’a dans son agenda.'
+      + ((r.lieu || (g.options && g.options.lieu)) ? '<div style="margin-top:6px;">📍 ' + escapeHTMLSafe(r.lieu || g.options.lieu) + '</div>' : '');
     if (r.exclus && r.exclus.length) h += '<div style="margin-top:6px; color:#8a6500;">Pas ajouté chez ' + tcListeDePrenoms(r.exclus) + ' : déjà pris à ce moment-là.</div>';
     return tcBulleCharly(h);
   }
@@ -33494,7 +33716,7 @@ async function tcConfirmerRdvGroupe(id, i) {
   // Mission 108 : la bulle le temps de l'inscription.
   typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('range'));
   try {
-    r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree, g.type, g.options && g.options.titre ? { titre: g.options.titre } : undefined);
+    r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree, g.type, tcOptionsConfirmerGroupe118(g));
     typeof tcFinEtapes === 'function' && await tcFinEtapes();
   } catch (e) {
     typeof tcFinEtapes === 'function' && await tcFinEtapes();
@@ -34318,6 +34540,8 @@ const TC_BACKEND = {
     // Mission 46 : le titre et la catégorie du rendez-vous créé par le questionnaire ; sans eux, comme avant (les prénoms).
     if (options && options.titre) corps.titre = options.titre;
     if (options && options.cat) corps.cat = options.cat;
+    // Mission 118 : le lieu dit dans la phrase, inscrit chez tout le monde.
+    if (options && options.lieu) corps.lieu = String(options.lieu).slice(0, 255);
     return tcAppel('POST', '/rdv/groupe/confirmer', corps);
   },
 

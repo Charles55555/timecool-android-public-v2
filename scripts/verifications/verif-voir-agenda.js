@@ -39,7 +39,7 @@ if (!exe) {
         var c = document.querySelector('.week-event[data-ev-id="' + CSS.escape(String(id)) + '"]'), d = document.querySelector('.tc-doigt');
         var rc = c ? c.getBoundingClientRect() : null, rd = d ? d.getBoundingClientRect() : null;
         return { page: currentPage, vue: currentView, jour: tcISO(viewDate), caseVue: !!rc && rc.top >= 0 && rc.bottom <= window.innerHeight && rc.width > 0,
-          doigt: !!d, colle: !!(rc && rd) && Math.abs(rd.right - rc.left) <= 8 && rd.bottom > rc.top && rd.top < rc.bottom,
+          doigt: !!d, colle: !!(rc && rd) && ((rc.left - rd.right >= 10 && rc.left - rd.right <= 28 && rd.bottom > rc.top && rd.top < rc.bottom) || (d.textContent === '👇' && rc.top - rd.bottom >= 10 && rc.top - rd.bottom <= 28 && rd.right > rc.left && rd.left < rc.right)), ecart: rc && rd ? [Math.round(rc.left - rd.right), Math.round(rc.top - rd.bottom), d.textContent] : null,
           mouvement: d ? getComputedStyle(d).animationName : null, contours: document.querySelectorAll('.week-event.tc-voir-autre').length,
           cases: document.querySelectorAll('.week-event[data-ev-id="' + CSS.escape(String(id)) + '"]').length, doigts: document.querySelectorAll('.tc-doigt').length, toutes: document.querySelectorAll('.week-event').length, avecId: document.querySelectorAll('.week-event[data-ev-id]').length, ids: Array.prototype.slice.call(document.querySelectorAll('.week-event[data-ev-id]'), 0, 30).map(function (x) { return x.getAttribute('data-ev-id'); }).join(','), cherche: String(id) };
       };
@@ -89,6 +89,15 @@ if (!exe) {
         R.michelAgenda = regarder(R.michelVoir[0][0]); R.bandeauAgenda = bandeau();
         await attendre(5200);
         R.michelApres = regarder(R.michelVoir[0][0]);
+        // Mission 118 : le doigt s'en va quand on touche le rendez-vous, et quand on quitte l'agenda ; il ne revient pas.
+        var _case = document.querySelector('.week-event[data-ev-id="' + CSS.escape(String(R.michelVoir[0][0])) + '"]');
+        if (_case) _case.dispatchEvent(new MouseEvent('click', { bubbles: true })); await attendre(200);
+        try { closeEventModal(); } catch (e) {}
+        R.michelTouche = !!document.querySelector('.tc-doigt');
+        tcVoirDansAgenda([R.michelVoir[0][0]]); await attendre(1200);
+        R.michelRevu = !!document.querySelector('.tc-doigt');
+        navigate('assistant'); await attendre(200); navigate('calendar'); await attendre(300);
+        R.michelQuitte = !!document.querySelector('.tc-doigt');
         navigate('assistant'); await attendre(300); R.bandeauRetour = bandeau();
         // 2. Une création tapée : « C'est noté », le bouton.
         await taper('Saisis dans mon agenda : rendez-vous dentiste mardi à 15h');
@@ -128,14 +137,15 @@ if (!exe) {
       S.bandeauCharly && S.bandeauCharly.fond === 'rgba(0, 0, 0, 0)' && P && P.fond === 'rgb(26, 71, 214)' && P.texte === 'rgb(255, 255, 255)' && P.l <= 260 && P.h === 40 && P.centre
       && P.quitter && P.quitter[0] === 'Quitter' && P.quitter[1] === 'rgb(255, 255, 255)' && P.quitter[2] === 'rgb(26, 71, 214)', JSON.stringify(S.bandeauCharly));
     verifie(nom + 'Michel : « RDV Michel Virtuel », un bouton « Voir dans mon agenda »', S.michelVoir && S.michelVoir.length === 1 && S.michelTitre === 'RDV Michel Virtuel', JSON.stringify([S.michelVoir, S.michelTitre]));
-    verifie(nom + 'le bouton : l’agenda en Semaine au bon jour, la case à l’écran, le doigt collé à gauche', S.michelAgenda && S.michelAgenda.page === 'calendar' && S.michelAgenda.vue === 'week' && S.michelAgenda.jour === S.michelJour && S.michelAgenda.caseVue && S.michelAgenda.doigt && S.michelAgenda.colle && S.michelAgenda.mouvement === 'tcDoigt', JSON.stringify([S.michelAgenda, S.michelJour]));
+    verifie(nom + 'le bouton : l’agenda en Semaine au bon jour, la case à l’écran, le doigt à gauche, à ≈ 18 px de la case', S.michelAgenda && S.michelAgenda.page === 'calendar' && S.michelAgenda.vue === 'week' && S.michelAgenda.jour === S.michelJour && S.michelAgenda.caseVue && S.michelAgenda.doigt && S.michelAgenda.colle && S.michelAgenda.mouvement === 'tcDoigt', JSON.stringify([S.michelAgenda, S.michelJour]));
     verifie(nom + 'agenda : le bandeau sous l’en-tête TimeCool', S.bandeauAgenda && /^HEADER\.header/.test(S.bandeauAgenda.apres || '') && S.bandeauAgenda.visible, JSON.stringify(S.bandeauAgenda));
-    verifie(nom + 'après 5 s : plus de doigt', S.michelApres && !S.michelApres.doigt, JSON.stringify(S.michelApres));
+    verifie(nom + 'après 5 s : le doigt reste, fixe, au même endroit', S.michelApres && S.michelApres.doigt && S.michelApres.mouvement === 'none' && S.michelApres.colle, JSON.stringify(S.michelApres));
+    verifie(nom + 'le doigt s’en va quand on touche le rendez-vous, et quand on quitte l’agenda (il ne revient pas)', S.michelTouche === false && S.michelRevu === true && S.michelQuitte === false, JSON.stringify([S.michelTouche, S.michelRevu, S.michelQuitte]));
     verifie(nom + 'retour à Charly : le bandeau revient au-dessus de la conversation', S.bandeauRetour && S.bandeauRetour.avant === 'charlyChatBody', JSON.stringify(S.bandeauRetour));
     verifie(nom + 'une création tapée : le bouton ; « Dentiste » garde son titre', S.dentisteVoir && S.dentisteTitre === 'Dentiste', JSON.stringify([S.dentisteVoir, S.dentisteTitre]));
     verifie(nom + 'malade : un bouton quand le coiffeur bouge, un autre quand le déjeuner est placé', S.maladeVoir2 && S.maladeVoir2.length >= (S.maladeVoir || []).length + 1 && (S.maladeVoir || []).length >= (S.michelVoir || []).length + 1, JSON.stringify([S.maladeVoir, S.maladeVoir2]));
     verifie(nom + 'le motif reste : « RDV Alice Virtuelle, Chloé Virtuelle, Virginie Virtuelle : boire un verre »', S.groupeTitre === 'RDV Alice Virtuelle, Chloé Virtuelle, Virginie Virtuelle : boire un verre', JSON.stringify(S.groupeTitre));
-    verifie(nom + 'plusieurs rendez-vous : le doigt sur le premier, un contour sur l’autre, 5 s', S.plusieurs && S.plusieurs.doigt && S.plusieurs.colle && S.plusieurs.contours >= 1 && S.plusieursApres && !S.plusieursApres.doigt && S.plusieursApres.contours === 0, JSON.stringify([S.plusieurs, S.plusieursApres]));
+    verifie(nom + 'plusieurs rendez-vous : le doigt sur le premier, un contour sur l’autre 5 s, puis le doigt reste fixe', S.plusieurs && S.plusieurs.doigt && S.plusieurs.colle && S.plusieurs.contours >= 1 && S.plusieursApres && S.plusieursApres.doigt && S.plusieursApres.mouvement === 'none' && S.plusieursApres.contours === 0, JSON.stringify([S.plusieurs, S.plusieursApres]));
     verifie(nom + 'une annulation : pas de bouton', S.annulation && S.annulation.sport === false && S.annulation.apres === S.annulation.avant, JSON.stringify(S.annulation));
   });
   const C = jouer(`

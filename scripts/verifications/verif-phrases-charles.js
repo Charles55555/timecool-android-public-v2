@@ -17,7 +17,13 @@ const verifie = (l, c, d) => { if (c) ok++; else { ko++; echecs.push(l); console
 const lignes = fs.readFileSync(fichier, 'utf8').split(/\r?\n/).filter((l) => l.trim() && !/^\s*#/.test(l));
 const cas = lignes.map((l) => {
   const [phrase, contexte, attendu] = l.split('|').map((x) => (x || '').trim());
-  return { phrase, contexte: contexte ? contexte.split('⏎').map((x) => x.trim()).filter(Boolean) : [], attendu: attendu || '' };
+  // Lot 118 : « {date:+8} » devient « 25 novembre », « {jourdate:+8} » « mercredi 25 novembre » (la phrase garde son sens chaque jour).
+  const dater = (x) => String(x || '').replace(/\{(date|jourdate):([+-]\d+)\}/g, function (m, sorte, n) {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + Number(n));
+    const J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    return (sorte === 'jourdate' ? J[d.getDay()] + ' ' : '') + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + M[d.getMonth()];
+  });
+  return { phrase: dater(phrase), contexte: contexte ? contexte.split('⏎').map((x) => dater(x.trim())).filter(Boolean) : [], attendu: attendu || '' };
 });
 const sansAccents = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 function variantes(p) {
@@ -37,6 +43,7 @@ function jourAttendu(spec) {
   const d = new Date(aujourdhui);
   let m;
   if ((m = spec.match(/^([+-]\d+)$/))) d.setDate(d.getDate() + Number(m[1]));
+  else if ((m = spec.match(/^([a-z]+)-$/))) { const k = JOURS.indexOf(m[1]); d.setDate(d.getDate() - (((d.getDay() - k + 7) % 7) || 7)); }
   else if ((m = spec.match(/^([a-z]+)(\+\d+)?$/))) { const k = JOURS.indexOf(m[1]); let diff = (k - d.getDay() + 7) % 7; if (diff === 0) diff = 7; d.setDate(d.getDate() + diff + (m[2] ? Number(m[2]) : 0)); }
   const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   return { iso, texte: JOURS[d.getDay()] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + MOIS[d.getMonth()] };

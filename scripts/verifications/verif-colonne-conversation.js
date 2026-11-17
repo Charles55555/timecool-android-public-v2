@@ -59,7 +59,7 @@ if (!exe) {
         var demain = new Date(); demain.setDate(demain.getDate() + 1);
         var long = 'Voici ce que je te propose pour ta semaine : je garde tes rendez-vous du matin, je décale le coiffeur à jeudi et je te laisse ton après-midi de vendredi libre, comme tu me l’as demandé la dernière fois. Dis-moi si cela te va.';
         charlyIA.history = [
-          { role: 'assistant', content: 'Paul a répondu : « Pas de souci, à tout à l’heure ! »', _court: 1 },
+          { role: 'assistant', content: 'Paul a répondu : « Pas de souci ! »', _court: 1 },
           { role: 'user', content: 'Merci' },
           { role: 'assistant', content: long },
           { role: 'assistant', content: 'Par téléphone, en personne ou en visio ?', _questionType: { id: 'qv', references: ['R'], duree: 1, etat: 'choix' } },
@@ -107,7 +107,7 @@ if (!exe) {
   // Mission 115 : les bulles de Charly à la taille de leur texte.
   function bulles(S, nom, max) {
     const B = (S.sortes && S.sortes.bulles) || [];
-    verifie(nom + 'une réponse courte : une petite bulle (« Paul a répondu… »)', B[0] && B[0].l < B[0].rang * 0.9 && B[0].l < 420, JSON.stringify(B[0]));
+    verifie(nom + 'une réponse courte : une petite bulle (« Paul a répondu… »)', B[0] && B[0].l < B[0].rang * 0.75 && B[0].l < 420, JSON.stringify(B[0]));
     verifie(nom + 'une réponse longue : la largeur maximum (' + Math.round(max * 100) + ' %), le texte passe à la ligne', B[1] && B[1].l <= B[1].rang * max + 2 && B[1].l >= B[1].rang * max - 30, JSON.stringify(B[1]));
     verifie(nom + 'les trois boutons de choix : dans la bulle, au moins 44 px de haut, texte jamais coupé', S.sortes && S.sortes.choix.length === 3 && S.sortes.choix.every(function (c) { return c.h >= 44 && !c.coupe; }) && B[2] && B[2].l <= B[2].rang * max + 2, JSON.stringify([S.sortes && S.sortes.choix, B[2]]));
     verifie(nom + 'la carte d’un rendez-vous proposé garde toute la colonne', B[3] && B[3].large && B[3].l >= B[3].rang - 52, JSON.stringify(B[3]));
