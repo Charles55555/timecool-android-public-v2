@@ -12860,9 +12860,16 @@ function tcAvionPrenoms(noms) {
   return p.length > 1 ? p.slice(0, -1).join(', ') + ' et ' + p[p.length - 1] : (p[0] || '');
 }
 
-/** Le texte sous l'avion. sens : 'aller' | 'retour' ; quoi : 'message' | 'demande'. */
+/** Le texte sous l'avion. sens : 'aller' | 'retour' ; quoi : 'message' | 'demande' | 'agenda' (lecture d'agenda, personne n'est écrit). */
 function tcAvionTexte(sens, noms, quoi) {
   const p = tcAvionPrenoms(noms);
+  // Décision du chef (17/11), mots de Charles : « Je demande à l’agenda de Michel », « L’agenda de Michel a répondu ».
+  if (quoi === 'agenda') {
+    const de = /^[aeiouyhàâéèêëîïôöûüœ]/i.test(p) ? 'd’' : 'de ';
+    const plusieurs = (noms || []).length > 1;
+    if (sens === 'retour') return plusieurs ? 'Les agendas ont répondu' : 'L’agenda ' + de + p + ' a répondu';
+    return plusieurs ? 'Je demande aux agendas ' + de + p : 'Je demande à l’agenda ' + de + p;
+  }
   if (sens === 'retour') return p + ((noms || []).length > 1 ? ' répondent…' : ' répond…');
   return (quoi === 'demande' ? 'Demande envoyée à ' : 'Message envoyé à ') + p;
 }
@@ -32830,11 +32837,14 @@ async function tcProposerRdvGroupe(references, duree, preambule, type, options) 
   let r;
   // Mission 107c : l'avion part vers eux pendant que la demande est lue ; il revient avec leur réponse.
   const _noms = (references || []).map(function (ref) { const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; }); return c ? c.name : ''; }).filter(Boolean);
-  const _vol = (_noms.length && typeof tcAvionPapier === 'function') ? tcAvionPapier({ sens: 'aller', noms: _noms, quoi: 'demande' }) : Promise.resolve();
+  // Décision du chef : lire un agenda n'écrit à personne. L'avion ne vole que dans la démonstration ; en vrai, la recherche
+  // reste immédiate (fluidité avant tout).
+  const _avion = _noms.length && typeof tcAvionPapier === 'function' && typeof tcDemoActive === 'function' && tcDemoActive();
+  const _vol = _avion ? tcAvionPapier({ sens: 'aller', noms: _noms, quoi: 'agenda' }) : Promise.resolve();
   try {
     r = await TC_BACKEND.proposerRdvGroupe(references, duree, type, options || undefined);
     await _vol;
-    if (_noms.length && typeof tcAvionPapier === 'function') await tcAvionPapier({ sens: 'retour', noms: _noms });
+    if (_avion) await tcAvionPapier({ sens: 'retour', noms: _noms, quoi: 'agenda' });
   } catch (e) {
     await _vol;
     charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
