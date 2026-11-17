@@ -7697,7 +7697,9 @@ function tcSocialHotline(texte) {
   const t = ' ' + tcSansAccents(String(texte || '')).toLowerCase().replace(/[’'«»"]/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
   const genres = [
     ['robot', / (tu es|t es|es tu|t as|tu est|c est) (un |une )?(robot|ia|intelligence artificielle|humain|humaine|vraie personne|machine|bot)|y a quelqu un|quelqu un derriere/, 'Je suis une intelligence artificielle, créée par TimeCool. Je peux me tromper : vérifie les informations importantes.'],
-    ['qui', / (qui es tu|t es qui|tu es qui|c est qui maya|c est qui charly|comment tu t appelles|tu t appelles comment|ton nom|qui est maya|qui est charly) /, 'Je m’appelle Maya, l’aide de TimeCool. Je réponds à tes questions sur l’appli. 😊'],
+    // Mission 119 (examen) : Charly, c'est Charly IA, l'assistant de l'agenda, sur sa page ; pas Maya.
+    ['charly', / (c est qui charly|qui est charly|charly c est qui|c est quoi charly|charly ia c est quoi|c est quoi charly ia|ou est charly|ou trouver charly|charly et toi c est pareil|tu es charly|t es charly|es tu charly) /, 'Charly IA, c’est l’assistant de ton agenda. Il crée, décale et annule tes rendez-vous. Tu le trouves dans le menu ☰ : touche « Charly IA ». Moi, je suis Maya : je réponds à tes questions sur l’appli.'],
+    ['qui', / (qui es tu|t es qui|tu es qui|c est qui maya|comment tu t appelles|tu t appelles comment|ton nom|qui est maya) /, 'Je m’appelle Maya, l’aide de TimeCool. Je réponds à tes questions sur l’appli. 😊'],
     ['cava', / (ca va|tu vas bien|comment vas tu|comment tu vas|la forme|vous allez bien|comment allez vous) /, ''],
     ['merci', / (merci|mrc|thanks|thank you|super|genial|parfait|top|nickel|bravo|tu es genial|t es genial|cool) /, 'Avec plaisir ! 😊'],
     ['revoir', / (au revoir|bye|a plus|a bientot|bonne soiree|bonne journee|bonne nuit|ciao|salut a plus|a demain|tchao) /, 'À bientôt ! 😊'],
@@ -13401,14 +13403,14 @@ async function tcTrajetDemo118(destination) {
  */
 function tcExtraireLieu118(texte) {
   const t = String(texte || '');
-  if (/\b(pr[ée]viens|pr[ée]venir|retard|annule|annuler|d[ée]cale|d[ée]caler|d[ée]place|supprime|malade|o[uù] aller|o[uù] est|o[uù] se trouve|trajet|itin[ée]raire)\b/i.test(t)) return null;
+  if (!tcEstCreation118(t)) return null;
   const fin = '(?=\\s+(?:demain|apr[eè]s-demain|aujourd[’\']hui|ce soir|ce matin|cet apr[eè]s-midi|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|cette semaine|la semaine|le week-end|ce week-end|le \\d|(?:à|a|vers|de|entre)\\s+\\d|pour\\s|avec\\s|stp|svp)\\b|\\s*[,.;!?]|\\s*$)';
   const coupe = function (m, lieu) {
     const reste = (t.slice(0, m.index) + ' ' + t.slice(m.index + m[0].length)).replace(/\s{2,}/g, ' ').replace(/\s+([,.;!?])/g, '$1').trim();
     return { lieu: lieu.charAt(0).toUpperCase() + lieu.slice(1), reste: reste };
   };
   // Une adresse : un numéro, un mot de voie, la suite jusqu'au moment ou à la ponctuation ; « à Paris » devient « , Paris ».
-  let m = t.match(new RegExp('(?:^|\\s)(?:au|à|a|chez)?\\s*(\\d{1,4}(?:\\s*(?:bis|ter))?,?\\s+(?:rue|avenue|av\\.?|boulevard|bd|place|all[ée]e|impasse|quai|chemin|route|cours|square|passage|villa)\\s+[^,.;!?]*?(?:,\\s*\\d{5}\\s+[A-ZÀ-Ý][\\wÀ-ÿ\\-]+)?)' + fin, 'i'));
+  let m = t.match(new RegExp('(?:^|\\s)(?:au|à|a|chez)\\s+(\\d{1,4}(?:\\s*(?:bis|ter))?,?\\s+(?:rue|avenue|av\\.?|boulevard|bd|place|all[ée]e|impasse|quai|chemin|route|cours|square|passage|villa)\\s+[^,.;!?]*?(?:,\\s*\\d{5}\\s+[A-ZÀ-Ý][\\wÀ-ÿ\\-]+)?)' + fin, 'i'));
   if (m) return coupe(m, m[1].trim().replace(/\s+(?:à|a)\s+([A-Za-zÀ-ÿ][\wÀ-ÿ\-' ]*)$/, function (x, ville) { return ', ' + ville.charAt(0).toUpperCase() + ville.slice(1); }));
   // Un endroit nommé.
   m = t.match(new RegExp('(?:^|\\s)(?:au|à la|a la|à l[’\']|a l[’\']|dans le|dans la)\\s*((?:caf[ée]|restaurant|resto|bar|bureau|cabinet|parc|gare|cin[ée]ma|th[ée][âa]tre|piscine|gymnase|stade|club|march[ée]|centre|salle|h[ôo]tel|mus[ée]e|biblioth[èe]que|[ée]cole|mairie|[ée]glise|boulangerie|brasserie|pizzeria|bistrot|plage|jardin)(?![\\wÀ-ÿ])[^,.;!?]*?)' + fin, 'i'));
@@ -13421,12 +13423,43 @@ function tcExtraireLieu118(texte) {
 
 /** À l'entrée de charlySendMessage : le lieu est noté, la phrase continue sans lui. */
 function tcLieuALEntree118(text) {
-  const l = tcExtraireLieu118(text);
   const n = (typeof charlyIA !== 'undefined' && charlyIA && Array.isArray(charlyIA.history)) ? charlyIA.history.length : 0;
+  const mots = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  // Une réponse courte à une question de Charly (« En personne », « samedi 10h ») : le lieu de la demande reste.
+  if (mots <= 3 && !TC_VERBE_CREATION_118.test(tcSansAccents(String(text || '')).toLowerCase()) && tcQuestionEnCours118()) return text;
+  const l = tcExtraireLieu118(text);
   if (l && l.reste.split(/\s+/).length >= 2) { _tcLieu118 = { lieu: l.lieu, depuis: n, quand: Date.now() }; return l.reste; }
-  // Une nouvelle demande sans lieu : le lieu d'avant ne la suit pas ; une réponse courte (« En personne », « jeudi ») le garde.
-  if (String(text || '').trim().split(/\s+/).length >= 4) _tcLieu118 = null;
+  // Toute autre phrase (une nouvelle demande, une question, un message) : aucun lieu n'est hérité.
+  _tcLieu118 = null;
   return text;
+}
+
+/** Les verbes qui créent un rendez-vous (sans accents, en minuscules). */
+const TC_VERBE_CREATION_118 = /(^|[^a-z])(ajoute|ajouter|cree|creer|planifie|programme|reserve|organise|fixe|mets|note un|note une|prends un|prends une|demande un rendez|demande un rdv|trouve (?:un|une|nous un|moi un|moi une) (?:creneau|rendez|rdv|moment)|trouve un rendez|rendez-vous commun|rendez vous commun|rdv commun)([^a-z]|$)/;
+
+/** Mission 118 (examen) : la phrase crée-t-elle un rendez-vous ? Un verbe de création, ou « quoi + jour + heure ». Jamais un message
+ *  à un contact (dis, envoie, écris, préviens…), une recherche, une question, une note ou un état (« je suis au bureau »). */
+function tcEstCreation118(texte) {
+  const brut = String(texte || '');
+  if (/\?\s*$/.test(brut)) return false;
+  const n = tcSansAccents(brut).toLowerCase().replace(/[’']/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/^(?:(?:et|stp|svp|charly)[ ,]+)*(dis|dites|envoie|envoyer|ecris|ecrire|reponds|repondre|previens|prevenir|transmets|rappelle|demande a|demande-lui|cherche|recherche|trouve[- ]moi (?:un|une|des) (?!creneau|rendez|rdv|moment)|quel|quelle|quels|quelles|qu est|est ce|ou |comment|pourquoi|combien|quand|je suis|j ai|je serai|note que|annule|supprime|efface|decale|deplace|reporte|avance)/.test(n)) return false;
+  if (/(^|\s)(dis|envoie|ecris|previens|reponds) a /.test(n)) return false;
+  if (TC_VERBE_CREATION_118.test(n)) return true;
+  const jour = (typeof tcPeriodeAgenda === 'function' && tcPeriodeAgenda(brut)) || (typeof tcJoursNommes === 'function' && tcJoursNommes(brut).length);
+  const heure = typeof tcHeureDansTexte === 'function' && tcHeureDansTexte(brut.toLowerCase());
+  return !!(jour && heure);
+}
+
+/** Le dernier message de Charly attend-il une réponse (une question, des boutons de choix) ? */
+function tcQuestionEnCours118() {
+  const h = (typeof charlyIA !== 'undefined' && charlyIA && Array.isArray(charlyIA.history)) ? charlyIA.history : [];
+  for (let i = h.length - 1; i >= 0; i--) {
+    const m = h[i];
+    if (!m || m.role === 'user' || m.role === 'tiers' || (m._demo && m._demo.phrases)) continue;
+    return m.nature === 'question' || !!m._questionType || !!(m._groupe && m._groupe.etat === 'choix') || !!(m._questionnaire && m._questionnaire.etat === 'choix') || /\?\s*$/.test(String(m.content || '').replace(/<[^>]+>/g, '').trim());
+  }
+  return false;
 }
 
 /** Une proposition [AGENDA] reçoit le lieu (5e champ) ; la réponse le rappelle. */
@@ -15522,7 +15555,8 @@ const TC_PHRASES_BOUTONS = {
 
 function charlyQuickAction(action) {
   // Mission 118 : le bouton touché laisse une bulle de l'utilisateur (son libellé, sans l'icône), comme un choix (116).
-  if (action !== 'trajet' && action !== 'reserver' && typeof tcBulleBoutonHaut118 === 'function') tcBulleBoutonHaut118(action);
+  // Examen : « Photo → rendez-vous » a déjà sa bulle (« 📎 J'ai importé : … ») et « Créer mon agenda » ouvre sa page : pas de bulle orpheline.
+  if (action !== 'trajet' && action !== 'reserver' && action !== 'photo' && action !== 'agenda' && typeof tcBulleBoutonHaut118 === 'function') tcBulleBoutonHaut118(action);
   // Mission 93 : la phrase d'exemple, seule (pas de bulle « Je veux… » de l'utilisateur).
   if (Object.prototype.hasOwnProperty.call(TC_PHRASES_BOUTONS, action)) {
     if (typeof _tcQuestionnaire !== 'undefined' && _tcQuestionnaire && typeof tcQuestionnaireArreter === 'function') tcQuestionnaireArreter();
@@ -16215,6 +16249,8 @@ async function tcGererDemandeCreneau(text, intent) {
  * tcAgendaSnapshotPourIA).
  */
 function detecterConsultationAgenda(text) {
+  // Examen du lot 118 : « Quel temps fera-t-il au parc demain ? » parle de la météo, pas de l'agenda.
+  if (/\b(quel temps|temps qu.il (?:fait|fera)|m[ée]t[ée]o|pleuvoir|pleut|pluie|neiger|neige|temp[ée]rature|fera(?:-t-il| t il)? beau)\b/i.test(String(text || ''))) return null;
   // « est-ce que j ai quelque chose vendredi ? » : l'apostrophe manquante (clavier du telephone) rend « j'ai » (campagne 7, 11/10).
   const t = text.toLowerCase().replace(/[\u2019\u2018\u00b4]/g, "'").replace(/\b(j|qu|d|l|n|s|c|m) (?=[aeiouyhéèêàâ])/g, "$1'").trim();
   // Une création/modification/suppression peut mentionner les mêmes mots de

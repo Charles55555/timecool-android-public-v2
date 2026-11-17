@@ -40,6 +40,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     R.qui = await poser('Qui es-tu ?');
     R.robot = await poser('Bonjour Maya, tu es une IA ?');
     R.bonjour = await poser('Bonjour Maya');
+    R.charly = await poser('C’est qui Charly ?');
     // Une conversation avec un contact, juste après : son rond à lui, pas celui de Maya.
     if (typeof openConversation === 'function' && Array.isArray(messages) && messages.length) { try { openConversation(messages[0].id); await attendre(300); R.autre = style(document.getElementById('convAvatar')); } catch (e) {} }
     // Charly IA ne change pas.
@@ -69,6 +70,7 @@ else {
   verifie('« Qui es-tu ? » : « Je m’appelle Maya, l’aide de TimeCool »', /^Je m’appelle Maya, l’aide de TimeCool/.test(S.qui), S.qui);
   verifie('« tu es une IA ? » : « créée par TimeCool » (au féminin)', /créée par TimeCool/.test(S.robot), S.robot);
   verifie('« Bonjour Maya » : une réponse aimable', /^Bonjour/.test(S.bonjour), S.bonjour);
+  verifie('« C’est qui Charly ? » : Charly IA, l’assistant de l’agenda, et où le trouver ; jamais « Je m’appelle Maya »', /^Charly IA, c’est l’assistant de ton agenda/.test(S.charly) && /« Charly IA »/.test(S.charly) && !/Je m’appelle Maya/.test(S.charly), S.charly);
   verifie('Charly IA garde son nom sur sa page', /Charly IA/.test(S.charlyIA) && !/Maya/.test(S.charlyIA), S.charlyIA);
   if (S.autre) verifie('une conversation avec un contact ensuite : pas le rond de Maya', S.autre.texte !== 'M' || S.autre.fond !== 'rgb(214, 51, 132)', JSON.stringify(S.autre));
 }

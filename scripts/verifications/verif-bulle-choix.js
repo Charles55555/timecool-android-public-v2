@@ -115,6 +115,11 @@ if (!exe) {
       R.hautVrai = await haut();
       await tcOuvrirDemo(); await attendre(300);
       R.hautDemo = await haut();
+      // Examen : « Photo → rendez-vous » (sélecteur fermé sans fichier) et « Créer mon agenda » : aucune bulle laissée sans réponse.
+      var n2 = charlyIA.history.length;
+      try { charlyQuickAction('photo'); } catch (e) {}
+      await attendre(400);
+      R.photoBulles = charlyIA.history.slice(n2).filter(function (m) { return m.role === 'user'; }).length;
       fin(R);
     } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
   }, 1200); });</script>`;
@@ -142,6 +147,7 @@ if (!exe) {
   const hautOk = (L) => Array.isArray(L) && L.length >= 7 && L.every((x) => x[2].length >= 2 && x[2][0] === '>> ' + x[1].replace(/^[^\p{L}\p{N}«(]+/u, '').trim().slice(0, 50) && !/^>/.test(x[2][1]) && x[2].filter((y) => /^>/.test(y)).length === 1);
   verifie('les boutons du haut (vrai) : une bulle avec le libellé sans l’icône, puis la réponse de Charly (mission 118)', hautOk(S.hautVrai), JSON.stringify(S.hautVrai));
   verifie('les boutons du haut (démonstration) : pareil', hautOk(S.hautDemo), JSON.stringify(S.hautDemo));
+  verifie('« Photo → rendez-vous » sans fichier choisi : aucune bulle orpheline (la photo choisie a sa bulle « 📎 J’ai importé »)', S.photoBulles === 0, S.photoBulles);
   verifie('un bouton périmé encore actif : pas de bulle laissée sans réponse (mission 117)', P.length && !/^>/.test(P[P.length - 1]) && P.length === C.length, JSON.stringify([S.perimeActif, P]));
   verifie('la carte de conflit : « Ajouter quand même » donne sa bulle, juste avant la réponse', S.conflitCarte === true && iq > 0 && C[iq + 1] && !/^>/.test(C[iq + 1]), JSON.stringify([S.conflitCarte, C]));
 }

@@ -58,6 +58,8 @@ function juger(c, r) {
     if ((m = cond.match(/^jour:(.+)$/))) { const j = jourAttendu(m[1]); if (bas.indexOf(j.texte) < 0 && rep.indexOf(j.iso) < 0) raisons.push('ne parle pas de ' + j.texte); }
     else if ((m = cond.match(/^texte:(.+)$/))) { if (!new RegExp(m[1], 'im').test(rep)) raisons.push('pas « ' + m[1] + ' »'); }
     else if ((m = cond.match(/^sans:(.+)$/))) { if (new RegExp(m[1], 'im').test(rep)) raisons.push('dit « ' + m[1] + ' »'); }
+    // Lot 118 : ce que reçoit le modèle (la phrase entière, son lieu compris), quand la phrase passe par lui.
+    else if ((m = cond.match(/^envoi:(.+)$/))) { if (!r.modele || !new RegExp(m[1], 'im').test(r.envoi || '')) raisons.push('le modèle ne reçoit pas « ' + m[1] + ' »'); }
   });
   if (r.modele && !/\bmodele\b/.test(c.attendu)) raisons.push('passe par le modèle');
   return raisons;
@@ -93,11 +95,12 @@ if (!exe) {
           await tcOuvrirDemo(); await attendre(200);
           if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 50; TC_ATTENTE_DUREES.vrai = 50; TC_ATTENTE_DUREES.feuilles = 50; TC_ATTENTE_DUREES.consulte = 50; }
           var modele = 0, neutre = callAI;
-          callAI = async function () { modele++; return neutre.apply(this, arguments); };
+          callAI = async function () { modele++; try { window.__envoi = JSON.stringify(arguments[0] || ''); } catch (x) {} return neutre.apply(this, arguments); };
           for (var c = 0; c < e.contexte.length; c++) await taper(e.contexte[c]);
           var n0 = charlyIA.history.length, m0 = modele;
           await taper(e.phrase);
           res.modele = modele > m0;
+          res.envoi = res.modele ? String(window.__envoi || '').slice(-3000) : '';
           res.reponses = charlyIA.history.slice(n0).filter(function (m) { return m && m.role !== 'user' && !(m._demo && m._demo.phrases); })
             .map(function (m) { return String(m.content || '').replace(/<[^>]+>/g, ' ') + (m._groupe ? ' [groupe ' + (m._groupe.creneaux || []).map(function (x) { return x.date; }).join(',') + ']' : '') + (m._questionnaire ? ' [questionnaire ' + String(m._questionnaire.question || '') + ']' : ''); });
         } catch (er) { res.erreur = String(er && er.message || er); }

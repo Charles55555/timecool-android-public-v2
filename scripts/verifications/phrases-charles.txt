@@ -5,6 +5,7 @@
 #     texte:REGEX    la réponse de Charly correspond (sans tenir compte des majuscules)
 #     sans:REGEX     la réponse ne contient jamais cela
 #     modele         la phrase peut passer par le modèle (sinon : moteur local seulement, le modèle n'est jamais appelé)
+#     envoi:REGEX    la phrase passe par le modèle, et ce qu'il reçoit correspond (par exemple, le lieu n'a pas été retiré)
 # La suite verif-phrases-charles rejoue chaque phrase ET ses variantes (sans accents, sans tirets, en minuscules, sans
 # ponctuation, avec « et » ou « stp » devant), dans l'agenda d'exemple de la démonstration, sans réseau ni modèle.
 # Toute phrase transmise par le chef de projet y entre le jour même, avant le commit du correctif.
@@ -70,3 +71,14 @@ Qu'est-ce que j'avais lundi ? |  | jour:lundi- && sans:Tu es libre
 Dentiste demain à 15h au 12 rue de Rivoli à Paris |  | jour:+1 && texte:📍 12 rue de Rivoli, Paris && texte:\s\S\s12 rue de Rivoli, Paris
 Dîner chez moi samedi à 20h |  | texte:📍 Chez moi && jour:samedi
 Réunion demain à 10h au café de la gare |  | texte:📍 Caf. de la gare
+
+# --- Examen du lot 118 (EXAMINATEUR et chef, 18/11) : le lieu n'est retiré que d'une phrase qui crée un rendez-vous, et ne passe jamais au suivant ---
+Dis à Paul que je l'attends au café de la gare |  | texte:je l.attends au caf. de la gare
+Envoie à Alice : on se retrouve au café demain |  | modele && sans:Avec qui && envoi:au caf. demain
+Cherche une pharmacie près du 25 avenue de Wagram |  | modele && envoi:pr.s du 25 avenue de Wagram
+Quel temps fera-t-il au parc demain ? |  | modele && sans:Tu es libre && envoi:au parc demain
+Note que la réunion au bureau est annulée |  | texte:R.union d.équipe && sans:📍
+Dentiste jeudi 15h | Ajoute coiffeur au 40 rue de la Convention samedi 10h | texte:Dentiste && sans:Convention
+Dentiste jeudi 15h | Qu'est-ce que j'ai demain au bureau ? | texte:Dentiste && sans:Bureau
+Ajoute coiffeur au 40 rue de la Convention samedi 10h |  | texte:📍 40 rue de la Convention
+Je suis au bureau demain toute la journée |  | modele && envoi:au bureau demain && sans:📍

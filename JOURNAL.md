@@ -3653,3 +3653,9 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Démonstration : la réponse d'un contact d'exemple est un message « tiers » (bulle verte, initiales, prénom), ni relu comme Charly ni envoyé au modèle, gardé avec la conversation.
 - En vrai : « Hugo t'a répondu : … » (tcGererDemandeRecue, sur demande) : affichage séparé (_cites), données inchangées. Les choix de créneau par lien restent la carte de Charly.
 - Lot 118-119-120 : 4e65cc7, c02fb00 et ce commit ; verifier.sh vert sur le serveur (Chrome du serveur, API locale).
+
+## 18/11/2026 (nuit) — Lot 118-119-120, examen (CODEUR)
+
+- 118 : le lieu n'est lu que dans une phrase qui crée un rendez-vous (verbe de création, ou quoi + jour + heure) ; jamais hérité par la demande suivante ; météo jamais prise pour l'agenda ; pas de bulle orpheline pour Photo et Créer mon agenda.
+- 119 : chez Maya, « C'est qui Charly ? » parle de Charly IA et dit où le trouver.
+- phrases-charles : 55 phrases, 305 essais ; condition envoi: (ce que reçoit le modèle).
