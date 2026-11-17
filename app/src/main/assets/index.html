@@ -3200,7 +3200,7 @@ Contact indisponible ou protégé (refus implicite via ses réglages) → formul
 ═══ CAS 3 — QUI ES-TU / QUE SAIS-TU FAIRE ═══
 Réponse courte et concrète, jamais de liste longue. Maximum 3 exemples.
 Exemple (son nom, qui il est) : "Je m'appelle Charly, ton assistant TimeCool 😊 Je suis là pour optimiser ton temps."
-Ne promets jamais ce que l'application ne fait pas : tu ne lis pas encore les photos (un PDF avec du texte ou un fichier texte, oui).
+Ne promets jamais ce que l'application ne fait pas, et ne dis jamais « pas encore » ni « bientôt » : pour une photo, demande simplement la date, l'heure et le lieu qu'elle montre (un PDF avec du texte ou un fichier texte, tu les lis).
 
 ═══ CAS 4 — CONSULTATION D'AGENDA ═══
 "Qu'est-ce que j'ai [jour] ?" → énumère les RDV avec leurs noms.
@@ -13226,8 +13226,27 @@ function tcBulleDuChoix116(h0, n, libelle) {
   const h = charlyIA.history;
   if (h !== h0 || !Array.isArray(h) || h.length < n) return;          // une autre conversation (démonstration ouverte ou fermée)
   if (h.slice(n).some(function (m) { return m && m.role === 'user'; })) return;
-  h.splice(n, 0, { role: 'user', content: libelle, _choix: true });
+  const bulle = { role: 'user', content: libelle, _choix: true };
+  h.splice(n, 0, bulle);
   try { renderCharlyChat(); } catch (e) {}
+  // Mission 117 : un bouton périmé (la carte a déjà été traitée) ne fait rien répondre : la bulle se retire.
+  tcRetirerBulleSansReponse117(h, bulle, 0);
+}
+
+/** La bulle d'un choix reste seulement si Charly y répond (un message après elle, ou Charly encore au travail). */
+function tcRetirerBulleSansReponse117(h, bulle, essai) {
+  setTimeout(function () {
+    if (charlyIA.history !== h) return;
+    const i = h.indexOf(bulle);
+    if (i < 0) return;
+    const reponse = h.slice(i + 1).some(function (m) { return m && m.role !== 'user'; });
+    if (reponse) return;
+    const auTravail = !!charlyIA.isLoading || (typeof _tcEtape !== 'undefined' && !!_tcEtape);
+    if (auTravail && essai < 30) { tcRetirerBulleSansReponse117(h, bulle, essai + 1); return; }
+    if (h.slice(i + 1).some(function (m) { return m && m.role === 'user'; })) return;   // l'utilisateur a déjà repris : on ne touche à rien
+    h.splice(i, 1);
+    try { renderCharlyChat(); } catch (e) {}
+  }, essai ? 1000 : 2000);
 }
 
 /** Cette réponse de Charly annonce-t-elle un rendez-vous créé, déplacé ou modifié ? */
@@ -13847,6 +13866,11 @@ function tcDateDemandee(texte, now, opts) {
     const d = valide(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     return d ? { date: d, libelle: m[0].trim() } : { invalide: true };
   }
+  // Mission 117 : « lundi en huit » : le lundi qui vient, plus une semaine.
+  if ((m = t.match(/ (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) en huit /))) {
+    let diff = (JOURS[m[1]] - jour0.getDay() + 7) % 7; if (diff === 0) diff = 7;
+    return { date: plus(diff + 7), libelle: m[1] + ' en huit' };
+  }
   // « mardi », « mardi prochain », « ce mardi », « lundi 19 » (jamais « mardi 15h » : 15 est une heure)
   if ((m = t.match(/ (?:ce |le )?(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochaine?| qui vient)?(?: (\d{1,2})(?![\dh:]| ?h(?:eures?)?(?![a-z])))? /))) {
     const idx = JOURS[m[1]], prochain = !!m[2], num = m[3] ? Number(m[3]) : 0;
@@ -13967,7 +13991,7 @@ function tcCreationLocale(texte, now, forcer) {
   const _repasContact = (typeof tcRepasAvecContact === 'function') ? tcRepasAvecContact(brut) : null;
   // Mission 93 : « Dentiste demain à 15h », « coiffeur samedi 10h » : quoi + jour + heure, rien d'autre.
   // Jamais un verbe (« mets le dentiste à jeudi 10h » est un déplacement), ni « à » juste avant le jour.
-  const _mCourt = t.trim().toLowerCase().match(/^([a-z][a-z -]{1,40}?) (?:aujourd hui|demain|apres[ -]demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain)? (?:a |vers )?\d{1,2} ?h(?: ?\d{2})?\.?$/);
+  const _mCourt = t.trim().toLowerCase().match(/^([a-z][a-z -]{1,40}?) (?:aujourd hui|demain|apres[ -]demain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain| en huit)? (?:a |vers )?\d{1,2} ?h(?: ?\d{2})?\.?$/);
   // Et seulement un objet simple (« dentiste », « mon coiffeur ») : jamais une personne (un nom de contact, une civilité,
   // « avec »), ni « me rappeler », « a appelé », « plutôt par téléphone » : ceux-là gardent leur chemin habituel.
   const _motsCourt = _mCourt ? _mCourt[1].trim().split(/\s+/) : [];
@@ -15588,9 +15612,30 @@ function tcPeriodeAgenda(text) {
   // Semaine calendaire Lundi(0)..Dimanche(6), cohérent avec DAYS_SHORT/DAYS_FULL de l'app.
   const indexSemaineLundi = (d) => (d.getDay() + 6) % 7;
 
-  if (/après-?demain|apres-?demain/.test(t)) {
+  // Mission 117 : « lundi en huit » : le lundi qui vient, plus une semaine.
+  const _enHuit = t.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) en huit\b/);
+  if (_enHuit) {
+    const k = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'].indexOf(_enHuit[1]);
+    let diff = (k - debutJour.getDay() + 7) % 7; if (diff === 0) diff = 7;
+    return { debut: ajouterJours(debutJour, diff + 7), fin: null, label: _enHuit[1] + ' en huit' };
+  }
+  if (/après[- ]?demain|apres[- ]?demain/.test(t)) {
     const d = ajouterJours(debutJour, 2);
     return { debut: d, fin: null, label: 'après-demain' };
+  }
+  // Mission 117 : le passé proche.
+  if (/avant[- ]?hier/.test(t)) return { debut: ajouterJours(debutJour, -2), fin: null, label: 'avant-hier' };
+  if (/\bhier\b/.test(t)) return { debut: ajouterJours(debutJour, -1), fin: null, label: 'hier' };
+  // Mission 117 : « ce week-end » : le samedi et le dimanche qui viennent (le jour même s'il en fait partie).
+  if (/week-?end/.test(t)) {
+    const j = debutJour.getDay();
+    const sam = j === 6 ? debutJour : (j === 0 ? ajouterJours(debutJour, -1) : ajouterJours(debutJour, 6 - j));
+    const prochain = /prochain/.test(t) && j !== 6 && j !== 0 ? 7 : (/prochain/.test(t) ? 7 : 0);
+    const debut = ajouterJours(sam, prochain), finWe = ajouterJours(debut, 1);
+    const _d = debut < debutJour ? debutJour : debut;
+    const _mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    const _dates = '(samedi ' + debut.getDate() + ' et dimanche ' + finWe.getDate() + ' ' + _mois[finWe.getMonth()] + ')';
+    return { debut: _d, fin: finWe, label: (prochain ? 'le week-end prochain ' : 'ce week-end ') + _dates };
   }
   if (/\bdemain\b/.test(t)) {
     const d = ajouterJours(debutJour, 1);
@@ -15937,7 +15982,7 @@ function detecterConsultationAgenda(text) {
     return { type: 'contact', contact: mContact[1].trim() };
   }
 
-  const declencheurPeriode = /\b(qu'?est[- ]?ce que j'?ai|qu'?ai[- ]?je|mon planning|mon programme|mon emploi du temps|mes rdv|mes rendez-vous|(montre|affiche|voir|regarde|consulte|ouvre)[- ]?(moi )?mon agenda|mon agenda (de|du|pour)|liste[- ]moi|dis-moi ce que j'ai|ce que j'ai de prévu|qu'?est[- ]?ce qu'?il y a|j'ai quoi|j ai quoi|je fais quoi|j'ai quelque chose|suis-je libre|je suis libre|suis-je dispo|je suis dispo|est-ce que je suis libre)\b/;
+  const declencheurPeriode = /\b(qu'?est[- ]?ce que j'?ai|qu'?ai[- ]?je|mon planning|mon programme|mon emploi du temps|mes rdv|mes rendez-vous|(montre|affiche|voir|regarde|consulte|ouvre)[- ]?(moi )?mon agenda|mon agenda (de|du|pour)|liste[- ]moi|dis-moi ce que j'ai|ce que j'ai de prévu|qu'?est[- ]?ce qu'?il y a|j'ai quoi|j ai quoi|je fais quoi|j'ai quelque chose|suis-je libre|je suis libre|suis-je dispo|je suis dispo|est-ce que je suis libre|les (?:rdv|rendez-vous) que j'?ai|(?:tu peux|peux-tu|pourrais-tu|tu pourrais) me dire (?:ce que|les|mes|si)|qu'?est[- ]?ce que j'?avais|j'?avais quoi|qu'?avais[- ]?je)\b/;
   const periode = tcPeriodeAgenda(t) || tcPeriodeJourNomme(t) || tcPeriodeContrainte(t);
   if (declencheurPeriode.test(t)) {
     return { type: 'periode', periode: periode || { debut: new Date(new Date().setHours(0,0,0,0)), fin: null, label: null } };
@@ -16012,11 +16057,17 @@ async function tcGererConsultationAgenda(text, intent) {
     const debutStr = tcISO(debut);
     const finStr = fin ? tcISO(fin) : debutStr;
     const matches = evs.filter(e => e.date >= debutStr && e.date <= finStr && (!intent.periode.jours || intent.periode.jours.indexOf(e.date) > -1)).sort(tcComparerEvenements);
+    // Mission 117 : « après-demain » dit aussi le jour (« après-demain, jeudi 19 novembre ») ; le passé se dit au passé.
+    const _relatif = !fin && !!label && !/\d/.test(String(label));   // un seul jour : sa date en entier (« lundi en huit, lundi 30 novembre »)
+    const _quand = _relatif ? label + ', ' + String(tcFormaterDateHumaine(debutStr)).toLowerCase() : (label || 'sur cette période');
+    const _passe = finStr < tcISO(new Date());
+    _tcDernierJourConsulte117 = fin ? null : new Date(debut);
+    _tcConsultationRecente117 = Date.now();
     if (!matches.length) {
-      reply = `Tu es libre ${label || 'sur cette période'} ! 🎉 Tu veux qu'on planifie quelque chose ?`;
+      reply = _passe ? `Tu n'avais aucun rendez-vous ${_quand}.` : `Tu es libre ${_quand} ! 🎉 Tu veux qu'on planifie quelque chose ?`;
     } else {
       const lignes = matches.map(e => `• ${tcFormaterDateHumaine(e.date)} ${tcFormaterHeure(e)} — ${e.title}`).join('\n');
-      reply = `Voici ce que tu as ${label || 'sur cette période'} (${matches.length}) :\n${lignes}`;
+      reply = `Voici ce que tu ${_passe ? 'avais' : 'as'} ${_quand} (${matches.length}) :\n${lignes}`;
     }
   }
 
@@ -17212,6 +17263,7 @@ async function charlySendMessage() {
   // l'utilisateur montre toujours ce qu'il a tapé (tcBulleTapee ; décision du chef, 24/10).
   const texteTape = inp.value.trim();
   let text = tcCorrigerAbreviations(texteTape);
+  if (typeof tcNormaliserMoments117 === 'function') text = tcNormaliserMoments117(text);   // mission 117
   _tcTexteTape = { tape: texteTape, corrige: text };
   if (!text) return;
   // Mission 93 : la réponse à « À quelle heure ? » complète la demande d'avant (« Dîner avec Paul et Marie samedi » + « 20h »).
@@ -21059,7 +21111,7 @@ async function handleCharlyFileSelected(event, sourceType) {
       if (!extractedText || extractedText.trim().length < 10) {
         charlyIA.history.push({
           role: 'system_info',
-          content: '⚠️ Ce PDF semble être une image scannée. Lecture des images bientôt disponible — peux-tu me donner les détails du RDV manuellement ?'
+          content: '📄 Ce PDF est une image scannée. Dis-moi ce qu’il annonce (la date, l’heure et le lieu) : je crée le rendez-vous tout de suite.'
         });
         tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
         renderCharlyChat();
@@ -21069,7 +21121,7 @@ async function handleCharlyFileSelected(event, sourceType) {
       // Pour les images : on prépare l'interface mais GPT-4o-mini ne lit pas les images
       charlyIA.history.push({
         role: 'system_info',
-        content: '📷 La lecture automatique des photos sera disponible bientôt. Pour ce RDV, peux-tu me donner les infos manuellement (date, heure, lieu) ?'
+        content: '📷 Bien reçu. Dis-moi ce que montre la photo (la date, l’heure et le lieu du rendez-vous) : je le crée tout de suite.'
       });
       tcDefinirStatutCharly('🔒 Votre Assistant Intelligent', false);
       renderCharlyChat();
@@ -22091,6 +22143,54 @@ const TC_ABREVIATIONS_PHRASES = [[/\bpeu pas\b/gi, 'peux pas'], [/\brendez vous\
   [/(^|\s)[àa] la bourre\b/gi, '$1en retard'], [/\bmai (rdv|rendez-vous|rendez vous|rendevous|rendez)\b/gi, 'mes $1'], [/\bm[ée]s? rdv\b/gi, 'mes rdv']];
 
 /** Le message tel que Charly le lit : abréviations et fautes courantes corrigées, mot entier par mot entier. */
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 117 (Charles, 17/11) : « Et apres demain ? » était lu « demain ». Les mots du temps et les formules ont une seule
+   écriture avant tout détecteur : « apres demain », « aprés-demain » → « après-demain » ; « avant hier » → « avant-hier » ;
+   « week end » → « week-end » ; « qu'est ce que » → « qu'est-ce que » ; « suis je » → « suis-je » ; « rendez vous » →
+   « rendez-vous » ; « stp », « svp », « et » devant une demande sont ôtés. « Et le lendemain ? », « et le jour d'après ? »
+   juste après une question sur un jour : le jour suivant.
+   ═══════════════════════════════════════════════════════════════ */
+let _tcDernierJourConsulte117 = null;
+let _tcConsultationRecente117 = 0;   // l'heure de la dernière réponse sur l'agenda (« et après-demain » qui suit est une question)
+function tcNormaliserMoments117(texte) {
+  let t = String(texte || '');
+  t = t.replace(/\bapr[eèéêÈÉ]s[\s-]*demain\b/gi, 'après-demain')
+    .replace(/\bavant[\s-]*hier\b/gi, 'avant-hier')
+    .replace(/\bweek[\s-]*end(s?)\b/gi, 'week-end$1')
+    .replace(/\bqu['’]?\s*est[\s-]+ce\s+(que|qu['’])/gi, function (x, y) { return 'qu’est-ce ' + y; })
+    .replace(/\bsuis[\s-]+je\b/gi, 'suis-je')
+    .replace(/\brendez[\s-]+vous\b/gi, 'rendez-vous')
+    .replace(/\baujourd\s*['’]?\s*hui\b/gi, 'aujourd’hui');
+  // « stp », « svp », « s'il te plaît », « et » devant une demande d'au moins deux mots.
+  for (let k = 0; k < 3; k++) {
+    const m = t.match(/^\s*(?:stp|svp|s['’ ]?il te pla[iî]t|s['’ ]?il vous pla[iî]t|et|charly)[\s,]+/i);
+    if (!m) break;
+    const reste = t.slice(m[0].length);
+    if (reste.trim().split(/\s+/).length < 2 && !/\?\s*$/.test(reste)) break;
+    t = reste.charAt(0).toUpperCase() + reste.slice(1);
+  }
+  // « et après-demain », « et ce week-end » sans « ? », juste après une réponse sur l'agenda : c'est encore une question.
+  if (_tcConsultationRecente117 && Date.now() - _tcConsultationRecente117 < 10 * 60000 && !/\?\s*$/.test(t)
+    && /^\s*(?:et\s+)?(?:pour\s+)?(?:aujourd’hui|demain|après-demain|hier|avant-hier|ce soir|ce week-end|le week-end prochain|cette semaine|la semaine prochaine|(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain| en huit)?)\s*$/i.test(t)) t = t.trim() + ' ?';
+  // « le lendemain ? », « le jour d'après ? », « le surlendemain ? » juste après une question sur un jour.
+  const suite = t.match(/^\s*(?:et\s+)?(?:pour\s+)?(le lendemain|le jour d['’ ]?apr[eè]s|le surlendemain)\s*\??\s*$/i);
+  if (suite && _tcDernierJourConsulte117) {
+    const d = new Date(_tcDernierJourConsulte117); d.setDate(d.getDate() + (/surlendemain/i.test(suite[1]) ? 2 : 1));
+    const j0 = new Date(); j0.setHours(0, 0, 0, 0);
+    const n = Math.round((d - j0) / 86400000);
+    const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+    const quand = n === 0 ? 'aujourd’hui' : n === 1 ? 'demain' : n === 2 ? 'après-demain' : n === -1 ? 'hier' : (n > 2 && n < 7 ? JOURS[d.getDay()] : null);
+    if (quand) t = 'Qu’est-ce que j’ai ' + quand + ' ?';
+  }
+  // « Qu'est-ce que j'ai ce soir ? » : dans une question sur l'agenda, « ce soir », « ce matin », « cet après-midi »
+  // sont aujourd'hui (ailleurs, « où aller manger ce soir ? » reste hors agenda).
+  if (/\b(ce soir|ce matin|cet apr[eè]s[\s-]?midi|cette apr[eè]s[\s-]?midi|cette nuit)\b/i.test(t)
+    && !/\b(aujourd|demain|hier|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|week-end)/i.test(t)
+    && /^\s*(?:qu’est-ce (?:que|qu’)\s*j[’']?\s*(?:ai|avais)|j[’']?\s*ai (?:quoi|des|un|une|rien|du monde)|(?:je suis|suis-je|est-ce que je suis) (?:libre|pris|prise|occupée?|dispo)|(?:quel(?:le)?s? (?:est|sont) )?mon (?:agenda|programme|planning)|(?:tu peux me dire |montre[- ]moi |donne[- ]moi )?(?:mes|les) (?:rdv|rendez-vous))\b/i.test(t))
+    t = t.replace(/\b(ce soir|ce matin|cet apr[eè]s[\s-]?midi|cette apr[eè]s[\s-]?midi|cette nuit)\b/i, 'aujourd’hui $1');
+  return t;
+}
+
 function tcCorrigerAbreviations(texte) {
   let t = String(texte || '');
   if (!t.trim()) return t;

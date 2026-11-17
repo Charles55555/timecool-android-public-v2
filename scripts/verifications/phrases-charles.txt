@@ -1,0 +1,53 @@
+# Phrases signalées par Charles (mission 117, 17/11/2026). Une ligne = phrase | contexte | attendu.
+# - contexte : phrases dites juste avant, séparées par « ⏎ » (vide si aucune).
+# - attendu, conditions séparées par « && » :
+#     jour:+N        la réponse parle du jour J+N (« jeudi 19 novembre », ou une carte datée de ce jour) ; jour:-N pour le passé
+#     texte:REGEX    la réponse de Charly correspond (sans tenir compte des majuscules)
+#     sans:REGEX     la réponse ne contient jamais cela
+#     modele         la phrase peut passer par le modèle (sinon : moteur local seulement, le modèle n'est jamais appelé)
+# La suite verif-phrases-charles rejoue chaque phrase ET ses variantes (sans accents, sans tirets, en minuscules, sans
+# ponctuation, avec « et » ou « stp » devant), dans l'agenda d'exemple de la démonstration, sans réseau ni modèle.
+# Toute phrase transmise par le chef de projet y entre le jour même, avant le commit du correctif.
+
+# --- Les six phrases de TikTok (mission 110) ---
+Saisis dans mon agenda : rendez-vous dentiste mardi à 15h |  | texte:^Dentiste, mardi .* à 15h : je te propose ceci && sans:Saisis
+
+# --- Mission 118 (Charles, 17/11 19h45) : un lieu dit dans la phrase ---
+Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine au 25 avenue de Wagram à Paris |  | texte:Par téléphone, en personne ou en visio
+Demande un rendez-vous demain à mon ami Michel |  | texte:Michel a TimeCool && sans:professionnel
+Excuse-moi auprès de Paul et préviens-le que j’aurai 10 minutes de retard |  | texte:Je préviens Paul de ton retard
+Quand suis-je libre ce vendredi ? |  | texte:libre ce vendredi && jour:vendredi
+Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot |  | texte:Par téléphone, en personne ou en visio
+Je suis malade, décale ma journée de demain, d’après-demain ou de cette semaine |  | texte:pour quand
+
+# --- Charles, 17/11 19h30 (mission 117) : « après-demain » lu comme « demain » ---
+Tu peux me dire les rendez-vous que j'ai demain dans agenda ? |  | jour:+1
+Et apres demain ? | Tu peux me dire les rendez-vous que j'ai demain dans agenda ? | jour:+2 && sans:demain \(
+Qu'est-ce que j'ai après-demain ? |  | jour:+2
+Qu'est-ce que j'ai après demain ? |  | jour:+2
+Qu'est-ce que j'ai aprés-demain ? |  | jour:+2
+Et le lendemain ? | Qu'est-ce que j'ai demain ? | jour:+2
+Et le jour d'après ? | Qu'est-ce que j'ai demain ? | jour:+2
+Qu'est-ce que j'ai demain ? |  | jour:+1
+Qu'est-ce que j'ai aujourd'hui ? |  | jour:+0
+Qu'est-ce que j'ai ce soir ? |  | jour:+0
+Qu'est-ce que j'avais hier ? |  | jour:-1
+Qu'est-ce que j'avais avant-hier ? |  | jour:-2
+Qu'est-ce que j'ai ce week-end ? |  | texte:ce week-end \(samedi \d+ et dimanche \d+
+Qu'est-ce que j'ai la semaine prochaine ? |  | texte:semaine prochaine
+Qu'est-ce que j'ai lundi en huit ? |  | jour:lundi+7
+Dentiste après-demain à 15h |  | jour:+2 && texte:Dentiste
+Dentiste apres demain à 15h |  | jour:+2 && texte:Dentiste
+Dentiste lundi en huit à 10h |  | jour:lundi+7 && texte:Dentiste
+
+# --- Missions Charly déjà corrigées (JOURNAL.md) ---
+Dentiste demain à 15h |  | jour:+1 && texte:^Dentiste
+rdv dentiste mardi 15h |  | texte:^Dentiste, mardi
+Rendez-vous chez le coiffeur vendredi à 9h |  | texte:Coiffeur
+Demande un rendez-vous avec mon dentiste demain 15h |  | jour:+1 && sans:Je ne trouve pas
+Demande un rendez-vous demain à mon ami Gérard |  | texte:Je m’en occupe\. Je ne trouve pas G[ée]rard
+Préviens Paul que j’aurai 10 minutes de retard |  | texte:Je préviens Paul de ton retard
+Je suis malade, décale ma journée de demain |  | texte:malade
+Trouve un rendez-vous commun avec Alice, Chloé et Virginie |  | texte:Par téléphone, en personne ou en visio
+Quand suis-je libre demain ? |  | jour:+1 && texte:libre
+Annule le sport de vendredi |  | texte:Sport

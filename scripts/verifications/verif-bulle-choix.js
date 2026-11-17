@@ -91,6 +91,11 @@ if (!exe) {
       R.conflitCarte = !!Array.prototype.filter.call(document.querySelectorAll('#charlyChatBody button'), function (x) { return /Ajouter quand même/.test(x.innerText); }).length;
       await cliquer('Ajouter quand même'); await attendre(1000);
       R.conflit = conv();
+      // Mission 117 : le « Valider mon agenda » périmé de la carte remplacée, encore actif : jamais une bulle sans réponse.
+      var perime = Array.prototype.filter.call(document.querySelectorAll('#charlyChatBody button'), function (x) { return !x.disabled && /Valider mon agenda/.test(x.innerText); })[0];
+      R.perimeActif = !!perime;
+      if (perime) { perime.click(); await attendre(4000); }
+      R.apresPerime = conv();
       fin(R);
     } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
   }, 1200); });</script>`;
@@ -114,6 +119,8 @@ if (!exe) {
   const V = S.vrai || [];
   verifie('en vrai : « En visio » touché, une bulle, puis la carte des créneaux', V[2] === '>> En visio' && V.length >= 4 && !/^>/.test(V[3]), JSON.stringify(V));
   const C = S.conflit || [], iq = C.indexOf('>> Ajouter quand même');
+  const P = S.apresPerime || [];
+  verifie('un bouton périmé encore actif : pas de bulle laissée sans réponse (mission 117)', P.length && !/^>/.test(P[P.length - 1]) && P.length === C.length, JSON.stringify([S.perimeActif, P]));
   verifie('la carte de conflit : « Ajouter quand même » donne sa bulle, juste avant la réponse', S.conflitCarte === true && iq > 0 && C[iq + 1] && !/^>/.test(C[iq + 1]), JSON.stringify([S.conflitCarte, C]));
 }
 

@@ -3617,3 +3617,11 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - Écouteur de clics (capture) de #charlyChatBody : tcNoterChoix116 retient le libellé (tcLibelleChoix116, sans chiffre ni icône) d un bouton DANS une bulle de Charly (.tc-bulle-col) ; juste après (setTimeout 0), tcBulleDuChoix116 insère { role: user, _choix: true } à la place du geste, sauf si le chemin a déjà écrit une bulle utilisateur ou si la conversation a changé. Exclus : Voir dans mon agenda, accueil, Modifier, Recommencer, Quitter. Suite verif-bulle-choix. Captures : m71/captures116.
 - Examen : carte de conflit (hors bulle) avec ses bulles ; tcDesignationPour, tcTypeDeProposition, tcEstUneCorrection et le repérage des sujets sautent les bulles _choix.
+
+## 17/11/2026 — Mission 117 : « Et apres demain ? », phrases de Charles rejouées (CODEUR)
+
+- Entrée normalisée (tcNormaliserMoments117) : après-demain, avant-hier, week-end, qu'est-ce que, rendez-vous, aujourd'hui en une seule écriture ; « et », « stp », « svp » devant ôtés ; « le lendemain » après une question sur un jour ; « ce soir » = aujourd'hui dans une question sur l'agenda seulement.
+- Compris en plus : hier, avant-hier, ce week-end (dates), « lundi en huit » ; la réponse dit la date d'un jour seul ; passé au passé.
+- Plus de « bientôt » pour la photo et le PDF scanné ; bouton périmé sans bulle orpheline.
+- Garde-fou : phrases-charles.txt (35 phrases) + verif-phrases-charles (206 essais, moteur local), dans verifier.sh. Page d'avant : 79 échecs dont 42 par le modèle ; maintenant 0.
+- À savoir : verif-demo-charly (malade) et verif-bulle-attente (malade) échouent après 22h, déjà sur la page publiée 116 : défaut d'heure, hors 117.
