@@ -1,0 +1,103 @@
+// Mission 106 (Charles, 17/11, textes validés mot pour mot) : l'accueil de la page Charly IA, une idée par ligne, puis six
+// exemples l'un sous l'autre ; seul dans la conversation (ou conversation vide), il est au milieu de la page. Texte de l'app :
+// traduit ligne par ligne, jamais envoyé au modèle, jamais lu comme une proposition de rendez-vous.
+// Usage : node verif-accueil-charly.js <index.html>
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const page = fs.readFileSync(process.argv[2] || path.join(__dirname, '../../app/src/main/assets/index.html'), 'utf8');
+let ko = 0, ok = 0;
+const verifie = (l, c, d) => { if (c) ok++; else { ko++; console.log('  KO ' + l + (d !== undefined ? ' : ' + String(d).slice(0, 400) : '')); } };
+function fonction(nom) {
+  const i = page.search(new RegExp('(async )?function ' + nom + '\\('));
+  if (i < 0) return '';
+  let n = 0;
+  for (let k = page.indexOf('{', i); k < page.length; k++) {
+    if (page[k] === '{') n++;
+    else if (page[k] === '}') { n--; if (n === 0) return page.slice(i, k + 1); }
+  }
+  return '';
+}
+const tableau = (nom) => { const m = page.match(new RegExp('const ' + nom + ' = \\[[\\s\\S]*?\\n\\];')); return m ? m[0].replace('const ', 'var ') : ''; };
+
+const NB = ' ';
+const ATTENDU = [
+  'Bonjour Charles ! 😊',
+  'Je suis Charly, ton assistant TimeCool.',
+  'Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore.',
+  'Par exemple, écris-moi ou dis-moi ci-dessous' + NB + ':',
+  '«' + NB + 'Crée-moi un nouveau rendez-vous demain à 15h chez mon dentiste' + NB + '»',
+  '«' + NB + 'Demande un rendez-vous demain entre 15h et 16h à mon ami Michel' + NB + '»',
+  '«' + NB + 'Excuse-moi auprès de Paul et préviens-le que j’aurai 10 minutes de retard' + NB + '»',
+  '«' + NB + 'Quand suis-je libre ce vendredi' + NB + '?' + NB + '»',
+  '«' + NB + 'Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot' + NB + '»',
+  '«' + NB + 'Je suis malade, décale ma journée de demain, d’après-demain ou de cette semaine' + NB + '»'
+];
+
+let heure = 10;
+const DateFixe = function () { return { getHours: () => heure }; };
+const traduits = [];
+const ctx = {
+  console, JSON, Array, Object, String, Promise, Date: DateFixe,
+  userAccount: { firstname: 'Charles' }, currentLanguage: 'fr', TC_TRANSLATE_CACHE: {},
+  tcPrenomUtilisateur: () => (ctx.userAccount && ctx.userAccount.firstname) || '',
+  escapeHTML: (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+  tcBulleCharly: (h) => '<bulle>' + h + '</bulle>',
+  translateText: (t, l) => { traduits.push(t); const r = '[' + l + '] ' + t; ctx.TC_TRANSLATE_CACHE[l + ':' + t] = r; return Promise.resolve(r); },
+  charlyIA: { history: [] }, rendus: 0, renderCharlyChat: () => { ctx.rendus++; }
+};
+vm.createContext(ctx);
+const code = [tableau('TC_CHARLY_ACCUEIL_LIGNES'), tableau('TC_CHARLY_ACCUEIL_EXEMPLES')].concat(
+  ['tcLignesAccueilCharly', 'tcMessageAccueilCharly', 'tcEstAccueilCharly', 'tcTraduireAccueilCharly', 'tcRendreAccueilCharly', 'tcRendreAccueilCharlyVide'].map(fonction));
+verifie('les textes et les six fonctions de l accueil sont dans la page', code.every(Boolean), code.map((c) => !!c).join(','));
+try { vm.runInContext(code.join('\n'), ctx); } catch (e) { verifie('chargement des fonctions', false, e.message); }
+
+(async () => {
+  console.log('-- 1. Le texte, mot pour mot --');
+  const lignes = vm.runInContext('tcLignesAccueilCharly()', ctx);
+  verifie('dix lignes, dans l ordre validé (une idée par ligne, puis les six exemples)', JSON.stringify(lignes) === JSON.stringify(ATTENDU), JSON.stringify(lignes));
+  heure = 19;
+  verifie('le soir : « Bonsoir Charles ! 😊 » (comme l accueil d avant)', vm.runInContext('tcLignesAccueilCharly()[0]', ctx) === 'Bonsoir Charles ! 😊');
+  heure = 10;
+  ctx.userAccount = { firstname: '' };
+  verifie('sans prénom : « Bonjour ! 😊 »', vm.runInContext('tcLignesAccueilCharly()[0]', ctx) === 'Bonjour ! 😊');
+  ctx.userAccount = { firstname: 'Charles' };
+  const msg = vm.runInContext('tcMessageAccueilCharly()', ctx);
+  verifie('le message rangé : texte de l app (appText, fr) marqué accueil, une ligne par idée', msg.role === 'assistant' && msg.appText === true && msg.accueil === true && msg.fr === ATTENDU.join('\n') && msg.content === msg.fr, JSON.stringify(msg));
+
+  console.log('-- 2. Le dessin --');
+  const seul = vm.runInContext('tcRendreAccueilCharly(tcMessageAccueilCharly(), true)', ctx);
+  verifie('seul : au milieu de la page (horizontalement et verticalement)', /id="tcAccueilCharly" style="min-height:100%;[^"]*display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;/.test(seul), seul.slice(0, 300));
+  verifie('seul : largeur bornée, rien ne dépasse (retour à la ligne)', /max-width:560px; overflow-wrap:break-word;/.test(seul));
+  verifie('les six exemples l un sous l autre, en texte simple (pas de bouton, pas de onclick)', (seul.match(/class="tc-accueil-exemple"/g) || []).length === 6 && !/<button|onclick/.test(seul));
+  verifie('chaque ligne a son bloc', ATTENDU.every((l) => seul.indexOf('>' + l + '</div>') > -1));
+  const bulle = vm.runInContext('tcRendreAccueilCharly(tcMessageAccueilCharly(), false)', ctx);
+  verifie('dans une conversation commencée : la même chose dans une bulle de Charly', /^<bulle>/.test(bulle) && (bulle.match(/tc-accueil-exemple/g) || []).length === 6 && bulle.indexOf('tcAccueilCharly') < 0);
+  verifie('vide : le même accueil, avec le prénom', vm.runInContext('tcRendreAccueilCharlyVide()', ctx) === seul);
+  verifie('l ancien accueil d une ligne est reconnu ; une réponse ordinaire non', vm.runInContext("tcEstAccueilCharly({ role: 'assistant', appText: true, fr: 'Bonjour ! 😊 Je suis Charly, ton assistant TimeCool. Je peux…' }) && !tcEstAccueilCharly({ role: 'assistant', content: 'Je suis Charly' }) && !tcEstAccueilCharly({ role: 'user', appText: true, content: 'Je suis Charly' })", ctx) === true);
+
+  console.log('-- 3. Les langues --');
+  const t = await vm.runInContext("tcTraduireAccueilCharly(tcMessageAccueilCharly().fr, 'en')", ctx);
+  verifie('traduit ligne par ligne : dix lignes traduites, chacune à sa place', t.split('\n').length === 10 && t.split('\n').every((l, i) => l === '[en] ' + ATTENDU[i]) && traduits.length === 10, t);
+  ctx.currentLanguage = 'en';
+  const vide = vm.runInContext('tcRendreAccueilCharlyVide()', ctx);
+  verifie('conversation vide en anglais : les lignes déjà traduites (cache) s affichent tout de suite', vide.indexOf('[en] ' + ATTENDU[1]) > -1 && (vide.match(/tc-accueil-exemple/g) || []).length === 6);
+  ctx.currentLanguage = 'de'; ctx.translateText = (x) => Promise.resolve(x); ctx.rendus = 0;
+  vm.runInContext('tcRendreAccueilCharlyVide()', ctx);
+  await new Promise((r) => setTimeout(r, 10));
+  verifie('traduction en échec : pas de redessin en boucle', ctx.rendus === 0, ctx.rendus);
+  ctx.currentLanguage = 'fr';
+
+  console.log('-- 4. La page --');
+  const rendu = fonction('renderCharlyChat');
+  verifie('renderCharlyChat : vide → accueil au milieu ; rien que l accueil → au milieu ; sinon les bulles', /if \(!charlyIA\.history\.length\) \{ body\.innerHTML = tcRendreAccueilCharlyVide\(\); return; \}/.test(rendu) && /if \(charlyIA\.history\.length === 1 && tcEstAccueilCharly\(charlyIA\.history\[0\]\)\) \{ body\.innerHTML = tcRendreAccueilCharly\(charlyIA\.history\[0\], true\); return; \}/.test(rendu));
+  verifie('l ancien accueil d une ligne, seul, est remplacé par le nouveau (avant l enregistrement)', /tcChargerHistoriqueCharly\(\);\s+\/\/ Mission 106[^\n]*\n\s+if \(charlyIA\.history\.length === 1 && tcEstAccueilCharly\(charlyIA\.history\[0\]\) && !charlyIA\.history\[0\]\.accueil\) \{\s+charlyIA\.history\[0\] = tcMessageAccueilCharly\(\);\s+setTimeout\(tcSyncCharlyGreeting, 0\);\s+\}\s+tcSauverHistoriqueCharly\(\);/.test(rendu));
+  verifie('plus d ancien accueil « Bonjour, je suis Charly IA »', page.indexOf('Bonjour, je suis Charly IA') < 0);
+  verifie('dans la conversation, l accueil ne passe jamais par la lecture des propositions (15h, 16h…)', /function renderChatMessage\(m\) \{\n  if \(m && m\.accueil\) return tcRendreAccueilCharly\(m, false\);/.test(page));
+  verifie('les deux chemins de connexion rangent ce même accueil, seulement si la conversation est vide', (page.match(/if \(!charlyIA\.history\.length\) charlyIA\.history\.push\(tcMessageAccueilCharly\(\)\);/g) || []).length === 2 && page.indexOf('const _accueil') < 0);
+  verifie('la traduction de l accueil passe ligne par ligne', fonction('tcSyncCharlyGreeting').indexOf('(msg.accueil ? tcTraduireAccueilCharly(msg.fr, currentLanguage) : translateText(msg.fr, currentLanguage))') > -1);
+  verifie('le modèle ne reçoit jamais l accueil (texte de l app)', /\.filter\(m => m && \(m\.role === 'user' \|\| m\.role === 'assistant'\) && !m\.appText && !m\._app\)/.test(page));
+
+  console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');
+  process.exit(ko ? 1 : 0);
+})().catch((e) => { console.log('  KO ' + e.message); process.exit(1); });

@@ -3507,3 +3507,14 @@ Chef, 16/11 (validé par Charles après son essai : « Ca va » recevait « Trè
 - Consigne du modèle : « prendre rendez-vous directement », avec ces mots-là (au banc, le modèle avait repris « réserver seul » d une question).
 - Banc des 100 questions d'essai, vrai modèle : 100/100 maintenu (95 réponses de la fiche, 4 politesses, 1 du modèle ; 2 réponses changées, toutes justes).
 - Suites : verif-hotline-manuel et verif-charly-conversation complétées (échouent sur la page d'avant). verifier.sh vert.
+
+## 17/11/2026 : mission 106, l'accueil de Charly au milieu de la page, avec six exemples
+
+Chef, 17/11 (ok de Charles, textes validés mot pour mot). Avant : une bulle d'une seule ligne en haut à gauche, coupée à droite sur PC.
+- Accueil en dix lignes : « Bonjour Charles ! 😊 » (Bonsoir après 18h, comme avant ; sans prénom, sans lui), « Je suis Charly, ton assistant TimeCool. », « Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. », « Par exemple, écris-moi ou dis-moi ci-dessous : », puis les six exemples entre guillemets, l'un sous l'autre (TC_CHARLY_ACCUEIL_LIGNES, TC_CHARLY_ACCUEIL_EXEMPLES, tcMessageAccueilCharly).
+- Tant que la conversation est vide ou n'a que l'accueil : au milieu de la zone (horizontalement et verticalement), largeur bornée à 560 px, retour à la ligne (tcRendreAccueilCharly). Après le premier message : le même texte dans une bulle de Charly, en tête ; jamais lu comme une proposition (15h, 16h).
+- Un compte qui n'a que l'ancien accueil d'une ligne reçoit le nouveau au prochain affichage. « Recommencer » montre le même accueil (dessiné, pas rangé).
+- Exemples en texte simple, non touchables (choix par défaut du chef ; les rendre touchables : une ligne, comme tcExempleHotline).
+- Langues : texte de l'app (appText) traduit par Google ligne par ligne, au même endroit qu'avant (tcSyncCharlyGreeting), mis en cache ligne par ligne ; jamais envoyé au modèle.
+- Correction liée : « Crée-moi un nouveau rendez-vous demain à 15h chez mon dentiste » donnait le titre « Nouveau dentiste » ; « nouveau / nouvel / autre » juste devant « rendez-vous » ou « rdv » ne compte plus dans le titre (tcTitreDepuisDemande) : « Dentiste », comme l'exemple d'avant.
+- Suites : verif-accueil-charly (nouvelle, échoue sur la page d'avant) ; verif-prenom-charly, verif-historique-charly, verif-rdv-groupe et verif-charly-campagne10 suivent le nouvel accueil. verifier.sh vert. Captures PC et 390 px : m71\captures106.

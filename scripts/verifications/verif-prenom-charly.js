@@ -82,16 +82,11 @@ console.log('-- 3. La page --');
 const appels = (page.match(/tcPromptSysteme\(\) \+ tcConsignePrenom\(\) \+ tcLangInstruction\(\)/g) || []).length;
 verifie('les trois appels du modèle ajoutent la consigne du prénom', appels === 3 && page.indexOf('tcPromptSysteme() + tcLangInstruction()') < 0, appels);
 verifie('le prompt modifiable dans les réglages ne contient pas la consigne (elle s ajoute à l envoi)', /escapeHTMLSafe\(tcPromptSysteme\(\)\)/.test(page) && extraire('tcPromptSysteme').indexOf('Prenom') < 0);
-verifie('l accueil à la connexion (deux chemins) prend tcPrenomUtilisateur, plus le champ brut', page.indexOf('const fname = tcPrenomUtilisateur();') > -1 && page.indexOf('const fnameG = tcPrenomUtilisateur();') > -1 && page.indexOf('userAccount ? userAccount.firstname :') < 0);
+// Mission 106 : les deux chemins rangent tcMessageAccueilCharly(), qui prend tcPrenomUtilisateur (verif-accueil-charly).
+verifie('l accueil à la connexion (deux chemins) prend tcPrenomUtilisateur, plus le champ brut', (page.match(/charlyIA\.history\.push\(tcMessageAccueilCharly\(\)\);/g) || []).length === 2 && /function tcLignesAccueilCharly\(\) \{\n  const sal = [^\n]*\n  const prenom = tcPrenomUtilisateur\(\);/.test(page) && page.indexOf('userAccount ? userAccount.firstname :') < 0);
 verifie('le premier bonjour met le prénom', /const _prenom = tcPrenomUtilisateur\(\);\s+const _reply = _sal \+ \(_prenom \? ' ' \+ _prenom : ''\) \+ ' ! 😊 Je suis Charly,/.test(page));
-// Mission 92 (Charles, 15/11, texte validé mot pour mot) : l'accueil finit par un exemple, dans ses deux variantes
-// (insécables avant « : » et dans les guillemets).
-{
-  const fin = ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par exemple, écris-moi ou dis-moi ci-dessous\u00a0: «\u00a0Crée-moi un rendez-vous demain à 15h chez mon dentiste\u00a0».';
-  verifie('l accueil après connexion : « Bonjour Charles ! 😊 … Par exemple, écris-moi ou dis-moi ci-dessous : « Crée-moi un rendez-vous demain à 15h chez mon dentiste ». »', page.indexOf("const _accueil = sal + (fname ? ' ' + fname : '') + '" + fin + "';") > -1);
-  verifie('le même sous l écran de bienvenue (connexion, Google)', page.indexOf("const _accueilG = salG + (fnameG ? ' ' + fnameG : '') + '" + fin + "';") > -1);
-  verifie('plus aucun « Par où on commence ? »', page.indexOf('Par où on commence') < 0);
-}
+// Mission 92, remplacée par la 106 (Charles, 17/11) : l'accueil tient sur dix lignes, vérifiées mot pour mot par verif-accueil-charly.
+verifie('plus aucun « Par où on commence ? »', page.indexOf('Par où on commence') < 0);
 verifie('pas d assertion arrière dans la page (Safari)', !/\(\?<[=!]/.test(page));
 
 console.log(ko ? ko + ' anomalie(s).' : ok + ' vérifications, aucune anomalie.');

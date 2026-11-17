@@ -3587,7 +3587,7 @@ function tcSyncCharlyGreeting() {
     if (msg.content !== msg.fr) { msg.content = msg.fr; renderCharlyChat(); }
     return;
   }
-  translateText(msg.fr, currentLanguage).then(function(t) {
+  (msg.accueil ? tcTraduireAccueilCharly(msg.fr, currentLanguage) : translateText(msg.fr, currentLanguage)).then(function(t) {
     if (!t) return;
     t = t.replace(/Tempo\s?Freddo/gi, 'TimeCool')
          .replace(/Charly\s+(AI|KI|IA|II)/gi, 'Charly IA');
@@ -12142,27 +12142,109 @@ function tcEffacerHistoriqueCharly() {
   try { localStorage.removeItem(TC_CHARLY_HISTORIQUE_CLE); } catch (e) {}
 }
 
+/**
+ * Mission 106 (Charles, 17/11, textes validés mot pour mot) : l'accueil de la page Charly IA, une idée par ligne, puis six
+ * exemples l'un sous l'autre. Tant que la conversation n'a que cet accueil (ou rien), il s'affiche au milieu de la page.
+ * Les exemples sont du texte simple (on ne les touche pas).
+ */
+const TC_CHARLY_ACCUEIL_LIGNES = [
+  'Je suis Charly, ton assistant TimeCool.',
+  'Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore.',
+  'Par exemple, écris-moi ou dis-moi ci-dessous :'
+];
+const TC_CHARLY_ACCUEIL_EXEMPLES = [
+  'Crée-moi un nouveau rendez-vous demain à 15h chez mon dentiste',
+  'Demande un rendez-vous demain entre 15h et 16h à mon ami Michel',
+  'Excuse-moi auprès de Paul et préviens-le que j’aurai 10 minutes de retard',
+  'Quand suis-je libre ce vendredi ?',
+  'Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot',
+  'Je suis malade, décale ma journée de demain, d’après-demain ou de cette semaine'
+];
+
+/** Les lignes de l'accueil, en français, avec le prénom du compte. */
+function tcLignesAccueilCharly() {
+  const sal = new Date().getHours() < 18 ? 'Bonjour' : 'Bonsoir';
+  const prenom = tcPrenomUtilisateur();
+  return [sal + (prenom ? ' ' + prenom : '') + ' ! 😊'].concat(TC_CHARLY_ACCUEIL_LIGNES,
+    TC_CHARLY_ACCUEIL_EXEMPLES.map(function (e) { return '« ' + e + ' »'; }));
+}
+
+/** Le message d'accueil rangé dans la conversation : texte de l'app (traduit, jamais envoyé au modèle). */
+function tcMessageAccueilCharly() {
+  const fr = tcLignesAccueilCharly().join('\n');
+  return { role: 'assistant', content: fr, appText: true, fr: fr, accueil: true };
+}
+
+/** Un accueil de Charly (celui-ci ou l'ancien, d'une seule ligne). */
+function tcEstAccueilCharly(m) {
+  return !!(m && m.role === 'assistant' && m.appText && /Je suis Charly/.test(String(m.fr || m.content || '')));
+}
+
+/** Traduit l'accueil ligne par ligne (chaque ligne garde sa place, et le cache sert ligne par ligne). */
+function tcTraduireAccueilCharly(fr, langue) {
+  return Promise.all(String(fr || '').split('\n').map(function (l) { return translateText(l, langue); })).then(function (ts) {
+    return ts.map(function (t) {
+      return String(t || '').replace(/Tempo\s?Freddo/gi, 'TimeCool').replace(/Charly\s+(AI|KI|IA|II)/gi, 'Charly IA');
+    }).join('\n');
+  });
+}
+
+/** Le dessin de l'accueil : au milieu de la page quand il est seul, dans une bulle de Charly sinon. */
+function tcRendreAccueilCharly(m, seul) {
+  const lignes = String((m && m.content) || '').split('\n');
+  const n = 1 + TC_CHARLY_ACCUEIL_LIGNES.length;
+  const intro = lignes.slice(0, n);
+  const exemples = lignes.slice(n);
+  const html = '<div style="font-size:' + (seul ? '18' : '15') + 'px; font-weight:700; color:var(--text); margin-bottom:6px;">' + escapeHTML(intro[0] || '') + '</div>'
+    + intro.slice(1).map(function (l) {
+      return '<div style="font-size:14px; color:var(--text); line-height:1.5; margin-bottom:4px;">' + escapeHTML(l) + '</div>';
+    }).join('')
+    + '<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">'
+    + exemples.map(function (l) {
+      return '<div class="tc-accueil-exemple" style="font-size:14px; color:var(--text-sec); line-height:1.45;">' + escapeHTML(l) + '</div>';
+    }).join('')
+    + '</div>';
+  if (!seul) return tcBulleCharly(html);
+  return '<div id="tcAccueilCharly" style="min-height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:8px 6px;">'
+    + '<div style="width:100%; max-width:560px; overflow-wrap:break-word;">'
+    + '<div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 12px; box-shadow:0 4px 14px rgba(26,115,232,0.25);">⚡</div>'
+    + html + '</div></div>';
+}
+
+/** Conversation vide (après « Recommencer ») : le même accueil, dessiné sans être rangé dans la conversation. */
+function tcRendreAccueilCharlyVide() {
+  const m = tcMessageAccueilCharly();
+  const langue = (typeof currentLanguage !== 'undefined') ? currentLanguage : 'fr';
+  if (langue && langue !== 'fr') {
+    const lignes = m.fr.split('\n');
+    const cache = (typeof TC_TRANSLATE_CACHE !== 'undefined' && TC_TRANSLATE_CACHE) || {};
+    if (lignes.every(function (l) { return cache[langue + ':' + l]; })) {
+      m.content = lignes.map(function (l) { return cache[langue + ':' + l]; }).join('\n');
+    } else {
+      // Une seule nouvelle tentative, et seulement si tout est arrivé : une traduction en échec ne boucle pas.
+      tcTraduireAccueilCharly(m.fr, langue).then(function () {
+        const c = (typeof TC_TRANSLATE_CACHE !== 'undefined' && TC_TRANSLATE_CACHE) || {};
+        if (!charlyIA.history.length && currentLanguage === langue && lignes.every(function (l) { return c[langue + ':' + l]; })) renderCharlyChat();
+      });
+    }
+  }
+  return tcRendreAccueilCharly(m, true);
+}
+
 function renderCharlyChat() {
   // A chaque affichage, les cent derniers messages sont enregistres :
   // tout ce qui change la conversation finit par un affichage.
   tcChargerHistoriqueCharly();
+  // Mission 106 : une conversation qui n'a que l'ancien accueil (une seule ligne) reçoit le nouveau.
+  if (charlyIA.history.length === 1 && tcEstAccueilCharly(charlyIA.history[0]) && !charlyIA.history[0].accueil) {
+    charlyIA.history[0] = tcMessageAccueilCharly();
+    setTimeout(tcSyncCharlyGreeting, 0);
+  }
   tcSauverHistoriqueCharly();
   const body = document.getElementById('charlyChatBody');
-  if (!charlyIA.history.length) {
-    // Welcome message
-    body.innerHTML = `
-      <div style="text-align:center; padding:30px 12px 20px;">
-        <div style="width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:40px; margin:0 auto 14px; box-shadow:0 4px 14px rgba(26,115,232,0.25);">⚡</div>
-        <div style="font-size:18px; font-weight:700; color:var(--text); margin-bottom:8px;">Bonjour, je suis Charly IA</div>
-        <div style="font-size:13px; color:var(--text-sec); line-height:1.5; max-width:300px; margin:0 auto;">
-          Je peux t'aider à remplir ton agenda, organiser ta journée, gérer tes imprévus et préparer certaines démarches.
-          <br><br>
-          <b>Choisis une action ci-dessus ou écris-moi librement.</b>
-        </div>
-      </div>
-    `;
-    return;
-  }
+  // Mission 106 : conversation vide, ou rien que l'accueil : l'accueil au milieu de la page.
+  if (!charlyIA.history.length) { body.innerHTML = tcRendreAccueilCharlyVide(); return; }
+  if (charlyIA.history.length === 1 && tcEstAccueilCharly(charlyIA.history[0])) { body.innerHTML = tcRendreAccueilCharly(charlyIA.history[0], true); return; }
   body.innerHTML = charlyIA.history.map(m => renderChatMessage(m)).join('');
   // Le redessin efface la bulle d'attente : on la remet si Charly
   // cherche toujours, sinon elle disparaitrait au premier rafraichissement.
@@ -12221,6 +12303,7 @@ function tcDemandePrecedente(m) {
 }
 
 function renderChatMessage(m) {
+  if (m && m.accueil) return tcRendreAccueilCharly(m, false);
   if (m && m._groupe) return tcRendreGroupe(m);
   if (m && m._fiches) return tcRendreFiches(m);
   if (m && m._questionType) return tcRendreQuestionType(m);
@@ -12776,7 +12859,8 @@ function tcDateDemandee(texte, now) {
 function tcTitreDepuisDemande(texte) {
   const VIDES = /^(jusqu|jusque|rdv|rendez-?vous|rendez|vous|mets?|met|mettre|ajoute[sz]?|ajouter|cree[sz]?|creer|prends?|prend|prendre|reserve[sz]?|reserver|bloque[sz]?|bloquer|note[sz]?|noter|planifie[sz]?|planifier|programme[sz]?|programmer|cale[sz]?|caler|organise[sz]?|organiser|change[sz]?|changer|modifie[sz]?|modifier|un|une|le|la|les|l|de|du|des|d|moi|me|pour|avec|chez|au|aux|en|et|a|ds|dans|ici|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|stp|svp|s|m|t|n|j|c|qu|il|te|pourriez|pouvez|peux|plait|merci|pourriez-vous|pouvez-vous|peux-tu|tu|je|prie|voudrais|veux|aimerais|faut|y|ai|besoin|aujourd|hui|demain|apres-demain|hier|matin|midi|soir|apres-midi|apres|prochaine?|jour|jours|semaine|semaines|mois|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|h|heure|heures|min|minutes|durant|pendant|vers|environ|que|qui|quand)$/;
   // Les apostrophes separent les mots : « aujourd'hui », « m'ajouter », « s'il te plait » (apostrophe droite ou typographique).
-  const mots = String(texte || '').replace(/[’']/g, ' ').split(/\s+/).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); });
+  // Mission 106 : « un nouveau rendez-vous chez mon dentiste » donne « Dentiste » (« nouveau » devant « rendez-vous » n'est pas le titre).
+  const mots = String(texte || '').replace(/(^|[^A-Za-zÀ-ÿ])(?:nouveau|nouvel|autre)\s+(?=(?:rdv|rendez[\s-]?vous)(?![A-Za-zÀ-ÿ]))/gi, '$1').replace(/[’']/g, ' ').split(/\s+/).map(function (w) { return w.replace(/^[^A-Za-zÀ-ÿ0-9]+|[^A-Za-zÀ-ÿ0-9]+$/g, ''); });
   const utile = mots.map(function (w) {
     const brut = tcSansAccents(w);
     if (!brut) return false;
@@ -17889,15 +17973,11 @@ function hideAuthFlow() {
   // Afficher l'écran de permissions au premier login
   setTimeout(checkPermissionsScreen, 800);
   navigate('assistant');
-  const h = new Date().getHours();
-  const sal = h < 18 ? 'Bonjour' : 'Bonsoir';
-  const fname = tcPrenomUtilisateur();
   tcChargerHistoriqueCharly();
-  const _accueil = sal + (fname ? ' ' + fname : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par exemple, écris-moi ou dis-moi ci-dessous : « Crée-moi un rendez-vous demain à 15h chez mon dentiste ».';
-  // appText : texte de l'app (pas une donnee personnelle) -> traduisible
+  // Mission 106 : l'accueil (une idée par ligne, six exemples), texte de l'app donc traduit.
   // L'accueil ne s'ajoute que si la conversation est vide : sinon il
   // s'empilerait a chaque connexion, et elle ne doit plus jamais se vider.
-  if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueil, appText: true, fr: _accueil});
+  if (!charlyIA.history.length) charlyIA.history.push(tcMessageAccueilCharly());
   renderCharlyChat();
   tcSyncCharlyGreeting();
   // Mission 81 : venu par https://timecool.fr/app/#supprimer-mon-compte, la confirmation s'ouvre une fois connecté.
@@ -18995,12 +19075,8 @@ function showWelcomeSplash(firstname) {
   const security = document.querySelector('.security-banner');
   if (security) security.style.display = '';
   navigate('assistant');
-  const hG = new Date().getHours();
-  const salG = hG < 18 ? 'Bonjour' : 'Bonsoir';
-  const fnameG = tcPrenomUtilisateur();
   tcChargerHistoriqueCharly();
-  const _accueilG = salG + (fnameG ? ' ' + fnameG : '') + ' ! 😊 Je suis Charly, ton assistant TimeCool. Je peux t’aider à organiser ton agenda, gérer tes rappels et bien plus encore. Par exemple, écris-moi ou dis-moi ci-dessous : « Crée-moi un rendez-vous demain à 15h chez mon dentiste ».';
-  if (!charlyIA.history.length) charlyIA.history.push({role:'assistant', content: _accueilG, appText: true, fr: _accueilG});
+  if (!charlyIA.history.length) charlyIA.history.push(tcMessageAccueilCharly());
   if (typeof tcSyncCharlyGreeting === 'function') setTimeout(tcSyncCharlyGreeting, 600);
   setTimeout(renderCharlyChat, 300);
 

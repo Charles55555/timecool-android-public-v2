@@ -88,13 +88,14 @@ const N = agenda().length;
   });
   {
     // Mission 92 : la promesse faite au nouvel inscrit. La phrase est lue dans l'accueil lui-même, tapée telle quelle.
-    const m = page.match(/const _accueil = [^\n]*«[ \u00a0]([^»]+?)[ \u00a0]»/);
+    // Mission 106 : le premier des six exemples (« Crée-moi un nouveau rendez-vous… »).
+    const m = page.match(/const TC_CHARLY_ACCUEIL_EXEMPLES = \[\n  '([^']+)'/);
     const phrase = m ? m[1] : '';
     const avant = ctx.events;
     ctx.events = [];
     const r = ctx.tcCreationLocale(phrase, NOW);
     ctx.events = avant;
-    verifie('l exemple de l accueil (« ' + phrase + ' »), sur un agenda vide : la carte « Dentiste », demain (lundi 12 octobre) à 15h', phrase === 'Crée-moi un rendez-vous demain à 15h chez mon dentiste'
+    verifie('l exemple de l accueil (« ' + phrase + ' »), sur un agenda vide : la carte « Dentiste », demain (lundi 12 octobre) à 15h', phrase === 'Crée-moi un nouveau rendez-vous demain à 15h chez mon dentiste'
       && r.indexOf('[AGENDA]\n2026-10-12 | 15:00-16:00 | Dentiste | rdv\n[/AGENDA]') > -1 && /je te propose ceci\./.test(r), r);
   }
   ['annule le dentiste', 'décale mon rdv de mardi à 16h', 'quand suis-je libre vendredi ?', 'qu est-ce que j ai mardi ?', 'rdv dentiste mardi', 'je suis malade', 'supprime tout mardi après-midi', 'rdv dentiste tous les mardis 15h', 'rdv dentiste mardi 15h ?',

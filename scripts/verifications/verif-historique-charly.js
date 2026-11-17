@@ -179,7 +179,7 @@ titre('Seul « Recommencer » efface');
   verifie('et c est celle du bouton Recommencer', /charlyIA\.history = \[\];\s*tcEffacerHistoriqueCharly\(\);/.test(reset));
   const auth = extraire('hideAuthFlow') || '';
   verifie('la connexion recharge au lieu de vider', /tcChargerHistoriqueCharly\(\);/.test(auth) && !/charlyIA\.history = \[\]/.test(auth));
-  verifie('et n ajoute l accueil que si la conversation est vide', /if \(!charlyIA\.history\.length\) charlyIA\.history\.push\(\{role:'assistant', content: _accueil,/.test(auth));
+  verifie('et n ajoute l accueil que si la conversation est vide', /if \(!charlyIA\.history\.length\) charlyIA\.history\.push\(tcMessageAccueilCharly\(\)\);/.test(auth));
   const bienvenue = extraire('showWelcomeSplash') || '';
   verifie('l ecran de bienvenue aussi', /tcChargerHistoriqueCharly\(\);/.test(bienvenue) && !/charlyIA\.history = \[\]/.test(bienvenue));
 }
@@ -188,7 +188,7 @@ titre('Chaque affichage enregistre');
 {
   const rendu = extraire('renderCharlyChat') || '';
   verifie('renderCharlyChat charge puis enregistre en premier',
-    /^function renderCharlyChat\(\) \{[\s\S]{0,300}?tcChargerHistoriqueCharly\(\);\s*tcSauverHistoriqueCharly\(\);/.test(rendu));
+    /^function renderCharlyChat\(\) \{[\s\S]{0,300}?tcChargerHistoriqueCharly\(\);\s*(\/\/ Mission 106[^\n]*\n\s*if \(charlyIA\.history\.length === 1 && tcEstAccueilCharly\(charlyIA\.history\[0\]\) && !charlyIA\.history\[0\]\.accueil\) \{\s*charlyIA\.history\[0\] = tcMessageAccueilCharly\(\);\s*setTimeout\(tcSyncCharlyGreeting, 0\);\s*\}\s*)?tcSauverHistoriqueCharly\(\);/.test(rendu));
 }
 
 console.log('');
