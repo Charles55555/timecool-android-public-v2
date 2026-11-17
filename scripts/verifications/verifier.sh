@@ -18,6 +18,18 @@ if [ -z "${TC_CHROME:-}" ] && [ -x "$HOME/outils-tc/chrome" ]; then export TC_CH
 
 rouge=0
 
+# Mission 117 (chef, 17/11 : le même vert pour tous) : sans TC_API, l API du dépôt est servie en local par api-locale.sh
+# (php -S 127.0.0.1:8099, mode_test : aucun SMS ; pas de mot de passe e-mail : aucun e-mail ; relais vers le faux service).
+# Les e2e y créent leurs comptes jetables (effacés en fin de passage) au lieu de passer par l API de production.
+if [ -z "${TC_API:-}" ] && [ -f "$D/api-locale.sh" ]; then
+  bash "$D/api-locale.sh" demarrer > "$HOME/api-locale-verifier.log" 2>&1
+  if curl -s -o /dev/null -m 5 -X POST -H 'Content-Type: application/json' http://127.0.0.1:8099/connexion -d '{}'; then
+    export TC_API=http://127.0.0.1:8099
+  else
+    rouge=1; echo "API locale : ne démarre pas (voir ~/api-locale-verifier.log) : les e2e ne joueront pas"
+  fi
+fi
+
 # Mission 70 : les comptes de test qu une suite n a pas pu effacer sont notes ici.
 export TC_COMPTES_RESTES=$(mktemp)
 trap 'rm -f "$TC_COMPTES_RESTES"' EXIT
