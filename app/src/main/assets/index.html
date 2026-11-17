@@ -33093,10 +33093,22 @@ function tcOptionsGroupeDepuisTexte(texte, options) {
     const mm = String(texte || '').match(/\bpour (?:aller )?(.+)$/i);
     if (mm) {
       const motif = mm[1].replace(/\s*(?:,\s*)?\b(?:après (?:le |la |mon |ma )?(?:boulot|travail|taf|bureau|job|journée)|ce soir|le soir|en soirée|en fin de journée|cette semaine|la semaine prochaine|demain|aujourd['’]hui|après-demain|ce week-end)\b/gi, '').replace(/[\s,.;!?]+$/, '').trim();
-      if (motif && motif.length <= 40 && motif.split(/\s+/).length <= 6 && !(typeof tcPhraseNommeUnContact110 === 'function' && tcPhraseNommeUnContact110(motif))) o.titre = motif;
+      if (motif && motif.length <= 40 && motif.split(/\s+/).length <= 6 && !(typeof tcPhraseNommeUnContact110 === 'function' && tcPhraseNommeUnContact110(motif))
+        && !(typeof tcMotifEstUnMoment111 === 'function' && tcMotifEstUnMoment111(motif))) o.titre = motif;
     }
   }
   return Object.keys(o).length ? o : null;
+}
+
+/** Mission 111 : ce qui suit « pour » est-il un moment (jour, date, heure, durée, période) plutôt qu'un motif ? */
+function tcMotifEstUnMoment111(motif) {
+  const t = ' ' + tcSansAccents(String(motif || '')).toLowerCase().replace(/[’']/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  if (/^ (?:le |la |les |l |ce |cet |cette |ces |un |une |deux |trois |quatre |\d+ ?)?(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|demain|apres demain|aujourd hui|ce soir|matin|midi|soir|soiree|semaine|week end|weekend|mois|annee|jour|jours|fin|debut|milieu|heure|heures|h|minute|minutes|min|quart|demi|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\b/.test(t)) return true;
+  if (/^ (?:le |la )?\d{1,2}(?:er)?(?: |h|:|\/|$)/.test(t)) return true;
+  try { if (typeof tcHeureDansTexte === 'function' && tcHeureDansTexte(t)) return true; } catch (e) {}
+  try { if (typeof tcDateDemandee === 'function' && tcDateDemandee(motif, new Date())) return true; } catch (e) {}
+  try { if (typeof tcPeriodeAgenda === 'function' && tcPeriodeAgenda(motif)) return true; } catch (e) {}
+  return false;
 }
 
 async function tcGererRdvGroupe(texte, intention) {

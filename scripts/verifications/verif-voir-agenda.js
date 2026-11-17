@@ -134,7 +134,15 @@ if (!exe) {
   const C = jouer(`
         await tcOuvrirDemo(); await attendre(400);
         var ev = events.filter(function (e) { return e.demo; })[0];
-        tcVoirDansAgenda([ev.id]); await attendre(600); R.calme = regarder(ev.id);`, true);
+        tcVoirDansAgenda([ev.id]); await attendre(600); R.calme = regarder(ev.id);
+        // Le motif après « pour » (examen de la mission 111) : jamais un moment, une date, une heure, une durée ou une période.
+        R.motifs = ['Trouve un créneau avec Alice et Paul pour mardi', 'Trouve un créneau avec Alice et Paul pour lundi à 18h', 'Trouve un créneau avec Alice et Paul pour une heure',
+          'Trouve un créneau avec Alice et Paul pour 2h', 'Trouve un créneau avec Alice et Paul pour le 25', 'Trouve un créneau avec Alice et Paul pour la fin du mois',
+          'Demande un rendez-vous à Paul pour vendredi', 'Trouve un créneau avec Alice et Paul pour demain', 'Trouve un créneau avec Alice et Paul pour ce week-end',
+          'Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot', 'Trouve un créneau avec Alice et Paul pour fêter mon anniversaire après le boulot']
+          .map(function (t) { return ((tcOptionsGroupeDepuisTexte(t, null) || {}).titre) || ''; });`, true);
+  verifie('le motif : « boire un verre », « fêter mon anniversaire » ; jamais « mardi », « lundi à 18h », « une heure », « 2h », « le 25 », « la fin du mois », « vendredi »…',
+    JSON.stringify(C.motifs) === JSON.stringify(['', '', '', '', '', '', '', '', '', 'boire un verre', 'fêter mon anniversaire']), JSON.stringify(C.motifs));
   verifie('« Réduire les animations » : le doigt est là, fixe', C.calme && C.calme.doigt && C.calme.colle && C.calme.mouvement === 'none', JSON.stringify(C));
 }
 
