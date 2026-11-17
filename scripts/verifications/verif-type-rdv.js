@@ -214,7 +214,7 @@ vm.runInContext(page.match(/const TC_TYPES_RDV = \[[\s\S]*?\n\];/)[0], c1);
   verifie('la reponse lance la recherche avec le type, une seule fois, et la question se ferme', c3.appels.length === 1 && c3.appels[0][3] === 'telephone' && c3.appels[0][0] === 'R1,R2' && c3.appels[0][1] === 2 && q._questionType.etat === 'fait');
   await vm.runInContext('tcRepondreTypeGroupe(' + JSON.stringify(q._questionType.id) + ', "visio")', c3);
   verifie('un second toucher ne relance rien', c3.appels.length === 1);
-  verifie('le type suit jusqu au serveur : proposer, confirmer, et la recherche relancee si le creneau est pris', /proposerRdvGroupe\(references, duree, type\)/.test(page) && /confirmerRdvGroupe\(g\.references, s\.date, s\.heure, g\.duree, g\.type\)/.test(page) && /tcProposerRdvGroupe\(g\.references, g\.duree, 'Ce créneau vient d’être pris\. Je relance la recherche :', g\.type\)/.test(page));
+  verifie('le type suit jusqu au serveur : proposer, confirmer, et la recherche relancee si le creneau est pris', /proposerRdvGroupe\(references, duree, type(, options \|\| undefined)?\)/.test(page) && /confirmerRdvGroupe\(g\.references, s\.date, s\.heure, g\.duree, g\.type\)/.test(page) && /tcProposerRdvGroupe\(g\.references, g\.duree, 'Ce créneau vient d’être pris\. Je relance la recherche :', g\.type(, g\.options)?\)/.test(page));
   verifie('la carte est dessinee dans la conversation', /if \(m && m\._questionType\) return tcRendreQuestionType\(m\);/.test(page));
 
   console.log('');

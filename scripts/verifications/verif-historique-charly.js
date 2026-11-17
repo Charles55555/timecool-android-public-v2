@@ -188,7 +188,7 @@ titre('Chaque affichage enregistre');
 {
   const rendu = extraire('renderCharlyChat') || '';
   verifie('renderCharlyChat charge puis enregistre en premier',
-    /^function renderCharlyChat\(\) \{[\s\S]{0,300}?tcChargerHistoriqueCharly\(\);\s*(\/\/ Mission 106[^\n]*\n\s*if \(charlyIA\.history\.length === 1 && tcEstAccueilCharly\(charlyIA\.history\[0\]\) && !charlyIA\.history\[0\]\.accueil\) \{\s*charlyIA\.history\[0\] = tcMessageAccueilCharly\(\);\s*setTimeout\(tcSyncCharlyGreeting, 0\);\s*\}\s*)?tcSauverHistoriqueCharly\(\);/.test(rendu));
+    /^function renderCharlyChat\(\) \{[\s\S]{0,300}?tcChargerHistoriqueCharly\(\);\s*(\/\/ Missions? 10[67][^\n]*\n\s*if \(charlyIA\.history\.length === 1 && tcEstAccueilCharly\(charlyIA\.history\[0\]\) && (!charlyIA\.history\[0\]\.accueil|charlyIA\.history\[0\]\.v !== 107)\) \{\s*charlyIA\.history\[0\] = tcMessageAccueilCharly\(\);\s*setTimeout\(tcSyncCharlyGreeting, 0\);\s*\}\s*)?tcSauverHistoriqueCharly\(\);/.test(rendu));
 }
 
 console.log('');

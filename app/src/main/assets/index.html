@@ -12143,9 +12143,9 @@ function tcEffacerHistoriqueCharly() {
 }
 
 /**
- * Mission 106 (Charles, 17/11, textes validés mot pour mot) : l'accueil de la page Charly IA, une idée par ligne, puis six
- * exemples l'un sous l'autre. Tant que la conversation n'a que cet accueil (ou rien), il s'affiche au milieu de la page.
- * Les exemples sont du texte simple (on ne les touche pas).
+ * Mission 106, revue par la 107 (Charles, 17/11, textes validés mot pour mot) : l'accueil de la page Charly IA, une idée par
+ * ligne, un exemple, puis « Tu veux voir tout ce dont je suis capable ? » et le bouton « Voir la démonstration ». Tant que la
+ * conversation n'a que cet accueil (ou rien), il s'affiche au milieu de la page.
  */
 const TC_CHARLY_ACCUEIL_LIGNES = [
   'Je suis Charly, ton assistant TimeCool.',
@@ -12153,12 +12153,13 @@ const TC_CHARLY_ACCUEIL_LIGNES = [
   'Par exemple, écris-moi ou dis-moi ci-dessous :'
 ];
 const TC_CHARLY_ACCUEIL_EXEMPLES = [
-  'Crée-moi un nouveau rendez-vous demain à 15h chez mon dentiste',
-  'Demande un rendez-vous demain entre 15h et 16h à mon ami Michel',
-  'Excuse-moi auprès de Paul et préviens-le que j’aurai 10 minutes de retard',
-  'Quand suis-je libre ce vendredi ?',
-  'Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot',
-  'Je suis malade, décale ma journée de demain, d’après-demain ou de cette semaine'
+  'Crée-moi un nouveau rendez-vous demain à 15h chez mon dentiste'
+];
+/** Mission 107 : l'invitation à la démonstration, puis le texte du bouton. */
+const TC_CHARLY_ACCUEIL_DEMO = [
+  'Tu veux voir tout ce dont je suis capable ?',
+  'Je te montre avec un agenda d’exemple et des contacts d’exemple.',
+  'Voir la démonstration'
 ];
 
 /** Les lignes de l'accueil, en français, avec le prénom du compte. */
@@ -12166,16 +12167,16 @@ function tcLignesAccueilCharly() {
   const sal = new Date().getHours() < 18 ? 'Bonjour' : 'Bonsoir';
   const prenom = tcPrenomUtilisateur();
   return [sal + (prenom ? ' ' + prenom : '') + ' ! 😊'].concat(TC_CHARLY_ACCUEIL_LIGNES,
-    TC_CHARLY_ACCUEIL_EXEMPLES.map(function (e) { return '« ' + e + ' »'; }));
+    TC_CHARLY_ACCUEIL_EXEMPLES.map(function (e) { return '« ' + e + ' »'; }), TC_CHARLY_ACCUEIL_DEMO);
 }
 
-/** Le message d'accueil rangé dans la conversation : texte de l'app (traduit, jamais envoyé au modèle). */
+/** Le message d'accueil rangé dans la conversation : texte de l'app (traduit, jamais envoyé au modèle). v : sa version. */
 function tcMessageAccueilCharly() {
   const fr = tcLignesAccueilCharly().join('\n');
-  return { role: 'assistant', content: fr, appText: true, fr: fr, accueil: true };
+  return { role: 'assistant', content: fr, appText: true, fr: fr, accueil: true, v: 107 };
 }
 
-/** Un accueil de Charly (celui-ci ou l'ancien, d'une seule ligne). */
+/** Un accueil de Charly (celui-ci ou un ancien). */
 function tcEstAccueilCharly(m) {
   return !!(m && m.role === 'assistant' && m.appText && /Je suis Charly/.test(String(m.fr || m.content || '')));
 }
@@ -12193,17 +12194,23 @@ function tcTraduireAccueilCharly(fr, langue) {
 function tcRendreAccueilCharly(m, seul) {
   const lignes = String((m && m.content) || '').split('\n');
   const n = 1 + TC_CHARLY_ACCUEIL_LIGNES.length;
+  const nEx = (m && m.v === 107) ? TC_CHARLY_ACCUEIL_EXEMPLES.length : lignes.length - n;
   const intro = lignes.slice(0, n);
-  const exemples = lignes.slice(n);
-  const html = '<div style="font-size:' + (seul ? '18' : '15') + 'px; font-weight:700; color:var(--text); margin-bottom:6px;">' + escapeHTML(intro[0] || '') + '</div>'
-    + intro.slice(1).map(function (l) {
-      return '<div style="font-size:14px; color:var(--text); line-height:1.5; margin-bottom:4px;">' + escapeHTML(l) + '</div>';
-    }).join('')
+  const exemples = lignes.slice(n, n + nEx);
+  const demo = (m && m.v === 107) ? lignes.slice(n + nEx) : [];
+  const ligne = function (l) { return '<div style="font-size:14px; color:var(--text); line-height:1.5; margin-bottom:4px;">' + escapeHTML(l) + '</div>'; };
+  let html = '<div style="font-size:' + (seul ? '18' : '15') + 'px; font-weight:700; color:var(--text); margin-bottom:6px;">' + escapeHTML(intro[0] || '') + '</div>'
+    + intro.slice(1).map(ligne).join('')
     + '<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">'
     + exemples.map(function (l) {
       return '<div class="tc-accueil-exemple" style="font-size:14px; color:var(--text-sec); line-height:1.45;">' + escapeHTML(l) + '</div>';
     }).join('')
     + '</div>';
+  if (demo.length >= 3) {
+    html += '<div style="margin-top:22px;">' + demo.slice(0, -1).map(ligne).join('')
+      + '<button id="tcBoutonDemo" onclick="tcOuvrirDemo()" style="margin-top:10px; padding:12px 22px; background:var(--g-blue); color:#fff; border:none; border-radius:22px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 3px 10px rgba(26,115,232,0.25);">'
+      + escapeHTML(demo[demo.length - 1]) + '</button></div>';
+  }
   if (!seul) return tcBulleCharly(html);
   return '<div id="tcAccueilCharly" style="min-height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:8px 6px;">'
     + '<div style="width:100%; max-width:560px; overflow-wrap:break-word;">'
@@ -12231,12 +12238,410 @@ function tcRendreAccueilCharlyVide() {
   return tcRendreAccueilCharly(m, true);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 107a (Charles, 17/11) : « Voir la démonstration ».
+
+   Un bac à sable dans la page. À l'entrée, les vraies données en mémoire (agenda, contacts, conversations, messages) sont mises
+   de côté et remplacées par des données d'exemple, fabriquées à ce moment-là (rien au chargement). Pendant la démonstration :
+   - le stockage de l'appareil n'est jamais écrit : les écritures vont dans une copie en mémoire, perdue à la sortie ; une
+     lecture ne voit que cette copie et quelques réglages d'affichage (langue, thème…), jamais les vraies données ;
+   - aucun appel ne sort : fetch est coupé, TC_BACKEND répond avec les agendas d'exemple, la synchronisation, les rappels du
+     téléphone et les liens sms:/mailto: ne font rien ; le modèle n'est pas appelé (réponse locale) ;
+   - le vrai moteur de Charly travaille, sur les données d'exemple.
+   Page fermée ou rechargée en pleine démonstration : rien n'a été écrit, tout revient comme avant. « Quitter » remet tout.
+   ═══════════════════════════════════════════════════════════════ */
+let _tcDemo = null;
+
+/** La démonstration est-elle ouverte ? */
+function tcDemoActive() { return !!_tcDemo; }
+
+/** Les phrases de la démonstration (107a : les deux premières ; les trois autres arrivent avec la 107b). */
+const TC_DEMO_PHRASES = [
+  { id: 'michel', texte: 'Demande un rendez-vous demain à mon ami Michel' },
+  { id: 'vendredi', texte: 'Quand suis-je libre ce vendredi ?' }
+];
+const TC_DEMO_TEXTES = {
+  bandeau: 'Démonstration',
+  quitter: 'Quitter',
+  intro: 'Voici un agenda d’exemple.\nTouche une phrase pour voir ce que je fais.',
+  suite: 'Touche une autre phrase, ou écris-moi ce que tu veux.',
+  fini: 'Tu as tout vu.\nÉcris-moi ce que tu veux, ou touche « Quitter ».',
+  libre: 'Dans la démonstration, je te montre ces phrases.\nTouche-en une :',
+  cale: 'C’est calé. Regarde dans l’agenda.',
+  voirAgenda: 'Voir l’agenda',
+  apresQuitter: 'Pour le faire avec tes vrais amis, importe tes contacts.',
+  importer: 'Importer mes contacts'
+};
+
+/** Les clés du stockage qu'une lecture voit pendant la démonstration : l'affichage seulement, jamais une donnée. */
+function tcDemoClesLisibles() {
+  const k = ['timecool_language', 'tc_theme', 'tc_premier_jour_semaine', 'tc_agenda_start', 'tc_agenda_end', 'tc_timezone', 'timecool_session_active'];
+  ['TC_LANGUE_AVANT_CONNEXION', 'TC_FEATURES_KEY', 'TC_DEVICE_ID_KEY', 'TC_DEVICE_KEY_STORAGE', 'TC_JETON_CLE', 'TC_TRANSLATE_KEY', 'TC_TIMEZONE_KEY',
+    'TC_PERMISSIONS_KEY', 'TC_ONBOARDING_KEY', 'TC_AUTO_UPDATE_KEY', 'TC_PROMPT_VERSION_KEY'].forEach(function (n) {
+    try { const v = (0, eval)('typeof ' + n + ' !== "undefined" ? ' + n + ' : null'); if (v) k.push(v); } catch (e) {}
+  });
+  return k;
+}
+
+/** Une date (Date) à minuit, n jours après aujourd'hui. */
+function tcDemoJour(n) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n); return d; }
+
+/** Le prochain vendredi (aujourd'hui si on est vendredi). */
+function tcDemoVendredi() { const d = tcDemoJour(0); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7)); return d; }
+
+/** Le prochain dimanche (dimanche : celui de la semaine suivante, le repas de midi serait déjà passé). */
+function tcDemoDimanche() { const d = tcDemoJour(0); d.setDate(d.getDate() + (((7 - d.getDay()) % 7) || 7)); return d; }
+
+/** Un rendez-vous d'exemple. */
+function tcDemoRdv(id, d, h, m, duree, titre, cat) {
+  const fin = h * 60 + m + duree;
+  return { id: 'demo_' + id, mode: 'user', date: tcISO(d), startH: h, startM: m, endH: Math.floor(fin / 60), endM: fin % 60, title: titre, cat: cat || 'perso', notes: '', demo: true };
+}
+
+/** Les données d'exemple, placées par rapport à aujourd'hui (fabriquées à l'ouverture, jamais au chargement). */
+function tcDemoDonnees() {
+  const maintenant = new Date();
+  const demain = tcDemoJour(1);
+  // Le café : une heure après l'entrée, à l'heure pile ; tard le soir, demain à 9h.
+  let hCafe = maintenant.getHours() + 1 + (maintenant.getMinutes() ? 1 : 0);
+  let jCafe = tcDemoJour(0);
+  if (hCafe > 21) { hCafe = 9; jCafe = demain; }
+  const vendredi = tcDemoVendredi();
+  const dimanche = tcDemoDimanche();
+  const evs = [
+    tcDemoRdv('cafe', jCafe, hCafe, 0, 60, 'Café avec Paul Virtuel', 'perso'),
+    tcDemoRdv('coiffeur', demain, 10, 0, 60, 'Coiffeur', 'perso'),
+    tcDemoRdv('dejeuner', demain, 12, 30, 60, 'Déjeuner avec Michel Virtuel', 'perso'),
+    // « Quand suis-je libre ce vendredi ? » montre du pris et du libre : une réunion le matin, le sport en fin de journée.
+    tcDemoRdv('reunion', vendredi, 10, 0, 60, 'Réunion d’équipe', 'travail'),
+    tcDemoRdv('sport', vendredi, 18, 0, 60, 'Sport', 'sport'),
+    tcDemoRdv('famille', dimanche, 12, 30, 120, 'Repas de famille', 'perso')
+  ];
+  const contact = function (id, prenom, nom, n, timecool) {
+    const c = { id: 'demo_' + id, name: prenom + ' ' + nom, firstname: prenom, lastname: nom, phone: '06 39 98 00 ' + n, email: id + '.' + tcSansAccents(nom.toLowerCase()) + '@exemple-timecool.fr', isTimeCool: timecool, categories: [], demo: true };
+    if (timecool) c.referenceCompte = 'DEMO-' + id.toUpperCase();
+    return c;
+  };
+  const contacts = [
+    contact('michel', 'Michel', 'Virtuel', '01', true),
+    contact('paul', 'Paul', 'Virtuel', '02', true),
+    contact('alice', 'Alice', 'Virtuelle', '03', true),
+    contact('chloe', 'Chloé', 'Virtuelle', '04', true),
+    contact('virginie', 'Virginie', 'Virtuelle', '05', true),
+    contact('julien', 'Julien', 'Virtuel', '06', false)
+  ];
+  // L'agenda de chaque contact avec TimeCool : assez pris pour être vrai, assez libre pour des créneaux communs.
+  const occ = function (d, h1, h2) { return { date: tcISO(d), debut: h1 * 60, fin: h2 * 60 }; };
+  const agendas = {
+    'DEMO-MICHEL': [occ(demain, 8, 16)],
+    'DEMO-PAUL': [occ(tcDemoJour(0), 8, 12)],
+    'DEMO-ALICE': [occ(demain, 9, 12), occ(tcDemoJour(2), 14, 18)],
+    'DEMO-CHLOE': [occ(demain, 13, 17), occ(tcDemoJour(3), 8, 11)],
+    'DEMO-VIRGINIE': [occ(demain, 8, 10), occ(tcDemoJour(2), 9, 13)]
+  };
+  return { events: evs, contacts: contacts, agendas: agendas };
+}
+
+/** Une plage [debut, fin[ (minutes) de ce jour est-elle libre dans cette liste d'occupations ? */
+function tcDemoLibre(occupations, date, debut, fin) {
+  return !occupations.some(function (o) { return o.date === date && o.debut < fin && o.fin > debut; });
+}
+
+/** L'agenda d'exemple de l'utilisateur, en occupations. */
+function tcDemoOccupationsMoi() {
+  return (Array.isArray(events) ? events : []).filter(function (e) { return e && e.mode === 'user'; }).map(function (e) {
+    return { date: e.date, debut: e.startH * 60 + (e.startM || 0), fin: e.endH * 60 + (e.endM || 0) };
+  });
+}
+
+/** Le serveur de la démonstration : les mêmes réponses que l'API (créneaux communs, confirmation), lues dans les agendas d'exemple. */
+function tcDemoServeur() {
+  const prenomDe = function (ref) { const c = contactsList.find(function (x) { return x.referenceCompte === ref; }); return c ? String(c.name).split(' ')[0] : ''; };
+  const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const libelle = function (d) { return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()]; };
+  const jourDe = function (iso) { const p = String(iso).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+  return {
+    // Comme creneauxCommuns (API) : de 8h à 20h, le meilleur de chaque jour (ou par_jour), trois en tout (ou combien).
+    async proposerRdvGroupe(references, duree, type, options) {
+      await new Promise(function (r) { setTimeout(r, 700); });
+      const o = options || {};
+      duree = (duree >= 1 && duree <= 3) ? duree : 1;
+      const refs = (Array.isArray(references) ? references : []).filter(function (r) { return _tcDemo.agendas[r]; });
+      const jours = [];
+      if (o.depuis || o.jusqua) {
+        const d0 = jourDe(o.depuis || tcISO(tcDemoJour(1)));
+        const f = o.jusqua || tcISO(new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + 13));
+        for (let d = new Date(d0), n = 0; tcISO(d) <= f && n < 31; d.setDate(d.getDate() + 1), n++) jours.push(new Date(d));
+      } else for (let j = 1; j <= 14; j++) jours.push(tcDemoJour(j));
+      const moi = tcDemoOccupationsMoi(), now = new Date(), candidats = [];
+      jours.forEach(function (d) {
+        const date = tcISO(d), duJour = [];
+        for (let h = 8; h + duree <= 20; h++) {
+          if (date === tcISO(now) && h <= now.getHours()) continue;
+          if (!tcDemoLibre(moi, date, h * 60, (h + duree) * 60)) continue;
+          const manquants = refs.filter(function (r) { return !tcDemoLibre(_tcDemo.agendas[r], date, h * 60, (h + duree) * 60); }).map(prenomDe);
+          if (manquants.length >= refs.length) continue;
+          duJour.push({ date: date, heure: h, minute: 0, duree: duree, libelle: libelle(d), manquants: manquants });
+        }
+        duJour.sort(function (a, b) { return (a.manquants.length - b.manquants.length) || (a.heure - b.heure); });
+        duJour.slice(0, Math.max(1, o.par_jour || 1)).forEach(function (c) { candidats.push(c); });
+      });
+      candidats.sort(function (a, b) { return (a.manquants.length - b.manquants.length) || (a.date < b.date ? -1 : a.date > b.date ? 1 : a.heure - b.heure); });
+      return { creneaux: candidats.slice(0, o.combien || 3), invites: refs.map(prenomDe), sans_acces: [], duree: duree, type: type || 'physique' };
+    },
+    // Comme /rdv/groupe/confirmer : le rendez-vous dans l'agenda d'exemple de chacun.
+    async confirmerRdvGroupe(references, date, heure, duree, type, options) {
+      await new Promise(function (r) { setTimeout(r, 500); });
+      const refs = (Array.isArray(references) ? references : []).filter(function (r) { return _tcDemo.agendas[r]; });
+      const prenoms = refs.map(prenomDe);
+      const noms = refs.map(function (r) { const c = contactsList.find(function (x) { return x.referenceCompte === r; }); return c ? c.name : ''; });
+      const titre = (options && options.titre ? options.titre + ' avec ' : '') + noms.join(', ');
+      const ev = tcDemoRdv('grp_' + Date.now(), jourDe(date), heure, 0, duree * 60, titre, (options && options.cat) || 'travail');
+      if (type) ev.type = type;
+      events.push(ev);
+      refs.forEach(function (r) { _tcDemo.agendas[r].push({ date: date, debut: heure * 60, fin: (heure + duree) * 60 }); });
+      _tcDemo.cale = true;
+      return { ok: true, libelle: libelle(jourDe(date)), heure: String(heure).padStart(2, '0') + ':00', inclus: prenoms, exclus: [] };
+    },
+    async propositions() { return []; },
+    async detecterContactsInscrits() { return []; },
+    async syncTirer() { return { elements: [], version: 0, suite: false }; },
+    async syncVersionServeur() { return { version: 0 }; },
+    async syncPousser() { return { version: 0 }; }
+  };
+}
+
+/** Le bandeau « Démonstration » + « Quitter », toujours visible en haut. */
+function tcDemoBandeau(montrer) {
+  let b = document.getElementById('tcDemoBandeau');
+  if (!montrer) { if (b) b.remove(); document.body.style.paddingTop = ''; return; }
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'tcDemoBandeau';
+    b.setAttribute('role', 'status');
+    b.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:9500; display:flex; align-items:center; justify-content:center; gap:12px; padding:6px 12px; background:#fff4e0; border-bottom:1px solid #fbd784; color:#8a6500; font-size:14px; font-weight:700; box-sizing:border-box; height:42px;';
+    b.innerHTML = '<span>🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.bandeau)) + '</span>'
+      + '<button onclick="tcQuitterDemo()" style="padding:6px 16px; background:#fff; color:#8a6500; border:1.5px solid #f0b429; border-radius:16px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.quitter)) + '</button>';
+    document.body.appendChild(b);
+  }
+  document.body.style.paddingTop = '42px';
+}
+
+/** Un texte de la démonstration dans la langue de l'appli (traduit à l'ouverture, avant que le réseau soit coupé). */
+function tcDemoTexte(fr) {
+  const l = (typeof currentLanguage !== 'undefined') ? currentLanguage : 'fr';
+  if (!l || l === 'fr') return fr;
+  const c = (typeof TC_TRANSLATE_CACHE !== 'undefined' && TC_TRANSLATE_CACHE) || {};
+  return String(fr).split('\n').map(function (x) { return c[l + ':' + x] || x; }).join('\n');
+}
+
+/** Tous les textes de la démonstration, traduits d'avance (ligne par ligne). */
+async function tcDemoTraduire() {
+  const l = (typeof currentLanguage !== 'undefined') ? currentLanguage : 'fr';
+  if (!l || l === 'fr' || typeof translateText !== 'function') return;
+  const tout = [];
+  Object.keys(TC_DEMO_TEXTES).forEach(function (k) { String(TC_DEMO_TEXTES[k]).split('\n').forEach(function (x) { tout.push(x); }); });
+  TC_DEMO_PHRASES.forEach(function (p) { tout.push(p.texte); });
+  try { await Promise.race([Promise.all(tout.map(function (x) { return translateText(x, l); })), new Promise(function (r) { setTimeout(r, 4000); })]); } catch (e) {}
+}
+
+/** Le message de Charly avec les boutons des phrases qui restent. */
+function tcDemoMessagePhrases(texte) {
+  return { role: 'assistant', content: texte, appText: true, _app: true, _demo: { phrases: true } };
+}
+
+/** Le dessin d'un message de la démonstration. */
+function tcRendreDemo(m) {
+  const d = m._demo || {};
+  let h = escapeHTML(tcDemoTexte(m.content || '')).replace(/\n/g, '<br>');
+  if (d.phrases && _tcDemo) {
+    const restent = TC_DEMO_PHRASES.filter(function (p) { return !_tcDemo.faites[p.id]; });
+    h += '<div style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">' + restent.map(function (p) {
+      return '<button class="tc-demo-phrase" onclick="tcDemoJouer(\'' + p.id + '\')" style="text-align:left; padding:10px 12px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:12px; font-size:13.5px; font-weight:600; cursor:pointer;">« ' + escapeHTML(tcDemoTexte(p.texte)) + ' »</button>';
+    }).join('') + '</div>';
+  }
+  if (d.agenda) h += '<div style="margin-top:8px;"><button onclick="navigate(\'calendar\')" style="padding:8px 14px; background:#e6f4ea; color:var(--g-green); border:1.5px solid #b9e1c4; border-radius:16px; font-size:13px; font-weight:600; cursor:pointer;">📅 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.voirAgenda)) + '</button></div>';
+  if (d.importer) h += '<div style="margin-top:8px;"><button onclick="importPhoneContacts()" style="padding:9px 16px; background:var(--g-blue); color:#fff; border:none; border-radius:16px; font-size:13px; font-weight:700; cursor:pointer;">📱 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.importer)) + '</button></div>';
+  return tcBulleCharly(h);
+}
+
+/** Une question attend-elle encore un geste (carte à choix, boutons) ? Alors les phrases ne reviennent pas encore. */
+function tcDemoQuestionEnCours() {
+  const h = charlyIA.history, m = h[h.length - 1];
+  if (!m || m.role !== 'assistant') return true;
+  if (m._demo) return true;
+  if (m._groupe && m._groupe.etat !== 'fait') return true;
+  if (m._questionType && m._questionType.etat === 'choix') return true;
+  // Une question de Charly (« C’est avec quelqu’un de tes contacts ? ») attend sa réponse.
+  if (!m._groupe && /\?\s*$/.test(String(m.content || '').replace(/<[^>]*>/g, ''))) return true;
+  try { if (typeof tcAttenteContact === 'function' && typeof extractAgendaProposals === 'function' && tcAttenteContact(m, extractAgendaProposals(m.content || ''))) return true; } catch (e) {}
+  return typeof tcEstUnCadreAQuestion === 'function' && tcEstUnCadreAQuestion(m) && !m._groupe;
+}
+
+/** Après chaque réponse de Charly dans la démonstration : « C'est calé », puis les phrases qui restent. */
+function tcDemoApres() {
+  if (!_tcDemo) return;
+  if (_tcDemo.cale) {
+    _tcDemo.cale = false;
+    charlyIA.history.push({ role: 'assistant', content: TC_DEMO_TEXTES.cale, appText: true, _app: true, _demo: { agenda: true } });
+  }
+  if (tcDemoQuestionEnCours()) { renderCharlyChat(); return; }
+  const restent = TC_DEMO_PHRASES.filter(function (p) { return !_tcDemo.faites[p.id]; });
+  charlyIA.history.push(tcDemoMessagePhrases(restent.length ? TC_DEMO_TEXTES.suite : TC_DEMO_TEXTES.fini));
+  renderCharlyChat();
+}
+
+/** Une phrase de la démonstration, touchée : elle part comme s'il l'avait écrite, le vrai moteur répond. */
+async function tcDemoJouer(id) {
+  if (!_tcDemo) return;
+  const p = TC_DEMO_PHRASES.find(function (x) { return x.id === id; });
+  if (!p) return;
+  _tcDemo.faites[id] = true;
+  const inp = document.getElementById('charlyInput');
+  if (inp) inp.value = p.texte;
+  await charlySendMessage();
+}
+
+/** Remplace une fonction de la page par son nom (le nom global, celui qu'appellent les autres fonctions). */
+function tcDemoRemplacer(nom, f) {
+  window.__tcDemoFonction = f;
+  try { (0, eval)(nom + ' = window.__tcDemoFonction'); } finally { window.__tcDemoFonction = null; }
+}
+
+/** « Voir la démonstration » : les vraies données de côté, les données d'exemple, le stockage et le réseau coupés. */
+async function tcOuvrirDemo() {
+  if (_tcDemo) return;
+  await tcDemoTraduire();
+  if (_tcDemo) return;
+  const donnees = tcDemoDonnees();
+  const S = Storage.prototype;
+  const etat = {
+    faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(),
+    vrai: {
+      events: events, contactsList: contactsList, history: charlyIA.history, historiqueCharge: charlyIA._historiqueCharge,
+      messages: (typeof messages !== 'undefined') ? messages : null, conv: (typeof _tcConvCharly !== 'undefined') ? _tcConvCharly : null,
+      tasks: (typeof tasksList !== 'undefined') ? tasksList : null, birthdays: (typeof birthdays !== 'undefined') ? birthdays : null,
+      demoMode: charlyIA.config.demoMode
+    },
+    fonctions: {}, backend: {},
+    stockage: { getItem: S.getItem, setItem: S.setItem, removeItem: S.removeItem, clear: S.clear },
+    fetch: window.fetch
+  };
+  _tcDemo = etat;
+  // 1. Le stockage : jamais écrit ; une lecture voit la copie de la démonstration, ou un réglage d'affichage.
+  const lire = etat.stockage.getItem;
+  S.setItem = function (k, v) { if (this === window.localStorage && _tcDemo) { _tcDemo.copie[String(k)] = String(v); return; } return etat.stockage.setItem.call(this, k, v); };
+  S.removeItem = function (k) { if (this === window.localStorage && _tcDemo) { _tcDemo.copie[String(k)] = null; return; } return etat.stockage.removeItem.call(this, k); };
+  S.clear = function () { if (this === window.localStorage && _tcDemo) { _tcDemo.copie = {}; return; } return etat.stockage.clear.call(this); };
+  S.getItem = function (k) {
+    if (this === window.localStorage && _tcDemo) {
+      k = String(k);
+      if (Object.prototype.hasOwnProperty.call(_tcDemo.copie, k)) return _tcDemo.copie[k];
+      return _tcDemo.lisibles.indexOf(k) > -1 ? lire.call(this, k) : null;
+    }
+    return lire.call(this, k);
+  };
+  // 2. Le réseau : rien ne sort.
+  window.fetch = function () { return Promise.reject(new TypeError('Démonstration : aucun appel réseau.')); };
+  // 3. Le serveur : les agendas d'exemple répondent ; tout autre appel répond « fait », sans rien envoyer.
+  const faux = tcDemoServeur();
+  Object.keys(TC_BACKEND).forEach(function (k) {
+    if (typeof TC_BACKEND[k] !== 'function' || k === 'estConnecte') return;
+    etat.backend[k] = TC_BACKEND[k];
+    TC_BACKEND[k] = faux[k] || async function () { return {}; };
+  });
+  // 4. Ce qui sortirait de l'appli : synchronisation, rappels du téléphone, sms:/mailto:/wa.me, le modèle.
+  // Le modèle n'est pas appelé : une phrase libre que le moteur ne sait pas jouer reçoit les phrases de la démonstration.
+  const neutres = {
+    tcSyncBientot: function () {}, tcSyncTour: async function () {}, tcProgrammerRappels: function () {}, tcOuvrirAilleurs: function () {},
+    callAI: async function () { return TC_DEMO_TEXTES.libre; }
+  };
+  Object.keys(neutres).forEach(function (n) {
+    try { etat.fonctions[n] = (0, eval)(n); } catch (e) { return; }
+    tcDemoRemplacer(n, neutres[n]);
+  });
+  // Chaque réponse de Charly finit par les phrases qui restent.
+  etat.fonctions.charlySendMessage = charlySendMessage;
+  etat.fonctions.tcConfirmerRdvGroupe = tcConfirmerRdvGroupe;
+  charlySendMessage = async function () { await etat.fonctions.charlySendMessage.apply(this, arguments); tcDemoApres(); };
+  tcConfirmerRdvGroupe = async function () { await etat.fonctions.tcConfirmerRdvGroupe.apply(this, arguments); tcDemoApres(); };
+  // 5. Les données d'exemple.
+  events = donnees.events;
+  contactsList = donnees.contacts;
+  if (typeof messages !== 'undefined') messages = { user: [], pro: [] };
+  if (typeof _tcConvCharly !== 'undefined') _tcConvCharly = [];
+  if (typeof tasksList !== 'undefined') tasksList = [];
+  if (typeof birthdays !== 'undefined') birthdays = [];
+  charlyIA.config.demoMode = true;
+  charlyIA._historiqueCharge = true;
+  charlyIA.history = [tcDemoMessagePhrases(TC_DEMO_TEXTES.intro)];
+  tcDemoBandeau(true);
+  navigate('assistant');
+  renderCharlyChat();
+}
+
+/** « Quitter » : tout revient comme avant, puis « importe tes contacts ». */
+function tcQuitterDemo() {
+  const etat = _tcDemo;
+  if (!etat) return;
+  const S = Storage.prototype;
+  S.getItem = etat.stockage.getItem; S.setItem = etat.stockage.setItem; S.removeItem = etat.stockage.removeItem; S.clear = etat.stockage.clear;
+  window.fetch = etat.fetch;
+  Object.keys(etat.backend).forEach(function (k) { TC_BACKEND[k] = etat.backend[k]; });
+  Object.keys(etat.fonctions).forEach(function (n) { tcDemoRemplacer(n, etat.fonctions[n]); });
+  events = etat.vrai.events;
+  contactsList = etat.vrai.contactsList;
+  if (etat.vrai.messages !== null) messages = etat.vrai.messages;
+  if (typeof _tcConvCharly !== 'undefined') _tcConvCharly = etat.vrai.conv;
+  if (etat.vrai.tasks !== null) tasksList = etat.vrai.tasks;
+  if (etat.vrai.birthdays !== null) birthdays = etat.vrai.birthdays;
+  charlyIA.config.demoMode = etat.vrai.demoMode;
+  charlyIA.history = etat.vrai.history;
+  charlyIA._historiqueCharge = etat.vrai.historiqueCharge;
+  _tcDemo = null;
+  tcDemoBandeau(false);
+  charlyIA.history.push({ role: 'assistant', content: TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
+  navigate('assistant');
+  renderCharlyChat();
+  try { if (typeof render === 'function') render(); } catch (e) {}
+}
+
+/**
+ * Mission 107a : « Demande un rendez-vous demain à mon ami Michel » : un contact qui a TimeCool, un moment : ses créneaux
+ * communs avec toi, lus dans son agenda (comme « demande à Hugo quand il est dispo », mission 65), sans lui écrire.
+ * Un autre contact, plusieurs, ou aucun : la phrase suit son chemin d'avant.
+ */
+async function tcDemanderRdvContact107(text) {
+  try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64()) return false; } catch (e) { return false; }
+  const norm = tcClasseNormaliser(text);
+  const m = norm.match(/^(?:stp |svp |charly )?(?:demande|demandes|demander)(?: moi)? (?:un |une )?(?:rendez vous|rdv|creneau)( .*)? (?:a|avec) (.+)$/);
+  if (!m || typeof tcContactsParMots !== 'function' || typeof tcGererRdvGroupe !== 'function') return false;
+  const VIDES = new RegExp('^(mon|ma|mes|le|la|l|' + TC_FICHE_LIENS + '|demain|apres|aujourd|hui|ce|cet|cette|semaine|prochaine|prochain|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|matin|soir|midi|aprem|entre|et|vers|pour|stp|svp|s|il|te|plait|\\d+h?\\d*)$');
+  const mots = m[2].split(' ').filter(function (w) { return w.length >= 2 && !VIDES.test(w); });
+  if (!mots.length) return false;
+  let c = [];
+  try { c = tcContactsParMots(mots); } catch (e) { c = []; }
+  if (c.length !== 1 || !c[0].referenceCompte || c[0].isTimeCool === false) return false;
+  const prenom = String(c[0].name || '').split(' ')[0];
+  const periode = (typeof tcPeriodeAgenda === 'function') ? tcPeriodeAgenda(text) : null;
+  const options = periode && periode.debut ? { depuis: tcISO(periode.debut), jusqua: tcISO(periode.fin || periode.debut), combien: 3, par_jour: periode.fin ? 1 : 3 } : null;
+  await tcGererRdvGroupe(text, { contacts: [c[0]], duree: 1, options: options });
+  const q = charlyIA.history[charlyIA.history.length - 1];
+  if (q && q._questionType) {
+    q._questionType.preambule = prenom + ' a TimeCool : je regarde vos créneaux communs, sans lui écrire.';
+    q.content = q._questionType.preambule + '\n' + q.content;
+    renderCharlyChat();
+  }
+  return true;
+}
+
 function renderCharlyChat() {
   // A chaque affichage, les cent derniers messages sont enregistres :
   // tout ce qui change la conversation finit par un affichage.
   tcChargerHistoriqueCharly();
-  // Mission 106 : une conversation qui n'a que l'ancien accueil (une seule ligne) reçoit le nouveau.
-  if (charlyIA.history.length === 1 && tcEstAccueilCharly(charlyIA.history[0]) && !charlyIA.history[0].accueil) {
+  // Missions 106 et 107 : une conversation qui n'a qu'un accueil d'avant (d'une ligne, ou celui de la 106) reçoit le nouveau.
+  if (charlyIA.history.length === 1 && tcEstAccueilCharly(charlyIA.history[0]) && charlyIA.history[0].v !== 107) {
     charlyIA.history[0] = tcMessageAccueilCharly();
     setTimeout(tcSyncCharlyGreeting, 0);
   }
@@ -12304,6 +12709,7 @@ function tcDemandePrecedente(m) {
 
 function renderChatMessage(m) {
   if (m && m.accueil) return tcRendreAccueilCharly(m, false);
+  if (m && m._demo) return tcRendreDemo(m);
   if (m && m._groupe) return tcRendreGroupe(m);
   if (m && m._fiches) return tcRendreFiches(m);
   if (m && m._questionType) return tcRendreQuestionType(m);
@@ -16265,6 +16671,8 @@ async function charlySendMessage() {
   // « demande à Hugo quand il est dispo » : vos créneaux communs (mission 65).
   if (typeof tcAbsentALHeureM65 === 'function' && tcAbsentALHeureM65(text)) return;
   if (typeof tcDemanderDispoContactM65 === 'function' && await tcDemanderDispoContactM65(text)) return;
+  // « Demande un rendez-vous demain à mon ami Michel » : ses créneaux communs avec toi ce jour-là (mission 107a).
+  if (typeof tcDemanderRdvContact107 === 'function' && await tcDemanderRdvContact107(text)) return;
   // === RÉPONSE TAPÉE À « Par téléphone, en personne ou en visio ? » (rendez-vous à plusieurs, mission 56) ===
   if (typeof tcQuestionTypeEnAttente === 'function') {
     const _qt = tcQuestionTypeEnAttente();
@@ -32064,12 +32472,12 @@ async function tcGererRdvGroupe(texte, intention) {
   const references = intention.contacts.map(function (c) { return c.referenceCompte; });
   const type = tcTypeDansTexte(texte);
   if (type) {
-    await tcProposerRdvGroupe(references, intention.duree, '', type);
+    await tcProposerRdvGroupe(references, intention.duree, '', type, intention.options);
     return;
   }
   // Il ne l'a pas dit : une seule question, comme « Avec qui ? ».
   charlyIA.history.push({ role: 'assistant', content: 'Par téléphone, en personne ou en visio ?',
-    _questionType: { id: 'q' + Date.now(), references: references, duree: intention.duree, etat: 'choix' } });
+    _questionType: { id: 'q' + Date.now(), references: references, duree: intention.duree, etat: 'choix', options: intention.options || null } });
   renderCharlyChat();
 }
 
@@ -32092,17 +32500,17 @@ async function tcRepondreTypeGroupe(id, type) {
   q.etat = 'fait';
   q.type = type;
   renderCharlyChat();
-  await tcProposerRdvGroupe(q.references, q.duree, '', type);
+  await tcProposerRdvGroupe(q.references, q.duree, '', type, q.options);
 }
 
 /** Interroge le serveur et pose la carte de choix dans la conversation. */
-async function tcProposerRdvGroupe(references, duree, preambule, type) {
+async function tcProposerRdvGroupe(references, duree, preambule, type, options) {
   const attente = { role: 'assistant', content: '🔎 Je regarde les agendas pour trouver un créneau commun…' };
   charlyIA.history.push(attente);
   renderCharlyChat();
   let r;
   try {
-    r = await TC_BACKEND.proposerRdvGroupe(references, duree, type);
+    r = await TC_BACKEND.proposerRdvGroupe(references, duree, type, options || undefined);
   } catch (e) {
     charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
     charlyIA.history.push({ role: 'assistant', content: '❌ ' + (e && e.message ? e.message : 'Je n’arrive pas à interroger les agendas pour le moment.') });
@@ -32116,7 +32524,7 @@ async function tcProposerRdvGroupe(references, duree, preambule, type) {
     _groupe: {
       id: 'g' + Date.now(), references: references, duree: r.duree || duree, etat: 'choix',
       creneaux: Array.isArray(r.creneaux) ? r.creneaux : [], invites: r.invites || [], sansAcces: r.sans_acces || [],
-      preambule: preambule || '', type: tcTypeRdvValide(type) || 'physique'
+      preambule: preambule || '', type: tcTypeRdvValide(type) || 'physique', options: options || null
     }
   });
   renderCharlyChat();
@@ -32188,7 +32596,7 @@ async function tcConfirmerRdvGroupe(id, i) {
     if (e && e.code === 'creneau_pris') {
       g.etat = 'perdu';
       charlyIA.history.splice(charlyIA.history.indexOf(m), 1);
-      await tcProposerRdvGroupe(g.references, g.duree, 'Ce créneau vient d’être pris. Je relance la recherche :', g.type);
+      await tcProposerRdvGroupe(g.references, g.duree, 'Ce créneau vient d’être pris. Je relance la recherche :', g.type, g.options);
       return;
     }
     g.etat = 'choix';
