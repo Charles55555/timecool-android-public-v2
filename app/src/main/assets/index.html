@@ -12843,6 +12843,19 @@ function tcQuitterDemo(options) {
  * communs avec toi, lus dans son agenda (comme « demande à Hugo quand il est dispo », mission 65), sans lui écrire.
  * Un autre contact, plusieurs, ou aucun : la phrase suit son chemin d'avant.
  */
+/**
+ * Mission 110 : « à mon ami Gérard », « à Hugo » ressemblent à une personne ; « avec mon dentiste », « à la mairie », « avec le
+ * dentiste » non (un métier, un lieu : leur chemin habituel).
+ */
+function tcRessembleAUnePersonne110(text, apres, mots) {
+  const lien = new RegExp('(^| )(?:' + TC_FICHE_LIENS + ')( |$)').test(apres);
+  if (!lien && /^(?:le|la|l|les|au|aux|chez|du|des|un|une|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|nos|votre|vos)( |$)/.test(apres)) return false;
+  const bruts = String(text || '').split(/[\s,.;:!?«»"()’']+/).filter(Boolean);
+  const tapes = mots.map(function (w) { return bruts.filter(function (x) { return tcClasseNormaliser(x) === w; }).pop() || w; });
+  if (typeof tcFicheNomPossible === 'function' && !tcFicheNomPossible(tapes.join(' '))) return false;
+  return lien || /^[A-ZÀ-Ý]/.test(tapes[0]);
+}
+
 async function tcDemanderRdvContact107(text) {
   try { if (typeof tcUneReponseAttendueM64 === 'function' && tcUneReponseAttendueM64(true)) return false; } catch (e) { return false; }
   const norm = tcClasseNormaliser(text);
@@ -12854,7 +12867,7 @@ async function tcDemanderRdvContact107(text) {
   let c = [];
   try { c = tcContactsParMots(mots); } catch (e) { c = []; }
   // Mission 110 : personne de ce nom : jamais un questionnaire, la solution (ajouter la fiche, ou importer ses contacts).
-  if (!c.length && mots.length <= 2) {
+  if (!c.length && mots.length <= 2 && tcRessembleAUnePersonne110(text, m[2], mots)) {
     tcLaisserTomberCarte110();
     tcPousserMessageUtilisateur(text);
     const _bruts = String(text || '').split(/[\s,.;:!?«»"()]+/).filter(Boolean);

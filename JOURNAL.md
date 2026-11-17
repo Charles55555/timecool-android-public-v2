@@ -3585,3 +3585,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Ajout (Charles, 16h42) : dans la démonstration, chaque étape de la bulle dure 5 s (TC_ATTENTE_DUREES.demo = 5000), « vendredi » compris ; en vrai, rien ne change.
 - API : /rdv/groupe/proposer accepte des (8 à 19). À déployer.
 - Suites : verif-phrases-tiktok (nouvelle, 34 contrôles : six phrases tapées, seules et après une carte en cours, démonstration et vrai) ; verif-type-rdv-e2e (des) ; verif-bulle-attente, verif-confiance-charly, verif-nouveau-rdv, verif-rdv-groupe, verif-charly-campagne10 adaptées. Essai en vrai sur l'API d'essai avec six comptes neufs : les six aboutissent (Dentiste, Michel calé, Paul prévenu, vendredi, Alice/Chloé/Virginie à 18h, malade décalé).
+- Examen : le cas « contact introuvable » ne vaut que pour une personne (lien ou majuscule) ; « avec mon dentiste demain 15h », « à la mairie », « avec le dentiste » reprennent leur chemin d avant (tcRessembleAUnePersonne110).

@@ -153,6 +153,13 @@ if (!exe) {
         var d2 = charlyIA.history.length;
         await taper('Saisis dans mon agenda : rendez-vous dentiste mardi à 15h');
         R.dentiste = textes(d2); R.modele3 = modele;
+        // Un métier ou un lieu n'est pas un contact introuvable (examen de la mission 110) : leur chemin d'avant.
+        R.metiers = [];
+        var ph = ['Demande un rendez-vous avec mon dentiste demain 15h', 'Demande un rendez-vous à la mairie', 'Demande un rendez-vous avec le dentiste'];
+        for (var q = 0; q < ph.length; q++) {
+          if (q === 2) charlyIA.history.push({ role: 'assistant', content: 'Coiffeur, demain à 10h : je te propose ceci.\\n[AGENDA]\\n' + tcISO(demain) + ' | 10:00-11:00 | Coiffeur | rdv\\n[/AGENDA]' });
+          var dq = charlyIA.history.length; await taper(ph[q]); R.metiers.push(textes(dq));
+        }
         // Personne n'est libre le soir : les autres créneaux communs, et Charly le dit.
         contactsList.push({ id: 'c_a', name: 'Alice Martin', referenceCompte: 'REF-A', isTimeCool: true });
         var soirs = [];
@@ -160,6 +167,11 @@ if (!exe) {
         await tcProposerRdvGroupe(['REF-A'], 1, '', 'physique', { des: 18 });
         var gs = charlyIA.history.filter(function (m) { return m._groupe; }).pop();
         R.soir = { appels: soirs, preambule: gs && gs._groupe.preambule, n: gs && gs._groupe.creneaux.length, carte: document.getElementById('charlyChatBody').innerText.indexOf('Personne n’est libre après 18h') > -1 };`);
+  const M = V.metiers || [];
+  verifie('« Demande un rendez-vous avec mon dentiste demain 15h » : la carte du rendez-vous, jamais « je ne trouve pas Dentiste »',
+    M[0] && !M[0].some(function (t) { return /Je ne trouve pas/.test(t); }) && M[0].some(function (t) { return /\[AGENDA\][^\n]*15:00/.test(t) || /\[AGENDA\]/.test(t); }), JSON.stringify(M[0]));
+  verifie('« Demande un rendez-vous à la mairie », « … avec le dentiste » (carte en cours) : jamais « je ne trouve pas … dans tes contacts »',
+    M[1] && M[2] && !M[1].concat(M[2]).some(function (t) { return /Je ne trouve pas .* dans tes contacts/.test(t); }), JSON.stringify([M[1], M[2]]));
   verifie('en vrai, personne de libre après 18h : les autres créneaux communs, et la carte le dit',
     V.soir && JSON.stringify(V.soir.appels) === '[18,0]' && V.soir.n === 1 && /^Personne n’est libre après 18h sur cette période\./.test(V.soir.preambule || '') && V.soir.carte, JSON.stringify(V.soir));
   verifie('en vrai, carte en cours : la carte tombe, les créneaux communs avec Michel (demain), sans le modèle',
