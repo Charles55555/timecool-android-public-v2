@@ -16,6 +16,13 @@ for p in libatk1.0-0 libatk-bridge2.0-0 libxcomposite1 libxdamage1 libxfixes3 li
   ls "$p"_*.deb >/dev/null 2>&1 || apt-get download "$p"
 done
 for d in *.deb; do dpkg -x "$d" "$O/libs"; done
+# Les polices : Liberation (mêmes largeurs qu'Arial, la police du PC) et les emoji (le doigt 👉), sinon les mesures
+# d'écran du serveur ne sont pas celles d'un téléphone.
+for p in fonts-liberation fonts-noto-color-emoji; do ls "$p"_*.deb >/dev/null 2>&1 || apt-get download "$p"; done
+mkdir -p "$O/polices" "$HOME/.local/share/fonts"
+for d in fonts-liberation_*.deb fonts-noto-color-emoji_*.deb; do dpkg -x "$d" "$O/polices"; done
+cp "$O/polices/usr/share/fonts/truetype/liberation/"*.ttf "$O/polices/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf" "$HOME/.local/share/fonts/"
+fc-cache -f "$HOME/.local/share/fonts" >/dev/null 2>&1 || true
 EXE=$(find "$O/chrome-headless-shell" -name chrome-headless-shell -type f | sort | tail -1)
 LIBS=$(find "$O/libs" -name '*.so*' -printf '%h\n' | sort -u | tr '\n' ':')
 cat > "$O/chrome" <<FIN
