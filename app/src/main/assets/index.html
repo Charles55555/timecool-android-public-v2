@@ -12567,6 +12567,12 @@ function tcDemoQuestionEnCours() {
   const h = charlyIA.history, m = h[h.length - 1];
   if (!m) return true;
   if (m.role === 'user') return 'attendre';
+  // Examen 107b : une carte encore ouverte depuis le dernier geste (une réponse de contact a pu passer devant elle).
+  for (let i = h.length - 1; i >= 0 && h[i].role !== 'user' && !(h[i]._demo && h[i]._demo.phrases); i--) {
+    const x = h[i];
+    if ((x._reponseCreneau && !x._reponseCreneau._resolu) || (x._questionnaire && x._questionnaire.etat === 'choix')
+      || (x._questionType && x._questionType.etat === 'choix') || (x._groupe && x._groupe.etat === 'choix')) return true;
+  }
   if (m.role !== 'assistant' && m.role !== 'system_info') return true;
   if (m._demo) return !!m._demo.phrases;
   if (m._questionnaire && m._questionnaire.etat === 'choix') return true;
@@ -12589,6 +12595,21 @@ function tcDemoApres(essai) {
   const enCours = _tcDemo.reponsesAttendues > 0 || tcDemoQuestionEnCours();
   if (enCours === 'attendre' && (essai || 0) < 5) { const etat = _tcDemo; setTimeout(function () { if (_tcDemo === etat && etat.occupe === 0) tcDemoApres((essai || 0) + 1); }, 400); return; }
   if (enCours) { renderCharlyChat(); return; }
+  // Examen 107b : une proposition d'exemple pas encore tranchée (Michel a répondu deux fois) : sa carte d'abord. Charly la relève
+  // tout de suite (pas au prochain tour de la sonde), trois fois au plus par geste.
+  const etat = _tcDemo;
+  if (etat.propositions.some(function (p) { return !p.traite; })) {
+    if (etat.propositions.some(function (p) { return !p.traite && p.etat === 'choisi'; }) && !etat.releve && etat.releves < 3 && typeof tcSuivrePropositions === 'function') {
+      etat.releve = true; etat.releves++;
+      Promise.resolve(tcSuivrePropositions(true)).then(function () { etat.releve = false; if (_tcDemo === etat && etat.occupe === 0) tcDemoApres(); }, function () { etat.releve = false; });
+    }
+    renderCharlyChat();
+    return;
+  }
+  // Jamais deux fois les mêmes phrases sans nouveau geste.
+  let dernierGeste = -1, dernieresPhrases = -1;
+  charlyIA.history.forEach(function (x, i) { if (x.role === 'user') dernierGeste = i; if (x._demo && x._demo.phrases) dernieresPhrases = i; });
+  if (dernieresPhrases > dernierGeste) { renderCharlyChat(); return; }
   const restent = TC_DEMO_PHRASES.filter(function (p) { return !_tcDemo.faites[p.id]; });
   charlyIA.history.push(tcDemoMessagePhrases(restent.length ? TC_DEMO_TEXTES.suite : TC_DEMO_TEXTES.fini));
   renderCharlyChat();
@@ -12623,7 +12644,7 @@ async function tcOuvrirDemo() {
   const S = Storage.prototype;
   const etat = {
     faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(), occupe: 0, attentes: [], quitterApres: false,
-    propositions: [], prochainId: 1, reponsesAttendues: 0,
+    propositions: [], prochainId: 1, reponsesAttendues: 0, releve: false, releves: 0,
     vrai: {
       events: events, contactsList: contactsList, history: charlyIA.history, historiqueCharge: charlyIA._historiqueCharge,
       messages: (typeof messages !== 'undefined') ? messages : null, conv: (typeof _tcConvCharly !== 'undefined') ? _tcConvCharly : null,
@@ -12673,6 +12694,7 @@ async function tcOuvrirDemo() {
     try { etat.fonctions[n] = (0, eval)(n); } catch (e) { return; }
     tcDemoRemplacer(n, async function () {
       if (n === 'charlySendMessage') tcDemoMarquer();
+      etat.releves = 0;
       etat.occupe++;
       try { return await etat.fonctions[n].apply(this, arguments); } finally {
         etat.occupe--;

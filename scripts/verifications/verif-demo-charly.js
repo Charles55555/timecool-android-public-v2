@@ -291,6 +291,14 @@ function monde(jour) {
           R.maladeDemainVide = events.filter(function (e) { return e.date === iso && e.demo; }).length;
           R.dejeunerDeplace = !!dej && dej.date !== iso;
           R.fini = charlyIA.history[charlyIA.history.length - 1].content;
+          var hh = charlyIA.history;
+          R.toutVu = hh.filter(function (m) { return /^Tu as tout vu/.test(m.content || ''); }).length;
+          var derniereCarte = -1, premierToutVu = -1;
+          hh.forEach(function (m, i) { if (m._reponseCreneau || m._questionnaire || m._groupe) derniereCarte = i; if (premierToutVu < 0 && /^Tu as tout vu/.test(m.content || '')) premierToutVu = i; });
+          R.toutVuApres = premierToutVu > derniereCarte && hh.every(function (m) { return !(m._reponseCreneau && !m._reponseCreneau._resolu) && !(m._questionnaire && m._questionnaire.etat === 'choix'); });
+          var suites = 0, doublon = false;
+          hh.forEach(function (m) { if (m.role === 'user') suites = 0; if (m._demo && m._demo.phrases) { suites++; if (suites > 1) doublon = true; } });
+          R.doublon = doublon;
           var t = tout();
           R.ecrit = Object.keys(Object.assign({}, avant, t)).filter(function (k) { return avant[k] !== t[k]; });
           R.reseau = window.__reseau.slice();
@@ -314,6 +322,7 @@ function monde(jour) {
     verifie('retard : le message part à Paul (messagerie d exemple), Paul répond tout seul', P.paul === true);
     verifie('à plusieurs : les trois agendas lus, des créneaux où tout le monde est libre ; touché : dans l agenda d exemple', JSON.stringify(P.groupeInvites) === JSON.stringify(['Alice', 'Chloé', 'Virginie']) && Array.isArray(P.groupe) && P.groupe.length === 3 && P.groupe.every(function (n) { return n === 0; }) && P.groupeAgenda === 1, JSON.stringify([P.groupeInvites, P.groupe, P.groupeAgenda]));
     verifie('malade : la journée de demain est vidée, Michel choisit tout seul, « Oui, place-le » le déplace ; puis « Tu as tout vu. »', P.michelChoisit === true && JSON.stringify(P.personneAPrevenir) === JSON.stringify(['Sans contact enregistré, donc personne à prévenir : « Coiffeur ».']) && P.maladeDemainVide === 0 && P.dejeunerDeplace === true && /^Tu as tout vu\./.test(P.fini || ''), JSON.stringify([P.michelChoisit, P.personneAPrevenir, P.maladeDemainVide, P.dejeunerDeplace, P.fini]));
+    verifie('examen 107b : un seul « Tu as tout vu », après la dernière carte, toutes les cartes tranchées ; jamais deux fois les phrases sans geste', P.toutVu === 1 && P.toutVuApres === true && P.doublon === false, JSON.stringify([P.toutVu, P.toutVuApres, P.doublon]));
     verifie('pendant la démonstration : rien écrit dans le stockage, aucun appel réseau', Array.isArray(P.ecrit) && P.ecrit.length === 0 && Array.isArray(P.reseau) && P.reseau.length === 0, JSON.stringify([P.ecrit, P.reseau]));
     verifie('rechargée en pleine démonstration : le stockage est celui d avant, octet pour octet', R2 && Array.isArray(R2.diff) && R2.diff.length === 0, R2 && JSON.stringify(R2.diff));
     verifie('au retour : plus de démonstration, ni bandeau ; stockage et réseau d origine ; vraies données là', R2 && R2.demo === false && R2.bandeau === false && R2.natif === true && R2.vrai && R2.vrai.agenda === 'VRAI Kiné', JSON.stringify(R2 && [R2.demo, R2.bandeau, R2.natif, R2.vrai]));
