@@ -433,28 +433,39 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
    La zone a toujours la même hauteur : la bulle ne saute pas quand les points deviennent des feuilles. */
 .tc-attente-anim { height:22px; display:flex; align-items:center; }
 .tc-feuilles { position:relative; display:block; width:96px; height:22px; overflow:hidden; }
-.tc-feuilles span { position:absolute; top:2px; left:0; width:14px; height:18px; box-sizing:border-box; border:1.5px solid var(--g-blue); border-radius:2px;
-  background:linear-gradient(#8ab4f8,#8ab4f8) 2px 6px/7px 1.5px no-repeat, linear-gradient(#8ab4f8,#8ab4f8) 2px 9.5px/7px 1.5px no-repeat,
-  linear-gradient(#8ab4f8,#8ab4f8) 2px 13px/5px 1.5px no-repeat, #fff; opacity:0; animation:tcFeuilleEnvoi 1.8s ease-in-out infinite; }
+/* Mission 111 : quatre feuilles, les quatre couleurs du logo en pastel, dans l'ordre bleu, rouge, jaune, vert. */
+.tc-feuilles span { --bord:#7baaf7; --fond:#e8f0fe; position:absolute; top:2px; left:0; width:14px; height:18px; box-sizing:border-box; border:1.5px solid var(--bord); border-radius:2px;
+  background:linear-gradient(var(--bord),var(--bord)) 2px 6px/7px 1.5px no-repeat, linear-gradient(var(--bord),var(--bord)) 2px 9.5px/7px 1.5px no-repeat,
+  linear-gradient(var(--bord),var(--bord)) 2px 13px/5px 1.5px no-repeat, var(--fond); opacity:0; animation:tcFeuilleEnvoi 1.8s ease-in-out infinite; }
 /* Le coin plié en haut à droite : c'est une feuille de papier. */
-.tc-feuilles span::after { content:""; position:absolute; top:-1.5px; right:-1.5px; border-top:5px solid #fff; border-left:5px solid #8ab4f8; }
-.tc-feuilles span:nth-child(2) { animation-delay:0.6s; }
-.tc-feuilles span:nth-child(3) { animation-delay:1.2s; }
+.tc-feuilles span::after { content:""; position:absolute; top:-1.5px; right:-1.5px; border-top:5px solid #fff; border-left:5px solid var(--bord); }
+.tc-feuilles span:nth-child(2) { --bord:#f28b82; --fond:#fce8e6; animation-delay:0.45s; }
+.tc-feuilles span:nth-child(3) { --bord:#f2bf2e; --fond:#fef7e0; animation-delay:0.9s; }
+.tc-feuilles span:nth-child(4) { --bord:#81c995; --fond:#e6f4ea; animation-delay:1.35s; }
 .tc-feuilles.retour span { animation-name:tcFeuilleRetour; }
 @keyframes tcFeuilleEnvoi { 0% { transform:translateX(0) rotate(-8deg); opacity:0; } 12%, 85% { opacity:1; } 100% { transform:translateX(82px) rotate(8deg); opacity:0; } }
 @keyframes tcFeuilleRetour { 0% { transform:translateX(82px) rotate(8deg); opacity:0; } 12%, 85% { opacity:1; } 100% { transform:translateX(0) rotate(-8deg); opacity:0; } }
 /* « Réduire les animations » : les feuilles restent, immobiles, avec une flèche qui dit le sens (→ envoi, ← réponse). */
 @media (prefers-reduced-motion: reduce) {
   .tc-feuilles span { animation:none; opacity:1; transform:none; }
-  .tc-feuilles span:nth-child(2) { left:19px; }
-  .tc-feuilles span:nth-child(3) { left:38px; }
-  .tc-feuilles::after { content:"→"; position:absolute; left:60px; top:0; line-height:22px; font-size:18px; font-weight:700; color:var(--g-blue); }
-  .tc-feuilles.retour span:nth-child(1) { left:44px; }
-  .tc-feuilles.retour span:nth-child(2) { left:63px; }
-  .tc-feuilles.retour span:nth-child(3) { left:82px; }
-  .tc-feuilles.retour::after { content:"←"; left:18px; }
+  .tc-feuilles span:nth-child(2) { left:18px; }
+  .tc-feuilles span:nth-child(3) { left:36px; }
+  .tc-feuilles span:nth-child(4) { left:54px; }
+  .tc-feuilles::after { content:"→"; position:absolute; left:74px; top:0; line-height:22px; font-size:18px; font-weight:700; color:var(--g-blue); }
+  .tc-feuilles.retour span:nth-child(1) { left:28px; }
+  .tc-feuilles.retour span:nth-child(2) { left:46px; }
+  .tc-feuilles.retour span:nth-child(3) { left:64px; }
+  .tc-feuilles.retour span:nth-child(4) { left:82px; }
+  .tc-feuilles.retour::after { content:"←"; left:6px; }
 }
 .ai-text { font-size:13px; color:var(--g-blue); font-weight:500; }
+
+/* Mission 111 : « Voir dans mon agenda » : un petit doigt clignote à côté du rendez-vous, les autres ont un contour bleu doux. */
+.tc-doigt { position:absolute; z-index:6; font-size:18px; line-height:18px; pointer-events:none; animation:tcDoigt 0.8s ease-in-out infinite; }
+@keyframes tcDoigt { 0%, 100% { opacity:1; transform:translateX(0); } 50% { opacity:0.25; transform:translateX(-3px); } }
+.week-event.tc-voir-autre { outline:2px solid #8ab4f8; outline-offset:1px; }
+/* « Réduire les animations » : le doigt reste fixe. */
+@media (prefers-reduced-motion: reduce) { .tc-doigt { animation:none; } }
 
 /* Dashboard */
 .dash-hero { padding:20px 16px; background:linear-gradient(135deg, #e8f0fe 0%, #e0f2f1 100%); }
@@ -3033,6 +3044,11 @@ async function tcDecrypt(payload) {
 
 
 async function saveEventsToStorage() {
+  // Mission 111 : ce qui vient d'être créé ou déplacé : le bouton « Voir dans mon agenda » sous la réponse de Charly.
+  try {
+    if (typeof tcSuivreRdvBouges === 'function' && tcSuivreRdvBouges() && typeof tcAttacherVoir111 === 'function' && tcAttacherVoir111()
+      && typeof currentPage !== 'undefined' && currentPage === 'assistant') setTimeout(function () { try { renderCharlyChat(); } catch (e) {} }, 0);
+  } catch (e) {}
   try {
     // Sauvegarder uniquement les événements utilisateur (pas les démo)
     const userEvents = events.filter(e => e.mode === 'user' || (e.id && e.id.startsWith('charly_ai_')));
@@ -5014,6 +5030,7 @@ function renderWeek() {
         evt.style.width = `${colWidth - 2}px`;
         evt.innerHTML = `<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         evt.onclick = () => openEventModal(e);
+        if (e.id !== undefined && e.id !== null && evt.setAttribute) evt.setAttribute('data-ev-id', String(e.id));   // mission 111 : « Voir dans mon agenda »
         tcRendreDeplacable(evt, e, { vue: 'week', pxParMin: 44/60, colWidth: colWidth, di: di });
         body.appendChild(evt);
       });
@@ -10858,6 +10875,7 @@ navigate = function(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page-' + page);
   if (el) el.classList.add('active');
+  if (typeof tcDemoPlacerBandeau === 'function') tcDemoPlacerBandeau();   // mission 111 : le bandeau de la démonstration suit la page
   if (typeof updateHeaderAgendaLabel === 'function') updateHeaderAgendaLabel();
   document.getElementById('sideMenu').classList.remove('open');
   document.getElementById('menuOverlay').classList.remove('open');
@@ -12326,7 +12344,7 @@ const TC_DEMO_TEXTES = {
   fini: 'Tu as tout vu.\nÉcris-moi ce que tu veux, ou touche « Quitter ».',
   libre: 'Dans la démonstration, je te montre ces phrases.\nTouche-en une :',
   cale: 'C’est calé. Regarde dans l’agenda.',
-  voirAgenda: 'Voir l’agenda',
+  voirAgenda: 'Voir dans mon agenda',
   apresQuitter: 'Pour le faire avec tes vrais amis, importe tes contacts.',
   importer: 'Importer mes contacts'
 };
@@ -12374,7 +12392,7 @@ function tcDemoDonnees() {
     // « Quand suis-je libre ce vendredi ? » montre du pris et du libre : une réunion le matin, le sport en fin de journée.
     tcDemoRdv('reunion', vendredi, 10, 0, 60, 'Réunion d’équipe', 'travail'),
     tcDemoRdv('sport', vendredi, 18, 0, 60, 'Sport', 'sport'),
-    tcDemoRdv('famille', dimanche, 12, 30, 120, 'Repas de famille', 'perso')
+    tcDemoRdv('famille', dimanche, 12, 30, 120, 'RDV famille', 'perso')
   ];
   const contact = function (id, prenom, nom, n, timecool) {
     const c = { id: 'demo_' + id, name: prenom + ' ' + nom, firstname: prenom, lastname: nom, phone: '06 39 98 00 ' + n, email: id + '.' + tcSansAccents(nom.toLowerCase()) + '@exemple-timecool.fr', isTimeCool: timecool, categories: [], demo: true };
@@ -12456,7 +12474,8 @@ function tcDemoServeur() {
       const refs = (Array.isArray(references) ? references : []).filter(function (r) { return _tcDemo.agendas[r]; });
       const prenoms = refs.map(prenomDe);
       const noms = refs.map(function (r) { const c = contactsList.find(function (x) { return x.referenceCompte === r; }); return c ? c.name : ''; });
-      const titre = (options && options.titre ? options.titre + ' avec ' : '') + noms.join(', ');
+      // Mission 111 : « RDV Michel Virtuel », « RDV Alice Virtuelle, Chloé Virtuelle, Virginie Virtuelle : boire un verre ».
+      const titre = 'RDV ' + noms.join(', ') + (options && options.titre ? ' : ' + options.titre : '');
       const ev = tcDemoRdv('grp_' + Date.now(), jourDe(date), heure, 0, duree * 60, titre, (options && options.cat) || 'travail');
       if (type) ev.type = type;
       // Examen 107b : pris avec une seule personne, il lui est relié (« malade » la prévient ensuite).
@@ -12534,12 +12553,30 @@ function tcDemoBandeau(montrer) {
     b = document.createElement('div');
     b.id = 'tcDemoBandeau';
     b.setAttribute('role', 'status');
-    b.style.cssText = 'position:fixed; top:0; left:0; right:0; z-index:9500; display:flex; align-items:center; justify-content:center; gap:12px; padding:6px 12px; background:#fff4e0; border-bottom:1px solid #fbd784; color:#8a6500; font-size:14px; font-weight:700; box-sizing:border-box; height:42px;';
+    // Mission 111 : dans la page, plus en haut de l'écran (tcDemoPlacerBandeau le pose à sa place).
+    b.style.cssText = 'position:relative; z-index:5; flex-shrink:0; display:flex; align-items:center; justify-content:center; gap:12px; padding:6px 12px; background:#fff4e0; border-top:1px solid #fbd784; border-bottom:1px solid #fbd784; color:#8a6500; font-size:14px; font-weight:700; box-sizing:border-box; height:42px;';
     b.innerHTML = '<span>🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.bandeau)) + '</span>'
       + '<button onclick="tcQuitterDemo()" style="padding:6px 16px; background:#fff; color:#8a6500; border:1.5px solid #f0b429; border-radius:16px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.quitter)) + '</button>';
     document.body.appendChild(b);
   }
-  document.body.style.paddingTop = '42px';
+  document.body.style.paddingTop = '';
+  if (typeof tcDemoPlacerBandeau === 'function') tcDemoPlacerBandeau();
+}
+
+/**
+ * Mission 111 : la place du bandeau. Page Charly : juste au-dessus de la conversation (sous les boutons), hors de la zone qui
+ * défile, donc toujours visible. Autres pages (agenda, contacts) : sous l'en-tête TimeCool, au-dessus du contenu.
+ */
+function tcDemoPlacerBandeau() {
+  const b = document.getElementById('tcDemoBandeau');
+  if (!b) return;
+  const corps = document.getElementById('charlyChatBody');
+  const entete = document.querySelector('header.header');
+  if (typeof currentPage !== 'undefined' && currentPage === 'assistant' && corps && corps.parentNode) {
+    if (b.nextSibling !== corps) corps.parentNode.insertBefore(b, corps);
+  } else if (entete && entete.parentNode) {
+    if (entete.nextSibling !== b) entete.parentNode.insertBefore(b, entete.nextSibling);
+  }
 }
 
 /** Un texte de la démonstration dans la langue de l'appli (traduit à l'ouverture, avant que le réseau soit coupé). */
@@ -12576,7 +12613,12 @@ function tcRendreDemo(m) {
       return '<button class="tc-demo-phrase" onclick="tcDemoJouer(\'' + p.id + '\')" style="text-align:left; padding:10px 12px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:12px; font-size:13.5px; font-weight:600; cursor:pointer;">« ' + escapeHTML(tcDemoTexte(p.texte)) + ' »</button>';
     }).join('') + '</div>';
   }
-  if (d.agenda) h += '<div style="margin-top:8px;"><button onclick="navigate(\'calendar\')" style="padding:8px 14px; background:#e6f4ea; color:var(--g-green); border:1.5px solid #b9e1c4; border-radius:16px; font-size:13px; font-weight:600; cursor:pointer;">📅 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.voirAgenda)) + '</button></div>';
+  if (d.agenda) {
+    const _voir = Array.isArray(m._voir) && typeof tcBoutonVoir111 === 'function' ? tcBoutonVoir111(m._voir, true) : '';
+    // Le bouton est déjà sous la carte du rendez-vous : un seul « Voir dans mon agenda » (le sien s'il l'a reçu).
+    const _carteAvecBouton = charlyIA.history.some(function (x) { return x && x !== m && x._groupe && Array.isArray(x._voir) && x._voir.length && typeof tcBoutonVoir111 === 'function' && tcBoutonVoir111(x._voir, false); });
+    if (_voir || !_carteAvecBouton) h += '<div style="margin-top:8px;">' + (_voir || '<button onclick="navigate(\'calendar\')" style="padding:8px 14px; background:#e6f4ea; color:var(--g-green); border:1.5px solid #b9e1c4; border-radius:16px; font-size:13px; font-weight:600; cursor:pointer;">📅 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.voirAgenda)) + '</button>') + '</div>';
+  }
   if (d.importer) h += '<div style="margin-top:8px;"><button onclick="importPhoneContacts()" style="padding:9px 16px; background:var(--g-blue); color:#fff; border:none; border-radius:16px; font-size:13px; font-weight:700; cursor:pointer;">📱 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.importer)) + '</button></div>';
   return tcBulleCharly(h);
 }
@@ -12989,11 +13031,12 @@ function renderCharlyChat() {
     setTimeout(tcSyncCharlyGreeting, 0);
   }
   tcSauverHistoriqueCharly();
+  if (typeof tcAttacherVoir111 === 'function') { try { tcSuivreRdvBouges(); tcAttacherVoir111(); } catch (e) {} }   // mission 111
   const body = document.getElementById('charlyChatBody');
   // Mission 106 : conversation vide, ou rien que l'accueil : l'accueil au milieu de la page.
   if (!charlyIA.history.length) { body.innerHTML = tcRendreAccueilCharlyVide(); return; }
   if (charlyIA.history.length === 1 && tcEstAccueilCharly(charlyIA.history[0])) { body.innerHTML = tcRendreAccueilCharly(charlyIA.history[0], true); return; }
-  body.innerHTML = charlyIA.history.map(m => renderChatMessage(m)).join('');
+  body.innerHTML = charlyIA.history.map(m => renderChatMessage(m) + (typeof tcSousVoir111 === 'function' ? tcSousVoir111(m) : '')).join('');
   // Le redessin efface la bulle d'attente : on la remet si Charly
   // cherche toujours, sinon elle disparaitrait au premier rafraichissement.
   tcMajAttenteCharly();
@@ -13048,6 +13091,134 @@ function tcDemandePrecedente(m) {
   const i = h.indexOf(m);
   for (let j = (i < 0 ? h.length : i) - 1; j >= 0; j--) { if (h[j] && h[j].role === 'user' && !h[j]._app && !h[j].appText) return String(h[j].content || ''); }
   return '';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 111 : « Voir dans mon agenda ».
+   À chaque geste dans la conversation (une phrase envoyée, un bouton touché), l'agenda est photographié ; ce qui est ensuite
+   créé ou déplacé (nouveau rendez-vous, autre jour, autre heure, autre titre) est retenu. La réponse de Charly qui l'annonce
+   (« C'est noté », « C'est fait », « C'est calé », la carte d'un rendez-vous à plusieurs inscrit) reçoit le bouton. Un rendez-vous
+   annulé ou supprimé n'est plus là : pas de bouton.
+   ═══════════════════════════════════════════════════════════════ */
+/** Combien de temps le doigt (et le contour des autres) reste, en millisecondes. */
+const TC_VOIR_AGENDA_MS = 5000;
+let _tcSuiviRdv = null;
+let _tcRdvBouges = [];
+
+/** Compare l'agenda à la dernière photo ; true si un rendez-vous vient d'être créé ou déplacé. */
+function tcSuivreRdvBouges() {
+  const liste = Array.isArray(events) ? events : [];
+  const sig = new Map();
+  liste.forEach(function (e) { if (e && e.id !== undefined && e.id !== null) sig.set(String(e.id), [e.date, e.startH, e.startM, e.endH, e.endM, e.title].join('|')); });
+  const avant = _tcSuiviRdv;
+  _tcSuiviRdv = sig;
+  if (!avant) return false;
+  // Un autre agenda (la démonstration s'ouvre ou se ferme) : on repart de cette photo.
+  let communs = 0;
+  sig.forEach(function (v, k) { if (avant.has(k)) communs++; });
+  if (avant.size && sig.size && communs < Math.min(avant.size, sig.size) / 2) { _tcRdvBouges = []; return false; }
+  let ajout = false;
+  sig.forEach(function (v, k) { if (avant.get(k) !== v && _tcRdvBouges.indexOf(k) < 0) { _tcRdvBouges.push(k); ajout = true; } });
+  _tcRdvBouges = _tcRdvBouges.filter(function (k) { return sig.has(k); });
+  return ajout;
+}
+
+/** Un geste dans la conversation : nouvelle photo de l'agenda, et rien n'est encore « bougé ». */
+function tcGesteCharly111() {
+  try { tcSuivreRdvBouges(); } catch (e) {}
+  _tcRdvBouges = [];
+}
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('click', function (ev) {
+    const t = ev && ev.target;
+    if (t && t.closest && t.closest('#charlyChatBody button') && !t.closest('[data-voir]')) tcGesteCharly111();
+  }, true);
+}
+
+/** Cette réponse de Charly annonce-t-elle un rendez-vous créé, déplacé ou modifié ? */
+function tcMessageAnnonceRdv111(m) {
+  if (!m || m.role === 'user') return false;
+  if (m._demo) return !!m._demo.agenda;
+  if (m._groupe) return m._groupe.etat === 'fait';
+  if (m._envois) return true;
+  const t = String(m.content || '').replace(/<[^>]+>/g, ' ');
+  return /C['’]est noté|C['’]est fait|C['’]est calé|rendez-vous déplacé|Déplacé :/i.test(t);
+}
+
+/** Le bouton va sous la dernière réponse qui annonce le rendez-vous (depuis le dernier message de l'utilisateur). */
+function tcAttacherVoir111() {
+  if (!_tcRdvBouges.length || !Array.isArray(charlyIA.history)) return false;
+  const h = charlyIA.history;
+  for (let i = h.length - 1; i >= 0 && i >= h.length - 6; i--) {
+    const m = h[i];
+    if (!m || m.role === 'user') break;
+    if (Array.isArray(m._voir)) return false;
+    if (tcMessageAnnonceRdv111(m)) {
+      const ids = _tcRdvBouges.filter(function (id) { return (events || []).some(function (e) { return e && String(e.id) === id; }); });
+      if (!ids.length) return false;
+      m._voir = ids;
+      _tcRdvBouges = [];
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Le bouton « Voir dans mon agenda » (les rendez-vous qui existent encore). */
+function tcBoutonVoir111(ids, demo) {
+  const ok = (ids || []).filter(function (id) { return (events || []).some(function (e) { return e && String(e.id) === String(id); }); });
+  if (!ok.length) return '';
+  const style = demo ? 'padding:8px 14px; background:#e6f4ea; color:var(--g-green); border:1.5px solid #b9e1c4; border-radius:16px; font-size:13px; font-weight:600; cursor:pointer;'
+    : 'padding:7px 14px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:16px; font-size:13px; font-weight:600; cursor:pointer;';
+  return '<button class="tc-voir-agenda" data-voir="' + escapeHTMLSafe(JSON.stringify(ok)) + '" onclick="tcVoirDansAgenda(JSON.parse(this.getAttribute(\'data-voir\')))" style="' + style + '">📅 Voir dans mon agenda</button>';
+}
+
+/** L'agenda au bon jour, vue Semaine, le premier rendez-vous à l'écran ; le doigt clignote à côté. */
+function tcVoirDansAgenda(ids) {
+  const liste = (Array.isArray(ids) ? ids : []).map(function (id) { return (events || []).find(function (e) { return e && String(e.id) === String(id); }); }).filter(Boolean);
+  if (!liste.length) { showToast('Ce rendez-vous n’est plus dans ton agenda.'); return; }
+  liste.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : ((a.startH * 60 + (a.startM || 0)) - (b.startH * 60 + (b.startM || 0))); });
+  const premier = liste[0];
+  window._lastAddedEventDate = null; window._lastAddedEventHour = null;
+  viewDate = new Date(premier.date + 'T00:00:00');
+  currentView = 'week';
+  navigate('calendar');
+  if (typeof switchView === 'function') { try { switchView('week', true); } catch (e) {} }
+  setTimeout(function () { tcMontrerDoigt111(premier, liste.slice(1)); }, 150);
+}
+
+function tcCaseDuRdv111(id) {
+  const v = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(String(id)) : String(id).replace(/"/g, '\\"');
+  const toutes = Array.prototype.slice.call(document.querySelectorAll('.week-event[data-ev-id="' + v + '"]'));
+  return toutes.filter(function (x) { return x.offsetParent !== null; })[0] || toutes[0] || null;
+}
+
+/** Le doigt 👉 juste à gauche du rendez-vous, TC_VOIR_AGENDA_MS ; les autres : un contour bleu doux, le même temps. */
+function tcMontrerDoigt111(premier, autres, essai) {
+  const el = tcCaseDuRdv111(premier.id);
+  if (!el || !el.parentNode) {
+    if ((essai || 0) < 10) setTimeout(function () { tcMontrerDoigt111(premier, autres, (essai || 0) + 1); }, 100);
+    return;
+  }
+  try { el.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) { el.scrollIntoView(); }
+  document.querySelectorAll('.tc-doigt').forEach(function (x) { x.remove(); });
+  const d = document.createElement('span');
+  d.className = 'tc-doigt';
+  d.textContent = '👉';
+  d.setAttribute('aria-hidden', 'true');
+  d.style.left = Math.max(0, el.offsetLeft - 21) + 'px';
+  d.style.top = (el.offsetTop + Math.max(0, Math.min(4, el.offsetHeight / 2 - 9))) + 'px';
+  el.parentNode.appendChild(d);
+  const halos = (autres || []).map(function (e) { return tcCaseDuRdv111(e.id); }).filter(function (x) { return x && x !== el; });
+  halos.forEach(function (x) { x.classList.add('tc-voir-autre'); });
+  setTimeout(function () { d.remove(); halos.forEach(function (x) { x.classList.remove('tc-voir-autre'); }); }, TC_VOIR_AGENDA_MS);
+}
+
+/** Sous la réponse qui l'annonce : « Voir dans mon agenda » (la démonstration le met dans sa bulle « C'est calé »). */
+function tcSousVoir111(m) {
+  if (!m || m._demo || !Array.isArray(m._voir) || !m._voir.length) return '';
+  const b = tcBoutonVoir111(m._voir, false);
+  return b ? '<div style="margin:-4px 0 12px 44px;">' + b + '</div>' : '';
 }
 
 function renderChatMessage(m) {
@@ -15190,6 +15361,7 @@ function detecterRechercheWeb(text) {
 
 /** Pousse le message utilisateur dans l'historique et rafraîchit — évite la répétition dans les 3 handlers. */
 function tcPousserMessageUtilisateur(text) {
+  if (typeof tcGesteCharly111 === 'function') tcGesteCharly111();
   charlyIA.history.push({role:'user', content:tcBulleTapee(text), _corrige: text});
   // Mission 77 : décaler, retard, annuler, malade, imprévu : « D’accord, pour celle-ci … » tout de suite après la bulle.
   if (typeof _tcConfianceMoment !== 'undefined' && _tcConfianceMoment && !_tcConfianceMoment.dit && _tcConfianceMoment.texte === text
@@ -15252,7 +15424,7 @@ function tcMajAttenteCharly() {
   const anim = bulle && bulle.querySelector('.tc-attente-anim');
   if (anim && anim.getAttribute('data-sorte') !== sorte) {
     anim.setAttribute('data-sorte', sorte);
-    anim.innerHTML = sorte ? '<div class="tc-feuilles' + (sorte === 'reception' ? ' retour' : '') + '"><span></span><span></span><span></span></div>'
+    anim.innerHTML = sorte ? '<div class="tc-feuilles' + (sorte === 'reception' ? ' retour' : '') + '"><span></span><span></span><span></span><span></span></div>'
       : '<div class="tc-points"><span></span><span></span><span></span><span></span></div>';
   }
   corps.scrollTop = corps.scrollHeight;
@@ -32916,6 +33088,14 @@ function tcOptionsGroupeDepuisTexte(texte, options) {
     if (p && p.debut) { o.depuis = tcISO(p.debut); o.jusqua = tcISO(p.fin || p.debut); o.combien = o.combien || 3; o.par_jour = o.par_jour || (p.fin ? 1 : 3); }
   }
   if (!o.des && / (apres (le |la |mon |ma )?(boulot|travail|taf|bureau|job|journee)|ce soir|le soir|en soiree|en fin de journee|apres 18 ?h) /.test(t)) o.des = 18;
+  // Mission 111 : le motif (« pour aller boire un verre ») : « RDV Alice, Chloé, Virginie : boire un verre ».
+  if (!o.titre) {
+    const mm = String(texte || '').match(/\bpour (?:aller )?(.+)$/i);
+    if (mm) {
+      const motif = mm[1].replace(/\s*(?:,\s*)?\b(?:après (?:le |la |mon |ma )?(?:boulot|travail|taf|bureau|job|journée)|ce soir|le soir|en soirée|en fin de journée|cette semaine|la semaine prochaine|demain|aujourd['’]hui|après-demain|ce week-end)\b/gi, '').replace(/[\s,.;!?]+$/, '').trim();
+      if (motif && motif.length <= 40 && motif.split(/\s+/).length <= 6 && !(typeof tcPhraseNommeUnContact110 === 'function' && tcPhraseNommeUnContact110(motif))) o.titre = motif;
+    }
+  }
   return Object.keys(o).length ? o : null;
 }
 
@@ -33059,7 +33239,7 @@ async function tcConfirmerRdvGroupe(id, i) {
   // Mission 108 : la bulle le temps de l'inscription.
   typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('range'));
   try {
-    r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree, g.type);
+    r = await TC_BACKEND.confirmerRdvGroupe(g.references, s.date, s.heure, g.duree, g.type, g.options && g.options.titre ? { titre: g.options.titre } : undefined);
     typeof tcFinEtapes === 'function' && await tcFinEtapes();
   } catch (e) {
     typeof tcFinEtapes === 'function' && await tcFinEtapes();

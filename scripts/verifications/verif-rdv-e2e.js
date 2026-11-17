@@ -154,9 +154,9 @@ const elements = async (jeton) => (await appel('GET', '/sync?depuis=0', undefine
   const rdvC = finC.filter((e) => e.type === 'rdv' && e.uid.startsWith('tc_rdv_'));
   const rdvJ = finJ.filter((e) => e.type === 'rdv' && e.uid.startsWith('tc_rdv_'));
   dire(rdvC.length === 1 && rdvJ.length === 1, 'inscrit dans les DEUX agendas');
-  dire(rdvC[0].contenu.title === 'Julian Verif', 'chez Charles : le nom de Julian',
+  dire(rdvC[0].contenu.title === 'RDV Julian Verif', 'chez Charles : le nom de Julian',
     rdvC[0].contenu.title);
-  dire(rdvJ[0].contenu.title === 'Charles Verif', 'chez Julian : le nom de Charles',
+  dire(rdvJ[0].contenu.title === 'RDV Charles Verif', 'chez Julian : le nom de Charles',
     rdvJ[0].contenu.title);
   dire(rdvC[0].contenu.date === rdvJ[0].contenu.date
     && rdvC[0].contenu.startH === rdvJ[0].contenu.startH,

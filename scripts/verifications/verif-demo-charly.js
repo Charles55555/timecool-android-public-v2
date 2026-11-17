@@ -90,7 +90,7 @@ function monde(jour) {
   verifie('aucune vraie donnée visible : ni le vrai agenda, ni les vrais contacts, ni la vraie conversation, ni les messages', !JSON.stringify(vm.runInContext('[events, contactsList, charlyIA.history, messages, _tcConvCharly, tasksList, birthdays]', ctx)).includes('VRAI'));
   const evs = vm.runInContext('events.map(function (e) { return e.date + " " + e.startH + "h" + (e.startM || "") + " " + e.title; })', ctx);
   verifie('l agenda d exemple : café +1h, coiffeur 10h et déjeuner 12h30 demain, sport vendredi 18h, repas dimanche 12h30, pas de dentiste',
-    JSON.stringify(evs) === JSON.stringify(['2026-11-17 16h Café avec Paul Virtuel', '2026-11-18 10h Coiffeur', '2026-11-18 12h30 Déjeuner avec Michel Virtuel', '2026-11-20 10h Réunion d’équipe', '2026-11-20 18h Sport', '2026-11-22 12h30 Repas de famille']), JSON.stringify(evs));
+    JSON.stringify(evs) === JSON.stringify(['2026-11-17 16h Café avec Paul Virtuel', '2026-11-18 10h Coiffeur', '2026-11-18 12h30 Déjeuner avec Michel Virtuel', '2026-11-20 10h Réunion d’équipe', '2026-11-20 18h Sport', '2026-11-22 12h30 RDV famille']), JSON.stringify(evs));
   verifie('le stockage n est pas lu pour les données : agenda, contacts → rien ; la langue et le thème → lus', ctx.localStorage.getItem('tc_user_events') === null && ctx.localStorage.getItem('timecool_contacts') === null && ctx.localStorage.getItem('timecool_language') === 'fr' && ctx.localStorage.getItem('tc_theme') === 'dark');
 
   console.log('-- 3. Pendant : rien n est écrit, rien ne sort --');
@@ -154,7 +154,7 @@ function monde(jour) {
     const w = monde(j);
     const d = vm.runInContext('tcDemoDonnees()', w);
     const ven = d.events.filter((e) => e.title === 'Sport')[0];
-    const dim = d.events.filter((e) => e.title === 'Repas de famille')[0];
+    const dim = d.events.filter((e) => e.title === 'RDV famille')[0];
     const cafe = d.events.filter((e) => /Café/.test(e.title))[0];
     verifie(nom + ' : le vendredi et le dimanche d exemple ne sont jamais passés, le café jamais la nuit', ven.date >= j.slice(0, 10) && dim.date >= j.slice(0, 10) && cafe.startH >= 8 && cafe.startH <= 21, JSON.stringify(d.events.map((e) => e.date + ' ' + e.startH + ' ' + e.title)));
   });

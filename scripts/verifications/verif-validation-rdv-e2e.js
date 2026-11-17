@@ -106,7 +106,7 @@ const conversation = async (jeton, ref) => (await elements(jeton)).find((e) => e
   const chezT = (await elements(titulaire.jeton)).filter((e) => e.type === 'rdv' && e.uid === 'tc_rdv_' + rdvInes);
   const chezI = (await elements(inconnu.jeton)).filter((e) => e.type === 'rdv' && e.uid === 'tc_rdv_' + rdvInes);
   dire(chezT.length === 1 && chezI.length === 1, 'le rendez-vous est dans les DEUX agendas');
-  dire(chezT[0] && chezT[0].contenu.title === 'Ines Valid' && chezI[0] && chezI[0].contenu.title === 'Tania Valid', 'chacun voit le nom de l\'autre');
+  dire(chezT[0] && chezT[0].contenu.title === 'RDV Ines Valid' && chezI[0] && chezI[0].contenu.title === 'RDV Tania Valid', 'chacun voit le nom de l\'autre');
   dire(chezT[0] && chezI[0] && chezT[0].contenu.date === chezI[0].contenu.date && chezT[0].contenu.startH === 15 && chezI[0].contenu.endH === 16 && chezI[0].contenu.endM === 30,
     'même jour, 15h à 16h30 des deux côtés', chezT[0] && chezT[0].contenu.date + ' ' + chezT[0].contenu.startH + 'h');
   const convIt = await conversation(inconnu.jeton, titulaire.ref);

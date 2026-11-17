@@ -28,11 +28,16 @@ console.log('-- 1. Plus d avion, ni de bandeau, ni de « réfléchit » --');
 verifie('l avion en papier et son bandeau sont retirés', !/tcAvion|TC_AVION|Demande envoyée à |avion en papier traverse/.test(page));
 verifie('le mot « réfléchit » a disparu des textes de Charly', !/'[^'\n]*réfléchit[^'\n]*'/.test(page), (page.match(/'[^'\n]*réfléchit[^'\n]*'/) || [])[0]);
 verifie('une constante réglable : 5 s par étape dans la démonstration (mission 110), 1 s en vrai, 5 s pour une étape à feuilles', /const TC_ATTENTE_DUREES = \{ demo: 5000, vrai: 1000, feuilles: 5000 \};/.test(page));
-verifie('les feuilles : 14 × 18 px, contour bleu, coin plié, dans la bulle (zone de hauteur fixe)',
+verifie('les feuilles : 14 × 18 px, contour de leur couleur, coin plié, dans la bulle (zone de hauteur fixe)',
   /\.tc-attente-anim \{ height:22px; display:flex; align-items:center; \}/.test(page)
   && /\.tc-feuilles \{ position:relative; display:block; width:96px; height:22px; overflow:hidden; \}/.test(page)
-  && /\.tc-feuilles span \{[^}]*width:14px; height:18px;[^}]*border:1\.5px solid var\(--g-blue\)/.test(page)
+  && /\.tc-feuilles span \{[^}]*width:14px; height:18px;[^}]*border:1\.5px solid var\(--bord\)/.test(page)
   && /\.tc-feuilles span::after \{/.test(page));
+// Mission 111 (Charles) : quatre feuilles, les quatre couleurs du logo en pastel, dans l'ordre bleu, rouge, jaune, vert.
+verifie('quatre feuilles pastel : bleu, rouge, jaune, vert (fond pastel, contour plus soutenu)',
+  /\.tc-feuilles span \{ --bord:#7baaf7; --fond:#e8f0fe;/.test(page) && /span:nth-child\(2\) \{ --bord:#f28b82; --fond:#fce8e6;/.test(page)
+  && /span:nth-child\(3\) \{ --bord:#f2bf2e; --fond:#fef7e0;/.test(page) && /span:nth-child\(4\) \{ --bord:#81c995; --fond:#e6f4ea;/.test(page)
+  && /<span><\/span><span><\/span><span><\/span><span><\/span><\/div>'/.test(page));
 verifie('« Réduire les animations » : les feuilles ne sont plus cachées', !/\.tc-feuilles \{ display:none; \}/.test(page));
 verifie('l appel au modèle : ce qu il fait, deviné d après la phrase', /tcDefinirStatutCharly\(typeof tcTexteAttente === 'function' \? tcTexteAttente\(tcDevinerAttente\(text\)\) : 'Charly cherche…', true\);/.test(page)
   && (page.match(/tcDefinirStatutCharly\('Charly cherche dans ton agenda…', true\);/g) || []).length === 3);   // consultation, suppression, et « vendredi » dans la démonstration (mission 110)
@@ -65,7 +70,7 @@ if (!exe) {
         var sp = f ? f.querySelector('span') : null, rs = sp ? sp.getBoundingClientRect() : null, cs = sp ? getComputedStyle(sp) : null;
         return { texte: b.innerText.replace(/\\s+/g, ' ').trim(), anim: f ? (f.classList.contains('retour') ? 'reception' : 'envoi') : (b.querySelector('.tc-points') ? 'points' : 'rien'),
           feuillesVisibles: f ? getComputedStyle(f).display !== 'none' && f.getBoundingClientRect().width > 80 : false,
-          feuille: sp ? [sp.offsetWidth, sp.offsetHeight] : null, bord: cs ? cs.borderTopColor : null, mouvement: cs ? cs.animationName : null,
+          feuille: sp ? [sp.offsetWidth, sp.offsetHeight] : null, bord: cs ? cs.borderTopColor : null, couleurs: f ? Array.prototype.map.call(f.querySelectorAll('span'), function (x) { return getComputedStyle(x).borderTopColor; }) : null, mouvement: cs ? cs.animationName : null,
           opacite: cs ? cs.opacity : null, fleche: f ? getComputedStyle(f, '::after').content : null,
           l: Math.round(r.width), h: Math.round(r.height), sous: document.getElementById('charlyStatus').textContent }; };
       // Le film de la bulle : un relevé toutes les 100 ms, gardé à chaque changement de texte ou de feuilles.
@@ -123,7 +128,7 @@ if (!exe) {
         await attendre(12000);
         // La bulle des quatre points (référence de taille) : le même cadre.
         tcDefinirStatutCharly(tcTexteAttente(''), true); await attendre(100); R.points = bulle(); tcDefinirStatutCharly(TC_STATUT_REPOS, false);`;
-  const bleu = 'rgb(26, 115, 232)';
+  const bleu = 'rgb(123, 170, 247)';   // mission 111 : la première feuille, bleu pastel
   [['390,844', 'téléphone 390'], ['1280,800', 'PC 1280']].forEach(function (x) {
     const S = jouer(demo, false, x[0]), nom = x[1];
     const film = S.film || [];
@@ -132,7 +137,7 @@ if (!exe) {
     const env = etape(plage(0, S.debutMalade), /^Charly envoie à Paul…$/, 'envoi'), rep = etape(plage(0, S.debutMalade), /^Paul répond…$/, 'reception');
     verifie(nom + ' — retard : « Charly envoie à Paul… », feuilles bleues 14 × 18 qui glissent, le sous-titre aussi ; « C’est fait » attend',
       S.envoi && S.envoi.texte === 'Charly envoie à Paul…' && S.envoi.anim === 'envoi' && S.envoi.feuillesVisibles && S.envoi.sous === 'Charly envoie à Paul…'
-      && JSON.stringify(S.envoi.feuille) === '[14,18]' && S.envoi.bord === bleu && S.envoi.mouvement === 'tcFeuilleEnvoi' && !/C’est fait/.test(S.envoiAvant || ''), JSON.stringify([S.envoi, S.envoiAvant, S.erreur]));
+      && JSON.stringify(S.envoi.feuille) === '[14,18]' && S.envoi.bord === bleu && JSON.stringify(S.envoi.couleurs) === JSON.stringify(['rgb(123, 170, 247)', 'rgb(242, 139, 130)', 'rgb(242, 191, 46)', 'rgb(129, 201, 149)']) &&S.envoi.mouvement === 'tcFeuilleEnvoi' && !/C’est fait/.test(S.envoiAvant || ''), JSON.stringify([S.envoi, S.envoiAvant, S.erreur]));
     verifie(nom + ' — retard : l envoi reste 5 s, puis « Paul répond… » 5 s, feuilles de droite à gauche',
       env && env.ms >= 4800 && env.ms < 6500 && rep && rep.ms >= 4800 && rep.ms < 6500 && rep.b.mouvement === 'tcFeuilleRetour' && film.indexOf(env) < film.indexOf(rep),
       JSON.stringify(film.slice(0, 8).map((e) => [e.texte, e.anim, e.ms])));

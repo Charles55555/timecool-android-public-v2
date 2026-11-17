@@ -4166,9 +4166,9 @@ switch ($route) {
             // Chacun voit le nom de l'autre dans son agenda (sans balise : texteSur).
             elementsPoser([
                 ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-                 'contenu' => $entree(texteSur($cible['prenom'] . ' ' . $cible['nom']), ficheContactDe((int) $moi['id'], $cible))],
+                 'contenu' => $entree('RDV ' . texteSur($cible['prenom'] . ' ' . $cible['nom']), ficheContactDe((int) $moi['id'], $cible))],
                 ['compte_id' => (int) $cible['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-                 'contenu' => $entree(texteSur($moi['prenom'] . ' ' . $moi['nom']), ficheContactDe((int) $cible['id'], $moi))],
+                 'contenu' => $entree('RDV ' . texteSur($moi['prenom'] . ' ' . $moi['nom']), ficheContactDe((int) $cible['id'], $moi))],
             ]);
 
             messagePoser(
@@ -4307,7 +4307,8 @@ switch ($route) {
             // Mission 107d : les invités (référence, prénom) restent dans le rendez-vous de chacun : « Je suis malade » les
             // retrouve pour les prévenir (un rendez-vous à plusieurs n'a pas de fiche contact unique).
             $entree = static function (string $noms, array $avec = []) use ($jour, $heure, $duree, $uid, $typeRdv, $titreDonne, $catDonnee): array {
-                $titre = $titreDonne !== null ? $titreDonne . ' avec ' . $noms : $noms;
+                // Mission 111 : « RDV Michel Martin », « RDV Alice, Chloé : boire un verre ».
+                $titre = 'RDV ' . $noms . ($titreDonne !== null ? ' : ' . $titreDonne : '');
                 return [
                     'invites' => $avec,
                     'id'     => $uid,
@@ -4571,7 +4572,7 @@ switch ($route) {
                     'date'   => $jour,
                     'startH' => (int) date('G', $debutTs), 'startM' => (int) date('i', $debutTs),
                     'endH'   => (int) date('G', $finTs), 'endM' => (int) date('i', $finTs),
-                    'title'  => mb_substr($titre . ' avec ' . $noms, 0, 120),
+                    'title'  => mb_substr('RDV ' . $noms . ' : ' . $titre, 0, 120),
                     'cat'    => $cat,
                     'mode'   => 'user',
                 ];
@@ -4730,9 +4731,9 @@ switch ($route) {
             }
             elementsPoser([
                 ['compte_id' => (int) $moi['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-                 'contenu' => $entree(texteSur($demandeur['prenom'] . ' ' . $demandeur['nom']), ficheContactDe((int) $moi['id'], $demandeur))],
+                 'contenu' => $entree('RDV ' . texteSur($demandeur['prenom'] . ' ' . $demandeur['nom']), ficheContactDe((int) $moi['id'], $demandeur))],
                 ['compte_id' => (int) $demandeur['id'], 'type' => 'rdv', 'uid' => 'tc_rdv_' . $rdvId,
-                 'contenu' => $entree(texteSur($moi['prenom'] . ' ' . $moi['nom']), ficheContactDe((int) $demandeur['id'], $moi))],
+                 'contenu' => $entree('RDV ' . texteSur($moi['prenom'] . ' ' . $moi['nom']), ficheContactDe((int) $demandeur['id'], $moi))],
             ]);
 
             messagePoser(
@@ -5818,7 +5819,7 @@ switch ($route) {
                             'startM' => (int) date('i', $debut),
                             'endH'   => (int) date('G', $fin),
                             'endM'   => (int) date('i', $fin),
-                            'title'  => $qui,
+                            'title'  => 'RDV ' . $qui,
                             'cat'    => 'travail',
                             'mode'   => 'user',
                         ],
