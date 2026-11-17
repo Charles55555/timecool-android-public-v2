@@ -117,7 +117,7 @@ if (!exe) {
         await attendre(500);
         R.envoi = bulle(); R.envoiAvant = dernier();
         await attendre(14000);
-        R.fini = bulle(); R.repondu = charlyIA.history.some(function (m) { return /^Paul a répondu/.test(m.content || ''); });
+        R.fini = bulle(); R.repondu = charlyIA.history.some(function (m) { return m.role === 'tiers' && m._tiers && m._tiers.prenom === 'Paul'; });
         R.debutMalade = film.length;
         tcDemoJouer('malade'); await attendre(4500);   // mission 113 : Michel consulté 3 s avant la carte
         // Mission 117 : le soir, Paul est consulté aussi (3 s de plus) : on attend la consultation de Michel, puis sa carte.

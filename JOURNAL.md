@@ -3647,3 +3647,9 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - « Charly, ton aide TimeCool » devient « Maya, ton aide TimeCool » : ligne, en-tête, rond rose avec M blanc, « Maya écrit… », réponses courtes, fiche du manuel (14 entrées), consigne du modèle, au féminin. Charly IA inchangé.
 - Le nom ne vient ni de l'API ni de la base (fil sur l'appareil, réponses de la fiche puis du modèle par le relais).
+
+## 18/11/2026 (nuit) — Mission 120 : la bulle verte des contacts (CODEUR)
+
+- Démonstration : la réponse d'un contact d'exemple est un message « tiers » (bulle verte, initiales, prénom), ni relu comme Charly ni envoyé au modèle, gardé avec la conversation.
+- En vrai : « Hugo t'a répondu : … » (tcGererDemandeRecue, sur demande) : affichage séparé (_cites), données inchangées. Les choix de créneau par lien restent la carte de Charly.
+- Lot 118-119-120 : 4e65cc7, c02fb00 et ce commit ; verifier.sh vert sur le serveur (Chrome du serveur, API locale).

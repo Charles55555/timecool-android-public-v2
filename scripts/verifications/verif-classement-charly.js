@@ -95,7 +95,9 @@ vm.runInContext((page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).
  'tcReponseDecalage', 'tcNomsLisibles', 'tcPropositionTexte', 'tcProposerLesCreneaux', 'tcEnvoyerPropositions', 'tcLignesPropositions',
  'tcDireBilanPropositions', 'tcCreneauxPourDecalage', 'tcPropositionLibelle', 'tcMinutesLisibles', 'tcHeureSql', 'tcRemplirModele', 'tcValeursDuRdv',
  // Mission 93 : la carte du profil 1.
- 'tcDemanderDeplacementProfil2', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcEvenementSurPlusieursJours', 'tcCarteEnvoiCreneaux', 'tcJourLisible'
+ 'tcDemanderDeplacementProfil2', 'tcCreneauxDuLot', 'tcCreneauxPourContact', 'tcEvenementSurPlusieursJours', 'tcCarteEnvoiCreneaux', 'tcJourLisible',
+ // Mission 120 : les citations d'un message de Charly, pour l'affichage (bulle verte).
+ 'tcCite120'
 ].forEach((n) => { const src = extraire(n); if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
 if (bloc) vm.runInContext(bloc, ctx);
 if (ko) { console.log(''); console.log(ko + ' anomalie(s).'); process.exit(1); }

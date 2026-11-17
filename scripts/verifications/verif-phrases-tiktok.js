@@ -50,7 +50,7 @@ if (!exe) {
           b.click(); await attendre(4000);
         }
       };
-      var textes = function (depuis) { return charlyIA.history.slice(depuis).map(function (m) { return (m.role === 'user' ? '> ' : '') + String(m.content || '').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' '); }); };
+      var textes = function (depuis) { return charlyIA.history.slice(depuis).map(function (m) { return (m.role === 'user' ? '> ' : m.role === 'tiers' ? '[' + ((m._tiers || {}).prenom || '') + '] ' : '') + String(m.content || '').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' '); }); };
       try {
         document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
         localStorage.setItem('tc_permissions_shown', '1');
@@ -121,7 +121,7 @@ if (!exe) {
       p2.groupes.length === 1 && p2.groupes[0].invites.join() === 'Michel' && p2.groupes[0].c.length && p2.groupes[0].c.every(function (c) { return c[0] === S.demain; })
       && p2.nouveaux.some(function (e) { return /Michel Virtuel/.test(e[2]) && e[0] === S.demain; }), JSON.stringify([p2.groupes, p2.nouveaux, p2.tout]));
     verifie('3. « Excuse-moi auprès de Paul … 10 minutes de retard » : le message part, Paul répond' + qui,
-      p3.tout.some(function (t) { return /^C’est fait/.test(t) && /Retard d’environ 10 minutes/.test(t); }) && p3.tout.some(function (t) { return /^Paul a répondu/.test(t); }), JSON.stringify(p3.tout));
+      p3.tout.some(function (t) { return /^C’est fait/.test(t) && /Retard d’environ 10 minutes/.test(t); }) && p3.tout.some(function (t) { return /^\[Paul\] Pas de souci/.test(t); }), JSON.stringify(p3.tout));
     verifie('4. « Quand suis-je libre ce vendredi ? » : les moments libres de vendredi' + qui, p4.tout.some(function (t) { return /^Voici ce qui est libre ce vendredi/.test(t); }), JSON.stringify(p4.tout));
     verifie('5. « Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, … après le boulot » : cette semaine, à partir de 18h, puis calé' + qui,
       p5.groupes.length === 1 && p5.groupes[0].c.length && p5.groupes[0].c.every(function (c) { return c[1] >= 18 && c[0] <= S.dimanche; })

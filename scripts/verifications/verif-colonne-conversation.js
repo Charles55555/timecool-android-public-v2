@@ -14,7 +14,7 @@ console.log('-- 1. Dans le code --');
 verifie('un seul réglage : la démonstration et la vraie conversation (mission 115)', /const TC_CONV_COLONNE = \{ demo: true, vrai: true \};/.test(page));
 verifie('mission 115 : la bulle à la taille de son texte (85 % au téléphone, 80 % au PC), boutons de 44 px au moins',
   /#charlyChatBody \{ --tc-bulle-max:85%; \}/.test(page) && /@media \(min-width:700px\) \{ #charlyChatBody \{ --tc-bulle-max:80%; \} \}/.test(page)
-  && /#charlyChatBody \.tc-bulle-col button, #charlyChatBody \.tc-voir-agenda \{ min-height:44px; \}/.test(page) && (page.match(/class="tc-bulle-col/g) || []).length === 2);
+  && /#charlyChatBody \.tc-bulle-col button, #charlyChatBody \.tc-voir-agenda \{ min-height:44px; \}/.test(page) && (page.match(/class="tc-bulle-col/g) || []).length === 3);   // mission 120 : la bulle verte d'un contact aussi
 verifie('une seule classe : 700 px au plus, la marge d’avant (12 px) en dessous', /#charlyChatBody\.tc-conv-colonne \{ --tc-conv-largeur:700px; padding-left:max\(12px, calc\(\(100% - var\(--tc-conv-largeur\)\) \/ 2\)\) !important; padding-right:max\(12px, calc\(\(100% - var\(--tc-conv-largeur\)\) \/ 2\)\) !important; \}/.test(page));
 verifie('la classe suit l’affichage de la conversation', /if \(typeof tcMajColonneConversation === 'function'\) tcMajColonneConversation\(\);/.test(page));
 

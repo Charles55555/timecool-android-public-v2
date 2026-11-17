@@ -12218,7 +12218,7 @@ const TC_CHARLY_MODELE_MAX = 10;
 function tcSauverHistoriqueCharly() {
   try {
     const liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
-      .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system_info'); })
+      .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system_info' || m.role === 'tiers'); })
       .slice(-TC_CHARLY_HISTORIQUE_MAX);
     localStorage.setItem(TC_CHARLY_HISTORIQUE_CLE, JSON.stringify(liste, function (k, v) {
       return (k === 'conflictData' || k === 'touches' || k === '_relu') ? undefined : v;
@@ -12685,7 +12685,7 @@ function tcDemoReponseDe(reference, texte, apres) {
         const t = new Date();
         conv.thread.push({ from: 'them', text: texte, time: String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') });
       }
-      charlyIA.history.push({ role: 'assistant', content: String(c.name).split(' ')[0] + ' a répondu : « ' + texte + ' »', appText: true, _app: true, _demo: {} });
+      tcPousserTiers120(c.name, texte, { _app: true });   // mission 120 : sa bulle verte
       renderCharlyChat();
       if (typeof apres === 'function') await apres();
     } catch (e) {} finally {
@@ -13141,6 +13141,39 @@ function tcSuiteSurNotification(texte) {
 }
 
 /** Une bulle de Charly (avatar + cadre blanc), avec ce HTML dedans : le même dessin que ses réponses. */
+/** Mission 120 : la réponse d'un contact, dans sa bulle verte (rôle « tiers ») : ses mots seulement, son prénom, ses initiales. */
+function tcTiers120(nom) {
+  const n = String(nom || '').trim();
+  const mots = n.split(/\s+/).filter(Boolean);
+  return { nom: n, prenom: mots[0] || n, initiales: (mots.length > 1 ? mots[0].charAt(0) + mots[mots.length - 1].charAt(0) : n.slice(0, 2)).toUpperCase() };
+}
+function tcPousserTiers120(nom, texte, extra) {
+  charlyIA.history.push(Object.assign({ role: 'tiers', content: String(texte || '').replace(/&nbsp;/g, '\u00a0'), _tiers: tcTiers120(nom) }, extra || {}));
+}
+/** Une citation (« Hugo t'a répondu : … ») gardée pour l'affichage : qui, et ses mots. */
+function tcCite120(x) { return { nom: String((x && x.nom) || ''), texte: String((x && x.texte) || '') }; }
+
+function tcRendreTiers120(m) {
+  const t = m._tiers || tcTiers120('');
+  return '<div class="tc-tiers" style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">'
+    + '<div aria-hidden="true" style="flex-shrink:0; width:32px; height:32px; margin-top:17px; border-radius:50%; background:#137333; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700;">' + escapeHTMLSafe(t.initiales || '?') + '</div>'
+    + '<div class="tc-bulle-col" style="flex:1; max-width:calc(100% - 50px);">'
+    + '<div class="tc-tiers-nom" data-notranslate style="font-size:11.5px; font-weight:600; color:var(--text-sec); margin:0 0 3px 4px;">' + escapeHTMLSafe(t.prenom || '') + '</div>'
+    + '<div class="tc-bulle-tiers" style="padding:10px 14px; background:#e6f4ea; color:#17331f; border:1px solid #b9e1c4; border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word;">'
+    + escapeHTMLSafe(String(m.content || '').replace(/&nbsp;/g, '\u00a0')).replace(/\n/g, '<br>') + '</div></div></div>';
+}
+
+/** Un message de Charly qui cite des réponses : une bulle verte par personne, puis le reste dans la bulle blanche de Charly. */
+function tcRendreAvecCites120(m) {
+  const cites = m._cites;
+  const tete = cites.map(function (x) { return x.nom + ' t’a répondu : « ' + x.texte + ' ».'; }).join(' ');
+  const contenu = String(m.content || '');
+  if (contenu.indexOf(tete) !== 0) return renderChatMessage(Object.assign({}, m, { _citesFaites: true }));
+  const vertes = cites.map(function (x) { return tcRendreTiers120({ content: x.texte, _tiers: tcTiers120(x.nom) }); }).join('');
+  const reste = contenu.slice(tete.length).trim();
+  return vertes + (reste ? renderChatMessage(Object.assign({}, m, { content: reste, _citesFaites: true })) : '');
+}
+
 function tcBulleCharly(interieur) {
   return '<div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">'
     + '<div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>'
@@ -13534,6 +13567,9 @@ function renderChatMessage(m) {
   if (m && m._envois) return tcRendreBilanQuestionnaire(m);
   if (m && m._reponseCreneau) return tcRendreReponseCreneau(m);
   if (m && m._boutonsEnvoi) return tcRendreBoutonsEnvoi(m);
+  // Mission 120 : la réponse d'un contact (bulle verte), et les citations d'un message de Charly.
+  if (m.role === 'tiers') return tcRendreTiers120(m);
+  if (m.role === 'assistant' && Array.isArray(m._cites) && m._cites.length && !m._citesFaites) return tcRendreAvecCites120(m);
   if (m.role === 'user') {
     return `
       <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
@@ -25391,13 +25427,13 @@ function tcRepondreAReponse(text, type, reponses) {
   const cite = function (x) { return x.nom + ' t’a répondu : « ' + x.texte + ' ».'; };
   if (!r) {
     const qui = nommees.length ? nommees : reponses;
-    charlyIA.history.push({ role: 'assistant', nature: type === 'lire' ? 'reponse' : 'question', content: qui.map(cite).join(' ') + (type === 'lire' ? '' : ' À qui je réponds ?') });
+    charlyIA.history.push({ role: 'assistant', nature: type === 'lire' ? 'reponse' : 'question', _cites: qui.map(tcCite120), content: qui.map(cite).join(' ') + (type === 'lire' ? '' : ' À qui je réponds ?') });
     renderCharlyChat();
     return true;
   }
   const prenom = r.nom.split(' ')[0];
   if (type === 'lire') {
-    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: cite(r) + ' Pour lui répondre, dis-moi par exemple « ok pour ' + prenom + ' » ou « propose-lui jeudi 10h » : je te relis le message avant de l’envoyer.' });
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', _cites: [tcCite120(r)], content: cite(r) + ' Pour lui répondre, dis-moi par exemple « ok pour ' + prenom + ' » ou « propose-lui jeudi 10h » : je te relis le message avant de l’envoyer.' });
     renderCharlyChat();
     return true;
   }
@@ -25428,7 +25464,7 @@ function tcRepondreAReponse(text, type, reponses) {
     const t = mQue[1].trim().replace(/\s*[.!]*$/, '');
     message = t.charAt(0).toUpperCase() + t.slice(1) + (/[?]$/.test(t) ? '' : '.');
   } else if ((ouiMais || nie) && !nouveauMoment) {
-    charlyIA.history.push({ role: 'assistant', nature: 'question', content: cite(r) + ' D’accord, pas ce moment-là. Quel autre moment je lui propose ? (par exemple « propose-lui jeudi 10h »)' });
+    charlyIA.history.push({ role: 'assistant', nature: 'question', _cites: [tcCite120(r)], content: cite(r) + ' D’accord, pas ce moment-là. Quel autre moment je lui propose ? (par exemple « propose-lui jeudi 10h »)' });
     renderCharlyChat();
     return true;
   }
@@ -25460,12 +25496,12 @@ function tcRepondreAReponse(text, type, reponses) {
     }
   }
   if (!message) {
-    charlyIA.history.push({ role: 'assistant', nature: 'question', content: cite(r) + ' Qu’est-ce que je lui réponds ? (par exemple « ok », « non », ou un autre moment)' });
+    charlyIA.history.push({ role: 'assistant', nature: 'question', _cites: [tcCite120(r)], content: cite(r) + ' Qu’est-ce que je lui réponds ? (par exemple « ok », « non », ou un autre moment)' });
     renderCharlyChat();
     return true;
   }
   const contact = tcContactDeReponse(r);
-  charlyIA.history.push({ role: 'assistant', nature: 'question',
+  charlyIA.history.push({ role: 'assistant', nature: 'question', _cites: [tcCite120(r)],
     content: cite(r) + ' Je lui réponds : « ' + message + ' »' + suite + ' J’envoie ? Réponds « oui » ou « non ».',
     _envoiEnAttente: { contact: contact, texte: message, apres: apres } });
   renderCharlyChat();

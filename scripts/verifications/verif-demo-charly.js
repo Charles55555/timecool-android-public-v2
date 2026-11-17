@@ -71,7 +71,7 @@ function monde(jour) {
   vm.runInContext('function tcISO(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }', ctx);
   const code = [objet('const TC_DEMO_PHRASES = ['), objet('const TC_DEMO_TEXTES = {'), 'let _tcDemo = null;', 'var TC_ATTENTE_DUREES = { demo: 0, vrai: 0, feuilles: 0 }; var TC_STATUT_REPOS = "repos"; var _tcEtape = null; function tcDefinirStatutCharly() {}'].concat(['tcDemoActive', 'tcDemoClesLisibles', 'tcDemoJour', 'tcDemoVendredi', 'tcDemoDimanche', 'tcDemoRdv', 'tcDemoDonnees', 'tcDemoLibre',
     'tcDemoOccupationsMoi', 'tcDemoServeur', 'tcDemoBandeau', 'tcDemoTexte', 'tcDemoTraduire', 'tcDemoMessagePhrases', 'tcDemoRemplacer', 'tcOuvrirDemo', 'tcQuitterDemo',
-    'tcDemoAttendre', 'tcDemoLibere', 'tcDemoApres', 'tcDemoQuestionEnCours', 'tcDemoReponseDe', 'tcDemoMarquer', 'tcAttenteDuree', 'tcAttentePrenoms', 'tcTexteAttente', 'tcEtapeAttente', 'tcMinEtape', 'tcFinEtapes'].map(fonction));
+    'tcDemoAttendre', 'tcDemoLibere', 'tcDemoApres', 'tcDemoQuestionEnCours', 'tcDemoReponseDe', 'tcDemoMarquer', 'tcAttenteDuree', 'tcAttentePrenoms', 'tcTexteAttente', 'tcEtapeAttente', 'tcMinEtape', 'tcFinEtapes', 'tcTiers120', 'tcPousserTiers120'].map(fonction));
   if (code.some((c) => !c)) { verifie('les fonctions de la démonstration sont dans la page', false, code.map((c) => !!c).join(',')); return null; }
   vm.runInContext(code.join('\n'), ctx);
   return ctx;
@@ -126,7 +126,7 @@ function monde(jour) {
   await vm.runInContext('TC_BACKEND.envoyerMessage("DEMO-PAUL", "Bonjour Paul, j aurai 10 minutes de retard")', ctx);
   verifie('un message envoyé : une réponse attendue, les phrases attendent', vm.runInContext('_tcDemo.reponsesAttendues', ctx) === 1);
   await new Promise((r) => setTimeout(r, 30));
-  verifie('Paul répond tout seul : dans la messagerie d exemple, et Charly le dit', vm.runInContext('messages.user[0].thread[1].from === "them" && /^Pas de souci, à tout à l’heure/.test(messages.user[0].thread[1].text) && /^Paul a répondu/.test(charlyIA.history[0].content) && _tcDemo.reponsesAttendues === 0', ctx) === true, vm.runInContext('JSON.stringify([messages.user, charlyIA.history])', ctx));
+  verifie('Paul répond tout seul : dans la messagerie d exemple, et Charly le dit', vm.runInContext('messages.user[0].thread[1].from === "them" && /^Pas de souci, à tout à l’heure/.test(messages.user[0].thread[1].text) && charlyIA.history[0].role === "tiers" && charlyIA.history[0]._tiers.prenom === "Paul" && /^Pas de souci, à tout à l’heure/.test(charlyIA.history[0].content) && _tcDemo.reponsesAttendues === 0', ctx) === true, vm.runInContext('JSON.stringify([messages.user, charlyIA.history])', ctx));
   const libres = await vm.runInContext('TC_BACKEND.propositionLibres("DEMO-MICHEL", [{ debut: "2026-11-18 10:00:00", fin: "2026-11-18 11:00:00" }, { debut: "2026-11-18 16:00:00", fin: "2026-11-18 17:00:00" }])', ctx);
   verifie('les créneaux proposés à Michel : ceux où son agenda d exemple est libre', JSON.stringify(libres.libres) === '[1]', JSON.stringify(libres));
   vm.runInContext('tcSuivrePropositions = function () { _sorties.push("releve"); return Promise.resolve(); };', ctx);
@@ -268,7 +268,7 @@ function monde(jour) {
           // Mission 107b : le retard (Paul répond), à plusieurs (trois agendas lus), malade (Michel choisit, on place).
           return tcDemoJouer('retard');
         }).then(function () { return cliquer('Oui, envoie'); }).then(function () { return attendre(1800); }).then(function () {
-          R.paul = charlyIA.history.some(function (m) { return /^Paul a répondu/.test(m.content || ''); }) && messages.user.some(function (c) { return c.with === 'Paul Virtuel' && c.thread.some(function (t) { return t.from === 'them'; }); });
+          R.paul = charlyIA.history.some(function (m) { return m.role === 'tiers' && m._tiers && m._tiers.prenom === 'Paul'; }) && messages.user.some(function (c) { return c.with === 'Paul Virtuel' && c.thread.some(function (t) { return t.from === 'them'; }); });
           return tcDemoJouer('groupe');
         }).then(function () {
           var q = charlyIA.history.filter(function (m) { return m._questionType; }).pop();
