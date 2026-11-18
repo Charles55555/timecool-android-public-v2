@@ -103,3 +103,7 @@ Trouve un créneau avec Julien | | texte:Voici ce qui est libre && texte:Julien 
 # Chef, 18/11 : un seul « Je m’en occupe » : l'invitation l'a dit, la carte de la 122 commence par « Chez Michel… ».
 En personne | @validation:Michel ⏎ Trouve un moment avec Michel et Julien demain | texte:Chez Michel, chaque rendez-vous attend son accord && sans:Je m’en occupe && sans:pas bien compris
 Trouve un rendez-vous en personne avec Michel et Julien demain | @validation:Michel | texte:Julien n’a pas encore TimeCool && texte:Chez Michel, chaque rendez-vous attend son accord && sans:Je m’en occupe[\s\S]*Je m’en occupe && sans:pas bien compris
+# Chef, 18/11 : l'invitation amicale seulement pour un prénom cité ; jamais pour un métier, un cabinet, un docteur (image de TimeCool).
+Trouve un créneau avec mon dentiste | @fiche:Cabinet dentaire Dentiste Martin | texte:Voici ce qui est libre && sans:invitation && sans:pas encore TimeCool && sans:pas bien compris
+Trouve un créneau avec le Dr Martin | @fiche:Dr Martin | texte:Voici ce qui est libre && sans:invitation && sans:pas encore TimeCool && sans:pas bien compris
+Trouve un moment avec Alice et mon dentiste cette semaine | @fiche:Cabinet dentaire Dentiste Martin | sans:invitation && sans:pas encore TimeCool && sans:pas bien compris

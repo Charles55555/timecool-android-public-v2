@@ -3700,3 +3700,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - Contact cité sans TimeCool : Charly prépare l’invitation (bouton SMS/e-mail, texte de Charles), aussi dans le chemin de la 122 où il disparaissait. « Créer un nouveau rdv » à plusieurs sans agenda lisible : invitation Présent ou Absent (questionnaire sans bouton d’entrée aujourd’hui).
 - 18/11 (suite) : un seul « Je m’en occupe » (la carte 122 commence par « Chez … » après l’invitation) ; « Trouve un créneau avec Julien » : invitation + créneaux libres.
+- 18/11 (suite) : l’invitation amicale seulement pour un prénom cité (jamais un cabinet, un docteur, « mon dentiste »).

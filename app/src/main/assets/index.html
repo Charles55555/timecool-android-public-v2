@@ -24254,13 +24254,33 @@ function tcDetecterPlusieursCites(text) {
 
 /** Le questionnaire « rendez-vous à plusieurs » (mission 47) démarre ; ceux qui n'ont pas TimeCool sont nommés d'abord. */
 async function tcGererPlusieursCites(text, d) {
-  tcPousserMessageUtilisateur(text);
-  // Groupe 5 (chef, 18/11) : jamais « je ne peux pas l’inviter d’ici » : Charly prépare l’invitation (SMS ou e-mail).
+  // Groupe 5 (chef, 18/11) : jamais « je ne peux pas l’inviter d’ici » : Charly prépare l’invitation (SMS ou e-mail), seulement
+  // pour une personne citée par son prénom (jamais « mon dentiste », un cabinet, un docteur).
+  const invitables = tcInvitablesParPrenom(d.sansCompte, text);
   const tous = d.sansCompte.length === d.contacts.length;
-  charlyIA.history.push(tcMessageInvitationSansCompte(d.sansCompte, !tous));
-  renderCharlyChat();
+  // Personne avec TimeCool, personne à inviter : le chemin des créneaux libres, sans invitation.
+  if (tous && !invitables.length && typeof tcGererDemandeCreneau === 'function') {
+    await tcGererDemandeCreneau(text, typeof detecterDemandeCreneau === 'function' ? detecterDemandeCreneau(text) : null);
+    return;
+  }
+  tcPousserMessageUtilisateur(text);
+  if (invitables.length) { charlyIA.history.push(tcMessageInvitationSansCompte(invitables, !tous)); renderCharlyChat(); }
   // Personne n’a TimeCool : pas de questionnaire (il n’aboutirait pas) ; l’invitation est ce qu’il y a à faire.
   if (!tous) await tcDemarrerRdvAPlusieurs(null);
+}
+
+/**
+ * Chef, 18/11 (image de TimeCool) : l’invitation amicale n’est proposée qu’à une personne citée par son prénom (« Julien » oui,
+ * « mon dentiste » non). Le premier mot d’une fiche qui est un titre ou une structure (Dr, Cabinet, Société, M., Mme…) n’est pas
+ * un prénom : dans le doute, pas d’invitation.
+ */
+function tcInvitablesParPrenom(liste, text) {
+  const pasUnPrenom = /^(dr|docteur|doc|pr|prof|professeur|me|maitre|m|mr|mme|mlle|monsieur|madame|mademoiselle|cabinet|centre|clinique|hopital|laboratoire|labo|pharmacie|garage|societe|ste|entreprise|ets|etablissement|etablissements|sarl|sas|sasu|eurl|sa|sci|agence|mairie|mutuelle|banque|assurance|assurances|institut|salon|ecole|association|asso|service|services|office|bureau|groupe|cie|compagnie|restaurant|hotel|magasin|boutique|atelier|studio|maison|residence|ehpad)$/;
+  const mots = ' ' + tcClasseNormaliser(String(text || '')) + ' ';
+  return (Array.isArray(liste) ? liste : []).filter(function (c) {
+    const p = tcClasseNormaliser(tcPrenomPresentable(c && c.name));
+    return p.length >= 2 && !pasUnPrenom.test(p) && mots.indexOf(' ' + p + ' ') > -1;
+  });
 }
 
 /** Chef, 18/11 : les contacts cités après « avec » (« trouve un créneau avec Julien ») qui n’ont pas TimeCool, ni bloqués. */
@@ -24271,7 +24291,7 @@ function tcSansCompteApresAvec(text) {
     && !/^(trouve|propose|cherche|moment|voir|pour|avec|semaine|prochaine|creneau|creneaux|rendez|vous|rdv|une|des|les|mon|mes|qui|est|libre|libres|cette|demain)$/.test(w); });
   const trouves = [];
   try { mots.forEach(function (w) { (typeof tcContactsParMots === 'function' ? tcContactsParMots([w]) : []).forEach(function (c) { if (trouves.indexOf(c) < 0) trouves.push(c); }); }); } catch (e) { return []; }
-  return trouves.filter(function (c) { return c && !c.referenceCompte && !c.blocked; });
+  return tcInvitablesParPrenom(trouves.filter(function (c) { return c && !c.referenceCompte && !c.blocked; }), text);
 }
 
 /**
@@ -34445,7 +34465,8 @@ async function tcGererRdvGroupe(texte, intention) {
   let _dejaPris = false;
   {
     const _sc = typeof tcDetecterPlusieursCites === 'function' ? tcDetecterPlusieursCites(texte) : null;
-    if (_sc && Array.isArray(_sc.sansCompte) && _sc.sansCompte.length) { charlyIA.history.push(tcMessageInvitationSansCompte(_sc.sansCompte, false)); _dejaPris = true; }
+    const _inv = _sc && Array.isArray(_sc.sansCompte) ? tcInvitablesParPrenom(_sc.sansCompte, texte) : [];
+    if (_inv.length) { charlyIA.history.push(tcMessageInvitationSansCompte(_inv, false)); _dejaPris = true; }
   }
   if (typeof tcOptionsGroupeDepuisTexte === 'function') intention = Object.assign({}, intention, { options: tcOptionsGroupeDepuisTexte(texte, intention.options) });
   // Chef, 18/11 : un seul « Je m’en occupe » : l’invitation l’a dit, la carte de la 122 commence par « Chez … ».

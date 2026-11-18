@@ -100,6 +100,9 @@ if (!exe) {
           for (var c = 0; c < e.contexte.length; c++) {
             // Groupe 7 (chef, 18/11) : « @demarrer:nouveau_rdv » ouvre le questionnaire « Créer un nouveau rdv » (plus de bouton).
             if (e.contexte[c] === '@demarrer:nouveau_rdv') { await tcDemarrerNouveauRdv(); await attendre(300); continue; }
+            // Chef, 18/11 : « @fiche:Cabinet dentaire Dentiste Martin » : une fiche sans TimeCool, avec un numéro, dans les contacts.
+            var df = /^@fiche:(.+)$/.exec(e.contexte[c]);
+            if (df) { contactsList.push({ id: 'fiche_' + c, name: df[1].trim(), phone: '06 39 98 00 77', email: '' }); continue; }
             var dv = /^@validation:(.+)$/.exec(e.contexte[c]);
             if (!dv) { await taper(e.contexte[c]); continue; }
             var norm = function (t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };

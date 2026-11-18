@@ -25,7 +25,7 @@ const contexte = function (plus) {
   const ctx = Object.assign({ console, Date, JSON, Array, String, Object, Math, encodeURIComponent, navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14)' },
     charlyIA: { history: [] }, _tcQuestionnaireNumero: 0, renderCharlyChat: function () {}, tcPousserMessageUtilisateur: function () {} }, plus || {});
   vm.createContext(ctx);
-  vm.runInContext(['tcPrenomPresentable', 'tcQuestionnaireNoms', 'tcTexteInvitationTimeCool', 'tcMessageInvitationSansCompte', 'tcGererPlusieursCites', 'tcMessageAnnonceRdv111', 'tcLienSms'].map(extraire).join('\n')
+  vm.runInContext(['tcSansAccents', 'tcClasseNormaliser', 'tcInvitablesParPrenom', 'tcPrenomPresentable', 'tcQuestionnaireNoms', 'tcTexteInvitationTimeCool', 'tcMessageInvitationSansCompte', 'tcGererPlusieursCites', 'tcMessageAnnonceRdv111', 'tcLienSms'].map(extraire).join('\n')
     + '\nglobalThis._n = function () { return _tcQuestionnaireNumero; };', ctx);
   return ctx;
 };
@@ -64,6 +64,28 @@ const alice = { id: 'a', name: 'Alice Durand', phone: '06 00 00 00 01', referenc
   ctx = contexte({ tcDemarrerRdvAPlusieurs: async function () { demarre++; } });
   await ctx.tcGererPlusieursCites('trouve un moment avec Alice et Julien', { contacts: [alice, julien], sansCompte: [julien] });
   verifie('Alice a TimeCool, Julien non : l’invitation de Julien, « Pour les autres, on y va. », puis le questionnaire', demarre === 1 && /Pour les autres, on y va\.$/.test(ctx.charlyIA.history[0].content), JSON.stringify(ctx.charlyIA.history));
+
+  // 2 bis. Chef, 18/11 (image de TimeCool) : seulement une personne citée par son prénom ; jamais un cabinet, un docteur, un métier.
+  ctx = contexte();
+  const cabinet = { id: 'cab', name: 'Cabinet dentaire Dentiste Martin', phone: '01 23 45 67 89' };
+  const dr = { id: 'dr', name: 'Dr Martin', phone: '01 23 45 67 80' };
+  const monsieur = { id: 'mr', name: 'M. Dupont', phone: '06 11 11 11 11' };
+  const jl = { id: 'jl', name: 'JEAN-LUC BERNARD', phone: '06 22 22 22 22' };
+  const noms = (l) => JSON.stringify(l.map((c) => c.name));
+  verifie('« avec Julien » : Julien (son prénom est cité)', noms(ctx.tcInvitablesParPrenom([julien], 'trouve un créneau avec Julien')) === '["Julien Martin"]');
+  verifie('« avec mon dentiste » : jamais le cabinet ; « avec le Dr Martin » : jamais le docteur ; « avec M. Dupont » : non',
+    noms(ctx.tcInvitablesParPrenom([cabinet], 'trouve un créneau avec mon dentiste')) === '[]' && noms(ctx.tcInvitablesParPrenom([dr], 'trouve un créneau avec le Dr Martin')) === '[]'
+    && noms(ctx.tcInvitablesParPrenom([monsieur], 'trouve un créneau avec M. Dupont')) === '[]' && noms(ctx.tcInvitablesParPrenom([cabinet], 'trouve un créneau avec le cabinet dentaire')) === '[]');
+  verifie('« avec Martin » pour Julien Martin (son nom, pas son prénom) : dans le doute, non ; « avec Jean-Luc » (fiche en majuscules) : oui',
+    noms(ctx.tcInvitablesParPrenom([julien], 'trouve un créneau avec Martin')) === '[]' && noms(ctx.tcInvitablesParPrenom([jl], 'trouve un moment avec jean-luc')) === '["JEAN-LUC BERNARD"]');
+  let creneaux = 0; demarre = 0;
+  ctx = contexte({ tcDemarrerRdvAPlusieurs: async function () { demarre++; }, tcGererDemandeCreneau: async function () { creneaux++; }, detecterDemandeCreneau: function () { return null; } });
+  await ctx.tcGererPlusieursCites('trouve un moment avec mon dentiste et le Dr Martin', { contacts: [cabinet, dr], sansCompte: [cabinet, dr] });
+  verifie('un cabinet et un docteur cités, personne avec TimeCool : mes créneaux libres, aucune invitation', creneaux === 1 && demarre === 0 && ctx.charlyIA.history.length === 0, JSON.stringify({ creneaux, demarre, h: ctx.charlyIA.history }));
+  demarre = 0;
+  ctx = contexte({ tcDemarrerRdvAPlusieurs: async function () { demarre++; } });
+  await ctx.tcGererPlusieursCites('trouve un moment avec Alice et mon dentiste', { contacts: [alice, cabinet], sansCompte: [cabinet] });
+  verifie('Alice et « mon dentiste » : le questionnaire avec Alice, aucune invitation au cabinet', demarre === 1 && !ctx.charlyIA.history.some((m) => m._invitation), JSON.stringify(ctx.charlyIA.history));
 
   // 3. L'e-mail de l'invitation porte son sujet ; un message de rendez-vous garde « Notre rendez-vous ».
   const ouvrir = async function (sujet) {
