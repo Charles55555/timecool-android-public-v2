@@ -107,3 +107,8 @@ Trouve un rendez-vous en personne avec Michel et Julien demain | @validation:Mic
 Trouve un créneau avec mon dentiste | @fiche:Cabinet dentaire Dentiste Martin | texte:Voici ce qui est libre && sans:invitation && sans:pas encore TimeCool && sans:pas bien compris
 Trouve un créneau avec le Dr Martin | @fiche:Dr Martin | texte:Voici ce qui est libre && sans:invitation && sans:pas encore TimeCool && sans:pas bien compris
 Trouve un moment avec Alice et mon dentiste cette semaine | @fiche:Cabinet dentaire Dentiste Martin | sans:invitation && sans:pas encore TimeCool && sans:pas bien compris
+# Mission 127 (Charles, 18/11) : Charly Pro IA, la même page que Charly IA : il répond exactement comme lui, sous son nom.
+Saisis dans mon agenda : rendez-vous dentiste mardi à 15h | @charlypro | texte:^Dentiste, mardi .* à 15h : je te propose ceci && sans:Saisis && page:^Charly Pro IA — && page:Charly Pro IA est une intelligence artificielle
+Demande un rendez-vous demain à mon ami Michel | @charlypro | texte:Michel a TimeCool && sans:professionnel && page:^Charly Pro IA —
+Quand suis-je libre ce vendredi ? | @charlypro | texte:libre ce vendredi && jour:vendredi && page:^Charly Pro IA —
+Trouve un créneau avec Julien | @charlypro | texte:Voici ce qui est libre && texte:Julien n’a pas encore TimeCool && texte:Je lui prépare une invitation par SMS ou par e-mail && sans:je ne peux && sans:pas bien compris && page:^Charly Pro IA —

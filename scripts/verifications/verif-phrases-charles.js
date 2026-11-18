@@ -57,6 +57,8 @@ function juger(c, r) {
     let m;
     if ((m = cond.match(/^jour:(.+)$/))) { const j = jourAttendu(m[1]); if (bas.indexOf(j.texte) < 0 && rep.indexOf(j.iso) < 0) raisons.push('ne parle pas de ' + j.texte); }
     else if ((m = cond.match(/^texte:(.+)$/))) { if (!new RegExp(m[1], 'im').test(rep)) raisons.push('pas « ' + m[1] + ' »'); }
+    // Mission 127 : le nom en tête de la page (et l'avertissement du bas).
+    else if ((m = cond.match(/^page:(.+)$/))) { if (!new RegExp(m[1], 'm').test(r.page || '')) raisons.push('la page ne dit pas « ' + m[1] + ' »'); }
     else if ((m = cond.match(/^sans:(.+)$/))) { if (new RegExp(m[1], 'im').test(rep)) raisons.push('dit « ' + m[1] + ' »'); }
     // Lot 118 : ce que reçoit le modèle (la phrase entière, son lieu compris), quand la phrase passe par lui.
     else if ((m = cond.match(/^envoi:(.+)$/))) { if (!r.modele || !new RegExp(m[1], 'im').test(r.envoi || '')) raisons.push('le modèle ne reçoit pas « ' + m[1] + ' »'); }
@@ -92,6 +94,10 @@ if (!exe) {
         var e = ESSAIS[k], res = {};
         try {
           if (typeof _tcDemo !== 'undefined' && _tcDemo) { tcQuitterDemo({ sansRetour: true }); await attendre(200); }
+          // Mission 127 : « @charlypro » : la phrase est tapée sur la page Charly Pro IA (case cochée) ; les autres, sur Charly IA.
+          var pro = e.contexte.indexOf('@charlypro') > -1;
+          if (typeof tcPasserCharlyVariante === 'function') { if (pro || tcCharlyVariante !== 'ia') { FEATURES.CHARLY_PRO = pro; await tcPasserCharlyVariante(pro ? 'pro' : 'ia', { ouvrir: true }); await attendre(200); } }
+          else if (pro) throw new Error('pas de page Charly Pro IA');
           await tcOuvrirDemo(); await attendre(200);
           if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 50; TC_ATTENTE_DUREES.vrai = 50; TC_ATTENTE_DUREES.feuilles = 50; TC_ATTENTE_DUREES.consulte = 50; }
           var modele = 0, neutre = callAI;
@@ -99,6 +105,7 @@ if (!exe) {
           // Mission 122 : « @validation:Michel,Virginie » : ces amis gardent « Toujours attendre ma validation » (agenda non lisible).
           for (var c = 0; c < e.contexte.length; c++) {
             // Groupe 7 (chef, 18/11) : « @demarrer:nouveau_rdv » ouvre le questionnaire « Créer un nouveau rdv » (plus de bouton).
+            if (e.contexte[c] === '@charlypro') continue;
             if (e.contexte[c] === '@demarrer:nouveau_rdv') { await tcDemarrerNouveauRdv(); await attendre(300); continue; }
             // Chef, 18/11 : « @fiche:Cabinet dentaire Dentiste Martin » : une fiche sans TimeCool, avec un numéro, dans les contacts.
             var df = /^@fiche:(.+)$/.exec(e.contexte[c]);
@@ -118,6 +125,7 @@ if (!exe) {
           }
           var n0 = charlyIA.history.length, m0 = modele;
           await taper(e.phrase);
+          res.page = ((document.querySelector('#page-assistant .conv-name') || {}).textContent || '') + ' — ' + ((document.getElementById('charlyInputBar') || {}).textContent || '');
           res.modele = modele > m0;
           res.envoi = res.modele ? String(window.__envoi || '').slice(-3000) : '';
           res.reponses = charlyIA.history.slice(n0).filter(function (m) { return m && m.role !== 'user' && !(m._demo && m._demo.phrases); })

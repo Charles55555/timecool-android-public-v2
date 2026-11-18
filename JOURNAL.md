@@ -3701,3 +3701,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Contact cité sans TimeCool : Charly prépare l’invitation (bouton SMS/e-mail, texte de Charles), aussi dans le chemin de la 122 où il disparaissait. « Créer un nouveau rdv » à plusieurs sans agenda lisible : invitation Présent ou Absent (questionnaire sans bouton d’entrée aujourd’hui).
 - 18/11 (suite) : un seul « Je m’en occupe » (la carte 122 commence par « Chez … » après l’invitation) ; « Trouve un créneau avec Julien » : invitation + créneaux libres.
 - 18/11 (suite) : l’invitation amicale seulement pour un prénom cité (jamais un cabinet, un docteur, « mon dentiste »).
+
+## 18/11/2026 — Mission 127 : « Charly Pro IA », la même page que Charly IA (CODEUR)
+
+- Case « Charly Pro IA » (MODE DÉVELOPPEUR, sous « Configuration professionnelle », décochée par défaut) ; cochée : entrée sous « Charly IA » (même éclair), même page et même moteur sous le nom « Charly Pro IA », même réponse ; conversation séparée (clé _pro, questions en attente rangées avec leur page) ; case décochée : Charly IA identique au pixel près.

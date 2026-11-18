@@ -11,8 +11,8 @@ let ko = 0, ok = 0;
 const verifie = (l, c, d) => { if (c) ok++; else ko++; console.log('  ' + (c ? 'OK ' : 'KO ') + l + (!c && d !== undefined ? ' : ' + String(d).slice(0, 600) : '')); };
 
 console.log('-- Le code --');
-verifie('la case CONFIG_PRO existe, éteinte par défaut', /CONFIG_PRO:\s+false\s+\/\/ Mission 121/.test(page) && /CONFIG_PRO:\s+\{ icon:'🩺', name:'Configuration professionnelle' \}/.test(page));
-verifie('« Version complète » garde l’état de CONFIG_PRO, MODE_PRO et CARNET_PROS', /const _gardes = \{ MODE_PRO: !!FEATURES\.MODE_PRO, CARNET_PROS: !!FEATURES\.CARNET_PROS, CONFIG_PRO: !!FEATURES\.CONFIG_PRO \};/.test(page));
+verifie('la case CONFIG_PRO existe, éteinte par défaut', /CONFIG_PRO:\s+false,?\s+\/\/ Mission 121/.test(page) && /CONFIG_PRO:\s+\{ icon:'🩺', name:'Configuration professionnelle' \}/.test(page));
+verifie('« Version complète » garde l’état de CONFIG_PRO, MODE_PRO et CARNET_PROS', /const _gardes = \{ MODE_PRO: !!FEATURES\.MODE_PRO, CARNET_PROS: !!FEATURES\.CARNET_PROS, CONFIG_PRO: !!FEATURES\.CONFIG_PRO(, CHARLY_PRO: !!FEATURES\.CHARLY_PRO)? \};/.test(page));
 verifie('la fiche ne reprend jamais les horaires de l’étape 4', !/fiche[\s\S]{0,80}jours\[/.test((page.match(/function tcConfigProFiche[\s\S]*?\n\}/) || [''])[0]) && /horaires: ''/.test((page.match(/function tcConfigProFiche[\s\S]*?\n\}/) || [''])[0]));
 verifie('les anciens modules restent éteints par défaut (MODE_PRO, CARNET_PROS)', /MODE_PRO:\s+false,/.test(page) && /CARNET_PROS:\s+false,/.test(page));
 verifie('la page ne se rattache à aucun ancien module', !/MODE_PRO|CARNET_PROS|switchMode/.test((page.match(/MISSION 121 \(Charles, 18\/11\)[\s\S]*?fin mission 121/) || [''])[0]));

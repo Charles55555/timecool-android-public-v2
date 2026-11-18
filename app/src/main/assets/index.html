@@ -2123,7 +2123,8 @@ const FEATURES = {
   IMPORT_AGENDA: true,   // Importer mon ancien agenda (.ics)
   RDV_CONTACT:   true,   // Demander un RDV depuis une fiche contact
   RDV_GROUPE:    false,  // RDV de groupe dans Mes contacts — pas encore prêt
-  CONFIG_PRO:    false   // Mission 121 : page « Configuration professionnelle » (TimeCool Pro), éteinte pour tout le monde par défaut
+  CONFIG_PRO:    false,  // Mission 121 : page « Configuration professionnelle » (TimeCool Pro), éteinte pour tout le monde par défaut
+  CHARLY_PRO:    false   // Mission 127 : page « Charly Pro IA » (la page Charly IA, sous ce nom), éteinte pour tout le monde par défaut
 };
 
 const FEATURE_LABELS = {
@@ -2134,7 +2135,8 @@ const FEATURE_LABELS = {
   IMPORT_AGENDA: { icon:'📥', name:'Importer mon ancien agenda' },
   RDV_CONTACT:   { icon:'📅', name:'Demander un RDV (fiche contact)' },
   RDV_GROUPE:    { icon:'👥', name:'RDV de groupe' },
-  CONFIG_PRO:    { icon:'🩺', name:'Configuration professionnelle' }
+  CONFIG_PRO:    { icon:'🩺', name:'Configuration professionnelle' },
+  CHARLY_PRO:    { icon:'⚡', name:'Charly Pro IA' }
 };
 
 const TC_FEATURES_KEY = 'timecool_features_override';
@@ -2197,6 +2199,8 @@ function toggleFeature(key) {
   if (key === 'MODE_PRO' && !FEATURES.MODE_PRO && mode === 'pro') switchMode('user');
   // Mission 121 : la case éteinte, la page se ferme.
   if (key === 'CONFIG_PRO' && !FEATURES.CONFIG_PRO && currentPage === 'configpro') navigate('calendar');
+  // Mission 127 : la case éteinte, Charly revient à la conversation de Charly IA.
+  if (key === 'CHARLY_PRO' && !FEATURES.CHARLY_PRO && typeof tcPasserCharlyVariante === 'function') tcPasserCharlyVariante('ia');
   renderMenu();
   renderAIConfig();
 }
@@ -2212,9 +2216,10 @@ function resetFeatureOverrides() {
   try { localStorage.removeItem(TC_FEATURES_KEY); } catch(e) {}
   // Mission 121 : « Version complète » ne touche plus la Configuration professionnelle ni les anciens modules MODE_PRO et
   // CARNET_PROS : ils gardent leur état actuel sur ce compte (chef, 18/11).
-  const _gardes = { MODE_PRO: !!FEATURES.MODE_PRO, CARNET_PROS: !!FEATURES.CARNET_PROS, CONFIG_PRO: !!FEATURES.CONFIG_PRO };
+  // Mission 127 : ni Charly Pro IA.
+  const _gardes = { MODE_PRO: !!FEATURES.MODE_PRO, CARNET_PROS: !!FEATURES.CARNET_PROS, CONFIG_PRO: !!FEATURES.CONFIG_PRO, CHARLY_PRO: !!FEATURES.CHARLY_PRO };
   Object.keys(FEATURES).forEach(function(k) { FEATURES[k] = Object.prototype.hasOwnProperty.call(_gardes, k) ? _gardes[k] : (k !== 'RDV_GROUPE'); });
-  if (_gardes.MODE_PRO || _gardes.CARNET_PROS || _gardes.CONFIG_PRO) { try { localStorage.setItem(TC_FEATURES_KEY, JSON.stringify(_gardes)); } catch(e) {} }
+  if (_gardes.MODE_PRO || _gardes.CARNET_PROS || _gardes.CONFIG_PRO || _gardes.CHARLY_PRO) { try { localStorage.setItem(TC_FEATURES_KEY, JSON.stringify(_gardes)); } catch(e) {} }
   _devDirty = false;
   renderMenu();
   renderAIConfig();
@@ -3868,6 +3873,7 @@ const menuItems = {
     {id:'importagenda', icon:'📥', label:'Importer mon ancien agenda'},
     {id:'google', icon:'📅', label:'Synchroniser avec mon ancien agenda'},
     {id:'assistant', icon:'⚡', label:'Charly IA'},
+    {id:'assistantpro', icon:'⚡', label:'Charly Pro IA'},   // mission 127 : seulement avec la case CHARLY_PRO
     {id:'contacts', icon:'👥', label:'Mes contacts'},
     {id:'pros', icon:'🌐', label:'Mes professionnels'},
     {id:'messages', icon:'💬', label:'Ma messagerie sécurisée', badge:true},
@@ -3887,6 +3893,7 @@ const menuItems = {
     {id:'importagenda', icon:'📥', label:'Importer mon ancien agenda'},
     {id:'google', icon:'📅', label:'Synchroniser avec mon ancien agenda'},
     {id:'assistant', icon:'⚡', label:'Charly IA'},
+    {id:'assistantpro', icon:'⚡', label:'Charly Pro IA'},   // mission 127 : seulement avec la case CHARLY_PRO
     {id:'contacts', icon:'👥', label:'Mes contacts'},
     {id:'pros', icon:'👥', label:'Mes clients'},
     {id:'messages', icon:'💬', label:'Ma messagerie sécurisée', badge:true},
@@ -3974,7 +3981,7 @@ function switchMode(m) {
   // Pas de toast en v2.0 puisque le bandeau n'existe plus
 }
 
-const FEATURE_BY_PAGE = { importagenda:'IMPORT_AGENDA', assistant:'CHARLY_IA', messages:'MESSAGERIE', configpro:'CONFIG_PRO' };
+const FEATURE_BY_PAGE = { importagenda:'IMPORT_AGENDA', assistant:'CHARLY_IA', messages:'MESSAGERIE', configpro:'CONFIG_PRO', assistantpro:'CHARLY_PRO' };
 
 function isMenuItemVisible(id) {
   // "pros" recouvre deux pages différentes selon le mode :
@@ -3988,12 +3995,12 @@ function renderMenu() {
   const items = menuItems[mode].filter(it => isMenuItemVisible(it.id));
   const navItems = items.map(it => {
     let extraStyle = '';
-    if (it.id === 'assistant') {
+    if (it.id === 'assistant' || it.id === 'assistantpro') {
       // Le degrade suit le theme : creme → fond en clair, ambre sombre → fond en sombre (mission 25).
       extraStyle = 'background:linear-gradient(90deg,var(--menu-charly, #fff4e0),var(--bg, #fff)); border-left:3px solid var(--g-yellow);';
     }
     return `
-    <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="${it.id === 'calendar' ? 'tcOuvrirMonAgenda()' : "navigate('" + it.id + "')"}">
+    <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="${it.id === 'calendar' ? 'tcOuvrirMonAgenda()' : "navigate('" + (it.id === 'assistant' && typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro' ? 'assistantia' : it.id) + "')"}">
       <span style="font-size:20px; flex-shrink:0;">${it.icon}</span>
       <span>${it.label}</span>
       ${it.badge?`<span class="menu-badge" id="menuBadge" style="display:none; margin-left:auto;">0</span>`:''}
@@ -10922,6 +10929,15 @@ function tcRetourImport() {
 navigate = function(page) {
   // Mission 121 : la case « Configuration professionnelle » éteinte, la page n'existe pas.
   if (page === 'configpro' && !(typeof FEATURES !== 'undefined' && FEATURES.CONFIG_PRO)) page = 'calendar';
+  // Mission 127 : « Charly Pro IA » est la page Charly (#page-assistant), sous son nom, avec sa conversation ; case éteinte, la page
+  // n'existe pas. « assistantia » : l'entrée « Charly IA » du menu, touchée pendant que Charly Pro IA est ouvert. Toute autre
+  // ouverture de « assistant » garde le dernier Charly ouvert (au démarrage : Charly IA).
+  if (page === 'assistantpro' || page === 'assistantia') {
+    const _v = page === 'assistantpro' ? 'pro' : 'ia';
+    if (_v === 'pro' && !(typeof FEATURES !== 'undefined' && FEATURES.CHARLY_PRO)) page = 'calendar';
+    else if (typeof tcPasserCharlyVariante === 'function' && tcCharlyVariante !== _v) { tcPasserCharlyVariante(_v, { ouvrir: true }); return; }
+    else page = 'assistant';
+  }
   // Une page ne se ramene pas a elle-meme : sans cela, revenir depuis
   // « importagenda » vers « importagenda » ne ferait rien.
   tcNoterDepart(page);
@@ -12930,7 +12946,7 @@ function tcSauverHistoriqueCharly() {
     const liste = (Array.isArray(charlyIA.history) ? charlyIA.history : [])
       .filter(function (m) { return m && (m.role === 'user' || m.role === 'assistant' || m.role === 'system_info' || m.role === 'tiers'); })
       .slice(-TC_CHARLY_HISTORIQUE_MAX);
-    localStorage.setItem(TC_CHARLY_HISTORIQUE_CLE, JSON.stringify(liste, function (k, v) {
+    localStorage.setItem(tcCleHistoriqueCharly(), JSON.stringify(liste, function (k, v) {
       return (k === 'conflictData' || k === 'touches' || k === '_relu') ? undefined : v;
     }));
   } catch (e) {}
@@ -12942,7 +12958,7 @@ function tcChargerHistoriqueCharly() {
   charlyIA._historiqueCharge = true;
   if (Array.isArray(charlyIA.history) && charlyIA.history.length) return;
   try {
-    const brut = localStorage.getItem(TC_CHARLY_HISTORIQUE_CLE);
+    const brut = localStorage.getItem(tcCleHistoriqueCharly());
     const liste = brut ? JSON.parse(brut) : null;
     // Relus de l'appareil : ils ne comptent pas dans la limite de messages de la session (mission 101).
     if (Array.isArray(liste) && liste.length) charlyIA.history = liste.map(function (m) { if (m && typeof m === 'object') m._relu = true; return m; });
@@ -12951,8 +12967,184 @@ function tcChargerHistoriqueCharly() {
 
 /** Le bouton « Recommencer » efface aussi ce qui etait enregistre. */
 function tcEffacerHistoriqueCharly() {
-  try { localStorage.removeItem(TC_CHARLY_HISTORIQUE_CLE); } catch (e) {}
+  try { localStorage.removeItem(tcCleHistoriqueCharly()); } catch (e) {}
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 127 (Charles, 18/11) : « Charly Pro IA », la même page que Charly IA, derrière la case CHARLY_PRO (Configuration IA,
+   mode développeur). Rien n'est recopié : la page #page-assistant et le moteur de Charly servent aux deux, une correction de
+   Charly IA vaut donc aussi pour Charly Pro IA. Ce qui change : le nom affiché (« Charly Pro IA » partout où la page dit
+   « Charly IA ») et la conversation, rangée à part (sa clé sur l'appareil, ses questions en attente). Au départ, Charly Pro IA
+   répond exactement comme Charly IA : ce qui le rendra différent sera décidé plus tard avec Charles.
+   Case éteinte : tcCharlyVariante reste 'ia', aucun observateur, rien ne change.
+   ═══════════════════════════════════════════════════════════════ */
+/** La page Charly ouverte : 'ia' (Charly IA) ou 'pro' (Charly Pro IA). Toujours 'ia' au démarrage. */
+var tcCharlyVariante = 'ia';
+var TC_CHARLY_PRO_NOM = 'Charly Pro IA';
+/** La conversation de l'autre page et ses questions en attente, le temps de la session : { ia: {…} } ou { pro: {…} }. */
+var _tcCharlyConversations = {};
+var _tcCharlyProObservateur = null;
+var _tcCharlyProRenommes = [];
+var _tcCharlyPassage = null;
+var _tcCharlyGeneration = 0;
+
+/** La clé de la conversation enregistrée sur l'appareil : celle de Charly IA, ou la sienne pour Charly Pro IA. */
+function tcCleHistoriqueCharly() {
+  return (typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro') ? TC_CHARLY_HISTORIQUE_CLE + '_pro' : TC_CHARLY_HISTORIQUE_CLE;
+}
+
+/**
+ * Les questions en attente d'une conversation (« lequel ? », « vers quand ? », un questionnaire, le lieu dont on parle…) : elles
+ * restent avec leur page. Sans cela, un « oui » tapé sur Charly Pro IA répondrait à une question posée sur Charly IA.
+ */
+var TC_CHARLY_EN_ATTENTE = [
+  [function () { return _tcSuppressionEnAttente; }, function (v) { _tcSuppressionEnAttente = v; }, null],
+  [function () { return _tcSuppressionChoix; }, function (v) { _tcSuppressionChoix = v; }, null],
+  [function () { return _tcMarcheArriere; }, function (v) { _tcMarcheArriere = v; }, null],
+  [function () { return _tcDeplacementEnAttente; }, function (v) { _tcDeplacementEnAttente = v; }, null],
+  [function () { return _tcTrajetEtapes; }, function (v) { _tcTrajetEtapes = v; }, null],
+  [function () { return _tcHeureEnAttente; }, function (v) { _tcHeureEnAttente = v; }, null],
+  [function () { return _tcDernierJourConsulte117; }, function (v) { _tcDernierJourConsulte117 = v; }, null],
+  [function () { return _tcConsultationRecente117; }, function (v) { _tcConsultationRecente117 = v; }, 0],
+  [function () { return _tcCreneauVagueEnAttente; }, function (v) { _tcCreneauVagueEnAttente = v; }, null],
+  [function () { return _tcDeplacementPeriode; }, function (v) { _tcDeplacementPeriode = v; }, null],
+  [function () { return _tcQuestionnaire; }, function (v) { _tcQuestionnaire = v; }, null],
+  [function () { return _tcLieu118; }, function (v) { _tcLieu118 = v; }, null],
+  [function () { return _tcConfianceMoment; }, function (v) { _tcConfianceMoment = v; }, null]
+];
+function tcCharlyEtatLire() { return TC_CHARLY_EN_ATTENTE.map(function (x) { try { return x[0](); } catch (e) { return x[2]; } }); }
+function tcCharlyEtatPoser(valeurs) { TC_CHARLY_EN_ATTENTE.forEach(function (x, i) { try { x[1](valeurs ? valeurs[i] : x[2]); } catch (e) {} }); }
+
+/** « Charly IA » devient « Charly Pro IA » ; le reste du texte ne bouge pas. */
+function tcNomCharlyPro(t) { return String(t).split('Charly IA').join(TC_CHARLY_PRO_NOM); }
+
+/**
+ * Sur la page Charly Pro IA : renomme ce nœud et ce qu'il contient (textes ; placeholder, title, aria-label). Ce qui est hors de
+ * la conversation est noté, pour redevenir « Charly IA » au retour (la conversation, elle, est redessinée).
+ */
+function tcRenommerCharlyPro(racine, attributsSeuls) {
+  if (!racine) return;
+  const corps = document.getElementById('charlyChatBody');
+  const noter = function (n, a, avant) {
+    if (corps && corps.contains(n)) return;
+    if (_tcCharlyProRenommes.length > 200) _tcCharlyProRenommes = _tcCharlyProRenommes.filter(function (r) { return r.n.isConnected; });
+    _tcCharlyProRenommes.push({ n: n, a: a, avant: avant });
+  };
+  const texte = function (n) {
+    const v = n.nodeValue;
+    if (v && v.indexOf('Charly IA') > -1) { noter(n, null, v); n.nodeValue = tcNomCharlyPro(v); }
+  };
+  const attributs = function (el) {
+    ['placeholder', 'title', 'aria-label'].forEach(function (a) {
+      const v = el.getAttribute(a);
+      if (v && v.indexOf('Charly IA') > -1) { noter(el, a, v); el.setAttribute(a, tcNomCharlyPro(v)); }
+    });
+  };
+  if (racine.nodeType === 3) { texte(racine); return; }
+  if (racine.nodeType !== 1) return;
+  attributs(racine);
+  if (attributsSeuls) return;
+  racine.querySelectorAll('[placeholder],[title],[aria-label]').forEach(attributs);
+  const w = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT, null);
+  let n;
+  while ((n = w.nextNode())) texte(n);
+}
+
+/** Page Charly Pro IA ouverte : le nom suit tout ce qui s'affiche sur la page. Retour à Charly IA : l'observateur s'arrête, le nom revient. */
+function tcCharlyProSurveiller(oui) {
+  const page = document.getElementById('page-assistant');
+  if (oui) {
+    if (!page) return;
+    tcRenommerCharlyPro(page);
+    if (!_tcCharlyProObservateur && typeof MutationObserver === 'function') {
+      _tcCharlyProObservateur = new MutationObserver(function (liste) {
+        if (tcCharlyVariante !== 'pro') return;
+        liste.forEach(function (m) {
+          if (m.type === 'childList') m.addedNodes.forEach(function (x) { tcRenommerCharlyPro(x); });
+          else if (m.type === 'characterData') tcRenommerCharlyPro(m.target);
+          else if (m.type === 'attributes') tcRenommerCharlyPro(m.target, true);
+        });
+      });
+      _tcCharlyProObservateur.observe(page, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label'] });
+    }
+    return;
+  }
+  if (_tcCharlyProObservateur) { _tcCharlyProObservateur.disconnect(); _tcCharlyProObservateur = null; }
+  _tcCharlyProRenommes.slice().reverse().forEach(function (r) {
+    try {
+      if (r.a) { if (r.n.getAttribute(r.a) === tcNomCharlyPro(r.avant)) r.n.setAttribute(r.a, r.avant); }
+      else if (r.n.nodeValue === tcNomCharlyPro(r.avant)) r.n.nodeValue = r.avant;
+    } catch (e) {}
+  });
+  _tcCharlyProRenommes = [];
+}
+
+/** Charly est-il en train de répondre (réponse en cours, étape affichée) ? */
+function tcCharlyAuTravail() {
+  return !!(typeof charlyIA !== 'undefined' && charlyIA.isLoading) || (typeof _tcEtape !== 'undefined' && !!_tcEtape);
+}
+
+/**
+ * Passe à Charly IA (v = 'ia') ou à Charly Pro IA (v = 'pro', seulement case cochée). La conversation ouverte et ses questions en
+ * attente sont rangées, celles de l'autre page reviennent. Charly au travail : sa réponse se termine d'abord, dans sa conversation.
+ * Une démonstration ouverte se ferme d'abord, comme pour toute autre page. options.ouvrir : la page s'ouvre ensuite.
+ * Deux gestes rapprochés : les passages se font l'un après l'autre, dans l'ordre.
+ */
+function tcPasserCharlyVariante(v, options) {
+  const faire = function () { return tcPasserCharlyVarianteMaintenant(v, options); };
+  const suite = (_tcCharlyPassage || Promise.resolve()).then(faire, faire);
+  _tcCharlyPassage = suite.catch(function () {});
+  return suite;
+}
+
+async function tcPasserCharlyVarianteMaintenant(v, options) {
+  v = (v === 'pro' && typeof FEATURES !== 'undefined' && FEATURES.CHARLY_PRO) ? 'pro' : 'ia';
+  const ouvrir = !!(options && options.ouvrir);
+  const generation = _tcCharlyGeneration;
+  if (ouvrir) {
+    try { document.getElementById('sideMenu').classList.remove('open'); document.getElementById('menuOverlay').classList.remove('open'); } catch (e) {}
+  }
+  if (v !== tcCharlyVariante) {
+    if (typeof _tcDemo !== 'undefined' && _tcDemo) {
+      const etat = _tcDemo;
+      if (etat.occupe > 0 && typeof tcDemoAttendre === 'function') await tcDemoAttendre(etat);
+      if (_tcDemo === etat) tcQuitterDemo({ sansRetour: true });
+    }
+    for (let i = 0; i < 300 && tcCharlyAuTravail(); i++) await new Promise(function (r) { setTimeout(r, 100); });
+    // Déconnexion pendant l'attente : rien à ranger.
+    if (generation !== _tcCharlyGeneration) return;
+    if (v !== tcCharlyVariante) {
+      const avant = tcCharlyVariante;
+      if (charlyIA._historiqueCharge) tcSauverHistoriqueCharly();
+      _tcCharlyConversations[avant] = { history: charlyIA.history, charge: !!charlyIA._historiqueCharge, attente: tcCharlyEtatLire() };
+      const apres = _tcCharlyConversations[v] || null;
+      delete _tcCharlyConversations[v];
+      tcCharlyVariante = v;
+      charlyIA.history = apres ? apres.history : [];
+      charlyIA._historiqueCharge = apres ? apres.charge : false;
+      tcCharlyEtatPoser(apres ? apres.attente : null);
+      try { _tcRdvBouges = []; } catch (e) {}
+      tcCharlyProSurveiller(v === 'pro');
+      if (typeof renderMenu === 'function') { try { renderMenu(); } catch (e) {} }
+      if (typeof renderCharlyChat === 'function') { try { renderCharlyChat(); } catch (e) {} }
+    }
+  }
+  if (ouvrir) navigate('assistant');
+}
+
+/** Déconnexion, changement de compte : la conversation gardée en mémoire part aussi ; Charly revient à Charly IA. */
+function tcCharlyVarianteOublier() {
+  _tcCharlyGeneration++;
+  _tcCharlyConversations = {};
+  _tcCharlyPassage = null;
+  if (tcCharlyVariante !== 'ia') {
+    tcCharlyVariante = 'ia';
+    tcCharlyEtatPoser(null);
+    tcCharlyProSurveiller(false);
+    if (typeof renderMenu === 'function') { try { renderMenu(); } catch (e) {} }
+  }
+}
+/* ═══ fin mission 127 ═══ */
 
 /**
  * Mission 106, revue par la 107 (Charles, 17/11, textes validés mot pour mot) : l'accueil de la page Charly IA, une idée par
@@ -37331,6 +37523,8 @@ function tcViderDonneesDuCompte() {
   if (typeof charlyIA !== 'undefined') {
     charlyIA.history = [];
     charlyIA._historiqueCharge = false;
+    // Mission 127 : la conversation de l’autre page (Charly Pro IA ou Charly IA), gardée en mémoire, part aussi.
+    if (typeof tcCharlyVarianteOublier === 'function') tcCharlyVarianteOublier();
     // Les cles IA sont celles du compte : effacees avec lui, elles reviennent du serveur pour le compte qui s ouvre
     // (a la deconnexion, plus de session : rien n est demande).
     charlyIA.config.apiKey = '';
@@ -40049,7 +40243,7 @@ var TC_NO_TRANSLATE_SEL = '[data-notranslate], input, textarea, code, pre, scrip
   ' .week-event, .day-event, .event-title, .conv-msg, #charlyChatBody, .tc-srcnm';
 
 /* Noms propres et marques : jamais traduits, où qu'ils apparaissent. */
-var TC_BRAND_WORDS = ['TIMECOOL', 'TimeCool', 'Timecool', 'Charly IA', 'Charly', 'TIME', 'COOL'];
+var TC_BRAND_WORDS = ['TIMECOOL', 'TimeCool', 'Timecool', 'Charly Pro IA', 'Charly IA', 'Charly', 'TIME', 'COOL'];
 
 function tcShouldTranslateNode(node) {
   var el = node.parentElement;
@@ -40119,6 +40313,8 @@ async function translatePageWithGoogle(targetLang, silent) {
           .replace(/TEMPOFREDDO/g, 'TIMECOOL')
           .replace(/TEMPO\s?FREDDO/g, 'TIMECOOL')
           .replace(/Tempo\s?Freddo/gi, 'TimeCool')
+          // Mission 127 : « Charly Pro IA » aussi.
+          .replace(/Charly\s+Pro\s+(AI|KI|IA|II)/gi, 'Charly Pro IA')
           // « Charly IA » est un nom propre : identique dans toutes les langues
           .replace(/Charly\s+(AI|KI|IA|II|МА|ИИ|AI-en|TEKOÄLY|KUNSTIG)/gi, 'Charly IA');
         if (n.parentElement) n.nodeValue = n.nodeValue.replace(orig, translated);

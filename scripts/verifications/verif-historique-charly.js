@@ -53,7 +53,8 @@ vm.createContext(ctx);
   // n'apparait pas sur l'objet ctx, et la suite doit lire la cle.
   if (src) vm.runInContext(src.replace('const ', 'var '), ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
-['tcSauverHistoriqueCharly', 'tcChargerHistoriqueCharly', 'tcEffacerHistoriqueCharly'].forEach((n) => {
+// Mission 127 : la clé passe par tcCleHistoriqueCharly (celle de Charly IA, ou la sienne pour Charly Pro IA).
+['tcCleHistoriqueCharly', 'tcSauverHistoriqueCharly', 'tcChargerHistoriqueCharly', 'tcEffacerHistoriqueCharly'].forEach((n) => {
   const src = extraire(n);
   if (src) vm.runInContext(src, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); }
 });
