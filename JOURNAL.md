@@ -3705,3 +3705,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Mission 127 : « Charly Pro IA », la même page que Charly IA (CODEUR)
 
 - Case « Charly Pro IA » (MODE DÉVELOPPEUR, sous « Configuration professionnelle », décochée par défaut) ; cochée : entrée sous « Charly IA » (même éclair), même page et même moteur sous le nom « Charly Pro IA », même réponse ; conversation séparée (clé _pro, questions en attente rangées avec leur page) ; case décochée : Charly IA identique au pixel près.
+
+## 18/11/2026 — Mission 128 : les couleurs de Charly Pro IA (CODEUR)
+
+- Menu : « Charly Pro IA » en bleu ciel dégradé (bleu nuit en sombre) ; page Pro : ronds de l'éclair bleu et rouge (en-tête, accueil, bulles) ; Charly IA inchangé au pixel près. L'accueil reste en tête sur Pro comme sur IA. Capture AdminCharly : la case « ⚡ Charly IA » y est décochée.

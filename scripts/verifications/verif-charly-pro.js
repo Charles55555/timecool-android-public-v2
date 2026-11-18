@@ -23,6 +23,13 @@ verifie('les anciens modules restent éteints (MODE_PRO, CARNET_PROS)', /MODE_PR
 verifie('la conversation de Charly Pro IA a sa clé, au préfixe de celle de Charly IA (effacée à la déconnexion)', /TC_CHARLY_HISTORIQUE_CLE \+ '_pro'/.test(page) && /const TC_CHARLY_HISTORIQUE_CLE = 'timecool_charly_historique';/.test(page));
 verifie('la déconnexion oublie aussi l’autre conversation', /function tcViderDonneesDuCompte\(\) \{[\s\S]*?tcCharlyVarianteOublier\(\);[\s\S]*?\n\}\n/.test(page));
 
+verifie('mission 128 : la ligne « Charly Pro IA » du menu en bleu ciel (clair et sombre) ; « Charly IA » garde son jaune',
+  page.indexOf("if (it.id === 'assistantpro') extraStyle = 'background:linear-gradient(90deg,var(--menu-charly-pro, #e1f5fe),var(--bg, #fff)); border-left:3px solid #4fc3f7;';") > -1
+  && page.indexOf("'--menu-charly-pro':'#1d3442'") > -1 && page.indexOf("'--menu-charly-pro':'#e1f5fe'") > -1
+  && page.indexOf("extraStyle = 'background:linear-gradient(90deg,var(--menu-charly, #fff4e0),var(--bg, #fff)); border-left:3px solid var(--g-yellow);';") > -1);
+verifie('mission 128 : sur Charly Pro IA seulement, les ronds de l’éclair en bleu et rouge (en-tête, accueil, bulles)',
+  page.indexOf('#page-assistant.tc-charly-pro .tc-rond-charly { background:linear-gradient(135deg, var(--g-blue), var(--g-red)) !important; }') > -1
+  && page.split('tc-rond-charly"').length - 1 === 4);
 console.log('-- Dans la page (Chrome) --');
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
 const exe = candidats.find((x) => { try { return fs.existsSync(x); } catch (e) { return false; } });
@@ -48,6 +55,9 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     var taper = async function (t) { var i = document.getElementById('charlyInput'); i.value = t; await charlySendMessage(); await attendre(1500); };
     var dernier = function () { var h = charlyIA.history.filter(function (m) { return m && m.role === 'assistant'; }); var m = h[h.length - 1]; return m ? String(m.content || '') : ''; };
     var parle = function (re) { return charlyIA.history.some(function (m) { return m && re.test(String(m.content || '')); }); };
+    // Mission 128 : les couleurs calculées (ronds de l'éclair de la page, lignes du menu).
+    var ronds = function () { return Array.prototype.map.call(document.querySelectorAll('#page-assistant .tc-rond-charly'), function (x) { return getComputedStyle(x).backgroundImage; }); };
+    var fond = function (el) { if (!el) return ''; var cs = getComputedStyle(el); return cs.backgroundImage + ' | ' + cs.borderLeftColor; };
     // 1. Case décochée (compte ordinaire) : rien.
     R.defaut = FEATURES.CHARLY_PRO;
     R.menuEteint = entrees();
@@ -57,8 +67,10 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // 2. Charly IA, telle qu'avant.
     navigate('assistant'); await attendre(300);
     R.ia = { nom: nomPage(), obs: _tcCharlyProObservateur === null, boutons: boutons(), pied: pied(), corps: corps() };
+    R.iaRondsAccueil = ronds();
     await taper('Qu’est-ce que j’ai demain ?');
     R.iaReponse = dernier();
+    R.iaRonds = ronds();
     R.iaLongueur = charlyIA.history.length;
     // 3. « Version complète » ne l'allume pas.
     resetFeatureOverrides(); await attendre(100);
@@ -67,19 +79,25 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     toggleFeature('CHARLY_PRO'); commitFeatureOverrides(); await attendre(100);
     R.garde = JSON.parse(localStorage.getItem('timecool_features_override') || '{}').CHARLY_PRO;
     R.menuAllume = entrees();
+    R.menuFonds = { ia: fond(entree('Charly IA')), pro: fond(entree('Charly Pro IA')) };
+    applyTheme('dark'); R.menuSombre = fond(entree('Charly Pro IA')); applyTheme('light');
     // 5. L'entrée du menu ouvre la page, sous le nom Charly Pro IA.
     entree('Charly Pro IA').click(); await attendre(400);
     R.pro = { page: currentPage, variante: tcCharlyVariante, nom: nomPage(), texte: textePage(), boutons: boutons(), pied: pied(), corps: corps(), obs: _tcCharlyProObservateur !== null };
+    R.proRondsAccueil = ronds();
     // 6. La même réponse ; une conversation à part.
     await taper('Qu’est-ce que j’ai demain ?');
     R.proReponse = dernier();
     R.proTexte = textePage();
+    R.proRonds = ronds();
+    R.proAccueilGarde = charlyIA.history.length > 2 && tcEstAccueilCharly(charlyIA.history[0]);
     await taper('Qu’est-ce que j’ai après-demain ?');
     R.cles = { pro: localStorage.getItem('timecool_charly_historique_pro') || '', ia: localStorage.getItem('timecool_charly_historique') || '' };
     // 7. Les questions en attente restent avec leur page.
     _tcSuppressionEnAttente = { essai: 'pro' };
     entree('Charly IA').click(); await attendre(400);
     R.retourIA = { variante: tcCharlyVariante, nom: nomPage(), texte: textePage(), pied: pied(), obs: _tcCharlyProObservateur === null, attente: _tcSuppressionEnAttente, longueur: charlyIA.history.length, apresDemain: parle(/après-demain/), demain: parle(/j’ai demain/) };
+    R.retourIARonds = ronds();
     entree('Charly Pro IA').click(); await attendre(400);
     R.retourPro = { nom: nomPage(), attente: _tcSuppressionEnAttente && _tcSuppressionEnAttente.essai, apresDemain: parle(/après-demain/) };
     _tcSuppressionEnAttente = null;
@@ -108,6 +126,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // 11. Rallumée : la conversation de Charly Pro IA est toujours là.
     toggleFeature('CHARLY_PRO'); await tcPasserCharlyVariante('pro', { ouvrir: true }); await attendre(300);
     R.rallumee = { nom: nomPage(), apresDemain: parle(/après-demain/) };
+    // Mission 128 : « Charly IA » décochée, « Charly Pro IA » cochée : Pro seul (la capture de Charles, compte AdminCharly).
+    FEATURES.CHARLY_IA = false; R.sansIA = entrees(); FEATURES.CHARLY_IA = true; renderMenu();
     // 12. Déconnexion (ménage du compte) : tout part, retour à Charly IA.
     tcViderDonneesDuCompte(); await attendre(300);
     R.menage = { variante: tcCharlyVariante, conv: Object.keys(_tcCharlyConversations).length, cle: localStorage.getItem('timecool_charly_historique_pro'), nom: nomPage(), obs: _tcCharlyProObservateur === null, apresDemain: parle(/après-demain/) };
@@ -145,6 +165,17 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'la page ne déborde pas sur le côté', S.debord <= 0, S.debord);
   verifie(n + 'la case éteinte : retour à Charly IA, plus d’entrée, plus de page', S.eteinte.variante === 'ia' && libelles(S.eteinte.menu).indexOf('Charly Pro IA') < 0 && S.eteinte.nom === 'Charly IA' && !/Charly Pro IA/.test(S.eteinte.texte) && S.eteinte.obs === true && S.eteinte.longueur === S.iaLongueur && S.eteintePage === 'calendar', JSON.stringify([S.eteinte.variante, libelles(S.eteinte.menu), S.eteinte.nom, S.eteinte.longueur, S.iaLongueur, S.eteintePage]));
   verifie(n + 'rallumée : la conversation de Charly Pro IA est toujours là', S.rallumee.nom === 'Charly Pro IA' && S.rallumee.apresDemain === true, JSON.stringify(S.rallumee));
+  const BLEU = 'rgb(26, 115, 232)', JAUNE = 'rgb(251, 188, 4)', ROUGE = 'rgb(234, 67, 53)';
+  const jaunes = (l, k) => Array.isArray(l) && l.length >= k && l.every((x) => x.indexOf(BLEU) > -1 && x.indexOf(JAUNE) > -1 && x.indexOf(ROUGE) < 0);
+  const rouges = (l, k) => Array.isArray(l) && l.length >= k && l.every((x) => x.indexOf(BLEU) > -1 && x.indexOf(ROUGE) > -1 && x.indexOf(JAUNE) < 0);
+  const mf = S.menuFonds || { ia: '', pro: '' };
+  verifie(n + 'mission 128 : menu, « Charly Pro IA » en bleu ciel dégradé, liseré bleu ciel ; « Charly IA » garde son jaune', mf.pro.indexOf('rgb(225, 245, 254)') > -1 && mf.pro.indexOf('rgb(79, 195, 247)') > -1 && mf.ia.indexOf('rgb(255, 244, 224)') > -1 && mf.ia.indexOf(JAUNE) > -1, JSON.stringify(mf));
+  verifie(n + 'mission 128 : en thème sombre, la ligne « Charly Pro IA » en bleu nuit', String(S.menuSombre || '').indexOf('rgb(29, 52, 66)') > -1, S.menuSombre);
+  verifie(n + 'mission 128 : Charly IA, les ronds de l’éclair restent bleu et jaune (en-tête, accueil, bulles)', jaunes(S.iaRondsAccueil, 2) && jaunes(S.iaRonds, 3) && jaunes(S.retourIARonds, 3), JSON.stringify([S.iaRondsAccueil, S.iaRonds]).slice(0, 300));
+  verifie(n + 'mission 128 : Charly Pro IA, les ronds de l’éclair en bleu et rouge (en-tête, accueil, bulles)', rouges(S.proRondsAccueil, 2) && rouges(S.proRonds, 3), JSON.stringify([S.proRondsAccueil, S.proRonds]).slice(0, 300));
+  verifie(n + 'mission 128 : sur Charly Pro IA comme sur Charly IA, l’accueil reste en tête après le premier message', S.proAccueilGarde === true, S.proAccueilGarde);
+  const si = libelles(S.sansIA), kp = si.indexOf('Charly Pro IA');
+  verifie(n + 'mission 128 : « Charly IA » décochée, « Charly Pro IA » cochée : Pro seul, entre « Synchroniser… » et « Mes contacts » (capture de Charles)', kp > 0 && si.indexOf('Charly IA') < 0 && si[kp - 1].indexOf('Synchroniser') === 0 && si[kp + 1] === 'Mes contacts', JSON.stringify(si));
   verifie(n + 'déconnexion : les deux conversations partent, retour à Charly IA', S.menage.variante === 'ia' && S.menage.conv === 0 && S.menage.cle === null && S.menage.nom === 'Charly IA' && S.menage.obs === true && S.menage.apresDemain === false, JSON.stringify(S.menage));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }

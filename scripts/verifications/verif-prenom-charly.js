@@ -83,7 +83,8 @@ const appels = (page.match(/tcPromptSysteme\(\) \+ tcConsignePrenom\(\) \+ tcLan
 verifie('les trois appels du modèle ajoutent la consigne du prénom', appels === 3 && page.indexOf('tcPromptSysteme() + tcLangInstruction()') < 0, appels);
 verifie('le prompt modifiable dans les réglages ne contient pas la consigne (elle s ajoute à l envoi)', /escapeHTMLSafe\(tcPromptSysteme\(\)\)/.test(page) && extraire('tcPromptSysteme').indexOf('Prenom') < 0);
 // Mission 106 : les deux chemins rangent tcMessageAccueilCharly(), qui prend tcPrenomUtilisateur (verif-accueil-charly).
-verifie('l accueil à la connexion (deux chemins) prend tcPrenomUtilisateur, plus le champ brut', (page.match(/charlyIA\.history\.push\(tcMessageAccueilCharly\(\)\);/g) || []).length === 2 && /function tcLignesAccueilCharly\(\) \{\n  const sal = [^\n]*\n  const prenom = tcPrenomUtilisateur\(\);/.test(page) && page.indexOf('userAccount ? userAccount.firstname :') < 0);
+// Mission 128 : la première ouverture de Charly Pro IA range le même accueil (troisième endroit).
+verifie('l accueil à la connexion (deux chemins) et à la première ouverture de Charly Pro IA prend tcPrenomUtilisateur, plus le champ brut', (page.match(/charlyIA\.history\.push\(tcMessageAccueilCharly\(\)\);/g) || []).length === 3 && /function tcLignesAccueilCharly\(\) \{\n  const sal = [^\n]*\n  const prenom = tcPrenomUtilisateur\(\);/.test(page) && page.indexOf('userAccount ? userAccount.firstname :') < 0);
 verifie('le premier bonjour met le prénom', /const _prenom = tcPrenomUtilisateur\(\);\s+const _reply = _sal \+ \(_prenom \? ' ' \+ _prenom : ''\) \+ ' ! 😊 Je suis Charly,/.test(page));
 // Mission 92, remplacée par la 106 (Charles, 17/11) : l'accueil tient sur dix lignes, vérifiées mot pour mot par verif-accueil-charly.
 verifie('plus aucun « Par où on commence ? »', page.indexOf('Par où on commence') < 0);

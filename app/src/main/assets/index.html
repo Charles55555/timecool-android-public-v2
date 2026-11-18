@@ -671,6 +671,8 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 .tc-maya-avatar { background:linear-gradient(135deg, #ffb3d9, #e0457b) !important; color:#fff !important; }
 /* L'éclair jaune de Charly IA, lisible sur le rose : une ombre légère tout autour. */
 .tc-maya-eclair { filter:drop-shadow(0 0 1px rgba(90,0,40,.55)) drop-shadow(0 1px 1px rgba(90,0,40,.35)); }
+/* Mission 128 (Charles, 18/11) : page Charly Pro IA, le rond de l’éclair garde son bleu, la partie jaune devient le rouge du logo. */
+#page-assistant.tc-charly-pro .tc-rond-charly { background:linear-gradient(135deg, var(--g-blue), var(--g-red)) !important; }
 #msgCharly, #msgCharly:hover { background:var(--tc-charly-ligne, #cdeafc); }
 .tc-aide-exemple { display:block; width:100%; text-align:left; margin-top:6px; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
 .tc-aide-bouton { margin-top:8px; padding:8px 12px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
@@ -1853,7 +1855,7 @@ if (window.pdfjsLib) {
 <div class="page" id="page-assistant">
   <div class="conv-header">
     <button class="back-btn" onclick="tcRetour()"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-    <div class="msg-avatar" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
+    <div class="msg-avatar tc-rond-charly" style="width:36px;height:36px;font-size:18px; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow));">⚡</div>
     <div class="conv-info"><div class="conv-name">Charly IA</div><div class="conv-sub" id="charlyStatus">🔒 Votre Assistant Intelligent</div></div>
     <button onclick="resetCharlyChat()" id="charlyResetBtn" title="Nouvelle conversation" style="background:transparent; border:none; cursor:pointer; padding:8px; color:var(--text-sec);">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
@@ -3999,6 +4001,8 @@ function renderMenu() {
       // Le degrade suit le theme : creme → fond en clair, ambre sombre → fond en sombre (mission 25).
       extraStyle = 'background:linear-gradient(90deg,var(--menu-charly, #fff4e0),var(--bg, #fff)); border-left:3px solid var(--g-yellow);';
     }
+    // Mission 128 (Charles, 18/11) : « Charly Pro IA » se distingue par un bleu ciel dégradé ; « Charly IA » garde son jaune.
+    if (it.id === 'assistantpro') extraStyle = 'background:linear-gradient(90deg,var(--menu-charly-pro, #e1f5fe),var(--bg, #fff)); border-left:3px solid #4fc3f7;';
     return `
     <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="${it.id === 'calendar' ? 'tcOuvrirMonAgenda()' : "navigate('" + (it.id === 'assistant' && typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro' ? 'assistantia' : it.id) + "')"}">
       <span style="font-size:20px; flex-shrink:0;">${it.icon}</span>
@@ -13055,6 +13059,7 @@ function tcCharlyProSurveiller(oui) {
   const page = document.getElementById('page-assistant');
   if (oui) {
     if (!page) return;
+    page.classList.add('tc-charly-pro');   // mission 128 : les ronds de l’éclair en bleu et rouge
     tcRenommerCharlyPro(page);
     if (!_tcCharlyProObservateur && typeof MutationObserver === 'function') {
       _tcCharlyProObservateur = new MutationObserver(function (liste) {
@@ -13069,6 +13074,7 @@ function tcCharlyProSurveiller(oui) {
     }
     return;
   }
+  if (page) page.classList.remove('tc-charly-pro');
   if (_tcCharlyProObservateur) { _tcCharlyProObservateur.disconnect(); _tcCharlyProObservateur = null; }
   _tcCharlyProRenommes.slice().reverse().forEach(function (r) {
     try {
@@ -13122,6 +13128,8 @@ async function tcPasserCharlyVarianteMaintenant(v, options) {
       tcCharlyVariante = v;
       charlyIA.history = apres ? apres.history : [];
       charlyIA._historiqueCharge = apres ? apres.charge : false;
+      // Mission 128 : une conversation ouverte pour la première fois commence par l’accueil, comme Charly IA à la connexion.
+      if (!apres) { tcChargerHistoriqueCharly(); if (!charlyIA.history.length && typeof tcMessageAccueilCharly === 'function') charlyIA.history.push(tcMessageAccueilCharly()); }
       tcCharlyEtatPoser(apres ? apres.attente : null);
       try { _tcRdvBouges = []; } catch (e) {}
       tcCharlyProSurveiller(v === 'pro');
@@ -13218,7 +13226,7 @@ function tcRendreAccueilCharly(m, seul) {
   if (!seul) return tcBulleCharly(html);
   return '<div id="tcAccueilCharly" style="min-height:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:8px 6px;">'
     + '<div style="width:100%; max-width:560px; overflow-wrap:break-word;">'
-    + '<div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 12px; box-shadow:0 4px 14px rgba(26,115,232,0.25);">⚡</div>'
+    + '<div class="tc-rond-charly" style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 12px; box-shadow:0 4px 14px rgba(26,115,232,0.25);">⚡</div>'
     + html + '</div></div>';
 }
 
@@ -14080,7 +14088,7 @@ function tcRendreAvecCites120(m) {
 
 function tcBulleCharly(interieur) {
   return '<div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">'
-    + '<div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>'
+    + '<div class="tc-rond-charly" style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>'
     + '<div class="tc-bulle-col" style="flex:1; max-width:calc(100% - 50px);">'
     + '<div style="padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">'
     + interieur + '</div></div></div>';
@@ -14590,7 +14598,7 @@ function renderChatMessage(m) {
     }
     let html = `
       <div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">
-        <div style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>
+        <div class="tc-rond-charly" style="flex-shrink:0; width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-yellow)); display:flex; align-items:center; justify-content:center; font-size:16px;">⚡</div>
         <div class="tc-bulle-col${displayProposals.length && !contactAttendu ? ' tc-bulle-large' : ''}" style="flex:1; max-width:calc(100% - 50px);">
           <div style="${(displayProposals.length && !contactAttendu && tcRepeteLaCarte(cleanContent)) ? 'display:none; ' : ''}padding:10px 14px; background:#fff; color:var(--text); border:1px solid var(--border); border-radius:4px 16px 16px 16px; font-size:14px; line-height:1.5; word-wrap:break-word; box-shadow:0 1px 2px rgba(0,0,0,0.04);">
             ${escapeHTML(cleanContent).replace(/\n/g,'<br>') || '...'}
@@ -21895,6 +21903,7 @@ const DARK_VARS = {
   '--bg':'#202124','--bg-soft':'#292a2d','--bg-hover':'#35363a',
   '--menu-active':'#2b3a55',  // entree active du menu : bleu nuit (mission 25)
   '--menu-charly':'#3a3222',  // mise en avant « Charly IA » : ambre sombre
+  '--menu-charly-pro':'#1d3442',  // mise en avant « Charly Pro IA » : bleu nuit (mission 128)
   '--tc-charly-ligne':'#b9dff7', // ligne de Charly : bleu ciel un peu plus soutenu (les lignes de la messagerie restent claires en sombre, mission 102)
   '--violet':'#c58af9'        // liens violets (Importer) lisibles sur sombre
 };
@@ -21903,6 +21912,7 @@ const LIGHT_VARS = {
   '--bg':'#fff','--bg-soft':'#f8f9fa','--bg-hover':'#f1f3f4',
   '--menu-active':'#e8f0fe',
   '--menu-charly':'#fff4e0',
+  '--menu-charly-pro':'#e1f5fe',  // « Charly Pro IA » : bleu ciel (mission 128)
   '--tc-charly-ligne':'#cdeafc', // ligne de Charly dans la messagerie : bleu ciel (mission 102)
   '--violet':'#8430ce'
 };
