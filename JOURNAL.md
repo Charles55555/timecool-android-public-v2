@@ -3659,3 +3659,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - 118 : le lieu n'est lu que dans une phrase qui crée un rendez-vous (verbe de création, ou quoi + jour + heure) ; jamais hérité par la demande suivante ; météo jamais prise pour l'agenda ; pas de bulle orpheline pour Photo et Créer mon agenda.
 - 119 : chez Maya, « C'est qui Charly ? » parle de Charly IA et dit où le trouver.
 - phrases-charles : 55 phrases, 305 essais ; condition envoi: (ce que reçoit le modèle).
+
+## 18/11/2026 (nuit) — Mission 121 A : Configuration professionnelle, étapes 1 à 5 (CODEUR)
+
+- Case CONFIG_PRO éteinte par défaut (Configuration IA, accès administrateur) ; page neuve, entrée de menu seulement avec la case ; étapes 1 à 5 et récapitulatif ; tc_config_pro (réglage du compte), jamais lu par le serveur ni par un autre compte (verif-config-pro-prive-e2e).
+- Choix faits seuls : familles et sous-familles cochées au départ ; jours du lundi au vendredi cochés, 9h-12h et 14h-18h proposés ; durée de rendez-vous 20 min proposée ; durées des actes proposées (15 à 60 min).

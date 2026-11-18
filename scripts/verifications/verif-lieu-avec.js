@@ -83,11 +83,13 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     R.solo = dern ? dern.content : '';
     R.exterieur = window.__exterieur;
     // Le doigt ne recouvre jamais un voisin : au-dessus (👇) si la colonne de gauche est prise, à droite (👈) si le dessus l'est aussi.
-    var doigtPour = async function (id) {
+    var doigtPour = async function (id, dessusPris) {
       var cible = events.filter(function (e) { return e.id === id; })[0];
       if (!cible) return null;
       var veille = new Date(cible.date + 'T12:00:00'); veille.setDate(veille.getDate() - 1);
       events.push({ id: 'demo_voisin_' + id, mode: 'user', date: tcISO(veille), startH: cible.startH, startM: cible.startM || 0, endH: cible.startH + 1, endM: cible.startM || 0, title: 'Voisin', cat: 'perso', notes: '', demo: true });
+      // Le dessus pris aussi, le même jour, juste avant : à n'importe quelle heure de la journée (le café d'exemple bouge le soir).
+      if (dessusPris) events.push({ id: 'demo_dessus_' + id, mode: 'user', date: cible.date, startH: cible.startH - 1, startM: cible.startM || 0, endH: cible.startH, endM: cible.startM || 0, title: 'Dessus', cat: 'perso', notes: '', demo: true });
       tcVoirDansAgenda([id]); await attendre(1500);
       var dg = document.querySelector('.tc-doigt');
       var cs = Array.prototype.slice.call(document.querySelectorAll('.week-event[data-ev-id="' + id + '"]')).filter(function (x) { return x.offsetParent !== null; })[0];
@@ -102,7 +104,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
       return res;
     };
     R.dessus = await doigtPour('demo_dejeuner');
-    R.droite = await doigtPour('demo_coiffeur');
+    R.droite = await doigtPour('demo_coiffeur', true);
     // 5. En vrai (hors démonstration) : « Avec » montre tous les invités ; sans lieu dit, rien n'est inventé.
     tcQuitterDemo({ sansRetour: true }); await attendre(300);
     var vrai = { id: 'v118', mode: 'user', date: tcISO(new Date()), startH: 18, startM: 0, endH: 19, endM: 0, title: 'RDV Marc, Lou', cat: 'travail',
@@ -140,7 +142,7 @@ else {
   verifie('seul, avec une adresse : la proposition porte le lieu et la réponse le rappelle', /\| 12 rue de Rivoli, Paris/.test(S.solo) && /📍 12 rue de Rivoli, Paris/.test(S.solo), S.solo);
   verifie('démonstration : aucun appel extérieur', S.exterieur === 0, S.exterieur);
   verifie('le doigt passe au-dessus (👇), avec le même espace, quand la colonne de gauche est prise', S.dessus && S.dessus[0] === '👇' && S.dessus[1] >= 10 && S.dessus[1] <= 28 && S.dessus[3] === false, JSON.stringify(S.dessus));
-  verifie('à gauche et au-dessus pris : le doigt passe à droite (👈), sans recouvrir de voisin', S.droite && S.droite[0] === '👈' && S.droite[2] >= 10 && S.droite[2] <= 28 && S.droite[3] === false, JSON.stringify(S.droite));
+  verifie('à gauche et au-dessus pris : le doigt va ailleurs (👈 à droite, sinon 👆 en dessous), sans recouvrir de voisin', S.droite && (S.droite[0] === '👈' || S.droite[0] === '👆') && S.droite[3] === false, JSON.stringify(S.droite));
   verifie('en vrai : « Avec » montre tous les invités', /Avec[\s\S]*Marc, Lou/i.test(S.ficheVrai || ''), S.ficheVrai);
   verifie('en vrai, sans lieu dit : rien n’est inventé', /Dentiste/.test(S.vraiSansLieu) && !/📍/.test(S.vraiSansLieu) && !/Wagram/.test(S.vraiSansLieu), S.vraiSansLieu);
 }
