@@ -3686,3 +3686,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - 122, examen de l API : reprise du demandeur bloqué indépendante du souhait et du type (echoDemandeRecent).
 - 122, examen de l API (suite) : seul mon dernier message compte pour la reprise, reconnu à son genre.
+
+## 18/11/2026 (nuit) — Livraison après la 122 : capture, morceau C, version de l aide, rond de Maya (CODEUR)
+
+- Capture d écran dans « Remplis à ma place » (image par le relais, sans changer l API) ; question au patient sur une sous-famille ; vraie version en bas de l aide ; Maya en dégradé rose avec l éclair.

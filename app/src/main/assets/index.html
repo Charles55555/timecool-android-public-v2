@@ -668,7 +668,9 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 .conv-composer button:active { transform:scale(.93); }
 /* Mission 102 : la ligne « Maya, ton aide TimeCool » (Charly jusqu'à la mission 119) a un fond bleu ciel, pour la distinguer des autres conversations. */
 /* Mission 119 : Maya, un rond rose avec un « M » blanc (Charly IA garde son éclair doré). */
-.tc-maya-avatar { background:#d63384 !important; color:#fff !important; font-weight:700; }
+.tc-maya-avatar { background:linear-gradient(135deg, #ffb3d9, #e0457b) !important; color:#fff !important; }
+/* L'éclair jaune de Charly IA, lisible sur le rose : une ombre légère tout autour. */
+.tc-maya-eclair { filter:drop-shadow(0 0 1px rgba(90,0,40,.55)) drop-shadow(0 1px 1px rgba(90,0,40,.35)); }
 #msgCharly, #msgCharly:hover { background:var(--tc-charly-ligne, #cdeafc); }
 .tc-aide-exemple { display:block; width:100%; text-align:left; margin-top:6px; padding:8px 12px; background:#e8f0fe; color:var(--g-blue); border:1px solid #c8d7ee; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
 .tc-aide-bouton { margin-top:8px; padding:8px 12px; background:var(--g-blue); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; }
@@ -1331,7 +1333,7 @@ if (window.pdfjsLib) {
 <div class="page" id="page-help">
   <div class="page-header">
     <div class="page-title">❓ Aide et commentaires</div>
-    <div class="page-subtitle">Questions fréquentes et envoi de feedback</div>
+    <div class="page-subtitle">Questions fréquentes et envoi d’un commentaire</div>
   </div>
   <div class="main"><div id="helpContent" style="padding:14px 16px 30px;"></div></div>
 </div>
@@ -7461,7 +7463,7 @@ function tcLigneCharlyMessagerie(q) {
   // Mission 102 : l'aperçu montre le dernier message de la conversation d'aide (pas celui de la page Charly IA).
   const apercu = typeof tcApercuCharly === 'function' ? tcApercuCharly() : '';
   return '<div class="msg-preview" id="msgCharly" onclick="tcOuvrirCharlyAide()">'
-    + '<div class="msg-avatar tc-maya-avatar" aria-hidden="true">M</div>'
+    + '<div class="msg-avatar tc-maya-avatar" aria-hidden="true"><span class="tc-maya-eclair">⚡</span></div>'
     + '<div class="msg-body"><div class="msg-name">Maya, ton aide TimeCool</div>'
     + (apercu
       ? '<div class="msg-text">' + escapeHTMLSafe(apercu) + '</div></div></div>'
@@ -7540,9 +7542,8 @@ function tcOuvrirConvCharly() {
   if (currentPage !== 'conv' || _currentConvId !== TC_CONV_CHARLY_ID) _convOrigine = currentPage === 'conv' ? 'messages' : currentPage;
   _currentConvId = TC_CONV_CHARLY_ID;
   const av = document.getElementById('convAvatar');
-  av.style.background = '#d63384';
-  av.textContent = 'M';
-  av.style.color = '#fff';
+  av.style.background = 'linear-gradient(135deg, #ffb3d9, #e0457b)';
+  av.innerHTML = '<span class="tc-maya-eclair">⚡</span>';
   document.getElementById('convName').textContent = 'Maya, ton aide TimeCool';
   const convoqBtn = document.getElementById('convConvoqBtn');
   if (convoqBtn) convoqBtn.style.display = 'none';
@@ -11097,7 +11098,7 @@ function tcOuvrirConfigPro121() {
   _tcConfigProErreur = '';
   const e = tcConfigProLire();
   _tcConfigProEtape = e.termine ? 7 : Math.min(6, Math.max(1, Number(e.etape) || 1));
-  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null;
+  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null; _tcConfigProQ = null; _tcConfigProQBrouillon = null;
   tcRendreConfigPro121();
 }
 
@@ -11306,6 +11307,89 @@ const tcConfigPro121 = {
     _tcConfigProPropose = prop; _tcConfigProRempli = 0; _tcConfigProRemplir = false; _tcConfigProTexteColle = '';
     tcRendreConfigPro121();
   },
+  // « 📷 Envoyer une capture » : la capture réduite part comme image au modèle ; le résultat attend « Valider ces réponses ».
+  capture: function (input) {
+    const fichier = input && input.files && input.files[0];
+    if (input) input.value = '';
+    const echec = function () { _tcConfigProLecture = ''; _tcConfigProErreur = 'Je n’ai pas pu lire cette image. Collez le texte, ou répondez aux questions une par une.'; tcRendreConfigPro121(); };
+    if (!fichier || !/^image\//.test(fichier.type || '')) { echec(); return; }
+    _tcConfigProErreur = ''; _tcConfigProLecture = 'Charly Pro IA lit votre capture…'; tcRendreConfigPro121();
+    const lecteur = new FileReader();
+    lecteur.onerror = echec;
+    lecteur.onload = function () {
+      const img = new Image();
+      img.onerror = echec;
+      img.onload = async function () {
+        let url = '';
+        // 1 000 px de large au plus ; puis moins fin, puis plus petit, jusqu'à passer sous 150 Ko.
+        const essais = [[1000, 0.8], [1000, 0.6], [800, 0.6], [640, 0.55]];
+        for (let k = 0; k < essais.length; k++) {
+          const r = Math.min(1, essais[k][0] / Math.max(1, img.width));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.width * r)); c.height = Math.max(1, Math.round(img.height * r));
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          try { url = c.toDataURL('image/jpeg', essais[k][1]); } catch (x) { url = ''; }
+          if (url && url.length * 0.75 < 150000) break;
+          url = '';
+        }
+        if (!url) { echec(); return; }
+        const b64 = url.slice(url.indexOf(',') + 1);
+        const anthropic = (typeof charlyIA !== 'undefined' && charlyIA.config && charlyIA.config.provider) === 'anthropic';
+        const contenu = anthropic
+          ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } }, { type: 'text', text: 'Voici la capture d’écran de ma fiche actuelle.' }]
+          : [{ type: 'text', text: 'Voici la capture d’écran de ma fiche actuelle.' }, { type: 'image_url', image_url: { url: url } }];
+        let reponse = '';
+        try { reponse = String(await callAI([{ role: 'system', content: TC_PRO_CONSIGNE_REMPLIR }, { role: 'user', content: contenu }]) || ''); } catch (x) { reponse = ''; }
+        url = ''; // la capture n'est gardée nulle part
+        let o = null;
+        try { const i = reponse.indexOf('{'), j = reponse.lastIndexOf('}'); o = i > -1 && j > i ? JSON.parse(reponse.slice(i, j + 1)) : null; } catch (x) { o = null; }
+        const prop = {};
+        if (o && typeof o === 'object' && !Array.isArray(o)) TC_PRO_FICHE_QUESTIONS.forEach(function (q) { const v = o[q[0]]; if (typeof v === 'string' && v.trim()) prop[q[0]] = v.trim().slice(0, 2000); });
+        if (!Object.keys(prop).length) { echec(); return; }
+        _tcConfigProLecture = ''; _tcConfigProPropose = prop; _tcConfigProRempli = 0; _tcConfigProRemplir = false;
+        tcRendreConfigPro121();
+      };
+      img.src = lecteur.result;
+    };
+    lecteur.readAsDataURL(fichier);
+  },
+  // Morceau C : la question attachée à une sous-famille.
+  ouvrirQuestion: function (fid, sid) {
+    const t = tcConfigProTrouver(fid, sid);
+    if (!t.s) return;
+    const q = t.s.question;
+    _tcConfigProQ = { f: fid, s: sid };
+    _tcConfigProQBrouillon = q ? { texte: q.texte, reponses: q.reponses.map(function (r) { return { texte: r.texte, passe: !!r.passe }; }) }
+      : { texte: '', reponses: [{ texte: '', passe: false }, { texte: '', passe: true }] };
+    _tcConfigProErreur = '';
+    tcRendreConfigPro121();
+  },
+  qTexte: function (v) { if (_tcConfigProQBrouillon) _tcConfigProQBrouillon.texte = String(v || '').slice(0, 200); },
+  qReponse: function (i, v) { const b = _tcConfigProQBrouillon; if (b && b.reponses[i]) b.reponses[i].texte = String(v || '').slice(0, 120); },
+  qPasse: function (i) { const b = _tcConfigProQBrouillon; if (b && b.reponses[i]) { b.reponses[i].passe = !b.reponses[i].passe; tcRendreConfigPro121(); } },
+  qAjouter: function () { const b = _tcConfigProQBrouillon; if (b && b.reponses.length < 6) { b.reponses.push({ texte: '', passe: false }); tcRendreConfigPro121(); } },
+  qRetirerReponse: function (i) { const b = _tcConfigProQBrouillon; if (b && b.reponses.length > 2) { b.reponses.splice(i, 1); tcRendreConfigPro121(); } },
+  qAnnuler: function () { _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProErreur = ''; tcRendreConfigPro121(); },
+  qEnregistrer: function () {
+    const b = _tcConfigProQBrouillon, q = _tcConfigProQ;
+    if (!b || !q) return;
+    const t = tcConfigProTrouver(q.f, q.s);
+    const texte = String(b.texte || '').replace(/\s+/g, ' ').trim();
+    const reponses = b.reponses.map(function (r) { return { texte: String(r.texte || '').replace(/\s+/g, ' ').trim(), passe: !!r.passe }; }).filter(function (r) { return r.texte; });
+    if (!texte) { _tcConfigProErreur = 'Écrivez la question.'; tcRendreConfigPro121(); return; }
+    if (reponses.length < 2) { _tcConfigProErreur = 'Écrivez au moins deux réponses.'; tcRendreConfigPro121(); return; }
+    if (!reponses.some(function (r) { return r.passe; })) { _tcConfigProErreur = 'Cochez au moins une réponse qui permet de prendre rendez-vous.'; tcRendreConfigPro121(); return; }
+    if (t.s) t.s.question = { texte: texte, reponses: reponses };
+    _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProErreur = '';
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
+  qSupprimer: function () {
+    const q = _tcConfigProQ;
+    const t = q ? tcConfigProTrouver(q.f, q.s) : {};
+    if (t.s) delete t.s.question;
+    _tcConfigProQ = null; _tcConfigProQBrouillon = null;
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
   validerPropose: function () {
     const prop = _tcConfigProPropose;
     if (!prop) return;
@@ -11353,6 +11437,8 @@ let _tcConfigProLecture = '';       // « Charly Pro IA lit votre fiche… »
 let _tcConfigProRempli = 0;         // combien de réponses Charly Pro IA vient de remplir
 let _tcConfigProTexteColle = '';    // le texte collé, gardé le temps d'un dessin
 let _tcConfigProPropose = null;      // les réponses lues par Charly Pro IA, en attente de « Valider ces réponses »
+let _tcConfigProQ = null;            // morceau C : la sous-famille dont on écrit la question { f, s }
+let _tcConfigProQBrouillon = null;   // la question en cours d'écriture { texte, reponses: [{ texte, passe }] }
 
 /** La fiche : créée la première fois avec les réponses proposées pour le métier. */
 function tcConfigProFiche(e) {
@@ -11378,6 +11464,9 @@ function tcCpEtape6(e) {
       ? '<div style="font-size:14px; color:var(--text); margin:12px 0 8px; line-height:1.5;">Copiez le texte de votre fiche actuelle.<br>Collez-le ici.<br>Charly Pro IA remplit la fiche. Vous relisez et vous corrigez.</div>'
         + '<textarea id="cpTexteFiche" data-notranslate rows="6" placeholder="Collez ici le texte de votre fiche" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box; resize:vertical;">' + escapeHTMLSafe(_tcConfigProTexteColle) + '</textarea>'
         + '<button id="cpRemplir" onclick="tcConfigPro121.remplir()" style="' + TC_CP_BOUTON + ' width:100%; margin-top:8px; background:var(--g-blue); color:#fff; border:none;">Remplir ma fiche</button>'
+        + '<div style="text-align:center; font-size:13px; color:var(--text-sec); margin:8px 0 4px;">ou</div>'
+        + '<label id="cpCapture" style="' + TC_CP_BOUTON + ' display:block; text-align:center; box-sizing:border-box; width:100%; background:#fff; color:#7b1fa2; border:1.5px solid #7b1fa2;">📷 Envoyer une capture<input type="file" accept="image/*" onchange="tcConfigPro121.capture(this)" style="display:none;"></label>'
+        + '<div style="font-size:12.5px; color:var(--text-sec); margin-top:6px; line-height:1.45;">Une capture d’écran de votre fiche actuelle. Elle n’est pas gardée après la lecture.</div>'
         + (_tcConfigProLecture ? '<div style="font-size:14px; color:#7b1fa2; margin-top:8px;">' + escapeHTMLSafe(_tcConfigProLecture) + '</div>' : '')
       : '')
     + '</div>'
@@ -11467,8 +11556,36 @@ function tcCpLigneActe(f, so, retrait) {
     + '<div role="checkbox" aria-checked="' + (o.gardee ? 'true' : 'false') + '" tabindex="0" onclick="tcConfigPro121.basculer(' + arg + ')" style="display:flex; align-items:center; gap:10px; flex:1; min-width:0; cursor:pointer;">'
     + tcCpCase(o.gardee) + '<span style="font-size:' + (so ? '14' : '15') + 'px; font-weight:' + (so ? '400' : '700') + '; color:' + (o.gardee ? 'var(--text)' : 'var(--text-sec)') + '; line-height:1.35;">' + tcConfigProNomHTML(f, so) + '</span></div>'
     + '<button onclick="tcConfigPro121.renommer(' + arg + ')" style="' + TC_CP_PETIT + '">Renommer</button>'
+    + (so && o.gardee ? '<button onclick="tcConfigPro121.ouvrirQuestion(' + arg + ')" title="Question au patient" aria-label="Question au patient" style="' + TC_CP_PETIT + '">❓</button>' : '')
     + (o.propre ? '<button onclick="tcConfigPro121.retirer(' + arg + ')" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3;">Retirer</button>' : '')
-    + '</div>';
+    + '</div>' + (so ? tcCpQuestion(f, so, retrait) : '');
+}
+
+/** Morceau C : sous une sous-famille, sa question (résumé) ou l'écriture de la question. */
+function tcCpQuestion(f, so, retrait) {
+  const q = _tcConfigProQ;
+  const b = _tcConfigProQBrouillon;
+  if (q && b && q.f === f.id && q.s === so.id) {
+    return '<div id="cpQuestion" style="margin:4px 0 10px ' + (retrait + 32) + 'px; padding:12px; background:#f8f9fa; border:1px solid var(--border); border-radius:10px;">'
+      + '<div style="font-size:14px; font-weight:700; color:var(--text);">Question au patient</div>'
+      + '<div style="font-size:12.5px; color:var(--text-sec); line-height:1.45; margin:2px 0 8px;">La question à poser pour cet acte.<br>Cochez les réponses qui permettent de prendre rendez-vous.</div>'
+      + '<input id="cpQTexte" type="text" maxlength="200" data-notranslate value="' + escapeHTMLSafe(b.texte) + '" placeholder="Par exemple : Quel est l’âge du patient ?" oninput="tcConfigPro121.qTexte(this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box;">'
+      + b.reponses.map(function (r, i) {
+        return '<div style="display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">'
+          + '<input id="cpQRep_' + i + '" type="text" maxlength="120" data-notranslate value="' + escapeHTMLSafe(r.texte) + '" placeholder="' + (i === 0 ? '13 ans ou moins' : i === 1 ? 'Plus de 13 ans' : 'Une autre réponse') + '" oninput="tcConfigPro121.qReponse(' + i + ', this.value)" style="' + TC_CP_CHAMP + ' flex:1; min-width:140px;">'
+          + '<div role="checkbox" aria-checked="' + (r.passe ? 'true' : 'false') + '" tabindex="0" onclick="tcConfigPro121.qPasse(' + i + ')" style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text);">' + tcCpCase(r.passe) + 'Permet de prendre rendez-vous</div>'
+          + (b.reponses.length > 2 ? '<button onclick="tcConfigPro121.qRetirerReponse(' + i + ')" aria-label="Retirer cette réponse" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3;">✕</button>' : '')
+          + '</div>';
+      }).join('')
+      + (b.reponses.length < 6 ? '<button onclick="tcConfigPro121.qAjouter()" style="' + TC_CP_PETIT + ' margin-top:8px;">➕ Ajouter une réponse</button>' : '')
+      + '<div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">'
+      + '<button onclick="tcConfigPro121.qEnregistrer()" style="' + TC_CP_PETIT + ' background:var(--g-blue); color:#fff; border-color:var(--g-blue);">Enregistrer la question</button>'
+      + (so.question ? '<button onclick="tcConfigPro121.qSupprimer()" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3;">Retirer la question</button>' : '')
+      + '<button onclick="tcConfigPro121.qAnnuler()" style="' + TC_CP_PETIT + '">Annuler</button></div></div>';
+  }
+  if (!so.question) return '';
+  return '<div class="cp-question" style="margin:0 0 6px ' + (retrait + 32) + 'px; font-size:12.5px; color:var(--text-sec); line-height:1.45;">❓ <span data-notranslate>' + escapeHTMLSafe(so.question.texte) + '</span> · '
+    + so.question.reponses.map(function (r) { return '<span data-notranslate>' + escapeHTMLSafe(r.texte) + '</span> ' + (r.passe ? '✓' : '✗'); }).join(' · ') + '</div>';
 }
 
 function tcCpEtape2(e) {
@@ -11560,7 +11677,8 @@ function tcCpRecapitulatif(e) {
   const actes = e.familles.filter(function (f) { return f.gardee && (!f.sous.length || f.sous.some(function (x) { return x.gardee; })); }).map(function (f) {
     if (!f.sous.length) return '<div style="padding:4px 0; font-size:14px; color:var(--text);">' + tcConfigProNomHTML(f, null) + ' · ' + (f.duree || 20) + ' min</div>';
     return '<div style="padding:6px 0 2px; font-size:14px; font-weight:700; color:var(--text);">' + tcConfigProNomHTML(f, null) + '</div>'
-      + f.sous.filter(function (x) { return x.gardee; }).map(function (x) { return '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text);">• ' + tcConfigProNomHTML(f, x) + ' · ' + (x.duree || 20) + ' min</div>'; }).join('');
+      + f.sous.filter(function (x) { return x.gardee; }).map(function (x) { return '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text);">• ' + tcConfigProNomHTML(f, x) + ' · ' + (x.duree || 20) + ' min</div>'
+        + (x.question ? '<div style="padding:0 0 2px 28px; font-size:12.5px; color:var(--text-sec);">❓ <span data-notranslate>' + escapeHTMLSafe(x.question.texte) + '</span> (' + x.question.reponses.filter(function (r) { return r.passe; }).map(function (r) { return '<span data-notranslate>' + escapeHTMLSafe(r.texte) + '</span>'; }).join(', ') + ')</div>' : ''); }).join('');
   }).join('');
   const jours = TC_PRO_JOURS.filter(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; }).map(function (x) {
     const d = e.jours[x[0]];
@@ -32712,7 +32830,7 @@ function renderHelp() {
       </button>
     </div>
     <div style="margin-top:24px; padding:14px; background:#e8f5e9; border:1px solid #b9e1c4; border-radius:12px; font-size:11px; color:#1b5e20; line-height:1.6; text-align:center;">
-      <b>TimeCool v4.0</b> — Votre agenda intelligent<br>
+      <b>TimeCool</b>${typeof tcVersionAide123 === 'function' && tcVersionAide123() ? ' ' + escapeHTMLSafe(tcVersionAide123()) : ''} — Votre agenda intelligent<br>
       © 2026 — Tous droits réservés
     </div>
   `;
@@ -32734,6 +32852,16 @@ function tcFiltrerAide(terme) {
   });
   const aucun = document.getElementById('tcAideAucun');
   if (aucun) { aucun.style.display = visibles === 0 ? 'block' : 'none'; }
+}
+
+/** Livraison après la 122 : la version montrée en bas de « Aide et commentaires » : celle de l'application (« v2.0.NNN »),
+ *  sinon la date de la page web publiée (« version web du 18/11/2026 02h15 ») ; jamais un numéro écrit en dur. */
+function tcVersionAide123() {
+  let v = '';
+  try { v = typeof tcVersionPourRapport === 'function' ? String(tcVersionPourRapport() || '') : ''; } catch (e) { v = ''; }
+  if (/^apk /.test(v)) return 'v' + v.slice(4);
+  if (/^web du /.test(v)) return 'version ' + v;
+  return '';
 }
 
 /** Ce qui part avec un commentaire : la version de l application et l appareil, sans donnee personnelle. */

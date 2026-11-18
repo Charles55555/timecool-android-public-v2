@@ -61,11 +61,13 @@ try { S = m ? JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').repl
 const rgb = (t) => (String(t || '').match(/\d+/g) || []).slice(0, 3).map(Number);
 const lum = (c) => { const v = c.map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
 const contraste = (a, b) => { const l1 = lum(rgb(a)), l2 = lum(rgb(b)); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
-const rose = (a) => !!a && a.texte === 'M' && a.fond === 'rgb(214, 51, 132)' && a.couleur === 'rgb(255, 255, 255)' && a.image === 'none' && contraste(a.fond, a.couleur) >= 4.5;
+// Charles, 18/11 : le rond de Maya est celui de Charly IA en rose bonbon : un dégradé, l'éclair jaune au centre (une ombre le garde lisible).
+const rose = (a) => !!a && a.texte === '⚡' && /^linear-gradient\(135deg, rgb\(255, 179, 217\), rgb\(224, 69, 123\)\)$/.test(a.image || '');
+verifie('l’éclair de Maya garde une ombre légère (lisible sur le rose)', /\.tc-maya-eclair \{ filter:drop-shadow/.test(page));
 if (!S) verifie('la page a rejoué le parcours', false, (r.stdout || '').slice(-300));
 else {
   if (S.erreur) verifie('aucune erreur', false, S.erreur);
-  verifie('la ligne de la messagerie : « Maya, ton aide TimeCool », rond rose avec un « M » blanc (contraste ≥ 4,5), plus d’éclair', S.ligne && S.ligne.nom === 'Maya, ton aide TimeCool' && rose(S.ligne.avatar), JSON.stringify(S.ligne));
+  verifie('la ligne de la messagerie : « Maya, ton aide TimeCool », rond rose bonbon en dégradé avec l’éclair jaune', S.ligne && S.ligne.nom === 'Maya, ton aide TimeCool' && rose(S.ligne.avatar), JSON.stringify(S.ligne));
   verifie('l’en-tête de sa conversation : le même nom, le même rond', S.entete && S.entete.nom === 'Maya, ton aide TimeCool' && rose(S.entete.avatar), JSON.stringify(S.entete));
   verifie('« Qui es-tu ? » : « Je m’appelle Maya, l’aide de TimeCool »', /^Je m’appelle Maya, l’aide de TimeCool/.test(S.qui), S.qui);
   verifie('« tu es une IA ? » : « créée par TimeCool » (au féminin)', /créée par TimeCool/.test(S.robot), S.robot);
