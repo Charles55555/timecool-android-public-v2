@@ -3739,3 +3739,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - « mon assistante et mon prothésiste » trouvés par un mot de leur nom ; en vrai sans fiche : un bouton par fiche ; démonstration du dentiste du lundi au vendredi dès 9h ; « Préviens Paul et Marie… » : les deux ; « … sauf Paul » : tout le monde sauf Paul.
 - Examen 131 (2e lot) : retard des personnes nommées au jour dit, prénoms seulement, « sauf Paul Martin » ; « ma femme », « mon petit frère » sans fiche : « Je ne trouve pas … », mes créneaux libres et « Ajouter un contact » (décision du chef).
+
+## 18/11/2026 — Mission 132 : remarques de l’EXAMINATEUR sur la 131 (CODEUR)
+
+- « sauf ceux de l’après-midi » : le reste de la journée, et la carte le dit ; « sauf Bruno » (pas une fiche) : « Je ne trouve pas Bruno dans tes rendez-vous de demain. » ; « Quand suis-je libre avec ma femme ? » comme « Trouve un créneau avec ma femme » ; verif-rappels-stop-e2e lit backend/api/lib.php (marche dans un worktree neuf).

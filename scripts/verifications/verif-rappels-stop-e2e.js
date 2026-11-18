@@ -17,7 +17,8 @@ const API = process.env.TC_API || 'https://api.timecool.fr';
 const LOCALE = /^http:\/\/127\.0\.0\.1:/.test(API);
 const PHP = '/opt/plesk/php/8.3/bin/php';
 const CONF_LOCALE = path.join(os.homedir(), 'api-locale/private/config.php');
-const LIB = path.join(D, '../../backend/private/lib.php');
+// Mission 132 : la lib suivie par git (présente dans tout worktree : celle du commit examiné), plus le lien backend/private.
+const LIB = process.env.TC_LIB || path.join(D, '../../backend/api/lib.php');
 
 let ko = 0, ok = 0;
 const verifie = (l, c, d) => { if (c) ok++; else { ko++; console.log('  KO ' + l + (d !== undefined ? ' : ' + d : '')); } };

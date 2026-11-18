@@ -21069,24 +21069,35 @@ async function tcImprevuDecaler131(text) {
  * phrase sans cette partie. { exclus, reste }.
  */
 function tcExclusSauf131(t) {
-  const m = String(t || '').match(/(?:^|\s)(?:sauf|excepte|hormis|a part)\s+/);
-  if (!m) return { exclus: [], reste: t };
+  t = String(t || '');
+  const m = t.match(/(?:^|\s)(?:sauf|excepte|exceptes|hormis|a part)\s+/);
+  if (!m) return { exclus: [], inconnus: [], partie: null, reste: t };
   const debut = m.index + m[0].length;
+  // Mission 132 : « sauf ceux de l'après-midi », « sauf le matin » : une partie de la journée, retirée de la période.
+  const p = t.slice(debut).match(/^(?:(?:ceux|celles|ceux et celles|les rendez vous|les rdv|mes rendez vous|mes rdv)\s+)?(?:(?:du|de la|de l|de|d|le|la|l|en)\s+)?(matin|matinee|apres midi|aprem)(?=\s|$)/);
+  if (p) return { exclus: [], inconnus: [], partie: /^matin/.test(p[1]) ? 'matin' : 'aprem', reste: (t.slice(0, m.index) + ' ' + t.slice(debut + p[0].length)).replace(/\s+/g, ' ').trim() };
   const mots = t.slice(debut).split(' ');
   const fiches = (Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c && c.name; });
   const norm = function (c) { return tcClasseNormaliser(String(c.name)).split(' '); };
-  const exclus = [];
+  const exclus = [], inconnus = [];
   const garder = function (c) { if (exclus.indexOf(c) < 0) exclus.push(c); };
+  // Mission 132 : un prénom qui n'est pas une fiche (« sauf Bruno ») : Charly le dit. Jamais un mot courant (« sauf si… », « sauf erreur »).
+  const COURANT = /^(que|qui|quand|si|car|mais|ou|ceux|celles|celui|celle|les|le|la|de|du|des|mes|tes|ses|nos|vos|leur|leurs|tous|toutes|tout|toi|moi|lui|eux|elle|elles|nous|vous|une|un|mon|ton|son|ma|ta|sa|pour|dans|avec|par|sur|chez|demain|aujourd|hui|hier|ce|cet|cette|ces|matin|matinee|apres|avant|midi|soir|soiree|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|semaine|retard|minutes|minute|heure|heures|urgence|urgences|urgent|exception|annulation|imprevu|erreur|contraire|contre|indication|avis|ordre|cas|besoin|probleme|empechement|ca|cela|ceci|rien|personne|patients|patientes|clients|clientes|rendez|rdv)$/;
   let i = 0;
   while (i < mots.length) {
     const deux = fiches.filter(function (c) { const n = norm(c); return n.length > 1 && n[0] === mots[i] && n[1] === mots[i + 1]; });
     if (deux.length) { deux.forEach(garder); i += 2; }
-    else { const un = fiches.filter(function (c) { return norm(c)[0] === mots[i]; }); if (!un.length) break; un.forEach(garder); i += 1; }
+    else {
+      const un = fiches.filter(function (c) { return norm(c)[0] === mots[i]; });
+      if (un.length) { un.forEach(garder); i += 1; }
+      else if (/^[a-z]{3,}$/.test(mots[i] || '') && !COURANT.test(mots[i])) { inconnus.push(mots[i]); i += 1; }
+      else break;
+    }
     if (mots[i] === 'et' || mots[i] === 'ni') { i += 1; continue; }
     break;
   }
   const fin = debut + mots.slice(0, i).join(' ').length;
-  return { exclus: exclus, reste: (t.slice(0, m.index) + ' ' + t.slice(fin)).replace(/\s+/g, ' ').trim() };
+  return { exclus: exclus, inconnus: inconnus, partie: null, reste: (t.slice(0, m.index) + ' ' + t.slice(fin)).replace(/\s+/g, ' ').trim() };
 }
 
 /** « mon assistante » → « ton assistante » (ce que Charly répond). */
@@ -21103,7 +21114,8 @@ function tcTonRole131(s) {
  */
 function tcRolesSansFiche131(text) {
   const t = tcClasseNormaliser(text);
-  if (!/(^|\s)(reunion|rendez vous|rdv|moment|creneau|creneaux|rencontre|point)(\s|$)/.test(t)) return null;
+  // Mission 132 : « Quand suis-je libre avec ma femme ? » aussi.
+  if (!/(^|\s)(reunion|rendez vous|rdv|moment|creneau|creneaux|rencontre|point|libre|libres|dispo|dispos|disponible|disponibles)(\s|$)/.test(t)) return null;
   const m = t.match(/(?:^|\s)avec\s+(.+)$/);
   if (!m) return null;
   const reste = m[1].replace(/\s+(?:cette|la|demain|aujourd|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|pour|a|au|vers|stp|svp)(?:\s.*)?$/, '');
@@ -28219,6 +28231,12 @@ function tcRecapRetardPeriode130(r) {
   return ['Je préviens ' + (noms.length > 1 ? noms.length + ' personnes' : '1 personne') + ' de ton retard, ' + r._libelle + ' :']
     .concat(avec.map(function (e) { return '• ' + tcContactsJoignables130(e).map(function (c) { return c.name; }).join(', ') + ' (« ' + e.title + ' », ' + tcHeureM64(e.startH, e.startM) + ')'; }))
     .concat(Array.isArray(r._exclus) && r._exclus.length ? ['Je ne préviens pas ' + tcQuestionnaireNoms(r._exclus.map(function (c) { return String(c.name).split(' ')[0]; })) + '.'] : [])
+    // Mission 132 : « sauf ceux de l'après-midi », « sauf Bruno » (pas une fiche).
+    .concat(r._partieExclue ? ['Je ne préviens pas ceux ' + (r._partieExclue === 'aprem' ? 'de l’après-midi' : 'du matin') + '.'] : [])
+    .concat(Array.isArray(r._inconnus) && r._inconnus.length ? (function () {
+      const noms = r._inconnus.map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); });
+      return ['Je ne trouve ' + (noms.length > 1 ? 'ni ' + noms.join(' ni ') : 'pas ' + noms[0]) + ' dans tes rendez-vous ' + (/^[aeiouyh]/.test(r._libelle) ? 'd’' : 'de ') + r._libelle + '.'];
+    })() : [])
     .concat(['Voici le message' + (noms.length > 1 ? ' pour ' + String(c0.name).split(' ')[0] : '') + ' :', '« ' + tcQuestionnaireMessage(r, c0, e0, e0) + ' »', noms.length > 1 ? 'Je leur envoie ?' : 'Je lui envoie ?'])
     .join('\n');
 }
@@ -28262,6 +28280,10 @@ async function tcRetardPeriode130(text, intent) {
   const _s131 = typeof tcExclusSauf131 === 'function' ? tcExclusSauf131(t) : { exclus: [], reste: t };
   const _exclus = _s131.exclus;
   const _sansSauf = _s131.reste;
+  // Mission 132 : « sauf ceux de l'après-midi » (la période se lit sans cette partie), « sauf Bruno » (pas une fiche).
+  const _partieExclue = _s131.partie || null;
+  const _inconnus = Array.isArray(_s131.inconnus) ? _s131.inconnus : [];
+  const _tP = _partieExclue ? _sansSauf : t;
   const dest = tcClasseNormaliser(String((intent && intent.destinataire) || '')).replace(/(?:^|\s)(?:sauf|excepte|hormis|a part)\s.*$/, '');
   if (dest && !/^(?:(?:tous|toutes|tout)\s+)?(?:mes|les|le|tout)\s/.test(dest + ' ')) return false;
   if (typeof tcPhraseNommeUnContact110 === 'function' && tcPhraseNommeUnContact110(_sansSauf)) return false;
@@ -28269,10 +28291,13 @@ async function tcRetardPeriode130(text, intent) {
   if (!/(^|\s)(?:(?:tous|toutes)\s+)?(?:mes|les)\s+(?:clients|clientes|patients|patientes|rendez vous|rdv|rendezvous|consultations|seances)(\s|$)|(^|\s)tout le monde(\s|$)/.test(t)) return false;
   const now = new Date();
   const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-  const jours = /(^|\s)(ce matin|cet apres midi|ce soir|aujourd hui)(\s|$)/.test(t) ? [auj] : tcJoursCites(' ' + t.replace(/apres demain/g, 'apres-demain') + ' ', now, false);
+  const jours = /(^|\s)(ce matin|cet apres midi|ce soir|aujourd hui)(\s|$)/.test(_tP) ? [auj] : tcJoursCites(' ' + _tP.replace(/apres demain/g, 'apres-demain') + ' ', now, false);
   if (jours.length > 1) return false;
   const iso = jours[0] || auj;
-  const partie = /(^|\s)(matin|matinee)(\s|$)/.test(t) ? 'matin' : (/(^|\s)(apres midi|aprem)(\s|$)/.test(t) ? 'aprem' : 'jour');
+  const _partieDite = /(^|\s)(matin|matinee)(\s|$)/.test(_tP) ? 'matin' : (/(^|\s)(apres midi|aprem)(\s|$)/.test(_tP) ? 'aprem' : 'jour');
+  // Mission 132 : toute la journée sauf l'après-midi : le matin (et l'inverse).
+  const _restante = _partieExclue && _partieDite === 'jour' ? (_partieExclue === 'aprem' ? 'matin' : 'aprem') : null;
+  const partie = _restante || _partieDite;
   const libelle = tcLibellePeriode130(iso, partie, null, now);
   tcPousserMessageUtilisateur(text);
   const rdvs = tcRdvPeriode130(iso, iso, partie, now).filter(function (e) { const cs = tcContactsDuRdv(e); return !(cs.length && cs.every(function (c) { return _exclus.indexOf(c) > -1; })); });
@@ -28285,7 +28310,7 @@ async function tcRetardPeriode130(text, intent) {
   const connu = tcRetardDansLaPhrase(text);
   delete connu.pour;
   await tcQuestionnaireDemarrer(tcQuestionnaireRetardPeriode130(), Object.assign(connu, {
-    action: 'retard', prevenir: 'charly', _rdvs: rdvs, _retardRdv: null, _liste: [], _libelle: libelle, _excuses: /(^|\s)excus/.test(t), _exclus: _exclus,
+    action: 'retard', prevenir: 'charly', _rdvs: rdvs, _retardRdv: null, _liste: [], _libelle: libelle, _excuses: /(^|\s)excus/.test(t), _exclus: _exclus, _partieExclue: _restante ? _partieExclue : null, _inconnus: _inconnus,
     _contacts: (function () { const l = []; rdvs.forEach(function (e) { tcContactsJoignables130(e).forEach(function (c) { if (l.indexOf(c) < 0) l.push(c); }); }); return l; })()
   }));
   return true;

@@ -78,6 +78,15 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     remettre(); n0 = charlyIA.history.length; await taper('Trouve un créneau avec mon grand frère'); R.x4 = tout(n0); R.x4b = boutons();
     remettre(); n0 = charlyIA.history.length; await taper('Trouve un créneau avec ma femme'); R.x5 = tout(n0); R.x5b = boutons();
     remettre(); n0 = charlyIA.history.length; await taper('Organise une réunion avec mes collègues'); R.x6 = tout(n0); R.x6b = boutons();
+    // Mission 132.
+    var plus = function () { contactsList.push({ id: 'c_jean', name: 'Jean Lune', phone: '06 39 98 00 45', email: '', vouvoie: true }); events.push(ev('b4', iso(1), 15, 0, 15, 30, 'RDV Jean Lune : contrôle', 'c_jean')); };
+    remettre(); plus(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain sauf ceux de l’après-midi que j’ai 10 minutes de retard'); R.y1 = tout(n0);
+    remettre(); plus(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain sauf ceux du matin que j’ai 10 minutes de retard'); R.y1b = tout(n0);
+    remettre(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain sauf Bruno que j’ai 10 minutes de retard'); R.y2 = tout(n0);
+    remettre(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain sauf Paul et Bruno que j’ai 10 minutes de retard'); R.y2b = tout(n0);
+    remettre(); n0 = charlyIA.history.length; await taper('Quand suis-je libre avec ma femme ?'); R.y3 = tout(n0); R.y3b = boutons();
+    remettre(); n0 = charlyIA.history.length; await taper('Quand suis-je libre avec ma femme cette semaine ?'); R.y4 = tout(n0); R.y4b = boutons();
+    remettre(); n0 = charlyIA.history.length; await taper('Quand suis-je libre avec Paul ?'); R.y5 = tout(n0);
   } catch (e) { R.erreur = String(e && e.stack || e); }
   var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(R); document.body.appendChild(pre);
 }, 1200); });</script>`;
@@ -108,6 +117,13 @@ else {
   verifie('examen et décision du chef : « Trouve un créneau avec mon grand frère » : jamais la fiche « Léa Grand » ; « Je ne trouve pas ton grand frère », « Ajouter un contact », tes créneaux libres', !/Par téléphone, en personne ou en visio|Léa/.test(S.x4) && /Je m’en occupe\. Je ne trouve pas ton grand frère dans tes contacts\./.test(S.x4) && /Voici ce qui est libre/.test(S.x4) && JSON.stringify(S.x4b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.x4, S.x4b]));
   verifie('décision du chef : « Trouve un créneau avec ma femme » : « Je ne trouve pas ta femme dans tes contacts. », tes créneaux libres comme avant, « Ajouter un contact » (jamais seulement « ajoute sa fiche »)', /Je m’en occupe\. Je ne trouve pas ta femme dans tes contacts\./.test(S.x5) && /Voici ce qui est libre/.test(S.x5) && JSON.stringify(S.x5b) === JSON.stringify(['Ajouter un contact']) && !/Ajoute sa fiche/.test(S.x5), JSON.stringify([S.x5, S.x5b]));
   verifie('« Organise une réunion avec mes collègues » : « Je ne trouve pas tes collègues dans tes contacts. », tes créneaux libres, « Ajouter un contact »', /Je ne trouve pas tes collègues dans tes contacts/.test(S.x6) && /Voici ce qui est libre/.test(S.x6) && JSON.stringify(S.x6b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.x6, S.x6b]));
+  verifie('mission 132 : « … de demain sauf ceux de l’après-midi … » : ceux du matin seulement, et la carte le dit', /Je préviens 3 personnes de ton retard, demain matin/.test(S.y1) && !/Jean Lune/.test(S.y1) && /Je ne préviens pas ceux de l’après-midi\./.test(S.y1) && !/aucun rendez-vous/.test(S.y1), S.y1);
+  verifie('mission 132 : « … de demain sauf ceux du matin … » : ceux de l’après-midi seulement, et la carte le dit', /Je préviens 1 personne de ton retard, demain après-midi/.test(S.y1b) && /Jean Lune/.test(S.y1b) && !/• Paul Martin/.test(S.y1b) && /Je ne préviens pas ceux du matin\./.test(S.y1b), S.y1b);
+  verifie('mission 132 : « … sauf Bruno … » (pas une fiche) : tout le monde, et « Je ne trouve pas Bruno dans tes rendez-vous de demain. » avant « Je leur envoie ? »', /Je préviens 3 personnes de ton retard, demain :/.test(S.y2) && /Je ne trouve pas Bruno dans tes rendez-vous de demain\.[\s\S]*Je leur envoie/.test(S.y2) && !/Je ne préviens pas/.test(S.y2), S.y2);
+  verifie('mission 132 : « … sauf Paul et Bruno … » : Marie et Zoé, « Je ne préviens pas Paul. » et « Je ne trouve pas Bruno… »', /Je préviens 2 personnes de ton retard, demain :/.test(S.y2b) && /Je ne préviens pas Paul\./.test(S.y2b) && /Je ne trouve pas Bruno dans tes rendez-vous de demain\./.test(S.y2b) && !/• Paul Martin/.test(S.y2b), S.y2b);
+  verifie('mission 132 : « Quand suis-je libre avec ma femme ? » : comme « Trouve un créneau avec ma femme » (message, créneaux, « Ajouter un contact »)', /Je m’en occupe\. Je ne trouve pas ta femme dans tes contacts\./.test(S.y3) && /Voici ce qui est libre/.test(S.y3) && JSON.stringify(S.y3b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.y3, S.y3b]));
+  verifie('mission 132 : « Quand suis-je libre avec ma femme cette semaine ? » : pareil', /Je m’en occupe\. Je ne trouve pas ta femme dans tes contacts\./.test(S.y4) && /Voici ce qui est libre|Je ne vois aucun créneau libre/.test(S.y4) && JSON.stringify(S.y4b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.y4, S.y4b]));
+  verifie('mission 132 : « Quand suis-je libre avec Paul ? » (une fiche) : jamais « Je ne trouve pas »', !/Je ne trouve pas/.test(S.y5), S.y5);
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
 console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');
