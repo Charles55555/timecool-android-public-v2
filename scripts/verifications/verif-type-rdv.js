@@ -90,7 +90,7 @@ const gp = route("case 'POST /rdv/groupe/proposer':", "case 'POST /rdv/groupe/co
 const gc = route("case 'POST /rdv/groupe/confirmer':", "case 'POST /messages/envoyer':");
 verifie('/rdv/demander : le type du corps est valide, enregistre sur la ligne rdv (INSERT ... type)', /\$typeRdv = typeRdvValide\(Entree::corps\(\)\['type'\] \?\? null\);/.test(dem) && /INSERT INTO rdv \(organisateur_id, invite_compte_id, titre, statut, type\)\s+VALUES \(\?, \?, \?, "attente", \?\)/.test(dem));
 verifie('/rdv/demander : une demande reprise recoit le nouveau type', /UPDATE rdv SET type = \? WHERE id = \?/.test(dem));
-verifie('/rdv/demander : le texte et la ligne du message portent le type', /messageDemandeRdv\(\$moi, \$cible, \$typeRdv\)/.test(dem) && /identiteDemandeur\(\(int\) \$cible\['id'\], \$moi\), \$typeRdv\)/.test(dem));
+verifie('/rdv/demander : le texte et la ligne du message portent le type', /messageDemandeRdv\(\$moi, \$cible, \$typeRdv(, \$souhait)?\)/.test(dem) && /identiteDemandeur\(\(int\) \$cible\['id'\], \$moi\), \$typeRdv\)/.test(dem));
 verifie('/rdv/choisir : le type de la demande est ecrit dans les DEUX agendas (meme fermeture $entree)', /\$typeRdv = typeRdvValide\(\$rdv\['type'\] \?\? null\);/.test(cho) && /\.\.\.\(\$typeRdv !== null \? \['type' => \$typeRdv\] : \[\]\)/.test(cho) && (cho.match(/\$entree\(/g) || []).length >= 2);
 verifie('/rdv/choisir : la confirmation dit le mot (« Rendez-vous confirmé par téléphone : »)', /'Rendez-vous confirmé' \. motTypeMessage\(\$typeRdv\) \. ' : '/.test(cho));
 verifie('/rdv/proposer-creneau : le choix du titulaire prime, sinon celui de la demande', /\$typeRdv = typeRdvValide\(\$corps\['type'\] \?\? null\) \?\? typeRdvValide\(\$rdv\['type'\] \?\? null\);/.test(pro));

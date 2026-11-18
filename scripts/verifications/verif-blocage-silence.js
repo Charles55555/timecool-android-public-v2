@@ -95,7 +95,7 @@ Db::$conv = null;
 $cible = ['prenom' => 'Armelle'];
 $a = reponseDemandeEnMessagerie($cible, 0, false);
 $b = reponseDemandeEnMessagerie($cible, 1723, false);
-t('la reponse « bloque » (rdv 0) et la reponse d une premiere demande ont le meme mode et le meme texte', $a['mode'] === 'messagerie' && $a['mode'] === $b['mode'] && $a['message'] === $b['message'] && count($a) === 3);
+t('la reponse « bloque » (rdv 0) et la reponse d une premiere demande ont le meme mode et le meme texte', $a['mode'] === 'messagerie' && $a['mode'] === $b['mode'] && $a['message'] === $b['message'] && count($a) === 4 && $a['reprise'] === $b['reprise']);   // mission 122 : + reprise, identique
 t('le texte ne dit ni bloque, ni inconnu, ni validation', !preg_match('/bloqu|inconnu|valid/i', $a['message']));
 t('la reponse de reprise (deuxieme clic) existe toujours, differente', reponseDemandeEnMessagerie($cible, 1723, true)['message'] !== $b['message']);
 

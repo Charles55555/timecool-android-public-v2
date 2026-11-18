@@ -3679,3 +3679,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - À deux : la demande part dans la messagerie de l'ami (/rdv/demander), « Je m'en occupe » ; à plusieurs sans agenda lisible : trois de mes moments libres, puis l'invitation Présent / Absent ; certains lisibles : « Lui envoyer la demande ».
 - phrases-charles : contexte @validation:… ; « version de test » : aucune mention dans l'appli ni dans l'API.
+
+## 18/11/2026 (nuit) — Mission 122, examen (CODEUR)
+
+- « oui » tapé ; « Je peux lui envoyer » (profils 1 et 2) ; champ souhait de /rdv/demander (API, sans migration) et reprise ; « J'ai dit à Michel que tu aimerais demain ».

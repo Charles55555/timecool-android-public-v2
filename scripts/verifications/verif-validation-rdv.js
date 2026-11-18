@@ -112,7 +112,7 @@ echo json_encode($res);
 titre('2. Le serveur : les routes');
 const dem = api.slice(api.indexOf("case 'POST /rdv/demander':"), api.indexOf("case 'POST /rdv/choisir':"));
 verifie('/rdv/demander : creneaux automatiques seulement via categoriesPourRdvAutomatique', /categoriesPourRdvAutomatique\(\(int\) \$cible\['id'\], \$moi\)/.test(dem) && /\$categoriesRdv !== \[\] \? creneauxLibres/.test(dem));
-verifie('/rdv/demander : la demande en messagerie est marquee « demande_rdv » (de quoi y repondre)', /messagePoser\(\$moi, \$cible, messageDemandeRdv\(\$moi, \$cible, \$typeRdv\), \$rdvId, null, 'demande_rdv',\s+identiteDemandeur\(\(int\) \$cible\['id'\], \$moi\), \$typeRdv\)/.test(dem));
+verifie('/rdv/demander : la demande en messagerie est marquee « demande_rdv » (de quoi y repondre)', /messagePoser\(\$moi, \$cible, messageDemandeRdv\(\$moi, \$cible, \$typeRdv(, \$souhait)?\), \$rdvId, null, 'demande_rdv',\s+identiteDemandeur\(\(int\) \$cible\['id'\], \$moi\), \$typeRdv\)/.test(dem));
 verifie('/rdv/demander : une seule reponse pour inconnu, bloque ou validation exigee (aucune raison dite)', /Rep::ok\(reponseDemandeEnMessagerie\(\$cible, \$rdvId, \$reprise\)\)/.test(dem) && !/bloqu|inconnu|valid/i.test(fonction(api, 'reponseDemandeEnMessagerie') || 'bloque'));
 verifie('rendez-vous a plusieurs : un invite qui exige sa validation, inconnu ou bloque = « sans acces »', /categoriesPourRdvAutomatique\(\(int\) \$c\['id'\], \$moi\);\s+if \(\$categories === \[\]\) \{\s+\$sansAcces\[\] = texteSur/.test(api));
 verifie('plus aucun horaire par defaut dans l API', !/\[9, 10, 11, 14, 15, 16, 17\]/.test(api) && !/heuresParDefaut/.test(api));

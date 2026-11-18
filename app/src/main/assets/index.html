@@ -18221,6 +18221,8 @@ async function charlySendMessage() {
   if (typeof tcRepondreReponseCreneau === 'function' && await tcRepondreReponseCreneau(text)) return;
   // Une autre demande pendant que la question attend : traitée normalement, puis Charly repose sa question (chef, 03/11).
   if (_questionCreneau) tcReposerReponseCreneau(_questionCreneau);
+  // === Mission 122 : « Je l'envoie ? » (demande à un ami qui valide lui-même ses rendez-vous) : « oui » tapé ou dit ===
+  if (typeof tcRepondreDemande122 === 'function' && await tcRepondreDemande122(text)) return;
   // === « J'envoie ? » : la réponse à un message relu (oui → il part, non → rien) (mission 57) ===
   if (typeof tcRepondreEnvoi === 'function' && await tcRepondreEnvoi(text)) return;
   // === « Je lui propose ? », « Je réponds présent ? » : oui → ça part, non → rien, un autre moment → le nouveau créneau (mission 58) ===
@@ -34341,8 +34343,12 @@ function tcSansAcces122(references, r, duree, type, options) {
   const d = { id: 'd' + Date.now(), refs: (references || []).slice(), noms: noms, type: tcTypeRdvValide(type) || 'physique', duree: Number(duree) || 1,
     titre: (options && options.titre) || null, cat: (options && options.cat) || null, etat: 'question', creneaux: [] };
   let texte;
+  d.quand = tcQuandSouhaite122(options);
+  const seul = typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3;
   if (un) {
-    texte = 'Je m’en occupe.\nChez ' + qui + ', chaque rendez-vous attend son accord.\nJe lui envoie ta demande dans sa messagerie.\n' + qui + ' te proposera un moment.';
+    // Profils 1 et 2 : Charly propose, l'utilisateur dit oui ; profil 3 : la demande part toute seule.
+    texte = 'Je m’en occupe.\nChez ' + qui + ', chaque rendez-vous attend son accord.\n'
+      + (seul ? 'Je lui envoie ta demande dans sa messagerie' : 'Je peux lui envoyer ta demande dans sa messagerie') + (d.quand ? ', pour ' + d.quand : '') + '.\n' + qui + ' te proposera un moment.';
   } else {
     // Trois moments où je suis libre, dans la période demandée (sinon les deux semaines qui viennent), un par jour.
     const depuis = options && options.depuis ? new Date(options.depuis + 'T00:00:00') : null;
@@ -34365,7 +34371,7 @@ function tcSansAcces122(references, r, duree, type, options) {
   charlyIA.history.push(m);
   renderCharlyChat();
   // Profil 3 (« Charly valide seul ») : à deux, la demande part tout de suite.
-  if (un && typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3) tcDemande122('' + d.id, 'oui');
+  if (un && seul) tcDemande122('' + d.id, 'oui');
 }
 
 function tcRendreDemande122(m) {
@@ -34388,6 +34394,45 @@ function tcRendreDemande122(m) {
   return tcBulleCharly(h);
 }
 
+/** Le moment souhaité, dit dans la phrase (période des options) : « demain (jeudi 19 novembre) », « du lundi 23 au vendredi 27 novembre » ; ou ''. */
+function tcQuandSouhaite122(options) {
+  const a = options && options.depuis, b = options && options.jusqua;
+  if (!a) return '';
+  const jour0 = new Date(); jour0.setHours(0, 0, 0, 0);
+  const n = Math.round((new Date(a + 'T00:00:00') - jour0) / 86400000);
+  const lib = function (iso) { return String(tcFormaterDateHumaine(iso)).toLowerCase(); };
+  if (!b || b === a) return (n === 0 ? 'aujourd’hui (' + lib(a) + ')' : n === 1 ? 'demain (' + lib(a) + ')' : n === 2 ? 'après-demain (' + lib(a) + ')' : lib(a));
+  return 'entre ' + lib(a) + ' et ' + lib(b);
+}
+
+/** « oui », « ok », « vas-y », « envoie », « non » tapés ou dits, tant que la carte de la demande attend ; « 1 », « 2 », « 3 » pour un moment. */
+async function tcRepondreDemande122(text) {
+  const h = Array.isArray(charlyIA.history) ? charlyIA.history : [];
+  let m = null;
+  for (let i = h.length - 1; i >= 0; i--) {
+    const x = h[i];
+    if (!x || x.role === 'user' || x.role === 'tiers' || (x._demo && x._demo.phrases)) continue;
+    m = x._demande122 ? x : null;
+    break;
+  }
+  if (!m || m._demande122.etat !== 'question') return false;
+  const d = m._demande122;
+  const t = tcSansAccents(String(text || '')).toLowerCase().replace(/[!.?,;:'’]/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^(?:(?:et|stp|svp|alors|bon|ben|euh|charly)\s+)+/, '').replace(/\s+(?:stp|svp|merci|s il te plait)$/, '');
+  let oui = typeof tcReponseOuiNon === 'function' ? tcReponseOuiNon(t) : null;
+  if (oui === null && /^(envoie|envoie[- ]?(la|le|lui|ca)|vas[- ]?y envoie|oui envoie|ok envoie|c est parti|go)$/.test(t)) oui = true;
+  if (d.refs.length > 1) {
+    const k = t.match(/^(?:le )?([123])(?:er|e|eme)?$/);
+    if (k && d.creneaux[Number(k[1]) - 1]) { await tcDemande122(d.id, 'm' + (Number(k[1]) - 1)); return true; }
+    if (oui === false) { await tcDemande122(d.id, 'non'); return true; }
+    if (oui === true) { charlyIA.history.push({ role: 'assistant', content: 'Touche le moment qui te va, ou écris son numéro : 1, 2 ou 3.' }); renderCharlyChat(); return true; }
+    return false;
+  }
+  if (oui === null) return false;
+  await tcDemande122(d.id, oui ? 'oui' : 'non');
+  return true;
+}
+
 /** « Oui, envoie », « Non », ou un moment choisi. */
 async function tcDemande122(id, choix) {
   const m = charlyIA.history.find(function (x) { return x && x._demande122 && x._demande122.id === id; });
@@ -34400,12 +34445,13 @@ async function tcDemande122(id, choix) {
   if (d.refs.length === 1) {
     typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('envoi', d.noms), 'envoi');
     let r = null, erreur = false;
-    try { r = await TC_BACKEND.demanderRdv(d.refs[0], d.titre || undefined, d.type); } catch (e) { erreur = true; }
+    try { r = await TC_BACKEND.demanderRdv(d.refs[0], d.titre || undefined, d.type, d.quand ? 'J’aimerais ' + d.quand + '.' : undefined); } catch (e) { erreur = true; }
     typeof tcFinEtapes === 'function' && await tcFinEtapes();
     d.etat = erreur ? 'question' : 'fait';
     charlyIA.history.push({ role: 'assistant', content: erreur ? 'Je n’arrive pas à joindre le serveur : rien n’est envoyé. Réessaie dans un instant.'
       : (r && r.mode === 'creneaux' ? qui + ' peut te recevoir maintenant. Redis-moi ta demande : je te montre ses moments libres.'
-        : 'C’est envoyé à ' + qui + '.\nSa réponse arrivera dans ta messagerie.') });
+        : r && r.reprise ? 'Ta demande à ' + qui + ' attend déjà sa réponse dans sa messagerie.\nJe ne l’ai pas renvoyée.'
+        : 'C’est envoyé à ' + qui + '.' + (d.quand ? '\nJ’ai dit à ' + qui + ' que tu aimerais ' + d.quand + '.' : '') + '\nSa réponse arrivera dans ta messagerie.') });
     renderCharlyChat();
     if (!erreur && typeof tcSyncTour === 'function') tcSyncTour();
     return;
@@ -34438,7 +34484,8 @@ async function tcDemandeSansAcces122(id) {
   renderCharlyChat();
   typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('envoi', g.sansAcces), 'envoi');
   let ok = 0;
-  for (const ref of cibles) { try { await TC_BACKEND.demanderRdv(ref, (g.options && g.options.titre) || undefined, g.type); ok++; } catch (e) {} }
+  const _quand = tcQuandSouhaite122(g.options);
+  for (const ref of cibles) { try { await TC_BACKEND.demanderRdv(ref, (g.options && g.options.titre) || undefined, g.type, _quand ? 'J’aimerais ' + _quand + '.' : undefined); ok++; } catch (e) {} }
   typeof tcFinEtapes === 'function' && await tcFinEtapes();
   g.demandeSansAcces = ok ? 'fait' : null;
   if (!ok) charlyIA.history.push({ role: 'assistant', content: 'Je n’arrive pas à joindre le serveur : rien n’est envoyé. Réessaie dans un instant.' });
@@ -35226,9 +35273,10 @@ const TC_BACKEND = {
    *   soit { mode:'messagerie', rdv, message }. Le demandeur ne peut
    *   pas distinguer un agenda plein d'un accès non accordé.
    */
-  async demanderRdv(reference, titre, type) {
+  async demanderRdv(reference, titre, type, souhait) {
     const corps = titre ? { reference: reference, titre: titre } : { reference: reference };
     if (tcTypeRdvValide(type)) corps.type = type;   // telephone | physique | visio
+    if (souhait) corps.souhait = String(souhait).slice(0, 120);   // mission 122 : « J'aimerais demain (jeudi 19 novembre). »
     return tcAppel('POST', '/rdv/demander', corps);
   },
 

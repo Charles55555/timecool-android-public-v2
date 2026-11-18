@@ -2178,11 +2178,14 @@ function creneauxLibresPourContact(array $moi, array $cible, array $creneaux): a
  * notification du système. Un ton sec ferait passer une demande banale
  * pour un reproche.
  */
-function messageDemandeRdv(array $de, array $vers, ?string $type = null): string
+function messageDemandeRdv(array $de, array $vers, ?string $type = null, ?string $souhait = null): string
 {
     $mot = motTypeRdv($type);
+    // Mission 122 : le moment souhaité, dit dans la phrase (« J'aimerais demain (jeudi 19 novembre). »).
     return "Salut " . $vers['prenom'] . " 👋 Je voudrais prendre rendez-vous avec toi "
-        . "sur TimeCool" . ($mot !== '' ? ', ' . $mot : '') . ". Tu me proposes un créneau ? Merci !";
+        . "sur TimeCool" . ($mot !== '' ? ', ' . $mot : '') . "."
+        . ($souhait !== null && $souhait !== '' ? ' ' . $souhait : '')
+        . " Tu me proposes un créneau ? Merci !";
 }
 
 /**
@@ -2195,6 +2198,8 @@ function reponseDemandeEnMessagerie(array $cible, int $rdvId, bool $reprise): ar
     return [
     'mode'    => 'messagerie',
     'rdv'     => $rdvId,
+    // Mission 122 : la demande attendait déjà ; rien n'est reparti (Charly ne dit pas « J'ai dit à … »).
+    'reprise' => $reprise,
     // Au deuxième clic rien n'est reparti : le dire, plutôt
     // que d'annoncer un envoi qui n'a pas eu lieu.
     'message' => $reprise
@@ -3990,6 +3995,9 @@ switch ($route) {
 
         $titre = texteSur((string) (Entree::texte('titre', 200) ?? trim($moi['prenom'] . ' ' . $moi['nom'])));
         $typeRdv = typeRdvValide(Entree::corps()['type'] ?? null);
+        // Mission 122 : facultatif, une phrase courte (« J'aimerais demain (jeudi 19 novembre). »).
+        $souhait = Entree::texte('souhait', 120);
+        $souhait = $souhait === null || trim($souhait) === '' ? null : texteSur(trim($souhait));
 
         /*
          * Bloque par le destinataire : rien n est cree chez lui (ni rendez-vous,
@@ -3999,7 +4007,7 @@ switch ($route) {
          * la page l y envoie chercher.
          */
         if (demandeurBloque((int) $cible['id'], $moi)) {
-            $texte = messageDemandeRdv($moi, $cible, $typeRdv);
+            $texte = messageDemandeRdv($moi, $cible, $typeRdv, $souhait);
             // Le meme identifiant que verrait un compte ordinaire : sa derniere demande vers cette personne.
             $dernier = Db::un(
                 'SELECT id FROM rdv WHERE organisateur_id = ? AND invite_compte_id = ? ORDER BY id DESC LIMIT 1',
@@ -4066,7 +4074,7 @@ switch ($route) {
             // même réponse dans les trois cas. Le message n'est déposé
             // qu'à la première demande.
             if (!$reprise) {
-                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible, $typeRdv), $rdvId, null, 'demande_rdv',
+                messagePoser($moi, $cible, messageDemandeRdv($moi, $cible, $typeRdv, $souhait), $rdvId, null, 'demande_rdv',
                     identiteDemandeur((int) $cible['id'], $moi), $typeRdv);
             }
             envoyerAbsenceSiBesoin($cible, $moi);

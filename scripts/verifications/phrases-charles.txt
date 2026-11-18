@@ -84,6 +84,13 @@ Ajoute coiffeur au 40 rue de la Convention samedi 10h |  | texte:📍 40 rue de 
 Je suis au bureau demain toute la journée |  | modele && envoi:au bureau demain && sans:📍
 
 # --- Mission 122 (chef, 18/11) : l'ami garde « Toujours attendre ma validation » (le cas par défaut) : jamais « je ne peux pas » ---
-En personne | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel | texte:Je m’en occupe && texte:Chez Michel, chaque rendez-vous attend son accord && texte:Je l’envoie \? && sans:je ne peux
+En personne | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel | texte:Je m’en occupe && texte:Chez Michel, chaque rendez-vous attend son accord && texte:Je l’envoie \? && sans:je ne peux && texte:Je peux lui envoyer ta demande dans sa messagerie, pour demain && sans:Je lui envoie ta demande
 En personne | @validation:Alice,Chloé,Virginie ⏎ Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot | texte:Je m’en occupe && texte:Présent ou Absent && sans:je ne peux
 En personne | @validation:Virginie ⏎ Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot | texte:Chez Virginie, chaque rendez-vous attend son accord && texte:Lui envoyer la demande && sans:je ne peux
+
+# --- Examen de la 122 : « Je l’envoie ? » se répond aussi en tapant ; le jour dit part avec la demande ---
+oui | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:C’est envoyé à Michel && texte:J’ai dit à Michel que tu aimerais demain && sans:pas bien compris
+ok | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:C’est envoyé à Michel && sans:pas bien compris
+vas-y | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:C’est envoyé à Michel && sans:pas bien compris
+envoie | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:C’est envoyé à Michel && sans:pas bien compris
+non | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:je n’envoie rien && sans:C’est envoyé

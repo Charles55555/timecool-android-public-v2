@@ -102,6 +102,7 @@ if (!exe) {
             if (!dv) { await taper(e.contexte[c]); continue; }
             var norm = function (t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
             var bloques = dv[1].split(',').map(norm);
+            TC_BACKEND.demanderRdv = async function (ref, titre, type, souhait) { window.__souhait = souhait || ''; return { mode: 'messagerie', rdv: 1, reprise: false }; };
             var ori = TC_BACKEND.proposerRdvGroupe;
             TC_BACKEND.proposerRdvGroupe = async function (refs, duree, type, options) {
               var lisibles = [], sans = [];
