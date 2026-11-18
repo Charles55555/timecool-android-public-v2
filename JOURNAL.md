@@ -3738,3 +3738,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Mission 131 (2e lot) : phrases 4 à 6, défauts anciens du retard (CODEUR)
 
 - « mon assistante et mon prothésiste » trouvés par un mot de leur nom ; en vrai sans fiche : un bouton par fiche ; démonstration du dentiste du lundi au vendredi dès 9h ; « Préviens Paul et Marie… » : les deux ; « … sauf Paul » : tout le monde sauf Paul.
+- Examen 131 (2e lot) : retard des personnes nommées au jour dit, prénoms seulement, « sauf Paul Martin » ; « ma femme », « mon petit frère » sans fiche : « Je ne trouve pas … », mes créneaux libres et « Ajouter un contact » (décision du chef).

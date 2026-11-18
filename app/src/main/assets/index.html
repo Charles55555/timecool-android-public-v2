@@ -17299,6 +17299,8 @@ async function tcGererDemandeCreneau(text, intent) {
   }
   // Chef, 18/11 : « Trouve un créneau avec Julien » (sans TimeCool) : l’invitation (mots du groupe 5), puis mes créneaux libres.
   { const _sc = typeof tcSansCompteApresAvec === 'function' ? tcSansCompteApresAvec(text) : []; if (_sc.length && typeof tcMessageInvitationSansCompte === 'function') charlyIA.history.push(tcMessageInvitationSansCompte(_sc, false)); }
+  // Chef, 18/11 : « … avec ma femme », « … avec mon assistante » sans fiche : « Je ne trouve pas … », le bouton, puis mes créneaux libres.
+  { const _r131 = typeof tcRolesSansFiche131 === 'function' ? tcRolesSansFiche131(text) : null; if (_r131) charlyIA.history.push(tcMessageRolesSansFiche131(_r131)); }
   let periode = intent && intent.periode;
   // Un seul jour demande (« vendredi », « aujourd'hui ») : la reponse s y limite, jamais les deux semaines (mission 19).
   if (periode && periode.debut && !periode.fin) periode = { debut: periode.debut, fin: periode.debut, label: periode.label, jours: periode.jours };
@@ -19037,7 +19039,7 @@ async function charlySendMessage() {
     return;
   }
   // Mission 131 : « … avec mon assistante et mon prothésiste », sans fiche de ce nom : le dire, et un bouton par fiche à ajouter.
-  if (typeof tcGroupeSansContacts131 === 'function' && tcGroupeSansContacts131(text)) return;
+  if (typeof tcGroupeSansContacts131 === 'function' && await tcGroupeSansContacts131(text)) return;
   // Deux contacts connus cités, dont un sans TimeCool : le questionnaire « à plusieurs », après l'avoir dit (mission 55).
   {
     const _plusieurs = tcDetecterPlusieursCites(text);
@@ -21062,41 +21064,88 @@ async function tcImprevuDecaler131(text) {
    - « Préviens Paul et Marie que j'ai 10 minutes de retard » : les deux sont prévenus (un seul « Je leur envoie ? »).
    ═══════════════════════════════════════════════════════════════ */
 
+/**
+ * Examen 131 : « sauf Paul », « sauf Paul Martin », « sauf Paul et Marie » : les contacts exclus (prénom, ou prénom et nom), et la
+ * phrase sans cette partie. { exclus, reste }.
+ */
+function tcExclusSauf131(t) {
+  const m = String(t || '').match(/(?:^|\s)(?:sauf|excepte|hormis|a part)\s+/);
+  if (!m) return { exclus: [], reste: t };
+  const debut = m.index + m[0].length;
+  const mots = t.slice(debut).split(' ');
+  const fiches = (Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c && c.name; });
+  const norm = function (c) { return tcClasseNormaliser(String(c.name)).split(' '); };
+  const exclus = [];
+  const garder = function (c) { if (exclus.indexOf(c) < 0) exclus.push(c); };
+  let i = 0;
+  while (i < mots.length) {
+    const deux = fiches.filter(function (c) { const n = norm(c); return n.length > 1 && n[0] === mots[i] && n[1] === mots[i + 1]; });
+    if (deux.length) { deux.forEach(garder); i += 2; }
+    else { const un = fiches.filter(function (c) { return norm(c)[0] === mots[i]; }); if (!un.length) break; un.forEach(garder); i += 1; }
+    if (mots[i] === 'et' || mots[i] === 'ni') { i += 1; continue; }
+    break;
+  }
+  const fin = debut + mots.slice(0, i).join(' ').length;
+  return { exclus: exclus, reste: (t.slice(0, m.index) + ' ' + t.slice(fin)).replace(/\s+/g, ' ').trim() };
+}
+
 /** « mon assistante » → « ton assistante » (ce que Charly répond). */
 function tcTonRole131(s) {
   return String(s || '').replace(/^mon\s/, 'ton ').replace(/^ma\s/, 'ta ').replace(/^mes\s/, 'tes ').replace(/^notre\s/, 'votre ').replace(/^nos\s/, 'vos ');
 }
 
 /**
- * Une demande de rendez-vous à plusieurs (« réunion commune », « rendez-vous commun »…) avec des personnes dites par leur rôle
- * (« mon assistante et mon prothésiste ») dont aucune n'est dans les contacts : la réponse de la mission 110 (le bouton par fiche).
- * Vrai si pris. Quelqu'un trouvé : faux, le chemin d'avant.
+ * Chef, 18/11 (décision après l'examen) : une personne désignée par un lien ou un rôle (« ma femme », « mon petit frère », « mon
+ * assistante et mon prothésiste »), sans fiche : Charly dit « Je m'en occupe. Je ne trouve pas … dans tes contacts. », montre quand
+ * même tes créneaux libres comme avant, et le bouton « Ajouter un contact ». Jamais une réponse qui s'arrête à « ajoute sa fiche »,
+ * jamais une fiche dont seul le nom de famille ressemble (« Léa Petit », « Banque Populaire ») : un lien ou un mot commun n'est pas
+ * un contact. Rend la liste des personnes (« ta femme », « ton assistante »…), ou null (quelqu'un est trouvé : le chemin d'avant).
  */
-function tcGroupeSansContacts131(text) {
+function tcRolesSansFiche131(text) {
   const t = tcClasseNormaliser(text);
-  if (!/(^|\s)(reunion|rendez vous|rdv|moment|creneau|rencontre|point)(\s|$)/.test(t) || !/(^|\s)(commun|commune|communs|ensemble|trouve|trouver|cherche|propose|organise|cale|fixe)(\s|$)/.test(t)) return false;
+  if (!/(^|\s)(reunion|rendez vous|rdv|moment|creneau|creneaux|rencontre|point)(\s|$)/.test(t)) return null;
   const m = t.match(/(?:^|\s)avec\s+(.+)$/);
-  if (!m) return false;
+  if (!m) return null;
   const reste = m[1].replace(/\s+(?:cette|la|demain|aujourd|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|pour|a|au|vers|stp|svp)(?:\s.*)?$/, '');
   const parts = reste.split(/\s*(?:,|\set\s)\s*/).map(function (x) { return x.trim(); }).filter(Boolean);
-  if (!parts.length || !parts.every(function (p) { return /^(mon|ma|mes|notre|nos)\s+[a-z]{4,}(?:\s+[a-z]{3,})?$/.test(p); })) return false;
+  if (!parts.length || !parts.every(function (p) { return /^(mon|ma|mes|notre|nos)\s+[a-z]{3,}(?:\s+[a-z]{3,})?$/.test(p); })) return null;
+  // Trouvé : un prénom de fiche, ou un rôle écrit entre parenthèses dans le nom (« Sophie Virtuelle (assistante) »).
+  const fiches = (Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c && c.name; });
+  const trouve = function (w) {
+    return fiches.some(function (c) {
+      if (tcClasseNormaliser(String(c.name)).split(' ')[0] === w) return true;
+      const par = String(c.name).match(/\(([^)]+)\)/);
+      return !!par && tcClasseNormaliser(par[1]).split(' ').indexOf(w) > -1;
+    });
+  };
+  if (parts.some(function (p) { return p.split(' ').slice(1).some(trouve); })) return null;
   const brut = String(text || '');
   const affiche = function (p) {
     // Le mot tel qu'il a été tapé (« prothésiste », pas « prothesiste »).
     return p.split(' ').map(function (w) { const b = brut.split(/[\s,.;:!?«»"()’']+/).filter(function (x) { return tcClasseNormaliser(x) === w; }).pop(); return b ? b.toLowerCase() : w; }).join(' ');
   };
-  // Quelqu'un est déjà dans les contacts (son nom porte le mot) : le chemin d'avant.
-  if (parts.some(function (p) { return p.split(' ').slice(1).some(function (w) { try { return tcContactsParMots([w]).length > 0; } catch (e) { return false; } }); })) return false;
-  const roles = parts.map(function (p) { return tcTonRole131(affiche(p)); });
+  return parts.map(function (p) { return tcTonRole131(affiche(p)); });
+}
+
+/** « Je m'en occupe. Je ne trouve pas ta femme dans tes contacts. », et le bouton « Ajouter un contact » (un par personne). */
+function tcMessageRolesSansFiche131(roles) {
   const noms = roles.length > 1 ? roles.slice(0, -1).join(', ') + ' ni ' + roles[roles.length - 1] : roles[0];
-  tcPousserMessageUtilisateur(text);
-  charlyIA.history.push({
-    role: 'assistant', nature: 'question',
-    content: 'Je m’en occupe. Je ne trouve pas ' + noms + ' dans tes contacts.\n'
-      + (roles.length > 1 ? 'Ajoute leur fiche avec les boutons' : 'Ajoute sa fiche avec le bouton') + ', ou importe tes contacts. Ensuite, redemande-moi : je regarde vos créneaux communs.',
-    _fiches: { ajouterTous: roles.map(function (r) { const w = r.split(' ').slice(1).join(' '); return { nom: w.charAt(0).toUpperCase() + w.slice(1), libelle: r }; }), ids: [] }
-  });
-  renderCharlyChat();
+  return {
+    role: 'assistant', nature: 'reponse',
+    content: 'Je m’en occupe. Je ne trouve pas ' + noms + ' dans tes contacts.',
+    _fiches: { ajouterTous: roles.map(function (r) { const w = r.split(' ').slice(1).join(' '); return { nom: w.charAt(0).toUpperCase() + w.slice(1), libelle: roles.length > 1 ? r : 'un contact' }; }), ids: [] }
+  };
+}
+
+/**
+ * Une demande à plusieurs (« réunion », « commun », « ensemble »), sans fiche pour ces personnes : le message ci-dessus, puis tes
+ * créneaux libres (tcGererDemandeCreneau). Une création de rendez-vous (« Rendez-vous avec mon commercial demain 15h ») garde son
+ * chemin. Vrai si pris.
+ */
+async function tcGroupeSansContacts131(text) {
+  if (!/(^|\s)(commun|commune|communs|communes|ensemble|reunion|reunions)(\s|$)/.test(tcClasseNormaliser(text))) return false;
+  if (!tcRolesSansFiche131(text) || typeof tcGererDemandeCreneau !== 'function') return false;
+  await tcGererDemandeCreneau(text, typeof detecterDemandeCreneau === 'function' ? detecterDemandeCreneau(text) : null);
   return true;
 }
 
@@ -21110,21 +21159,28 @@ async function tcRetardNommes131(text) {
   if (!/(^|\s)retard(\s|$)/.test(t)) return false;
   const VIDES = /^(retard|retards|minute|minutes|previens|prevenir|previens|avertis|dis|leur|leurs|que|qu|aurai|aurais|ai|avec|pour|tous|tout|toutes|monde|client|clients|patient|patients|rendez|vous|rdv|des|une|heure|heures|demain|matin|apres|midi|aujourd|hui|excuse|moi|aupres|eux|elles|sauf|environ|quart|demi|les|mes|tes)$/;
   const nommes = [];
-  t.split(' ').filter(function (w) { return w.length >= 3 && !VIDES.test(w); }).forEach(function (w) {
-    let cs = [];
-    try { cs = tcContactsParMots([w]); } catch (e) { cs = []; }
+  // Examen 131 : seulement un prénom (le premier mot de la fiche), jamais après un article (« pour la banque » ≠ « Banque Populaire »).
+  const _fiches = (Array.isArray(contactsList) ? contactsList : []).filter(function (c) { return c && c.name; });
+  const _mots = t.split(' ');
+  _mots.forEach(function (w, i) {
+    if (w.length < 3 || VIDES.test(w) || /^(la|le|les|l|ma|mon|ta|ton|sa|son|une|un|du|au|aux|des|de|mes|tes|ses|nos|vos|notre|votre)$/.test(_mots[i - 1] || '')) return;
+    const cs = _fiches.filter(function (c) { return tcClasseNormaliser(String(c.name)).split(' ')[0] === w; });
     if (cs.length === 1 && nommes.indexOf(cs[0]) < 0) nommes.push(cs[0]);
   });
   if (nommes.length < 2) return false;
   const now = new Date();
   const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-  const rdvs = tcRdvPeriode130(auj, auj, 'jour', now).filter(function (e) { return tcContactsDuRdv(e).some(function (c) { return nommes.indexOf(c) > -1; }); });
+  // Examen 131 : le jour dit (« … demain »), aujourd'hui sinon.
+  const _jours = tcJoursCites(' ' + t.replace(/apres demain/g, 'apres-demain') + ' ', now, false);
+  if (_jours.length > 1) return false;
+  const jour = _jours[0] || auj;
+  const rdvs = tcRdvPeriode130(jour, jour, 'jour', now).filter(function (e) { return tcContactsDuRdv(e).some(function (c) { return nommes.indexOf(c) > -1; }); });
   if (!nommes.every(function (c) { return rdvs.some(function (e) { return tcContactsDuRdv(e).indexOf(c) > -1; }); })) return false;
   tcPousserMessageUtilisateur(text);
   const connu = tcRetardDansLaPhrase(text);
   delete connu.pour;
   await tcQuestionnaireDemarrer(tcQuestionnaireRetardPeriode130(), Object.assign(connu, {
-    action: 'retard', prevenir: 'charly', _rdvs: rdvs, _retardRdv: null, _liste: [], _libelle: 'aujourd’hui', _excuses: /(^|\s)excus/.test(t),
+    action: 'retard', prevenir: 'charly', _rdvs: rdvs, _retardRdv: null, _liste: [], _libelle: tcLibellePeriode130(jour, 'jour', null, now), _excuses: /(^|\s)excus/.test(t),
     _contacts: nommes.slice()
   }));
   return true;
@@ -28203,10 +28259,9 @@ async function tcRetardPeriode130(text, intent) {
   const t = tcClasseNormaliser(text);
   // Examen 130 B : un contact nommé (« Dis à Paul que… », « Préviens Paul que… ») : son chemin d'avant, pour cette personne seule.
   // Mission 131 : « … sauf Paul », « … à part Marie » : ces personnes ne sont pas prévenues ; le reste de la phrase décide.
-  const _sauf = t.match(/(?:^|\s)(?:sauf|excepte|hormis|a part)\s+([a-z]+(?:\s+(?:et|ni)\s+[a-z]+)*)/);
-  const _exclus = [];
-  if (_sauf) _sauf[1].split(/\s+(?:et|ni)\s+/).forEach(function (w) { let cs = []; try { cs = tcContactsParMots([w]); } catch (e) { cs = []; } cs.forEach(function (c) { if (_exclus.indexOf(c) < 0) _exclus.push(c); }); });
-  const _sansSauf = _sauf ? t.replace(_sauf[0], ' ') : t;
+  const _s131 = typeof tcExclusSauf131 === 'function' ? tcExclusSauf131(t) : { exclus: [], reste: t };
+  const _exclus = _s131.exclus;
+  const _sansSauf = _s131.reste;
   const dest = tcClasseNormaliser(String((intent && intent.destinataire) || '')).replace(/(?:^|\s)(?:sauf|excepte|hormis|a part)\s.*$/, '');
   if (dest && !/^(?:(?:tous|toutes|tout)\s+)?(?:mes|les|le|tout)\s/.test(dest + ' ')) return false;
   if (typeof tcPhraseNommeUnContact110 === 'function' && tcPhraseNommeUnContact110(_sansSauf)) return false;
@@ -35339,7 +35394,9 @@ function tcComptesCitesDansTexte(texte) {
     const nomComplet = mots.length >= 2 && mots.every(function (w) { return t.indexOf(' ' + w + ' ') > -1; });
     const prenomSeul = mots[0].length >= 4 && prenoms[mots[0]] === 1 && t.indexOf(' ' + mots[0] + ' ') > -1;
     // Mission 131 : « mon assistante », « mon prothésiste » : un mot du nom (pas le prénom) dit juste après « mon / ma / notre ».
-    const role = mots.slice(1).some(function (w) { return w.length >= 4 && ['mon', 'ma', 'mes', 'notre', 'nos'].some(function (d) { return t.indexOf(' ' + d + ' ' + w + ' ') > -1; }); });
+    // Examen 131 : seulement un rôle écrit entre parenthèses dans le nom (« Sophie Virtuelle (assistante) »), jamais un nom de famille.
+    const _par = String(c.name || '').match(/\(([^)]+)\)/);
+    const role = !!_par && tcMotsDuTexte(_par[1]).trim().split(' ').filter(Boolean).some(function (w) { return w.length >= 4 && ['mon', 'ma', 'mes', 'notre', 'nos'].some(function (d) { return t.indexOf(' ' + d + ' ' + w + ' ') > -1; }); });
     if (nomComplet || prenomSeul || role) { vus[c.referenceCompte] = true; trouves.push(c); }
   });
   return trouves;

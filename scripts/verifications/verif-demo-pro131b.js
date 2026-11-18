@@ -56,8 +56,9 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     var vendredi = tcISO(tcDemoVendredi());
     var hP = Math.min(21, now.getHours() + 1);
     var remettre = function () {
-      contactsList = [{ id: 'c_paul', name: 'Paul Martin', phone: '06 39 98 00 41', email: '', vouvoie: true }, { id: 'c_marie', name: 'Marie Durand', phone: '06 39 98 00 42', email: '', vouvoie: true }, { id: 'c_zoe', name: 'Zoé Petit', phone: '06 39 98 00 43', email: '', vouvoie: true }];
-      events = [ev('a1', iso(0), hP, 0, hP, 30, 'RDV Paul Martin : contrôle', 'c_paul'), ev('a2', iso(0), hP, 30, hP + 1, 0, 'RDV Marie Durand : détartrage', 'c_marie'),
+      contactsList = [{ id: 'c_paul', name: 'Paul Martin', phone: '06 39 98 00 41', email: '', vouvoie: true }, { id: 'c_marie', name: 'Marie Durand', phone: '06 39 98 00 42', email: '', vouvoie: true }, { id: 'c_zoe', name: 'Zoé Petit', phone: '06 39 98 00 43', email: '', vouvoie: true },
+        { id: 'c_lea', name: 'Léa Grand', phone: '06 39 98 00 44', email: '', referenceCompte: 'REF-LEA' }, { id: 'c_banque', name: 'Banque Populaire', phone: '01 00 00 00 01', email: '' }];
+      events = [ev('a1', iso(0), hP, 0, hP, 30, 'RDV Paul Martin : contrôle', 'c_paul'), ev('a2', iso(0), hP, 30, hP + 1, 0, 'RDV Marie Durand : détartrage', 'c_marie'), ev('a3', iso(0), hP, 45, hP, 59, 'Banque', 'c_banque'),
         ev('b1', iso(1), 9, 0, 9, 30, 'RDV Paul Martin : soin', 'c_paul'), ev('b2', iso(1), 10, 0, 10, 30, 'RDV Marie Durand : contrôle', 'c_marie'), ev('b3', iso(1), 11, 0, 11, 30, 'RDV Zoé Petit : détartrage', 'c_zoe'),
         ev('f1', vendredi, 9, 0, 10, 0, 'RDV vendredi', null)];
       charlyIA.history = []; if (typeof tcQuestionnaireArreter === 'function') tcQuestionnaireArreter(); renderCharlyChat();
@@ -69,6 +70,14 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     remettre(); n0 = charlyIA.history.length; await taper('Préviens Paul et Marie que j’ai 10 minutes de retard'); R.dA = tout(n0);
     remettre(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain sauf Paul que j’aurai 15 minutes de retard'); R.dB = tout(n0);
     remettre(); n0 = charlyIA.history.length; await taper('Préviens Paul que j’aurai 10 minutes de retard'); R.dC = tout(n0);
+    // Examen du 2e lot.
+    remettre(); n0 = charlyIA.history.length; await taper('Préviens Paul et Marie que j’aurai 10 minutes de retard demain'); R.x1 = tout(n0);
+    remettre(); n0 = charlyIA.history.length; await taper('Préviens Paul que j’aurai 10 minutes de retard pour la banque'); R.x2 = tout(n0);
+    remettre(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain sauf Paul Martin que j’ai 10 minutes de retard'); R.x3 = tout(n0);
+    var boutons = function () { return Array.prototype.map.call(document.querySelectorAll('#charlyChatBody .tc-ajouter-fiche-131'), function (b) { return b.textContent; }); };
+    remettre(); n0 = charlyIA.history.length; await taper('Trouve un créneau avec mon grand frère'); R.x4 = tout(n0); R.x4b = boutons();
+    remettre(); n0 = charlyIA.history.length; await taper('Trouve un créneau avec ma femme'); R.x5 = tout(n0); R.x5b = boutons();
+    remettre(); n0 = charlyIA.history.length; await taper('Organise une réunion avec mes collègues'); R.x6 = tout(n0); R.x6b = boutons();
   } catch (e) { R.erreur = String(e && e.stack || e); }
   var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(R); document.body.appendChild(pre);
 }, 1200); });</script>`;
@@ -88,11 +97,17 @@ else {
   verifie('démonstration, phrase 6 : « Tu es malade. Je déplace … rendez-vous », les patients de la semaine', /Tu es malade\. Je déplace \d+ rendez-vous\./.test(S.d6) && /Claire/.test(S.d6) && SANS(S.d6), S.d6);
   verifie('démonstration, phrase 6 : après le oui, leurs choix (vert) et le compte rendu', /VERT C’est bon pour/.test(S.d6b) && /a choisi .*J’ai déplacé/.test(S.d6b), S.d6b.slice(-500));
   verifie('en vrai, phrase 4 : les créneaux libres de vendredi', /Voici ce qui est libre ce vendredi/.test(S.v4) && SANS(S.v4), S.v4);
-  verifie('en vrai, phrase 5 sans fiche : « Je ne trouve pas ton assistante ni ton prothésiste dans tes contacts. », un bouton par fiche, jamais le modèle', /Je m’en occupe\. Je ne trouve pas ton assistante ni ton prothésiste dans tes contacts\./.test(S.v5) && JSON.stringify(S.v5boutons) === JSON.stringify(['Ajouter ton assistante', 'Ajouter ton prothésiste']) && SANS(S.v5), JSON.stringify([S.v5, S.v5boutons]));
+  verifie('en vrai, phrase 5 sans fiche (décision du chef) : « Je m’en occupe. Je ne trouve pas ton assistante ni ton prothésiste dans tes contacts. », un bouton par personne, puis tes créneaux libres ; jamais le modèle', /Je m’en occupe\. Je ne trouve pas ton assistante ni ton prothésiste dans tes contacts\./.test(S.v5) && /Voici ce qui est libre/.test(S.v5) && JSON.stringify(S.v5boutons) === JSON.stringify(['Ajouter ton assistante', 'Ajouter ton prothésiste']) && SANS(S.v5), JSON.stringify([S.v5, S.v5boutons]));
   verifie('en vrai, phrase 6 : « Tu es malade. Je déplace … rendez-vous » (les patients de la semaine)', /Tu es malade\. Je déplace \d+ rendez-vous\./.test(S.v6) && SANS(S.v6), S.v6);
   verifie('défaut ancien : « Préviens Paul et Marie que j’ai 10 minutes de retard » prévient les deux (un seul « Je leur envoie ? »)', /Je préviens 2 personnes de ton retard/.test(S.dA) && /Paul Martin/.test(S.dA) && /Marie Durand/.test(S.dA) && /Je leur envoie \?/.test(S.dA) && SANS(S.dA), S.dA);
   verifie('défaut ancien : « Préviens mes clients de demain sauf Paul… » : Marie et Zoé, pas Paul, et la carte le dit', /Je préviens 2 personnes de ton retard, demain/.test(S.dB) && /Marie Durand/.test(S.dB) && /Zoé Petit/.test(S.dB) && !/• Paul Martin/.test(S.dB) && /Je ne préviens pas Paul\./.test(S.dB) && SANS(S.dB), S.dB);
   verifie('une seule personne nommée (« Préviens Paul… ») : le retard d’avant, inchangé', /Je préviens Paul de ton retard/.test(S.dC), S.dC);
+  verifie('examen : « Préviens Paul et Marie… demain » : leurs rendez-vous de demain (9h10, 10h10), pas ceux d’aujourd’hui', /Je préviens 2 personnes de ton retard, demain/.test(S.x1) && /Je serai là vers 9h10/.test(S.x1) && SANS(S.x1), S.x1);
+  verifie('examen : « Préviens Paul … pour la banque » : Paul seul (« la banque » n’est pas « Banque Populaire »)', /Je préviens Paul de ton retard/.test(S.x2) && !/Banque Populaire|2 personnes/.test(S.x2), S.x2);
+  verifie('examen : « … sauf Paul Martin … » : Marie et Zoé, pas Paul, et la carte le dit', /Je préviens 2 personnes de ton retard, demain/.test(S.x3) && !/• Paul Martin/.test(S.x3) && /Je ne préviens pas Paul\./.test(S.x3), S.x3);
+  verifie('examen et décision du chef : « Trouve un créneau avec mon grand frère » : jamais la fiche « Léa Grand » ; « Je ne trouve pas ton grand frère », « Ajouter un contact », tes créneaux libres', !/Par téléphone, en personne ou en visio|Léa/.test(S.x4) && /Je m’en occupe\. Je ne trouve pas ton grand frère dans tes contacts\./.test(S.x4) && /Voici ce qui est libre/.test(S.x4) && JSON.stringify(S.x4b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.x4, S.x4b]));
+  verifie('décision du chef : « Trouve un créneau avec ma femme » : « Je ne trouve pas ta femme dans tes contacts. », tes créneaux libres comme avant, « Ajouter un contact » (jamais seulement « ajoute sa fiche »)', /Je m’en occupe\. Je ne trouve pas ta femme dans tes contacts\./.test(S.x5) && /Voici ce qui est libre/.test(S.x5) && JSON.stringify(S.x5b) === JSON.stringify(['Ajouter un contact']) && !/Ajoute sa fiche/.test(S.x5), JSON.stringify([S.x5, S.x5b]));
+  verifie('« Organise une réunion avec mes collègues » : « Je ne trouve pas tes collègues dans tes contacts. », tes créneaux libres, « Ajouter un contact »', /Je ne trouve pas tes collègues dans tes contacts/.test(S.x6) && /Voici ce qui est libre/.test(S.x6) && JSON.stringify(S.x6b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.x6, S.x6b]));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
 console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');
