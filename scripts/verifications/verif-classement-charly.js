@@ -85,7 +85,7 @@ vm.runInContext((page.match(/^const TC_PROPOSITION_[A-Z_]+ = [^;]+;$/gm) || []).
  'detecterConsultationAgenda', 'tcGererConsultationAgenda', 'detecterDemandeCreneau',
  'extraireLieuDuTexte', 'detecterRechercheProfessionnel', 'extraireAdresseDuTexte', 'detecterDemandeTrajet', 'detecterRechercheWeb',
  'tcEstDeplacement', 'tcVerbeConjugue', 'tcDetecterMarcheArriere', 'tcEstUneReprise',
- 'tcCreationLocale', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcJoursCites', 'tcDateEnLettres',
+ 'tcCreationLocale', 'tcDureeMinutes129', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcJoursCites', 'tcDateEnLettres',
  'tcMotsUtiles', 'tcContactsParMots', 'tcLangueCourante', 'tcDetecterRdvGroupe', 'tcMotsDuTexte', 'tcComptesCitesDansTexte',
  'tcAppliquerDeplacement', 'tcExecuterDeplacement', 'tcConfianceCharly', '_tcLigneRdv', 'tcRdvDesigne', 'tcRdvVise', 'tcConflitEnAttente', 'tcPropositionEnAttente', 'extractAgendaProposals', 'tcTypeRdvValide',
  'tcGererPrevenance', 'tcReponseValidation', 'tcTypeDansTexte', 'tcHeureCourte', 'tcCiviliteEnTete',

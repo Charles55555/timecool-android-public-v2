@@ -41,7 +41,7 @@ function contexte() {
    'tcJoursDansTexte', 'tcBorneDeFin', 'tcJoursNommes', 'tcPhraseNonCompris', 'tcPeriodeAgenda', 'tcPeriodeContrainte', 'tcPeriodeCoherente', 'tcPeriodeJourNomme',
    'parseFrenchDateFromText', 'tcComparerEvenements', 'tcDateDemandee', 'tcTitreDepuisDemande', 'tcVerbeConjugue', 'tcEstDeplacement',
    'tcJoursCites', 'tcTitreContient', 'tcEvenementCouvre', 'tcEvenementFin',
-   'detecterConsultationAgenda', 'detecterDemandeCreneau', 'tcCreationLocale',
+   'detecterConsultationAgenda', 'detecterDemandeCreneau', 'tcCreationLocale', 'tcDureeMinutes129',
    'tcGererSuppressionRdv', 'tcConfirmerSuppressionRdv', 'tcSupprimerRdvs', 'tcAnnulerSuppressionRdv', 'tcMemoriserSuppression', 'tcRdvDesigne', 'tcRdvRemplace']
     .forEach((n) => { const f = fonction(page, n); if (f) vm.runInContext(f, ctx); else { ko++; console.log('  KO  ' + n + ' introuvable'); } });
   vm.runInContext('let _tcSuppressionEnAttente = null; let _tcSuppressionChoix = null; globalThis.attente = () => _tcSuppressionEnAttente; globalThis.choix = () => _tcSuppressionChoix;', ctx);

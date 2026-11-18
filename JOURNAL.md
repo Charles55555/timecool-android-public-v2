@@ -3709,3 +3709,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Mission 128 : les couleurs de Charly Pro IA (CODEUR)
 
 - Menu : « Charly Pro IA » en bleu ciel dégradé (bleu nuit en sombre) ; page Pro : ronds de l'éclair bleu et rouge (en-tête, accueil, bulles) ; Charly IA inchangé au pixel près. L'accueil reste en tête sur Pro comme sur IA. Capture AdminCharly : la case « ⚡ Charly IA » y est décochée.
+
+## 18/11/2026 — Mission 129 : l'accueil de Charly Pro IA (CODEUR)
+
+- Accueil dicté par Charles sur Charly Pro IA (Charly IA inchangé) ; l'exemple « … avec mon commercial demain à 15h durant 30 minutes » marche mot pour mot sur les deux pages (durée en minutes lue localement : fin 15h30). Inventaire envoyé au chef : journée oui (en deux temps), matinée et semaine (hors « malade ») non, retard pour une seule personne.

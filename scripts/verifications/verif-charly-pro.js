@@ -93,11 +93,31 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     R.proAccueilGarde = charlyIA.history.length > 2 && tcEstAccueilCharly(charlyIA.history[0]);
     await taper('Qu’est-ce que j’ai après-demain ?');
     R.cles = { pro: localStorage.getItem('timecool_charly_historique_pro') || '', ia: localStorage.getItem('timecool_charly_historique') || '' };
+    // Mission 129 : l'exemple de l'accueil, mot pour mot, sur un compte sans contact : la carte, puis le rendez-vous validé.
+    var essaiExemple = async function () {
+      var garde = contactsList; contactsList = [];
+      var n0 = charlyIA.history.length;
+      await taper('Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h durant 30 minutes');
+      var neufs = charlyIA.history.slice(n0).filter(function (m) { return m && m.role === 'assistant'; });
+      var carte = neufs.filter(function (m) { return m.tempId; }).pop();
+      var res = { textes: neufs.map(function (m) { return String(m.content || ''); }).join(' / '), carte: !!carte };
+      if (carte) { validateAgendaProposal(carte.tempId); await attendre(800); }
+      var dem = new Date(); dem.setDate(dem.getDate() + 1);
+      var iso = dem.getFullYear() + '-' + String(dem.getMonth() + 1).padStart(2, '0') + '-' + String(dem.getDate()).padStart(2, '0');
+      var ev = (Array.isArray(events) ? events : []).filter(function (e) { return e && e.date === iso && e.title === 'Commercial' && Number(e.startH) === 15; }).pop();
+      res.ev = ev ? [ev.date, Number(ev.startH), Number(ev.startM || 0), Number(ev.endH), Number(ev.endM || 0), ev.title] : null;
+      if (ev) events = events.filter(function (e) { return e !== ev; });
+      charlyIA.history.splice(n0); renderCharlyChat();
+      contactsList = garde;
+      return res;
+    };
+    R.exemplePro = await essaiExemple();
     // 7. Les questions en attente restent avec leur page.
     _tcSuppressionEnAttente = { essai: 'pro' };
     entree('Charly IA').click(); await attendre(400);
     R.retourIA = { variante: tcCharlyVariante, nom: nomPage(), texte: textePage(), pied: pied(), obs: _tcCharlyProObservateur === null, attente: _tcSuppressionEnAttente, longueur: charlyIA.history.length, apresDemain: parle(/après-demain/), demain: parle(/j’ai demain/) };
     R.retourIARonds = ronds();
+    R.exempleIA = await essaiExemple();
     entree('Charly Pro IA').click(); await attendre(400);
     R.retourPro = { nom: nomPage(), attente: _tcSuppressionEnAttente && _tcSuppressionEnAttente.essai, apresDemain: parle(/après-demain/) };
     _tcSuppressionEnAttente = null;
@@ -154,7 +174,7 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'case cochée et enregistrée : l’entrée « Charly Pro IA » juste sous « Charly IA », le même éclair', S.garde === true && i > -1 && lm[i + 1] === 'Charly Pro IA' && S.menuAllume[i][0] === '⚡' && S.menuAllume[i + 1][0] === '⚡', JSON.stringify([S.garde, S.menuAllume]));
   verifie(n + 'l’entrée ouvre la page Charly, sous le nom « Charly Pro IA »', S.pro.page === 'assistant' && S.pro.variante === 'pro' && S.pro.nom === 'Charly Pro IA' && S.pro.obs === true, JSON.stringify([S.pro.page, S.pro.variante, S.pro.nom]));
   verifie(n + '« Charly Pro IA » partout où la page disait « Charly IA » (en tête, avertissement du bas)', !/Charly IA/.test(S.pro.texte) && /Charly Pro IA est une intelligence artificielle/.test(S.pro.pied) && !/Charly IA/.test(S.proTexte), S.pro.texte.slice(0, 300));
-  verifie(n + 'la même page : les mêmes boutons, le même accueil, sa démonstration', S.pro.boutons === S.ia.boutons && /Je suis Charly, ton assistant TimeCool\./.test(S.pro.corps) && /Voir la démonstration/.test(S.pro.corps), JSON.stringify([S.pro.boutons, S.ia.boutons, S.pro.corps.slice(0, 200)]));
+  verifie(n + 'la même page : les mêmes boutons, son accueil (mission 129), sa démonstration', S.pro.boutons === S.ia.boutons && /Je suis Charly Pro IA, ton assistant TimeCool\./.test(S.pro.corps) && /contacts clients d’exemple/.test(S.pro.corps) && /Voir la démonstration/.test(S.pro.corps), JSON.stringify([S.pro.boutons, S.ia.boutons, S.pro.corps.slice(0, 200)]));
   verifie(n + 'Charly Pro IA répond exactement comme Charly IA', S.iaReponse.length > 10 && S.proReponse === S.iaReponse, JSON.stringify([S.iaReponse, S.proReponse]).slice(0, 400));
   verifie(n + 'une conversation à part : rien de Charly IA sur Charly Pro IA, et sa propre clé', !/j’ai demain/.test(S.pro.corps) && /après-demain/.test(S.cles.pro) && !/après-demain/.test(S.cles.ia) && /j’ai demain/.test(S.cles.ia), JSON.stringify([S.cles.pro.slice(0, 120), S.cles.ia.slice(0, 120)]));
   verifie(n + '« Charly IA » au menu : la conversation de Charly IA revient, telle quelle, sous son nom', S.retourIA.variante === 'ia' && S.retourIA.nom === 'Charly IA' && !/Charly Pro IA/.test(S.retourIA.texte) && /Charly IA est une intelligence artificielle/.test(S.retourIA.pied) && S.retourIA.obs === true && S.retourIA.longueur === S.iaLongueur && S.retourIA.demain === true && S.retourIA.apresDemain === false, JSON.stringify(S.retourIA).slice(0, 400));
@@ -176,6 +196,9 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'mission 128 : sur Charly Pro IA comme sur Charly IA, l’accueil reste en tête après le premier message', S.proAccueilGarde === true, S.proAccueilGarde);
   const si = libelles(S.sansIA), kp = si.indexOf('Charly Pro IA');
   verifie(n + 'mission 128 : « Charly IA » décochée, « Charly Pro IA » cochée : Pro seul, entre « Synchroniser… » et « Mes contacts » (capture de Charles)', kp > 0 && si.indexOf('Charly IA') < 0 && si[kp - 1].indexOf('Synchroniser') === 0 && si[kp + 1] === 'Mes contacts', JSON.stringify(si));
+  const exOk = (x) => !!x && x.carte === true && Array.isArray(x.ev) && x.ev[1] === 15 && x.ev[2] === 0 && x.ev[3] === 15 && x.ev[4] === 30 && x.textes.indexOf('Commercial, ') === 0 && x.textes.indexOf(' à 15h : je te propose ceci') > -1 && x.textes.indexOf('?') < 0 && !/je ne peux|pas bien compris/i.test(x.textes);
+  verifie(n + 'mission 129 : l’exemple de l’accueil, mot pour mot, sur Charly Pro IA (compte sans contact) : « Commercial » demain 15h → 15h30, validé', exOk(S.exemplePro), JSON.stringify(S.exemplePro).slice(0, 400));
+  verifie(n + 'mission 129 : le même exemple sur Charly IA : « Commercial » demain 15h → 15h30, validé', exOk(S.exempleIA), JSON.stringify(S.exempleIA).slice(0, 400));
   verifie(n + 'déconnexion : les deux conversations partent, retour à Charly IA', S.menage.variante === 'ia' && S.menage.conv === 0 && S.menage.cle === null && S.menage.nom === 'Charly IA' && S.menage.obs === true && S.menage.apresDemain === false, JSON.stringify(S.menage));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }

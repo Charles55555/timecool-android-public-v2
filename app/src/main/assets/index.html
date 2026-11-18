@@ -13174,18 +13174,46 @@ const TC_CHARLY_ACCUEIL_DEMO = [
   'Voir la démonstration'
 ];
 
+/**
+ * Mission 129 (Charles, 18/11, texte dicté ; seule l'orthographe est corrigée) : l'accueil de la page Charly Pro IA. Même dessin,
+ * même salutation (Bonjour / Bonsoir et le prénom du compte), même bouton. L'accueil de Charly IA ne change pas d'un mot.
+ */
+const TC_CHARLY_PRO_ACCUEIL_LIGNES = [
+  'Je suis Charly Pro IA, ton assistant TimeCool.',
+  'Je peux t’aider à organiser ton agenda, prévenir tes clients d’un retard, décaler tes rendez-vous de la matinée, de la journée ou de la semaine et bien plus encore.',
+  'Par exemple, écris-moi ou dis-moi ci-dessous :'
+];
+const TC_CHARLY_PRO_ACCUEIL_EXEMPLES = [
+  'Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h durant 30 minutes'
+];
+const TC_CHARLY_PRO_ACCUEIL_DEMO = [
+  'Tu veux voir tout ce dont je suis capable ?',
+  'Je te montre avec un agenda d’exemple et des contacts clients d’exemple.',
+  'Voir la démonstration'
+];
+/** Charly Pro IA est-il la page ouverte ? */
+function tcAccueilEstPro() { return typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro'; }
+/** Les listes de l'accueil : celles de Charly Pro IA (pro vrai), ou celles de Charly IA. */
+function tcListesAccueilCharly(pro) {
+  return pro ? { lignes: TC_CHARLY_PRO_ACCUEIL_LIGNES, exemples: TC_CHARLY_PRO_ACCUEIL_EXEMPLES, demo: TC_CHARLY_PRO_ACCUEIL_DEMO }
+    : { lignes: TC_CHARLY_ACCUEIL_LIGNES, exemples: TC_CHARLY_ACCUEIL_EXEMPLES, demo: TC_CHARLY_ACCUEIL_DEMO };
+}
+
 /** Les lignes de l'accueil, en français, avec le prénom du compte. */
 function tcLignesAccueilCharly() {
   const sal = new Date().getHours() < 18 ? 'Bonjour' : 'Bonsoir';
   const prenom = tcPrenomUtilisateur();
-  return [sal + (prenom ? ' ' + prenom : '') + ' ! 😊'].concat(TC_CHARLY_ACCUEIL_LIGNES,
-    TC_CHARLY_ACCUEIL_EXEMPLES.map(function (e) { return '« ' + e + ' »'; }), TC_CHARLY_ACCUEIL_DEMO);
+  // Mission 129 : sur Charly Pro IA, ses lignes (même salutation).
+  const L = tcListesAccueilCharly(tcAccueilEstPro());
+  return [sal + (prenom ? ' ' + prenom : '') + ' ! 😊'].concat(L.lignes,
+    L.exemples.map(function (e) { return '« ' + e + ' »'; }), L.demo);
 }
 
 /** Le message d'accueil rangé dans la conversation : texte de l'app (traduit, jamais envoyé au modèle). v : sa version. */
 function tcMessageAccueilCharly() {
   const fr = tcLignesAccueilCharly().join('\n');
-  return { role: 'assistant', content: fr, appText: true, fr: fr, accueil: true, v: 107 };
+  // Mission 129 : l'accueil de Charly Pro IA est marqué (pro), pour être dessiné avec ses listes.
+  return Object.assign({ role: 'assistant', content: fr, appText: true, fr: fr, accueil: true, v: 107 }, tcAccueilEstPro() ? { pro: true } : {});
 }
 
 /** Un accueil de Charly (celui-ci ou un ancien). */
@@ -13197,7 +13225,7 @@ function tcEstAccueilCharly(m) {
 function tcTraduireAccueilCharly(fr, langue) {
   return Promise.all(String(fr || '').split('\n').map(function (l) { return translateText(l, langue); })).then(function (ts) {
     return ts.map(function (t) {
-      return String(t || '').replace(/Tempo\s?Freddo/gi, 'TimeCool').replace(/Charly\s+(AI|KI|IA|II)/gi, 'Charly IA');
+      return String(t || '').replace(/Tempo\s?Freddo/gi, 'TimeCool').replace(/Charly\s+Pro\s+(AI|KI|IA|II)/gi, 'Charly Pro IA').replace(/Charly\s+(AI|KI|IA|II)/gi, 'Charly IA');
     }).join('\n');
   });
 }
@@ -13205,8 +13233,10 @@ function tcTraduireAccueilCharly(fr, langue) {
 /** Le dessin de l'accueil : au milieu de la page quand il est seul, dans une bulle de Charly sinon. */
 function tcRendreAccueilCharly(m, seul) {
   const lignes = String((m && m.content) || '').split('\n');
-  const n = 1 + TC_CHARLY_ACCUEIL_LIGNES.length;
-  const nEx = (m && m.v === 107) ? TC_CHARLY_ACCUEIL_EXEMPLES.length : lignes.length - n;
+  // Mission 129 : l'accueil de Charly Pro IA a ses listes (même dessin).
+  const _L = tcListesAccueilCharly(!!(m && m.pro));
+  const n = 1 + _L.lignes.length;
+  const nEx = (m && m.v === 107) ? _L.exemples.length : lignes.length - n;
   const intro = lignes.slice(0, n);
   const exemples = lignes.slice(n, n + nEx);
   const demo = (m && m.v === 107) ? lignes.slice(n + nEx) : [];
@@ -14011,6 +14041,14 @@ function renderCharlyChat() {
     setTimeout(tcSyncCharlyGreeting, 0);
   }
   tcSauverHistoriqueCharly();
+  // Mission 129 : un accueil qui n'est pas celui de sa page (Charly Pro IA ouvert avec l'accueil de Charly IA, rangé avant la 129)
+  // devient le bon, même suivi de messages. Sur Charly IA, la règle d'avant ne change pas (seulement un accueil seul).
+  { const _acc = charlyIA.history[0];
+    if (_acc && tcEstAccueilCharly(_acc) && _acc.v === 107 && !!_acc.pro !== tcAccueilEstPro() && (charlyIA.history.length === 1 || tcAccueilEstPro())) {
+      charlyIA.history[0] = tcMessageAccueilCharly();
+      tcSauverHistoriqueCharly();
+      setTimeout(tcSyncCharlyGreeting, 0);
+    } }
   if (typeof tcAttacherVoir111 === 'function') { try { tcSuivreRdvBouges(); tcAttacherVoir111(); } catch (e) {} }   // mission 111
   if (typeof tcMajColonneConversation === 'function') tcMajColonneConversation();   // mission 114
   const body = document.getElementById('charlyChatBody');
@@ -15154,8 +15192,29 @@ function tcCiviliteEnTete(brut) {
   return m[1].replace(/^M$/i, 'M.');
 }
 
+/**
+ * Mission 129 (Charles, 18/11 : « … demain à 15h durant 30 minutes ») : une durée en minutes (« durant 30 minutes », « pendant 30 min »,
+ * « de 30 mn », « 30mn », « d'une durée de 45 minutes ») : { minutes, reste } (le texte sans elle), ou null. Jamais une durée :
+ * « dans 30 minutes », « 30 minutes avant », « 10 min de retard », « 10 minutes à pied », ni « 15h 30mn » sans « de », « pendant »…
+ * (c'est peut-être 15h30).
+ */
+function tcDureeMinutes129(texte) {
+  const s = String(texte || '');
+  const m = /(\s*,?\s*\b(?:pendant|durant|d['’ ]une dur[ée]e de|dur[ée]e de|de|pour|sur)\s+)?(\d{1,3})\s?(?:minutes?|mins?|mn)(?![a-zà-ÿ])/i.exec(s);
+  if (!m) return null;
+  const n = Number(m[2]);
+  if (n < 5 || n > 480) return null;
+  const avant = s.slice(0, m.index).toLowerCase(), apres = s.slice(m.index + m[0].length).toLowerCase();
+  if (!m[1] && /(dans|ici|y a|toutes les|chaque|\d ?h|\d)\s*$/.test(avant)) return null;
+  if (/(retard|avance)\s*$/.test(avant)) return null;
+  if (/^\s*(avant|apr[eè]s|plus tard|de retard|en retard|d['’]avance|en avance|[àa] l['’]avance|de marche|[àa] pied|de trajet|en voiture|de route)/.test(apres)) return null;
+  return { minutes: n, reste: (s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim() };
+}
+
 function tcCreationLocale(texte, now, forcer) {
-  const brut = String(texte || '');
+  // Mission 129 : une durée en minutes est lue à part (elle fixe la fin) ; le reste de la lecture se fait sans elle.
+  const _duree129 = tcDureeMinutes129(texte);
+  const brut = _duree129 ? _duree129.reste : String(texte || '');
   if (/\?/.test(brut)) return '';
   const t = tcSansAccents(brut).replace(/[’']/g, ' ');
   // « réserve » : une reservation de restaurant ou d hotel n est pas une creation locale (examen de la mission 19).
@@ -15237,7 +15296,9 @@ function tcCreationLocale(texte, now, forcer) {
   }
   const sh = heure.h, sm = heure.m || 0;
   const hh = function (h) { return String(h).padStart(2, '0'); };
-  const finH = plage ? Number(plage[3]) : Math.min(sh + 1, 23), finM = plage ? Number(plage[4] || 0) : sm;
+  let finH = plage ? Number(plage[3]) : Math.min(sh + 1, 23), finM = plage ? Number(plage[4] || 0) : sm;
+  // Mission 129 : « durant 30 minutes » : la fin suit la durée (15h → 15h30).
+  if (!plage && _duree129) { const _f = Math.min(23 * 60 + 59, sh * 60 + sm + _duree129.minutes); finH = Math.floor(_f / 60); finM = _f % 60; }
   const creneau = hh(sh) + ':' + hh(sm) + '-' + hh(finH) + ':' + hh(finM);
   return titreFinal + ', ' + tcDateEnLettres(demande.date) + ' à ' + sh + 'h' + (sm ? hh(sm) : '') + ' : je te propose ceci.'
     + '\n[AGENDA]\n' + tcISO(demande.date) + ' | ' + creneau + ' | ' + titreFinal + ' | rdv\n[/AGENDA]';
@@ -26972,7 +27033,9 @@ function tcHeuresCitees(t) {
 function tcDureeDemandee(t) {
   const s = String(t).toLowerCase();
   const heures = tcHeuresCitees(s);
-  if (heures.length < 2) return 0;
+  // Mission 129 : « durant 30 minutes », « de 30 mn » : une durée en minutes compte aussi.
+  const _min129 = (typeof tcDureeMinutes129 === 'function' && tcDureeMinutes129(t)) || null;
+  if (heures.length < 2) return _min129 ? _min129.minutes : 0;
   if (tcEstUneDuree(s, heures[0].index, heures[0].fin)) return heures[0].h * 60 + (heures[0].m || 0);
   // « bloque 14h-16h lundi », « de 14h à 16h » : la plage entière compte (examen, mission 62).
   // « réserve la salle 14h 16h » : deux heures côte à côte aussi (mission 63).
@@ -26980,7 +27043,7 @@ function tcDureeDemandee(t) {
     const ecart = heures[1].h * 60 + (heures[1].m || 0) - (heures[0].h * 60 + (heures[0].m || 0));
     return ecart > 0 ? ecart : 0;
   }
-  return 0;
+  return _min129 ? _min129.minutes : 0;
 }
 
 /** « bloque 2h jusqu'à 18h » : le début (16h), quand la durée est suivie de « jusqu'à » et d'une heure ; null sinon. */

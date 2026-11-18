@@ -45,8 +45,10 @@ const ctx = {
   charlyIA: { history: [] }, rendus: 0, renderCharlyChat: () => { ctx.rendus++; }
 };
 vm.createContext(ctx);
-const code = [tableau('TC_CHARLY_ACCUEIL_LIGNES'), tableau('TC_CHARLY_ACCUEIL_EXEMPLES'), tableau('TC_CHARLY_ACCUEIL_DEMO')].concat(
-  ['tcLignesAccueilCharly', 'tcMessageAccueilCharly', 'tcEstAccueilCharly', 'tcTraduireAccueilCharly', 'tcRendreAccueilCharly', 'tcRendreAccueilCharlyVide'].map(fonction));
+// Mission 129 : les listes de Charly Pro IA, et le choix des listes.
+const code = [tableau('TC_CHARLY_ACCUEIL_LIGNES'), tableau('TC_CHARLY_ACCUEIL_EXEMPLES'), tableau('TC_CHARLY_ACCUEIL_DEMO'),
+  tableau('TC_CHARLY_PRO_ACCUEIL_LIGNES'), tableau('TC_CHARLY_PRO_ACCUEIL_EXEMPLES'), tableau('TC_CHARLY_PRO_ACCUEIL_DEMO')].concat(
+  ['tcAccueilEstPro', 'tcListesAccueilCharly', 'tcLignesAccueilCharly', 'tcMessageAccueilCharly', 'tcEstAccueilCharly', 'tcTraduireAccueilCharly', 'tcRendreAccueilCharly', 'tcRendreAccueilCharlyVide'].map(fonction));
 verifie('les textes et les six fonctions de l accueil sont dans la page', code.every(Boolean), code.map((c) => !!c).join(','));
 try { vm.runInContext(code.join('\n'), ctx); } catch (e) { verifie('chargement des fonctions', false, e.message); }
 
@@ -97,6 +99,27 @@ try { vm.runInContext(code.join('\n'), ctx); } catch (e) { verifie('chargement d
   verifie('les deux chemins de connexion rangent ce même accueil, seulement si la conversation est vide', (page.match(/if \(!charlyIA\.history\.length\) charlyIA\.history\.push\(tcMessageAccueilCharly\(\)\);/g) || []).length === 2 && page.indexOf('const _accueil') < 0);
   verifie('la traduction de l accueil passe ligne par ligne', fonction('tcSyncCharlyGreeting').indexOf('(msg.accueil ? tcTraduireAccueilCharly(msg.fr, currentLanguage) : translateText(msg.fr, currentLanguage))') > -1);
   verifie('le modèle ne reçoit jamais l accueil (texte de l app)', /\.filter\(m => m && \(m\.role === 'user' \|\| m\.role === 'assistant'\) && !m\.appText && !m\._app\)/.test(page));
+
+  console.log('-- 4. Mission 129 : l accueil de Charly Pro IA (celui de Charly IA ne change pas d un mot) --');
+  const ATTENDU_PRO = [
+    'Bonjour Charles ! 😊',
+    'Je suis Charly Pro IA, ton assistant TimeCool.',
+    'Je peux t’aider à organiser ton agenda, prévenir tes clients d’un retard, décaler tes rendez-vous de la matinée, de la journée ou de la semaine et bien plus encore.',
+    'Par exemple, écris-moi ou dis-moi ci-dessous' + NB + ':',
+    '«' + NB + 'Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h durant 30 minutes' + NB + '»',
+    'Tu veux voir tout ce dont je suis capable' + NB + '?',
+    'Je te montre avec un agenda d’exemple et des contacts clients d’exemple.',
+    'Voir la démonstration'
+  ];
+  ctx.tcCharlyVariante = 'pro';
+  const lignesPro = vm.runInContext('tcLignesAccueilCharly()', ctx);
+  verifie('Charly Pro IA : huit lignes, le texte dicté par Charles, mot pour mot (même salutation)', JSON.stringify(lignesPro) === JSON.stringify(ATTENDU_PRO), JSON.stringify(lignesPro));
+  const msgPro = vm.runInContext('tcMessageAccueilCharly()', ctx);
+  const seulPro = vm.runInContext('tcRendreAccueilCharly(tcMessageAccueilCharly(), true)', ctx);
+  verifie('Charly Pro IA : l accueil rangé est marqué pro, dessiné avec ses lignes, son exemple et le bouton', msgPro.pro === true && msgPro.v === 107 && seulPro.indexOf('Je suis Charly Pro IA') > -1 && seulPro.indexOf('tc-accueil-exemple') > -1 && seulPro.indexOf('mon commercial demain à 15h durant 30 minutes') > -1 && seulPro.indexOf('contacts clients d’exemple') > -1 && seulPro.indexOf('tcOuvrirDemo()') > -1, seulPro.slice(0, 300));
+  ctx.tcCharlyVariante = 'ia';
+  const lignesIA = vm.runInContext('tcLignesAccueilCharly()', ctx);
+  verifie('Charly IA : son accueil ne change pas d un mot (et n est pas marqué pro)', JSON.stringify(lignesIA) === JSON.stringify(ATTENDU) && !vm.runInContext('tcMessageAccueilCharly()', ctx).pro, JSON.stringify(lignesIA));
 
   console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');
   process.exit(ko ? 1 : 0);
