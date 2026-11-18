@@ -16504,7 +16504,7 @@ function tcDetecterPrevenance(text) {
 async function tcGererPrevenance(text, intent) {
   // Mission 130 B : un retard pour plusieurs personnes, sur une période (« Préviens mes clients de ce matin… ») : la période dite,
   // jamais le seul prochain rendez-vous.
-  if (intent && intent.type === 'retard' && typeof tcRetardPeriode130 === 'function' && await tcRetardPeriode130(text)) return;
+  if (intent && intent.type === 'retard' && typeof tcRetardPeriode130 === 'function' && await tcRetardPeriode130(text, intent)) return;
   // Un destinataire nommé sans rendez-vous visé (« envoie à Gaëlle que j'arrive dans 10 minutes »), ou un message libre : le message part à lui (mission 55).
   // (un texte qui ne parle pas de moi, « dis à Marc que Sophie est en retard », part tel quel, jamais dans MON questionnaire retard.)
   if (intent.destinataire && (intent.type === 'message' || intent.type === 'question' || !tcRdvVise(text) || (intent.texte && !/^(je|j)\b/.test(tcSansAccents(intent.texte).replace(/[’']/g, ' '))))) { await tcPrevenirContactLibre(text, intent); return; }
@@ -27945,8 +27945,12 @@ function tcQuestionnaireRetardPeriode130() {
 }
 
 /** La phrase : un retard, plusieurs personnes (ou tout le monde), une période. Vrai si c'est elle (et le travail est lancé). */
-async function tcRetardPeriode130(text) {
+async function tcRetardPeriode130(text, intent) {
   const t = tcClasseNormaliser(text);
+  // Examen 130 B : un contact nommé (« Dis à Paul que… », « Préviens Paul que… ») : son chemin d'avant, pour cette personne seule.
+  const dest = tcClasseNormaliser(String((intent && intent.destinataire) || ''));
+  if (dest && !/^(?:(?:tous|toutes|tout)\s+)?(?:mes|les|le|tout)\s/.test(dest + ' ')) return false;
+  if (typeof tcPhraseNommeUnContact110 === 'function' && tcPhraseNommeUnContact110(text)) return false;
   if (!/(^|\s)retard(\s|$)/.test(t)) return false;
   if (!/(^|\s)(?:(?:tous|toutes)\s+)?(?:mes|les)\s+(?:clients|clientes|patients|patientes|rendez vous|rdv|rendezvous|consultations|seances)(\s|$)|(^|\s)tout le monde(\s|$)/.test(t)) return false;
   const now = new Date();

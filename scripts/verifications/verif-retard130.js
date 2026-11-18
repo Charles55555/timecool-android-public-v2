@@ -11,7 +11,7 @@ let ko = 0, ok = 0;
 const verifie = (l, c, d) => { if (c) ok++; else ko++; console.log('  ' + (c ? 'OK ' : 'KO ') + l + (!c && d !== undefined ? ' : ' + String(d).slice(0, 700) : '')); };
 
 console.log('-- Le code --');
-verifie('un retard pour plusieurs personnes passe d’abord par tcRetardPeriode130 (avant le retard d’une seule personne)', /async function tcGererPrevenance\(text, intent\) \{\n[^\n]*\n[^\n]*\n  if \(intent && intent\.type === 'retard' && typeof tcRetardPeriode130 === 'function' && await tcRetardPeriode130\(text\)\) return;/.test(page));
+verifie('un retard pour plusieurs personnes passe d’abord par tcRetardPeriode130 (avant le retard d’une seule personne)', /async function tcGererPrevenance\(text, intent\) \{\n[^\n]*\n[^\n]*\n  if \(intent && intent\.type === 'retard' && typeof tcRetardPeriode130 === 'function' && await tcRetardPeriode130\(text, intent\)\) return;/.test(page));
 verifie('les envois sont ceux du retard habituel (tcQuestionnaireExecuter)', (page.match(/function tcQuestionnaireRetardPeriode130\(\) \{[\s\S]*?\n\}\n/) || [''])[0].indexOf('await tcQuestionnaireExecuter(r, ') > -1);
 verifie('jamais « je ne peux pas joindre »', !/[Jj]e ne peux pas joindre/.test(page));
 
@@ -84,6 +84,13 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     n0 = charlyIA.history.length;
     await taper('Préviens Hugo que j’aurai 10 minutes de retard');
     R.c5 = tout(n0);
+    // 7. Examen : un contact nommé (Paul) garde son chemin d'avant, jamais toute la période.
+    remettre();
+    n0 = charlyIA.history.length;
+    await taper('Dis à Paul que mes rendez-vous de demain ont du retard'); R.c7 = tout(n0);
+    remettre();
+    n0 = charlyIA.history.length;
+    await taper('Préviens Paul que j’ai 10 minutes de retard pour tous mes rendez-vous de demain'); R.c7b = tout(n0);
     // 6. « Ajouter un contact » : la fiche du rendez-vous, modifiable, sur le choix du contact.
     remettre();
     await taper('Préviens tous mes rendez-vous de demain après-midi que j’aurai 15 minutes de retard');
@@ -112,6 +119,7 @@ else {
   verifie('« J’ai 30 minutes de retard, préviens tout le monde demain matin » : 30 minutes, demain matin ; « non » : rien ne part', /Je préviens 2 personnes de ton retard, demain matin/.test(S.c2) && /30 minutes de retard/.test(S.c2) && /je n’envoie rien/.test(S.o2.dit) && S.o2.envoyes === 0 && SANS(S.c2), JSON.stringify([S.c2, S.o2]));
   verifie('une période où personne n’est joignable : la ligne à part seulement, aucune question d’envoi', /Pour « Garage 2 », je n’ai pas de contact/.test(S.c3) && !/Je leur envoie|Je lui envoie/.test(S.c3) && S.q3 === false, JSON.stringify([S.c3, S.q3]));
   verifie('une période sans rendez-vous : « Tu n’as aucun rendez-vous … 28 décembre : personne à prévenir. »', /^Tu n’as aucun rendez-vous [a-z]+ 28 décembre : personne à prévenir\.$/.test(S.c4), S.c4);
+  verifie('examen : « Dis à Paul que mes rendez-vous de demain ont du retard », « Préviens Paul que … pour tous mes rendez-vous de demain » : Paul seul, son chemin d’avant (jamais Marie, jamais « Je préviens 2 personnes »)', /Paul/.test(S.c7) && !/Je préviens \d personne|Tu as combien de retard|Marie/.test(S.c7) && /Paul/.test(S.c7b) && !/Je préviens \d personne|Marie/.test(S.c7b), JSON.stringify([S.c7, S.c7b]));
   verifie('une seule personne (« Préviens Hugo… ») : le retard d’avant, inchangé', /Je préviens Hugo de ton retard/.test(S.c5) && /Je lui envoie \?/.test(S.c5), S.c5);
   verifie('« Ajouter un contact » ouvre la fiche du rendez-vous, sur le choix du contact', S.ajout.modale === true && S.ajout.champ === true && S.ajout.courant === 'garage2', JSON.stringify(S.ajout));
 }

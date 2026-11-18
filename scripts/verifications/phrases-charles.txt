@@ -150,3 +150,6 @@ Préviens tous mes rendez-vous de demain après-midi que j’aurai 15 minutes de
 Préviens mes clients de ce matin que j’ai 20 minutes de retard |  | texte:ce matin && sans:Michel && sans:je ne peux && sans:pas bien compris && sans:Lequel
 J’ai 30 minutes de retard, préviens tout le monde ce matin |  | texte:ce matin && sans:Michel && sans:je ne peux && sans:pas bien compris && sans:Lequel
 Préviens tous mes rendez-vous de cet après-midi que j’aurai 15 minutes de retard |  | texte:cet après-midi && sans:je ne peux && sans:pas bien compris && sans:Lequel
+# Examen 130 B : un contact nommé : son chemin d’avant (jamais toute la période).
+Dis à Paul que mes rendez-vous de demain ont du retard |  | texte:Paul && sans:Je préviens \d personne && sans:Tu as combien de retard && sans:pas bien compris
+Préviens Paul que j’ai 10 minutes de retard pour tous mes rendez-vous de demain |  | texte:Paul && sans:Je préviens \d personne && sans:Michel && sans:pas bien compris

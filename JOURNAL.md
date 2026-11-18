@@ -3724,3 +3724,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Mission 130 B : prévenir d’un retard plusieurs personnes (CODEUR)
 
 - La période dite (ce matin, demain matin, cet après-midi…), les personnes des rendez-vous, le message, un seul « Je leur envoie ? » ; sans contact joignable : à part, avec « Ajouter un contact ». Le mot cherché garde ses accents (« matinée »).
+- Examen 130 B : un contact nommé (« Dis à Paul que… », « Préviens Paul que… ») garde son chemin d’avant, jamais toute la période.
