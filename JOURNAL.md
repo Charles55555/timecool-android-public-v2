@@ -3683,3 +3683,5 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 (nuit) — Mission 122, examen (CODEUR)
 
 - « oui » tapé ; « Je peux lui envoyer » (profils 1 et 2) ; champ souhait de /rdv/demander (API, sans migration) et reprise ; « J'ai dit à Michel que tu aimerais demain ».
+
+- 122, examen de l API : reprise du demandeur bloqué indépendante du souhait et du type (echoDemandeRecent).

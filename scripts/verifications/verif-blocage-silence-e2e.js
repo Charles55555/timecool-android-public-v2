@@ -88,6 +88,10 @@ const empreinte = async (jeton) => {
   dire((await empreinte(armelle.jeton)) === avant, 'toujours rien chez Armelle');
   const chezClem3 = await conversation(clemence.jeton, armelle.ref);
   dire(chezClem3.contenu.thread.length === nApres, 'et un seul écho chez Clémence (pas un par clic)', chezClem3.contenu.thread.length);
+  // Mission 122 (examen) : un autre souhait et un autre type ne changent pas la reprise (le blocage ne se devine pas au texte).
+  const d3b = await appel('POST', '/rdv/demander', { reference: armelle.ref, souhait: 'J’aimerais vendredi (exemple).', type: 'visio' }, clemence.jeton);
+  dire(d3b.d.mode === 'messagerie' && d3b.d.message === d2.d.message && d3b.d.reprise === true, 'bloquée, un autre souhait et un autre type : la même réponse de reprise', JSON.stringify(d3b.d).slice(0, 120));
+  dire((await conversation(clemence.jeton, armelle.ref)).contenu.thread.length === nApres && (await empreinte(armelle.jeton)) === avant, 'rien de réécrit chez Clémence, rien chez Armelle');
   const prop = await appel('POST', '/rdv/proposer-creneau', { rdv: d1.d.rdv, date: jourOuvre(3), debut: '10:00', duree: 60 }, armelle.jeton);
   dire(prop.code === 404, 'la demande refusée reste close (rien de nouveau n a été ouvert)', 'HTTP ' + prop.code);
 
@@ -111,6 +115,9 @@ const empreinte = async (jeton) => {
   dire(d6.code === 200 && d6.d.mode === 'messagerie' && d6.d.message === d1.d.message, 'validation cochée : messagerie, réponse de première demande (nouvelle demande)', d6.d && d6.d.mode);
   const convA2 = await conversation(armelle.jeton, clemence.ref);
   dire(convA2 && convA2.contenu.thread.some((m) => m.genre === 'demande_rdv' && !m.traite && m.rdv === d6.d.rdv), 'et cette fois la demande ARRIVE chez Armelle (carte à traiter)');
+  // Mission 122 (examen) : ordinaire, un autre souhait et un autre type : la même réponse de reprise que bloquée (mêmes champs, même texte).
+  const d6b = await appel('POST', '/rdv/demander', { reference: armelle.ref, souhait: 'J’aimerais vendredi (exemple).', type: 'visio' }, clemence.jeton);
+  dire(d6b.d.mode === 'messagerie' && d6b.d.reprise === true && d6b.d.message === d3b.d.message && Object.keys(d6b.d).sort().join() === Object.keys(d3b.d).sort().join(), 'ordinaire, un autre souhait : la même réponse que bloquée (mêmes champs, même texte)', JSON.stringify(d6b.d).slice(0, 120));
   // Validation decochee : la demande en attente est reprise, des creneaux (comportement ordinaire).
   await poser(armelle.jeton, [reglage('tc_rdv_validation', '0')]);
   const d5 = await appel('POST', '/rdv/demander', { reference: armelle.ref }, clemence.jeton);

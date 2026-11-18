@@ -1081,12 +1081,22 @@ function echoDemandeRecent(array $moi, array $cible, string $texte, int $jours):
     if (!is_array($conv) || !is_array($conv['thread'] ?? null) || $conv['thread'] === []) {
         return false;
     }
-    $dernier = $conv['thread'][count($conv['thread']) - 1];
-    if (!is_array($dernier) || ($dernier['from'] ?? '') !== 'me' || ($dernier['texte'] ?? '') !== $texte) {
-        return false;
+    // Mission 122 : le texte d'une demande porte le souhait et le type ; la reprise n'en dépend plus (sinon le blocage se devine).
+    for ($i = count($conv['thread']) - 1; $i >= 0; $i--) {
+        $m = $conv['thread'][$i];
+        if (!is_array($m)) {
+            continue;
+        }
+        if (($m['from'] ?? '') !== 'me') {
+            return false;   // l'autre a écrit depuis : une nouvelle demande
+        }
+        if (($m['genre'] ?? '') !== 'demande_rdv' && ($m['texte'] ?? '') !== $texte) {
+            continue;       // mes autres messages ne changent rien, comme pour une demande ordinaire en attente
+        }
+        $le = strtotime((string) ($m['le'] ?? ''));
+        return $le !== false && $le >= time() - $jours * 86400;
     }
-    $le = strtotime((string) ($dernier['le'] ?? ''));
-    return $le !== false && $le >= time() - $jours * 86400;
+    return false;
 }
 
 /**
