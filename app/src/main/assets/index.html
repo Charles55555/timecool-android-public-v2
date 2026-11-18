@@ -15206,6 +15206,9 @@ function tcDureeMinutes129(texte) {
   if (n < 5 || n > 480) return null;
   const avant = s.slice(0, m.index).toLowerCase(), apres = s.slice(m.index + m[0].length).toLowerCase();
   if (!m[1] && /(dans|ici|y a|toutes les|chaque|\d ?h|\d)\s*$/.test(avant)) return null;
+  // Examen 129 : sans préposition, « est à 15 minutes », « à 10 minutes de chez moi » (une distance), « 15 minutes de pause »
+  // (de + nom) : pas une durée.
+  if (!m[1] && (/(^|\s)[àa]\s*$/.test(avant) || /^\s*(de|du|des)(\s|$)/.test(apres) || /^\s*d['’]/.test(apres))) return null;
   if (/(retard|avance)\s*$/.test(avant)) return null;
   if (/^\s*(avant|apr[eè]s|plus tard|de retard|en retard|d['’]avance|en avance|[àa] l['’]avance|de marche|[àa] pied|de trajet|en voiture|de route)/.test(apres)) return null;
   return { minutes: n, reste: (s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim() };

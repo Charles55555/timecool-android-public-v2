@@ -121,3 +121,6 @@ Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h de 30 mn |  |
 Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h de 30 mn | @charlypro | jour:+1 && texte:^Commercial, .* à 15h : je te propose ceci && texte:15:00-15:30 . Commercial && sans:je ne peux && sans:pas bien compris && page:^Charly Pro IA —
 Crée-moi un nouveau rendez-vous de 30mn avec mon commercial demain à 15h |  | jour:+1 && texte:^Commercial, .* à 15h : je te propose ceci && texte:15:00-15:30 . Commercial && sans:je ne peux && sans:pas bien compris
 Crée-moi un nouveau rendez-vous de 30mn avec mon commercial demain à 15h | @charlypro | jour:+1 && texte:^Commercial, .* à 15h : je te propose ceci && texte:15:00-15:30 . Commercial && sans:je ne peux && sans:pas bien compris && page:^Charly Pro IA —
+# Examen 129 : « est à 15 minutes », « 15 minutes de pause » ne sont pas une durée (le rendez-vous garde son heure).
+Rendez-vous demain à 9h, le cabinet est à 15 minutes |  | jour:+1 && texte:09:00-10:00 && sans:pas bien compris
+Rendez-vous kiné demain à 9h, j’ai 15 minutes de pause |  | jour:+1 && texte:09:00-10:00 && sans:pas bien compris

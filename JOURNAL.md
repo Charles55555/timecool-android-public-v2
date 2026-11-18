@@ -3713,3 +3713,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Mission 129 : l'accueil de Charly Pro IA (CODEUR)
 
 - Accueil dicté par Charles sur Charly Pro IA (Charly IA inchangé) ; l'exemple « … avec mon commercial demain à 15h durant 30 minutes » marche mot pour mot sur les deux pages (durée en minutes lue localement : fin 15h30). Inventaire envoyé au chef : journée oui (en deux temps), matinée et semaine (hors « malade ») non, retard pour une seule personne.
+- Examen 129 : « est à 15 minutes », « 15 minutes de pause » ne sont plus une durée (sans préposition, après « à » ou devant « de »).

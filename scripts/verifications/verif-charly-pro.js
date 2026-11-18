@@ -58,6 +58,24 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // Mission 128 : les couleurs calculées (ronds de l'éclair de la page, lignes du menu).
     var ronds = function () { return Array.prototype.map.call(document.querySelectorAll('#page-assistant .tc-rond-charly'), function (x) { return getComputedStyle(x).backgroundImage; }); };
     var fond = function (el) { if (!el) return ''; var cs = getComputedStyle(el); return cs.backgroundImage + ' | ' + cs.borderLeftColor; };
+    // Mission 129 et son examen : ce qui est une durée en minutes, et ce qui n'en est pas une.
+    R.durees = [
+      'Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h durant 30 minutes',
+      'Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h pendant 30 min',
+      'Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h de 30 mn',
+      'Crée-moi un nouveau rendez-vous de 30mn avec mon commercial demain à 15h',
+      'Réunion demain à 10h d’une durée de 45 minutes',
+      'Réunion 45 minutes demain à 10h',
+      'Rendez-vous demain à 9h, le cabinet est à 15 minutes',
+      'Rendez-vous kiné demain à 9h, j’ai 15 minutes de pause',
+      'Rendez-vous demain à 15h à 10 minutes de chez moi',
+      'Rappelle-moi le dentiste 30 minutes avant',
+      'J’aurai 10 minutes de retard',
+      'Rendez-vous dans 20 minutes',
+      'Dentiste demain 15h 30mn',
+      'Le cabinet est à 20 minutes de trajet',
+      'Bois de l’eau toutes les 30 minutes'
+    ].map(function (t) { var d = typeof tcDureeMinutes129 === 'function' ? tcDureeMinutes129(t) : 'absente'; return d && d.minutes ? d.minutes : d; });
     // 1. Case décochée (compte ordinaire) : rien.
     R.defaut = FEATURES.CHARLY_PRO;
     R.menuEteint = entrees();
@@ -199,6 +217,7 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   const exOk = (x) => !!x && x.carte === true && Array.isArray(x.ev) && x.ev[1] === 15 && x.ev[2] === 0 && x.ev[3] === 15 && x.ev[4] === 30 && x.textes.indexOf('Commercial, ') === 0 && x.textes.indexOf(' à 15h : je te propose ceci') > -1 && x.textes.indexOf('?') < 0 && !/je ne peux|pas bien compris/i.test(x.textes);
   verifie(n + 'mission 129 : l’exemple de l’accueil, mot pour mot, sur Charly Pro IA (compte sans contact) : « Commercial » demain 15h → 15h30, validé', exOk(S.exemplePro), JSON.stringify(S.exemplePro).slice(0, 400));
   verifie(n + 'mission 129 : le même exemple sur Charly IA : « Commercial » demain 15h → 15h30, validé', exOk(S.exempleIA), JSON.stringify(S.exempleIA).slice(0, 400));
+  verifie(n + 'mission 129 : durées en minutes lues (30, 30, 30, 30, 45, 45) ; jamais une distance (« est à 15 minutes », « à 10 minutes de chez moi »), « 15 minutes de pause », « 30 minutes avant », un retard, « dans 20 minutes », « 15h 30mn », un trajet, « toutes les 30 minutes »', JSON.stringify(S.durees) === JSON.stringify([30, 30, 30, 30, 45, 45, null, null, null, null, null, null, null, null, null]), JSON.stringify(S.durees));
   verifie(n + 'déconnexion : les deux conversations partent, retour à Charly IA', S.menage.variante === 'ia' && S.menage.conv === 0 && S.menage.cle === null && S.menage.nom === 'Charly IA' && S.menage.obs === true && S.menage.apresDemain === false, JSON.stringify(S.menage));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
