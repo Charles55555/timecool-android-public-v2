@@ -93,7 +93,7 @@ t('echo sans date : prudence, on reecrit', !echoDemandeRecent($moi, $armelle, $t
 Db::$conv = ['reference' => 'REFARM', 'thread' => [['from' => 'me', 'texte' => 'Salut Armelle, autre souhait, autre type', 'genre' => 'demande_rdv', 'le' => $il_y_a(2)]]];
 t('mission 122 : mon echo de demande avec un autre souhait ou un autre type : reprise quand meme', echoDemandeRecent($moi, $armelle, $txt, 7));
 Db::$conv = ['reference' => 'REFARM', 'thread' => [['from' => 'me', 'texte' => $txt, 'genre' => 'demande_rdv', 'le' => $il_y_a(3)], ['from' => 'me', 'texte' => 'Autre chose', 'le' => $il_y_a(1)]]];
-t('mission 122 : un autre message de moi apres la demande : reprise (comme une demande ordinaire en attente)', echoDemandeRecent($moi, $armelle, $txt, 7));
+t('mission 122 : un autre message de moi apres la demande (par exemple « Rendez-vous confirme ») : nouvelle demande, comme avant', !echoDemandeRecent($moi, $armelle, $txt, 7));
 Db::$conv = ['reference' => 'REFARM', 'thread' => [['from' => 'me', 'texte' => 'x', 'genre' => 'demande_rdv', 'le' => $il_y_a(8 * 24)]]];
 t('mission 122 : une demande de plus de 7 jours : nouvelle demande', !echoDemandeRecent($moi, $armelle, $txt, 7));
 Db::$conv = null;

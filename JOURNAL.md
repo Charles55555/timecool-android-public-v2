@@ -3685,3 +3685,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - « oui » tapé ; « Je peux lui envoyer » (profils 1 et 2) ; champ souhait de /rdv/demander (API, sans migration) et reprise ; « J'ai dit à Michel que tu aimerais demain ».
 
 - 122, examen de l API : reprise du demandeur bloqué indépendante du souhait et du type (echoDemandeRecent).
+- 122, examen de l API (suite) : seul mon dernier message compte pour la reprise, reconnu à son genre.
