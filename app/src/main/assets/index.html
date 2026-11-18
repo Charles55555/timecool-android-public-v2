@@ -15583,6 +15583,12 @@ const TC_MOTS_VISEE_CREUX = /^(annul\w*|supprim\w*|effac\w*|enlev\w*|retir\w*|de
 function tcFaitRaconte(t) {
   return /(?:^|[^\w'’])(?:a|ont|avait|avaient)\s+(?:ete\s+)?(?:annul|supprim|effac|enlev|retir|decal|deplac|report|repouss|avanc|boug|chang|modifi)(?:e|ee|es|ees)\b/.test(tcSansAccents(String(t || '')));
 }
+/** Chef, 18/11 : les mots cherchés, tels qu'ils ont été tapés (« matinée », jamais « matinee »). */
+function tcMotsCommeTapes(texte, mots) {
+  const bruts = String(texte || '').toLowerCase().split(/[^a-zà-ÿ0-9-]+/).filter(Boolean);
+  return mots.map(function (w) { return bruts.filter(function (b) { return tcSansAccents(b) === w; })[0] || w; }).join(' ');
+}
+
 function tcRdvViseIntrouvable(texte, now, events, mode) {
   const t = tcSansAccents(texte);
   // « Paul a annulé sans … », « le dentiste a été décalé » : un fait raconté, pas un ordre ; le modèle lit la suite (TESTEURS, 03/11).
@@ -15603,7 +15609,7 @@ function tcRdvViseIntrouvable(texte, now, events, mode) {
   if (trouve) return null;
   // Un contact nomme (« annule Marc ») : la suppression par contact est traitee ailleurs, on ne tranche pas ici.
   if (typeof contactsList !== 'undefined' && Array.isArray(contactsList) && contactsList.some(function (c) { return c && c.name && tcTitreContient(c.name, mots); })) return null;
-  return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda à venir. Rien n’a été changé.';
+  return 'Je ne trouve pas de rendez-vous « ' + (typeof tcMotsCommeTapes === 'function' ? tcMotsCommeTapes(texte, mots) : mots.join(' ')) + ' » dans ton agenda à venir. Rien n’a été changé.';
 }
 /**
  * « decale mon coiffeur a 18h » avec DEUX coiffeurs a venir : jamais une action, la page demande lequel (mission 31 bis,
@@ -15682,7 +15688,7 @@ function tcRdvNommeIntrouvable(texte, now, events, mode) {
     return e && e.mode === evMode && e.title && tcEvenementFin(e) >= debutStr && (tcTitreContient(e.title, mots) || (cRdv && cRdv.name && tcTitreContient(cRdv.name, mots)));
   });
   if (trouve) return null;
-  return 'Je ne trouve pas de rendez-vous « ' + mots.join(' ') + ' » dans ton agenda à venir. Rien n’a été changé.';
+  return 'Je ne trouve pas de rendez-vous « ' + (typeof tcMotsCommeTapes === 'function' ? tcMotsCommeTapes(texte, mots) : mots.join(' ')) + ' » dans ton agenda à venir. Rien n’a été changé.';
 }
 
 /**
@@ -16496,6 +16502,9 @@ function tcDetecterPrevenance(text) {
 
 /** La demande écrite : on trouve le rendez-vous, puis on prévient. */
 async function tcGererPrevenance(text, intent) {
+  // Mission 130 B : un retard pour plusieurs personnes, sur une période (« Préviens mes clients de ce matin… ») : la période dite,
+  // jamais le seul prochain rendez-vous.
+  if (intent && intent.type === 'retard' && typeof tcRetardPeriode130 === 'function' && await tcRetardPeriode130(text)) return;
   // Un destinataire nommé sans rendez-vous visé (« envoie à Gaëlle que j'arrive dans 10 minutes »), ou un message libre : le message part à lui (mission 55).
   // (un texte qui ne parle pas de moi, « dis à Marc que Sophie est en retard », part tel quel, jamais dans MON questionnaire retard.)
   if (intent.destinataire && (intent.type === 'message' || intent.type === 'question' || !tcRdvVise(text) || (intent.texte && !/^(je|j)\b/.test(tcSansAccents(intent.texte).replace(/[’']/g, ' '))))) { await tcPrevenirContactLibre(text, intent); return; }
@@ -27855,6 +27864,115 @@ async function tcRepondrePeriode130(text, attente) {
   return true;
 }
 /* ═══ fin mission 130 A ═══ */
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 130 B (Charles, 18/11) : prévenir d'un retard plusieurs personnes, pour la PÉRIODE dite.
+   « Préviens mes clients de ce matin que j'ai 20 minutes de retard », « Préviens tous mes rendez-vous de cet après-midi que j'aurai
+   15 minutes de retard », « J'ai 30 minutes de retard, préviens tout le monde ce matin ». « mes clients », « mes patients »,
+   « mes rendez-vous », « tout le monde » : même sens. Sans période dite : le reste de la journée. Charly liste les personnes des
+   rendez-vous de la période, montre le message, puis UN seul « Je leur envoie ? » ; les envois sont ceux du retard habituel
+   (tcQuestionnaireExecuter : messagerie TimeCool, ou SMS / e-mail prêt d'un geste). Jamais le seul prochain rendez-vous quand une
+   période est dite. Un rendez-vous sans contact joignable est listé à part, avec « Ajouter un contact ». Le retard pour une seule
+   personne (un contact nommé, le prochain rendez-vous) ne change pas.
+   ═══════════════════════════════════════════════════════════════ */
+
+/** Les contacts joignables d'un rendez-vous (un compte TimeCool, un numéro ou un e-mail). */
+function tcContactsJoignables130(e) {
+  const liste = typeof tcContactsDuRdv === 'function' ? tcContactsDuRdv(e) : [];
+  return (Array.isArray(liste) ? liste : []).filter(function (c) { return c && (c.referenceCompte || c.phone || c.email); });
+}
+
+/** « Ajouter un contact » sous un rendez-vous sans contact : sa fiche, modifiable, sur le choix du contact. */
+function tcAjouterContactRdv130(id) {
+  const e = (Array.isArray(events) ? events : []).filter(function (x) { return x && String(x.id) === String(id); })[0];
+  if (!e) { showToast('Ce rendez-vous n’est plus dans ton agenda.'); return; }
+  openEventModal(e);
+  openEditEventModal('contact');
+  if (typeof tcChoisirContactRdv === 'function') tcChoisirContactRdv();
+}
+
+/** Les rendez-vous sans contact joignable, listés à part : une ligne et un bouton chacun. */
+function tcSansContact130(sans) {
+  if (!sans.length) return;
+  const lignes = sans.map(function (e) {
+    return '<div style="margin:2px 0 8px;">Pour « ' + escapeHTMLSafe(e.title) + ' », je n’ai pas de contact. Tu veux l’ajouter ?<br>'
+      + '<button class="tc-ajouter-contact-130" onclick="tcAjouterContactRdv130(\'' + escapeHTMLSafe(String(e.id)).replace(/'/g, '&#39;') + '\')" style="margin-top:6px; padding:7px 14px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:16px; font-size:13px; font-weight:600; cursor:pointer;">👤 Ajouter un contact</button></div>';
+  });
+  charlyIA.history.push({ role: 'system_info', isHTML: true, content: lignes.join('') });
+}
+
+/** La carte : qui je préviens, le message, puis « Je leur envoie ? ». */
+function tcRecapRetardPeriode130(r) {
+  const avec = r._rdvs.filter(function (e) { return tcContactsJoignables130(e).length; });
+  const noms = [];
+  avec.forEach(function (e) { tcContactsJoignables130(e).forEach(function (c) { if (noms.indexOf(c.name) < 0) noms.push(c.name); }); });
+  const e0 = avec[0], c0 = tcContactsJoignables130(e0)[0];
+  return ['Je préviens ' + (noms.length > 1 ? noms.length + ' personnes' : '1 personne') + ' de ton retard, ' + r._libelle + ' :']
+    .concat(avec.map(function (e) { return '• ' + tcContactsJoignables130(e).map(function (c) { return c.name; }).join(', ') + ' (« ' + e.title + ' », ' + tcHeureM64(e.startH, e.startM) + ')'; }))
+    .concat(['Voici le message' + (noms.length > 1 ? ' pour ' + String(c0.name).split(' ')[0] : '') + ' :', '« ' + tcQuestionnaireMessage(r, c0, e0, e0) + ' »', noms.length > 1 ? 'Je leur envoie ?' : 'Je lui envoie ?'])
+    .join('\n');
+}
+
+/** Le parcours (une fonction : TC_RETARD_MINUTES est défini plus loin dans la page). */
+function tcQuestionnaireRetardPeriode130() {
+  return {
+  nom: 'retard',
+  etapes: [
+    { cle: 'minutes', question: 'Tu as combien de retard ?', choix: TC_RETARD_MINUTES, libre: tcRetardMinutesTapees },
+    { cle: 'minutes_plus', si: function (r) { return r.minutes === 'plus'; }, question: 'Combien de minutes ? Tape un nombre.', libre: tcRetardMinutesTapees },
+    { cle: 'recap',
+      avant: function (r) {
+        if (r.minutes === 'plus') r.minutes = r.minutes_plus;
+        const sans = r._rdvs.filter(function (e) { return !tcContactsJoignables130(e).length; });
+        tcSansContact130(sans);
+        if (sans.length === r._rdvs.length) { renderCharlyChat(); return false; }   // personne à joindre : rien à envoyer
+      },
+      question: tcRecapRetardPeriode130,
+      choix: function (r) {
+        const n = []; r._rdvs.forEach(function (e) { tcContactsJoignables130(e).forEach(function (c) { if (n.indexOf(c.id) < 0) n.push(c.id); }); });
+        return [
+          { cle: 'oui', texte: n.length > 1 ? 'Oui, envoie-leur' : 'Oui, envoie-lui', mots: /^(oui|ouais|ok|okay|yes|go|vas y|envoie|d accord|daccord|confirme|c est bon)\b/ },
+          { cle: 'non', texte: 'Non', mots: /^(non|no|nan|stop|arrete|laisse|annule)\b/, ton: 'gris' }
+        ];
+      } }
+  ],
+  terminer: async function (r) {
+    if (r.recap !== 'oui') { tcQuestionnaireDire('D’accord, je n’envoie rien.'); return; }
+    // Les rendez-vous sans contact restent dans le bilan (le retard vaut aussi pour eux) ; seuls les contacts joignables reçoivent un message.
+    await tcQuestionnaireExecuter(r, 'C’est fait.');
+  }
+  };
+}
+
+/** La phrase : un retard, plusieurs personnes (ou tout le monde), une période. Vrai si c'est elle (et le travail est lancé). */
+async function tcRetardPeriode130(text) {
+  const t = tcClasseNormaliser(text);
+  if (!/(^|\s)retard(\s|$)/.test(t)) return false;
+  if (!/(^|\s)(?:(?:tous|toutes)\s+)?(?:mes|les)\s+(?:clients|clientes|patients|patientes|rendez vous|rdv|rendezvous|consultations|seances)(\s|$)|(^|\s)tout le monde(\s|$)/.test(t)) return false;
+  const now = new Date();
+  const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const jours = /(^|\s)(ce matin|cet apres midi|ce soir|aujourd hui)(\s|$)/.test(t) ? [auj] : tcJoursCites(' ' + t.replace(/apres demain/g, 'apres-demain') + ' ', now, false);
+  if (jours.length > 1) return false;
+  const iso = jours[0] || auj;
+  const partie = /(^|\s)(matin|matinee)(\s|$)/.test(t) ? 'matin' : (/(^|\s)(apres midi|aprem)(\s|$)/.test(t) ? 'aprem' : 'jour');
+  const libelle = tcLibellePeriode130(iso, partie, null, now);
+  tcPousserMessageUtilisateur(text);
+  const rdvs = tcRdvPeriode130(iso, iso, partie, now);
+  if (!rdvs.length) {
+    if (typeof tcQuestionnaireArreter === 'function') tcQuestionnaireArreter();
+    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'Tu n’as aucun rendez-vous ' + libelle + ' : personne à prévenir.' });
+    renderCharlyChat();
+    return true;
+  }
+  const connu = tcRetardDansLaPhrase(text);
+  delete connu.pour;
+  await tcQuestionnaireDemarrer(tcQuestionnaireRetardPeriode130(), Object.assign(connu, {
+    action: 'retard', prevenir: 'charly', _rdvs: rdvs, _retardRdv: null, _liste: [], _libelle: libelle,
+    _contacts: (function () { const l = []; rdvs.forEach(function (e) { tcContactsJoignables130(e).forEach(function (c) { if (l.indexOf(c) < 0) l.push(c); }); }); return l; })()
+  }));
+  return true;
+}
+/* ═══ fin mission 130 B ═══ */
 
 /**
  * La relecture de « décale tout lundi » puis « mardi » : un jour nommé avant le rendez-vous (« mardi », dit un mardi, pour le lundi

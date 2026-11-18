@@ -144,3 +144,9 @@ Décale ma matinée du {num:+1} |  | texte:Demain matin, tu as \d rendez-vous &&
 Décale mes rendez-vous du {num:+1} au {date:+3} |  | texte:Tu veux que je décale && texte:Coiffeur && sans:aucun rendez-vous && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
 Décale mes rendez-vous de demain à 23h |  | texte:ne tien && texte:plus dans la journée && texte:Vers quand && sans:23h59 && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
 Décale mes rendez-vous de demain à vendredi d’une heure |  | texte:Tu veux que je décale && texte:Après : Vendredi .* 11h à 12h && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
+# Mission 130 B (Charles, 18/11) : un retard pour plusieurs personnes : la période dite, jamais le seul prochain rendez-vous.
+Préviens mes clients de demain matin que j’aurai 15 minutes de retard |  | texte:Pour « Coiffeur », je n’ai pas de contact. Tu veux l’ajouter && sans:Michel && sans:Je préviens Paul de ton retard && sans:je ne peux && sans:pas bien compris && sans:Lequel
+Préviens tous mes rendez-vous de demain après-midi que j’aurai 15 minutes de retard |  | texte:Je préviens 1 personne de ton retard, demain après-midi && texte:Michel Virtuel && texte:12h45 && texte:Je lui envoie && sans:Paul && sans:je ne peux && sans:pas bien compris && sans:Lequel
+Préviens mes clients de ce matin que j’ai 20 minutes de retard |  | texte:ce matin && sans:Michel && sans:je ne peux && sans:pas bien compris && sans:Lequel
+J’ai 30 minutes de retard, préviens tout le monde ce matin |  | texte:ce matin && sans:Michel && sans:je ne peux && sans:pas bien compris && sans:Lequel
+Préviens tous mes rendez-vous de cet après-midi que j’aurai 15 minutes de retard |  | texte:cet après-midi && sans:je ne peux && sans:pas bien compris && sans:Lequel

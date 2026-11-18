@@ -3720,3 +3720,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - Matinée, après-midi, journée, semaine ; destination, « Vers quand ? » (une seule question) ou décalage ; relecture habituelle et un seul oui ; période vide : la journée proposée. « après midi » dicté n’est plus « après 12 heures ».
 - Examen 130 A : « du 19 » lu comme le jour du mois (jamais aujourd’hui deviné) ; rien qui finit après minuit (Charly le dit et redemande) ; un décalage avec une destination : les deux.
+
+## 18/11/2026 — Mission 130 B : prévenir d’un retard plusieurs personnes (CODEUR)
+
+- La période dite (ce matin, demain matin, cet après-midi…), les personnes des rendez-vous, le message, un seul « Je leur envoie ? » ; sans contact joignable : à part, avec « Ajouter un contact ». Le mot cherché garde ses accents (« matinée »).

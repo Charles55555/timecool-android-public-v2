@@ -101,6 +101,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     remettre();
     await taper('Décale mes rendez-vous de demain à après-demain d’une heure'); R.r13 = dit();
     await taper('oui'); R.o13 = { k: place('k'), b: place('b'), r: place('r') };
+    // 14. Chef : « Je ne trouve pas de rendez-vous « matinée » » : le mot tel qu'il a été tapé, avec ses accents.
+    R.accent = [tcRdvNommeIntrouvable('Avance ma matinée de demain de 10 heures', new Date(), [], 'user'), typeof tcMotsCommeTapes === 'function' ? tcMotsCommeTapes('Annule ma séance chez l’ostéo', ['seance', 'osteo']) : null];
     // 10. « après midi » dicté (sans trait d'union) reste l'après-midi ; « à midi » reste 12 heures.
     R.midi = [tcHeuresEnLettres('Décale mes rendez vous de cet après midi'), tcHeuresEnLettres('Rendez-vous demain à midi')];
   } catch (e) { R.erreur = String(e && e.stack || e); }
@@ -135,6 +137,7 @@ else {
   verifie('examen : « Décale mes rendez-vous du <après-demain> » : le Garage ; un numéro illisible ou un mois seul : le chemin d’avant (rien ici)', /Garage/.test(S.r11b) && !/aucun rendez-vous/.test(S.r11b) && S.r11c[0] === false && S.r11c[1] === false, JSON.stringify([S.r11b, S.r11c]));
   verifie('examen : « … de demain à 23h » : jamais 0 minute ni 23h59 ; Charly dit ce qui ne tient plus et redemande « Vers quand ? »', /ne tiennent plus dans la journée/.test(S.r12) && /Vers quand je les décale \?/.test(S.r12) && !/23h59/.test(S.r12) && S.attente12 === true && S.relu12 === false, JSON.stringify([S.r12, S.attente12, S.relu12]));
   verifie('examen : « … de demain à après-demain d’une heure » : après-demain ET une heure plus tard (Kiné 10h-11h, Banque 11h30-12h, Réunion 15h-16h), le Garage signalé', /À cette heure-là, tu as déjà « Garage »/.test(S.r13) && S.o13.k === P(S.D2, 10, 0, 11, 0) && S.o13.b === P(S.D2, 11, 30, 12, 0) && S.o13.r === P(S.D2, 15, 0, 16, 0), JSON.stringify([S.r13.slice(0, 300), S.o13]));
+  verifie('chef : « Je ne trouve pas de rendez-vous « matinée » » : le mot cherché garde ses accents, tel qu’il a été tapé', /« matinée »/.test(String(S.accent[0])) && !/matinee/.test(String(S.accent[0])) && S.accent[1] === 'séance ostéo', JSON.stringify(S.accent));
   verifie('« après midi » dicté reste l’après-midi ; « à midi » reste 12 heures', /après midi/.test(S.midi[0]) && !/12 heures/.test(S.midi[0]) && /12 heures/.test(S.midi[1]), JSON.stringify(S.midi));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
