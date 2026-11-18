@@ -18639,6 +18639,8 @@ async function charlySendMessage() {
   // « même heure la semaine prochaine » sans rien avant : la question (mission 64).
   if (typeof tcRepondreReponseVague === 'function' && await tcRepondreReponseVague(text, _attenteVague)) return;
   if (typeof tcDecalerToutUnJour === 'function' && tcDecalerToutUnJour(text)) return;
+  // Mission 130 A : « Décale ma matinée de demain à jeudi », « … d'une heure », « Décale toute ma semaine » : une période, en une phrase.
+  if (typeof tcDecalerPeriode130 === 'function' && tcDecalerPeriode130(text)) return;
   if (typeof tcMemeHeureSansContexte === 'function' && tcMemeHeureSansContexte(text)) return;
   // « Le client de 14h m'a posé un lapin » : le rendez-vous de cette heure, ou « je ne vois pas de rendez-vous à 14h » ;
   // « demande à Hugo quand il est dispo » : vos créneaux communs (mission 65).
@@ -24177,6 +24179,8 @@ function tcHeuresEnLettres(texte) {
     const apresTexte = tcSansAccents(t.slice(offset + tout.length));
     if (/(^|\s)(dans|il y a|y a|pendant|durant|depuis|environ|encore|ca fait|plus de|moins de|en|de|d|pour|sous|d ici)\s*$/.test(avantTexte)) return tout;
     if (/^\s+(de|d)\s/.test(apresTexte + ' ')) return tout;
+    // Mission 130 : « après midi » (sans trait d'union, souvent dicté) est l'après-midi, pas 12 heures.
+    if (estMidi && /(^|\s)apres\s*$/.test(avantTexte)) return tout;
     // « une heure » ne vaut 1h qu'après « à » (« à une heure ») ; « midi », « minuit » toujours.
     if (/^(une|un)$/.test(cle) && !/(^|\s)[àa]\s*$/.test(avantTexte)) return tout;
     let m = '';
@@ -27316,9 +27320,13 @@ function tcRelireDeplacement(liste) {
   const lignes = liste.map(function (x) {
     const debut = minutes(x.p.startH, x.p.startM), fin = minutes(x.p.endH, x.p.endM);
     const deja = (Array.isArray(events) ? events : []).filter(function (e) {
-      return e && e !== x.ev && e.id !== x.ev.id && e.mode === x.ev.mode && e.date === x.p.date && !e.allDay && e.title
+      // Mission 130 : un rendez-vous qui bouge aussi ne compte pas à son ancienne place…
+      return e && e !== x.ev && e.id !== x.ev.id && !liste.some(function (y) { return y.ev === e; }) && e.mode === x.ev.mode && e.date === x.p.date && !e.allDay && e.title
         && minutes(e.startH, e.startM) < fin && minutes(e.endH, e.endM) > debut;
-    });
+    }).concat(liste.filter(function (y) {
+      // … mais à sa nouvelle place.
+      return y !== x && y.p.date === x.p.date && minutes(y.p.startH, y.p.startM) < fin && minutes(y.p.endH, y.p.endM) > debut;
+    }).map(function (y) { return Object.assign({}, y.ev, y.p); }));
     return '« ' + x.ev.title + ' » ?\n• Avant : ' + quand(x.ev.date, x.ev) + '\n• Après : ' + quand(x.p.date, x.p)
       + (deja.length ? '\n• À cette heure-là, tu as déjà ' + deja.map(function (e) { return '« ' + e.title + ' » (' + hh(e.startH, e.startM) + ' à ' + hh(e.endH, e.endM) + ')'; }).join(' et ') + '.' : '');
   });
@@ -27589,6 +27597,237 @@ function tcDecalerToutUnJour(text) {
   renderCharlyChat();
   return true;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 130 A (Charles, 18/11) : décaler une période en une phrase, pour tous les comptes (Charly IA et Charly Pro IA).
+   « Décale ma matinée de demain », « Décale mes rendez-vous de demain matin à jeudi », « Décale ma journée de demain à vendredi »,
+   « Décale toute ma semaine », « Décale ma semaine à la semaine prochaine », « Décale mes rendez-vous de cet après-midi d'une heure »,
+   « Décale ma matinée de 30 minutes ». Périodes : matinée (avant 12h), après-midi (à partir de 12h), journée, semaine.
+   Sans destination : une seule question, « Vers quand ? ». Ensuite, la relecture habituelle (avant, après, ce qui chevauche) et
+   UN seul oui ; au oui, le déplacement habituel (tcExecuterDeplacement : les profils, les contacts, « Voir dans mon agenda »).
+   Période vide : « Tu n'as aucun rendez-vous demain matin. », puis la journée proposée.
+   ═══════════════════════════════════════════════════════════════ */
+
+/** « d'une heure », « de 30 minutes », « d'1h30 », « d'une demi-heure », « d'un quart d'heure », « de deux heures » : { minutes, reste }. */
+function tcLireDecalage130(t) {
+  const s = ' ' + String(t || '') + ' ';
+  const MOTS = { une: 1, un: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6 };
+  const formes = [
+    [/ (?:de|d) (?:une|1) demi heure /, function () { return 30; }],
+    [/ (?:de|d) (?:un|1) quart d heure /, function () { return 15; }],
+    [/ (?:de|d) trois quarts? d heure /, function () { return 45; }],
+    // « de 9h à 10h » est une heure, pas un décalage : un chiffre suivi de « à » ne compte pas.
+    [/ (?:de|d) (une|un|deux|trois|quatre|cinq|six|[1-6]) ?(?:h|heures?)(?: (?:et )?(demie|quart|[0-5]\d))? (?!(?:a|au|jusqu) )/, function (m) {
+      const h = MOTS[m[1]] || Number(m[1]);
+      return h * 60 + (m[2] === 'demie' ? 30 : m[2] === 'quart' ? 15 : (m[2] ? Number(m[2]) : 0));
+    }],
+    [/ (?:de|d) (\d{1,3}) ?(?:min|mins|minutes?|mn) /, function (m) { return Number(m[1]); }]
+  ];
+  for (let k = 0; k < formes.length; k++) {
+    const m = formes[k][0].exec(s);
+    if (!m) continue;
+    const n = formes[k][1](m);
+    if (n >= 5 && n <= 6 * 60) return { minutes: n, reste: (s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim() };
+  }
+  return null;
+}
+
+/** Les mots qu'une période ou une destination peut contenir (rien d'autre : sinon ce n'est pas cette demande). */
+const TC_MOTS_PERIODE_130 = /^(de|du|d|des|la|le|l|les|a|au|aux|en|ce|cet|cette|ma|mon|toute|tout|demain|apres|aujourd|hui|jour|matin|matinee|midi|aprem|soir|journee|semaine|prochaine|prochain|suivante|qui|vient|huit|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|1er|er|h|heure|heures|\d{1,2}|\d{1,2}h|\d{1,2}h\d{2})$/;
+
+/**
+ * La destination dite (« jeudi », « la semaine prochaine », « vendredi 14h », « l'après-midi », « demain après-midi ») :
+ * { semaines } (une semaine plus tard), ou { iso (ou null : le même jour), debut (minutes, ou null : les mêmes heures), nomme },
+ * ou null si ce n'est pas un moment.
+ */
+function tcLireDestination130(d, now) {
+  let s = ' ' + String(d || '').replace(/^(?:a|au|vers|pour|jusqu a)\s+/, '') + ' ';
+  if (s.trim().split(' ').some(function (w) { return w && !TC_MOTS_PERIODE_130.test(w); })) return null;
+  if (/ (?:la )?semaine (?:prochaine|d apres|suivante|qui vient) /.test(s)) {
+    return s.replace(/ (?:la )?semaine (?:prochaine|d apres|suivante|qui vient) /, ' ').trim().split(' ').some(function (w) { return w && !/^(a|au|la|le|de)$/.test(w); }) ? null : { semaines: 1 };
+  }
+  let debut = null;
+  if (/ (?:l |le |cet |en )?(?:apres midi|aprem) /.test(s)) { debut = 14 * 60; s = s.replace(/ (?:l |le |cet |en )?(?:apres midi|aprem) /, ' '); }
+  else if (/ (?:le |au |en )?(?:matin|matinee) /.test(s)) { debut = 9 * 60; s = s.replace(/ (?:le |au |en )?(?:matin|matinee) /, ' '); }
+  const h = tcHeureDansTexte(s);
+  if (h) debut = h.h * 60 + (h.m || 0);
+  const jours = tcJoursCites(s.replace(/apres demain/g, 'apres-demain'), now, false);
+  if (jours.length > 1) return null;
+  if (!jours.length && debut === null) return null;
+  const nomme = /(^|\s)(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(\s|$)/.test(s) && !/\d{1,2} (janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)/.test(s) && !/(^|\s)(demain|aujourd)(\s|$)/.test(s);
+  return { iso: jours[0] || null, debut: debut, nomme: nomme };
+}
+
+/** « demain matin », « ce matin », « cet après-midi », « jeudi 19 novembre au matin », « demain », « cette semaine ». */
+function tcLibellePeriode130(iso, partie, semaine, now) {
+  if (semaine) return semaine.label;
+  const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dem = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  const base = iso === auj ? 'aujourd’hui' : iso === dem ? 'demain' : tcJourM64(iso);
+  if (partie === 'matin') return iso === auj ? 'ce matin' : base + (iso === dem ? ' matin' : ' au matin');
+  if (partie === 'aprem') return iso === auj ? 'cet après-midi' : base + ' après-midi';
+  return base;
+}
+
+/** Les rendez-vous de la période (pas les journées entières, ni ce qui est déjà fini), dans l'ordre. */
+function tcRdvPeriode130(debutIso, finIso, partie, now) {
+  const evMode = (typeof mode !== 'undefined' && mode === 'pro') ? 'pro' : 'user';
+  const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const minute = now.getHours() * 60 + now.getMinutes();
+  return (Array.isArray(events) ? events : []).filter(function (e) {
+    if (!e || e.mode !== evMode || !e.title || e.allDay || e.date < debutIso || e.date > finIso) return false;
+    if (e.date < auj || (e.date === auj && Number(e.endH) * 60 + Number(e.endM || 0) <= minute)) return false;
+    const debut = Number(e.startH) * 60 + Number(e.startM || 0);
+    if (partie === 'matin') return debut < 12 * 60;
+    if (partie === 'aprem') return debut >= 12 * 60;
+    return true;
+  }).sort(tcComparerEvenements);
+}
+
+/** Les nouvelles places : un décalage (± minutes), une semaine plus tard, un autre jour (mêmes heures), ou à la suite dès une heure. */
+function tcPlacesPeriode130(touches, quoi) {
+  const FIN = 23 * 60 + 59;
+  const de = function (x) { return { date: x.date, startH: x.startH, startM: x.startM, endH: x.endH, endM: x.endM }; };
+  const place = function (date, debut, duree) {
+    const d0 = Math.max(0, Math.min(debut, FIN)), f0 = Math.max(d0, Math.min(d0 + Math.max(duree, 0), FIN));
+    return { date: date, startH: Math.floor(d0 / 60), startM: d0 % 60, endH: Math.floor(f0 / 60), endM: f0 % 60 };
+  };
+  const duree = function (e) { return (Number(e.endH) * 60 + Number(e.endM || 0)) - (Number(e.startH) * 60 + Number(e.startM || 0)); };
+  const debutDe = function (e) { return Number(e.startH) * 60 + Number(e.startM || 0); };
+  if (quoi.decalage) return touches.map(function (e) { return { ev: e, p: place(e.date, debutDe(e) + quoi.decalage, duree(e)) }; });
+  if (quoi.semaines) return touches.map(function (e) { const d = new Date(e.date + 'T12:00:00'); d.setDate(d.getDate() + 7 * quoi.semaines); return { ev: e, p: Object.assign(de(e), { date: tcISO(d) }) }; });
+  const dest = quoi.destination;
+  let curseur = dest.debut;
+  return touches.map(function (e) {
+    let date = dest.iso || e.date;
+    // « à jeudi », dit pour un rendez-vous de jeudi (ou d'après) : le jeudi qui suit le rendez-vous.
+    if (dest.iso && dest.nomme && date <= e.date) { const d = new Date(date + 'T12:00:00'); while (tcISO(d) <= e.date) d.setDate(d.getDate() + 7); date = tcISO(d); }
+    if (curseur === null) return { ev: e, p: Object.assign(de(e), { date: date }) };
+    const p = place(date, curseur, duree(e));
+    curseur = p.endH * 60 + p.endM;
+    return { ev: e, p: p };
+  });
+}
+
+/** La question « Vers quand ? » (une seule), la période en attente de sa réponse. */
+function tcDemanderVersQuand130(touches, libelle) {
+  _tcDeplacementPeriode = { p130: true, touches: touches, essais: 2 };
+  const un = touches.length === 1;
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: libelle.charAt(0).toUpperCase() + libelle.slice(1) + ', tu as ' + touches.length + ' rendez-vous :\n'
+    + touches.map(function (e) { return '• « ' + e.title + ' » ' + (libelle.indexOf('semaine') > -1 ? tcJourM64(e.date) + ', ' : '') + tcHeureM64(e.startH, e.startM) + ' à ' + tcHeureM64(e.endH, e.endM); }).join('\n')
+    + '\nVers quand je ' + (un ? 'le' : 'les') + ' décale ?\nPar exemple : « à jeudi », « à la semaine prochaine » ou « d’une heure ».' });
+}
+
+/** Fait le travail une fois la période lue : la relecture, la question, ou « aucun rendez-vous » (et la journée proposée). */
+function tcTravaillerPeriode130(o, now) {
+  const touches = tcRdvPeriode130(o.debutIso, o.finIso, o.partie, now);
+  const libelle = tcLibellePeriode130(o.debutIso, o.partie, o.semaine, now);
+  if (!touches.length) {
+    const jour = (o.partie === 'matin' || o.partie === 'aprem') ? tcRdvPeriode130(o.debutIso, o.debutIso, 'jour', now) : [];
+    let texte = 'Tu n’as aucun rendez-vous ' + libelle + '.';
+    if (jour.length) {
+      const lj = tcLibellePeriode130(o.debutIso, 'jour', null, now);
+      texte += '\n' + lj.charAt(0).toUpperCase() + lj.slice(1) + ', tu as ' + jour.length + ' rendez-vous.\nTu veux que je décale toute ta journée ?\nRéponds « oui » ou « non ».';
+      _tcDeplacementPeriode = { p130: true, journee: Object.assign({}, o, { partie: 'jour' }), touches: jour, essais: 1 };
+    }
+    charlyIA.history.push({ role: 'assistant', nature: jour.length ? 'question' : 'reponse', content: texte });
+    return;
+  }
+  if (!o.decalage && !o.semaines && !o.destination) { tcDemanderVersQuand130(touches, libelle); return; }
+  tcRelireDeplacement(tcPlacesPeriode130(touches, o));
+}
+
+/** La demande, lue : « Décale ma matinée de demain à jeudi ». Vrai si c'est elle (et le travail est fait). */
+function tcDecalerPeriode130(text) {
+  const t = tcClasseNormaliser(text);
+  const m = t.match(/^(?:(?:charly|stp|svp|et|alors|peux tu|tu peux|pourrais tu)\s+)*(decale[rsz]?|deplace[rsz]?|reporte[rsz]?|repousse[rsz]?|bouge[rsz]?|avance[rsz]?|recule[rsz]?|glisse[rsz]?|retarde[rsz]?)(?:\s+(?:moi|nous))?\s+(.+)$/);
+  if (!m) return false;
+  const arriere = /^avance/.test(m[1]);
+  let r = m[2];
+  const PARTIES = { matinee: 'matin', matin: 'matin', journee: 'jour', 'apres midi': 'aprem', aprem: 'aprem', semaine: 'semaine' };
+  const o1 = r.match(/^(?:(?:toute|tout)\s+)?(?:ma|mon|la|le|cette|cet|ce)\s+(matinee|matin|journee|apres midi|aprem|semaine)(?=\s|$)\s*/);
+  const o2 = o1 ? null : r.match(/^(?:(?:tous|toutes|tout)\s+)?(?:mes|les)\s+(?:rdv|rendez vous|rendezvous|clients|patients|consultations|seances|reunions)(?=\s|$)\s*/);
+  const o3 = (o1 || o2) ? null : r.match(/^(?:tout|tous)(?=\s|$)\s*/);
+  const o = o1 || o2 || o3;
+  if (!o) return false;
+  let partie = o1 ? PARTIES[o1[1]] : null;
+  r = r.slice(o[0].length).replace(/(?:\s+(?:stp|svp|merci|charly|s il te plait))+$/, '').trim();
+  const dec = tcLireDecalage130(r);
+  if (dec) r = dec.reste;
+  const md = r.match(/(?:^|\s)(?:a|au|vers|pour|jusqu a)\s+(.+)$/);
+  const destTxt = md ? md[1] : null;
+  const p = (md ? r.slice(0, md.index) : r).replace(/^(?:de|du|d|des)\s+/, '').trim();
+  if (p.split(' ').some(function (w) { return w && !TC_MOTS_PERIODE_130.test(w); })) return false;
+  if (/(^|\s)\d{1,2}h/.test(p) || (/(^|\s)(h|heure|heures)(\s|$)/.test(p))) return false;   // une heure dans la période : un seul rendez-vous, son chemin habituel
+  if (/(^|\s)(matin|matinee)(\s|$)/.test(p) && partie !== 'semaine') partie = 'matin';
+  else if (/(^|\s)(apres midi|aprem)(\s|$)/.test(p) && partie !== 'semaine') partie = 'aprem';
+  else if (/(^|\s)journee(\s|$)/.test(p) && !partie) partie = 'jour';
+  if (/(^|\s)semaine(\s|$)/.test(p)) partie = 'semaine';
+  // « mes rendez-vous », « tout » sans aucun moment : pas cette demande (son chemin d'avant).
+  if (!partie && !p) return false;
+  const now = new Date();
+  let debutIso, finIso, semaine = null;
+  if (partie === 'semaine') {
+    semaine = tcPeriodeAgenda(/prochaine|suivante|d apres|qui vient/.test(p) ? 'la semaine prochaine' : 'cette semaine');
+    if (!semaine || !semaine.fin) return false;
+    debutIso = tcISO(semaine.debut); finIso = tcISO(semaine.fin);
+  } else {
+    const auj = tcISO(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+    let jours = /(^|\s)(ce matin|cet apres midi|ce soir|aujourd hui|ce jour)(\s|$)/.test(p) ? [auj] : tcJoursCites(' ' + p.replace(/apres demain/g, 'apres-demain') + ' ', now, false);
+    if (jours.length > 1) return false;
+    debutIso = finIso = jours[0] || auj;
+    if (!partie) partie = 'jour';
+  }
+  let destination = null, semaines = 0;
+  if (destTxt) {
+    const d = tcLireDestination130(destTxt, now);
+    if (d && d.semaines) semaines = d.semaines;
+    else if (d) destination = d;
+  }
+  tcPousserMessageUtilisateur(text);
+  const quoi = { debutIso: debutIso, finIso: finIso, partie: partie, semaine: semaine, decalage: dec ? (arriere ? -dec.minutes : dec.minutes) : 0, semaines: semaines, destination: destination };
+  tcTravaillerPeriode130(quoi, now);
+  renderCharlyChat();
+  return true;
+}
+
+/** La réponse à « Vers quand ? », ou à « Tu veux que je décale toute ta journée ? ». Faux si ce n'en était pas une. */
+async function tcRepondrePeriode130(text, attente) {
+  const now = new Date();
+  if (attente.journee) {
+    const oui = tcReponseOuiNon(text);
+    _tcDeplacementPeriode = null;
+    if (oui === null) return false;
+    tcPousserMessageUtilisateur(text);
+    if (oui) tcTravaillerPeriode130(attente.journee, now);
+    else charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, je ne change rien.' });
+    renderCharlyChat();
+    return true;
+  }
+  const t = tcClasseNormaliser(text).replace(/^(?:(?:et|stp|svp|alors|ok|bon|euh|plutot|disons)\s+)+/, '').replace(/(?:\s+(?:stp|svp|merci|charly))+$/, '').trim();
+  const dec = tcLireDecalage130(t);
+  const d = (dec && !dec.reste) ? null : tcLireDestination130(t, now);
+  if (!(dec && !dec.reste) && !d) {
+    // Une nouvelle demande (un verbe, ou une phrase longue) : la question tombe, la demande suit son chemin.
+    if (t.split(' ').length > 5 || /^(decale|deplace|reporte|repousse|bouge|avance|recule|glisse|retarde|ajoute|cree|annule|supprime|mets|note|previens|previens|rappelle|qu|quand|est|trouve|cherche)/.test(t)) { _tcDeplacementPeriode = null; return false; }
+    attente.essais -= 1;
+    if (attente.essais <= 0) { _tcDeplacementPeriode = null; return false; }
+    tcPousserMessageUtilisateur(text);
+    charlyIA.history.push({ role: 'assistant', nature: 'question', content: tcPhraseNonCompris('Vers quand ? (ex : à jeudi, à la semaine prochaine, ou d’une heure)') });
+    renderCharlyChat();
+    return true;
+  }
+  _tcDeplacementPeriode = null;
+  tcPousserMessageUtilisateur(text);
+  const touches = attente.touches.filter(function (e) { return events.indexOf(e) > -1; }).sort(tcComparerEvenements);
+  if (touches.length) {
+    const quoi = dec && !dec.reste ? { decalage: dec.minutes } : (d.semaines ? { semaines: d.semaines } : { destination: d });
+    tcRelireDeplacement(tcPlacesPeriode130(touches, quoi));
+  }
+  renderCharlyChat();
+  return true;
+}
+/* ═══ fin mission 130 A ═══ */
 
 /**
  * La relecture de « décale tout lundi » puis « mardi » : un jour nommé avant le rendez-vous (« mardi », dit un mardi, pour le lundi
@@ -28851,6 +29090,8 @@ function tcPeriodeDeplacer() {
  */
 async function tcRepondreDeplacementPeriode(text) {
   const attente = _tcDeplacementPeriode;
+  // Mission 130 A : la réponse à « Vers quand ? » d'une période (matinée, après-midi, semaine), ou à « toute ta journée ? ».
+  if (attente && attente.p130 && typeof tcRepondrePeriode130 === 'function') return tcRepondrePeriode130(text, attente);
   const t = String(text || '').toLowerCase();
   const jour = parseFrenchDateFromText(t) || (function () { const p = tcPeriodeJourNomme(text) || tcPeriodeAgenda(t); return p ? p.debut : null; })();
   const heure = tcHeureDansTexte(t);

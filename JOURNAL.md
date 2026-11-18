@@ -3715,3 +3715,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Accueil dicté par Charles sur Charly Pro IA (Charly IA inchangé) ; l'exemple « … avec mon commercial demain à 15h durant 30 minutes » marche mot pour mot sur les deux pages (durée en minutes lue localement : fin 15h30). Inventaire envoyé au chef : journée oui (en deux temps), matinée et semaine (hors « malade ») non, retard pour une seule personne.
 - Examen 129 : « est à 15 minutes », « 15 minutes de pause » ne sont plus une durée (sans préposition, après « à » ou devant « de »).
 - Examen 129 (2e passage, conseil du chef) : une durée n’est lue que dite comme telle (durant, pendant, d’une durée de, de N minutes collé au rendez-vous ou à l’heure, pour N minutes) ; tout le reste garde l’heure par défaut.
+
+## 18/11/2026 — Mission 130 A : décaler une période en une phrase (CODEUR)
+
+- Matinée, après-midi, journée, semaine ; destination, « Vers quand ? » (une seule question) ou décalage ; relecture habituelle et un seul oui ; période vide : la journée proposée. « après midi » dicté n’est plus « après 12 heures ».
