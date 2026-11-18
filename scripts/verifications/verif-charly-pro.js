@@ -107,6 +107,10 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     toggleFeature('CHARLY_PRO'); commitFeatureOverrides(); await attendre(100);
     R.garde = JSON.parse(localStorage.getItem('timecool_features_override') || '{}').CHARLY_PRO;
     R.menuAllume = entrees();
+    // Charles, 18/11 : « Configuration professionnelle » sous « Charly Pro IA » (ou sous « Charly IA » si Pro est décochée).
+    FEATURES.CONFIG_PRO = true; R.ordre2 = entrees();
+    FEATURES.CHARLY_PRO = false; R.ordre1 = entrees();
+    FEATURES.CHARLY_PRO = true; FEATURES.CONFIG_PRO = false; renderMenu();
     R.menuFonds = { ia: fond(entree('Charly IA')), pro: fond(entree('Charly Pro IA')) };
     applyTheme('dark'); R.menuSombre = fond(entree('Charly Pro IA')); applyTheme('light');
     // 5. L'entrée du menu ouvre la page, sous le nom Charly Pro IA.
@@ -228,6 +232,8 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'mission 129 : l’exemple de l’accueil, mot pour mot, sur Charly Pro IA (compte sans contact) : « Commercial » demain 15h → 15h30, validé', exOk(S.exemplePro), JSON.stringify(S.exemplePro).slice(0, 400));
   verifie(n + 'mission 129 : le même exemple sur Charly IA : « Commercial » demain 15h → 15h30, validé', exOk(S.exempleIA), JSON.stringify(S.exempleIA).slice(0, 400));
   verifie(n + 'mission 129 et son examen : une durée n’est lue que dite comme telle (durant, pendant, d’une durée de, « de N minutes » collé au rendez-vous ou à l’heure, pour N minutes) ; une distance, une pause, un trajet, un retard, un rappel, un déplacement : la durée par défaut', JSON.stringify(S.durees) === JSON.stringify([30,30,30,30,45,45,30,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]), JSON.stringify(S.durees));
+  const o2 = libelles(S.ordre2), o1 = libelles(S.ordre1), sansCp = function (l) { return l.filter(function (x) { return x !== 'Configuration professionnelle' && x !== 'Charly Pro IA'; }); };
+  verifie(n + 'Charles : « Configuration professionnelle » juste sous « Charly Pro IA » ; Pro décochée : juste sous « Charly IA » ; rien d’autre ne bouge', o2[o2.indexOf('Charly Pro IA') + 1] === 'Configuration professionnelle' && o2[o2.indexOf('Charly IA') + 1] === 'Charly Pro IA' && o1[o1.indexOf('Charly IA') + 1] === 'Configuration professionnelle' && o1.indexOf('Charly Pro IA') < 0 && JSON.stringify(sansCp(o2)) === JSON.stringify(sansCp(libelles(S.menuEteint))) && o2[o2.indexOf('Mes disponibilités') + 1] !== 'Configuration professionnelle', JSON.stringify([o2, o1]));
   verifie(n + 'déconnexion : les deux conversations partent, retour à Charly IA', S.menage.variante === 'ia' && S.menage.conv === 0 && S.menage.cle === null && S.menage.nom === 'Charly IA' && S.menage.obs === true && S.menage.apresDemain === false, JSON.stringify(S.menage));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
