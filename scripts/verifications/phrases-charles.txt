@@ -109,9 +109,10 @@ Trouve un créneau avec le Dr Martin | @fiche:Dr Martin | texte:Voici ce qui est
 Trouve un moment avec Alice et mon dentiste cette semaine | @fiche:Cabinet dentaire Dentiste Martin | sans:invitation && sans:pas encore TimeCool && sans:pas bien compris
 # Mission 127 (Charles, 18/11) : Charly Pro IA, la même page que Charly IA : il répond exactement comme lui, sous son nom.
 Saisis dans mon agenda : rendez-vous dentiste mardi à 15h | @charlypro | texte:^Dentiste, mardi .* à 15h : je te propose ceci && sans:Saisis && page:^Charly Pro IA — && page:Charly Pro IA est une intelligence artificielle
-Demande un rendez-vous demain à mon ami Michel | @charlypro | texte:Michel a TimeCool && sans:professionnel && page:^Charly Pro IA —
+# Mission 131 : la page Charly Pro IA ouvre la démonstration du dentiste : ses phrases citent une patiente (Claire), plus Michel ni Julien.
+Demande un rendez-vous demain à Claire | @charlypro | texte:Claire a TimeCool && sans:professionnel && page:^Charly Pro IA —
 Quand suis-je libre ce vendredi ? | @charlypro | texte:libre ce vendredi && jour:vendredi && page:^Charly Pro IA —
-Trouve un créneau avec Julien | @charlypro | texte:Voici ce qui est libre && texte:Julien n’a pas encore TimeCool && texte:Je lui prépare une invitation par SMS ou par e-mail && sans:je ne peux && sans:pas bien compris && page:^Charly Pro IA —
+Trouve un créneau avec Claire | @charlypro | texte:Par téléphone, en personne ou en visio && sans:je ne peux && sans:pas bien compris && page:^Charly Pro IA —
 # Mission 129 (Charles, 18/11) : l’exemple de l’accueil de Charly Pro IA, sur les deux pages : demain 15h, 30 minutes (fin 15h30).
 Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h durant 30 minutes |  | jour:+1 && texte:^Commercial, .* à 15h : je te propose ceci && texte:15:00-15:30 . Commercial && sans:je ne peux && sans:pas bien compris
 Crée-moi un nouveau rendez-vous avec mon commercial demain à 15h durant 30 minutes | @charlypro | jour:+1 && texte:^Commercial, .* à 15h : je te propose ceci && texte:15:00-15:30 . Commercial && sans:je ne peux && sans:pas bien compris && page:^Charly Pro IA —
@@ -153,3 +154,10 @@ Préviens tous mes rendez-vous de cet après-midi que j’aurai 15 minutes de re
 # Examen 130 B : un contact nommé : son chemin d’avant (jamais toute la période).
 Dis à Paul que mes rendez-vous de demain ont du retard |  | texte:Paul && sans:Je préviens \d personne && sans:Tu as combien de retard && sans:pas bien compris
 Préviens Paul que j’ai 10 minutes de retard pour tous mes rendez-vous de demain |  | texte:Paul && sans:Je préviens \d personne && sans:Michel && sans:pas bien compris
+# Mission 131 (Charles, 18/11) : la démonstration du chirurgien-dentiste (page Charly Pro IA), phrases 1 à 3, et son écriture d’origine.
+Note-moi un rendez-vous demain avec mon commercial Matériaux | @charlypro | jour:+1 && texte:^Commercial Mat.riaux, .* à \d+h : je te propose ceci && sans:À quelle heure && sans:je ne peux && sans:pas bien compris && sans:Lequel
+Note moi 1 rdv demain avec mon Commercial Materiaux | @charlypro | jour:+1 && texte:je te propose ceci && sans:À quelle heure && sans:je ne peux && sans:pas bien compris && sans:Lequel
+Préviens mes patients à venir et excuse-moi auprès d’eux : j’ai un retard de 30 minutes | @charlypro | texte:de ton retard && texte:30 minutes de retard && texte:Toutes mes excuses && sans:je ne peux && sans:pas bien compris && sans:Lequel
+Préviens et excuse moi auprès de mes patients a venir pour les prevenir que j’ai retard de 30mn | @charlypro | texte:de ton retard && texte:30 minutes de retard && texte:Toutes mes excuses && sans:je ne peux && sans:pas bien compris && sans:Lequel
+Demain j’ai un imprévu et je ne pourrai pas travailler. Préviens tous mes patients de la matinée, excuse-moi auprès d’eux et décale tous leurs rendez-vous | @charlypro | texte:Tu as un imprévu\. Je déplace 4 rendez-vous && texte:Claire && sans:Léa && texte:Toutes mes excuses && sans:je ne peux && sans:pas bien compris && sans:Lequel
+demain jai imprevu et je ne pourrais pas travailler, préviens, excuse moi et decale tous mes rdv auprès de tous mes Patients de la matinee | @charlypro | texte:Tu as un imprévu\. Je déplace 4 rendez-vous && texte:Toutes mes excuses && sans:je ne peux && sans:pas bien compris && sans:Lequel

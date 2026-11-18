@@ -671,6 +671,8 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
 .tc-maya-avatar { background:linear-gradient(135deg, #ffb3d9, #e0457b) !important; color:#fff !important; }
 /* L'éclair jaune de Charly IA, lisible sur le rose : une ombre légère tout autour. */
 .tc-maya-eclair { filter:drop-shadow(0 0 1px rgba(90,0,40,.55)) drop-shadow(0 1px 1px rgba(90,0,40,.35)); }
+/* Mission 131 : le titre de la démonstration du dentiste tient sur une ligne au-delà de 520 px, sur deux au téléphone. */
+@media (min-width: 520px) { .tc-demo-coupe { display:none; } }
 /* Mission 128 (Charles, 18/11) : page Charly Pro IA, le rond de l’éclair garde son bleu, la partie jaune devient le rouge du logo. */
 #page-assistant.tc-charly-pro .tc-rond-charly { background:linear-gradient(135deg, var(--g-blue), var(--g-red)) !important; }
 #msgCharly, #msgCharly:hover { background:var(--tc-charly-ligne, #cdeafc); }
@@ -13318,6 +13320,92 @@ const TC_DEMO_TEXTES = {
   importer: 'Importer mes contacts'
 };
 
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 131 (Charles, 18/11) : dans Charly Pro IA, « Voir la démonstration » ouvre la démonstration d'un chirurgien-dentiste :
+   son titre (« Démonstration pour un chirurgien-dentiste »), ses six phrases, son agenda de cabinet et ses contacts d'exemple
+   (patients, assistante, prothésiste, commercial). Mêmes garanties que la 107 (rien écrit sur l'appareil, aucun appel réseau ni
+   modèle, aucun vrai message). La démonstration de Charly IA ne change pas.
+   ═══════════════════════════════════════════════════════════════ */
+const TC_DEMO_PHRASES_PRO = [
+  { id: 'commercial', texte: 'Note-moi un rendez-vous demain avec mon commercial Matériaux' },
+  { id: 'retard', texte: 'Préviens mes patients à venir et excuse-moi auprès d’eux : j’ai un retard de 30 minutes' },
+  { id: 'imprevu', texte: 'Demain j’ai un imprévu et je ne pourrai pas travailler. Préviens tous mes patients de la matinée, excuse-moi auprès d’eux et décale tous leurs rendez-vous' },
+  { id: 'vendredi', texte: 'Quand suis-je libre vendredi pour une urgence ?' },
+  { id: 'reunion', texte: 'Trouve une réunion commune avec mon assistante et mon prothésiste' },
+  { id: 'malade', texte: 'Je suis malade, décale tous mes patients de la semaine' }
+];
+const TC_DEMO_TEXTES_PRO = {
+  // Deux lignes au téléphone (la coupe se cache au-delà de 520 px) ; aucun mot retiré, la taille du texte ne change pas.
+  bandeau: 'Démonstration\npour un chirurgien-dentiste',
+  apresQuitter: 'Pour le faire avec tes vrais patients, importe tes contacts.'
+};
+/** L'adresse du cabinet d'exemple : les rendez-vous de la démonstration du dentiste s'y tiennent. */
+const TC_DEMO_CABINET_131 = '12 rue de la Paix, 75002 Paris';
+
+/** La démonstration ouverte est-elle celle du chirurgien-dentiste ? */
+function tcDemoPro() { return !!(typeof _tcDemo !== 'undefined' && _tcDemo && _tcDemo.pro); }
+/** Les phrases de la démonstration ouverte. */
+function tcDemoPhrases() { return (typeof tcDemoPro === 'function' && tcDemoPro()) ? TC_DEMO_PHRASES_PRO : TC_DEMO_PHRASES; }
+
+/** Les données d'exemple du cabinet dentaire, placées par rapport à aujourd'hui (fabriquées à l'ouverture). */
+function tcDemoDonneesPro() {
+  const maintenant = new Date();
+  const auj = tcDemoJour(0), demain = tcDemoJour(1);
+  const vendredi = tcDemoVendredi();
+  const patient = function (id, d, h, m, duree, prenom, nom, acte) {
+    return Object.assign(tcDemoRdv(id, d, h, m, duree, 'RDV ' + prenom + ' ' + nom + ' : ' + acte, 'sante'), { contact: 'demo_' + id.split('_')[0], lieu: TC_DEMO_CABINET_131 });
+  };
+  const evs = [];
+  // Aujourd'hui : deux patients à venir, une heure après l'ouverture (« mes patients à venir »).
+  let h1 = maintenant.getHours() + 1 + (maintenant.getMinutes() ? 1 : 0);
+  if (h1 < 9) h1 = 9;
+  if (h1 <= 23) {
+    evs.push(patient('ines_auj', auj, h1, 0, 30, 'Inès', 'Virtuelle', 'consultation de contrôle'));
+    if (h1 < 23) evs.push(patient('nina_auj', auj, h1, 30, 30, 'Nina', 'Virtuelle', 'détartrage'));
+  }
+  // Demain : la matinée (quatre patients) et l'après-midi (deux) ; libre de 12h à 14h, de 15h à 15h30 et après 16h30.
+  evs.push(patient('claire_dem', demain, 9, 0, 30, 'Claire', 'Virtuelle', 'détartrage'));
+  evs.push(patient('louis_dem', demain, 9, 30, 30, 'Louis', 'Virtuel', 'consultation de contrôle'));
+  evs.push(patient('emma_dem', demain, 10, 30, 45, 'Emma', 'Virtuelle', 'soin d’une carie'));
+  evs.push(patient('hugo_dem', demain, 11, 30, 30, 'Hugo', 'Virtuel', 'consultation de contrôle'));
+  evs.push(patient('lea_dem', demain, 14, 0, 60, 'Léa', 'Virtuelle', 'pose d’une couronne'));
+  evs.push(patient('tom_dem', demain, 15, 30, 60, 'Tom', 'Virtuel', 'urgence dentaire'));
+  // Vendredi (s'il vient après demain) : du pris et du libre, pour « Quand suis-je libre vendredi pour une urgence ? ».
+  if (tcISO(vendredi) > tcISO(demain)) {
+    evs.push(patient('tom_ven', vendredi, 9, 0, 60, 'Tom', 'Virtuel', 'pose d’une couronne'));
+    evs.push(patient('ines_ven', vendredi, 11, 0, 30, 'Inès', 'Virtuelle', 'consultation de contrôle'));
+    evs.push(patient('nina_ven', vendredi, 14, 0, 45, 'Nina', 'Virtuelle', 'soin d’une carie'));
+  }
+  const contact = function (id, prenom, nom, role, n) {
+    const c = { id: 'demo_' + id, name: prenom + ' ' + nom + (role ? ' (' + role + ')' : ''), firstname: prenom, lastname: nom, phone: '06 39 98 00 ' + n,
+      email: tcSansAccents(prenom.toLowerCase()) + '.' + tcSansAccents(nom.toLowerCase()) + '@exemple-timecool.fr', isTimeCool: true, categories: [], demo: true, vouvoie: true };
+    c.referenceCompte = 'DEMO-PRO-' + id.toUpperCase();
+    return c;
+  };
+  const contacts = [
+    contact('claire', 'Claire', 'Virtuelle', '', '11'), contact('louis', 'Louis', 'Virtuel', '', '12'),
+    contact('emma', 'Emma', 'Virtuelle', '', '13'), contact('hugo', 'Hugo', 'Virtuel', '', '14'),
+    contact('lea', 'Léa', 'Virtuelle', '', '15'), contact('tom', 'Tom', 'Virtuel', '', '16'),
+    contact('ines', 'Inès', 'Virtuelle', '', '17'), contact('nina', 'Nina', 'Virtuelle', '', '18'),
+    contact('sophie', 'Sophie', 'Virtuelle', 'assistante', '19'), contact('marc', 'Marc', 'Virtuel', 'prothésiste', '20'),
+    contact('luc', 'Luc', 'Virtuel', 'commercial Matériaux', '21')
+  ];
+  // Le commercial n'a pas TimeCool : on note le rendez-vous ; son agenda n'est pas lu.
+  const luc = contacts[contacts.length - 1]; delete luc.referenceCompte; luc.isTimeCool = false;
+  const occ = function (d, h1, h2) { return { date: tcISO(d), debut: h1 * 60, fin: h2 * 60 }; };
+  const J = function (n) { return tcDemoJour(n); };
+  // L'agenda de chacun : assez pris pour être vrai, assez libre pour choisir.
+  const agendas = {
+    'DEMO-PRO-CLAIRE': [occ(J(2), 8, 12)], 'DEMO-PRO-LOUIS': [occ(J(2), 13, 19)], 'DEMO-PRO-EMMA': [occ(J(3), 8, 13)],
+    'DEMO-PRO-HUGO': [occ(J(2), 8, 20)], 'DEMO-PRO-LEA': [occ(J(3), 13, 20)], 'DEMO-PRO-TOM': [occ(J(4), 8, 12)],
+    'DEMO-PRO-INES': [occ(J(2), 14, 18)], 'DEMO-PRO-NINA': [occ(J(3), 9, 11)],
+    // L'assistante et le prothésiste : pris demain et après-demain matin ; la réunion commune tombe ensuite.
+    'DEMO-PRO-SOPHIE': [occ(demain, 8, 20), occ(J(2), 8, 12)], 'DEMO-PRO-MARC': [occ(demain, 8, 20), occ(J(2), 14, 18)]
+  };
+  return { events: evs, contacts: contacts, agendas: agendas };
+}
+
+
 /** Les clés du stockage qu'une lecture voit pendant la démonstration : l'affichage seulement, jamais une donnée. */
 function tcDemoClesLisibles() {
   const k = ['timecool_language', 'tc_theme', 'tc_premier_jour_semaine', 'tc_agenda_start', 'tc_agenda_end', 'tc_timezone', 'timecool_session_active'];
@@ -13531,8 +13619,9 @@ function tcDemoBandeau(montrer) {
     // Mission 111 : dans la page, plus en haut de l'écran (tcDemoPlacerBandeau le pose à sa place).
     // Mission 112 : plus de bande : une pastille bleu roi centrée (le bleu du stylo de Charles), le reste transparent.
     b.style.cssText = 'position:relative; z-index:5; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:6px 12px; background:transparent; box-sizing:border-box;';
-    b.innerHTML = '<div class="tc-demo-pastille" style="display:inline-flex; align-items:center; gap:10px; height:40px; box-sizing:border-box; padding:0 5px 0 14px; background:#1a47d6; color:#fff; border-radius:20px; box-shadow:0 2px 6px rgba(26,71,214,0.28); font-size:14px; font-weight:700; white-space:nowrap;">'
-      + '<span>🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.bandeau)) + '</span>'
+    b.innerHTML = '<div class="tc-demo-pastille" style="display:inline-flex; align-items:center; gap:10px; ' + ((typeof tcDemoPro === 'function' && tcDemoPro()) ? 'min-height:40px; box-sizing:border-box; padding:5px 5px 5px 14px;' : 'height:40px; box-sizing:border-box; padding:0 5px 0 14px;') + ' background:#1a47d6; color:#fff; border-radius:20px; box-shadow:0 2px 6px rgba(26,71,214,0.28); font-size:14px; font-weight:700; white-space:nowrap;">'
+      + ((typeof tcDemoPro === 'function' && tcDemoPro()) ? '<span class="tc-demo-titre-pro" style="text-align:center; line-height:1.25;">🎬 ' + tcDemoTexte(TC_DEMO_TEXTES_PRO.bandeau).split('\n').map(function (x) { return escapeHTML(x); }).join('<br class="tc-demo-coupe"> ') + '</span>'
+        : '<span>🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.bandeau)) + '</span>')
       + '<button onclick="tcQuitterDemo()" style="padding:6px 14px; background:#fff; color:#1a47d6; border:none; border-radius:15px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.quitter)) + '</button></div>';
     document.body.appendChild(b);
   }
@@ -13570,7 +13659,9 @@ async function tcDemoTraduire() {
   if (!l || l === 'fr' || typeof translateText !== 'function') return;
   const tout = [];
   Object.keys(TC_DEMO_TEXTES).forEach(function (k) { String(TC_DEMO_TEXTES[k]).split('\n').forEach(function (x) { tout.push(x); }); });
-  TC_DEMO_PHRASES.forEach(function (p) { tout.push(p.texte); });
+  // Mission 131 : les phrases et les textes du dentiste aussi.
+  TC_DEMO_PHRASES.concat(typeof TC_DEMO_PHRASES_PRO !== 'undefined' ? TC_DEMO_PHRASES_PRO : []).forEach(function (p) { tout.push(p.texte); });
+  if (typeof TC_DEMO_TEXTES_PRO !== 'undefined') Object.keys(TC_DEMO_TEXTES_PRO).forEach(function (k) { String(TC_DEMO_TEXTES_PRO[k]).split('\n').forEach(function (x) { tout.push(x); }); });
   try { await Promise.race([Promise.all(tout.map(function (x) { return translateText(x, l); })), new Promise(function (r) { setTimeout(r, 4000); })]); } catch (e) {}
 }
 
@@ -13585,7 +13676,7 @@ function tcRendreDemo(m) {
   let h = escapeHTML(tcDemoTexte(m.content || '')).replace(/\n/g, '<br>');
   const derniers = charlyIA.history.filter(function (x) { return x && x._demo && x._demo.phrases; }).pop();
   if (d.phrases && _tcDemo && m === derniers) {
-    const restent = TC_DEMO_PHRASES.filter(function (p) { return !_tcDemo.faites[p.id]; });
+    const restent = (typeof tcDemoPhrases === 'function' ? tcDemoPhrases() : TC_DEMO_PHRASES).filter(function (p) { return !_tcDemo.faites[p.id]; });
     h += '<div style="display:flex; flex-direction:column; gap:6px; margin-top:10px;">' + restent.map(function (p) {
       return '<button class="tc-demo-phrase" onclick="tcDemoJouer(\'' + p.id + '\')" style="text-align:left; padding:10px 12px; background:#e8f0fe; color:#1a3d6e; border:1.5px solid #c6dafc; border-radius:12px; font-size:13.5px; font-weight:600; cursor:pointer;">« ' + escapeHTML(tcDemoTexte(p.texte)) + ' »</button>';
     }).join('') + '</div>';
@@ -13641,7 +13732,7 @@ function tcDemoReponseDe(reference, texte, apres) {
 function tcDemoMarquer() {
   const inp = document.getElementById('charlyInput');
   const t = tcClasseNormaliser(inp ? inp.value : '');
-  TC_DEMO_PHRASES.forEach(function (p) { if (t && tcClasseNormaliser(p.texte) === t) _tcDemo.faites[p.id] = true; });
+  (typeof tcDemoPhrases === 'function' ? tcDemoPhrases() : TC_DEMO_PHRASES).forEach(function (p) { if (t && tcClasseNormaliser(p.texte) === t) _tcDemo.faites[p.id] = true; });
 }
 
 /** Une question attend-elle encore un geste (carte à choix, boutons) ? Alors les phrases ne reviennent pas encore. */
@@ -13692,7 +13783,7 @@ function tcDemoApres(essai) {
   let dernierGeste = -1, dernieresPhrases = -1;
   charlyIA.history.forEach(function (x, i) { if (x.role === 'user') dernierGeste = i; if (x._demo && x._demo.phrases) dernieresPhrases = i; });
   if (dernieresPhrases > dernierGeste) { renderCharlyChat(); return; }
-  const restent = TC_DEMO_PHRASES.filter(function (p) { return !_tcDemo.faites[p.id]; });
+  const restent = (typeof tcDemoPhrases === 'function' ? tcDemoPhrases() : TC_DEMO_PHRASES).filter(function (p) { return !_tcDemo.faites[p.id]; });
   charlyIA.history.push(tcDemoMessagePhrases(restent.length ? TC_DEMO_TEXTES.suite : TC_DEMO_TEXTES.fini));
   renderCharlyChat();
 }
@@ -13700,7 +13791,7 @@ function tcDemoApres(essai) {
 /** Une phrase de la démonstration, touchée : elle part comme s'il l'avait écrite, le vrai moteur répond. */
 async function tcDemoJouer(id) {
   if (!_tcDemo) return;
-  const p = TC_DEMO_PHRASES.find(function (x) { return x.id === id; });
+  const p = (typeof tcDemoPhrases === 'function' ? tcDemoPhrases() : TC_DEMO_PHRASES).find(function (x) { return x.id === id; });
   if (!p) return;
   _tcDemo.faites[id] = true;
   const inp = document.getElementById('charlyInput');
@@ -13722,7 +13813,9 @@ async function tcOuvrirDemo() {
   if (bouton && typeof currentLanguage !== 'undefined' && currentLanguage && currentLanguage !== 'fr') { bouton.disabled = true; bouton.style.opacity = '0.6'; bouton.textContent = '⏳ ' + bouton.textContent; }
   await tcDemoTraduire();
   if (_tcDemo) return;
-  const donnees = tcDemoDonnees();
+  // Mission 131 : ouverte dans Charly Pro IA, la démonstration du chirurgien-dentiste.
+  const _pro131 = typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro';
+  const donnees = _pro131 && typeof tcDemoDonneesPro === 'function' ? tcDemoDonneesPro() : tcDemoDonnees();
   const S = Storage.prototype;
   const etat = {
     faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(), occupe: 0, attentes: [], quitterApres: false,
@@ -13738,6 +13831,9 @@ async function tcOuvrirDemo() {
     fetch: window.fetch
   };
   _tcDemo = etat;
+  etat.pro = _pro131;
+  // Mission 131 : la démonstration du dentiste montre le profil 2 (un seul oui, les choix placés, le compte rendu).
+  if (_pro131 && typeof TC_CONFIANCE_KEY !== 'undefined') etat.copie[TC_CONFIANCE_KEY] = '2';
   // 1. Le stockage : jamais écrit ; une lecture voit la copie de la démonstration, ou un réglage d'affichage.
   const lire = etat.stockage.getItem;
   S.setItem = function (k, v) { if (this === window.localStorage && _tcDemo) { _tcDemo.copie[String(k)] = String(v); return; } return etat.stockage.setItem.call(this, k, v); };
@@ -13851,7 +13947,7 @@ function tcQuitterDemo(options) {
   _tcDemo = null;
   tcDemoBandeau(false);
   if (_tcEtape) { clearTimeout(_tcEtape.garde); _tcEtape = null; tcDefinirStatutCharly(TC_STATUT_REPOS, false); }
-  charlyIA.history.push({ role: 'assistant', content: TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
+  charlyIA.history.push({ role: 'assistant', content: etat.pro ? TC_DEMO_TEXTES_PRO.apresQuitter : TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
   if (!(options && options.sansRetour)) navigate('assistant');
   renderCharlyChat();
   try { if (typeof render === 'function') render(); } catch (e) {}
@@ -14440,7 +14536,7 @@ function tcPoserLieu118() {
       continue;
     }
     if (typeof m.content === 'string' && /\[AGENDA\][\s\S]*\[\/AGENDA\]/.test(m.content) && !m._valide && !m._validated) {
-      const lieu = L ? L.lieu : TC_DEMO_LIEU_DEFAUT_118;
+      const lieu = L ? L.lieu : ((typeof tcDemoPro === 'function' && tcDemoPro()) ? TC_DEMO_CABINET_131 : TC_DEMO_LIEU_DEFAUT_118);
       m.content = tcLieuDansAgenda118(m.content, lieu);
       m._lieu118 = true;
     }
@@ -15265,7 +15361,9 @@ function tcCreationLocale(texte, now, forcer) {
   // Deux demandes (« dentiste demain à 10h et coach jeudi à 14h ») : plus d un jour ou plus d une heure (hors plage).
   if (!plage && (t.match(/\b\d{1,2} ?h(?:\d{2})?\b|\b\d{1,2}:\d{2}\b/g) || []).length > 1) return '';
   if (tcJoursCites(brut, now).length > 1 || /\b(puis|ensuite)\b/.test(t)) return '';
-  const heure = plage ? { h: Number(plage[1]), m: plage[2] ? Number(plage[2]) : null } : tcHeureDansTexte(brut.toLowerCase());
+  let heure = plage ? { h: Number(plage[1]), m: plage[2] ? Number(plage[2]) : null } : tcHeureDansTexte(brut.toLowerCase());
+  // Mission 131 : un rendez-vous avec quelqu'un, un jour, sans heure : le premier moment libre d'une heure ce jour-là.
+  if (!heure && typeof tcCreneauLibreSansHeure131 === 'function') { const _l131 = tcCreneauLibreSansHeure131(brut); if (_l131) heure = { h: Math.floor(_l131.debut / 60), m: _l131.debut % 60 || null }; }
   if (!heure) return '';
   const demande = tcDateDemandee(brut, now, { suivantSiPasse: true });
   if (!demande || demande.invalide || !demande.date) return '';
@@ -18942,6 +19040,8 @@ async function charlySendMessage() {
     }
   }
 
+  // === Mission 131 : « Demain j'ai un imprévu… Préviens… et décale tous leurs rendez-vous » : créneaux, un oui, les choix, le compte rendu ===
+  if (typeof tcImprevuDecaler131 === 'function' && await tcImprevuDecaler131(text)) return;
   // === IMPRÉVU sans jour : « j'ai un imprévu », « je dois réorganiser ma journée » ===
   // Le même questionnaire que le bouton (mission 44) ; avec un jour, c'est une contrainte (juste en dessous).
   if (/\b(imprevu|reorganis)/.test(tcSansAccents(text)) && !tcPeriodeContrainte(text)) {
@@ -20868,6 +20968,8 @@ var _tcHeureEnAttente = null;
 function tcHeureManquante(text) {
   const brut = String(text || '');
   if (/\?/.test(brut)) return false;
+  // Mission 131 : « Note-moi un rendez-vous demain avec … » : le premier moment libre ce jour-là, pas « À quelle heure ? ».
+  if (typeof tcCreneauLibreSansHeure131 === 'function' && tcCreneauLibreSansHeure131(brut)) return false;
   const t = tcSansAccents(brut).toLowerCase().replace(/[’']/g, ' ');
   if (!/\bavec\s+[a-z]{2,}/.test(t) || t.split(/\s+/).filter(Boolean).length > 12) return false;
   if (tcHeureDansTexte(brut.toLowerCase())) return false;
@@ -20877,6 +20979,65 @@ function tcHeureManquante(text) {
   if (/\b(qu est ce|est ce|combien|quand|quels?|quelles?|qui|ou|comment|pourquoi|ai je|qu ai je|j ai|je suis|suis je|y a t il|il y a|liste|montre|affiche|dis moi|rappelle moi)\b/.test(t)) return false;
   return typeof tcJoursCites === 'function' && tcJoursCites(brut, new Date()).length === 1;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 131 (Charles, 18/11) : les phrases de la démonstration du chirurgien-dentiste, comprises aussi en vrai, mot pour mot.
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * « Note-moi un rendez-vous demain avec mon commercial Matériaux » : un rendez-vous avec quelqu'un, un jour, sans heure. Au lieu de
+ * « À quelle heure ? », le premier moment libre d'une heure ce jour-là (Mes disponibilités, mon agenda) ; la carte habituelle le
+ * propose (on peut le changer). { date, debut } ou null (alors, le chemin d'avant).
+ */
+function tcCreneauLibreSansHeure131(text) {
+  const t = tcClasseNormaliser(text);
+  if (!/^(?:(?:charly|stp|svp|et|peux tu|tu peux)\s+)*(?:note|notes|noter|ajoute|ajouter|mets|mettre|cree|creer|prends|prendre|planifie|planifier|cale|caler|programme|programmer|fixe|fixer|organise|organiser)(?:\s+(?:moi|nous))?\s+(?:un|une|1)\s+(?:nouveau\s+|nouvelle\s+)?(?:rdv|rendez vous|rendezvous|reunion|rencontre)\s/.test(t + ' ')) return null;
+  if (!/(^|\s)avec\s/.test(t)) return null;
+  if (tcHeureDansTexte(String(text || '').toLowerCase())) return null;
+  const jours = tcJoursCites(' ' + t.replace(/apres demain/g, 'apres-demain') + ' ', new Date(), false);
+  if (jours.length !== 1) return null;
+  const d = new Date(jours[0] + 'T00:00:00');
+  const partie = /(^|\s)(matin|matinee)(\s|$)/.test(t) ? 'matin' : (/(^|\s)(apres midi|aprem)(\s|$)/.test(t) ? 'apres-midi' : null);
+  const c = typeof tcPremierCreneauLibre === 'function' ? tcPremierCreneauLibre({ debut: d, fin: d }, null, partie) : null;
+  return c && c.date === jours[0] ? c : null;
+}
+
+/** Le parcours « malade » (créneaux selon tes préférences, un oui, les choix, le compte rendu), pour un imprévu. */
+function tcQuestionnaireImprevu131() {
+  const etapes = TC_QUESTIONNAIRE_MALADE.etapes.map(function (e) {
+    if (e.cle === 'action') return Object.assign({}, e, { avant: function (r) {
+      r._rdvs = tcMaladeRdv(r.periode);
+      if (!r._rdvs.length) { tcQuestionnaireDire('Tu n’as aucun rendez-vous ' + TC_MALADE_PERIODES[r.periode].label + ' : rien à décaler.'); return false; }
+    } });
+    if (e.cle === 'fin_rien') return Object.assign({}, e, { avant: function () { tcQuestionnaireDire('D’accord, je ne touche à rien.'); return false; } });
+    return e;
+  });
+  return { nom: 'imprevu131', etapes: etapes, terminer: async function (r) {
+    if (r.recap !== 'oui') { tcQuestionnaireDire('D’accord, j’arrête là : je ne touche à rien.'); return; }
+    await tcQuestionnaireExecuter(r, 'C’est fait.');
+  } };
+}
+
+/**
+ * « Demain j'ai un imprévu et je ne pourrai pas travailler. Préviens tous mes patients de la matinée, excuse-moi auprès d'eux et
+ * décale tous leurs rendez-vous » : un imprévu, une période, « décale » : le parcours ci-dessus (Charly prévient, avec les excuses
+ * si elles sont demandées). Sans « décale » ou sans période : le chemin d'avant. Vrai si pris.
+ */
+async function tcImprevuDecaler131(text) {
+  const t = tcClasseNormaliser(text);
+  if (!/(^|\s)(imprevu|imprevus|empeche|empechee|empechement)(\s|$)|ne (?:pourrai|pourrais|peux|pourra|pourrons) pas (?:travailler|venir|assurer|consulter|recevoir|etre la)/.test(t)) return false;
+  if (!/(^|\s)(decal|deplac|report|repouss)/.test(t)) return false;
+  if (typeof tcDetecterMalade === 'function' && tcDetecterMalade(text)) return false;
+  const connu = tcMaladeDansLaPhrase(text);
+  if (!connu.periode || connu._periodesDites) return false;
+  connu.action = 'decaler';
+  if (/(^|\s)(previen|previens|prevenir|avertis|excuse|excuses)/.test(t)) connu.prevenir = 'charly';
+  connu._excuses = /(^|\s)excus/.test(t);
+  tcPousserMessageUtilisateur(text);
+  await tcQuestionnaireDemarrer(tcQuestionnaireImprevu131(), connu);
+  return true;
+}
+/* ═══ fin mission 131 (phrases) ═══ */
 
 /** La demande d'avant, complétée par l'heure donnée (« samedi soir » + « 20h » → « samedi à 20h »). */
 function tcComposerAvecHeure(texte, reponse) {
@@ -27971,7 +28132,7 @@ async function tcRetardPeriode130(text, intent) {
   const connu = tcRetardDansLaPhrase(text);
   delete connu.pour;
   await tcQuestionnaireDemarrer(tcQuestionnaireRetardPeriode130(), Object.assign(connu, {
-    action: 'retard', prevenir: 'charly', _rdvs: rdvs, _retardRdv: null, _liste: [], _libelle: libelle,
+    action: 'retard', prevenir: 'charly', _rdvs: rdvs, _retardRdv: null, _liste: [], _libelle: libelle, _excuses: /(^|\s)excus/.test(t),
     _contacts: (function () { const l = []; rdvs.forEach(function (e) { tcContactsJoignables130(e).forEach(function (c) { if (l.indexOf(c) < 0) l.push(c); }); }); return l; })()
   }));
   return true;
@@ -29765,14 +29926,20 @@ function tcRecapRetard(r) {
 function tcQuestionnaireRecap(r) {
   // Mission 91 : décaler en prévenant les contacts : la carte simple (une idée par ligne), au profil 1 comme au profil 2.
   if (tcRecapEnvoi(r)) {
-    return tcCarteEnvoiCreneaux({
-      malade: r._parcours === 'malade',
+    const _carte131 = tcCarteEnvoiCreneaux({
+      malade: r._parcours === 'malade', imprevu: r._parcours === 'imprevu131',
       items: r._creneaux,
       deplaces: r._liste.filter(function (x) { return x.p && !tcContactDuRdv(x.ev) && !tcEstRdvAPlusieurs(x.ev); }),
       groupes: r._liste.filter(function (x) { return x.p && tcEstRdvAPlusieurs(x.ev); }).map(function (x) { return x.ev; }),
       laisses: r._liste.filter(function (x) { return !x.p; }),
       profil: typeof tcConfianceCharly === 'function' ? tcConfianceCharly() : 1
-    }).lignes.join('\n');
+    }).lignes;
+    // Mission 131 : « excuse-moi auprès d'eux » : le message (avec les excuses), juste avant la question.
+    if (r._excuses) {
+      const _it = (r._creneaux || []).filter(function (x) { return x && x.contact && x.creneaux && x.creneaux.length; })[0];
+      if (_it) _carte131.splice(Math.max(0, _carte131.length - 1), 0, 'Le message' + ((r._creneaux || []).length > 1 ? ' pour ' + String(_it.contact.name).split(' ')[0] : '') + ' : « ' + tcPropositionTexte(_it.contact, _it.ev) + ' Toutes mes excuses. »');
+    }
+    return _carte131.join('\n');
   }
   // Mission 93 (Charles, 15/11) : le retard en trois lignes : qui je préviens, le message (celui des Paramètres, avec l'heure
   // d'arrivée), « Je lui envoie ? ». Plusieurs personnes : leurs prénoms, un seul message montré, « Je leur envoie ? ».
@@ -29834,7 +30001,8 @@ function tcQuestionnaireMessage(r, c, ev, ancien) {
     const valeurs = tcValeursDuRdv(c.name, ev);
     valeurs['[minutes]'] = String(r.minutes);
     return tcRemplirModele(tcModeleMessage('retard', tcVouvoiement(c)), valeurs)
-      + ' Je serai là vers ' + tcMinutesLisibles(Math.max(0, Math.min(1439, ev.startH * 60 + ev.startM + Number(r.minutes)))) + '.';
+      + ' Je serai là vers ' + tcMinutesLisibles(Math.max(0, Math.min(1439, ev.startH * 60 + ev.startM + Number(r.minutes)))) + '.'
+      + (r._excuses ? ' Toutes mes excuses.' : '');   // mission 131 : « excuse-moi auprès d'eux »
   }
   return tcRemplirModele(tcModeleMessage('annule', tcVouvoiement(c)), tcValeursDuRdv(c.name, ancien));
 }
@@ -29915,6 +30083,7 @@ async function tcQuestionnaireExecuter(r, fin) {
   }).filter(Boolean) : null;
   const profil2 = typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 2;
   const optionsEnvoi = { apres: r._depuis || null, lot: lotId };
+  if (r._excuses) optionsEnvoi.excuses = true;   // mission 131
   if (montres) optionsEnvoi.items = montres;
   if (montres && profil2) optionsEnvoi.confiance = 2;
   const propositions = aProposer.length ? await tcProposerLesCreneaux(aProposer, optionsEnvoi) : null;
@@ -30083,7 +30252,7 @@ async function tcEnvoyerPropositions(items) {
   const res = { proposes: [], envois: [], echecs: [], sansMoyen: [], details: [], sansCreneau: [] };
   for (const it of items) {
     const c = it.contact, ev = it.ev;
-    const texte = tcPropositionTexte(c, ev);
+    const texte = tcPropositionTexte(c, ev) + (it.excuses ? ' Toutes mes excuses.' : '');   // mission 131
     const corps = {
       titre: ev.title || null, remplace: String(ev.id), texte: texte, avant: tcPropositionLibelle(ev),
       creneaux: it.creneaux.map(function (x) {
@@ -30156,6 +30325,7 @@ async function tcProposerLesCreneaux(liste, options) {
   const items = valables.map(function (it) {
     const x = { ev: it.ev, contact: it.contact, creneaux: it.creneaux, lot: lot, apres: o.apres || null };
     if (o.confiance) x.confiance = o.confiance;
+    if (o.excuses) x.excuses = true;   // mission 131
     return x;
   });
   const res = await tcEnvoyerPropositions(items);
@@ -30268,7 +30438,7 @@ function tcCarteEnvoiCreneaux(o) {
     return jours;
   };
   const libre = 'Je regarde dans ton agenda quand tu es libre, selon tes préférences et tes disponibilités enregistrées dans tes paramètres.';
-  const debut = o.malade ? 'Tu es malade. ' : '';
+  const debut = o.malade ? 'Tu es malade. ' : (o.imprevu ? 'Tu as un imprévu. ' : '');
   const aucun = function (it) { return it.contact && it.contact.referenceCompte ? 'pour vous deux' : 'dans ton agenda'; };
   const avec = items.filter(function (it) { return it.creneaux && it.creneaux.length; });
   const noter = o.profil === 1 ? 'Je te demande avant de noter ' : 'Je note ';
@@ -31288,6 +31458,7 @@ async function tcPrevenirRetard(text, rdv) {
   if (!rdv) rdv = tcRdvDuJourDuContactNomme(text);
   const connu = tcRetardDansLaPhrase(text);
   if (rdv) { connu.pour = 'autre'; connu._vise = rdv; }
+  connu._excuses = /excus/i.test(String(text || ''));   // mission 131
   await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_RETARD, connu);
 }
 

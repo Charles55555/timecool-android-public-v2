@@ -3729,3 +3729,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Menu : « Configuration professionnelle » sous « Charly Pro IA » (CODEUR)
 
 - Juste sous « Charly Pro IA » (ou sous « Charly IA » si Pro est décochée) ; rien d’autre ne bouge.
+
+## 18/11/2026 — Mission 131 (1er lot) : la démonstration du chirurgien-dentiste, phrases 1 à 3 (CODEUR)
+
+- Dans Charly Pro IA : titre « Démonstration pour un chirurgien-dentiste » (deux lignes au téléphone), six phrases, agenda de cabinet et onze contacts d’exemple, profil 2 dans la démonstration ; « Note-moi un rendez-vous demain avec … » au premier moment libre ; excuses dans les messages ; l’imprévu qui décale (créneaux, un oui, compte rendu). Charly IA : identique.
