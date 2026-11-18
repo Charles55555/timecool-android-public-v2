@@ -3744,3 +3744,10 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - « sauf ceux de l’après-midi » : le reste de la journée, et la carte le dit ; « sauf Bruno » (pas une fiche) : « Je ne trouve pas Bruno dans tes rendez-vous de demain. » ; « Quand suis-je libre avec ma femme ? » comme « Trouve un créneau avec ma femme » ; verif-rappels-stop-e2e lit backend/api/lib.php (marche dans un worktree neuf).
 - Examen 132 : un inconnu après « sauf » n’est dit que s’il est tapé avec une majuscule (« sauf Bruno ») ; « sauf contrordre » : rien.
+
+## 18/11/2026 — Mission 133 : l’agenda de la démonstration du dentiste rempli, « RDV disponible » (CODEUR)
+
+- Cabinet d’exemple : 9h-13h et 14h-18h, cases de 30 minutes, du lundi au vendredi ; demain toujours rempli, même un samedi ou un dimanche (choix B du chef). 15 jours remplis : 14, 14, 12, 8, 4 patients, puis 1 ou 2 par jour ; 15h-16h libre partout ; 46 patients virtuels ajoutés. Aujourd’hui ne change pas.
+- « RDV disponible » (bleu ciel ; « Dispo » en vue Semaine au téléphone) : seulement dessiné par tcEvenementsDuJour, jamais dans `events` ; pour Charly, du temps libre. Fiche : « Ajouter un rendez-vous ».
+- Démonstration du dentiste seulement : plages de Charly = heures du cabinet (tcPlagesDuJour, serveur d’exemple) ; matinée jusqu’à 13h (tcMidi133).
+- Suites : verif-demo-pro133 (neuve, 7 jours simulés à 10h + PC, 158 vérifications) ; verif-demo-pro131 et phrases-charles aux nouveaux chiffres ; @charlypro joué à 10h du jour même.

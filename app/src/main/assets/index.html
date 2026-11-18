@@ -173,6 +173,9 @@ body { display:flex; flex-direction:column; }
 .day-event.bloc-court .day-event-time { flex:0 0 auto; font-size:11px; }
 .day-event.bloc-court .day-event-time::before { content:'· '; }
 .week-event, .day-event { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+/* Mission 133 : « RDV disponible » (démonstration du dentiste) : bleu ciel, bord en pointillés, texte bleu foncé. */
+.week-event.tc-dispo133, .day-event.tc-dispo133 { background:#c3e6fb !important; color:#0b4f7c !important; border:1px dashed #6fb9e8; box-shadow:none; box-sizing:border-box; }
+.tc-dispo133 .week-event-title, .tc-dispo133 .week-event-time, .tc-dispo133 .day-event-title, .tc-dispo133 .day-event-time { color:#0b4f7c !important; }
 .tc-deplace { z-index:60 !important; box-shadow:0 10px 24px rgba(0,0,0,0.30) !important; opacity:0.97; transition:none !important; cursor:grabbing; will-change:transform; }
 body.tc-deplacement { -webkit-user-select:none; user-select:none; cursor:grabbing; }
 .tc-deplace-etiquette { position:fixed; z-index:10201; background:#202124; color:#fff; font-size:12px; font-weight:600; padding:5px 10px; border-radius:12px; pointer-events:none; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.3); }
@@ -4629,11 +4632,13 @@ function tcEtapeDeLaPeriode(e, jour) {
 
 /** Les evenements qui occupent ce jour, tries, bandeaux ou non. */
 function tcEvenementsDuJour(jour, enBandeau) {
-  return events.filter(function (e) {
+  const l = events.filter(function (e) {
     return tcEvenementCouvre(e, jour) && e.mode === mode
       && isCategoryVisible(e.cat) && isCalendarVisible(e.calendarId)
       && tcEstBandeau(e) === enBandeau;
   });
+  // Mission 133 : la démonstration du dentiste : ses « RDV disponible », seulement pour le dessin des vues Semaine et Jour.
+  return !enBandeau && typeof tcDispoDuJour133 === 'function' ? l.concat(tcDispoDuJour133(jour)) : l;
 }
 
 function renderMonth() {
@@ -5077,6 +5082,7 @@ function renderWeek() {
         const evt = document.createElement('div');
         evt.className = 'week-event';
         tcAppliquerCouleurEvenement(evt, e.cat);
+        if (e._dispo133) evt.classList.add('tc-dispo133');   // mission 133
         evt.style.top = `${sm*(44/60)}px`;
         const hb = tcHauteurBloc('week', dm);
         if (hb.court) evt.classList.add('bloc-court');
@@ -5084,6 +5090,7 @@ function renderWeek() {
         evt.style.left = `${50 + di*colWidth + 1}px`;
         evt.style.width = `${colWidth - 2}px`;
         evt.innerHTML = `<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
+        if (e._dispo133 && colWidth < 90) { const _t133 = evt.querySelector('.tc-titre-case'); if (_t133) _t133.textContent = 'Dispo'; }   // mission 133
         evt.onclick = () => openEventModal(e);
         if (e.id !== undefined && e.id !== null && evt.setAttribute) evt.setAttribute('data-ev-id', String(e.id));   // mission 111 : « Voir dans mon agenda »
         tcRendreDeplacable(evt, e, { vue: 'week', pxParMin: 44/60, colWidth: colWidth, di: di });
@@ -5196,6 +5203,7 @@ function renderDay() {
     const evt = document.createElement('div');
     evt.className = 'day-event';
     tcAppliquerCouleurEvenement(evt, e.cat);
+    if (e._dispo133) evt.classList.add('tc-dispo133');   // mission 133
     evt.style.top = `${sm*(48/60)+8}px`;
     const hb = tcHauteurBloc('day', dm);
     if (hb.court) evt.classList.add('bloc-court');
@@ -5652,6 +5660,7 @@ function tcLigneVideFiche(champ) {
 }
 
 function openEventModal(e) {
+  if (e && e._dispo133 && typeof tcFicheDispo133 === 'function') return tcFicheDispo133(e);   // mission 133
   currentEvent = e;
   document.getElementById('emTitle').textContent = tcMarqueDecalage(e) + tcIconeType(e) + e.title + (tcMarqueDecalage(e) ? ' (en cours de décalage)' : '');
   const dateStr = tcPeriodeLisible(e);
@@ -13347,35 +13356,93 @@ function tcDemoPro() { return !!(typeof _tcDemo !== 'undefined' && _tcDemo && _t
 /** Les phrases de la démonstration ouverte. */
 function tcDemoPhrases() { return (typeof tcDemoPro === 'function' && tcDemoPro()) ? TC_DEMO_PHRASES_PRO : TC_DEMO_PHRASES; }
 
+/** Mission 133 (Charles, 18/11) : les 16 cases de 30 minutes du cabinet d'exemple (9h-13h, 14h-18h), en minutes depuis minuit. */
+const TC_DEMO_CASES133 = [540, 570, 600, 630, 660, 690, 720, 750, 840, 870, 900, 930, 960, 990, 1020, 1050];
+/** Mission 133 : les jours remplis du cabinet (au moins 10 jours ouvrés demandés) : trois semaines, la suivante toujours entière. */
+const TC_DEMO_NB_JOURS133 = 15;
+/**
+ * Mission 133 : les patients de chaque jour rempli, par numéro de case (0 = 9h, 7 = 12h30, 8 = 14h, 15 = 17h30), comme chez un vrai
+ * dentiste : demain et le jour ouvré suivant pleins (seule la case d'urgence de 15h à 16h reste libre), puis aux trois quarts, à
+ * moitié, au quart, puis un ou deux rendez-vous par jour. 15h-16h reste libre partout.
+ */
+const TC_DEMO_REMPLISSAGE133 = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15],
+  [0, 1, 2, 3, 6, 7, 8, 9, 12, 13, 14, 15],
+  [0, 1, 4, 5, 8, 9, 12, 13],
+  [1, 4, 9, 12],
+  [2, 13], [6], [1, 9], [12], [4, 14], [0], [3, 8], [13], [5, 12], [9]
+];
+/** Mission 133 : les patients virtuels ajoutés (vouvoyés) ; aucun prénom qui commence comme un mot courant (« ça », « et », « je »…). */
+const TC_DEMO_PATIENTS133 = [
+  ['Agathe', 'f'], ['Antoine', 'm'], ['Anaïs', 'f'], ['Arthur', 'm'], ['Amandine', 'f'], ['Basile', 'm'], ['Bérénice', 'f'], ['Bastien', 'm'],
+  ['Clara', 'f'], ['Clément', 'm'], ['Diane', 'f'], ['Cyril', 'm'], ['Faustine', 'f'], ['Fabien', 'm'], ['Gaëlle', 'f'], ['Félix', 'm'],
+  ['Garance', 'f'], ['Gabriel', 'm'], ['Gisèle', 'f'], ['Gaspard', 'm'], ['Héloïse', 'f'], ['Guillaume', 'm'], ['Hortense', 'f'], ['Hector', 'm'],
+  ['Iris', 'f'], ['Henri', 'm'], ['Jade', 'f'], ['Isaac', 'm'], ['Olivia', 'f'], ['Joseph', 'm'], ['Ophélie', 'f'], ['Karim', 'm'],
+  ['Perrine', 'f'], ['Lionel', 'm'], ['Rachel', 'f'], ['Octave', 'm'], ['Romane', 'f'], ['Pierre', 'm'], ['Solène', 'f'], ['Raphaël', 'm'],
+  ['Tiphaine', 'f'], ['Victor', 'm'], ['Victoire', 'f'], ['William', 'm'], ['Yasmine', 'f'], ['Adam', 'm']
+];
+/** Mission 133 : les actes des patients ajoutés. */
+const TC_DEMO_ACTES133 = ['consultation de contrôle', 'détartrage', 'soin d’une carie', 'dévitalisation', 'empreinte pour une couronne', 'pose d’une couronne',
+  'extraction d’une dent', 'contrôle après extraction', 'radio panoramique', 'blanchiment', 'pose d’un implant', 'contrôle de l’appareil', 'urgence dentaire'];
+
+/**
+ * Mission 133 : où finit le matin, en minutes : à 13h dans la démonstration du dentiste (la matinée du cabinet, 9h-13h : les patients
+ * de 12h et 12h30 sont « de la matinée ») ; à midi partout ailleurs, comme avant.
+ */
+function tcMidi133() {
+  return (typeof tcDemoPro === 'function' && tcDemoPro()) ? 13 * 60 : 12 * 60;
+}
+
+/** Mission 133 : le cabinet d'exemple est-il ouvert ce jour-là ? Du lundi au vendredi ; demain toujours (même un samedi ou un dimanche). */
+function tcDemoCabinetOuvert133(d) {
+  const j = d.getDay();
+  return (j !== 0 && j !== 6) || tcISO(d) === tcISO(tcDemoJour(1));
+}
+
+/** Mission 133 : les jours remplis du cabinet (Date à minuit) : demain (toujours), puis les jours ouvrés qui suivent. */
+function tcDemoJoursCabinet133() {
+  const jours = [tcDemoJour(1)];
+  for (let k = 2; jours.length < TC_DEMO_NB_JOURS133 && k < 60; k++) {
+    const d = tcDemoJour(k);
+    if (d.getDay() !== 0 && d.getDay() !== 6) jours.push(d);
+  }
+  return jours;
+}
+
 /** Les données d'exemple du cabinet dentaire, placées par rapport à aujourd'hui (fabriquées à l'ouverture). */
 function tcDemoDonneesPro() {
   const maintenant = new Date();
-  const auj = tcDemoJour(0), demain = tcDemoJour(1);
-  const vendredi = tcDemoVendredi();
+  const auj = tcDemoJour(0);
   const patient = function (id, d, h, m, duree, prenom, nom, acte) {
     return Object.assign(tcDemoRdv(id, d, h, m, duree, 'RDV ' + prenom + ' ' + nom + ' : ' + acte, 'sante'), { contact: 'demo_' + id.split('_')[0], lieu: TC_DEMO_CABINET_131 });
   };
   const evs = [];
-  // Aujourd'hui : deux patients à venir, une heure après l'ouverture (« mes patients à venir »).
+  // Aujourd'hui (ne change pas) : deux patients à venir, une heure après l'ouverture (« mes patients à venir »).
   let h1 = maintenant.getHours() + 1 + (maintenant.getMinutes() ? 1 : 0);
   if (h1 < 9) h1 = 9;
   if (h1 <= 23) {
     evs.push(patient('ines_auj', auj, h1, 0, 30, 'Inès', 'Virtuelle', 'consultation de contrôle'));
     if (h1 < 23) evs.push(patient('nina_auj', auj, h1, 30, 30, 'Nina', 'Virtuelle', 'détartrage'));
   }
-  // Demain : la matinée (quatre patients) et l'après-midi (deux) ; libre de 12h à 14h, de 15h à 15h30 et après 16h30.
-  evs.push(patient('claire_dem', demain, 9, 0, 30, 'Claire', 'Virtuelle', 'détartrage'));
-  evs.push(patient('louis_dem', demain, 9, 30, 30, 'Louis', 'Virtuel', 'consultation de contrôle'));
-  evs.push(patient('emma_dem', demain, 10, 30, 45, 'Emma', 'Virtuelle', 'soin d’une carie'));
-  evs.push(patient('hugo_dem', demain, 11, 30, 30, 'Hugo', 'Virtuel', 'consultation de contrôle'));
-  evs.push(patient('lea_dem', demain, 14, 0, 60, 'Léa', 'Virtuelle', 'pose d’une couronne'));
-  evs.push(patient('tom_dem', demain, 15, 30, 60, 'Tom', 'Virtuel', 'urgence dentaire'));
-  // Vendredi (s'il vient après demain) : du pris et du libre, pour « Quand suis-je libre vendredi pour une urgence ? ».
-  if (tcISO(vendredi) > tcISO(demain)) {
-    evs.push(patient('tom_ven', vendredi, 9, 0, 60, 'Tom', 'Virtuel', 'pose d’une couronne'));
-    evs.push(patient('ines_ven', vendredi, 11, 0, 30, 'Inès', 'Virtuelle', 'consultation de contrôle'));
-    evs.push(patient('nina_ven', vendredi, 14, 0, 45, 'Nina', 'Virtuelle', 'soin d’une carie'));
-  }
+  // Mission 133 : trois semaines de cabinet, 30 minutes par patient (une seule durée pour tout, règle de Charles). Demain garde ses six
+  // patients d'avant aux mêmes heures (Tom passe à 16h : 15h-16h, la case d'urgence, reste libre).
+  const jours = tcDemoJoursCabinet133();
+  const FIXES = { 0: ['claire_dem', 'Claire', 'Virtuelle', 'détartrage'], 1: ['louis_dem', 'Louis', 'Virtuel', 'consultation de contrôle'],
+    3: ['emma_dem', 'Emma', 'Virtuelle', 'soin d’une carie'], 5: ['hugo_dem', 'Hugo', 'Virtuel', 'consultation de contrôle'],
+    8: ['lea_dem', 'Léa', 'Virtuelle', 'pose d’une couronne'], 12: ['tom_dem', 'Tom', 'Virtuel', 'urgence dentaire'] };
+  const idDe = function (prenom) { return tcSansAccents(prenom.toLowerCase()).replace(/[^a-z]/g, ''); };
+  let n = 0;
+  jours.forEach(function (d, k) {
+    (TC_DEMO_REMPLISSAGE133[k] || []).forEach(function (c) {
+      const h = Math.floor(TC_DEMO_CASES133[c] / 60), m = TC_DEMO_CASES133[c] % 60;
+      const fixe = k === 0 ? FIXES[c] : null;
+      if (fixe) { evs.push(patient(fixe[0], d, h, m, 30, fixe[1], fixe[2], fixe[3])); return; }
+      const p = TC_DEMO_PATIENTS133[n % TC_DEMO_PATIENTS133.length];
+      evs.push(patient(idDe(p[0]) + '_' + k, d, h, m, 30, p[0], p[1] === 'f' ? 'Virtuelle' : 'Virtuel', TC_DEMO_ACTES133[(n * 5 + k) % TC_DEMO_ACTES133.length]));
+      n++;
+    });
+  });
   const contact = function (id, prenom, nom, role, n) {
     const c = { id: 'demo_' + id, name: prenom + ' ' + nom + (role ? ' (' + role + ')' : ''), firstname: prenom, lastname: nom, phone: '06 39 98 00 ' + n,
       email: tcSansAccents(prenom.toLowerCase()) + '.' + tcSansAccents(nom.toLowerCase()) + '@exemple-timecool.fr', isTimeCool: true, categories: [], demo: true, vouvoie: true };
@@ -13392,6 +13459,8 @@ function tcDemoDonneesPro() {
   ];
   // Le commercial n'a pas TimeCool : on note le rendez-vous ; son agenda n'est pas lu.
   const luc = contacts[contacts.length - 1]; delete luc.referenceCompte; luc.isTimeCool = false;
+  // Mission 133 : les patients ajoutés (vouvoyés, TimeCool, agenda libre), après ceux d'avant.
+  TC_DEMO_PATIENTS133.forEach(function (p, i) { contacts.push(contact(idDe(p[0]), p[0], p[1] === 'f' ? 'Virtuelle' : 'Virtuel', '', String(22 + i))); });
   const occ = function (d, h1, h2) { return { date: tcISO(d), debut: h1 * 60, fin: h2 * 60 }; };
   const J = function (n) { return tcDemoJour(n); };
   // L'agenda de chacun : assez pris pour être vrai, assez libre pour choisir.
@@ -13399,10 +13468,51 @@ function tcDemoDonneesPro() {
     'DEMO-PRO-CLAIRE': [occ(J(2), 8, 12)], 'DEMO-PRO-LOUIS': [occ(J(2), 13, 19)], 'DEMO-PRO-EMMA': [occ(J(3), 8, 13)],
     'DEMO-PRO-HUGO': [occ(J(2), 8, 20)], 'DEMO-PRO-LEA': [occ(J(3), 13, 20)], 'DEMO-PRO-TOM': [occ(J(4), 8, 12)],
     'DEMO-PRO-INES': [occ(J(2), 14, 18)], 'DEMO-PRO-NINA': [occ(J(3), 9, 11)],
-    // L'assistante et le prothésiste : pris demain et après-demain matin ; la réunion commune tombe ensuite.
-    'DEMO-PRO-SOPHIE': [occ(demain, 8, 20), occ(J(2), 8, 12)], 'DEMO-PRO-MARC': [occ(demain, 8, 20), occ(J(2), 14, 18)]
+    // L'assistante et le prothésiste : pris demain, et le jour du cabinet qui suit (l'une le matin, l'autre l'après-midi) ; la réunion
+    // commune tombe ensuite, sur une case libre du cabinet.
+    'DEMO-PRO-SOPHIE': [occ(jours[0], 8, 20), occ(jours[1], 8, 12)], 'DEMO-PRO-MARC': [occ(jours[0], 8, 20), occ(jours[1], 14, 18)]
   };
+  TC_DEMO_PATIENTS133.forEach(function (p) { agendas['DEMO-PRO-' + idDe(p[0]).toUpperCase()] = []; });
   return { events: evs, contacts: contacts, agendas: agendas };
+}
+
+/**
+ * Mission 133 : les « RDV disponible » d'un jour de la démonstration du dentiste : chaque case de 30 minutes du cabinet sans
+ * rendez-vous, sur les jours remplis (pas aujourd'hui, qui ne change pas). Ils sont seulement dessinés (vues Semaine et Jour) :
+ * jamais dans l'agenda que lit Charly (pour lui, c'est du temps libre). Un rendez-vous posé sur une case la prend : le bloc s'en va.
+ */
+function tcDispoDuJour133(jour) {
+  if (!(typeof tcDemoPro === 'function' && tcDemoPro()) || !_tcDemo) return [];
+  if (!_tcDemo.jours133) _tcDemo.jours133 = tcDemoJoursCabinet133().map(tcISO);
+  if (_tcDemo.jours133.indexOf(jour) < 0) return [];
+  const pris = tcOccupationsDuJour(jour);
+  return TC_DEMO_CASES133.filter(function (c) { return !pris.some(function (o) { return o.debut < c + 30 && o.fin > c; }); }).map(function (c) {
+    return { id: 'dispo133_' + jour + '_' + c, _dispo133: true, mode: 'dispo', date: jour, startH: Math.floor(c / 60), startM: c % 60,
+      endH: Math.floor((c + 30) / 60), endM: (c + 30) % 60, title: 'RDV disponible', cat: 'dispo133', notes: '' };
+  });
+}
+
+/** Mission 133 : la fiche d'un « RDV disponible » : le libellé en entier, le jour, l'heure ; « Ajouter un rendez-vous » ouvre « Nouveau ». */
+function tcFicheDispo133(e) {
+  currentEvent = null;
+  const jour = new Date(e.date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const hm = function (h, m) { return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
+  document.getElementById('emTitle').textContent = 'RDV disponible';
+  document.getElementById('emBody').innerHTML =
+    '<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><div style="flex:1;"><div class="event-detail-label">Date</div><div class="event-detail-value">' + escapeHTMLSafe(jour) + '</div></div></div>'
+    + '<div class="event-detail-row"><svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/></svg><div style="flex:1;"><div class="event-detail-label">Horaire</div><div class="event-detail-value">' + hm(e.startH, e.startM) + ' – ' + hm(e.endH, e.endM) + '</div></div></div>'
+    + '<div class="tc-dispo133-texte" style="margin:6px 0 2px; padding:10px 12px; border-radius:10px; background:#d7eefc; color:#0b4f7c; font-size:13.5px; line-height:1.4;">Cette case de 30 minutes est libre : aucun patient ne l’a encore prise.</div>';
+  document.getElementById('emActions').innerHTML = '<button class="btn-secondary" onclick="closeEventModal()" style="flex:1;">Fermer</button>'
+    + '<button onclick="tcPrendreDispo133(\'' + e.date + '\', ' + e.startH + ', ' + e.startM + ')" style="flex:1; padding:10px; background:var(--g-blue); color:white; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">➕ Ajouter un rendez-vous</button>';
+  const prevenir = document.getElementById('emPrevenirRow');
+  if (prevenir) prevenir.innerHTML = '';
+  document.getElementById('eventModal').classList.add('open');
+}
+
+/** Mission 133 : « Ajouter un rendez-vous » depuis la fiche d'un « RDV disponible » : « Nouveau », à ce jour et à cette heure. */
+function tcPrendreDispo133(date, h, m) {
+  closeEventModal();
+  openCreateModal({ date: date, heure: h, minute: m });
 }
 
 
@@ -13517,10 +13627,11 @@ function tcDemoServeur() {
       // Mission 131 : la démonstration du dentiste : du lundi au vendredi, à partir de 9h (le cabinet).
       const _cabinet = typeof tcDemoPro === 'function' && tcDemoPro();
       jours.forEach(function (d) {
-        if (_cabinet && (d.getDay() === 0 || d.getDay() === 6)) return;
+        if (_cabinet && typeof tcDemoCabinetOuvert133 === 'function' ? !tcDemoCabinetOuvert133(d) : (_cabinet && (d.getDay() === 0 || d.getDay() === 6))) return;
         const date = tcISO(d), duJour = [];
         for (let h = Math.max(_cabinet ? 9 : 8, Math.min(19, o.des || 8)); h + duree <= 20; h++) {
           if (date === tcISO(now) && h <= now.getHours()) continue;
+          if (_cabinet && !(h + duree <= 13 || (h >= 14 && h + duree <= 18))) continue;   // mission 133 : 9h-13h, 14h-18h
           if (!tcDemoLibre(moi, date, h * 60, (h + duree) * 60)) continue;
           const manquants = refs.filter(function (r) { return !tcDemoLibre(_tcDemo.agendas[r], date, h * 60, (h + duree) * 60); }).map(prenomDe);
           if (manquants.length >= refs.length) continue;
@@ -16635,8 +16746,9 @@ function tcPlageImprevu(text) {
   if (m) { const h = heure(m[1], m[2]); return { debut: h, fin: 1440, precise: true, label: 'à partir de ' + m[1] + 'h' + (m[2] || '') }; }
   m = sans.match(/\b(?:jusqu.?a|avant)\s*(\d{1,2})\s*(?:h|:)\s*(\d{2})?/);
   if (m) { const h = heure(m[1], m[2]); return { debut: 0, fin: h, precise: true, label: 'jusqu\'à ' + m[1] + 'h' + (m[2] || '') }; }
-  if (/apres-?midi/.test(sans)) return { debut: 720, fin: 1080, precise: true, label: 'l\'après-midi' };
-  if (/\bmatin(?:ee)?\b/.test(sans)) return { debut: 0, fin: 720, precise: true, label: 'le matin' };
+  // Mission 133 : la limite du matin suit tcMidi133 (13h dans la démonstration du dentiste, midi ailleurs).
+  if (/apres-?midi/.test(sans)) return { debut: typeof tcMidi133 === 'function' ? tcMidi133() : 720, fin: 1080, precise: true, label: 'l\'après-midi' };
+  if (/\bmatin(?:ee)?\b/.test(sans)) return { debut: 0, fin: typeof tcMidi133 === 'function' ? tcMidi133() : 720, precise: true, label: 'le matin' };
   if (/\bsoir(?:ee)?\b/.test(sans)) return { debut: 1080, fin: 1440, precise: true, label: 'le soir' };
   return { debut: 0, fin: 1440, precise: false, label: '' };
 }
@@ -17125,6 +17237,10 @@ function tcDesPlagesDeclarees() {
 }
 
 function tcPlagesDuJour(date) {
+  // Mission 133 : dans la démonstration du dentiste, les heures du cabinet (jamais la pause de midi ni le soir).
+  if (typeof tcDemoPro === 'function' && tcDemoPro() && typeof tcDemoCabinetOuvert133 === 'function') {
+    return { plages: tcDemoCabinetOuvert133(date) ? [{ debut: 9 * 60, fin: 13 * 60 }, { debut: 14 * 60, fin: 18 * 60 }] : [], defaut: false };
+  }
   if (typeof loadDispo === 'function' && !_dispoData) loadDispo();
   const jour = ((date.getDay() + 6) % 7) + 1;        // 1 = lundi … 7 = dimanche
   const brutes = [], protegees = [];
@@ -25793,8 +25909,8 @@ function tcPremierCreneauLibre(periode, borne, partie) {
     let debut = c.debut, fin = c.fin;
     if (borne && borne.apres) debut = Math.max(debut, borne.apres);
     if (borne && borne.avant) fin = Math.min(fin, borne.avant);
-    if (partie === 'matin') fin = Math.min(fin, 12 * 60);
-    if (partie === 'apres-midi') { debut = Math.max(debut, 12 * 60); fin = Math.min(fin, 19 * 60); }
+    if (partie === 'matin') fin = Math.min(fin, typeof tcMidi133 === 'function' ? tcMidi133() : 12 * 60);   // mission 133
+    if (partie === 'apres-midi') { debut = Math.max(debut, typeof tcMidi133 === 'function' ? tcMidi133() : 12 * 60); fin = Math.min(fin, 19 * 60); }
     if (partie === 'soir') debut = Math.max(debut, 17 * 60);
     if (debut % 15) debut += 15 - (debut % 15);
     if (fin - debut >= 60) return { date: c.date, debut: debut };
@@ -28008,8 +28124,9 @@ function tcRdvPeriode130(debutIso, finIso, partie, now) {
     if (!e || e.mode !== evMode || !e.title || e.allDay || e.date < debutIso || e.date > finIso) return false;
     if (e.date < auj || (e.date === auj && Number(e.endH) * 60 + Number(e.endM || 0) <= minute)) return false;
     const debut = Number(e.startH) * 60 + Number(e.startM || 0);
-    if (partie === 'matin') return debut < 12 * 60;
-    if (partie === 'aprem') return debut >= 12 * 60;
+    // Mission 133 : la matinée du cabinet d'exemple finit à 13h.
+    if (partie === 'matin') return debut < (typeof tcMidi133 === 'function' ? tcMidi133() : 12 * 60);
+    if (partie === 'aprem') return debut >= (typeof tcMidi133 === 'function' ? tcMidi133() : 12 * 60);
     return true;
   }).sort(tcComparerEvenements);
 }
@@ -31373,8 +31490,9 @@ async function tcQuestionnaireEnvoyer(id, i) {
 /** Les périodes proposées : jours (depuis aujourd'hui), partie de journée en minutes, mots reconnus au clavier. */
 const TC_MALADE_PERIODES = {
   aujourdhui:       { texte: 'Ce qui reste aujourd’hui',   label: 'pour le reste de la journée', jours: [0, 0], debut: 0,   fin: 1440, mots: /aujourd|ce soir|cet apres|ce matin|reste/ },
-  demain_matin:     { texte: 'Demain matin',               label: 'demain matin',                jours: [1, 1], debut: 0,   fin: 720,  mots: /matin/ },
-  demain_apresmidi: { texte: 'Demain après-midi',          label: 'demain après-midi',           jours: [1, 1], debut: 720, fin: 1440, mots: /apres.?midi|aprem/ },
+  // Mission 133 : la limite du matin suit tcMidi133 (13h dans la démonstration du dentiste, midi ailleurs).
+  demain_matin:     { texte: 'Demain matin',               label: 'demain matin',                jours: [1, 1], debut: 0,   get fin() { return typeof tcMidi133 === 'function' ? tcMidi133() : 720; },  mots: /matin/ },
+  demain_apresmidi: { texte: 'Demain après-midi',          label: 'demain après-midi',           jours: [1, 1], get debut() { return typeof tcMidi133 === 'function' ? tcMidi133() : 720; }, fin: 1440, mots: /apres.?midi|aprem/ },
   demain:           { texte: 'Demain toute la journée',    label: 'demain',                      jours: [1, 1], debut: 0,   fin: 1440, mots: /^demain$|toute la journee|journee entiere|tout demain/ },
   prochains_jours:  { texte: 'Les 2 ou 3 prochains jours', label: 'pour les 3 prochains jours',  jours: [0, 2], debut: 0,   fin: 1440, mots: /prochains|jours|2 ou 3|deux ou trois/ },
   // Mission 93 : « aujourd'hui ou demain » dit dans la phrase : les deux jours (pas de bouton de plus).

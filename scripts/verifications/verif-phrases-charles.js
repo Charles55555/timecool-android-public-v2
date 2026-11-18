@@ -98,6 +98,7 @@ if (!exe) {
           if (typeof _tcDemo !== 'undefined' && _tcDemo) { tcQuitterDemo({ sansRetour: true }); await attendre(200); }
           // Mission 127 : « @charlypro » : la phrase est tapée sur la page Charly Pro IA (case cochée) ; les autres, sur Charly IA.
           var pro = e.contexte.indexOf('@charlypro') > -1;
+          if (window.__tcDixHeures) window.__tcDixHeures(pro);   // mission 133
           if (typeof tcPasserCharlyVariante === 'function') { if (pro || tcCharlyVariante !== 'ia') { FEATURES.CHARLY_PRO = pro; await tcPasserCharlyVariante(pro ? 'pro' : 'ia', { ouvrir: true }); await attendre(200); } }
           else if (pro) throw new Error('pas de page Charly Pro IA');
           await tcOuvrirDemo(); await attendre(200);
@@ -138,8 +139,16 @@ if (!exe) {
       fin(R);
     } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
   }, 1200); });</script>`;
+  // Mission 133 : « @charlypro » est joué à 10h du jour même (la démonstration du dentiste place ses patients d'aujourd'hui une heure
+  // après l'ouverture, et ses créneaux aux heures du cabinet) : la suite reste vraie à toute heure. Le jour ne change pas ; les sept
+  // jours de la semaine sont rejoués par verif-demo-pro133.
+  const horloge = `<script>(function () { var V = Date; window.__tcDecalage = 0;
+    class D extends V { constructor(...a) { if (a.length === 0) super(V.now() + window.__tcDecalage); else super(...a); } static now() { return V.now() + window.__tcDecalage; } }
+    window.Date = D;
+    window.__tcDixHeures = function (oui) { var n = new V(); window.__tcDecalage = oui ? new V(n.getFullYear(), n.getMonth(), n.getDate(), 10, 0, 0).getTime() - n.getTime() : 0; };
+  })();</script>`;
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-phrases-'));
-  fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('</body>', () => js + '</body>'));
+  fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + horloge).replace('</body>', () => js + '</body>'));
   const args = ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=390,844', '--virtual-time-budget=' + (essais.length * 12000 + 20000), '--dump-dom'];
   const r = spawnSync(exe, args.concat(['file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')]), { encoding: 'utf8', timeout: 1800000, maxBuffer: 1 << 28 });
   try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
