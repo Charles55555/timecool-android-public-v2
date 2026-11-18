@@ -11097,7 +11097,7 @@ function tcOuvrirConfigPro121() {
   _tcConfigProErreur = '';
   const e = tcConfigProLire();
   _tcConfigProEtape = e.termine ? 7 : Math.min(6, Math.max(1, Number(e.etape) || 1));
-  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0;
+  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null;
   tcRendreConfigPro121();
 }
 
@@ -11299,12 +11299,22 @@ const tcConfigPro121 = {
       _tcConfigProErreur = 'Je n’arrive pas à lire ce texte pour le moment. Réessayez dans un instant, ou remplissez les réponses vous-même.';
       tcRendreConfigPro121(); return;
     }
+    // Les réponses lues attendent : rien n'est enregistré avant « Valider ces réponses ».
+    const prop = {};
+    TC_PRO_FICHE_QUESTIONS.forEach(function (q) { const v = o[q[0]]; if (typeof v === 'string' && v.trim()) prop[q[0]] = v.trim().slice(0, 2000); });
+    if (!Object.keys(prop).length) { _tcConfigProErreur = 'Je n’ai trouvé aucune réponse dans ce texte. Vérifiez le texte collé, ou remplissez les réponses vous-même.'; tcRendreConfigPro121(); return; }
+    _tcConfigProPropose = prop; _tcConfigProRempli = 0; _tcConfigProRemplir = false; _tcConfigProTexteColle = '';
+    tcRendreConfigPro121();
+  },
+  validerPropose: function () {
+    const prop = _tcConfigProPropose;
+    if (!prop) return;
     const fi = tcConfigProFiche(tcConfigProLire());
-    let n = 0;
-    TC_PRO_FICHE_QUESTIONS.forEach(function (q) { const v = o[q[0]]; if (typeof v === 'string' && v.trim()) { fi[q[0]] = v.trim().slice(0, 2000); n++; } });
-    _tcConfigProRempli = n; _tcConfigProRemplir = false; _tcConfigProTexteColle = '';
+    Object.keys(prop).forEach(function (k) { fi[k] = prop[k]; });
+    _tcConfigProRempli = Object.keys(prop).length; _tcConfigProPropose = null;
     tcConfigProSauver(); tcRendreConfigPro121();
-  }
+  },
+  annulerPropose: function () { _tcConfigProPropose = null; _tcConfigProRempli = 0; tcRendreConfigPro121(); }
 };
 
 // Étape 6 (morceau B). Les questions de la fiche : [clé, question, aide, lignes, nom court au récapitulatif].
@@ -11342,6 +11352,7 @@ let _tcConfigProRemplir = false;    // le cadre « Remplis à ma place » ouvert
 let _tcConfigProLecture = '';       // « Charly Pro IA lit votre fiche… »
 let _tcConfigProRempli = 0;         // combien de réponses Charly Pro IA vient de remplir
 let _tcConfigProTexteColle = '';    // le texte collé, gardé le temps d'un dessin
+let _tcConfigProPropose = null;      // les réponses lues par Charly Pro IA, en attente de « Valider ces réponses »
 
 /** La fiche : créée la première fois avec les réponses proposées pour le métier. */
 function tcConfigProFiche(e) {
@@ -11370,7 +11381,14 @@ function tcCpEtape6(e) {
         + (_tcConfigProLecture ? '<div style="font-size:14px; color:#7b1fa2; margin-top:8px;">' + escapeHTMLSafe(_tcConfigProLecture) + '</div>' : '')
       : '')
     + '</div>'
-    + (_tcConfigProRempli ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ Charly Pro IA a rempli ' + _tcConfigProRempli + ' réponse' + (_tcConfigProRempli > 1 ? 's' : '') + '.<br>Relisez chaque réponse et corrigez-la si besoin.<br>C’est vous qui validez.</div>' : '')
+    + (_tcConfigProPropose ? '<div id="cpPropose" role="status" style="' + TC_CP_CARTE + ' background:#f3e8fd; border-color:#d7b8f5;">'
+      + '<div style="font-size:15px; font-weight:700; color:var(--text);">Charly Pro IA a lu votre fiche.</div>'
+      + '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin:4px 0 8px;">Voici ce qu’il a trouvé.<br>Rien n’est encore enregistré : c’est vous qui validez.</div>'
+      + TC_PRO_FICHE_QUESTIONS.filter(function (q) { return _tcConfigProPropose[q[0]]; }).map(function (q) { return '<div style="padding:4px 0; font-size:14px; color:var(--text); line-height:1.45;"><b>' + q[4] + '</b> : <span data-notranslate>' + escapeHTMLSafe(_tcConfigProPropose[q[0]]).replace(/\n/g, '<br>') + '</span></div>'; }).join('')
+      + '<div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">'
+      + '<button onclick="tcConfigPro121.validerPropose()" style="' + TC_CP_BOUTON + ' flex:2; background:var(--g-blue); color:#fff; border:none;">Valider ces réponses</button>'
+      + '<button onclick="tcConfigPro121.annulerPropose()" style="' + TC_CP_BOUTON + ' flex:1; background:#fff; color:var(--text); border:1px solid var(--border);">Annuler</button></div></div>' : '')
+    + (_tcConfigProRempli ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ C’est enregistré : ' + _tcConfigProRempli + ' réponse' + (_tcConfigProRempli > 1 ? 's' : '') + '.<br>Vous pouvez encore les corriger ci-dessous.</div>' : '')
     + '<div style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:14px;">'
     + (photo ? '<img src="' + photo + '" alt="Votre photo" style="width:64px; height:64px; border-radius:50%; object-fit:cover; flex-shrink:0;">'
       : '<div aria-hidden="true" style="width:64px; height:64px; border-radius:50%; background:#e8eaed; display:flex; align-items:center; justify-content:center; font-size:28px; flex-shrink:0;">👤</div>')

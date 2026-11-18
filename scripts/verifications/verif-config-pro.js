@@ -82,8 +82,18 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     document.getElementById('cpTexteFiche').value = 'Dr Paul Martin, chirurgien-dentiste, 12 rue de la Paix 75002 Paris. Paiement : carte bancaire, espèces. Ouvert du lundi au vendredi de 8h à 19h. Langues : français, anglais.';
     await tcConfigPro121.remplir(); await attendre(150);
     R.e6b = texte();
+    R.enAttente = { nom: document.getElementById('cpFiche_nom').value, garde: (JSON.parse(localStorage.getItem('tc_config_pro') || '{}').fiche || {}).nom };
+    bouton(/Valider ces réponses/).click(); await attendre(150);
+    R.valide = texte();
     R.fiche = { nom: document.getElementById('cpFiche_nom').value, adresse: document.getElementById('cpFiche_adresse').value, horaires: document.getElementById('cpFiche_horaires').value, presentation: document.getElementById('cpFiche_presentation').value };
     document.getElementById('cpFiche_langues').value = 'Français, anglais, espagnol'; tcConfigPro121.fiche('langues', 'Français, anglais, espagnol');
+    // « Annuler » : rien ne change.
+    callAI = async function () { return '{"nom":"Dr Autre Nom"}'; };
+    bouton(/Remplis à ma place/).click(); await attendre(50);
+    document.getElementById('cpTexteFiche').value = 'Un autre texte de fiche, assez long pour être lu.';
+    await tcConfigPro121.remplir(); await attendre(100);
+    bouton(/^Annuler$/).click(); await attendre(100);
+    R.annule = [document.getElementById('cpFiche_nom').value, (JSON.parse(localStorage.getItem('tc_config_pro') || '{}').fiche || {}).nom, !!document.getElementById('cpPropose')];
     callAI = async function () { throw new Error('hors ligne'); };
     bouton(/Remplis à ma place/).click(); await attendre(50);
     document.getElementById('cpTexteFiche').value = 'Un texte de fiche assez long pour être lu par Charly Pro IA.';
@@ -126,7 +136,9 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'étape 5 : le total de la semaine (lundi à samedi)', /En tout : 105 créneaux par semaine\./.test(S.e5), S.e5.slice(-200));
   verifie(n + 'étape 6 : la fiche, question par question, « Remplis à ma place » en haut', /Étape 6 sur 6/i.test(S.e6) && /Votre fiche professionnelle/.test(S.e6) && /Remplis à ma place/.test(S.e6) && /Quelle est l’adresse du cabinet \?/.test(S.e6) && /Que doit apporter le patient \?/.test(S.e6), S.e6.slice(0, 300));
   verifie(n + 'étape 6 : les horaires du cabinet vides au départ (jamais ceux de l’étape 4)', S.horairesFiche === '', S.horairesFiche);
-  verifie(n + '« Remplis à ma place » : la fiche remplie depuis le texte collé, ce qui manque garde la réponse proposée', S.fiche && S.fiche.nom === 'Dr Paul Martin' && S.fiche.adresse === '12 rue de la Paix, 75002 Paris' && S.fiche.horaires === 'Lundi au vendredi, 8h à 19h' && /cabinet de chirurgie dentaire/.test(S.fiche.presentation) && /Charly Pro IA a rempli 5 réponses/.test(S.e6b), JSON.stringify(S.fiche));
+  verifie(n + '« Remplis à ma place » puis « Valider ces réponses » : la fiche remplie, ce qui manque garde la réponse proposée', S.fiche && S.fiche.nom === 'Dr Paul Martin' && S.fiche.adresse === '12 rue de la Paix, 75002 Paris' && S.fiche.horaires === 'Lundi au vendredi, 8h à 19h' && /cabinet de chirurgie dentaire/.test(S.fiche.presentation) && /Charly Pro IA a lu votre fiche/.test(S.e6b) && /Rien n’est encore enregistré/.test(S.e6b) && /C’est enregistré : 5 réponses/.test(S.valide), JSON.stringify(S.fiche));
+  verifie(n + '« Remplis à ma place » : en attente, rien n’est enregistré avant « Valider ces réponses »', S.enAttente && S.enAttente.nom === 'Dr Charles Haddad' && S.enAttente.garde !== 'Dr Paul Martin', JSON.stringify(S.enAttente));
+  verifie(n + '« Annuler » : la fiche ne change pas', S.annule && S.annule[0] === 'Dr Paul Martin' && S.annule[1] === 'Dr Paul Martin' && S.annule[2] === false, JSON.stringify(S.annule));
   verifie(n + '« Remplis à ma place » sans réponse du modèle : un message simple, rien d’effacé', /Je n’arrive pas à lire ce texte pour le moment/.test(S.e6panne) && !/je ne peux pas/i.test(S.e6panne), S.e6panne.slice(-200));
   verifie(n + 'la page ne déborde pas sur le côté', S.debord <= 0, S.debord);
   verifie(n + 'le récapitulatif : métier, actes, jours, rendez-vous', /Votre configuration/.test(S.recap) && /Chirurgien-dentiste/.test(S.recap) && /Détartrage · 40 min/.test(S.recap) && /Samedi/.test(S.recap) && /Chaque rendez-vous dure 20 minutes\./.test(S.recap) && /Votre fiche professionnelle/.test(S.recap) && /Dr Paul Martin/.test(S.recap) && /Français, anglais, espagnol/.test(S.recap), S.recap.slice(0, 500));

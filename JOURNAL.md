@@ -3670,3 +3670,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Étape 6 : fiche question par question, réponses proposées pour le chirurgien-dentiste, photo réduite ; horaires du cabinet facultatifs, jamais ceux de l'étape 4 ; « Remplis à ma place » par texte collé (Charly Pro IA, relais habituel).
 - Version complète garde CONFIG_PRO, MODE_PRO, CARNET_PROS ; 9h-9h : « la fin est la même que le début » ; café de la démonstration en journée.
 - Capture d'écran pour « Remplis à ma place » : pas encore ; le relais transmet le corps tel quel (200 Ko au plus), à confirmer par un essai avant de coder.
+
+## 18/11/2026 (nuit) — Mission 121 B, examen (CODEUR)
+
+- « Remplis à ma place » : réponses en attente, « Valider ces réponses » / « Annuler », rien d'enregistré avant.
