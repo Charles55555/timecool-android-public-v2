@@ -94,3 +94,7 @@ ok | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ 
 vas-y | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:C’est envoyé à Michel && sans:pas bien compris
 envoie | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:C’est envoyé à Michel && sans:pas bien compris
 non | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎ En personne | texte:je n’envoie rien && sans:C’est envoyé
+# Groupe 5 (chef, 18/11) : un contact sans TimeCool cité avec d'autres : jamais « je ne peux pas l'inviter d'ici » ; Charly prépare l'invitation.
+Trouve un moment avec Alice, Chloé et Julien cette semaine | | texte:Je m’en occupe && texte:Julien n’a pas encore TimeCool && texte:Je lui prépare une invitation par SMS ou par e-mail && sans:je ne peux && sans:pas bien compris
+# Groupe 7 (chef, 18/11) : « Créer un nouveau rdv » à plusieurs, personne de lisible : comme la 122 (invitation Présent ou Absent), jamais « je ne peux pas chercher ».
+1 h | @validation:Alice,Chloé,Virginie ⏎ @demarrer:nouveau_rdv ⏎ Apéro ⏎ Alice, Chloé et Virginie ⏎ Cette semaine | texte:Je m’en occupe && texte:Chez Alice, Chloé et Virginie, chaque rendez-vous attend leur accord && texte:Chacun répondra Présent ou Absent && sans:je ne peux && sans:pas bien compris

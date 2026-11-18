@@ -98,6 +98,8 @@ if (!exe) {
           callAI = async function () { modele++; try { window.__envoi = JSON.stringify(arguments[0] || ''); } catch (x) {} return neutre.apply(this, arguments); };
           // Mission 122 : « @validation:Michel,Virginie » : ces amis gardent « Toujours attendre ma validation » (agenda non lisible).
           for (var c = 0; c < e.contexte.length; c++) {
+            // Groupe 7 (chef, 18/11) : « @demarrer:nouveau_rdv » ouvre le questionnaire « Créer un nouveau rdv » (plus de bouton).
+            if (e.contexte[c] === '@demarrer:nouveau_rdv') { await tcDemarrerNouveauRdv(); await attendre(300); continue; }
             var dv = /^@validation:(.+)$/.exec(e.contexte[c]);
             if (!dv) { await taper(e.contexte[c]); continue; }
             var norm = function (t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };

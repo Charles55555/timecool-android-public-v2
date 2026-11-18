@@ -3695,3 +3695,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Notification discrète, références sans accès, e2e-rdv-groupe réparée (CODEUR)
 
 - Notification du compte rendu sans nom ni rendez-vous ; sans_acces_refs dans /rdv/groupe/proposer, utilisé par « Lui envoyer la demande » (deux Alice) ; e2e-rdv-groupe aux règles du 10/10, avec le lieu, dans verifier.sh (API locale).
+
+## 18/11/2026 — Groupes 5 et 7 des « je ne peux pas » (CODEUR)
+
+- Contact cité sans TimeCool : Charly prépare l’invitation (bouton SMS/e-mail, texte de Charles), aussi dans le chemin de la 122 où il disparaissait. « Créer un nouveau rdv » à plusieurs sans agenda lisible : invitation Présent ou Absent (questionnaire sans bouton d’entrée aujourd’hui).

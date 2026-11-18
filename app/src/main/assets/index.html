@@ -14020,7 +14020,7 @@ function tcMessageAnnonceRdv111(m) {
   if (!m || m.role === 'user') return false;
   if (m._demo) return !!m._demo.agenda;
   if (m._groupe) return m._groupe.etat === 'fait';
-  if (m._envois) return true;
+  if (m._envois) return !m._invitation;   // groupe 5 : une invitation n’annonce pas de rendez-vous
   const t = String(m.content || '').replace(/<[^>]+>/g, ' ');
   return /C['’]est noté|C['’]est fait|C['’]est calé|rendez-vous déplacé|Déplacé :/i.test(t);
 }
@@ -24253,20 +24253,35 @@ function tcDetecterPlusieursCites(text) {
 /** Le questionnaire « rendez-vous à plusieurs » (mission 47) démarre ; ceux qui n'ont pas TimeCool sont nommés d'abord. */
 async function tcGererPlusieursCites(text, d) {
   tcPousserMessageUtilisateur(text);
-  const noms = d.sansCompte.map(function (c) { return c.name; });
-  const liste = noms.length > 1 ? noms.slice(0, -1).join(', ') + ' et ' + noms[noms.length - 1] : noms.join('');
-  const pluriel = noms.length > 1;
-  // Personne n'a TimeCool : pas de questionnaire (il n'aboutirait pas), Charly propose de leur écrire.
-  if (d.sansCompte.length === d.contacts.length) {
-    charlyIA.history.push({ role: 'assistant', nature: 'question', content: liste + (pluriel ? ' n’ont' : ' n’a') + ' pas TimeCool : je ne peux pas ' + (pluriel ? 'leur' : 'lui') + ' proposer un créneau d’ici. Tu veux que je ' + (pluriel ? 'leur' : 'lui') + ' écrive ?' });
-    renderCharlyChat();
-    return;
+  // Groupe 5 (chef, 18/11) : jamais « je ne peux pas l’inviter d’ici » : Charly prépare l’invitation (SMS ou e-mail).
+  const tous = d.sansCompte.length === d.contacts.length;
+  charlyIA.history.push(tcMessageInvitationSansCompte(d.sansCompte, !tous));
+  renderCharlyChat();
+  // Personne n’a TimeCool : pas de questionnaire (il n’aboutirait pas) ; l’invitation est ce qu’il y a à faire.
+  if (!tous) await tcDemarrerRdvAPlusieurs(null);
+}
+
+/**
+ * Groupe 5 (chef, 18/11) : « Je m’en occupe. Julien n’a pas encore TimeCool. Je lui prépare une invitation par SMS ou par e-mail. »
+ * Un bouton « Envoyer à … » par personne qui a un numéro ou un e-mail (le texte de Charles du 07/09) ; sans l’un ni l’autre, Charly
+ * dit quoi ajouter. « autres » : d’autres personnes suivent (« Pour les autres, on y va. »).
+ */
+function tcMessageInvitationSansCompte(sansCompte, autres) {
+  const prenom = function (c) { return (typeof tcPrenomPresentable === 'function' ? tcPrenomPresentable(c.name) : '') || String(c.name || '').trim().split(' ')[0]; };
+  const liste = (Array.isArray(sansCompte) ? sansCompte : []).filter(Boolean);
+  const joignables = liste.filter(function (c) { return c.phone || c.email; });
+  const sansCoord = liste.filter(function (c) { return !c.phone && !c.email; });
+  const pl = function (l, a, b) { return l.length > 1 ? a : b; };
+  const lignes = ['Je m’en occupe.', tcQuestionnaireNoms(liste.map(prenom)) + pl(liste, ' n’ont pas encore TimeCool.', ' n’a pas encore TimeCool.')];
+  if (joignables.length) lignes.push('Je ' + pl(joignables, 'leur', 'lui') + ' prépare une invitation par SMS ou par e-mail' + (sansCoord.length ? ' (' + tcQuestionnaireNoms(joignables.map(prenom)) + ')' : '') + '.');
+  if (sansCoord.length) lignes.push('Pour ' + tcQuestionnaireNoms(sansCoord.map(prenom)) + ', ajoute ' + pl(sansCoord, 'leur numéro ou leur e-mail dans leur fiche', 'son numéro ou son e-mail dans sa fiche') + ' : je ' + pl(sansCoord, 'leur', 'lui') + ' préparerai l’invitation.');
+  if (autres) lignes.push('Pour les autres, on y va.');
+  const m = { role: 'assistant', nature: 'reponse', content: lignes.join('\n'), _invitation: true };
+  if (joignables.length) {
+    m._envois = joignables.map(function (c) { return { nom: c.name, phone: c.phone || '', email: c.email || '', titre: 'invitation TimeCool', sujet: 'Rejoins-moi sur TimeCool', texte: tcTexteInvitationTimeCool(c) }; });
+    m._envoisId = 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero);
   }
-  if (d.sansCompte.length) {
-    charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: liste + (pluriel ? ' n’ont pas TimeCool : je ne peux pas les inviter d’ici.' : ' n’a pas TimeCool : je ne peux pas l’inviter d’ici.') + ' Pour les autres, on y va.' });
-    renderCharlyChat();
-  }
-  await tcDemarrerRdvAPlusieurs(null);
+  return m;
 }
 
 /** « envoie à Gaëlle que j'arrive dans dix minutes », « dis à Paul que j'annule » sans rendez-vous visé : le message, rédigé par
@@ -30287,7 +30302,7 @@ async function tcQuestionnaireEnvoyer(id, i) {
   const m = (Array.isArray(charlyIA.history) ? charlyIA.history : []).filter(function (x) { return x && x._envoisId === id; })[0];
   const e = m && m._envois && m._envois[i];
   if (!e || e.fait) return;
-  const chemin = await tcTransmettrePrevenance({ name: e.nom, phone: e.phone, email: e.email }, e.texte);
+  const chemin = await tcTransmettrePrevenance({ name: e.nom, phone: e.phone, email: e.email }, e.texte, e.sujet);
   tcDirePrevenance(chemin, e.nom);
   if (chemin === 'aucun') return;
   e.fait = chemin;
@@ -31014,7 +31029,8 @@ function tcNouveauRdvRecap(r) {
     else if (r._contact.phone || r._contact.email) l.push('• Je prépare le message pour ' + prenom + ' (SMS ou email), tu l’envoies d’un geste');
     else l.push('• ' + prenom + ' n’a ni numéro ni email dans ta fiche : tu le préviens toi-même');
   } else if (r.avec === 'plusieurs') {
-    l.push('• Je l’inscris dans l’agenda de ' + tcQuestionnaireNoms(r._invites) + (r._sansAcces && r._sansAcces.length ? ' (sauf ' + tcQuestionnaireNoms(r._sansAcces) + ' : je ne vois pas son agenda)' : ''));
+    if (Array.isArray(r._tousSansAcces) && r._tousSansAcces.length) l.push('• Je leur envoie une invitation dans leur messagerie : chacun répondra Présent ou Absent, et je l’inscris dans vos agendas quand tout le monde a répondu');
+    else l.push('• Je l’inscris dans l’agenda de ' + tcQuestionnaireNoms(r._invites) + (r._sansAcces && r._sansAcces.length ? ' (sauf ' + tcQuestionnaireNoms(r._sansAcces) + ' : je ne vois pas son agenda)' : ''));
   }
   return l.join('\n');
 }
@@ -31048,6 +31064,8 @@ async function tcNouveauRdvCreer(r) {
   const p = tcNouveauRdvHoraire(r);
   const quand = tcQuestionnaireQuand(p.date, p);
   if (r.avec === 'plusieurs') {
+    // Groupe 7 : personne de lisible : l’invitation part à tous (rien n’est inscrit avant les réponses).
+    if (Array.isArray(r._tousSansAcces) && r._tousSansAcces.length) { await tcPlusieursEnvoyer(r); return; }
     let res;
     try {
       // La durée est une heure ronde (1 à 3), celle du récapitulatif : le serveur inscrit exactement ce qui est annoncé.
@@ -31116,6 +31134,11 @@ function tcNouveauRdvQuestionCreneau(r, refaire) {
     s += n ? 'Voici ce qui tient. Touche-en un, ou tape une autre heure.' : 'Je ne vois rien d’autre de libre ' + quand + ' : tape une autre heure (ex : 14h30), ou un autre jour (ex : mardi 10h).';
     return s;
   }
+  // Groupe 7 (chef, 18/11) : personne de lisible, comme la 122.
+  if (r.avec === 'plusieurs' && Array.isArray(r._tousSansAcces) && r._tousSansAcces.length) {
+    return 'Je m’en occupe.\nChez ' + tcQuestionnaireNoms(r._tousSansAcces) + ', chaque rendez-vous attend leur accord.\nJe leur envoie une invitation dans leur messagerie.\nChacun répondra Présent ou Absent.\nQuel moment leur proposer ? '
+      + (n ? 'Voici des créneaux libres chez toi ' + quand + '. Touche-en un, ou tape une heure (ex : 14h30).' : 'Je ne vois aucun créneau libre chez toi ' + quand + '. Tape une heure (ex : 14h30), ou un autre jour (ex : mardi 10h).');
+  }
   if (r.avec === 'plusieurs') {
     if (!Array.isArray(r._communs)) {
       // Personne de consultable : mes créneaux à moi, et je le dis (mission 47).
@@ -31148,7 +31171,8 @@ function tcNouveauRdvQuestionCreneau(r, refaire) {
 const TC_ETAPE_RECAP_CREER = {
   cle: 'recap',
   question: function (r) { return 'Voici ce que je vais faire :\n' + tcNouveauRdvRecap(r); },
-  choix: TC_ETAPE_RECAP.choix.map(function (c) { return Object.assign({}, c, { texte: c.cle === 'oui' ? 'Oui, crée-le' : c.texte }); })
+  // Groupe 7 : quand c’est une invitation qui part, le bouton le dit.
+  choix: function (r) { return TC_ETAPE_RECAP.choix.map(function (c) { return Object.assign({}, c, { texte: c.cle === 'oui' ? (r && Array.isArray(r._tousSansAcces) && r._tousSansAcces.length ? 'Oui, envoie' : 'Oui, crée-le') : c.texte }); }); }
 };
 
 /** La fin du parcours, partagée avec « Rendez-vous à plusieurs » (mission 47) : la durée, la vérification du créneau, une nouvelle proposition s'il le faut. */
@@ -31276,14 +31300,21 @@ const TC_QUESTIONNAIRE_NOUVEAU_RDV = {
         r._communs = null;
         r._agendas = '';
         r._sansAcces = [];
+        r._tousSansAcces = null;
         if (r.avec === 'plusieurs' && r._invites.length < 2) { tcQuestionnaireDire('Il me faut au moins deux contacts qui ont TimeCool pour un rendez-vous à plusieurs.'); return false; }
         if (r._invites.length && r.creneau === undefined) {
           const res = await tcNouveauRdvCommuns(r);
           if (r.avec === 'plusieurs') {
-            if (res.etat !== 'ok') { tcQuestionnaireDire('Je n’arrive pas à interroger les agendas pour le moment : je ne peux pas chercher de créneau commun.'); return false; }
-            if (!res.invites.length) { tcQuestionnaireDire('Je ne peux consulter l’agenda d’aucune de ces personnes : je ne peux pas chercher de créneau commun.'); return false; }
-            r._communs = res.creneaux;
-            r._sansAcces = res.sansAcces;
+            // Groupe 7 (chef, 18/11), comme la 122 : jamais « je ne peux pas chercher ». Personne de lisible : mes créneaux à moi,
+            // puis l’invitation part à tous (Présent ou Absent, tcPlusieursEnvoyer).
+            if (res.etat !== 'ok') { tcQuestionnaireDire('Je n’arrive pas à joindre le serveur : rien n’est envoyé. Réessaie dans un instant.'); return false; }
+            if (!res.invites.length) {
+              const _noms = tcNouveauRdvNomsDuServeur(res.sansAcces, r._invites);
+              r._tousSansAcces = (_noms.length ? _noms : r._invites.map(function (c) { return c.name; })).map(function (n) { return String((n && n.name) || n || '').trim().split(' ')[0]; });
+            } else {
+              r._communs = res.creneaux;
+              r._sansAcces = res.sansAcces;
+            }
           } else if (res.etat === 'ok' && !res.sansAcces.length) { r._agendas = 'ok'; r._communs = res.creneaux; }
           else r._agendas = res.etat === 'ok' ? 'non' : 'erreur';
         }
@@ -34397,6 +34428,11 @@ function tcMotifEstUnMoment111(motif) {
 
 async function tcGererRdvGroupe(texte, intention) {
   tcPousserMessageUtilisateur(texte);
+  // Groupe 5 (chef, 18/11) : les contacts cités qui n’ont pas TimeCool : Charly prépare leur invitation (avant, ils disparaissaient).
+  {
+    const _sc = typeof tcDetecterPlusieursCites === 'function' ? tcDetecterPlusieursCites(texte) : null;
+    if (_sc && Array.isArray(_sc.sansCompte) && _sc.sansCompte.length) charlyIA.history.push(tcMessageInvitationSansCompte(_sc.sansCompte, false));
+  }
   if (typeof tcOptionsGroupeDepuisTexte === 'function') intention = Object.assign({}, intention, { options: tcOptionsGroupeDepuisTexte(texte, intention.options) });
   const references = intention.contacts.map(function (c) { return c.referenceCompte; });
   const type = tcTypeDansTexte(texte);
@@ -35911,18 +35947,22 @@ function inviteContact(contactId) {
    * Surtout pas app.timecool.fr, utilise jusqu'au 07/09 : ce nom n'a
    * jamais ete enregistre et menait a une page morte.
    */
+  const txt = tcTexteInvitationTimeCool(contact);
+  if (contact.phone) {
+    try { window.location.href = tcLienSms(contact.phone, txt); } catch(e) {}
+  }
+  showToast('\u{1F48C} Invitation pr\u00eate pour ' + (contact.name || '').split(' ')[0]);
+}
+
+/** Le texte de l’invitation (Charles, 07/09, mot pour mot) : la fiche contact et Charly (groupe 5, chef 18/11) s’en servent. */
+function tcTexteInvitationTimeCool(contact) {
   const prenom = tcPrenomPresentable(contact.name);
-  const txt =
-    (prenom ? 'Salut ' + prenom + ',' : 'Salut,') + '\n'
+  return (prenom ? 'Salut ' + prenom + ',' : 'Salut,') + '\n'
     + 'J\'ai test\u00e9 l\'application gratuite TimeCool et je la trouve exceptionnelle.\n'
     + 'TimeCool est un agenda qui parle aux autres agendas pour simplifier '
     + 'la prise de rendez-vous, ou m\u00eame la saisie d\'un rendez-vous gr\u00e2ce \u00e0 Charly IA.\n'
     + 'Crois moi tu vas \u00eatre surpris !\n'
     + 'Rejoins-moi sur TimeCool, on va optimiser notre temps : https://timecool.fr';
-  if (contact.phone) {
-    try { window.location.href = tcLienSms(contact.phone, txt); } catch(e) {}
-  }
-  showToast('\u{1F48C} Invitation pr\u00eate pour ' + (contact.name || '').split(' ')[0]);
 }
 
 function toggleContactMenu(e, contactId) {
@@ -38574,7 +38614,7 @@ function cycleRecipientStatus(convocId, idx) {
  *   coordonnee -- auquel cas il faut le dire, et surtout ne pas
  *   annoncer que la personne est prevenue.
  */
-async function tcTransmettrePrevenance(contact, texte) {
+async function tcTransmettrePrevenance(contact, texte, sujet) {
   const nom = (contact && contact.name) || _prevenirName || '';
   if (contact && contact.referenceCompte) {
     try {
@@ -38597,7 +38637,7 @@ async function tcTransmettrePrevenance(contact, texte) {
   if (contact && contact.email) {
     sendPrevenirMessage(nom, texte);
     window.location.href = 'mailto:' + contact.email
-      + '?subject=' + encodeURIComponent('Notre rendez-vous')
+      + '?subject=' + encodeURIComponent(sujet || 'Notre rendez-vous')
       + '&body=' + encodeURIComponent(texte);
     return 'email';
   }
