@@ -3734,3 +3734,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - Dans Charly Pro IA : titre « Démonstration pour un chirurgien-dentiste » (deux lignes au téléphone), six phrases, agenda de cabinet et onze contacts d’exemple, profil 2 dans la démonstration ; « Note-moi un rendez-vous demain avec … » au premier moment libre ; excuses dans les messages ; l’imprévu qui décale (créneaux, un oui, compte rendu). Charly IA : identique.
 - Examen 131 (1er lot) : l’imprévu ne prend que « tous mes rendez-vous » / « ma matinée… » ; un moment vague garde « À quelle heure ? » ; l’après-midi commence à 14h.
+
+## 18/11/2026 — Mission 131 (2e lot) : phrases 4 à 6, défauts anciens du retard (CODEUR)
+
+- « mon assistante et mon prothésiste » trouvés par un mot de leur nom ; en vrai sans fiche : un bouton par fiche ; démonstration du dentiste du lundi au vendredi dès 9h ; « Préviens Paul et Marie… » : les deux ; « … sauf Paul » : tout le monde sauf Paul.
