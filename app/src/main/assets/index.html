@@ -16910,6 +16910,8 @@ async function tcGererDemandeCreneau(text, intent) {
     await new Promise(function (r) { setTimeout(r, TC_ATTENTE_DUREES.demo); });
     tcDefinirStatutCharly(typeof TC_STATUT_REPOS !== 'undefined' ? TC_STATUT_REPOS : '', false);
   }
+  // Chef, 18/11 : « Trouve un créneau avec Julien » (sans TimeCool) : l’invitation (mots du groupe 5), puis mes créneaux libres.
+  { const _sc = typeof tcSansCompteApresAvec === 'function' ? tcSansCompteApresAvec(text) : []; if (_sc.length && typeof tcMessageInvitationSansCompte === 'function') charlyIA.history.push(tcMessageInvitationSansCompte(_sc, false)); }
   let periode = intent && intent.periode;
   // Un seul jour demande (« vendredi », « aujourd'hui ») : la reponse s y limite, jamais les deux semaines (mission 19).
   if (periode && periode.debut && !periode.fin) periode = { debut: periode.debut, fin: periode.debut, label: periode.label, jours: periode.jours };
@@ -24259,6 +24261,17 @@ async function tcGererPlusieursCites(text, d) {
   renderCharlyChat();
   // Personne n’a TimeCool : pas de questionnaire (il n’aboutirait pas) ; l’invitation est ce qu’il y a à faire.
   if (!tous) await tcDemarrerRdvAPlusieurs(null);
+}
+
+/** Chef, 18/11 : les contacts cités après « avec » (« trouve un créneau avec Julien ») qui n’ont pas TimeCool, ni bloqués. */
+function tcSansCompteApresAvec(text) {
+  const m = / avec (.+)$/.exec(' ' + tcClasseNormaliser(text));
+  if (!m) return [];
+  const mots = m[1].split(' ').filter(function (w) { return w.length >= 3 && (typeof TC_CLASSE_MOTS_DE_MOMENT === 'undefined' || TC_CLASSE_MOTS_DE_MOMENT.indexOf(w) < 0)
+    && !/^(trouve|propose|cherche|moment|voir|pour|avec|semaine|prochaine|creneau|creneaux|rendez|vous|rdv|une|des|les|mon|mes|qui|est|libre|libres|cette|demain)$/.test(w); });
+  const trouves = [];
+  try { mots.forEach(function (w) { (typeof tcContactsParMots === 'function' ? tcContactsParMots([w]) : []).forEach(function (c) { if (trouves.indexOf(c) < 0) trouves.push(c); }); }); } catch (e) { return []; }
+  return trouves.filter(function (c) { return c && !c.referenceCompte && !c.blocked; });
 }
 
 /**
@@ -34429,11 +34442,14 @@ function tcMotifEstUnMoment111(motif) {
 async function tcGererRdvGroupe(texte, intention) {
   tcPousserMessageUtilisateur(texte);
   // Groupe 5 (chef, 18/11) : les contacts cités qui n’ont pas TimeCool : Charly prépare leur invitation (avant, ils disparaissaient).
+  let _dejaPris = false;
   {
     const _sc = typeof tcDetecterPlusieursCites === 'function' ? tcDetecterPlusieursCites(texte) : null;
-    if (_sc && Array.isArray(_sc.sansCompte) && _sc.sansCompte.length) charlyIA.history.push(tcMessageInvitationSansCompte(_sc.sansCompte, false));
+    if (_sc && Array.isArray(_sc.sansCompte) && _sc.sansCompte.length) { charlyIA.history.push(tcMessageInvitationSansCompte(_sc.sansCompte, false)); _dejaPris = true; }
   }
   if (typeof tcOptionsGroupeDepuisTexte === 'function') intention = Object.assign({}, intention, { options: tcOptionsGroupeDepuisTexte(texte, intention.options) });
+  // Chef, 18/11 : un seul « Je m’en occupe » : l’invitation l’a dit, la carte de la 122 commence par « Chez … ».
+  if (_dejaPris) intention = Object.assign({}, intention, { options: Object.assign({}, intention.options || {}, { _dejaPris: true }) });
   const references = intention.contacts.map(function (c) { return c.referenceCompte; });
   const type = tcTypeDansTexte(texte);
   if (type) {
@@ -34533,10 +34549,12 @@ function tcSansAcces122(references, r, duree, type, options) {
     titre: (options && options.titre) || null, cat: (options && options.cat) || null, etat: 'question', creneaux: [] };
   let texte;
   d.quand = tcQuandSouhaite122(options);
+  // Chef, 18/11 : l’invitation d’un contact sans TimeCool a déjà dit « Je m’en occupe » pour cette demande.
+  const _occupe = (options && options._dejaPris) ? '' : 'Je m’en occupe.\n';
   const seul = typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3;
   if (un) {
     // Profils 1 et 2 : Charly propose, l'utilisateur dit oui ; profil 3 : la demande part toute seule.
-    texte = 'Je m’en occupe.\nChez ' + qui + ', chaque rendez-vous attend son accord.\n'
+    texte = _occupe + 'Chez ' + qui + ', chaque rendez-vous attend son accord.\n'
       + (seul ? 'Je lui envoie ta demande dans sa messagerie' : 'Je peux lui envoyer ta demande dans sa messagerie') + (d.quand ? ', pour ' + d.quand : '') + '.\n' + qui + ' te proposera un moment.';
   } else {
     // Trois moments où je suis libre, dans la période demandée (sinon les deux semaines qui viennent), un par jour.
@@ -34553,7 +34571,7 @@ function tcSansAcces122(references, r, duree, type, options) {
       if (debut % 30) debut += 30 - (debut % 30);
       if (c.fin - debut >= d.duree * 60) { vus[c.date] = true; d.creneaux.push({ date: c.date, debut: debut }); }
     });
-    texte = 'Je m’en occupe.\nChez ' + qui + ', chaque rendez-vous attend leur accord.\nJe leur envoie une invitation dans leur messagerie.\nChacun répondra Présent ou Absent.'
+    texte = _occupe + 'Chez ' + qui + ', chaque rendez-vous attend leur accord.\nJe leur envoie une invitation dans leur messagerie.\nChacun répondra Présent ou Absent.'
       + (d.creneaux.length ? '\nQuel moment leur proposer ? Tu es libre :' : '\nDis-moi quel jour et à quelle heure, je leur envoie l’invitation.');
   }
   const m = { role: 'assistant', nature: 'question', content: texte, _demande122: d };

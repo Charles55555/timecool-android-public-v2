@@ -98,3 +98,8 @@ non | @validation:Michel ⏎ Demande un rendez-vous demain à mon ami Michel ⏎
 Trouve un moment avec Alice, Chloé et Julien cette semaine | | texte:Je m’en occupe && texte:Julien n’a pas encore TimeCool && texte:Je lui prépare une invitation par SMS ou par e-mail && sans:je ne peux && sans:pas bien compris
 # Groupe 7 (chef, 18/11) : « Créer un nouveau rdv » à plusieurs, personne de lisible : comme la 122 (invitation Présent ou Absent), jamais « je ne peux pas chercher ».
 1 h | @validation:Alice,Chloé,Virginie ⏎ @demarrer:nouveau_rdv ⏎ Apéro ⏎ Alice, Chloé et Virginie ⏎ Cette semaine | texte:Je m’en occupe && texte:Chez Alice, Chloé et Virginie, chaque rendez-vous attend leur accord && texte:Chacun répondra Présent ou Absent && sans:je ne peux && sans:pas bien compris
+# Chef, 18/11 : « Trouve un créneau avec Julien » (Julien seul, sans TimeCool) : mes créneaux libres ET l'invitation, avec les mots du groupe 5.
+Trouve un créneau avec Julien | | texte:Voici ce qui est libre && texte:Julien n’a pas encore TimeCool && texte:Je lui prépare une invitation par SMS ou par e-mail && sans:je ne peux && sans:pas bien compris
+# Chef, 18/11 : un seul « Je m’en occupe » : l'invitation l'a dit, la carte de la 122 commence par « Chez Michel… ».
+En personne | @validation:Michel ⏎ Trouve un moment avec Michel et Julien demain | texte:Chez Michel, chaque rendez-vous attend son accord && sans:Je m’en occupe && sans:pas bien compris
+Trouve un rendez-vous en personne avec Michel et Julien demain | @validation:Michel | texte:Julien n’a pas encore TimeCool && texte:Chez Michel, chaque rendez-vous attend son accord && sans:Je m’en occupe[\s\S]*Je m’en occupe && sans:pas bien compris

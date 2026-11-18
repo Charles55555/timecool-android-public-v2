@@ -3699,3 +3699,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Groupes 5 et 7 des « je ne peux pas » (CODEUR)
 
 - Contact cité sans TimeCool : Charly prépare l’invitation (bouton SMS/e-mail, texte de Charles), aussi dans le chemin de la 122 où il disparaissait. « Créer un nouveau rdv » à plusieurs sans agenda lisible : invitation Présent ou Absent (questionnaire sans bouton d’entrée aujourd’hui).
+- 18/11 (suite) : un seul « Je m’en occupe » (la carte 122 commence par « Chez … » après l’invitation) ; « Trouve un créneau avec Julien » : invitation + créneaux libres.
