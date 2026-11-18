@@ -139,3 +139,8 @@ Décale mes rendez-vous de cet après-midi d’une heure |  | texte:^Tu && sans:
 Décale ma matinée de demain de 30 minutes |  | texte:Tu veux que je décale && texte:Coiffeur && texte:Après : .* 10h30 à 11h30 && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
 Décale ma matinée de 30 minutes |  | texte:^Tu && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
 Décale ma matinée du 25 décembre |  | texte:Tu n’as aucun rendez-vous && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
+# Examen 130 A : le jour par son seul numéro ; un rendez-vous qui ne tient plus avant minuit ; un décalage ET une destination.
+Décale ma matinée du {num:+1} |  | texte:Demain matin, tu as \d rendez-vous && texte:Coiffeur && sans:aucun rendez-vous && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
+Décale mes rendez-vous du {num:+1} au {date:+3} |  | texte:Tu veux que je décale && texte:Coiffeur && sans:aucun rendez-vous && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
+Décale mes rendez-vous de demain à 23h |  | texte:ne tien && texte:plus dans la journée && texte:Vers quand && sans:23h59 && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris
+Décale mes rendez-vous de demain à vendredi d’une heure |  | texte:Tu veux que je décale && texte:Après : Vendredi .* 11h à 12h && sans:Lequel && sans:Je ne trouve pas && sans:je ne peux && sans:pas bien compris

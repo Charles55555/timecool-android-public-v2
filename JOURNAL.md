@@ -3719,3 +3719,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Mission 130 A : décaler une période en une phrase (CODEUR)
 
 - Matinée, après-midi, journée, semaine ; destination, « Vers quand ? » (une seule question) ou décalage ; relecture habituelle et un seul oui ; période vide : la journée proposée. « après midi » dicté n’est plus « après 12 heures ».
+- Examen 130 A : « du 19 » lu comme le jour du mois (jamais aujourd’hui deviné) ; rien qui finit après minuit (Charly le dit et redemande) ; un décalage avec une destination : les deux.

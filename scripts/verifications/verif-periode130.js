@@ -13,7 +13,7 @@ const verifie = (l, c, d) => { if (c) ok++; else ko++; console.log('  ' + (c ? '
 console.log('-- Le code --');
 verifie('la lecture d’une période est dans la page, après « décale tout lundi », avant le chemin d’un seul rendez-vous', /tcDecalerToutUnJour\(text\)\) return;\n[^\n]*\n  if \(typeof tcDecalerPeriode130 === 'function' && tcDecalerPeriode130\(text\)\) return;/.test(page));
 verifie('la réponse à « Vers quand ? » d’une période passe par tcRepondrePeriode130', /if \(attente && attente\.p130 && typeof tcRepondrePeriode130 === 'function'\) return tcRepondrePeriode130\(text, attente\);/.test(page));
-verifie('au oui, le déplacement habituel (profils, contacts) : la relecture tcRelireDeplacement, jamais un autre chemin', (page.match(/function tcTravaillerPeriode130[\s\S]*?\n\}\n/) || [''])[0].indexOf('tcRelireDeplacement(tcPlacesPeriode130(touches, o));') > -1);
+verifie('au oui, le déplacement habituel (profils, contacts) : la relecture tcRelireDeplacement, jamais un autre chemin', (page.match(/function tcTravaillerPeriode130[\s\S]*?\n\}\n/) || [''])[0].indexOf('tcRelirePlaces130(tcPlacesPeriode130(touches, o));') > -1 && (page.match(/function tcRelirePlaces130[\s\S]*?\n\}\n/) || [''])[0].indexOf('tcRelireDeplacement(liste)') > -1);
 
 console.log('-- Dans la page (Chrome) --');
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
@@ -87,6 +87,20 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     R.pasNous = ['Décale mon rendez-vous de demain', 'Décale le dentiste de 30 minutes', 'Décale mes rendez-vous de 9h à 10h', 'Décale tout'].map(function (t) {
       var n = charlyIA.history.length; var r = tcDecalerPeriode130(t); return r === false && charlyIA.history.length === n;
     });
+    // 11. Examen : le jour par son seul numéro (« du 19 ») ; un numéro illisible (« du 45 ») : le chemin d'avant, jamais aujourd'hui deviné.
+    remettre();
+    await taper('Décale ma matinée du ' + Number(D1.slice(8))); R.r11 = dit();
+    remettre();
+    await taper('Décale mes rendez-vous du ' + Number(D2.slice(8))); R.r11b = dit();
+    remettre();
+    R.r11c = [tcDecalerPeriode130('Décale ma matinée du 45'), tcDecalerPeriode130('Décale mes rendez-vous de novembre')];
+    // 12. Examen : « … de demain à 23h » : rien de raccourci, Charly le dit et redemande.
+    remettre();
+    await taper('Décale mes rendez-vous de demain à 23h'); R.r12 = dit(); R.attente12 = !!(_tcDeplacementPeriode && _tcDeplacementPeriode.p130); R.relu12 = !!_tcDeplacementEnAttente;
+    // 13. Examen : un décalage ET une destination : les deux (après-demain, une heure plus tard), et le Garage signalé.
+    remettre();
+    await taper('Décale mes rendez-vous de demain à après-demain d’une heure'); R.r13 = dit();
+    await taper('oui'); R.o13 = { k: place('k'), b: place('b'), r: place('r') };
     // 10. « après midi » dicté (sans trait d'union) reste l'après-midi ; « à midi » reste 12 heures.
     R.midi = [tcHeuresEnLettres('Décale mes rendez vous de cet après midi'), tcHeuresEnLettres('Rendez-vous demain à midi')];
   } catch (e) { R.erreur = String(e && e.stack || e); }
@@ -117,6 +131,10 @@ else {
   verifie('une nouvelle demande après « Vers quand ? » est lue (jamais « je n’ai pas bien compris »)', /Vers quand je les décale/.test(S.q7) && /Réunion/.test(S.r7) && /16h/.test(S.r7) && SANS(S.r7), JSON.stringify([S.q7.slice(0, 120), S.r7]));
   verifie('une réponse illisible : « Vers quand ? » redemandé une fois, puis « à jeudi » mène à la relecture', /Vers quand/.test(S.r8) && S.attente8 === true && /Tu veux que je décale/.test(S.r8b) && /Après : Jeudi/.test(S.r8b), JSON.stringify([S.r8, S.r8b]));
   verifie('pas cette demande (un seul rendez-vous, une heure, « tout » sans moment) : rien ici, le chemin d’avant', S.pasNous.every(Boolean), JSON.stringify(S.pasNous));
+  verifie('examen : « Décale ma matinée du <demain> » : le jour du mois (Kiné, Banque), jamais « aucun rendez-vous ce matin »', /Demain matin, tu as 2 rendez-vous/.test(S.r11) && /Kiné/.test(S.r11) && !/aucun rendez-vous/.test(S.r11), S.r11);
+  verifie('examen : « Décale mes rendez-vous du <après-demain> » : le Garage ; un numéro illisible ou un mois seul : le chemin d’avant (rien ici)', /Garage/.test(S.r11b) && !/aucun rendez-vous/.test(S.r11b) && S.r11c[0] === false && S.r11c[1] === false, JSON.stringify([S.r11b, S.r11c]));
+  verifie('examen : « … de demain à 23h » : jamais 0 minute ni 23h59 ; Charly dit ce qui ne tient plus et redemande « Vers quand ? »', /ne tiennent plus dans la journée/.test(S.r12) && /Vers quand je les décale \?/.test(S.r12) && !/23h59/.test(S.r12) && S.attente12 === true && S.relu12 === false, JSON.stringify([S.r12, S.attente12, S.relu12]));
+  verifie('examen : « … de demain à après-demain d’une heure » : après-demain ET une heure plus tard (Kiné 10h-11h, Banque 11h30-12h, Réunion 15h-16h), le Garage signalé', /À cette heure-là, tu as déjà « Garage »/.test(S.r13) && S.o13.k === P(S.D2, 10, 0, 11, 0) && S.o13.b === P(S.D2, 11, 30, 12, 0) && S.o13.r === P(S.D2, 15, 0, 16, 0), JSON.stringify([S.r13.slice(0, 300), S.o13]));
   verifie('« après midi » dicté reste l’après-midi ; « à midi » reste 12 heures', /après midi/.test(S.midi[0]) && !/12 heures/.test(S.midi[0]) && /12 heures/.test(S.midi[1]), JSON.stringify(S.midi));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
