@@ -14196,6 +14196,7 @@ function renderChatMessage(m) {
   if (m && m._envois) return tcRendreBilanQuestionnaire(m);
   if (m && m._reponseCreneau) return tcRendreReponseCreneau(m);
   if (m && m._boutonsEnvoi) return tcRendreBoutonsEnvoi(m);
+  if (m && m._demande122) return tcRendreDemande122(m);   // mission 122
   // Mission 120 : la réponse d'un contact (bulle verte), et les citations d'un message de Charly.
   if (m.role === 'tiers') return tcRendreTiers120(m);
   if (m.role === 'assistant' && Array.isArray(m._cites) && m._cites.length && !m._citesFaites) return tcRendreAvecCites120(m);
@@ -34311,6 +34312,11 @@ async function tcProposerRdvGroupe(references, duree, preambule, type, options) 
     return;
   }
   charlyIA.history.splice(charlyIA.history.indexOf(attente), 1);
+  // Mission 122 : personne dont l'agenda se lit (chacun valide lui-même ses rendez-vous) : Charly s'en occupe autrement.
+  if (typeof tcSansAcces122 === 'function' && (!Array.isArray(r.invites) || !r.invites.length) && Array.isArray(r.sans_acces) && r.sans_acces.length) {
+    tcSansAcces122(references, r, duree, type, options);
+    return;
+  }
   charlyIA.history.push({
     role: 'assistant',
     content: 'Rendez-vous à plusieurs',
@@ -34321,6 +34327,123 @@ async function tcProposerRdvGroupe(references, duree, preambule, type, options) 
     }
   });
   renderCharlyChat();
+}
+
+/**
+ * Mission 122 : personne dont l'agenda se lit. À deux : la demande dans sa messagerie (comme le bouton de la fiche).
+ * À plusieurs : trois moments où je suis libre ; celui choisi part en invitation Présent / Absent.
+ */
+function tcSansAcces122(references, r, duree, type, options) {
+  const contacts = (references || []).map(function (ref) { return (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; }) || null; });
+  const noms = contacts.map(function (c, i) { return c ? String(c.name || '').split(' ')[0] : String((r.sans_acces || [])[i] || ''); }).filter(Boolean);
+  const qui = tcListeDePrenoms(noms).replace(/<[^>]+>/g, '');
+  const un = (references || []).length === 1;
+  const d = { id: 'd' + Date.now(), refs: (references || []).slice(), noms: noms, type: tcTypeRdvValide(type) || 'physique', duree: Number(duree) || 1,
+    titre: (options && options.titre) || null, cat: (options && options.cat) || null, etat: 'question', creneaux: [] };
+  let texte;
+  if (un) {
+    texte = 'Je m’en occupe.\nChez ' + qui + ', chaque rendez-vous attend son accord.\nJe lui envoie ta demande dans sa messagerie.\n' + qui + ' te proposera un moment.';
+  } else {
+    // Trois moments où je suis libre, dans la période demandée (sinon les deux semaines qui viennent), un par jour.
+    const depuis = options && options.depuis ? new Date(options.depuis + 'T00:00:00') : null;
+    const jusqua = options && options.jusqua ? new Date(options.jusqua + 'T00:00:00') : null;
+    let libres = [];
+    try { const x = tcCreneauxDisponibles(depuis || jusqua ? { debut: depuis || new Date(), fin: jusqua || depuis } : null, 40); libres = (x && Array.isArray(x.creneaux)) ? x.creneaux : []; } catch (e) { libres = []; }
+    const maintenant = new Date();
+    const vus = {};
+    libres.forEach(function (c) {
+      if (d.creneaux.length >= 3 || vus[c.date]) return;
+      let debut = c.debut;
+      if (c.date === tcISO(maintenant)) debut = Math.max(debut, (maintenant.getHours() + 1) * 60);
+      if (debut % 30) debut += 30 - (debut % 30);
+      if (c.fin - debut >= d.duree * 60) { vus[c.date] = true; d.creneaux.push({ date: c.date, debut: debut }); }
+    });
+    texte = 'Je m’en occupe.\nChez ' + qui + ', chaque rendez-vous attend leur accord.\nJe leur envoie une invitation dans leur messagerie.\nChacun répondra Présent ou Absent.'
+      + (d.creneaux.length ? '\nQuel moment leur proposer ? Tu es libre :' : '\nDis-moi quel jour et à quelle heure, je leur envoie l’invitation.');
+  }
+  const m = { role: 'assistant', nature: 'question', content: texte, _demande122: d };
+  charlyIA.history.push(m);
+  renderCharlyChat();
+  // Profil 3 (« Charly valide seul ») : à deux, la demande part tout de suite.
+  if (un && typeof tcConfianceCharly === 'function' && tcConfianceCharly() === 3) tcDemande122('' + d.id, 'oui');
+}
+
+function tcRendreDemande122(m) {
+  const d = m._demande122;
+  let h = escapeHTMLSafe(m.content).replace(/\n/g, '<br>');
+  const bouton = function (choix, libelle, plein) {
+    return '<button ' + (d.etat === 'question' ? '' : 'disabled ') + 'onclick="tcDemande122(\'' + d.id + '\', \'' + choix + '\')" style="display:block; width:100%; text-align:left; margin-top:6px; padding:10px 12px; background:' + (plein ? 'var(--g-blue)' : '#e8f0fe') + '; color:' + (plein ? '#fff' : '#1a3d6e') + '; border:1.5px solid ' + (plein ? 'var(--g-blue)' : '#c6dafc') + '; border-radius:10px; font-size:13.5px; font-weight:600; cursor:pointer;">' + libelle + '</button>';
+  };
+  if (d.refs.length === 1) {
+    if (d.etat === 'question') h += '<div style="margin-top:6px;">Je l’envoie ?</div>' + bouton('oui', 'Oui, envoie', true) + bouton('non', 'Non', false);
+  } else if (d.creneaux.length) {
+    h += '<div style="margin-top:4px;">' + d.creneaux.map(function (c, i) {
+      const fin = c.debut + d.duree * 60;
+      const hm = function (x) { return Math.floor(x / 60) + 'h' + (x % 60 ? String(x % 60).padStart(2, '0') : ''); };
+      const lib = String(tcFormaterDateHumaine(c.date));
+      return bouton('m' + i, '🕐 ' + escapeHTMLSafe(lib.charAt(0).toUpperCase() + lib.slice(1)) + ' · ' + hm(c.debut) + '–' + hm(fin), false);
+    }).join('') + (d.etat === 'question' ? bouton('non', 'Non, merci', false) : '') + '</div>';
+  }
+  if (d.etat === 'envoi') h += '<div style="margin-top:6px; color:var(--text-sec);">⏳ J’envoie…</div>';
+  return tcBulleCharly(h);
+}
+
+/** « Oui, envoie », « Non », ou un moment choisi. */
+async function tcDemande122(id, choix) {
+  const m = charlyIA.history.find(function (x) { return x && x._demande122 && x._demande122.id === id; });
+  if (!m || m._demande122.etat !== 'question') return;
+  const d = m._demande122;
+  const qui = tcListeDePrenoms(d.noms).replace(/<[^>]+>/g, '');
+  if (choix === 'non') { d.etat = 'refuse'; charlyIA.history.push({ role: 'assistant', content: 'D’accord, je n’envoie rien.' }); renderCharlyChat(); return; }
+  d.etat = 'envoi';
+  renderCharlyChat();
+  if (d.refs.length === 1) {
+    typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('envoi', d.noms), 'envoi');
+    let r = null, erreur = false;
+    try { r = await TC_BACKEND.demanderRdv(d.refs[0], d.titre || undefined, d.type); } catch (e) { erreur = true; }
+    typeof tcFinEtapes === 'function' && await tcFinEtapes();
+    d.etat = erreur ? 'question' : 'fait';
+    charlyIA.history.push({ role: 'assistant', content: erreur ? 'Je n’arrive pas à joindre le serveur : rien n’est envoyé. Réessaie dans un instant.'
+      : (r && r.mode === 'creneaux' ? qui + ' peut te recevoir maintenant. Redis-moi ta demande : je te montre ses moments libres.'
+        : 'C’est envoyé à ' + qui + '.\nSa réponse arrivera dans ta messagerie.') });
+    renderCharlyChat();
+    if (!erreur && typeof tcSyncTour === 'function') tcSyncTour();
+    return;
+  }
+  const i = Number(String(choix).replace(/^m/, ''));
+  const c = d.creneaux[i];
+  if (!c) { d.etat = 'question'; renderCharlyChat(); return; }
+  const invites = d.refs.map(function (ref) { return (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; }); }).filter(Boolean);
+  typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('envoi', d.noms), 'envoi');
+  typeof tcFinEtapes === 'function' && await tcFinEtapes();
+  d.etat = 'fait';
+  await tcPlusieursEnvoyer({ _invites: invites, _titre: d.titre || ('Rendez-vous avec ' + qui), _cat: d.cat || 'travail', _creneau: { date: c.date, debut: c.debut }, _dureeMin: d.duree * 60 });
+  renderCharlyChat();
+}
+
+/** À plusieurs, certains lisibles : « Lui envoyer la demande » pour ceux dont chaque rendez-vous attend l'accord. */
+async function tcDemandeSansAcces122(id) {
+  const m = charlyIA.history.find(function (x) { return x && x._groupe && x._groupe.id === id; });
+  if (!m) return;
+  const g = m._groupe;
+  if (g.demandeSansAcces === 'envoi' || g.demandeSansAcces === 'fait') return;
+  const sans = function (t) { return tcSansAccents(String(t || '')).trim(); };
+  const lisibles = (g.invites || []).map(sans);
+  const cibles = (g.references || []).filter(function (ref) {
+    const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; });
+    const prenom = sans(c ? String(c.name || '').split(' ')[0] : '');
+    return g.sansAcces.some(function (p) { return sans(p) === prenom; }) || (prenom && lisibles.indexOf(prenom) < 0 && g.sansAcces.length);
+  });
+  g.demandeSansAcces = 'envoi';
+  renderCharlyChat();
+  typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('envoi', g.sansAcces), 'envoi');
+  let ok = 0;
+  for (const ref of cibles) { try { await TC_BACKEND.demanderRdv(ref, (g.options && g.options.titre) || undefined, g.type); ok++; } catch (e) {} }
+  typeof tcFinEtapes === 'function' && await tcFinEtapes();
+  g.demandeSansAcces = ok ? 'fait' : null;
+  if (!ok) charlyIA.history.push({ role: 'assistant', content: 'Je n’arrive pas à joindre le serveur : rien n’est envoyé. Réessaie dans un instant.' });
+  renderCharlyChat();
+  if (ok && typeof tcSyncTour === 'function') tcSyncTour();
 }
 
 function tcListeDePrenoms(l) {
@@ -34347,7 +34470,7 @@ function tcRendreGroupe(m) {
   if (!g.creneaux.length) {
     h += g.invites.length
       ? 'Je n’ai trouvé aucun créneau libre dans les deux semaines qui viennent, pour toi, ' + tcListeDePrenoms(g.invites) + '.'
-      : 'Je ne peux consulter l’agenda d’aucune de ces personnes : je n’ai pas pu chercher de créneau commun.';
+      : 'Je n’ai trouvé le compte TimeCool d’aucune de ces personnes. Tu peux les inviter depuis la messagerie.';
   } else {
     const complets = g.creneaux.filter(function (s) { return s.manquants.length === 0; }).length;
     h += complets === g.creneaux.length
@@ -34369,8 +34492,13 @@ function tcRendreGroupe(m) {
     if (g.etat === 'envoi') h += '<div style="margin-top:4px; color:var(--text-sec);">⏳ Je l’inscris dans les agendas…</div>';
   }
   if (g.sansAcces.length) {
-    h += '<div style="margin-top:8px; font-size:12px; color:var(--text-sec);">Je ne peux pas voir l’agenda de '
-      + tcListeDePrenoms(g.sansAcces) + ' : je ne l’ai pas compté. Tu peux lui écrire un message.</div>';
+    // Mission 122 : jamais « je ne peux pas » ; la demande part dans leur messagerie, comme depuis la fiche du contact.
+    const _un = g.sansAcces.length === 1;
+    h += '<div style="margin-top:10px; font-size:13px; color:var(--text); line-height:1.5;">Chez ' + tcListeDePrenoms(g.sansAcces) + ', chaque rendez-vous attend ' + (_un ? 'son' : 'leur') + ' accord.<br>'
+      + (g.demandeSansAcces === 'fait' ? '✅ C’est envoyé dans ' + (_un ? 'sa' : 'leur') + ' messagerie.'
+        : g.demandeSansAcces === 'envoi' ? '⏳ J’envoie…'
+        : 'Je peux ' + (_un ? 'lui' : 'leur') + ' envoyer ta demande dans ' + (_un ? 'sa' : 'leur') + ' messagerie.</div><button onclick="tcDemandeSansAcces122(\'' + g.id + '\')" style="margin-top:6px; padding:9px 12px; background:#fff; color:var(--g-blue); border:1.5px solid #c6dafc; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">' + (_un ? 'Lui envoyer la demande' : 'Leur envoyer la demande') + '</button><div>')
+      + '</div>';
   }
   return tcBulleCharly(h);
 }

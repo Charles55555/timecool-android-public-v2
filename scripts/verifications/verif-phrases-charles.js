@@ -96,13 +96,26 @@ if (!exe) {
           if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 50; TC_ATTENTE_DUREES.vrai = 50; TC_ATTENTE_DUREES.feuilles = 50; TC_ATTENTE_DUREES.consulte = 50; }
           var modele = 0, neutre = callAI;
           callAI = async function () { modele++; try { window.__envoi = JSON.stringify(arguments[0] || ''); } catch (x) {} return neutre.apply(this, arguments); };
-          for (var c = 0; c < e.contexte.length; c++) await taper(e.contexte[c]);
+          // Mission 122 : « @validation:Michel,Virginie » : ces amis gardent « Toujours attendre ma validation » (agenda non lisible).
+          for (var c = 0; c < e.contexte.length; c++) {
+            var dv = /^@validation:(.+)$/.exec(e.contexte[c]);
+            if (!dv) { await taper(e.contexte[c]); continue; }
+            var norm = function (t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); };
+            var bloques = dv[1].split(',').map(norm);
+            var ori = TC_BACKEND.proposerRdvGroupe;
+            TC_BACKEND.proposerRdvGroupe = async function (refs, duree, type, options) {
+              var lisibles = [], sans = [];
+              (refs || []).forEach(function (ref) { var ct = contactsList.find(function (x) { return x.referenceCompte === ref; }); var p = ct ? String(ct.name).split(' ')[0] : ''; if (bloques.indexOf(norm(p)) > -1) sans.push(p); else lisibles.push(ref); });
+              var r = lisibles.length ? await ori.call(this, lisibles, duree, type, options) : { creneaux: [], invites: [], sans_acces: [], duree: duree, type: type || 'physique' };
+              r = Object.assign({}, r); r.sans_acces = (r.sans_acces || []).concat(sans); return r;
+            };
+          }
           var n0 = charlyIA.history.length, m0 = modele;
           await taper(e.phrase);
           res.modele = modele > m0;
           res.envoi = res.modele ? String(window.__envoi || '').slice(-3000) : '';
           res.reponses = charlyIA.history.slice(n0).filter(function (m) { return m && m.role !== 'user' && !(m._demo && m._demo.phrases); })
-            .map(function (m) { return String(m.content || '').replace(/<[^>]+>/g, ' ') + (m._groupe ? ' [groupe ' + (m._groupe.creneaux || []).map(function (x) { return x.date; }).join(',') + ']' : '') + (m._questionnaire ? ' [questionnaire ' + String(m._questionnaire.question || '') + ']' : ''); });
+            .map(function (m) { return String(m.content || '').replace(/<[^>]+>/g, ' ') + (m._groupe ? ' [groupe ' + (m._groupe.creneaux || []).map(function (x) { return x.date; }).join(',') + ']' : '') + (m._questionnaire ? ' [questionnaire ' + String(m._questionnaire.question || '') + ']' : '') + ((m._groupe || m._demande122) ? ' ' + String(renderChatMessage(m)).replace(/<[^>]+>/g, ' ') : ''); });
         } catch (er) { res.erreur = String(er && er.message || er); }
         R.push(res);
       }

@@ -3674,3 +3674,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 (nuit) — Mission 121 B, examen (CODEUR)
 
 - « Remplis à ma place » : réponses en attente, « Valider ces réponses » / « Annuler », rien d'enregistré avant.
+
+## 18/11/2026 (nuit) — Mission 122 : l'ami qui attend sa validation (CODEUR)
+
+- À deux : la demande part dans la messagerie de l'ami (/rdv/demander), « Je m'en occupe » ; à plusieurs sans agenda lisible : trois de mes moments libres, puis l'invitation Présent / Absent ; certains lisibles : « Lui envoyer la demande ».
+- phrases-charles : contexte @validation:… ; « version de test » : aucune mention dans l'appli ni dans l'API.
