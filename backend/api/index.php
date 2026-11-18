@@ -1920,8 +1920,10 @@ function creneauxCommuns(int $organisateurId, array $invites, int $duree, int $c
  * autres vont dans $sansAcces, sans dire pourquoi : un contact bloque, un
  * inconnu ou une validation exigee ne doivent pas se distinguer.
  */
-function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces): array
+function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces, ?array &$sansAccesRefs = null): array
 {
+    // Les références des personnes sans accès, dans le même ordre (deux contacts du même prénom ne se confondent plus).
+    $sansAccesRefs = [];
     if (!is_array($references) || $references === [] || count($references) > 12) {
         Rep::erreur(400, 'participants_invalides', 'Indiquez de 1 a 12 personnes.');
     }
@@ -1939,6 +1941,7 @@ function invitesRdvGroupe(array $moi, mixed $references, array &$sansAcces): arr
         $categories = categoriesPourRdvAutomatique((int) $c['id'], $moi);
         if ($categories === []) {
             $sansAcces[] = texteSur((string) $c['prenom']);
+            $sansAccesRefs[] = (string) $c['reference'];
             continue;
         }
         $invites[] = [
@@ -4216,7 +4219,8 @@ switch ($route) {
         }
         $typeRdv = typeRdvValide($corps['type'] ?? null) ?? 'physique';
         $sansAcces = [];
-        $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces);
+        $sansAccesRefs = [];
+        $invites = invitesRdvGroupe($moi, $corps['references'] ?? null, $sansAcces, $sansAccesRefs);
         // Mission 46 : une période (jamais dans le passé, 31 jours au plus), le nombre voulu (1 à 40) et le nombre par
         // jour (1 à 12). Sans ces champs, comme avant : de demain à J+14, le meilleur de chaque jour, trois en tout.
         $jourValide = static fn(?string $d): ?string => ($d !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) === 1 && strtotime($d) !== false) ? $d : null;
@@ -4248,6 +4252,7 @@ switch ($route) {
             'creneaux'   => $creneaux,
             'invites'    => array_column($invites, 'prenom'),
             'sans_acces' => $sansAcces,
+            'sans_acces_refs' => $sansAccesRefs,
             'duree'      => $duree,
             'type'       => $typeRdv,
         ]);

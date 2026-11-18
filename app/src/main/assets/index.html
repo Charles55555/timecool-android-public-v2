@@ -30116,7 +30116,8 @@ async function tcTraiterSeul(liste) {
   renderCharlyChat();
   if (currentPage !== 'assistant' && typeof showToast === 'function' && (deplaces.length || reproposes.length || laisses.length)) showToast('📋 Charly a avancé : son compte rendu t’attend');
   // Une notification, si elles sont permises et que la page Charly IA n'est pas sous les yeux.
-  if ((deplaces.length || reproposes.length) && typeof tcNotifierCompteRendu === 'function') tcNotifierCompteRendu(lignes.filter(function (l) { return /^• /.test(l); }).slice(0, 2).join(' ').replace(/^• /, ''));
+  // Chef, 18/11 : sur l'écran verrouillé, ni nom ni rendez-vous ; le détail reste dans la conversation.
+  if ((deplaces.length || reproposes.length) && typeof tcNotifierCompteRendu === 'function') tcNotifierCompteRendu('Charly a avancé : son compte rendu t’attend');
 }
 
 /** Le compte rendu de Charly signalé hors de la page : notification de l'appareil (Android) ou du navigateur, si elles sont permises. */
@@ -30129,9 +30130,9 @@ async function tcNotifierCompteRendu(texte) {
       const LN = window.Capacitor.Plugins.LocalNotifications;
       const perm = await LN.checkPermissions();
       if (!perm || perm.display !== 'granted') return;
-      await LN.schedule({ notifications: [{ id: Math.floor(Date.now() % 2000000000), title: '📋 Charly a avancé', body: corps, smallIcon: 'ic_notification', channelId: 'timecool_reminders' }] });
+      await LN.schedule({ notifications: [{ id: Math.floor(Date.now() % 2000000000), title: 'TimeCool', body: corps, smallIcon: 'ic_notification', channelId: 'timecool_reminders' }] });
     } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification('📋 Charly a avancé', { body: corps });
+      new Notification('TimeCool', { body: corps });
     }
   } catch (e) {}
 }
@@ -34476,7 +34477,7 @@ async function tcProposerRdvGroupe(references, duree, preambule, type, options) 
     content: 'Rendez-vous à plusieurs',
     _groupe: {
       id: 'g' + Date.now(), references: references, duree: r.duree || duree, etat: 'choix',
-      creneaux: Array.isArray(r.creneaux) ? r.creneaux : [], invites: r.invites || [], sansAcces: r.sans_acces || [],
+      creneaux: Array.isArray(r.creneaux) ? r.creneaux : [], invites: r.invites || [], sansAcces: r.sans_acces || [], sansAccesRefs: Array.isArray(r.sans_acces_refs) ? r.sans_acces_refs : null,
       preambule: preambule || '', type: tcTypeRdvValide(type) || 'physique', options: options || null
     }
   });
@@ -34627,7 +34628,8 @@ async function tcDemandeSansAcces122(id) {
   if (g.demandeSansAcces === 'envoi' || g.demandeSansAcces === 'fait') return;
   const sans = function (t) { return tcSansAccents(String(t || '')).trim(); };
   const lisibles = (g.invites || []).map(sans);
-  const cibles = (g.references || []).filter(function (ref) {
+  // Les références rendues par le serveur (sans_acces_refs) ; à défaut (ancienne réponse), le prénom.
+  const cibles = Array.isArray(g.sansAccesRefs) && g.sansAccesRefs.length ? g.sansAccesRefs.slice() : (g.references || []).filter(function (ref) {
     const c = (Array.isArray(contactsList) ? contactsList : []).find(function (x) { return x && x.referenceCompte === ref; });
     const prenom = sans(c ? String(c.name || '').split(' ')[0] : '');
     return g.sansAcces.some(function (p) { return sans(p) === prenom; }) || (prenom && lisibles.indexOf(prenom) < 0 && g.sansAcces.length);
