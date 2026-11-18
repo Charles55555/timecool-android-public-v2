@@ -25,6 +25,11 @@ verifie('la démonstration de Charly IA garde ses cinq phrases', /const TC_DEMO_
 verifie('les phrases de la démonstration suivent la démonstration ouverte (tcDemoPhrases), jamais la liste de Charly IA en dur', (page.match(/TC_DEMO_PHRASES\.(filter|find|forEach)\(/g) || []).length === 0);
 
 console.log('-- Dans la page (Chrome) --');
+// Mission 134 : la page joue à 10h du jour même (ses rendez-vous d'aujourd'hui sont placés une heure plus tard) : la suite reste
+// vraie à toute heure (après 21h30, un rendez-vous d'aujourd'hui était déjà fini).
+const DIX_HEURES = `<script>(function () { var V = Date, n = new V(), dec = new V(n.getFullYear(), n.getMonth(), n.getDate(), 10, 0, 0).getTime() - n.getTime();
+  class D extends V { constructor(...a) { if (a.length === 0) super(V.now() + dec); else super(...a); } static now() { return V.now() + dec; } }
+  window.Date = D; })();</script>`;
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
 const exe = candidats.find((x) => { try { return fs.existsSync(x); } catch (e) { return false; } });
 if (!exe) { console.log('NON JOUÉ : pas de Chrome sur ce poste'); process.exit(1); }
@@ -99,7 +104,7 @@ const js = (largeur) => `<script>window.addEventListener('load', function () { s
 }, 1200); });</script>`;
 for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-131-'));
-  fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('</body>', () => js(w) + '</body>'));
+  fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + DIX_HEURES).replace('</body>', () => js(w) + '</body>'));
   const r = spawnSync(exe, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=' + w + ',844', '--virtual-time-budget=120000', '--dump-dom', 'file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')], { encoding: 'utf8', timeout: 400000, maxBuffer: 1 << 28 });
   try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
   const m = (r.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);

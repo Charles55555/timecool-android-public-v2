@@ -3751,3 +3751,11 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - « RDV disponible » (bleu ciel ; « Dispo » en vue Semaine au téléphone) : seulement dessiné par tcEvenementsDuJour, jamais dans `events` ; pour Charly, du temps libre. Fiche : « Ajouter un rendez-vous ».
 - Démonstration du dentiste seulement : plages de Charly = heures du cabinet (tcPlagesDuJour, serveur d’exemple) ; matinée jusqu’à 13h (tcMidi133).
 - Suites : verif-demo-pro133 (neuve, 7 jours simulés à 10h + PC, 158 vérifications) ; verif-demo-pro131 et phrases-charles aux nouveaux chiffres ; @charlypro joué à 10h du jour même.
+
+## 18/11/2026 — Mission 134 : plus de 6 personnes d’un coup, la conversation reste courte (CODEUR)
+
+- Réponses : 5 bulles vertes puis « … et N autres personnes ont répondu » (« Voir le détail ») ; démonstration : une seule étape d’attente pour une vague de plus de 6 réponses (5 s, règle de Charles inchangée) ; en vrai, les réponses citées pareil.
+- Récapitulatif avant le « oui », carte du retard, « C’est fait », compte rendu : une ligne par jour et « Voir le détail » ; jamais plié : sans moment libre, conflit, laissé à sa place, non prévenu.
+- Affichage seulement (_plie134, tcVue134) : le texte entier reste dans le message et au Journal d’activité. Jusqu’à 6 personnes : rien ne change.
+- Suite verif-pliage134 (18 vérifications, lundi simulé). Phrase 6 du dentiste un lundi : réponses en 5 s (au lieu de 10 s).
+- verif-demo-pro131 et 131b jouées à 10h du jour même (131b échouait après 21h30 UTC, sur 8225f6c aussi).

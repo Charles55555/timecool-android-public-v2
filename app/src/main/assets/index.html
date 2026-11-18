@@ -13816,14 +13816,22 @@ function tcDemoReponseDe(reference, texte, apres) {
   const c = contactsList.find(function (x) { return x.referenceCompte === reference; });
   if (!c) return;
   etat.reponsesAttendues++;
+  const _vague134 = typeof tcVagueDemo134 === 'function' ? tcVagueDemo134(etat, c) : null;   // mission 134
   setTimeout(async function () {
+    if (_vague134) _vague134.ferme = true;
     if (_tcDemo !== etat) return;
     try {
       // Mission 108 : après la scène en cours (« C'est fait » d'abord), la bulle dit « Paul répond… », puis la réponse.
       await tcDemoAttendre(etat);
       if (_tcDemo !== etat) return;
-      typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('reponse', [c.name]), 'reception');
-      typeof tcFinEtapes === 'function' && await tcFinEtapes();
+      if (_vague134 && _vague134.n > TC_PLIER134) {
+        // Mission 134 : plus de 6 réponses d'un coup : une seule étape « Inès, Nina… et 45 autres répondent ».
+        if (!_vague134.pret) _vague134.pret = (async function () { await tcEtapeAttente(tcTexteVague134(_vague134), 'reception'); await tcFinEtapes(); })();
+        await _vague134.pret;
+      } else {
+        typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('reponse', [c.name]), 'reception');
+        typeof tcFinEtapes === 'function' && await tcFinEtapes();
+      }
       if (_tcDemo !== etat) return;
       const liste = (typeof messages !== 'undefined' && messages && Array.isArray(messages.user)) ? messages.user : null;
       if (liste) {
@@ -13832,7 +13840,8 @@ function tcDemoReponseDe(reference, texte, apres) {
         const t = new Date();
         conv.thread.push({ from: 'them', text: texte, time: String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') });
       }
-      tcPousserTiers120(c.name, texte, { _app: true });   // mission 120 : sa bulle verte
+      if (_vague134 && _vague134.n > TC_PLIER134) tcResumerReponse134(_vague134, c.name, texte);   // mission 134
+      else tcPousserTiers120(c.name, texte, { _app: true });   // mission 120 : sa bulle verte
       renderCharlyChat();
       if (typeof apres === 'function') await apres();
     } catch (e) {} finally {
@@ -14265,7 +14274,8 @@ function renderCharlyChat() {
   // Mission 106 : conversation vide, ou rien que l'accueil : l'accueil au milieu de la page.
   if (!charlyIA.history.length) { body.innerHTML = tcRendreAccueilCharlyVide(); return; }
   if (charlyIA.history.length === 1 && tcEstAccueilCharly(charlyIA.history[0])) { body.innerHTML = tcRendreAccueilCharly(charlyIA.history[0], true); return; }
-  body.innerHTML = charlyIA.history.map(m => renderChatMessage(m) + (typeof tcSousVoir111 === 'function' ? tcSousVoir111(m) : '')).join('');
+  // Mission 134 : tcLigne134 : le message (plié tant qu'il n'est pas déplié), « Voir dans mon agenda », « Voir le détail ».
+  body.innerHTML = charlyIA.history.map(m => tcLigne134(m)).join('');
   // Le redessin efface la bulle d'attente : on la remet si Charly
   // cherche toujours, sinon elle disparaitrait au premier rafraichissement.
   tcMajAttenteCharly();
@@ -14314,6 +14324,7 @@ function tcPousserTiers120(nom, texte, extra) {
 function tcCite120(x) { return { nom: String((x && x.nom) || ''), texte: String((x && x.texte) || '') }; }
 
 function tcRendreTiers120(m) {
+  if (m && m._resume134 && typeof tcRendreResume134 === 'function') return tcRendreResume134(m);   // mission 134
   const t = m._tiers || tcTiers120('');
   return '<div class="tc-tiers" style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">'
     + '<div aria-hidden="true" style="flex-shrink:0; width:32px; height:32px; margin-top:17px; border-radius:50%; background:#137333; color:#fff; display:flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:700;">' + escapeHTMLSafe(t.initiales || '?') + '</div>'
@@ -14329,10 +14340,241 @@ function tcRendreAvecCites120(m) {
   const tete = cites.map(function (x) { return x.nom + ' t’a répondu : « ' + x.texte + ' ».'; }).join(' ');
   const contenu = String(m.content || '');
   if (contenu.indexOf(tete) !== 0) return renderChatMessage(Object.assign({}, m, { _citesFaites: true }));
-  const vertes = cites.map(function (x) { return tcRendreTiers120({ content: x.texte, _tiers: tcTiers120(x.nom) }); }).join('');
+  // Mission 134 : plus de 6 réponses citées : les 5 premières, puis « … et N autres personnes ont répondu » (« Voir le détail »).
+  const _plier134 = typeof TC_PLIER134 !== 'undefined' && cites.length > TC_PLIER134 && !m._citesOuvert134;
+  if (_plier134 && !m._cle134) m._cle134 = tcCle134('c134');
+  const vertes = (_plier134 ? cites.slice(0, 5) : cites).map(function (x) { return tcRendreTiers120({ content: x.texte, _tiers: tcTiers120(x.nom) }); }).join('')
+    + (_plier134 ? tcRendreResume134({ _resume134: { cle: m._cle134, reponses: cites.slice(5), ouvert: false } }) : '');
   const reste = contenu.slice(tete.length).trim();
   return vertes + (reste ? renderChatMessage(Object.assign({}, m, { content: reste, _citesFaites: true })) : '');
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MISSION 134 (chef, 18/11) : quand Charly prévient ou décale beaucoup de personnes d'un coup (plus de 6), la conversation reste
+   courte. Les 5 premières bulles vertes, puis une seule : « … et N autres personnes ont répondu ». Le récapitulatif avant le
+   « oui », la carte du retard, le « C'est fait » et le compte rendu : une ligne par jour et « Voir le détail », qui déplie tout.
+   Affichage seulement : le texte entier reste dans le message, tout part et se fait comme avant. Un conflit, un rendez-vous que
+   Charly ne sait pas replacer, une personne qu'il n'a pas pu prévenir ne se plient jamais. Jusqu'à 6 personnes : rien ne change.
+   ═══════════════════════════════════════════════════════════════ */
+const TC_PLIER134 = 6;
+let _tcPlie134 = 0;
+
+/** Une clé neuve pour un message plié. */
+function tcCle134(prefixe) { return (prefixe || 'p134') + '-' + (++_tcPlie134) + '-' + Date.now(); }
+
+/** « Jeudi 19 », « Mardi 1er ». */
+function tcJourCourt134(iso) {
+  const d = new Date(String(iso) + 'T12:00:00');
+  if (isNaN(d)) return String(iso);
+  return ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][d.getDay()] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate());
+}
+
+/** « 14 personnes prévenues et décalées », « 1 personne prévenue ». */
+function tcPersonnes134(n, mots) {
+  const s = n > 1 ? 's' : '';
+  return n + ' personne' + s + (mots && mots.length ? ' ' + mots.map(function (w) { return w + s; }).join(' et ') : '');
+}
+
+/** [{ date, cle }] → [{ date, n }] dans l'ordre des jours (n : les clés différentes du jour). */
+function tcParJour134(items) {
+  const jours = {};
+  items.forEach(function (x) { if (!x || !x.date) return; (jours[x.date] = jours[x.date] || []).indexOf(x.cle) < 0 && jours[x.date].push(x.cle); });
+  return Object.keys(jours).sort().map(function (d) { return { date: d, n: jours[d].length }; });
+}
+
+/** Les lignes pliées : celles qu'on plie laissent la place aux lignes par jour (là où était la première), les autres restent. */
+function tcInserer134(lignes, pliable, jours, changer) {
+  const out = [];
+  let mis = false;
+  lignes.forEach(function (l) {
+    if (pliable(l)) { if (!mis) { jours.forEach(function (j) { out.push(j); }); mis = true; } return; }
+    out.push(changer ? changer(l) : l);
+  });
+  if (!mis) jours.forEach(function (j) { out.push(j); });
+  return out;
+}
+
+/** « • Envoyé dans la messagerie TimeCool : Inès, Nina et Claire » → « … : 3 personnes ». */
+function tcCompterNoms134(l) {
+  const m = String(l).match(/^(• (?:Envoyé dans la messagerie TimeCool|Prévenu par la messagerie TimeCool|Message prêt, à envoyer toi-même d’un geste \(SMS ou email\))) : (.+)$/);
+  return m ? m[1] + ' : ' + tcPersonnes134(m[2].split(/, | et /).length) : l;
+}
+
+/**
+ * Le récapitulatif avant le « oui », plié au-delà de 6 : la carte « Je déplace N rendez-vous » (décaler en prévenant) et la carte
+ * du retard (« Je préviens N personnes de ton retard »). { texte, cle, ouvert } ou null (rien ne change).
+ */
+function tcPlierRecap134(r, texte) {
+  if (!r || typeof texte !== 'string') return null;
+  const L = texte.split('\n');
+  let lignes = null;
+  if (typeof tcRecapEnvoi === 'function' && tcRecapEnvoi(r) && Array.isArray(r._liste)) {
+    if (r._liste.length <= TC_PLIER134) return null;
+    const sansPlace = function (x) {
+      if (!x || !x.p) return true;
+      const it = (r._creneaux || []).filter(function (i) { return i && i.ev && x.ev && i.ev.id === x.ev.id; })[0];
+      return !!it && !(it.creneaux && it.creneaux.length);
+    };
+    const jours = tcParJour134(r._liste.filter(function (x) { return x && x.ev && !sansPlace(x); }).map(function (x) { return { date: x.ev.date, cle: x.ev.id }; }))
+      .map(function (j) { return tcJourCourt134(j.date) + ' : ' + j.n + ' rendez-vous à décaler'; });
+    const i = L.findIndex(function (l, k) { return k > 1 && /choisit/.test(l); });
+    const fin = i > 1 ? L.slice(i) : [L[L.length - 1]];
+    // Jamais plié : un rendez-vous que Charly ne sait pas replacer, un conflit.
+    const gardes = L.slice(2, i > 1 ? i : L.length - 1).filter(function (l) { return /pas de moment libre|chevauche|⚠️/.test(l); });
+    lignes = L.slice(0, 2).concat(jours, gardes, fin);
+  } else if (r.action === 'retard' && Array.isArray(r._rdvs) && /^Je préviens \d+ personnes de ton retard/.test(L[0]) && typeof tcContactsJoignables130 === 'function') {
+    const items = [];
+    r._rdvs.forEach(function (e) { tcContactsJoignables130(e).forEach(function (c) { items.push({ date: e.date, cle: c.name }); }); });
+    if (new Set(items.map(function (x) { return x.cle; })).size <= TC_PLIER134) return null;
+    const jours = tcParJour134(items).map(function (j) { return tcJourCourt134(j.date) + ' : ' + tcPersonnes134(j.n); });
+    lignes = [L[0]].concat(jours, L.slice(1).filter(function (l) { return !/^• /.test(l); }));
+  }
+  return lignes ? { texte: lignes.join('\n'), cle: tcCle134(), ouvert: false } : null;
+}
+
+/**
+ * Le « C'est fait » après le « oui », plié au-delà de 6 personnes : une ligne par jour (le jour d'avant le décalage). d : presents,
+ * anciens, aProposer, deplaces, sansMoyen, propositions (ceux qui n'ont rien reçu ne comptent pas comme prévenus).
+ */
+function tcPlierBilan134(lignes, r, d) {
+  if (!Array.isArray(lignes) || !r || !d) return null;
+  const decaler = r.action === 'decaler';
+  const aProposer = d.aProposer || [], deplaces = d.deplaces || [], presents = d.presents || [];
+  if ((decaler ? aProposer.length + deplaces.length : presents.length) <= TC_PLIER134) return null;
+  const res = d.propositions && d.propositions.res ? d.propositions.res : {};
+  const exclus = [].concat(res.echecs || [], res.sansMoyen || [], (res.sansCreneau || []).map(function (x) { return x && x.contact && x.contact.name; }),
+    (d.sansMoyen || []).map(function (c) { return c && c.name; })).filter(Boolean);
+  const personnes = [], rdvs = [];
+  const ancienne = function (ev) { const a = (d.anciens || []).filter(function (x) { return x && ev && x.id === ev.id; })[0]; return a ? a.date : ev.date; };
+  const contactsDe = function (ev) { return (typeof tcContactsDuRdv === 'function' ? tcContactsDuRdv(ev) : []).filter(function (c) { return c && exclus.indexOf(c.name) < 0; }); };
+  if (decaler) {
+    aProposer.forEach(function (x) { contactsDe(x.ev).forEach(function (c) { personnes.push({ date: ancienne(x.ev), cle: c.name }); }); });
+    deplaces.forEach(function (x) { rdvs.push({ date: ancienne(x.ev), cle: x.ev.id }); });
+  } else if (r.action === 'retard') {
+    presents.forEach(function (e) { contactsDe(e).forEach(function (c) { personnes.push({ date: e.date, cle: c.name }); }); });
+  } else {
+    presents.forEach(function (e) { rdvs.push({ date: e.date, cle: e.id }); });
+  }
+  const P = tcParJour134(personnes), R = tcParJour134(rdvs);
+  const dates = P.concat(R).map(function (x) { return x.date; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).sort();
+  const jours = dates.map(function (dt) {
+    const p = (P.filter(function (x) { return x.date === dt; })[0] || {}).n || 0, n = (R.filter(function (x) { return x.date === dt; })[0] || {}).n || 0;
+    const morceaux = [];
+    if (p) morceaux.push(tcPersonnes134(p, ['prévenue']));
+    if (n) morceaux.push(n + ' rendez-vous ' + (r.action === 'supprimer' ? 'supprimé' : 'déplacé') + (n > 1 ? 's' : ''));
+    return '• ' + tcJourCourt134(dt) + ' : ' + morceaux.join(', ');
+  });
+  const pliable = function (l) { return /^• Retard d’environ|^• Déplacé : |^• « .* » : je propose à |^• Supprimé : /.test(l); };
+  return { texte: tcInserer134(lignes, pliable, jours, tcCompterNoms134).join('\n'), cle: tcCle134(), ouvert: false };
+}
+
+/** Le compte rendu de Charly (📋), plié au-delà de 6 personnes : « Jeudi 19 : 14 personnes prévenues et décalées ». */
+function tcPlierCompteRendu134(lignes, deplaces, reproposes, avant) {
+  deplaces = deplaces || []; reproposes = reproposes || [];
+  if (deplaces.length + reproposes.length <= TC_PLIER134) return null;
+  const D = tcParJour134(deplaces.map(function (x) { return { date: (avant && avant[x.ev.id]) || x.ev.date, cle: String(x.p.qui || x.ev.id) }; }));
+  const A = tcParJour134(reproposes.map(function (x) { return { date: x.ev.date, cle: String((x.contact && x.contact.name) || x.ev.id) }; }));
+  const dates = D.concat(A).map(function (x) { return x.date; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).sort();
+  const jours = dates.map(function (dt) {
+    const n = (D.filter(function (x) { return x.date === dt; })[0] || {}).n || 0, a = (A.filter(function (x) { return x.date === dt; })[0] || {}).n || 0;
+    const morceaux = [];
+    if (n) morceaux.push(tcPersonnes134(n, ['prévenue', 'décalée']));
+    if (a) morceaux.push(a + (a > 1 ? ' n’ont pas pu : je leur propose' : ' n’a pas pu : je lui propose') + ' d’autres moments');
+    return '• ' + tcJourCourt134(dt) + ' : ' + morceaux.join(' ; ');
+  });
+  const pliable = function (l) { return /^• \S+ a choisi .*J’ai déplacé « |^• \S+ n’a pas pu pour « .*Je lui ai proposé d’autres moments/.test(l); };
+  return { texte: tcInserer134(lignes, pliable, jours).join('\n'), cle: tcCle134(), ouvert: false };
+}
+
+/** Le dernier message de la conversation reçoit son pli (un texte en HTML pour un message HTML). */
+function tcPlierDernier134(plie) {
+  const m = charlyIA.history[charlyIA.history.length - 1];
+  if (!m || !plie) return;
+  m._plie134 = Object.assign({}, plie, { texte: m.isHTML ? escapeHTMLSafe(plie.texte).replace(/\n/g, '<br>') : plie.texte });
+  renderCharlyChat();
+}
+
+/** Ce qu'on dessine d'un message : plié tant que « Voir le détail » n'a pas été touché. */
+function tcVue134(m) {
+  if (!m || !m._plie134 || m._plie134.ouvert) return m;
+  const v = Object.assign({}, m, { content: m._plie134.texte });
+  if (m._questionnaire) v._questionnaire = Object.assign({}, m._questionnaire, { question: m._plie134.texte });
+  return v;
+}
+
+/** Le bouton « Voir le détail » (44 px de haut au moins, comme les autres boutons de la conversation). */
+function tcBouton134(cle) {
+  return '<button class="tc-detail134" onclick="tcDeplier134(\'' + cle + '\')" style="min-height:44px; padding:7px 16px; background:#fff; color:#1a56b8; border:1.5px solid #c8d7ee; border-radius:22px; font-size:13px; font-weight:600; cursor:pointer;">Voir le détail</button>';
+}
+
+/** Une ligne de la conversation : le message (plié tant qu'il n'est pas déplié), « Voir dans mon agenda », « Voir le détail ». */
+function tcLigne134(m) {
+  return renderChatMessage(tcVue134(m)) + (typeof tcSousVoir111 === 'function' ? tcSousVoir111(m) : '') + tcBoutonDetail134(m);
+}
+
+/** Sous un message plié (hors questionnaire, qui l'a dans sa bulle) : « Voir le détail ». */
+function tcBoutonDetail134(m) {
+  if (!m || !m._plie134 || m._plie134.ouvert || m._questionnaire) return '';
+  return '<div style="margin:-4px 0 12px 44px;">' + tcBouton134(m._plie134.cle) + '</div>';
+}
+
+/** « Voir le détail » touché : le message se déplie là où il est (la conversation ne saute pas en bas). */
+function tcDeplier134(cle) {
+  (Array.isArray(charlyIA.history) ? charlyIA.history : []).forEach(function (m) {
+    if (!m) return;
+    if (m._plie134 && m._plie134.cle === cle) m._plie134.ouvert = true;
+    if (m._resume134 && m._resume134.cle === cle) m._resume134.ouvert = true;
+    if (m._cle134 === cle) m._citesOuvert134 = true;
+  });
+  const corps = document.getElementById('charlyChatBody');
+  const y = corps ? corps.scrollTop : 0;
+  renderCharlyChat();
+  if (corps) setTimeout(function () { corps.scrollTop = y; }, 80);
+}
+
+/** « … et 45 autres personnes ont répondu » (la bulle verte qui résume), avec « Voir le détail » ; dépliée : une bulle par personne. */
+function tcRendreResume134(m) {
+  const r = m._resume134 || {};
+  const reponses = Array.isArray(r.reponses) ? r.reponses : [];
+  if (r.ouvert) return reponses.map(function (x) { return tcRendreTiers120({ content: x.texte, _tiers: tcTiers120(x.nom) }); }).join('');
+  const n = reponses.length;
+  // La bulle verte habituelle (sans prénom, « +45 » dans le rond), « Voir le détail » dessous.
+  return '<div class="tc-resume134">' + tcRendreTiers120({ content: tcTexteResume134(n), _tiers: { nom: '', prenom: '', initiales: '+' + n } })
+    + '<div style="margin:-4px 0 12px 40px;">' + tcBouton134(r.cle) + '</div></div>';
+}
+
+/** « … et 45 autres personnes ont répondu », « … et 1 autre personne a répondu ». */
+function tcTexteResume134(n) {
+  return '… et ' + n + (n > 1 ? ' autres personnes ont répondu' : ' autre personne a répondu');
+}
+
+/** Démonstration : les réponses programmées ensemble forment une vague (fermée dès que la première arrive). */
+function tcVagueDemo134(etat, c) {
+  if (!etat.vague134 || etat.vague134.ferme) etat.vague134 = { n: 0, vus: 0, noms: [], pret: null, resume: null };
+  const v = etat.vague134;
+  v.n++;
+  v.noms.push(String((c && c.name) || ''));
+  return v;
+}
+
+/** « Inès, Nina, Claire, Louis, Agathe et 45 autres répondent… » (une seule étape pour toute la vague). */
+function tcTexteVague134(v) {
+  const p = v.noms.slice(0, 5).map(function (x) { return x.split(' ')[0]; });
+  return p.join(', ') + ' et ' + (v.n - p.length) + (v.n - p.length > 1 ? ' autres répondent…' : ' autre répondent…');
+}
+
+/** Une réponse d'une grande vague : les 5 premières ont leur bulle verte, les suivantes rejoignent la bulle qui les résume. */
+function tcResumerReponse134(v, nom, texte) {
+  const rang = ++v.vus;
+  if (rang <= 5) { tcPousserTiers120(nom, texte, { _app: true }); return; }
+  if (!v.resume) {
+    v.resume = { role: 'tiers', _app: true, content: '', _tiers: tcTiers120(''), _resume134: { cle: tcCle134('r134'), reponses: [], ouvert: false } };
+    charlyIA.history.push(v.resume);
+  }
+  v.resume._resume134.reponses.push({ nom: String(nom || ''), texte: String(texte || '') });
+  v.resume.content = tcTexteResume134(v.resume._resume134.reponses.length);
+}
+/* ═══ fin mission 134 ═══ */
 
 function tcBulleCharly(interieur) {
   return '<div style="display:flex; gap:8px; margin-bottom:10px; align-items:flex-start;">'
@@ -29863,7 +30105,8 @@ async function tcQuestionnaireSuivant() {
     q.etape = etape.cle;
     q.essais = 2;
     const question = typeof etape.question === 'function' ? etape.question(q.reponses) : etape.question;
-    charlyIA.history.push({ role: 'system_info', content: question, _questionnaire: {
+    const _p134 = etape.cle === 'recap' && typeof tcPlierRecap134 === 'function' ? tcPlierRecap134(q.reponses, question) : null;   // mission 134
+    charlyIA.history.push({ role: 'system_info', content: question, _plie134: _p134 || undefined, _questionnaire: {
       id: q.id, etape: etape.cle, question: question, etat: 'choix',
       multiple: !!etape.multiple, min: etape.min || 1, selection: [],
       choix: (choix || []).map(function (c) { return { cle: c.cle, texte: c.texte, ton: c.ton || '' }; })
@@ -30058,6 +30301,7 @@ function tcRendreQuestionnaire(m) {
       + (actif && q.selection.length >= (q.min || 1) ? '' : ' opacity:0.55;') + '">✔️ C’est tout</button>'
     : '';
   return tcBulleCharly(escapeHTMLSafe(q.question).replace(/\n/g, '<br>')
+    + (m._plie134 && !m._plie134.ouvert && typeof tcBouton134 === 'function' ? '<div style="margin-top:8px;">' + tcBouton134(m._plie134.cle) + '</div>' : '')   // mission 134
     + '<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">' + boutons + valider + '</div>');
 }
 
@@ -30410,8 +30654,10 @@ async function tcQuestionnaireExecuter(r, fin) {
   if (r._seul) tcJournaliserCompteRendu(lignes);   // profil 3 : le compte rendu est rangé au Journal d’activité (mission 91)
   // Mission 108 : la bulle s'en va, puis « C'est fait ».
   typeof tcFinEtapes === 'function' && await tcFinEtapes();
-  if (!envois.length) { tcQuestionnaireDire(lignes.join('\n')); return; }
-  charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero) });
+  // Mission 134 : au-delà de 6 personnes, une ligne par jour et « Voir le détail » (le texte entier reste dans le message).
+  const _p134 = typeof tcPlierBilan134 === 'function' ? tcPlierBilan134(lignes, r, { presents: presents, anciens: anciens, aProposer: aProposer, deplaces: deplaces, sansMoyen: sansMoyen, propositions: propositions }) : null;
+  if (!envois.length) { tcQuestionnaireDire(lignes.join('\n')); if (_p134) tcPlierDernier134(_p134); return; }
+  charlyIA.history.push({ role: 'system_info', content: lignes.join('\n'), _envois: envois, _envoisId: 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero), _plie134: _p134 || undefined });
   renderCharlyChat();
 }
 
@@ -31252,6 +31498,7 @@ async function tcTraiterSeul(liste) {
   const presents = choisis.filter(function (x) { return !!x.ev; });
   const genesLot = tcGenesDuLot(presents, true);
   const alertes = presents.map(function (x, i) { return genesLot[i].length ? '« ' + x.ev.title + ' » et ' + genesLot[i].map(_tcLigneRdv).join(', ') : ''; }).filter(Boolean);
+  const _avant134 = {}; presents.forEach(function (x) { _avant134[x.ev.id] = x.ev.date; });   // mission 134 : le jour d'avant
   if (presents.length) {
     tcDeplacerDansLeLot(presents.map(function (x) { delete x.ev.decalage; return { ev: x.ev, p: tcCreneauDeProposition(x.p) }; }), { silencieux: true });
     presents.forEach(function (x) { deplaces.push(x); });
@@ -31302,6 +31549,7 @@ async function tcTraiterSeul(liste) {
   // « Voir dans mon agenda » sous le compte rendu, pour ce qui a été déplacé (mission 111).
   if (deplaces.length) carte._voir = deplaces.map(function (x) { return x.ev.id; });
   if (envois.length) { carte._envois = envois; carte._envoisId = 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero); }
+  if (typeof tcPlierCompteRendu134 === 'function') { const _p134 = tcPlierCompteRendu134(lignes, deplaces, reproposes, _avant134); if (_p134) carte._plie134 = _p134; }   // mission 134
   if (lignes.length > 1) { charlyIA.history.push(carte); tcJournaliserCompteRendu(lignes); }
   renderCharlyChat();
   if (currentPage !== 'assistant' && typeof showToast === 'function' && (deplaces.length || reproposes.length || laisses.length)) showToast('📋 Charly a avancé : son compte rendu t’attend');
