@@ -3743,3 +3743,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 — Mission 132 : remarques de l’EXAMINATEUR sur la 131 (CODEUR)
 
 - « sauf ceux de l’après-midi » : le reste de la journée, et la carte le dit ; « sauf Bruno » (pas une fiche) : « Je ne trouve pas Bruno dans tes rendez-vous de demain. » ; « Quand suis-je libre avec ma femme ? » comme « Trouve un créneau avec ma femme » ; verif-rappels-stop-e2e lit backend/api/lib.php (marche dans un worktree neuf).
+- Examen 132 : un inconnu après « sauf » n’est dit que s’il est tapé avec une majuscule (« sauf Bruno ») ; « sauf contrordre » : rien.

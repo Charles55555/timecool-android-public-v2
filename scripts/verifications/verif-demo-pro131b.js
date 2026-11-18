@@ -87,6 +87,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     remettre(); n0 = charlyIA.history.length; await taper('Quand suis-je libre avec ma femme ?'); R.y3 = tout(n0); R.y3b = boutons();
     remettre(); n0 = charlyIA.history.length; await taper('Quand suis-je libre avec ma femme cette semaine ?'); R.y4 = tout(n0); R.y4b = boutons();
     remettre(); n0 = charlyIA.history.length; await taper('Quand suis-je libre avec Paul ?'); R.y5 = tout(n0);
+    remettre(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain que j’aurai 10 minutes de retard, sauf contrordre'); R.y6 = tout(n0);
+    remettre(); n0 = charlyIA.history.length; await taper('Préviens mes clients de demain sauf changement que j’ai 10 minutes de retard'); R.y6b = tout(n0);
   } catch (e) { R.erreur = String(e && e.stack || e); }
   var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(R); document.body.appendChild(pre);
 }, 1200); });</script>`;
@@ -124,6 +126,7 @@ else {
   verifie('mission 132 : « Quand suis-je libre avec ma femme ? » : comme « Trouve un créneau avec ma femme » (message, créneaux, « Ajouter un contact »)', /Je m’en occupe\. Je ne trouve pas ta femme dans tes contacts\./.test(S.y3) && /Voici ce qui est libre/.test(S.y3) && JSON.stringify(S.y3b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.y3, S.y3b]));
   verifie('mission 132 : « Quand suis-je libre avec ma femme cette semaine ? » : pareil', /Je m’en occupe\. Je ne trouve pas ta femme dans tes contacts\./.test(S.y4) && /Voici ce qui est libre|Je ne vois aucun créneau libre/.test(S.y4) && JSON.stringify(S.y4b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.y4, S.y4b]));
   verifie('mission 132 : « Quand suis-je libre avec Paul ? » (une fiche) : jamais « Je ne trouve pas »', !/Je ne trouve pas/.test(S.y5), S.y5);
+  verifie('examen 132 : « … , sauf contrordre », « sauf changement » : tout le monde, sans « Je ne trouve pas » (un mot en minuscules n’est pas un prénom)', /Je préviens 3 personnes de ton retard, demain/.test(S.y6) && !/Je ne trouve pas|Contrordre/.test(S.y6) && /Je préviens 3 personnes de ton retard, demain/.test(S.y6b) && !/Je ne trouve pas|Changement/.test(S.y6b), JSON.stringify([S.y6, S.y6b]));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
 console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');

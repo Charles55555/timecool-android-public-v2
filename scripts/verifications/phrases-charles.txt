@@ -169,4 +169,7 @@ Je suis malade, décale tous mes patients de la semaine | @charlypro | texte:Tu 
 Quand suis-je libre avec ma femme ? | @charlypro | texte:Je ne trouve pas ta femme dans tes contacts && texte:Voici ce qui est libre && sans:je ne peux && sans:pas bien compris
 Quand suis-je libre avec ma femme cette semaine ? | @charlypro | texte:Je ne trouve pas ta femme dans tes contacts && sans:je ne peux && sans:pas bien compris
 Préviens mes patients de demain sauf ceux de l’après-midi que j’ai 10 minutes de retard | @charlypro | texte:Je préviens 4 personnes de ton retard, demain matin && texte:Claire && sans:Léa Virtuelle && sans:Tom Virtuel && texte:Je ne préviens pas ceux de l’après-midi && sans:aucun rendez-vous && sans:pas bien compris
-Préviens mes patients de demain sauf Bruno que j’ai 10 minutes de retard | @charlypro | texte:Je préviens 6 personnes de ton retard, demain && texte:Je ne trouve pas Bruno dans tes rendez-vous de demain\.[\s\S]*Je leur envoie && sans:Je ne préviens pas && sans:pas bien compris
+# Examen 132 : « Je ne trouve pas Bruno » seulement avec la majuscule (verif-demo-pro131b) ; en minuscules, rien n’est dit.
+Préviens mes patients de demain sauf Bruno que j’ai 10 minutes de retard | @charlypro | texte:Je préviens 6 personnes de ton retard, demain && sans:Je ne préviens pas && sans:pas bien compris
+Préviens mes patients de demain que j’aurai 10 minutes de retard, sauf contrordre | @charlypro | texte:Je préviens 6 personnes de ton retard, demain && sans:Je ne trouve pas && sans:Contrordre && sans:pas bien compris
+Préviens mes patients de demain sauf changement que j’ai 10 minutes de retard | @charlypro | texte:Je préviens 6 personnes de ton retard, demain && sans:Je ne trouve pas && sans:Changement && sans:pas bien compris

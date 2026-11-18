@@ -28282,7 +28282,9 @@ async function tcRetardPeriode130(text, intent) {
   const _sansSauf = _s131.reste;
   // Mission 132 : « sauf ceux de l'après-midi » (la période se lit sans cette partie), « sauf Bruno » (pas une fiche).
   const _partieExclue = _s131.partie || null;
-  const _inconnus = Array.isArray(_s131.inconnus) ? _s131.inconnus : [];
+  // Examen 132 : seulement un mot tapé avec une majuscule (« sauf Bruno ») ; « sauf contrordre » : rien n'est dit.
+  const _tapes = String(text || '').split(/[\s,.;:!?«»"()’']+/).filter(function (x) { return /^[A-ZÀ-ÖØ-Ý]/.test(x); }).map(tcClasseNormaliser);
+  const _inconnus = (Array.isArray(_s131.inconnus) ? _s131.inconnus : []).filter(function (w) { return _tapes.indexOf(w) > -1; });
   const _tP = _partieExclue ? _sansSauf : t;
   const dest = tcClasseNormaliser(String((intent && intent.destinataire) || '')).replace(/(?:^|\s)(?:sauf|excepte|hormis|a part)\s.*$/, '');
   if (dest && !/^(?:(?:tous|toutes|tout)\s+)?(?:mes|les|le|tout)\s/.test(dest + ' ')) return false;
