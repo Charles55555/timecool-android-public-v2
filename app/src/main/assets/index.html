@@ -30079,7 +30079,7 @@ async function tcTraiterSeul(liste) {
       // La connexion a manqué : rien n’est clos, la sonde réessaiera.
       if (!res.details.length) { x.ev.decalage = avant; echecs.push(x); continue; }
       res.envois.forEach(function (e) { envois.push(e); });
-      reproposes.push({ p: p, ev: x.ev, contact: contact });
+      reproposes.push({ p: p, ev: x.ev, contact: contact, creneaux: creneaux });
       await traiter(x, 'autres');
       continue;
     }
@@ -30090,8 +30090,11 @@ async function tcTraiterSeul(liste) {
   saveEventsToStorage();
   if (currentPage === 'calendar') render();
   const lignes = ['📋 Compte rendu de Charly'];
-  deplaces.forEach(function (x) { lignes.push('• Déplacé : ' + _tcLigneRdv(x.ev) + tcPrisParentheses(x.p)); });
-  reproposes.forEach(function (x) { lignes.push('• Reproposé à ' + x.contact.name + ' : « ' + x.ev.title + ' »' + (tcPrisTexte(x.p) ? ' (' + tcPrisTexte(x.p) + ')' : '')); });
+  // Décision de Charles (18/11) : ce que Charly a fait seul, écrit en clair (qui a choisi quoi, ce qui a bougé).
+  if (deplaces.length) lignes.push('C’est fait.');
+  const _prenom = function (q) { return String(q || 'Ton contact').split(' ')[0]; };
+  deplaces.forEach(function (x) { lignes.push('• ' + _prenom(x.p.qui) + ' a choisi ' + tcPropositionLibelle(tcCreneauDeProposition(x.p)) + '. J’ai déplacé « ' + x.ev.title + ' »' + tcPrisParentheses(x.p) + '.'); });
+  reproposes.forEach(function (x) { lignes.push('• ' + _prenom(x.contact.name) + ' n’a pas pu pour « ' + x.ev.title + ' »' + (tcPrisTexte(x.p) ? ' (' + tcPrisTexte(x.p) + ')' : '') + '. Je lui ai proposé d’autres moments : ' + (x.creneaux || []).map(tcPropositionLibelle).join(', ') + '.'); });
   laisses.forEach(function (x) { lignes.push('• Laissé à sa place : « ' + x.ev.title + ' » (' + (Number(x.p.tours || 1) >= 2 ? 'aucun créneau retenu après deux propositions' : 'pas d’autre moment libre') + ')'); });
   absents.forEach(function (x) { lignes.push('• Plus dans ton agenda, rien placé : « ' + (x.p.titre || 'un rendez-vous') + ' »'); });
   echecs.forEach(function (x) { lignes.push('• Pas envoyé, la connexion a manqué : « ' + x.ev.title + ' ». Je réessaie.'); });
@@ -30106,10 +30109,31 @@ async function tcTraiterSeul(liste) {
   if (deplaces.length) lignes.push('Pour revenir en arrière, dis-moi « remets-' + (deplaces.length > 1 ? 'les' : 'le') + ' ».');
   const traites = liste.filter(function (p) { return !echecs.some(function (x) { return x.p === p; }) && aClore.indexOf(Number(p.rdv_id)) < 0; }).map(function (p) { return Number(p.rdv_id); });
   const carte = { role: 'system_info', content: lignes.join('\n'), _compteRendu: true, _traites: traites };
+  // « Voir dans mon agenda » sous le compte rendu, pour ce qui a été déplacé (mission 111).
+  if (deplaces.length) carte._voir = deplaces.map(function (x) { return x.ev.id; });
   if (envois.length) { carte._envois = envois; carte._envoisId = 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero); }
   if (lignes.length > 1) { charlyIA.history.push(carte); tcJournaliserCompteRendu(lignes); }
   renderCharlyChat();
   if (currentPage !== 'assistant' && typeof showToast === 'function' && (deplaces.length || reproposes.length || laisses.length)) showToast('📋 Charly a avancé : son compte rendu t’attend');
+  // Une notification, si elles sont permises et que la page Charly IA n'est pas sous les yeux.
+  if ((deplaces.length || reproposes.length) && typeof tcNotifierCompteRendu === 'function') tcNotifierCompteRendu(lignes.filter(function (l) { return /^• /.test(l); }).slice(0, 2).join(' ').replace(/^• /, ''));
+}
+
+/** Le compte rendu de Charly signalé hors de la page : notification de l'appareil (Android) ou du navigateur, si elles sont permises. */
+async function tcNotifierCompteRendu(texte) {
+  try {
+    if (typeof currentPage !== 'undefined' && currentPage === 'assistant' && document.visibilityState === 'visible') return;
+    const corps = String(texte || '').replace(/^• /g, '').slice(0, 180);
+    if (!corps) return;
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+      const LN = window.Capacitor.Plugins.LocalNotifications;
+      const perm = await LN.checkPermissions();
+      if (!perm || perm.display !== 'granted') return;
+      await LN.schedule({ notifications: [{ id: Math.floor(Date.now() % 2000000000), title: '📋 Charly a avancé', body: corps, smallIcon: 'ic_notification', channelId: 'timecool_reminders' }] });
+    } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification('📋 Charly a avancé', { body: corps });
+    }
+  } catch (e) {}
 }
 
 /**

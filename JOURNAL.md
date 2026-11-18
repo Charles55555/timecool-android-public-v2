@@ -3690,3 +3690,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 ## 18/11/2026 (nuit) — Livraison après la 122 : capture, morceau C, version de l aide, rond de Maya (CODEUR)
 
 - Capture d écran dans « Remplis à ma place » (image par le relais, sans changer l API) ; question au patient sur une sous-famille ; vraie version en bas de l aide ; Maya en dégradé rose avec l éclair.
+- Profil 2 : compte rendu écrit en clair (« Michel a choisi … J’ai déplacé … »), « Voir dans mon agenda », notification hors de la page.

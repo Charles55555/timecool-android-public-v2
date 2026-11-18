@@ -304,8 +304,8 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
   const nDec2 = trace.decisions.length;
   await ctx.tcSuivrePropositions(true);
   verifie('Paul choisit un créneau montré, encore libre : placé seul (« place »), sans question ; le compte rendu le dit', ctx.events[0].date === cA.date && ctx.events[0].startH === cA.startH && !ctx.events[0].decalage
-    && trace.decisions[nDec2] === 'place' && ctx.charlyIA.history.some((m) => m._compteRendu && /• Déplacé : « Avocat »/.test(m.content)), JSON.stringify(trace.decisions.slice(nDec2)));
-  verifie('le compte rendu est aussi rangé au Journal d’activité : Charly, « 📋 Compte rendu », texte entier', journal.some((d) => d.categorie === 'charly' && d.title === 'Compte rendu de Charly' && d.status === 'compte_rendu' && /• Déplacé : « Avocat »/.test(d.detail) && d.detail.indexOf('📋') !== 0), JSON.stringify(journal));
+    && trace.decisions[nDec2] === 'place' && ctx.charlyIA.history.some((m) => m._compteRendu && /C’est fait\.\n• Paul a choisi [^\n]+\. J’ai déplacé « Avocat »\./.test(m.content) && Array.isArray(m._voir) && m._voir.length === 1), JSON.stringify(trace.decisions.slice(nDec2)));
+  verifie('le compte rendu est aussi rangé au Journal d’activité : Charly, « 📋 Compte rendu », texte entier', journal.some((d) => d.categorie === 'charly' && d.title === 'Compte rendu de Charly' && d.status === 'compte_rendu' && /J’ai déplacé « Avocat »\./.test(d.detail) && d.detail.indexOf('📋') !== 0), JSON.stringify(journal));
   q = last();
   verifie('Chloé a choisi un moment qui n’est plus libre (Gym y est) : rien n’est écrit, Charly demande', ctx.events[1].date === iso(0) && ctx.events[1].decalage && q.nature === 'question' && q._reponseCreneau && /Je le place dans ton agenda \?$/.test(q.content), q.content);
   await ctx.tcRepondreReponseCreneau('non');
@@ -385,7 +385,7 @@ titre('3. L’envoi : TimeCool par la messagerie, sinon un lien à envoyer d’u
     !ctx.charlyIA.history.some((m) => m.nature === 'question') && ctx.events[0].date === iso(3) && ctx.events[1].date === iso(3) && ctx.events[1].startH === 14
     && trace.creees.length === nCr + 1 && trace.creees[nCr].remplace === 'd' && trace.decisions.slice(nDec).join() === 'place,place,autres,laisse' && !ctx.events[3].decalage && ctx.events[2].decalage, trace.decisions.slice(nDec).join());
   verifie('une seule carte « 📋 Compte rendu de Charly » : déplacés, reproposé, laissé, ce qui attend, le créneau pris dit', cr3._compteRendu && /^📋 Compte rendu de Charly\n/.test(cr3.content)
-    && /• Déplacé : « Avocat »\n/.test(cr3.content) && /• Déplacé : « Kiné » \(Paul Martin avait déjà pris mardi à 9h\)/.test(cr3.content) && /• Reproposé à Chloé Roux : « Dentiste »/.test(cr3.content)
+    && /a choisi [^\n]+\. J’ai déplacé « Avocat »\.\n/.test(cr3.content) && /J’ai déplacé « Kiné » \(Paul Martin avait déjà pris mardi à 9h\)\./.test(cr3.content) && /• Chloé n’a pas pu pour « Dentiste »[^\n]*\. Je lui ai proposé d’autres moments : [^\n]+\./.test(cr3.content)
     && /• Laissé à sa place : « Zen » \(aucun créneau retenu après deux propositions\)/.test(cr3.content) && /• En attente d’une réponse : 1 rendez-vous/.test(cr3.content) && /remets-les/.test(cr3.content), cr3.content);
   verifie('les contacts l apprennent dans la même carte : Paul par sa messagerie, Chloé par deux boutons (le nouveau lien, le « déplacé »)', /✉️ Message envoyé à Paul Martin dans sa messagerie TimeCool : « Rendez-vous déplacé : ici\. »/.test(cr3.content)
     && cr3._envois && cr3._envois.length === 2 && cr3._envois.some((e) => e.texte === 'Rendez-vous déplacé : ici.') && cr3._envois.some((e) => /rdv\/ABCD2345$/.test(e.texte)), JSON.stringify(cr3._envois));
