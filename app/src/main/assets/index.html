@@ -15193,25 +15193,36 @@ function tcCiviliteEnTete(brut) {
 }
 
 /**
- * Mission 129 (Charles, 18/11 : « … demain à 15h durant 30 minutes ») : une durée en minutes (« durant 30 minutes », « pendant 30 min »,
- * « de 30 mn », « 30mn », « d'une durée de 45 minutes ») : { minutes, reste } (le texte sans elle), ou null. Jamais une durée :
- * « dans 30 minutes », « 30 minutes avant », « 10 min de retard », « 10 minutes à pied », ni « 15h 30mn » sans « de », « pendant »…
- * (c'est peut-être 15h30).
+ * Mission 129 (Charles, 18/11 : « … demain à 15h durant 30 minutes »), revue après l'examen (conseil du chef) : une durée en minutes
+ * n'est lue que dite comme telle et rattachée au rendez-vous :
+ * « durant / pendant N minutes », « d'une durée de N minutes », « durée de N minutes », « pour N minutes » (« réserve la salle pour
+ * 30 minutes »), « de N minutes » collé au rendez-vous (« rendez-vous de 30mn », « réunion de 45 minutes ») ou à l'heure (« à 15h de
+ * 30 mn »). « minutes », « min », « mn ». Tout le reste garde la durée par défaut (une heure) : mieux vaut une heure par défaut qu'une
+ * durée devinée à tort (« le cabinet est à 15 minutes », « 15 minutes de pause », « 15 minutes en métro », « pour y aller », « Réunion
+ * 45 minutes » sans préposition). Jamais dans une phrase qui déplace (« avance la réunion de 15 minutes »).
+ * { minutes, reste } (le texte sans elle), ou null.
  */
 function tcDureeMinutes129(texte) {
   const s = String(texte || '');
-  const m = /(\s*,?\s*\b(?:pendant|durant|d['’ ]une dur[ée]e de|dur[ée]e de|de|pour|sur)\s+)?(\d{1,3})\s?(?:minutes?|mins?|mn)(?![a-zà-ÿ])/i.exec(s);
-  if (!m) return null;
-  const n = Number(m[2]);
-  if (n < 5 || n > 480) return null;
-  const avant = s.slice(0, m.index).toLowerCase(), apres = s.slice(m.index + m[0].length).toLowerCase();
-  if (!m[1] && /(dans|ici|y a|toutes les|chaque|\d ?h|\d)\s*$/.test(avant)) return null;
-  // Examen 129 : sans préposition, « est à 15 minutes », « à 10 minutes de chez moi » (une distance), « 15 minutes de pause »
-  // (de + nom) : pas une durée.
-  if (!m[1] && (/(^|\s)[àa]\s*$/.test(avant) || /^\s*(de|du|des)(\s|$)/.test(apres) || /^\s*d['’]/.test(apres))) return null;
-  if (/(retard|avance)\s*$/.test(avant)) return null;
-  if (/^\s*(avant|apr[eè]s|plus tard|de retard|en retard|d['’]avance|en avance|[àa] l['’]avance|de marche|[àa] pied|de trajet|en voiture|de route)/.test(apres)) return null;
-  return { minutes: n, reste: (s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim() };
+  if (/\b(d[ée]cal|d[ée]plac|avanc|recul|repouss|report|retard|boug|gliss|rallong|raccourc|prolong)/i.test(s)) return null;
+  // [la forme, ce qu'elle garde au début de sa prise (le mot rendez-vous, ou l'heure)]
+  const formes = [
+    [/\s*,?\s*\b(?:pendant|durant|d['’ ]une dur[ée]e de|dur[ée]e de|pour)\s+(\d{1,3})\s?(?:minutes?|mins?|mn)(?![a-zà-ÿ])/i, false],
+    [/(\b(?:rendez[- ]vous|rdv|r[ée]union|s[ée]ance|consultation|appel|entretien|visio|rencontre|cours)|\d\s?h(?:\s?\d{2})?)\s+de\s+(\d{1,3})\s?(?:minutes?|mins?|mn)(?![a-zà-ÿ])/i, true]
+  ];
+  for (let k = 0; k < formes.length; k++) {
+    const m = formes[k][0].exec(s);
+    if (!m) continue;
+    const garde = formes[k][1] ? m[1].length : 0;
+    const n = Number(formes[k][1] ? m[2] : m[1]);
+    if (n < 5 || n > 480) continue;
+    // Ce qui suit dit que ce n'est pas la durée du rendez-vous : une pause, un trajet, un retard, un rappel.
+    const apres = s.slice(m.index + m[0].length).toLowerCase();
+    if (/^\s*(de|du|des)(\s|$)|^\s*d['’]|^\s*(avant|apr[eè]s|plus tard|en retard|en avance|[àa] l['’]avance|en (m[ée]tro|bus|train|tram|tramway|rer|v[ée]lo|taxi|vtc|uber|moto|scooter|trottinette|transports?|avion|bateau|car|voiture)\b|[àa] (pied|v[ée]lo|moto|cheval)\b|pour (y |m['’]y |s['’]y )?(aller|venir|arriver|rentrer|revenir|repartir|me rendre|se rendre)\b)/.test(apres)) continue;
+    const coupe = m.index + garde;
+    return { minutes: n, reste: (s.slice(0, coupe) + ' ' + s.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim() };
+  }
+  return null;
 }
 
 function tcCreationLocale(texte, now, forcer) {

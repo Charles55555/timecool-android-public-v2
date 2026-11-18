@@ -124,3 +124,6 @@ Crée-moi un nouveau rendez-vous de 30mn avec mon commercial demain à 15h | @ch
 # Examen 129 : « est à 15 minutes », « 15 minutes de pause » ne sont pas une durée (le rendez-vous garde son heure).
 Rendez-vous demain à 9h, le cabinet est à 15 minutes |  | jour:+1 && texte:09:00-10:00 && sans:pas bien compris
 Rendez-vous kiné demain à 9h, j’ai 15 minutes de pause |  | jour:+1 && texte:09:00-10:00 && sans:pas bien compris
+# Examen 129 (2e passage) : un trajet n’est pas une durée (le rendez-vous garde son heure).
+Rendez-vous demain à 9h, il me faut 15 minutes pour y aller |  | jour:+1 && texte:09:00-10:00 && sans:pas bien compris
+Rendez-vous demain à 9h, c’est 15 minutes en métro |  | jour:+1 && texte:09:00-10:00 && sans:pas bien compris
