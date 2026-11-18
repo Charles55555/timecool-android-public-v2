@@ -3664,3 +3664,9 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - Case CONFIG_PRO éteinte par défaut (Configuration IA, accès administrateur) ; page neuve, entrée de menu seulement avec la case ; étapes 1 à 5 et récapitulatif ; tc_config_pro (réglage du compte), jamais lu par le serveur ni par un autre compte (verif-config-pro-prive-e2e).
 - Choix faits seuls : familles et sous-familles cochées au départ ; jours du lundi au vendredi cochés, 9h-12h et 14h-18h proposés ; durée de rendez-vous 20 min proposée ; durées des actes proposées (15 à 60 min).
+
+## 18/11/2026 (nuit) — Mission 121 B : la fiche professionnelle et « Remplis à ma place » (CODEUR)
+
+- Étape 6 : fiche question par question, réponses proposées pour le chirurgien-dentiste, photo réduite ; horaires du cabinet facultatifs, jamais ceux de l'étape 4 ; « Remplis à ma place » par texte collé (Charly Pro IA, relais habituel).
+- Version complète garde CONFIG_PRO, MODE_PRO, CARNET_PROS ; 9h-9h : « la fin est la même que le début » ; café de la démonstration en journée.
+- Capture d'écran pour « Remplis à ma place » : pas encore ; le relais transmet le corps tel quel (200 Ko au plus), à confirmer par un essai avant de coder.

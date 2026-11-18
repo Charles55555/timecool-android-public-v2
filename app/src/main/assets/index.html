@@ -1279,7 +1279,7 @@ if (window.pdfjsLib) {
 <div class="page" id="page-configpro">
   <div class="page-header">
     <div class="page-title">🩺 Configuration professionnelle</div>
-    <div class="page-subtitle">Votre agenda professionnel, en cinq étapes.</div>
+    <div class="page-subtitle">Votre agenda professionnel et votre fiche, en six étapes.</div>
   </div>
   <div class="main"><div id="configProCorps" style="padding:14px; max-width:720px; margin:0 auto;"></div></div>
 </div>
@@ -2208,8 +2208,11 @@ function commitFeatureOverrides() {
 
 function resetFeatureOverrides() {
   try { localStorage.removeItem(TC_FEATURES_KEY); } catch(e) {}
-  // Mission 121 : « Version complète » ne rallume jamais la Configuration professionnelle.
-  Object.keys(FEATURES).forEach(function(k) { FEATURES[k] = (k !== 'RDV_GROUPE' && k !== 'CONFIG_PRO'); });
+  // Mission 121 : « Version complète » ne touche plus la Configuration professionnelle ni les anciens modules MODE_PRO et
+  // CARNET_PROS : ils gardent leur état actuel sur ce compte (chef, 18/11).
+  const _gardes = { MODE_PRO: !!FEATURES.MODE_PRO, CARNET_PROS: !!FEATURES.CARNET_PROS, CONFIG_PRO: !!FEATURES.CONFIG_PRO };
+  Object.keys(FEATURES).forEach(function(k) { FEATURES[k] = Object.prototype.hasOwnProperty.call(_gardes, k) ? _gardes[k] : (k !== 'RDV_GROUPE'); });
+  if (_gardes.MODE_PRO || _gardes.CARNET_PROS || _gardes.CONFIG_PRO) { try { localStorage.setItem(TC_FEATURES_KEY, JSON.stringify(_gardes)); } catch(e) {} }
   _devDirty = false;
   renderMenu();
   renderAIConfig();
@@ -11081,7 +11084,7 @@ function tcConfigProLire() {
 /** Enregistré tout de suite, sur l'appareil puis sur le compte (synchronisation des réglages). */
 function tcConfigProSauver() {
   const e = tcConfigProLire();
-  e.etape = Math.min(5, _tcConfigProEtape);
+  e.etape = Math.min(6, _tcConfigProEtape);
   e.maj = new Date().toISOString();
   try { localStorage.setItem(TC_CONFIG_PRO_CLE, JSON.stringify(e)); } catch (x) {}
   if (typeof tcSyncBientot === 'function') tcSyncBientot();
@@ -11093,7 +11096,8 @@ function tcOuvrirConfigPro121() {
   _tcConfigProEdition = null;
   _tcConfigProErreur = '';
   const e = tcConfigProLire();
-  _tcConfigProEtape = e.termine ? 6 : Math.min(5, Math.max(1, Number(e.etape) || 1));
+  _tcConfigProEtape = e.termine ? 7 : Math.min(6, Math.max(1, Number(e.etape) || 1));
+  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0;
   tcRendreConfigPro121();
 }
 
@@ -11141,7 +11145,8 @@ function tcConfigProCreneaux(plage, duree) {
   const a = tcConfigProMinutes(plage && plage[0]), b = tcConfigProMinutes(plage && plage[1]);
   if (a === null && b === null) return { n: 0, msg: 'pas d’horaire' };
   if (a === null || b === null) return { n: 0, msg: 'horaire incomplet' };
-  if (b <= a) return { n: 0, msg: 'la fin est avant le début' };
+  if (b === a) return { n: 0, msg: 'la fin est la même que le début' };
+  if (b < a) return { n: 0, msg: 'la fin est avant le début' };
   return { n: Math.floor((b - a) / Math.max(5, Number(duree) || 20)), msg: null };
 }
 
@@ -11241,12 +11246,156 @@ const tcConfigPro121 = {
     if (n === 1 && !e.metier) { _tcConfigProErreur = 'Choisissez votre métier.'; tcRendreConfigPro121(); return; }
     if (n === 2 && !tcConfigProActes(e).length) { _tcConfigProErreur = 'Gardez au moins un acte.'; tcRendreConfigPro121(); return; }
     if (n === 4 && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
-    if (n === 5) e.termine = true;
-    tcConfigPro121.aller(Math.min(6, n + 1));
-    if (n === 5 && typeof showToast === 'function') showToast('✅ C’est enregistré');
+    if (n === 6) e.termine = true;
+    tcConfigPro121.aller(Math.min(7, n + 1));
+    if (n === 6 && typeof showToast === 'function') showToast('✅ C’est enregistré');
   },
-  retour: function () { tcConfigPro121.aller(Math.max(1, _tcConfigProEtape - 1)); }
+  retour: function () { tcConfigPro121.aller(Math.max(1, _tcConfigProEtape - 1)); },
+  // Étape 6 : une réponse de la fiche, enregistrée à chaque lettre (sans redessiner : le curseur reste où il est).
+  fiche: function (champ, v) {
+    const fi = tcConfigProFiche(tcConfigProLire());
+    if (!TC_PRO_FICHE_QUESTIONS.some(function (q) { return q[0] === champ; })) return;
+    fi[champ] = String(v || '').slice(0, 2000);
+    tcConfigProSauver();
+  },
+  photo: function (input) {
+    const fichier = input && input.files && input.files[0];
+    if (!fichier || !/^image\//.test(fichier.type || '')) return;
+    const lecteur = new FileReader();
+    lecteur.onload = function () {
+      const img = new Image();
+      img.onload = function () {
+        const k = Math.min(1, 256 / Math.max(img.width || 1, img.height || 1));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        let url = '';
+        try { url = c.toDataURL('image/jpeg', 0.82); } catch (x) { url = ''; }
+        if (url && url.length < 90000) {
+          try { localStorage.setItem(TC_CONFIG_PRO_PHOTO_CLE, url); } catch (x) {}
+          if (typeof tcSyncBientot === 'function') tcSyncBientot();
+        } else { _tcConfigProErreur = 'Cette photo est trop grande. Essayez une autre photo.'; }
+        tcRendreConfigPro121();
+      };
+      img.src = lecteur.result;
+    };
+    lecteur.readAsDataURL(fichier);
+  },
+  retirerPhoto: function () { try { localStorage.removeItem(TC_CONFIG_PRO_PHOTO_CLE); } catch (x) {} if (typeof tcSyncBientot === 'function') tcSyncBientot(); tcRendreConfigPro121(); },
+  ouvrirRemplir: function () { _tcConfigProRemplir = !_tcConfigProRemplir; _tcConfigProErreur = ''; tcRendreConfigPro121(); const z = document.getElementById('cpTexteFiche'); if (z) z.focus(); },
+  // « Remplis à ma place » : Charly Pro IA lit le texte collé et remplit la fiche ; le professionnel relit et corrige.
+  remplir: async function () {
+    const zone = document.getElementById('cpTexteFiche');
+    const texte = String((zone && zone.value) || '').trim();
+    _tcConfigProTexteColle = texte;
+    if (texte.length < 20) { _tcConfigProErreur = 'Collez le texte de votre fiche actuelle.'; tcRendreConfigPro121(); return; }
+    _tcConfigProErreur = ''; _tcConfigProLecture = 'Charly Pro IA lit votre fiche…'; tcRendreConfigPro121();
+    let reponse = '';
+    try { reponse = String(await callAI([{ role: 'system', content: TC_PRO_CONSIGNE_REMPLIR }, { role: 'user', content: texte.slice(0, 12000) }]) || ''); } catch (x) { reponse = ''; }
+    let o = null;
+    try { const i = reponse.indexOf('{'), j = reponse.lastIndexOf('}'); o = i > -1 && j > i ? JSON.parse(reponse.slice(i, j + 1)) : null; } catch (x) { o = null; }
+    _tcConfigProLecture = '';
+    if (!o || typeof o !== 'object' || Array.isArray(o)) {
+      _tcConfigProErreur = 'Je n’arrive pas à lire ce texte pour le moment. Réessayez dans un instant, ou remplissez les réponses vous-même.';
+      tcRendreConfigPro121(); return;
+    }
+    const fi = tcConfigProFiche(tcConfigProLire());
+    let n = 0;
+    TC_PRO_FICHE_QUESTIONS.forEach(function (q) { const v = o[q[0]]; if (typeof v === 'string' && v.trim()) { fi[q[0]] = v.trim().slice(0, 2000); n++; } });
+    _tcConfigProRempli = n; _tcConfigProRemplir = false; _tcConfigProTexteColle = '';
+    tcConfigProSauver(); tcRendreConfigPro121();
+  }
 };
+
+// Étape 6 (morceau B). Les questions de la fiche : [clé, question, aide, lignes, nom court au récapitulatif].
+const TC_CONFIG_PRO_PHOTO_CLE = 'tc_config_pro_photo';
+const TC_PRO_FICHE_QUESTIONS = [
+  ['nom', 'Quel nom voient vos patients ?', 'Par exemple : Dr Marie Martin.', 1, 'Nom'],
+  ['metier', 'Quel métier affichez-vous ?', '', 1, 'Métier'],
+  ['adresse', 'Quelle est l’adresse du cabinet ?', 'Numéro, rue, code postal et ville.', 2, 'Adresse'],
+  ['acces', 'Comment entre-t-on dans le cabinet ?', 'Étage, ascenseur, code, accès en fauteuil roulant…', 2, 'Accès'],
+  ['presentation', 'Comment vous présentez-vous ?', 'Quelques phrases pour vos patients.', 4, 'Présentation'],
+  ['consignes', 'Avez-vous des consignes pour vos patients ?', 'Par exemple : rendez-vous en ligne pour les plus de 13 ans.', 3, 'Consignes'],
+  ['tarifs', 'Vos tarifs et le remboursement', 'Conventionné, tiers payant, carte Vitale…', 3, 'Tarifs'],
+  ['paiement', 'Quels moyens de paiement acceptez-vous ?', 'Carte bancaire, chèques, espèces…', 1, 'Paiement'],
+  ['horaires', 'Les horaires d’ouverture du cabinet', 'Facultatif : seulement si vous voulez les montrer.<br>Vos jours et vos horaires de travail (étape 4) ne sont jamais montrés ici.', 2, 'Horaires du cabinet'],
+  ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues'],
+  ['apporter', 'Que doit apporter le patient ?', '', 2, 'À apporter']
+];
+// Les réponses proposées, par métier : le professionnel n'a qu'à corriger. Jamais d'horaires proposés (ils sont privés).
+const TC_PRO_FICHE_PROPOSEE = {
+  'chirurgien-dentiste': {
+    acces: 'Cabinet au rez-de-chaussée. Accessible en fauteuil roulant.',
+    presentation: 'Je vous accueille dans mon cabinet de chirurgie dentaire : soins, prévention, urgences et esthétique dentaire.',
+    consignes: 'Merci d’arriver 5 minutes avant votre rendez-vous.',
+    tarifs: 'Conventionné. Carte Vitale acceptée. Tiers payant possible.',
+    paiement: 'Carte bancaire, chèques, espèces',
+    langues: 'Français',
+    apporter: 'Votre carte Vitale, votre carte de mutuelle et vos radios récentes.'
+  }
+};
+const TC_PRO_CONSIGNE_REMPLIR = 'Tu es Charly Pro IA, l’assistant de TimeCool Pro. On te donne le texte de la fiche d’un professionnel de santé (par exemple sa page sur un site de prise de rendez-vous). '
+  + 'Réponds seulement par un objet JSON, sans aucun texte autour, avec ces clés : nom, metier, adresse, acces, presentation, consignes, tarifs, paiement, horaires, langues, apporter. '
+  + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant le patient. Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
+  + '« horaires » : seulement les horaires d’ouverture du cabinet écrits dans le texte. « paiement » : les moyens de paiement séparés par des virgules.';
+let _tcConfigProRemplir = false;    // le cadre « Remplis à ma place » ouvert
+let _tcConfigProLecture = '';       // « Charly Pro IA lit votre fiche… »
+let _tcConfigProRempli = 0;         // combien de réponses Charly Pro IA vient de remplir
+let _tcConfigProTexteColle = '';    // le texte collé, gardé le temps d'un dessin
+
+/** La fiche : créée la première fois avec les réponses proposées pour le métier. */
+function tcConfigProFiche(e) {
+  if (e.fiche && typeof e.fiche === 'object') return e.fiche;
+  const m = tcConfigProMetier(e.metier);
+  const p = TC_PRO_FICHE_PROPOSEE[e.metier] || {};
+  const nom = (typeof userAccount !== 'undefined' && userAccount && (userAccount.firstname || userAccount.lastname))
+    ? 'Dr ' + String((userAccount.firstname || '') + ' ' + (userAccount.lastname || '')).trim() : '';
+  e.fiche = { nom: nom, metier: m ? m.nom : '', adresse: '', acces: p.acces || '', presentation: p.presentation || '', consignes: p.consignes || '',
+    tarifs: p.tarifs || '', paiement: p.paiement || '', horaires: '', langues: p.langues || 'Français', apporter: p.apporter || '' };
+  return e.fiche;
+}
+
+function tcCpEtape6(e) {
+  const fi = tcConfigProFiche(e);
+  let photo = '';
+  try { photo = localStorage.getItem(TC_CONFIG_PRO_PHOTO_CLE) || ''; } catch (x) { photo = ''; }
+  if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(photo)) photo = '';
+  return tcCpTitre('Votre fiche professionnelle', 'C’est la page que verront vos patients.<br>Une réponse est déjà proposée : corrigez-la si besoin.')
+    + '<div style="' + TC_CP_CARTE + ' background:#f3e8fd; border-color:#d7b8f5;">'
+    + '<button id="cpOuvrirRemplir" onclick="tcConfigPro121.ouvrirRemplir()" style="' + TC_CP_BOUTON + ' width:100%; background:#7b1fa2; color:#fff; border:none;">✨ Remplis à ma place</button>'
+    + (_tcConfigProRemplir
+      ? '<div style="font-size:14px; color:var(--text); margin:12px 0 8px; line-height:1.5;">Copiez le texte de votre fiche actuelle.<br>Collez-le ici.<br>Charly Pro IA remplit la fiche. Vous relisez et vous corrigez.</div>'
+        + '<textarea id="cpTexteFiche" data-notranslate rows="6" placeholder="Collez ici le texte de votre fiche" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box; resize:vertical;">' + escapeHTMLSafe(_tcConfigProTexteColle) + '</textarea>'
+        + '<button id="cpRemplir" onclick="tcConfigPro121.remplir()" style="' + TC_CP_BOUTON + ' width:100%; margin-top:8px; background:var(--g-blue); color:#fff; border:none;">Remplir ma fiche</button>'
+        + (_tcConfigProLecture ? '<div style="font-size:14px; color:#7b1fa2; margin-top:8px;">' + escapeHTMLSafe(_tcConfigProLecture) + '</div>' : '')
+      : '')
+    + '</div>'
+    + (_tcConfigProRempli ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ Charly Pro IA a rempli ' + _tcConfigProRempli + ' réponse' + (_tcConfigProRempli > 1 ? 's' : '') + '.<br>Relisez chaque réponse et corrigez-la si besoin.<br>C’est vous qui validez.</div>' : '')
+    + '<div style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:14px;">'
+    + (photo ? '<img src="' + photo + '" alt="Votre photo" style="width:64px; height:64px; border-radius:50%; object-fit:cover; flex-shrink:0;">'
+      : '<div aria-hidden="true" style="width:64px; height:64px; border-radius:50%; background:#e8eaed; display:flex; align-items:center; justify-content:center; font-size:28px; flex-shrink:0;">👤</div>')
+    + '<div><div style="font-size:15px; font-weight:700; color:var(--text);">Votre photo</div>'
+    + '<label style="' + TC_CP_PETIT + ' display:inline-block; margin-top:6px;">📷 ' + (photo ? 'Changer ma photo' : 'Ajouter ma photo') + '<input type="file" accept="image/*" onchange="tcConfigPro121.photo(this)" style="display:none;"></label>'
+    + (photo ? ' <button onclick="tcConfigPro121.retirerPhoto()" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3;">Retirer</button>' : '')
+    + '</div></div>'
+    + TC_PRO_FICHE_QUESTIONS.map(function (q) {
+      const v = String(fi[q[0]] || '');
+      const champ = 'id="cpFiche_' + q[0] + '" data-notranslate oninput="tcConfigPro121.fiche(\'' + q[0] + '\', this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box;' + (q[3] > 1 ? ' resize:vertical;' : '') + '"';
+      return '<div style="' + TC_CP_CARTE + '"><label for="cpFiche_' + q[0] + '" style="display:block; font-size:15px; font-weight:700; color:var(--text); margin-bottom:4px;">' + q[1] + '</label>'
+        + (q[2] ? '<div style="font-size:12.5px; color:var(--text-sec); line-height:1.45; margin-bottom:6px;">' + q[2] + '</div>' : '')
+        + (q[3] > 1 ? '<textarea rows="' + q[3] + '" ' + champ + '>' + escapeHTMLSafe(v) + '</textarea>' : '<input type="text" maxlength="200" value="' + escapeHTMLSafe(v) + '" ' + champ + '>')
+        + '</div>';
+    }).join('');
+}
+
+function tcCpFicheRecap(e) {
+  const fi = e.fiche && typeof e.fiche === 'object' ? e.fiche : null;
+  if (!fi) return '<div style="font-size:14px; color:var(--text-sec);">Pas encore remplie.</div>';
+  const lignes = TC_PRO_FICHE_QUESTIONS.filter(function (q) { return String(fi[q[0]] || '').trim(); }).map(function (q) {
+    return '<div style="padding:3px 0; font-size:14px; color:var(--text); line-height:1.45;"><b>' + q[4] + '</b> : <span data-notranslate>' + escapeHTMLSafe(String(fi[q[0]]).trim()).replace(/\n/g, '<br>') + '</span></div>';
+  }).join('');
+  return lignes || '<div style="font-size:14px; color:var(--text-sec);">Pas encore remplie.</div>';
+}
 
 function tcConfigProHaut() { const c = document.querySelector('#page-configpro .main'); if (c) c.scrollTop = 0; try { window.scrollTo(0, 0); } catch (x) {} }
 
@@ -11261,7 +11410,7 @@ function tcCpCase(on) {
 }
 
 function tcCpTitre(question, aide) {
-  return '<div style="font-size:12px; font-weight:700; color:var(--g-blue); text-transform:uppercase; letter-spacing:.3px;">Étape ' + _tcConfigProEtape + ' sur 5</div>'
+  return '<div style="font-size:12px; font-weight:700; color:var(--g-blue); text-transform:uppercase; letter-spacing:.3px;">Étape ' + _tcConfigProEtape + ' sur 6</div>'
     + '<div style="font-size:20px; font-weight:700; color:var(--text); margin:4px 0 6px;">' + question + '</div>'
     + (aide ? '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">' + aide + '</div>' : '');
 }
@@ -11408,6 +11557,7 @@ function tcCpRecapitulatif(e) {
     + tcCpSection('Vos jours et vos horaires', jours || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour.</div>', 4)
     + tcCpSection('Vos rendez-vous', '<div style="font-size:14px; color:var(--text);">Chaque rendez-vous dure ' + e.dureeRdv + ' minutes.</div>' + c.html
       + '<div style="font-size:14px; font-weight:700; color:var(--g-blue); margin-top:8px;">En tout : ' + c.total + ' créneau' + (c.total > 1 ? 'x' : '') + ' par semaine.</div>', 5)
+    + tcCpSection('Votre fiche professionnelle', tcCpFicheRecap(e), 6)
     + '<div style="font-size:13px; color:#137333; background:#e6f4ea; border:1px solid #b9e1c4; border-radius:10px; padding:9px 12px;">🔒 Vos jours et vos horaires restent privés. Personne d’autre ne les voit.</div>';
 }
 
@@ -11416,12 +11566,12 @@ function tcRendreConfigPro121() {
   if (!corps) return;
   const e = tcConfigProLire();
   const n = _tcConfigProEtape;
-  let h = n === 1 ? tcCpEtape1(e) : n === 2 ? tcCpEtape2(e) : n === 3 ? tcCpEtape3(e) : n === 4 ? tcCpEtape4(e) : n === 5 ? tcCpEtape5(e) : tcCpRecapitulatif(e);
+  let h = n === 1 ? tcCpEtape1(e) : n === 2 ? tcCpEtape2(e) : n === 3 ? tcCpEtape3(e) : n === 4 ? tcCpEtape4(e) : n === 5 ? tcCpEtape5(e) : n === 6 ? tcCpEtape6(e) : tcCpRecapitulatif(e);
   if (_tcConfigProErreur) h += '<div role="alert" style="color:#c5221f; font-size:14px; font-weight:600; margin:4px 0 10px;">' + escapeHTMLSafe(_tcConfigProErreur) + '</div>';
-  if (n <= 5) {
+  if (n <= 6) {
     h += '<div style="display:flex; gap:10px; margin:16px 0 30px;">'
       + (n > 1 ? '<button onclick="tcConfigPro121.retour()" style="' + TC_CP_BOUTON + ' flex:1; background:#fff; color:var(--text); border:1px solid var(--border);">← Retour</button>' : '')
-      + '<button id="cpSuivant" onclick="tcConfigPro121.suivant()" style="' + TC_CP_BOUTON + ' flex:2; background:var(--g-blue); color:#fff; border:none;">' + (n < 5 ? 'Suivant →' : 'Voir le récapitulatif') + '</button></div>';
+      + '<button id="cpSuivant" onclick="tcConfigPro121.suivant()" style="' + TC_CP_BOUTON + ' flex:2; background:var(--g-blue); color:#fff; border:none;">' + (n < 6 ? 'Suivant →' : 'Voir le récapitulatif') + '</button></div>';
   }
   corps.innerHTML = h;
   if (typeof currentLanguage !== 'undefined' && currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
@@ -12834,7 +12984,9 @@ function tcDemoDonnees() {
   // Le café : une heure après l'entrée, à l'heure pile ; tard le soir, demain à 9h.
   let hCafe = maintenant.getHours() + 1 + (maintenant.getMinutes() ? 1 : 0);
   let jCafe = tcDemoJour(0);
-  if (hCafe > 21) { hCafe = 9; jCafe = demain; }
+  // Chef, 18/11 : un rendez-vous d'exemple tombe toujours en journée (9h-19h) : la nuit et tôt le matin, 9h ; le soir, demain 9h.
+  if (hCafe < 9) hCafe = 9;
+  if (hCafe > 18) { hCafe = 9; jCafe = demain; }
   const vendredi = tcDemoVendredi();
   const dimanche = tcDemoDimanche();
   const evs = [
