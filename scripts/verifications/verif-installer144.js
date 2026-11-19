@@ -136,6 +136,27 @@ const FAUX = "window.__prompts = 0; window.__choix = window.__choix || 'accepted
       if (cle === 'firefox') await capture('5-pc-firefox');
     }
     R.gestes = gestes;
+    // I. Examen de la 144 : thème sombre (« Sombre », puis « Auto » sur un système sombre) : le titre, le geste, ses petites
+    // lignes et « Plus tard » se lisent (contraste avec leur fond d'au moins 4,5) ; la ligne du menu sur iPhone aussi.
+    const CONTRASTE = "const lum = function (c) { const m = c.match(/[\\d.]+/g).map(Number); const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]); };"
+      + " const fond = function (el) { while (el) { const m = getComputedStyle(el).backgroundColor.match(/[\\d.]+/g); if (m && (m.length < 4 || Number(m[3]) > 0.5)) return getComputedStyle(el).backgroundColor; el = el.parentElement; } return 'rgb(255, 255, 255)'; };"
+      + " const contraste = function (el) { const a = lum(getComputedStyle(el).color), b = lum(fond(el)); return Math.round((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) * 100) / 100; };";
+    const mesureCarte = () => js(CONTRASTE + " const l = ['tcCarte144Titre', 'tcGeste144', 'tcPlusTard144'].map(function (i) { return document.getElementById(i); }).filter(Boolean);"
+      + " document.querySelectorAll('#tcGeste144 div').forEach(function (x) { l.push(x); });"
+      + " return { sombre: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(), carte: !!document.getElementById('tcCarteInstaller144'), contrastes: l.map(function (x) { return (x.id || 'ligne') + ' ' + contraste(x); }), mini: Math.min.apply(null, l.map(contraste)), n: l.length };");
+    await ouvrir({ pc: true, avant: " try { localStorage.setItem('tc_theme', 'dark'); } catch (e) {}" });
+    R.sombre = await mesureCarte();
+    await capture('6-pc-sombre');
+    await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
+    await ouvrir({ ua: UA.android, avant: " try { localStorage.setItem('tc_theme', 'auto'); } catch (e) {}" });
+    R.auto = await mesureCarte();
+    await ouvrir({ ua: UA.iphone, avant: " try { localStorage.setItem('tc_theme', 'dark'); } catch (e) {}" });
+    R.menuSombre = await js(CONTRASTE + " const p = document.getElementById('tcPlusTard144'); if (p) p.click(); document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; }); localStorage.setItem('tc_permissions_shown', '1');"
+      + " userAccount = { firstname: 'Charles', lastname: 'Haddad', reference: 'REFTEST' }; hideAuthFlow(); await new Promise(function (r) { setTimeout(r, 800); }); toggleMenu(); await new Promise(function (r) { setTimeout(r, 500); });"
+      + " const z = document.getElementById('tcInstaller140'); const l = Array.prototype.slice.call(z.querySelectorAll('span, b')).filter(function (x) { return x.innerText.trim().length > 3; });"
+      + " return { sombre: getComputedStyle(document.documentElement).getPropertyValue('--text').trim(), visible: z.style.display !== 'none', mini: l.length ? Math.min.apply(null, l.map(contraste)) : 0, contrastes: l.map(function (x) { return x.tagName + ' ' + contraste(x); }) };");
+    await cdp('Emulation.setEmulatedMedia', { features: [] });
+    await js("try { localStorage.removeItem('tc_theme'); } catch (e) {} return 1;");
   } catch (e) { R.erreur = String(e && e.stack || e).slice(0, 400); }
   try { ws && ws.close(); } catch (e) {}
   chrome.kill('SIGKILL'); serveur.close();
@@ -155,7 +176,7 @@ const FAUX = "window.__prompts = 0; window.__choix = window.__choix || 'accepted
   verifie('refusé dans la fenêtre du navigateur : la carte reste, avec le geste (Android : « Installer et créer un raccourci »)', R.refuse && R.refuse.prompts === 1 && R.refuse.carte && !R.refuse.bouton && /Installer et créer un raccourci/.test(R.refuse.geste || ''), J(R.refuse));
   const D = R.plusTard || {}, L = D.ligne || {};
   verifie('« Plus tard » : la carte s’en va, et ne revient pas quand le navigateur propose ensuite', D.carte === false, J(D));
-  verifie('la ligne du menu : en haut du menu, bien visible (15 px, gras, bleue, dans un cadre)', L.visible && /Installer TimeCool sur cet appareil$/.test(L.texte || '') && L.avantMenu && L.police >= 14 && L.gras >= 600 && L.couleur === 'rgb(26, 115, 232)' && L.fond !== 'rgba(0, 0, 0, 0)', J(L));
+  verifie('la ligne du menu : en haut du menu, bien visible (15 px, gras, bleu foncé sur bleu clair, dans un cadre)', L.visible && /Installer TimeCool sur cet appareil$/.test(L.texte || '') && L.avantMenu && L.police >= 14 && L.gras >= 600 && L.couleur === 'rgb(26, 86, 184)' && L.fond === 'rgb(232, 240, 254)', J(L));
   verifie('sans ?installer=1, déjà installé (ouvert dans sa fenêtre), dans l’APK : pas de carte', R.sans && !R.sans.la && R.fenetre && !R.fenetre.la && R.apk && !R.apk.la, J([R.sans, R.fenetre, R.apk]));
   const G = R.gestes || {};
   const g = (k) => (G[k] && G[k].geste) || '';
@@ -165,6 +186,10 @@ const FAUX = "window.__prompts = 0; window.__choix = window.__choix || 'accepted
   verifie('iPhone Safari : « Touche Partager, puis « Sur l’écran d’accueil » » ; un autre navigateur sur iPhone : l’ouvrir dans Safari', /^Touche Partager ⬆️, puis « Sur l’écran d’accueil »\./.test(g('iphone')) && /^Ouvre cette page dans Safari\./.test(g('iphoneChrome')) && /Sur l’écran d’accueil/.test(g('iphoneChrome')), J([g('iphone'), g('iphoneChrome')]));
   verifie('Android : Chrome, menu ⋮ puis « Installer et créer un raccourci » ; un autre navigateur (Samsung) : l’ouvrir dans Chrome', /^Touche le menu ⋮ en haut à droite, puis « Installer et créer un raccourci », puis « Installer »\./.test(g('android')) && /^Ouvre cette page dans Chrome\./.test(g('samsung')), J([g('android'), g('samsung')]));
   verifie('chaque carte de geste : au centre, sans débordement ; aucune ligne qui commence par « : » ou « » » (200 à 360 px)', Object.keys(G).length === 7 && Object.values(G).every((x) => x.la && x.centre && x.deborde <= 0 && x.coupures === 0), J(Object.fromEntries(Object.entries(G).map(([k, x]) => [k, [x.la, x.centre, x.deborde, x.coupures]]))));
+  const So = R.sombre || {}, Au = R.auto || {}, Me = R.menuSombre || {};
+  verifie('thème « Sombre » : la carte se lit (titre, geste, petites lignes, « Plus tard » : contraste d’au moins 4,5)', So.sombre === '#e8eaed' && So.carte && So.n >= 5 && So.mini >= 4.5, J(So));
+  verifie('thème « Auto » sur un système sombre : la carte se lit aussi (contraste d’au moins 4,5)', Au.sombre === '#e8eaed' && Au.carte && Au.n >= 4 && Au.mini >= 4.5, J(Au));
+  verifie('thème sombre, iPhone : la ligne du menu se lit (contraste d’au moins 4,5)', Me.sombre === '#e8eaed' && Me.visible && Me.mini >= 4.5, J(Me));
   verifie('toujours aucun service worker ni cache', R.sw === '0 0', R.sw);
   if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
   console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');

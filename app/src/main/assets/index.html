@@ -40946,8 +40946,8 @@ function tcMajInstaller140() {
   if (!z) return;
   let h = '';
   if (!tcEstApplicationNative() && !tcInstallee140()) {
-    if (_tcInstall140) h = '<div role="button" tabindex="0" onclick="tcInstaller140()" style="display:flex; align-items:center; gap:12px; margin:10px 12px 6px; padding:12px 14px; cursor:pointer; color:var(--g-blue); background:#e8f0fe; border:1px solid #c8d7ee; border-radius:12px; font-size:15px; font-weight:700;"><span aria-hidden="true" style="font-size:18px;">📲</span><span>Installer TimeCool sur cet appareil</span></div>';
-    else if (tcIphoneSafari140()) h = '<div style="display:flex; align-items:flex-start; gap:12px; margin:10px 12px 6px; padding:12px 14px; color:var(--text); background:#e8f0fe; border:1px solid #c8d7ee; border-radius:12px; font-size:14px; line-height:1.45;"><span aria-hidden="true" style="font-size:18px;">📲</span><span><b style="color:var(--g-blue);">Installer TimeCool sur cet appareil</b>&nbsp;:<br>touche Partager <span aria-hidden="true">⬆️</span>, puis «&nbsp;Sur l’écran d’accueil&nbsp;».</span></div>';
+    if (_tcInstall140) h = '<div role="button" tabindex="0" onclick="tcInstaller140()" style="display:flex; align-items:center; gap:12px; margin:10px 12px 6px; padding:12px 14px; cursor:pointer; color:#1a56b8; background:#e8f0fe; border:1px solid #c8d7ee; border-radius:12px; font-size:15px; font-weight:700;"><span aria-hidden="true" style="font-size:18px;">📲</span><span>Installer TimeCool sur cet appareil</span></div>';
+    else if (tcIphoneSafari140()) h = '<div style="display:flex; align-items:flex-start; gap:12px; margin:10px 12px 6px; padding:12px 14px; color:#202124; background:#e8f0fe; border:1px solid #c8d7ee; border-radius:12px; font-size:14px; line-height:1.45;"><span aria-hidden="true" style="font-size:18px;">📲</span><span><b style="color:#1a56b8;">Installer TimeCool sur cet appareil</b>&nbsp;:<br>touche Partager <span aria-hidden="true">⬆️</span>, puis «&nbsp;Sur l’écran d’accueil&nbsp;».</span></div>';
   }
   z.innerHTML = h;
   z.style.display = h ? '' : 'none';
@@ -41011,7 +41011,9 @@ function tcOuvrirCarte144() {
   const d = document.createElement('div');
   d.id = 'tcCarteInstaller144';
   d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'tcCarte144Titre');
-  d.style.cssText = 'position:fixed; inset:0; z-index:100000; background:rgba(32,33,36,0.45); display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;';
+  // Examen de la 144 : en thème sombre aussi, la carte reste claire, comme les fenêtres de l'appli (ses couleurs posées sur elle).
+  d.style.cssText = 'position:fixed; inset:0; z-index:100000; background:rgba(32,33,36,0.45); display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;'
+    + ' --text:#202124; --text-sec:#5f6368; --border:#dadce0; --bg:#fff; --bg-soft:#f8f9fa;';
   d.innerHTML = '<div style="background:#fff; border-radius:18px; box-shadow:0 12px 40px rgba(0,0,0,0.25); width:100%; max-width:380px; max-height:100%; overflow-y:auto; padding:24px 20px 12px; box-sizing:border-box; text-align:center;">'
     + '<img src="icone-192.png" alt="" width="72" height="72" style="display:block; margin:0 auto 12px; border-radius:16px;">'
     + '<div id="tcCarte144Titre" style="font-size:20px; font-weight:700; color:var(--text); line-height:1.3; margin-bottom:16px;">Installer TimeCool sur cet appareil</div>'
