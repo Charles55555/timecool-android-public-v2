@@ -11546,7 +11546,7 @@ function tcCpJoursErreur136(e) {
 /* ── Mission 137 (Charles, 19/11) : l'avocat ─────────────────────────────────────────────────────────────────────── */
 function tcCpAvocat137(e) { const m = tcConfigProMetier(e && e.metier); return !!(m && m.avocat); }
 function tcCpMots137() {
-  return { titre2: 'Quels domaines d’activité <span style="white-space:nowrap;">pratiquez-vous ?</span>', aide2: 'Cochez vos domaines, puis leurs missions.<br>Vous pouvez les renommer, et en créer d’autres.',
+  return { titre2: 'Quels domaines d’activité pratiquez-vous ?', aide2: 'Cochez vos domaines, puis leurs missions.<br>Vous pouvez les renommer, et en créer d’autres.',
     nomSous: 'Nom de la mission', creerSous: '➕ Créer ma propre mission', nomFamille: 'Nom du domaine', familleManque: 'Un domaine qui manque ?', creerFamille: '➕ Créer mon propre domaine',
     erreurFamille: 'Écrivez le nom de votre domaine.', erreurSous: 'Écrivez le nom de votre mission.', erreurActe: 'Cochez au moins un domaine et une mission.',
     question: 'Question au client', aideQuestion: 'La question à poser pour cette mission.<br>Cochez les réponses qui permettent de prendre rendez-vous.',
@@ -12235,9 +12235,17 @@ function tcCpCase(on) {
   return '<span aria-hidden="true" style="flex-shrink:0; width:22px; height:22px; border-radius:6px; border:2px solid ' + (on ? 'var(--g-blue)' : '#9aa0a6') + '; background:' + (on ? 'var(--g-blue)' : '#fff') + '; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:14px; font-weight:700;">' + (on ? '✓' : '') + '</span>';
 }
 
+/* Mission 143 (19/11) : un titre d'étape ne se coupe jamais au milieu d'un mot à trait d'union (« rendez-vous »), et « ? » reste
+   avec le mot d'avant (« faites-vous ? », « faut-il ? », « métier ? »). Les balises éventuelles du titre ne sont pas touchées. */
+function tcCpBlocs143(t) {
+  return String(t).split(/(<[^>]*>)/).map(function (x) {
+    return x.charAt(0) === '<' ? x : x.replace(/\S+ \?|\S+-\S+/g, function (m) { return '<span class="cp-bloc143" style="white-space:nowrap;">' + m + '</span>'; });
+  }).join('');
+}
+
 function tcCpTitre(question, aide) {
   return '<div style="font-size:12px; font-weight:700; color:var(--g-blue); text-transform:uppercase; letter-spacing:.3px;">Étape ' + _tcConfigProEtape + ' sur 6</div>'
-    + '<div style="font-size:20px; font-weight:700; color:var(--text); margin:4px 0 6px;">' + question + '</div>'
+    + '<div style="font-size:20px; font-weight:700; color:var(--text); margin:4px 0 6px;">' + tcCpBlocs143(question) + '</div>'   // mission 143
     + (aide ? '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">' + aide + '</div>' : '')
     + tcCpRappelMetier141();   // mission 141
 }

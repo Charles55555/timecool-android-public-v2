@@ -3821,3 +3821,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Avocat, étape 2 : « Quels domaines d’activité pratiquez-vous ? ».
 - Suite verif-rappel-metier142 (9 vérifications à 390, 360 et 320 px, rouge sur ecf9c94 : 3 KO) ; empreintes des trois métiers sans la ligne et avec l’ancien titre : identiques. verif-rappel-metier141 et verif-config-avocat137 suivent.
 - Reprise de la 142 avant l’examen : le titre de l’avocat se coupait à « pratiquez- / vous ? » ; « pratiquez-vous ? » reste d’un bloc. verif-rappel-metier142 : 10 vérifications (titre à 390, 360, 320 px), rouge sur 86b67bd.
+
+## 19/11/2026 — Mission 143 : titres d’étape d’un bloc sur les petits téléphones (CODEUR)
+
+- Configuration professionnelle, étapes 1 à 6 : un mot à trait d’union reste entier (« rendez-vous », « faites-vous »), « ? » reste avec le mot d’avant ; trois métiers, 320 à 390 px. Texte inchangé.
+- Suite verif-titres-etapes143 (5 vérifications, 5 largeurs, onze titres ; rouge sur 82cb5f8). Les suites à empreintes lisent la page sans ces blocs : empreintes d’avant inchangées.

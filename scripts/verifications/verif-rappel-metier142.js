@@ -61,7 +61,7 @@ const jouer = (largeur) => {
         lignesEtiquette: sp[0] ? ligneDe(sp[0]) : [], lignesNom: sp[1] ? ligneDe(sp[1]) : [], deuxPoints: (L.chars.filter(function (c) { return c.c === ':'; })[0] || {}).ligne,
         mot: (L.chars.filter(function (c) { return c.c === 'r'; })[0] || {}).ligne, debord: deborde() };
     };
-    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace('Quels domaines d’activité <span style="white-space:nowrap;">pratiquez-vous ?</span>', 'Quels domaines pratiquez-vous ?'); };
+    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?'); };   // mission 143 : les blocs des titres retirés
     ['chirurgien-dentiste', 'coiffeur', 'avocat'].forEach(function (id) {
       var e = { v: 1, metier: id, familles: tcConfigProFamillesDuMetier(id), jours: tcConfigProJoursDefaut(), dureeRdv: id === 'chirurgien-dentiste' ? 20 : 30, etape: 2, termine: false };
       if (id === 'avocat') e.familles[0].gardee = true;

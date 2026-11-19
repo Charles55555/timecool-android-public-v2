@@ -96,7 +96,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     ouvrir(a); R.avocat = etapes(); R.recapAvocat = carteRecap();
     // L'avocat sans la ligne, étape par étape (empreintes) ; dessiné sans « Voir tous les métiers ».
     var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '')
-      .replace('Quels domaines d’activité <span style="white-space:nowrap;">pratiquez-vous ?</span>', 'Quels domaines pratiquez-vous ?'); };   // mission 142 : le titre de l'étape 2 de l'avocat
+      .replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?'); };   // mission 143 : les blocs des titres retirés   // mission 142 : le titre de l'étape 2 de l'avocat
     var H = {}; for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); H['etape' + n] = sans(); } R.html = H;
     // B. Le vrai parcours d'un avocat neuf : il touche « Avocat », puis « Suivant ».
     localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; _tcConfigProEtape = 1; _tcConfigProErreur = '';

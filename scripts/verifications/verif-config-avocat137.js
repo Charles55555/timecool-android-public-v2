@@ -47,7 +47,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     tcOuvrirConfigPro121(); await attendre(50);
     // Mission 139 : l'empreinte se lit sans le bouton « Voir tous les métiers » (le reste ne bouge pas).
     // Mission 141 : et sans la ligne « Votre métier : … » des étapes 2 à 6 (verif-rappel-metier141 la vérifie).
-    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), ''); };
+    // Mission 143 : et sans les blocs des titres d'étape (verif-titres-etapes143 les vérifie).
+    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1'); };
     var C = {};
     for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); C['etape' + n] = corps(); }
     _tcConfigProEtape = 4; tcConfigPro121.choisirCoiffeur('cB'); C.etape4julien = corps();
