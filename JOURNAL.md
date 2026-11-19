@@ -3781,3 +3781,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Prix facultatif (un prix, une fourchette, « Sur devis ») ; durées en heures, jusqu’à 5 h ; une seule durée de rendez-vous.
 - Fiche du salon (sans tarifs remboursés, carte Vitale, « à apporter », « Dr ») ; « Remplis à ma place » propose aussi les prestations, leurs durées et leurs prix.
 - Dentiste identique au caractère près (empreintes). Suite verif-config-coiffeur136 (27 vérifications).
+
+## 19/11/2026 — Mission 136, lot 2 : un salon, un ou plusieurs coiffeurs (CODEUR)
+
+- « Vous travaillez seul, ou à plusieurs ? » (coiffeur seulement). À plusieurs : les coiffeurs un par un (prénom, photo) ; « Qui la fait ? » sous chaque prestation ; les jours de chaque coiffeur ; ses créneaux et le total du salon au récapitulatif.
+- Photos dans tc_config_pro_photos (privé, ajouté à verif-config-pro-prive-e2e). Suite verif-config-salon136 (16 vérifications).

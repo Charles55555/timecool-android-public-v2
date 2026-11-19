@@ -42,12 +42,14 @@ verifie('chaque lecture d’un réglage nomme sa clé, et tc_config_pro n’en e
   if (!A || !B) { console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications'); process.exit(1); }
   const marque = 'MARQUE-PRIVEE-' + Date.now();
   const config = { v: 1, metier: 'chirurgien-dentiste', dureeRdv: 20, jours: { 2: { actif: true, matin: ['09:00', '12:00'], apres: ['14:00', '18:00'] } }, familles: [], marque: marque };
-  const p = await appel('POST', '/sync', { elements: [{ type: 'reglage', uid: 'tc_config_pro', contenu: { id: 'tc_config_pro', v: JSON.stringify(config) } }] }, A);
+  // Mission 136 : les photos des coiffeurs d'un salon (tc_config_pro_photos), un réglage du compte, privé lui aussi.
+  const p = await appel('POST', '/sync', { elements: [{ type: 'reglage', uid: 'tc_config_pro', contenu: { id: 'tc_config_pro', v: JSON.stringify(config) } },
+    { type: 'reglage', uid: 'tc_config_pro_photos', contenu: { id: 'tc_config_pro_photos', v: JSON.stringify({ c1: 'data:image/jpeg;base64,' + marque + 'PHOTO' }) } }] }, A);
   verifie('A enregistre sa configuration professionnelle', p.code === 200, p.code + ' ' + JSON.stringify(p.d).slice(0, 200));
   const lu = async (jeton) => { const r = await appel('GET', '/sync?depuis=0', undefined, jeton); return r.code === 200 ? JSON.stringify(r.d.elements || []) : 'ERREUR ' + r.code; };
   const deA = await lu(A), deB = await lu(B);
-  verifie('A la retrouve', deA.indexOf(marque) > -1 && deA.indexOf('tc_config_pro') > -1);
-  verifie('B ne reçoit rien de la configuration de A (ni la clé, ni ses jours)', deB.indexOf(marque) < 0 && deB.indexOf('tc_config_pro') < 0, deB.slice(0, 200));
+  verifie('A la retrouve (et les photos de ses coiffeurs)', deA.indexOf(marque) > -1 && deA.indexOf('tc_config_pro') > -1 && deA.indexOf(marque + 'PHOTO') > -1 && deA.indexOf('tc_config_pro_photos') > -1);
+  verifie('B ne reçoit rien de la configuration de A (ni la clé, ni ses jours, ni les photos de ses coiffeurs)', deB.indexOf(marque) < 0 && deB.indexOf('tc_config_pro') < 0, deB.slice(0, 200));
   console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');
   process.exit(ko ? 1 : 0);
 })().catch((e) => { console.log('  KO erreur : ' + (e && e.message)); process.exit(1); });

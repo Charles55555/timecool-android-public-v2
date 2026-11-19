@@ -11146,7 +11146,7 @@ function tcOuvrirConfigPro121() {
   _tcConfigProErreur = '';
   const e = tcConfigProLire();
   _tcConfigProEtape = e.termine ? 7 : Math.min(6, Math.max(1, Number(e.etape) || 1));
-  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null; _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProPrestations136 = 0;
+  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null; _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProPrestations136 = 0; _tcConfigProCoiffeur136 = null;
   tcRendreConfigPro121();
 }
 
@@ -11280,7 +11280,7 @@ function tcCpOptions136(f, so, retrait) {
     return '<div role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '" tabindex="0" onclick="tcConfigPro121.option(' + arg + ', \'' + cle + '\')" style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text); line-height:1.35; min-height:34px;">' + tcCpCase(on) + '<span>' + texte + '</span></div>';
   };
   return '<div class="cp-options136" style="display:flex; flex-direction:column; gap:2px; padding:0 0 6px ' + (retrait + 32) + 'px;">'
-    + c('horsLigne', '📞 Pas de rendez-vous en ligne : le client appelle le salon') + c('pasSeule', '➕ Seulement avec une autre prestation (une coupe, une couleur…)') + '</div>';
+    + c('horsLigne', '📞 Pas de rendez-vous en ligne : le client appelle le salon') + c('pasSeule', '➕ Seulement avec une autre prestation (une coupe, une couleur…)') + '</div>' + tcCpQuiLaFait136(f, so, retrait);
 }
 /** Étape 2, sous le nom d'une famille gardée : la consigne que le client lit avant de choisir. */
 function tcCpConsigneFamille136(f) {
@@ -11312,9 +11312,9 @@ function tcCpEtape3_136(e) {
 }
 /** Au récapitulatif du coiffeur : chaque prestation, sa durée, son prix, ses réglages ; la consigne de la famille. */
 function tcCpRecapActes136(e) {
-  const ligne = function (o, nomHTML, retrait) {
+  const ligne = function (o, nomHTML, retrait, cle) {
     const det = [tcCpDuree136(o.duree || 20), tcCpPrix136(o.prix)].filter(Boolean).join(' · ');
-    const plus = [o.horsLigne ? '📞 pas de rendez-vous en ligne' : '', o.pasSeule ? '➕ seulement avec une autre prestation' : ''].filter(Boolean).join(' · ');
+    const plus = [o.horsLigne ? '📞 pas de rendez-vous en ligne' : '', o.pasSeule ? '➕ seulement avec une autre prestation' : '', cle ? tcCpPasFaitePar136(e, cle) : ''].filter(Boolean).join(' · ');
     return '<div style="padding:2px 0 2px ' + retrait + 'px; font-size:14px; color:var(--text);">' + (retrait ? '• ' : '') + nomHTML + ' · ' + escapeHTMLSafe(det)
       + (plus ? '<div style="font-size:12.5px; color:var(--text-sec); padding-left:' + (retrait ? 14 : 0) + 'px;">' + plus + '</div>' : '') + '</div>';
   };
@@ -11322,7 +11322,7 @@ function tcCpRecapActes136(e) {
     const consigne = f.consigne ? '<div style="padding:0 0 2px 14px; font-size:12.5px; color:var(--text-sec);">💬 <span data-notranslate>' + escapeHTMLSafe(f.consigne) + '</span></div>' : '';
     if (!f.sous.length) return ligne(f, tcConfigProNomHTML(f, null), 0) + consigne;
     return '<div style="padding:6px 0 2px; font-size:14px; font-weight:700; color:var(--text);">' + tcConfigProNomHTML(f, null) + '</div>' + consigne
-      + f.sous.filter(function (x) { return x.gardee; }).map(function (x) { return ligne(x, tcConfigProNomHTML(f, x), 14) + (x.question ? '<div style="padding:0 0 2px 28px; font-size:12.5px; color:var(--text-sec);">❓ <span data-notranslate>' + escapeHTMLSafe(x.question.texte) + '</span></div>' : ''); }).join('');
+      + f.sous.filter(function (x) { return x.gardee; }).map(function (x) { return ligne(x, tcConfigProNomHTML(f, x), 14, f.id + '/' + x.id) + (x.question ? '<div style="padding:0 0 2px 28px; font-size:12.5px; color:var(--text-sec);">❓ <span data-notranslate>' + escapeHTMLSafe(x.question.texte) + '</span></div>' : ''); }).join('');
   }).join('');
 }
 /** Le métier change : les réponses proposées de l'ancien métier (jamais celles écrites par le professionnel) laissent la place. */
@@ -11339,6 +11339,113 @@ function tcCpFicheChangerMetier136(e, ancien, nouveau) {
   // « Dr Charles Haddad », proposé au dentiste, n'est pas un nom de salon.
   const dr = typeof userAccount !== 'undefined' && userAccount ? 'Dr ' + String((userAccount.firstname || '') + ' ' + (userAccount.lastname || '')).trim() : null;
   if (tcCpPrestations136(e) && dr && fi.nom === dr) fi.nom = '';
+}
+/* Lot 2 : un salon, un ou plusieurs coiffeurs. e.equipe = { mode: 'seul' | 'plusieurs', coiffeurs: [{ id, prenom, jours, sans }] } ;
+   « sans » : les prestations qu'il ne fait pas (« famille/prestation »). Les photos : tc_config_pro_photos (une par coiffeur). */
+const TC_CONFIG_PRO_PHOTOS_CLE = 'tc_config_pro_photos';
+let _tcConfigProCoiffeur136 = null;   // le coiffeur dont on règle les jours (étape 4)
+function tcCpPlusieurs136(e) { return tcCpPrestations136(e) && !!(e.equipe && e.equipe.mode === 'plusieurs'); }
+function tcCpCoiffeurs136(e) { return tcCpPlusieurs136(e) && Array.isArray(e.equipe.coiffeurs) ? e.equipe.coiffeurs : []; }
+function tcCpPhotos136() { try { const p = JSON.parse(localStorage.getItem(TC_CONFIG_PRO_PHOTOS_CLE) || '{}'); return p && typeof p === 'object' && !Array.isArray(p) ? p : {}; } catch (x) { return {}; } }
+function tcCpPhotoHTML136(id, taille) {
+  const p = tcCpPhotos136()[id];
+  return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(p || '') ? '<img src="' + p + '" alt="" style="width:' + taille + 'px; height:' + taille + 'px; border-radius:50%; object-fit:cover; flex-shrink:0;">'
+    : '<span aria-hidden="true" style="width:' + taille + 'px; height:' + taille + 'px; border-radius:50%; background:#e8eaed; display:inline-flex; align-items:center; justify-content:center; font-size:' + Math.round(taille / 2) + 'px; flex-shrink:0;">👤</span>';
+}
+/** Les jours qu'on règle : ceux du coiffeur choisi (à plusieurs), sinon ceux du professionnel (comme avant). */
+function tcCpJours136(e) {
+  const l = tcCpCoiffeurs136(e);
+  if (!l.length) return e.jours;
+  const c = l.find(function (x) { return x.id === _tcConfigProCoiffeur136; }) || l[0];
+  _tcConfigProCoiffeur136 = c.id;
+  if (!c.jours || typeof c.jours !== 'object') c.jours = JSON.parse(JSON.stringify(e.jours || tcConfigProJoursDefaut()));
+  return c.jours;
+}
+/** Étape 1 du coiffeur : « Vous travaillez seul, ou à plusieurs ? », puis ses coiffeurs. */
+function tcCpEquipe136(e) {
+  if (!tcCpPrestations136(e)) return '';
+  const plus = !!(e.equipe && e.equipe.mode === 'plusieurs');
+  const choix = function (val, titre, aide) {
+    const on = (val === 'plusieurs') === plus;
+    return '<div role="button" tabindex="0" class="cp-equipe-choix136" onclick="tcConfigPro121.equipeMode(\'' + val + '\')" style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:12px; cursor:pointer; border-color:' + (on ? 'var(--g-blue)' : 'var(--border)') + ';">'
+      + '<span aria-hidden="true" style="flex-shrink:0; width:20px; height:20px; border-radius:50%; border:2px solid ' + (on ? 'var(--g-blue)' : '#9aa0a6') + '; display:inline-flex; align-items:center; justify-content:center;">' + (on ? '<span style="width:10px; height:10px; border-radius:50%; background:var(--g-blue);"></span>' : '') + '</span>'
+      + '<span><span style="display:block; font-size:15px; font-weight:600; color:var(--text);">' + titre + '</span><span style="display:block; font-size:13px; color:var(--text-sec); line-height:1.4;">' + aide + '</span></span></div>';
+  };
+  const l = plus && Array.isArray(e.equipe.coiffeurs) ? e.equipe.coiffeurs : [];
+  return '<div style="font-size:17px; font-weight:700; color:var(--text); margin:20px 0 8px;">Vous travaillez seul, ou à plusieurs ?</div>'
+    + choix('seul', 'Seul', 'Un seul agenda : le vôtre.') + choix('plusieurs', 'À plusieurs', 'Plusieurs coiffeurs dans le salon, chacun avec ses jours.')
+    + (plus ? '<div class="cp-equipe136"><div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin:4px 0 10px;">Ajoutez vos coiffeurs, un par un : leur prénom, et leur photo s’ils le veulent.<br>Les prestations, les prix et la fiche sont ceux du salon, les mêmes pour tous.<br>Chaque coiffeur a ses jours et ses horaires (étape 4).</div>'
+      + l.map(function (c) {
+        return '<div class="cp-coiffeur136" style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' + tcCpPhotoHTML136(c.id, 44)
+          + '<input id="cpPrenom_' + c.id + '" type="text" maxlength="40" data-notranslate aria-label="Prénom du coiffeur" value="' + escapeHTMLSafe(c.prenom || '') + '" oninput="tcConfigPro121.prenomCoiffeur(\'' + c.id + '\', this.value)" style="' + TC_CP_CHAMP + ' flex:1; min-width:110px;">'
+          + '<label style="' + TC_CP_PETIT + ' display:inline-block;">📷 Photo<input type="file" accept="image/*" onchange="tcConfigPro121.photoCoiffeur(\'' + c.id + '\', this)" style="display:none;"></label>'
+          + '<button onclick="tcConfigPro121.retirerCoiffeur(\'' + c.id + '\')" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3;">Retirer</button></div>';
+      }).join('')
+      + '<div style="' + TC_CP_CARTE + ' background:#f8f9fa;"><div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px;">Ajouter un coiffeur</div>'
+      + '<div style="display:flex; gap:6px; flex-wrap:wrap;"><input id="cpNouveauCoiffeur" type="text" maxlength="40" data-notranslate placeholder="Son prénom" onkeydown="if (event.key === \'Enter\') tcConfigPro121.ajouterCoiffeur();" style="' + TC_CP_CHAMP + ' flex:1; min-width:150px;">'
+      + '<button onclick="tcConfigPro121.ajouterCoiffeur()" style="' + TC_CP_PETIT + '">➕ Ajouter ce coiffeur</button></div></div></div>' : '');
+}
+/** Étape 2, à plusieurs : « Qui la fait ? », un bouton par coiffeur (touché : il ne la fait pas). */
+function tcCpQuiLaFait136(f, so, retrait) {
+  const l = tcCpCoiffeurs136(tcConfigProLire());
+  if (!l.length) return '';
+  const cle = f.id + '/' + so.id;
+  return '<div class="cp-qui136" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:0 0 8px ' + (retrait + 32) + 'px; font-size:13px; color:var(--text-sec);">Qui la fait ?'
+    + l.map(function (c) {
+      const on = !(Array.isArray(c.sans) && c.sans.indexOf(cle) > -1);
+      return '<button aria-pressed="' + (on ? 'true' : 'false') + '" onclick="tcConfigPro121.quiLaFait(\'' + f.id + '\', \'' + so.id + '\', \'' + c.id + '\')" style="' + TC_CP_PETIT + (on ? '' : ' background:#f1f3f4; color:var(--text-sec); border-color:var(--border); text-decoration:line-through;') + '">' + (on ? '✓ ' : '') + '<span data-notranslate>' + escapeHTMLSafe(c.prenom || '?') + '</span></button>';
+    }).join('') + '</div>';
+}
+/** Étape 4, à plusieurs : un bouton par coiffeur ; ses jours s'affichent dessous. */
+function tcCpOngletsCoiffeurs136(e) {
+  const l = tcCpCoiffeurs136(e);
+  tcCpJours136(e);
+  return '<div class="cp-onglets136" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">' + l.map(function (c) {
+    const on = c.id === _tcConfigProCoiffeur136;
+    return '<button aria-pressed="' + (on ? 'true' : 'false') + '" onclick="tcConfigPro121.choisirCoiffeur(\'' + c.id + '\')" style="' + TC_CP_BOUTON + ' display:inline-flex; align-items:center; gap:8px; background:' + (on ? 'var(--g-blue)' : '#fff') + '; color:' + (on ? '#fff' : 'var(--text)') + '; border:1px solid ' + (on ? 'var(--g-blue)' : 'var(--border)') + ';">' + tcCpPhotoHTML136(c.id, 24) + '<span data-notranslate>' + escapeHTMLSafe(c.prenom || '?') + '</span></button>';
+  }).join('') + '</div>';
+}
+/** Étape 5 et récapitulatif, à plusieurs : les créneaux de chaque coiffeur, et le total du salon. */
+function tcCpCreneauxEquipe136(e) {
+  let total = 0;
+  const html = tcCpCoiffeurs136(e).map(function (c) {
+    const r = tcCpLignesCreneaux({ jours: c.jours || e.jours, dureeRdv: e.dureeRdv });
+    total += r.total;
+    return '<div class="cp-coiffeur-creneaux136" style="padding:10px 0 2px; font-size:15px; font-weight:700; color:var(--text);"><span data-notranslate>' + escapeHTMLSafe(c.prenom || '?') + '</span> · ' + r.total + ' créneau' + (r.total > 1 ? 'x' : '') + '</div>'
+      + (r.html || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour coché (étape 4).</div>');
+  }).join('');
+  return { html: html, total: total };
+}
+/** Au récapitulatif, à plusieurs : les jours de chaque coiffeur. */
+function tcCpRecapJoursEquipe136(e) {
+  return tcCpCoiffeurs136(e).map(function (c) {
+    const J = c.jours || e.jours;
+    const plage = function (p) { return tcConfigProHeure(p[0]) && tcConfigProHeure(p[1]) ? tcConfigProHeure(p[0]) + ' à ' + tcConfigProHeure(p[1]) : '—'; };
+    return '<div style="padding:6px 0 2px; font-size:14px; font-weight:700; color:var(--text);"><span data-notranslate>' + escapeHTMLSafe(c.prenom || '?') + '</span></div>'
+      + (TC_PRO_JOURS.filter(function (x) { return J[x[0]] && J[x[0]].actif; }).map(function (x) {
+        return '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text);"><b>' + x[1] + '</b> : ' + plage(J[x[0]].matin) + ', puis ' + plage(J[x[0]].apres) + '</div>';
+      }).join('') || '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text-sec);">Aucun jour.</div>');
+  }).join('');
+}
+/** « pas faite par Julien » (récapitulatif). */
+function tcCpPasFaitePar136(e, cle) {
+  const n = tcCpCoiffeurs136(e).filter(function (c) { return Array.isArray(c.sans) && c.sans.indexOf(cle) > -1; }).map(function (c) { return escapeHTMLSafe(c.prenom || '?'); });
+  return n.length ? '✂️ pas faite par ' + n.join(', ') : '';
+}
+/** Étape 1 : à plusieurs, au moins un coiffeur, chacun avec son prénom. */
+function tcCpEquipeErreur136(e) {
+  if (!tcCpPlusieurs136(e)) return null;
+  const l = tcCpCoiffeurs136(e);
+  if (!l.length) return 'Ajoutez au moins un coiffeur, avec son prénom.';
+  if (l.some(function (c) { return !String(c.prenom || '').trim(); })) return 'Écrivez le prénom de chaque coiffeur.';
+  return null;
+}
+/** Étape 4 : à plusieurs, chaque coiffeur coche au moins un jour (on montre celui qui n'en a pas). */
+function tcCpJoursErreur136(e) {
+  const c = tcCpCoiffeurs136(e).find(function (x) { const J = x.jours || e.jours; return !TC_PRO_JOURS.some(function (j) { return J[j[0]] && J[j[0]].actif; }); });
+  if (!c) return null;
+  _tcConfigProCoiffeur136 = c.id;
+  return 'Cochez au moins un jour pour ' + String(c.prenom || 'ce coiffeur') + '.';
 }
 /* ── fin mission 136 (outils) ─────────────────────────────────────────────────────────────────────────────────────── */
 
@@ -11453,14 +11560,15 @@ const tcConfigPro121 = {
   },
   jour: function (j) {
     const e = tcConfigProLire();
-    if (!e.jours[j]) e.jours[j] = { actif: false, matin: ['09:00', '12:00'], apres: ['14:00', '18:00'] };
-    e.jours[j].actif = !e.jours[j].actif;
+    const J = tcCpJours136(e);   // mission 136, lot 2 : à plusieurs, les jours du coiffeur choisi
+    if (!J[j]) J[j] = { actif: false, matin: ['09:00', '12:00'], apres: ['14:00', '18:00'] };
+    J[j].actif = !J[j].actif;
     _tcConfigProErreur = '';
     tcConfigProSauver(); tcRendreConfigPro121();
   },
   heure: function (j, partie, rang, v) {
     const e = tcConfigProLire();
-    const d = e.jours[j];
+    const d = tcCpJours136(e)[j];
     if (!d || (partie !== 'matin' && partie !== 'apres')) return;
     d[partie][rang] = /^\d{1,2}:\d{2}$/.test(String(v || '')) ? String(v).padStart(5, '0') : '';
     tcConfigProSauver(); tcRendreConfigPro121();
@@ -11476,6 +11584,8 @@ const tcConfigPro121 = {
     const n = _tcConfigProEtape;
     if (n === 1 && !e.metier) { _tcConfigProErreur = 'Choisissez votre métier.'; tcRendreConfigPro121(); return; }
     if (n === 2 && !tcConfigProActes(e).length) { _tcConfigProErreur = tcCpMots136(e).erreurActe; tcRendreConfigPro121(); return; }
+    if (n === 1 && tcCpEquipeErreur136(e)) { _tcConfigProErreur = tcCpEquipeErreur136(e); tcRendreConfigPro121(); return; }   // mission 136, lot 2
+    if (n === 4 && tcCpJoursErreur136(e)) { _tcConfigProErreur = tcCpJoursErreur136(e); tcRendreConfigPro121(); return; }
     if (n === 4 && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
     if (n === 6) e.termine = true;
     tcConfigPro121.aller(Math.min(7, n + 1));
@@ -11632,6 +11742,73 @@ const tcConfigPro121 = {
     tcConfigProSauver(); tcRendreConfigPro121();
   },
   annulerPropose: function () { _tcConfigProPropose = null; _tcConfigProRempli = 0; _tcConfigProPrestations136 = 0; tcRendreConfigPro121(); },
+  // Mission 136, lot 2 : seul ou à plusieurs, les coiffeurs, « Qui la fait ? », le coiffeur dont on règle les jours.
+  equipeMode: function (m) {
+    const e = tcConfigProLire();
+    if (m !== 'seul' && m !== 'plusieurs') return;
+    e.equipe = Object.assign({ coiffeurs: [] }, e.equipe || {}, { mode: m });
+    _tcConfigProErreur = '';
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
+  ajouterCoiffeur: function () {
+    const e = tcConfigProLire();
+    const i = document.getElementById('cpNouveauCoiffeur');
+    const v = String((i && i.value) || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!v) { _tcConfigProErreur = 'Écrivez le prénom du coiffeur.'; tcRendreConfigPro121(); return; }
+    e.equipe = Object.assign({ mode: 'plusieurs' }, e.equipe || {});
+    if (!Array.isArray(e.equipe.coiffeurs)) e.equipe.coiffeurs = [];
+    e.equipe.coiffeurs.push({ id: 'c' + tcConfigProIdNeuf(), prenom: v, jours: JSON.parse(JSON.stringify(e.jours || tcConfigProJoursDefaut())), sans: [] });
+    _tcConfigProErreur = '';
+    tcConfigProSauver(); tcRendreConfigPro121();
+    const n = document.getElementById('cpNouveauCoiffeur'); if (n) n.focus();
+  },
+  prenomCoiffeur: function (id, v) {
+    const c = tcCpCoiffeurs136(tcConfigProLire()).find(function (x) { return x.id === id; });
+    if (!c) return;
+    c.prenom = String(v || '').replace(/\s+/g, ' ').slice(0, 40);
+    tcConfigProSauver();
+  },
+  retirerCoiffeur: function (id) {
+    const e = tcConfigProLire();
+    if (!e.equipe || !Array.isArray(e.equipe.coiffeurs)) return;
+    e.equipe.coiffeurs = e.equipe.coiffeurs.filter(function (x) { return x.id !== id; });
+    const p = tcCpPhotos136(); if (p[id]) { delete p[id]; try { localStorage.setItem(TC_CONFIG_PRO_PHOTOS_CLE, JSON.stringify(p)); } catch (x) {} }
+    if (_tcConfigProCoiffeur136 === id) _tcConfigProCoiffeur136 = null;
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
+  photoCoiffeur: function (id, input) {
+    const fichier = input && input.files && input.files[0];
+    if (!fichier || !/^image\//.test(fichier.type || '')) return;
+    const lecteur = new FileReader();
+    lecteur.onload = function () {
+      const img = new Image();
+      img.onload = function () {
+        const r = Math.min(1, 128 / Math.max(img.width || 1, img.height || 1));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * r)); c.height = Math.max(1, Math.round(img.height * r));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        let url = '';
+        try { url = c.toDataURL('image/jpeg', 0.8); } catch (x) { url = ''; }
+        if (url && url.length < 40000) {
+          const p = tcCpPhotos136(); p[id] = url;
+          try { localStorage.setItem(TC_CONFIG_PRO_PHOTOS_CLE, JSON.stringify(p)); } catch (x) {}
+          if (typeof tcSyncBientot === 'function') tcSyncBientot();
+        } else { _tcConfigProErreur = 'Cette photo est trop grande. Essayez une autre photo.'; }
+        tcRendreConfigPro121();
+      };
+      img.src = lecteur.result;
+    };
+    lecteur.readAsDataURL(fichier);
+  },
+  choisirCoiffeur: function (id) { _tcConfigProCoiffeur136 = id; _tcConfigProErreur = ''; tcRendreConfigPro121(); },
+  quiLaFait: function (fid, sid, cid) {
+    const c = tcCpCoiffeurs136(tcConfigProLire()).find(function (x) { return x.id === cid; });
+    if (!c) return;
+    const cle = fid + '/' + sid;
+    if (!Array.isArray(c.sans)) c.sans = [];
+    if (c.sans.indexOf(cle) > -1) c.sans = c.sans.filter(function (x) { return x !== cle; }); else c.sans.push(cle);
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
   // Mission 136 : la consigne d'une famille (enregistrée à chaque lettre, sans redessiner), les deux réglages, le prix.
   consigne: function (fid, v) {
     const t = tcConfigProTrouver(fid);
@@ -11817,7 +11994,7 @@ function tcCpEtape1(e) {
       return '<div role="button" tabindex="0" onclick="tcConfigPro121.choisirMetier(\'' + m.id + '\')" style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:12px; cursor:pointer; border-color:' + (on ? 'var(--g-blue)' : 'var(--border)') + ';">'
         + '<span aria-hidden="true" style="width:20px; height:20px; border-radius:50%; border:2px solid ' + (on ? 'var(--g-blue)' : '#9aa0a6') + '; display:inline-flex; align-items:center; justify-content:center;">' + (on ? '<span style="width:10px; height:10px; border-radius:50%; background:var(--g-blue);"></span>' : '') + '</span>'
         + '<span style="font-size:15px; font-weight:600; color:var(--text);">' + escapeHTMLSafe(m.nom) + '</span></div>';
-    }).join('');
+    }).join('') + tcCpEquipe136(e);
 }
 
 function tcCpLigneActe(f, so, retrait) {
@@ -11902,10 +12079,12 @@ function tcCpChampHeure(j, partie, rang, v) {
 }
 
 function tcCpEtape4(e) {
-  return tcCpTitre('Quels jours travaillez-vous ?', 'Cochez vos jours.<br>Pour chaque jour, donnez vos horaires du matin et de l’après-midi.')
+  const J = tcCpJours136(e);
+  return (tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length ? tcCpTitre('Quels jours travaille chaque coiffeur ?', 'Choisissez un coiffeur, puis cochez ses jours.<br>Pour chaque jour, donnez ses horaires du matin et de l’après-midi.') + tcCpOngletsCoiffeurs136(e)
+    : tcCpTitre('Quels jours travaillez-vous ?', 'Cochez vos jours.<br>Pour chaque jour, donnez vos horaires du matin et de l’après-midi.'))
     + '<div style="font-size:13px; color:#137333; background:#e6f4ea; border:1px solid #b9e1c4; border-radius:10px; padding:9px 12px; margin-bottom:12px;">🔒 Vos jours et vos horaires restent privés. Personne d’autre ne les voit.</div>'
     + TC_PRO_JOURS.map(function (x) {
-      const d = e.jours[x[0]] || { actif: false, matin: ['', ''], apres: ['', ''] };
+      const d = J[x[0]] || { actif: false, matin: ['', ''], apres: ['', ''] };
       return '<div style="' + TC_CP_CARTE + '">'
         + '<div role="checkbox" aria-checked="' + (d.actif ? 'true' : 'false') + '" tabindex="0" onclick="tcConfigPro121.jour(' + x[0] + ')" style="display:flex; align-items:center; gap:10px; cursor:pointer;">'
         + tcCpCase(d.actif) + '<span style="font-size:15px; font-weight:700; color:' + (d.actif ? 'var(--text)' : 'var(--text-sec)') + ';">' + x[1] + '</span></div>'
@@ -11933,7 +12112,7 @@ function tcCpLignesCreneaux(e) {
 }
 
 function tcCpEtape5(e) {
-  const c = tcCpLignesCreneaux(e);
+  const c = tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length ? tcCpCreneauxEquipe136(e) : tcCpLignesCreneaux(e);
   const M = tcCpMots136(e);
   return tcCpTitre('Combien de temps dure un rendez-vous chez vous, par défaut ?', M.aide5)
     + '<div style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:10px; flex-wrap:wrap;"><span style="font-size:15px; color:var(--text);">Un rendez-vous dure</span>'
@@ -11965,12 +12144,13 @@ function tcCpRecapitulatif(e) {
     const plage = function (p) { return tcConfigProHeure(p[0]) && tcConfigProHeure(p[1]) ? tcConfigProHeure(p[0]) + ' à ' + tcConfigProHeure(p[1]) : '—'; };
     return '<div style="padding:3px 0; font-size:14px; color:var(--text);"><b>' + x[1] + '</b> : ' + plage(d.matin) + ', puis ' + plage(d.apres) + '</div>';
   }).join('');
-  const c = tcCpLignesCreneaux(e);
+  const c = tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length ? tcCpCreneauxEquipe136(e) : tcCpLignesCreneaux(e);
   return '<div style="font-size:20px; font-weight:700; color:var(--text); margin:0 0 6px;">Votre configuration</div>'
     + '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">C’est enregistré sur votre compte.<br>Vous pouvez revenir et tout changer quand vous voulez.</div>'
-    + tcCpSection('Votre métier', '<div style="font-size:14px; color:var(--text);">' + (m ? escapeHTMLSafe(m.nom) : '—') + '</div>', 1)
+    + tcCpSection('Votre métier', '<div style="font-size:14px; color:var(--text);">' + (m ? escapeHTMLSafe(m.nom) : '—') + '</div>'
+      + (tcCpPlusieurs136(e) ? '<div class="cp-recap-equipe136" style="font-size:14px; color:var(--text); margin-top:4px;">À plusieurs : <span data-notranslate>' + (tcCpCoiffeurs136(e).map(function (c) { return escapeHTMLSafe(c.prenom || '?'); }).join(', ') || '—') + '</span></div>' : ''), 1)
     + tcCpSection(M.recapActes, (tcCpPrestations136(e) ? tcCpRecapActes136(e) : actes) || '<div style="font-size:14px; color:var(--text-sec);">' + M.aucun + '</div>', 2)
-    + tcCpSection('Vos jours et vos horaires', jours || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour.</div>', 4)
+    + tcCpSection(tcCpPlusieurs136(e) ? 'Les jours de chaque coiffeur' : 'Vos jours et vos horaires', (tcCpPlusieurs136(e) ? tcCpRecapJoursEquipe136(e) : jours) || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour.</div>', 4)
     + tcCpSection('Vos rendez-vous', '<div style="font-size:14px; color:var(--text);">Chaque rendez-vous dure ' + e.dureeRdv + ' minutes.</div>' + c.html
       + '<div style="font-size:14px; font-weight:700; color:var(--g-blue); margin-top:8px;">En tout : ' + c.total + ' créneau' + (c.total > 1 ? 'x' : '') + ' par semaine.</div>', 5)
     + tcCpSection('Votre fiche professionnelle', tcCpFicheRecap(e), 6)
