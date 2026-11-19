@@ -44,6 +44,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     var boutonDetail = function (m) { var c = m && m._plie134 && m._plie134.cle; return c ? Array.prototype.filter.call(document.querySelectorAll('#charlyChatBody .tc-detail134'), function (x) { return (x.getAttribute('onclick') || '').indexOf(c) > -1; })[0] : null; };
     var bulle = function (m) { var d = document.createElement('div'); d.style.width = '360px'; d.innerHTML = renderChatMessage(typeof tcVue134 === 'function' ? tcVue134(m) : m); document.body.appendChild(d); var t = d.innerText; d.remove(); return t; };
     var position = function (e) { return e.id + '@' + e.date + ' ' + e.startH + ':' + e.startM; };
+    var utilisateur = function () { return charlyIA.history.filter(function (m) { return m && m.role === 'user'; }).length; };
     FEATURES.CHARLY_PRO = true; await tcPasserCharlyVariante('pro', { ouvrir: true }); await attendre(300);
     // A et B. La phrase 6 du dentiste au profil 1, un lundi : 50 patients ; puis « Oui, place-les » (A) ou « Non » (B).
     for (var tour = 0; tour < 2; tour++) {
@@ -63,7 +64,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
       X.unSeulDetail = bd ? Array.prototype.filter.call(document.querySelectorAll('#charlyChatBody .tc-detail134'), function (x) { return x.getAttribute('onclick') === bd.getAttribute('onclick'); }).length : 0;
       var choisis = lot ? lot._reponseCreneau.lot.map(function (p) { return { ev: tcRdvDeProposition(p), c: tcCreneauDeProposition(p) }; }) : [];
       if (tour === 0) {
-        if (bd) { bd.click(); await attendre(300); }
+        // Examen de la 135 : « Voir le détail » n'écrit aucune bulle de l'utilisateur, ni tout de suite, ni 3 s après.
+        if (bd) { var u0 = utilisateur(); bd.click(); await attendre(300); X.bulleCarte = [utilisateur() - u0]; await attendre(3000); X.bulleCarte.push(utilisateur() - u0); }
         X.ouvert = lot ? bulle(lot) : '';
         var n1 = charlyIA.history.length;
         oui = bouton(/^Oui, place-les$/); if (oui) { oui.click(); await attendre(4000); }
@@ -72,6 +74,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
         X.enAttenteApres = events.filter(function (e) { return e && e.decalage && e.decalage.rdv; }).length;
         var fait = charlyIA.history.slice(n1).filter(function (m) { return m && /^✅ <b>C'est fait, rendez-vous déplacés/.test(String(m.content || '')); })[0];
         X.fait = { plie: !!(fait && fait._plie134), vu: fait ? bulle(fait) : '', rdvs: fait ? (String(fait.content).match(/« RDV /g) || []).length : 0, bouton: !!boutonDetail(fait) };
+        var bf = boutonDetail(fait);
+        if (bf) { var u1 = utilisateur(); bf.click(); await attendre(300); X.bulleFait = [utilisateur() - u1]; await attendre(3000); X.bulleFait.push(utilisateur() - u1); }
         X.traites = _tcDemo.propositions.filter(function (p) { return p.traite; }).length;
         R.A = X;
       } else {
@@ -184,6 +188,7 @@ else {
   verifie('la carte : une ligne par jour (« • Lundi 23 : 2 personnes ont choisi leur nouveau moment »…, 50 en tout), aucun rendez-vous listé, « Je les place dans ton agenda ? »', A.plie && somme(A.vu, / personnes? (ont|a) choisi (leur|son) nouveau moment$/) === 50 && !/« RDV /.test(A.vu) && /Je les place dans ton agenda \?/.test(A.vu) && lignesVues(A.vu).length <= 12, A.vu);
   verifie('la carte : « Voir le détail » dans la bulle, au-dessus de « Oui, place-les », une seule fois ; le message garde les 50 choix', A.boutonAvantOui && A.unSeulDetail === 1 && (A.contenu.match(/ a choisi /g) || []).length === 50, JSON.stringify([A.boutonAvantOui, A.unSeulDetail]));
   verifie('« Voir le détail » déplie les 50 choix avant le « oui »', (String(A.ouvert).match(/ a choisi /g) || []).length === 50, (String(A.ouvert).match(/ a choisi /g) || []).length);
+  verifie('« Voir le détail » n’écrit aucune bulle de l’utilisateur, ni tout de suite, ni 3 s après (la carte, puis le « C’est fait »)', JSON.stringify(A.bulleCarte) === '[0,0]' && JSON.stringify(A.bulleFait) === '[0,0]', JSON.stringify([A.bulleCarte, A.bulleFait]));
   verifie('rien n’est placé avant le « oui » : aucun rendez-vous n’a bougé, les 50 attendent (⏳)', A.bougesAvant === 0 && A.enAttente === 50, JSON.stringify([A.bougesAvant, A.enAttente]));
   verifie('« Oui, place-les » : les 50 rendez-vous sont à l’heure choisie, plus aucun en attente, les 50 réponses closes', A.places === 50 && A.bougesApres === 50 && A.enAttenteApres === 0 && A.traites === 50, JSON.stringify([A.places, A.bougesApres, A.enAttenteApres, A.traites]));
   verifie('« C’est fait » : une ligne par jour (« • Lundi 23 : 2 rendez-vous déplacés »…, 50 en tout), « remets-les », « Voir le détail » ; le message garde les 50', A.fait && A.fait.plie && somme(A.fait.vu, / rendez-vous déplacés?$/) === 50 && !/« RDV /.test(A.fait.vu) && /remets-les/.test(A.fait.vu) && A.fait.bouton && A.fait.rdvs === 50, JSON.stringify(A.fait).slice(0, 600));

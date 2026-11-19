@@ -14670,6 +14670,7 @@ function tcLibelleChoix116(bouton) {
 function tcNoterChoix116(cible) {
   const b = cible && cible.closest ? cible.closest('#charlyChatBody button') : null;
   if (!b || b.disabled || b.closest('[data-voir]') || b.closest('#tcAccueilCharly') || b.id === 'tcBoutonDemo') return;
+  if (b.classList && b.classList.contains('tc-detail134')) return;   // « Voir le détail » (missions 134 et 135) : pas un choix, pas de bulle
   // Un bouton d'une réponse de Charly : sa bulle, ou une carte posée à part (la carte de conflit).
   const libelle = tcLibelleChoix116(b);
   if (!libelle || TC_CHOIX_SANS_BULLE.test(libelle)) return;
