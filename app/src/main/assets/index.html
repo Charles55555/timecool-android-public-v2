@@ -3999,6 +3999,9 @@ function isMenuItemVisible(id) {
 }
 
 function renderMenu() {
+  // Mission 138 (Charles, 19/11) : « Charly Pro IA » porte le logo de sa page (le rond dégradé bleu et rouge, l'éclair jaune ; sur
+  // la page : 36 px, l'éclair à 18 px), à la taille des autres icônes du menu (25 x 24 : un rond de 24 px, l'éclair à 12 px).
+  const rondPro138 = '<span class="tc-menu-rond138" aria-hidden="true" style="flex-shrink:0; width:24px; height:24px; margin-right:1px; border-radius:50%; background:linear-gradient(135deg, var(--g-blue), var(--g-red)); display:flex; align-items:center; justify-content:center; font-size:12px; line-height:1;">⚡</span>';
   const items = menuItems[mode].filter(it => isMenuItemVisible(it.id));
   const navItems = items.map(it => {
     let extraStyle = '';
@@ -4010,7 +4013,7 @@ function renderMenu() {
     if (it.id === 'assistantpro') extraStyle = 'background:linear-gradient(90deg,var(--menu-charly-pro, #e1f5fe),var(--bg, #fff)); border-left:3px solid #4fc3f7;';
     return `
     <div class="menu-item ${it.premium?'pro-premium':''}" style="${extraStyle}" onclick="${it.id === 'calendar' ? 'tcOuvrirMonAgenda()' : "navigate('" + (it.id === 'assistant' && typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro' ? 'assistantia' : it.id) + "')"}">
-      <span style="font-size:20px; flex-shrink:0;">${it.icon}</span>
+      ${it.id === 'assistantpro' ? rondPro138 : '<span style="font-size:20px; flex-shrink:0;">' + it.icon + '</span>'}
       <span>${it.label}</span>
       ${it.badge?`<span class="menu-badge" id="menuBadge" style="display:none; margin-left:auto;">0</span>`:''}
     </div>

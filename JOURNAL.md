@@ -3769,3 +3769,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Suite verif-lot135 (23 vérifications), rouge sur 8b04f66.
 - verif-phrases-boutons, verif-demo-charly, verif-voir-agenda : rouges la nuit et le jeudi (sur 8b04f66 aussi) ; leur page croit être le mercredi de la semaine à 10h.
 - Examen de la 135 : « Voir le détail » écrivait une bulle bleue « Voir le détail » (défaut de la 134, tcNoterChoix116) ; plus de bulle (classe tc-detail134). verif-lot135 : 24 vérifications, rouge sur cf850ed.
+
+## 19/11/2026 — Mission 138 : le logo de Charly Pro IA dans le menu (CODEUR)
+
+- La ligne « Charly Pro IA » du menu porte le rond dégradé bleu et rouge avec l’éclair jaune, comme sur sa page, à la taille des autres icônes (24 px). Fond bleu ciel gardé ; « Charly IA » inchangé.
+- Suite verif-menu-charly-pro138 (17 vérifications), rouge sur b5370cf.
