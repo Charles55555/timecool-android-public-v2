@@ -11130,6 +11130,7 @@ let _tcConfigPro = null;          // l'état, lu à l'ouverture de la page
 let _tcConfigProEtape = 1;        // 1 à 5 ; 6 = le récapitulatif
 let _tcConfigProEdition = null;   // le nom en cours de changement : { f, s }
 let _tcConfigProErreur = '';
+let _tcCpApercu139 = null;        // mission 139 : « Voir tous les métiers » ; rien n'est enregistré avant « Voir le récapitulatif » { photo, photos }
 
 function tcConfigProJoursDefaut() {
   const j = {};
@@ -11151,6 +11152,7 @@ function tcConfigProLire() {
 
 /** Enregistré tout de suite, sur l'appareil puis sur le compte (synchronisation des réglages). */
 function tcConfigProSauver() {
+  if (_tcCpApercu139) return;   // mission 139 : on regarde les métiers ; « Voir le récapitulatif » enregistre
   const e = tcConfigProLire();
   e.etape = Math.min(6, _tcConfigProEtape);
   e.maj = new Date().toISOString();
@@ -11158,8 +11160,51 @@ function tcConfigProSauver() {
   if (typeof tcSyncBientot === 'function') tcSyncBientot();
 }
 
+/* Mission 139 (Charles, 19/11) : « Voir tous les métiers ». Depuis son récapitulatif, le professionnel regarde les métiers.
+   Tant qu'il ne va pas jusqu'à « Voir le récapitulatif », rien n'est enregistré : ni la configuration (elle reste en mémoire),
+   ni les photos (gardées au début, remises à la fin). Chaque métier garde sa propre configuration : e.metiers139[métier]. */
+const TC_CP_COMMUNS139 = ['v', 'metier', 'etape', 'termine', 'maj', 'metiers139'];
+function tcCpDebutApercu139() {
+  let p = null, ps = null;
+  try { p = localStorage.getItem(TC_CONFIG_PRO_PHOTO_CLE); ps = localStorage.getItem(TC_CONFIG_PRO_PHOTOS_CLE); } catch (x) {}
+  _tcCpApercu139 = { photo: p, photos: ps };
+}
+/** Sans « Voir le récapitulatif » : les photos reviennent comme au début (la configuration, elle, n'a jamais été écrite). */
+function tcCpFinApercu139() {
+  const a = _tcCpApercu139;
+  _tcCpApercu139 = null;
+  if (!a) return;
+  let change = false;
+  [[TC_CONFIG_PRO_PHOTO_CLE, a.photo], [TC_CONFIG_PRO_PHOTOS_CLE, a.photos]].forEach(function (x) {
+    try {
+      if (localStorage.getItem(x[0]) === x[1]) return;
+      if (x[1] === null) localStorage.removeItem(x[0]); else localStorage.setItem(x[0], x[1]);
+      change = true;
+    } catch (y) {}
+  });
+  if (change && typeof tcSyncBientot === 'function') tcSyncBientot();
+}
+/** Le métier change : la configuration de l'ancien est rangée ; celle du nouveau revient s'il a déjà été configuré (rend true). */
+function tcCpChangerMetier139(e, ancien, nouveau) {
+  const garde = e.metiers139 && typeof e.metiers139 === 'object' && !Array.isArray(e.metiers139) ? e.metiers139 : {};
+  const propre = function (o) { const r = {}; Object.keys(o).forEach(function (k) { if (TC_CP_COMMUNS139.indexOf(k) < 0) r[k] = o[k]; }); return JSON.parse(JSON.stringify(r)); };
+  if (ancien && tcConfigProMetier(ancien)) garde[ancien] = propre(e);
+  e.metier = nouveau;
+  const b = garde[nouveau];
+  delete garde[nouveau];
+  if (Object.keys(garde).length) e.metiers139 = garde; else delete e.metiers139;
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return false;
+  Object.keys(e).forEach(function (k) { if (TC_CP_COMMUNS139.indexOf(k) < 0) delete e[k]; });
+  Object.assign(e, propre(b));
+  if (!e.jours || typeof e.jours !== 'object') e.jours = tcConfigProJoursDefaut();
+  if (!Array.isArray(e.familles)) e.familles = [];
+  if (TC_PRO_DUREES_RDV.indexOf(Number(e.dureeRdv)) < 0) e.dureeRdv = 20;
+  return true;
+}
+
 /** À l'ouverture : relire (un autre appareil a pu changer la configuration), reprendre où on en était. */
 function tcOuvrirConfigPro121() {
+  tcCpFinApercu139();   // mission 139 : sorti sans « Voir le récapitulatif » : rien n'a changé
   _tcConfigPro = null;
   _tcConfigProEdition = null;
   _tcConfigProErreur = '';
@@ -11654,7 +11699,7 @@ const tcConfigPro121 = {
   choisirMetier: function (id) {
     const e = tcConfigProLire();
     if (!tcConfigProMetier(id)) return;
-    if (e.metier !== id) { const _ancien136 = e.metier; e.metier = id; e.familles = tcConfigProFamillesDuMetier(id); if (typeof tcCpFicheChangerMetier136 === 'function') tcCpFicheChangerMetier136(e, _ancien136, id); if (tcCpAvocat137(e)) e.dureeRdv = 30; }
+    if (e.metier !== id) { const _ancien136 = e.metier; if (!tcCpChangerMetier139(e, _ancien136, id)) { e.familles = tcConfigProFamillesDuMetier(id); if (typeof tcCpFicheChangerMetier136 === 'function') tcCpFicheChangerMetier136(e, _ancien136, id); if (tcCpAvocat137(e)) e.dureeRdv = 30; } }
     _tcConfigProErreur = '';
     tcConfigProSauver(); tcRendreConfigPro121();
   },
@@ -11740,11 +11785,14 @@ const tcConfigPro121 = {
     if (n === 4 && tcCpJoursErreur136(e)) { _tcConfigProErreur = tcCpJoursErreur136(e); tcRendreConfigPro121(); return; }
     // Examen de la 136 : à plusieurs, seuls les jours de chaque coiffeur comptent (ceux du salon ne sont plus à l'écran).
     if (n === 4 && !(tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length) && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
-    if (n === 6) e.termine = true;
+    if (n === 6) { e.termine = true; _tcCpApercu139 = null; }   // mission 139 : on enregistre ce qu'on regardait
     tcConfigPro121.aller(Math.min(7, n + 1));
     if (n === 6 && typeof showToast === 'function') showToast('✅ C’est enregistré');
   },
   retour: function () { tcConfigPro121.aller(Math.max(1, _tcConfigProEtape - 1)); },
+  // Mission 139 : « Voir tous les métiers » (depuis le récapitulatif) ; « Retour à ma configuration », sans rien changer.
+  tousMetiers: function () { tcCpDebutApercu139(); tcConfigPro121.aller(1); },
+  retourConfig: function () { tcOuvrirConfigPro121(); tcConfigProHaut(); },
   // Étape 6 : une réponse de la fiche, enregistrée à chaque lettre (sans redessiner : le curseur reste où il est).
   fiche: function (champ, v) {
     const fi = tcConfigProFiche(tcConfigProLire());
@@ -12339,6 +12387,7 @@ function tcCpRecapitulatif(e) {
   const c = tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length ? tcCpCreneauxEquipe136(e) : tcCpLignesCreneaux(e);
   return '<div style="font-size:20px; font-weight:700; color:var(--text); margin:0 0 6px;">Votre configuration</div>'
     + '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">C’est enregistré sur votre compte.<br>Vous pouvez revenir et tout changer quand vous voulez.</div>'
+    + '<button id="cpTousMetiers139" onclick="tcConfigPro121.tousMetiers()" style="' + TC_CP_BOUTON + ' display:block; width:100%; margin:0 0 12px; min-height:52px; font-size:16px; background:var(--g-blue); color:#fff; border:none;">Voir tous les métiers</button>'   // mission 139
     + tcCpSection('Votre métier', '<div style="font-size:14px; color:var(--text);">' + (m ? escapeHTMLSafe(m.nom) : '—') + '</div>'
       + (tcCpPlusieurs136(e) ? '<div class="cp-recap-equipe136" style="font-size:14px; color:var(--text); margin-top:4px;">À plusieurs : <span data-notranslate>' + (tcCpCoiffeurs136(e).map(function (c) { return escapeHTMLSafe(c.prenom || '?'); }).join(', ') || '—') + '</span></div>' : ''), 1)
     + tcCpSection(M.recapActes, (tcCpPrestations136(e) ? tcCpRecapActes136(e) : (tcCpAvocat137(e) ? tcCpRecapActes137(e) : actes)) || '<div style="font-size:14px; color:var(--text-sec);">' + M.aucun + '</div>', 2)
@@ -12356,6 +12405,7 @@ function tcRendreConfigPro121() {
   const e = tcConfigProLire();
   const n = _tcConfigProEtape;
   let h = n === 1 ? tcCpEtape1(e) : n === 2 ? tcCpEtape2(e) : n === 3 ? tcCpEtape3(e) : n === 4 ? tcCpEtape4(e) : n === 5 ? tcCpEtape5(e) : n === 6 ? tcCpEtape6(e) : tcCpRecapitulatif(e);
+  if (_tcCpApercu139 && n <= 6) h = '<button id="cpRetourConfig139" onclick="tcConfigPro121.retourConfig()" style="' + TC_CP_BOUTON + ' display:block; width:100%; margin:0 0 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);">← Retour à ma configuration</button>' + h;   // mission 139
   if (_tcConfigProErreur) h += '<div role="alert" style="color:#c5221f; font-size:14px; font-weight:600; margin:4px 0 10px;">' + escapeHTMLSafe(_tcConfigProErreur) + '</div>';
   if (n <= 6) {
     h += '<div style="display:flex; gap:10px; margin:16px 0 30px;">'

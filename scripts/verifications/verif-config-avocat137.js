@@ -45,7 +45,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     c.fiche = { nom: 'Salon Lumière', metier: 'Coiffeur', adresse: '8 rue des Lilas', acces: 'Métro Voltaire', presentation: 'Bienvenue.', consignes: 'Prévenez 24 h avant.', paiement: 'Carte bancaire', horaires: '', langues: 'Français' };
     localStorage.setItem('tc_config_pro', JSON.stringify(c));
     tcOuvrirConfigPro121(); await attendre(50);
-    var corps = function () { return document.getElementById('configProCorps').innerHTML; };
+    // Mission 139 : l'empreinte se lit sans le bouton « Voir tous les métiers » (le reste ne bouge pas).
+    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), ''); };
     var C = {};
     for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); C['etape' + n] = corps(); }
     _tcConfigProEtape = 4; tcConfigPro121.choisirCoiffeur('cB'); C.etape4julien = corps();

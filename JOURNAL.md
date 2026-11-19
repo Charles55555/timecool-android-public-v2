@@ -3794,3 +3794,9 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Étape 3 : ses deux rendez-vous (premier contact par téléphone gratuit au départ ; cabinet, prix facultatif ; « Un nouveau client ne prend seul que le premier contact », cochée), 30 minutes pour tout.
 - Fiche : « Maître … », barreau, honoraires, aide juridictionnelle Oui / Non, ses domaines ; « Remplis à ma place » coche les domaines.
 - Dentiste et coiffeur identiques au caractère près (empreintes). Suite verif-config-avocat137 (22 vérifications).
+
+## 19/11/2026 — Mission 139 : « Voir tous les métiers » (CODEUR)
+
+- Récapitulatif de la Configuration professionnelle : gros bouton bleu « Voir tous les métiers » au-dessus de la carte « Votre métier » ; il ouvre l’étape 1, le métier enregistré coché. « ← Retour à ma configuration » en haut de chaque étape, tant qu’on regarde.
+- En regardant, rien n’est enregistré (configuration en mémoire, photos remises) ; « Voir le récapitulatif » valide. Chaque métier garde sa configuration (e.metiers139).
+- verif-config-metiers139 : 17 vérifications, rouge sur 1bfca84. Empreintes 136/137 lues sans le bouton.

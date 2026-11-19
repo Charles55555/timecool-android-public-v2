@@ -44,7 +44,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     e.fiche = { nom: 'Dr Charles Haddad', metier: 'Chirurgien-dentiste', adresse: '12 rue de la Paix, 75002 Paris', acces: 'Cabinet au rez-de-chaussée.', presentation: 'Bonjour.', consignes: 'Arrivez 5 minutes avant.', tarifs: 'Conventionné.', paiement: 'Carte bancaire', horaires: '', langues: 'Français', apporter: 'Votre carte Vitale.' };
     localStorage.setItem('tc_config_pro', JSON.stringify(e));
     tcOuvrirConfigPro121(); await attendre(50);
-    var corps = function () { return document.getElementById('configProCorps').innerHTML; };
+    // Mission 139 : l'empreinte se lit sans le bouton « Voir tous les métiers » (le reste ne bouge pas).
+    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), ''); };
     var D = {};
     for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); D['etape' + n] = corps(); }
     _tcConfigProEtape = 2; tcConfigPro121.ouvrirQuestion('consultation-dentaire', 'controle'); D.editeurNeuf = corps(); tcConfigPro121.qAnnuler();
