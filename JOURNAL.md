@@ -3774,3 +3774,10 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - La ligne « Charly Pro IA » du menu porte le rond dégradé bleu et rouge avec l’éclair jaune, comme sur sa page, à la taille des autres icônes (24 px). Fond bleu ciel gardé ; « Charly IA » inchangé.
 - Suite verif-menu-charly-pro138 (17 vérifications), rouge sur b5370cf.
+
+## 19/11/2026 — Mission 136, lot 1 : le métier « Coiffeur » (CODEUR)
+
+- Même page, mêmes six étapes que le dentiste. « Prestation » et « client » ; 7 familles et 23 prestations ; consigne en tête de famille ; « Pas de rendez-vous en ligne » ; « Seulement avec une autre prestation ».
+- Prix facultatif (un prix, une fourchette, « Sur devis ») ; durées en heures, jusqu’à 5 h ; une seule durée de rendez-vous.
+- Fiche du salon (sans tarifs remboursés, carte Vitale, « à apporter », « Dr ») ; « Remplis à ma place » propose aussi les prestations, leurs durées et leurs prix.
+- Dentiste identique au caractère près (empreintes). Suite verif-config-coiffeur136 (27 vérifications).
