@@ -11586,7 +11586,8 @@ const tcConfigPro121 = {
     if (n === 2 && !tcConfigProActes(e).length) { _tcConfigProErreur = tcCpMots136(e).erreurActe; tcRendreConfigPro121(); return; }
     if (n === 1 && tcCpEquipeErreur136(e)) { _tcConfigProErreur = tcCpEquipeErreur136(e); tcRendreConfigPro121(); return; }   // mission 136, lot 2
     if (n === 4 && tcCpJoursErreur136(e)) { _tcConfigProErreur = tcCpJoursErreur136(e); tcRendreConfigPro121(); return; }
-    if (n === 4 && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
+    // Examen de la 136 : à plusieurs, seuls les jours de chaque coiffeur comptent (ceux du salon ne sont plus à l'écran).
+    if (n === 4 && !(tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length) && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
     if (n === 6) e.termine = true;
     tcConfigPro121.aller(Math.min(7, n + 1));
     if (n === 6 && typeof showToast === 'function') showToast('✅ C’est enregistré');

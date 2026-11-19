@@ -3786,3 +3786,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - « Vous travaillez seul, ou à plusieurs ? » (coiffeur seulement). À plusieurs : les coiffeurs un par un (prénom, photo) ; « Qui la fait ? » sous chaque prestation ; les jours de chaque coiffeur ; ses créneaux et le total du salon au récapitulatif.
 - Photos dans tc_config_pro_photos (privé, ajouté à verif-config-pro-prive-e2e). Suite verif-config-salon136 (16 vérifications).
+- Examen de la 136 : à plusieurs, l’étape 4 contrôlait encore les jours du salon (impasse si le salon n’avait plus de jour) ; seuls les jours de chaque coiffeur comptent. verif-config-salon136 : 18 vérifications, rouge sur cede390.
