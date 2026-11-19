@@ -3759,3 +3759,12 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Affichage seulement (_plie134, tcVue134) : le texte entier reste dans le message et au Journal d’activité. Jusqu’à 6 personnes : rien ne change.
 - Suite verif-pliage134 (18 vérifications, lundi simulé). Phrase 6 du dentiste un lundi : réponses en 5 s (au lieu de 10 s).
 - verif-demo-pro131 et 131b jouées à 10h du jour même (131b échouait après 21h30 UTC, sur 8225f6c aussi).
+
+## 19/11/2026 — Mission 135 : au profil 1, plus de 6 choix d’un coup, une seule carte (CODEUR)
+
+- Charles (solution B) : au-delà de 6 créneaux choisis qui attendent en même temps, une seule carte « Je les place dans ton agenda ? », pliée par jour, « Voir le détail » au-dessus du « oui ». Jusqu’à 6 : une question par réponse.
+- Jamais plié : un conflit, un rendez-vous qui n’est plus dans l’agenda. Refus et silences : leur question, une à la fois, après.
+- Rien placé avant le « oui » ; « non » ne place rien ; le lot est figé quand la carte est posée (une réponse tardive a sa propre question).
+- Après : « C’est fait » et « D’accord, les N rendez-vous restent à leur place » pliés ; messages aux contacts comptés (« ✉️ … : 14 personnes »), aussi dans le compte rendu du profil 3 (oubli de la 134).
+- Suite verif-lot135 (23 vérifications), rouge sur 8b04f66.
+- verif-phrases-boutons, verif-demo-charly, verif-voir-agenda : rouges la nuit et le jeudi (sur 8b04f66 aussi) ; leur page croit être le mercredi de la semaine à 10h.

@@ -66,7 +66,12 @@ if (!exe) {
       } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
     }, 1200); });</script>`;
     const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-voir-'));
-    fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('</body>', () => js + '</body>'));
+    // Mission 135 : la page croit être le mercredi de la semaine, à 10h (chef, lot 118 : verte à toute heure et tous les jours).
+    const HORLOGE_10H = '<script>(function () { var V = Date, d = new V(), base = new V(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 4) % 7), 10, 0, 0).getTime(), t0 = V.now();'
+      + ' function F() { if (!(this instanceof F)) return new V(base + V.now() - t0).toString(); if (!arguments.length) return new V(base + V.now() - t0);'
+      + ' return new (Function.prototype.bind.apply(V, [null].concat([].slice.call(arguments))))(); }'
+      + ' F.prototype = V.prototype; F.now = function () { return base + V.now() - t0; }; F.UTC = V.UTC; F.parse = V.parse; window.Date = F; })();</script>';
+    fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + HORLOGE_10H).replace('</body>', () => js + '</body>'));
     const args = ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=' + (taille || '390,844'), '--virtual-time-budget=300000', '--dump-dom'];
     if (calme) args.push('--force-prefers-reduced-motion');
     const r = spawnSync(exe, args.concat(['file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')]), { encoding: 'utf8', timeout: 400000, maxBuffer: 1 << 28 });

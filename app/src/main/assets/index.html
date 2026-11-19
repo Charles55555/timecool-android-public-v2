@@ -14514,7 +14514,7 @@ function tcLigne134(m) {
 
 /** Sous un message plié (hors questionnaire, qui l'a dans sa bulle) : « Voir le détail ». */
 function tcBoutonDetail134(m) {
-  if (!m || !m._plie134 || m._plie134.ouvert || m._questionnaire) return '';
+  if (!m || !m._plie134 || m._plie134.ouvert || m._questionnaire || m._reponseCreneau) return '';   // mission 135 : la carte du lot l'a dans sa bulle
   return '<div style="margin:-4px 0 12px 44px;">' + tcBouton134(m._plie134.cle) + '</div>';
 }
 
@@ -31161,6 +31161,59 @@ function tcGenesDuLot(items, apresSeulement) {
   });
 }
 
+/**
+ * Mission 135 (Charles, 19/11) : au profil 1, plus de 6 créneaux choisis qui attendent en même temps : une seule carte pour le
+ * lot (les autres réponses, refus ou silence, gardent leur question, après). null : une question par réponse, comme avant.
+ */
+function tcLotProfil1_135(aDemander) {
+  const choix = (Array.isArray(aDemander) ? aDemander : []).filter(function (x) { return x && x.etat === 'choisi'; });
+  return choix.length > (typeof TC_PLIER134 !== 'undefined' ? TC_PLIER134 : 6) ? choix : null;
+}
+
+/**
+ * Mission 135 : la carte « Je les place dans ton agenda ? », pliée au-delà de 6 personnes : « • Jeudi 19 : 14 personnes ont
+ * choisi leur nouveau moment » (le jour d'avant le décalage). Jamais plié : un conflit (« attention, ça chevauche »), un
+ * rendez-vous qui n'est plus dans l'agenda (rien à replacer). { texte, cle, ouvert } ou null (rien ne change).
+ */
+function tcPlierLot135(items, lignes) {
+  if (!Array.isArray(items) || !Array.isArray(lignes) || items.length <= (typeof TC_PLIER134 !== 'undefined' ? TC_PLIER134 : 6) || typeof tcParJour134 !== 'function') return null;
+  const garde = function (i) { return !items[i].ev || /attention, ça chevauche/.test(lignes[i]); };
+  const jours = tcParJour134(items.map(function (x, i) { return garde(i) ? null : { date: x.ev.date, cle: String(x.p.qui || x.ev.id) }; }).filter(Boolean))
+    .map(function (j) { return '• ' + tcJourCourt134(j.date) + ' : ' + tcPersonnes134(j.n) + (j.n > 1 ? ' ont choisi leur nouveau moment' : ' a choisi son nouveau moment'); });
+  const gardes = lignes.filter(function (l, i) { return garde(i); });
+  return { texte: jours.concat(gardes, ['Je les place dans ton agenda ?']).join('\n'), cle: tcCle134('l135'), ouvert: false };
+}
+
+/** Mission 135 : le « C'est fait » du lot placé, plié au-delà de 6 : « • Jeudi 19 : 14 rendez-vous déplacés » (le jour d'avant). */
+function tcPlierFait135(presents, avant) {
+  const m = charlyIA.history[charlyIA.history.length - 1];
+  if (!Array.isArray(presents) || presents.length <= TC_PLIER134 || !m || m.role !== 'system_info' || !/^✅ <b>C'est fait, rendez-vous déplacés/.test(String(m.content || ''))) return;
+  const jours = tcParJour134(presents.map(function (x) { return { date: (avant && avant[x.ev.id]) || x.ev.date, cle: x.ev.id }; }))
+    .map(function (j) { return '• ' + tcJourCourt134(j.date) + ' : ' + j.n + ' rendez-vous déplacé' + (j.n > 1 ? 's' : ''); });
+  m._plie134 = { texte: '✅ <b>C\'est fait, rendez-vous déplacés :</b><br>' + escapeHTMLSafe(jours.join('\n')).replace(/\n/g, '<br>')
+    + '<br><span style="font-size:12px; color:var(--text-sec);">Pour revenir en arrière, dis-moi « remets-les ».</span>', cle: tcCle134('f135'), ouvert: false };
+}
+
+/**
+ * Mission 135 : les messages aux contacts, au-delà de 6 personnes : « ✉️ Message envoyé dans la messagerie TimeCool : 14
+ * personnes », « • Message prêt, à envoyer toi-même d’un geste (SMS ou email) : 3 personnes » (les boutons restent). Jamais
+ * plié : « Pense à prévenir … » (sans numéro ni e-mail). Les lignes pliées, ou null (rien ne change).
+ */
+function tcPlierSuites135(lignes) {
+  if (!Array.isArray(lignes)) return null;
+  const msg = /^✉️ Message envoyé à .+ dans sa messagerie TimeCool : « /, pret = /^• Message prêt pour .+, à envoyer toi-même d’un geste \(SMS ou email\) : « /;
+  const nm = lignes.filter(function (l) { return msg.test(l); }).length, np = lignes.filter(function (l) { return pret.test(l); }).length;
+  if (nm + np <= TC_PLIER134) return null;
+  const out = [];
+  let vm = false, vp = false;
+  lignes.forEach(function (l) {
+    if (msg.test(l)) { if (!vm) out.push('✉️ Message envoyé dans la messagerie TimeCool : ' + tcPersonnes134(nm)); vm = true; return; }
+    if (pret.test(l)) { if (!vp) out.push('• Message prêt, à envoyer toi-même d’un geste (SMS ou email) : ' + tcPersonnes134(np)); vp = true; return; }
+    out.push(l);
+  });
+  return out;
+}
+
 /** Profil 2 : plusieurs réponses sont arrivées, un seul accord pour le lot (« Je les place dans ton agenda ? »). */
 function tcPoserLotCreneaux(lot) {
   const items = lot.map(function (p) { return { p: p, ev: tcRdvDeProposition(p) }; });
@@ -31173,7 +31226,8 @@ function tcPoserLotCreneaux(lot) {
       + (genes.length ? ' (attention, ça chevauche ' + genes.map(_tcLigneRdv).join(' ; ') + ')' : '') + '.';
   });
   tcRetirerQuestionsDe(lot.map(function (p) { return Number(p.rdv_id); }));
-  charlyIA.history.push({ role: 'assistant', nature: 'question', content: lignes.join('\n') + '\nJe les place dans ton agenda ?',
+  const _p135 = typeof tcPlierLot135 === 'function' ? tcPlierLot135(items, lignes) : null;   // mission 135
+  charlyIA.history.push({ role: 'assistant', nature: 'question', content: lignes.join('\n') + '\nJe les place dans ton agenda ?', _plie134: _p135 || undefined,
     _reponseCreneau: { p: lot[0], lot: lot, choix: [{ cle: 'placer', texte: 'Oui, place-les' }, { cle: 'laisser', texte: 'Non, je les laisse où ils sont' }] } });
   renderCharlyChat();
   if (currentPage !== 'assistant' && typeof showToast === 'function') showToast('💬 ' + lot.length + ' réponses : Charly te demande la suite');
@@ -31330,15 +31384,17 @@ async function tcSuivrePropositions(toujours) {
     const libre = function (x) { const e = tcRdvDeProposition(x); return x.etat === 'choisi' && !!e && !tcGenesDuCreneau(e, tcCreneauDeProposition(x)).length; };
     const seuls = nouvelles.filter(function (x) { return profilDe(x) === 3 || (profilDe(x) === 2 && libre(x)); });
     const aDemander = nouvelles.filter(function (x) { return seuls.indexOf(x) < 0; });
+    const lot135 = typeof tcLotProfil1_135 === 'function' ? tcLotProfil1_135(aDemander) : null;   // mission 135
     // Mission 108 : la bulle dit « Paul répond… » (la démonstration a déjà joué la sienne).
     if ((seuls.length || aDemander.length) && !(typeof tcDemoActive === 'function' && tcDemoActive())
       && typeof currentPage !== 'undefined' && currentPage === 'assistant') {
       const qui = [];
-      seuls.concat(aDemander.slice(0, 1)).forEach(function (x) { if (x && x.qui && qui.indexOf(x.qui) < 0) qui.push(x.qui); });
-      if (qui.length) { typeof tcEtapeAttente === 'function' && await tcEtapeAttente(tcTexteAttente('reponse', qui), 'reception'); typeof tcFinEtapes === 'function' && await tcFinEtapes(); }
+      seuls.concat(lot135 || aDemander.slice(0, 1)).forEach(function (x) { if (x && x.qui && qui.indexOf(x.qui) < 0) qui.push(x.qui); });
+      if (qui.length) { typeof tcEtapeAttente === 'function' && await tcEtapeAttente(qui.length > TC_PLIER134 && typeof tcTexteVague134 === 'function' ? tcTexteVague134({ noms: qui, n: qui.length }) : tcTexteAttente('reponse', qui), 'reception'); typeof tcFinEtapes === 'function' && await tcFinEtapes(); }
     }
     if (seuls.length) await tcTraiterSeul(seuls);
-    if (aDemander.length) tcPoserReponseCreneau(aDemander[0]);
+    if (lot135) tcPoserLotCreneaux(lot135);   // mission 135
+    else if (aDemander.length) tcPoserReponseCreneau(aDemander[0]);
   } finally {
     _tcPropositionsEnCours = false;
   }
@@ -31445,13 +31501,16 @@ async function tcExecuterLotCreneaux(m, cle) {
   if (presents.length && cle === 'placer') {
     const genesLot = tcGenesDuLot(presents, true);
     const chevauche = presents.map(function (x, i) { return genesLot[i].length ? '« ' + x.ev.title + ' » et ' + genesLot[i].map(_tcLigneRdv).join(', ') : ''; }).filter(Boolean);
+    const _avant135 = {}; presents.forEach(function (x) { _avant135[x.ev.id] = x.ev.date; });   // mission 135 : le jour d'avant
     const liste = presents.map(function (x) { delete x.ev.decalage; return { ev: x.ev, p: tcCreneauDeProposition(x.p) }; });
     tcDeplacerDansLeLot(liste);
+    if (typeof tcPlierFait135 === 'function') tcPlierFait135(presents, _avant135);
     if (chevauche.length) charlyIA.history.push({ role: 'system_info', content: '⚠️ Attention, ça chevauche : ' + chevauche.join(' ; ') + '.' });
   } else if (presents.length) {
     presents.forEach(function (x) { delete x.ev.decalage; });
     saveEventsToStorage(); if (currentPage === 'calendar') render();
     charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: 'D’accord, ' + presents.map(function (x) { return '« ' + x.ev.title + ' »'; }).join(', ') + (presents.length > 1 ? ' restent à leur place.' : ' reste à sa place.') });
+    if (presents.length > TC_PLIER134) charlyIA.history[charlyIA.history.length - 1]._plie134 = { texte: 'D’accord, les ' + presents.length + ' rendez-vous restent à leur place.', cle: tcCle134('n135'), ouvert: false };   // mission 135
   }
   if (absents.length) charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: absents.map(function (x) { return '« ' + (x.p.titre || 'ton rendez-vous') + ' »'; }).join(', ') + (absents.length > 1 ? ' ne sont plus' : ' n’est plus') + ' dans ton agenda : je n’ai rien placé.' });
   const suites = [];
@@ -31550,6 +31609,7 @@ async function tcTraiterSeul(liste) {
   if (deplaces.length) carte._voir = deplaces.map(function (x) { return x.ev.id; });
   if (envois.length) { carte._envois = envois; carte._envoisId = 'env' + Date.now() + '-' + (++_tcQuestionnaireNumero); }
   if (typeof tcPlierCompteRendu134 === 'function') { const _p134 = tcPlierCompteRendu134(lignes, deplaces, reproposes, _avant134); if (_p134) carte._plie134 = _p134; }   // mission 134
+  if (carte._plie134 && typeof tcPlierSuites135 === 'function') { const _s135 = tcPlierSuites135(carte._plie134.texte.split('\n')); if (_s135) carte._plie134.texte = _s135.join('\n'); }   // mission 135
   if (lignes.length > 1) { charlyIA.history.push(carte); tcJournaliserCompteRendu(lignes); }
   renderCharlyChat();
   if (currentPage !== 'assistant' && typeof showToast === 'function' && (deplaces.length || reproposes.length || laisses.length)) showToast('📋 Charly a avancé : son compte rendu t’attend');
@@ -31608,8 +31668,10 @@ function tcSuitesEnLignes(suites) {
 function tcDireSuitesAuxContacts(suites) {
   const s = tcSuitesEnLignes(suites);
   const lignes = s.lignes, envois = s.envois, aPrevenir = s.aPrevenir;
+  const _s135 = typeof tcPlierSuites135 === 'function' ? tcPlierSuites135(lignes) : null;   // mission 135
   if (envois.length) tcDireBilanPropositions(lignes, envois);
   else if (lignes.length) charlyIA.history.push({ role: 'system_info', content: lignes.join('\n') });
+  if (_s135 && (envois.length || lignes.length)) { charlyIA.history[charlyIA.history.length - 1]._plie134 = { texte: _s135.join('\n'), cle: tcCle134('s135'), ouvert: false }; renderCharlyChat(); }
   if (aPrevenir.length) charlyIA.history.push({ role: 'assistant', nature: 'reponse', content: aPrevenir.join('\n') });
 }
 
@@ -31621,6 +31683,7 @@ function tcRendreReponseCreneau(m) {
       + '; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; text-align:left;">' + escapeHTMLSafe(ch.texte) + '</button>';
   }).join('');
   return tcBulleCharly(escapeHTMLSafe(m.content).replace(/\n/g, '<br>')
+    + (m._plie134 && !m._plie134.ouvert && typeof tcBouton134 === 'function' ? '<div style="margin-top:8px;">' + tcBouton134(m._plie134.cle) + '</div>' : '')   // mission 135
     + (boutons ? '<div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">' + boutons + '</div>' : ''));
 }
 
