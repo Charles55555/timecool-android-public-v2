@@ -3807,3 +3807,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - web/app/ : manifest.json + icônes « étoiles » (192, 512, masquable 512, iPhone 180), dessinées par scripts/dessiner-icones-web.sh ; publiées par deployer-web.sh à côté de index.html. L’onglet garde l’horloge.
 - index.html : manifeste, icône iPhone, ligne discrète « Installer TimeCool sur cet appareil » en bas du menu (navigateur qui le propose ; iPhone Safari : « Partager, puis Sur l’écran d’accueil » ; jamais installé, jamais dans l’APK).
 - Aucun service worker, aucun cache ; version.json inchangé. Suite verif-installable140 (19 vérifications, rouge sur bc6180b).
+- Examen de la 140 : sur iPhone, le « : » pouvait rester seul sur une ligne ; espaces insécables devant « : » et dans les guillemets. verif-installable140 : 20 vérifications (coupures contrôlées de 140 à 300 px), rouge sur 696be0e.

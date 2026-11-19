@@ -104,6 +104,14 @@ const portLibre = () => new Promise((ok2) => { const s = net.createServer(); s.l
     R.iphone = await js("Object.defineProperty(navigator, 'userAgent', { configurable: true, get: function () { return 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1'; } }); _tcInstall140 = null; tcMajInstaller140(); const z = document.getElementById('tcInstaller140'); return { visible: z.style.display !== 'none', texte: z.innerText.trim(), bouton: !!z.querySelector('[role=button]') };");
     await js("document.getElementById('tcInstaller140').scrollIntoView({ block: 'end' }); return 1;");
     await capture('2-menu-iphone');
+    // Examen de la 140 : aucune ligne du texte d'aide ne commence par « : » ou « » », ni ne finit par « « », quelle que soit la
+    // largeur (de 140 à 300 px, lettre par lettre, chaque caractère situé par Range.getClientRects).
+    R.coupures = await js("const z = document.getElementById('tcInstaller140'); const fautes = []; const r = document.createRange();"
+      + " for (let w = 140; w <= 300; w++) { z.style.width = w + 'px'; const car = []; const tw = document.createTreeWalker(z, NodeFilter.SHOW_TEXT); let n;"
+      + " while ((n = tw.nextNode())) for (let i = 0; i < n.data.length; i++) { r.setStart(n, i); r.setEnd(n, i + 1); const q = r.getClientRects()[0]; if (q) car.push({ c: n.data[i], t: q.top }); }"
+      + " const lignes = []; car.forEach(function (x) { const l = lignes.find(function (y) { return Math.abs(y.t - x.t) < 6; }); if (l) l.s += x.c; else lignes.push({ t: x.t, s: x.c }); });"
+      + " lignes.forEach(function (l) { const s = l.s.replace(/^[\\s\\u00a0]+|[\\s\\u00a0]+$/g, ''); if (/^[:;!?»]/.test(s) || /«$/.test(s)) fautes.push(w + ' px : « ' + s + ' »'); }); }"
+      + " z.style.width = ''; return { fautes: fautes.length, exemples: fautes.slice(0, 3) };");
     R.iphoneChrome = await js("Object.defineProperty(navigator, 'userAgent', { configurable: true, get: function () { return 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/131.0 Mobile/15E148 Safari/604.1'; } }); tcMajInstaller140(); return document.getElementById('tcInstaller140').style.display;");
     R.deborde = await js("return document.documentElement.scrollWidth - document.documentElement.clientWidth;");
     // Sur PC (1280 px), avec l'événement de Chrome ou d'Edge.
@@ -129,6 +137,7 @@ const portLibre = () => new Promise((ok2) => { const s = net.createServer(); s.l
   verifie('déjà installé (appinstalled, ou ouvert dans sa fenêtre) : pas de ligne', R.installee === 'none' && R.fenetre === 'none', R.installee + ' ' + R.fenetre);
   verifie('dans l’application Android : pas de ligne', R.apk === 'none', R.apk);
   verifie('iPhone Safari : la ligne explique « Partager, puis Sur l’écran d’accueil » ; Chrome sur iPhone : rien', R.iphone && R.iphone.visible && /Installer TimeCool sur cet appareil/.test(R.iphone.texte) && /Partager/.test(R.iphone.texte) && /Sur l’écran d’accueil/.test(R.iphone.texte) && !R.iphone.bouton && R.iphoneChrome === 'none', JSON.stringify([R.iphone, R.iphoneChrome]));
+  verifie('iPhone : le « : » et les guillemets restent collés à leurs mots, à toutes les largeurs (140 à 300 px)', R.coupures && R.coupures.fautes === 0, JSON.stringify(R.coupures));
   verifie('sur PC (1280 px) : la ligne est là ; rien ne déborde (390 et 1280 px)', R.pc && R.pc.visible && /Installer TimeCool sur cet appareil/.test(R.pc.texte) && R.pc.deborde <= 0 && R.deborde <= 0, JSON.stringify([R.pc, R.deborde]));
   console.log('verif-installable140 : ' + ok + ' OK, ' + ko + ' KO');
   process.exit(ko ? 1 : 0);
