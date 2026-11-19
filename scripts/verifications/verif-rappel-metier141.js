@@ -95,7 +95,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     a.fiche = { nom: 'Maître Charles Haddad', metier: 'Avocat', adresse: '3 place du Palais, 75001 Paris', barreau: 'Paris' };
     ouvrir(a); R.avocat = etapes(); R.recapAvocat = carteRecap();
     // L'avocat sans la ligne, étape par étape (empreintes) ; dessiné sans « Voir tous les métiers ».
-    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), ''); };
+    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '')
+      .replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?'); };   // mission 142 : le titre de l'étape 2 de l'avocat
     var H = {}; for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); H['etape' + n] = sans(); } R.html = H;
     // B. Le vrai parcours d'un avocat neuf : il touche « Avocat », puis « Suivant ».
     localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; _tcConfigProEtape = 1; _tcConfigProErreur = '';
@@ -152,8 +153,9 @@ else {
   }
   // Le style de la carte « Votre métier » du récapitulatif : même fond, même bord, mêmes coins, même marge ; le titre à 15 px, en gras.
   const rc = [S.recapDentiste, S.recapCoiffeur, S.recapAvocat];
-  const styleOk = rc.every((x) => x && x.style) && trois.every(([cle], i) => [2, 3, 4, 5, 6].every((n) => S[cle]['e' + n].style === rc[i].style && S[cle]['e' + n].polices[0] === rc[i].titre));
-  verifie('dans le style de la carte « Votre métier » du récapitulatif (fond, bord, coins, marges ; « Votre métier » à 15 px, en gras)', styleOk && /^15px 700 /.test(rc[0].titre), J([rc, S.avocat.e2.style, S.avocat.e2.polices]));
+  // Mission 142 : le texte passe à la taille et au gras du titre de l'étape (verif-rappel-metier142) ; la carte garde ce style.
+  const styleOk = rc.every((x) => x && x.style) && trois.every(([cle], i) => [2, 3, 4, 5, 6].every((n) => S[cle]['e' + n].style === rc[i].style));
+  verifie('dans le style de la carte « Votre métier » du récapitulatif (fond, bord, coins, marges)', styleOk, J([rc, S.avocat.e2.style, S.avocat.e2.polices]));
   verifie('bien lisible : le nom du métier à 15 px au moins', trois.every(([cle]) => [2, 3, 4, 5, 6].every((n) => parseFloat((S[cle]['e' + n].polices || [])[1]) >= 15)), J(S.avocat.e2.polices));
   verifie('le récapitulatif garde sa carte « Votre métier » (Chirurgien-dentiste, Coiffeur, Avocat)', rc.map((x) => x && x.nom).join(',') === 'Chirurgien-dentiste,Coiffeur,Avocat', J(rc));
   const eq = S.equipe;

@@ -3814,3 +3814,9 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Configuration professionnelle : aux étapes 2 à 6, une carte « Votre métier : Avocat » (Coiffeur, Chirurgien-dentiste) entre le texte d’explication et la première carte, dans le style de la carte « Votre métier » du récapitulatif ; une ligne à 390 px (espace insécable devant « : »). En regardant les métiers : le métier regardé. Ni à l’étape 1, ni au récapitulatif.
 - Suite verif-rappel-metier141 (17 vérifications, rouge sur be6740e : 10 KO). Les empreintes du dentiste (coiffeur136), du coiffeur (avocat137) et de l’avocat (141) se lisent sans cette ligne et restent celles d’avant : rien d’autre ne bouge.
 - Règle de Charles redonnée : quand on touche quelque chose et qu’une suite s’ouvre, l’écran suivant rappelle le sujet touché.
+
+## 19/11/2026 — Mission 142 : « Votre métier : … » grand et en gras ; « domaines d’activité » (CODEUR)
+
+- Configuration professionnelle, étapes 2 à 6 : « Votre métier : … » tout en gras, le métier aussi, à la taille du titre de l’étape (20 px) ; même place, même carte. Une ligne à 390 px pour les trois métiers ; plus étroit, deux lignes propres (le métier ne se coupe jamais).
+- Avocat, étape 2 : « Quels domaines d’activité pratiquez-vous ? ».
+- Suite verif-rappel-metier142 (9 vérifications à 390, 360 et 320 px, rouge sur ecf9c94 : 3 KO) ; empreintes des trois métiers sans la ligne et avec l’ancien titre : identiques. verif-rappel-metier141 et verif-config-avocat137 suivent.
