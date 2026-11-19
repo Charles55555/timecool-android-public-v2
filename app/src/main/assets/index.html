@@ -1698,8 +1698,8 @@ if (window.pdfjsLib) {
     <div class="menu-logo"><span class="logo-time">TIME</span><span class="logo-cool">COOL</span></div>
     <div class="menu-subtitle" id="menuSubtitle">Mode Particulier</div>
   </div>
+  <div id="tcInstaller140" style="display:none;"></div><!-- mission 140 : « Installer TimeCool sur cet appareil » ; mission 144 : en haut du menu, bien visible -->
   <div class="menu-section" id="menuItems"></div>
-  <div id="tcInstaller140" style="display:none;"></div><!-- mission 140 : « Installer TimeCool sur cet appareil » -->
 </aside>
 
 <!-- CREATE EVENT MODAL -->
@@ -40946,8 +40946,8 @@ function tcMajInstaller140() {
   if (!z) return;
   let h = '';
   if (!tcEstApplicationNative() && !tcInstallee140()) {
-    if (_tcInstall140) h = '<div role="button" tabindex="0" onclick="tcInstaller140()" style="display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; color:var(--text-sec); font-size:13px;"><span aria-hidden="true" style="font-size:18px;">📲</span><span>Installer TimeCool sur cet appareil</span></div>';
-    else if (tcIphoneSafari140()) h = '<div style="display:flex; align-items:flex-start; gap:14px; padding:14px 16px; color:var(--text-sec); font-size:13px; line-height:1.45;"><span aria-hidden="true" style="font-size:18px;">📲</span><span>Installer TimeCool sur cet appareil&nbsp;:<br>touche Partager <span aria-hidden="true">⬆️</span>, puis «&nbsp;Sur l’écran d’accueil&nbsp;».</span></div>';
+    if (_tcInstall140) h = '<div role="button" tabindex="0" onclick="tcInstaller140()" style="display:flex; align-items:center; gap:12px; margin:10px 12px 6px; padding:12px 14px; cursor:pointer; color:var(--g-blue); background:#e8f0fe; border:1px solid #c8d7ee; border-radius:12px; font-size:15px; font-weight:700;"><span aria-hidden="true" style="font-size:18px;">📲</span><span>Installer TimeCool sur cet appareil</span></div>';
+    else if (tcIphoneSafari140()) h = '<div style="display:flex; align-items:flex-start; gap:12px; margin:10px 12px 6px; padding:12px 14px; color:var(--text); background:#e8f0fe; border:1px solid #c8d7ee; border-radius:12px; font-size:14px; line-height:1.45;"><span aria-hidden="true" style="font-size:18px;">📲</span><span><b style="color:var(--g-blue);">Installer TimeCool sur cet appareil</b>&nbsp;:<br>touche Partager <span aria-hidden="true">⬆️</span>, puis «&nbsp;Sur l’écran d’accueil&nbsp;».</span></div>';
   }
   z.innerHTML = h;
   z.style.display = h ? '' : 'none';
@@ -40959,9 +40959,100 @@ async function tcInstaller140() {
   try { await ev.prompt(); await ev.userChoice; } catch (e) {}
   tcMajInstaller140();
 }
-window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); _tcInstall140 = e; tcMajInstaller140(); });
-window.addEventListener('appinstalled', function () { _tcInstall140 = null; tcMajInstaller140(); });
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); _tcInstall140 = e; tcMajInstaller140(); tcMajCarte144(); });
+window.addEventListener('appinstalled', function () { _tcInstall140 = null; tcMajInstaller140(); tcFermerCarte144(); });
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tcMajInstaller140); else tcMajInstaller140();
+
+/* Mission 144 (Charles, 19/11) : le site mène à https://timecool.fr/app/?installer=1. L'appli ouvre alors, au centre et par-dessus
+   tout (même « Bienvenue ! », sans être connecté), la carte « Installer TimeCool sur cet appareil » : le gros bouton « Installer »
+   quand le navigateur le propose (beforeinstallprompt, retenu par la mission 140) ; sinon le geste exact pour ce navigateur
+   (libellés relus le 19/11 dans l'aide de Google, Microsoft et Apple) ; « Plus tard », discret. Déjà installé, ou dans
+   l'application Android : pas de carte. Le paramètre s'efface de l'adresse (recharger ouvre l'appli comme d'habitude). */
+let _tcCarte144 = null;   // null : pas demandée ; 'attente' : le navigateur va peut-être proposer ; 'ouverte' ; 'fermee'
+/** Le navigateur de cet appareil, pour dire le geste exact. */
+function tcNavigateur144() {
+  const ua = String(navigator.userAgent || '');
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+  if (ios) return tcIphoneSafari140() ? 'iphone-safari' : 'iphone-autre';
+  if (/Android/.test(ua)) return /Chrome\//.test(ua) && !/EdgA\/|SamsungBrowser|OPR\/|Firefox\/|; wv\)|FBAN|FBAV|Instagram/.test(ua) ? 'android-chrome' : 'android-autre';
+  if (/Firefox\//.test(ua)) return 'pc-firefox';
+  if (/Edg\//.test(ua)) return 'pc-edge';
+  if (/OPR\/|Vivaldi|YaBrowser/.test(ua)) return 'pc-autre';
+  if (/Chrome\//.test(ua)) return 'pc-chrome';
+  if (/Macintosh/.test(ua) && /Safari\//.test(ua)) return 'mac-safari';
+  return 'pc-autre';
+}
+const TC_DEJA144 = '<div style="margin-top:12px; font-size:13px; color:var(--text-sec);">Déjà installé&nbsp;? Ouvre TimeCool depuis son icône.</div>';
+const TC_PARTAGER144 = 'Partager <span aria-hidden="true">⬆️</span>';
+const TC_GESTES144 = {
+  'pc-chrome': 'Clique sur la petite icône d’écran avec une flèche, à droite de la barre d’adresse, puis sur «&nbsp;Installer&nbsp;».'
+    + '<div style="margin-top:10px; font-size:14px; color:var(--text-sec);">Tu ne la vois pas&nbsp;? Menu ⋮, puis «&nbsp;Caster, enregistrer et partager&nbsp;», puis «&nbsp;Installer la page en tant qu’appli&nbsp;».</div>' + TC_DEJA144,
+  'pc-edge': 'Clique sur la petite icône «&nbsp;Application disponible&nbsp;», à droite de la barre d’adresse, puis sur «&nbsp;Installer&nbsp;».' + TC_DEJA144,
+  'mac-safari': 'Dans le menu «&nbsp;Fichier&nbsp;», choisis «&nbsp;Ajouter au Dock&nbsp;», puis clique sur «&nbsp;Ajouter&nbsp;».' + TC_DEJA144,
+  'pc-firefox': 'Firefox ne sait pas installer TimeCool.<br>Ouvre timecool.fr/app dans Chrome ou Edge&nbsp;: tu pourras l’installer.',
+  'pc-autre': 'Ce navigateur ne sait pas installer TimeCool.<br>Ouvre timecool.fr/app dans Chrome ou Edge&nbsp;: tu pourras l’installer.',
+  'iphone-safari': 'Touche ' + TC_PARTAGER144 + ', puis «&nbsp;Sur l’écran d’accueil&nbsp;».' + TC_DEJA144,
+  'iphone-autre': 'Ouvre cette page dans Safari.<br>Puis touche ' + TC_PARTAGER144 + ', et «&nbsp;Sur l’écran d’accueil&nbsp;».',
+  'android-chrome': 'Touche le menu ⋮ en haut à droite, puis «&nbsp;Installer et créer un raccourci&nbsp;», puis «&nbsp;Installer&nbsp;».' + TC_DEJA144,
+  'android-autre': 'Ouvre cette page dans Chrome.<br>Puis touche le menu ⋮, et «&nbsp;Installer et créer un raccourci&nbsp;».'
+};
+/** Le bouton « Installer » si le navigateur le propose ; sinon le geste. */
+function tcRendreCarte144() {
+  const z = document.getElementById('tcCarte144Action');
+  if (!z) return;
+  z.innerHTML = _tcInstall140
+    ? '<button id="tcInstaller144" onclick="tcInstaller144()" style="display:block; width:100%; min-height:56px; padding:14px; border:none; border-radius:14px; background:var(--g-blue); color:#fff; font-size:18px; font-weight:700; cursor:pointer;">Installer</button>'
+    : '<div id="tcGeste144" style="font-size:16px; color:var(--text); line-height:1.5; text-align:left; background:#f1f6fe; border:1px solid #c8d7ee; border-radius:12px; padding:14px 16px;">' + (TC_GESTES144[tcNavigateur144()] || TC_GESTES144['pc-autre']) + '</div>';
+}
+function tcOuvrirCarte144() {
+  if (_tcCarte144 === 'ouverte' || _tcCarte144 === 'fermee') return;
+  if (tcEstApplicationNative() || tcInstallee140()) { _tcCarte144 = 'fermee'; return; }
+  _tcCarte144 = 'ouverte';
+  const d = document.createElement('div');
+  d.id = 'tcCarteInstaller144';
+  d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'tcCarte144Titre');
+  d.style.cssText = 'position:fixed; inset:0; z-index:100000; background:rgba(32,33,36,0.45); display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;';
+  d.innerHTML = '<div style="background:#fff; border-radius:18px; box-shadow:0 12px 40px rgba(0,0,0,0.25); width:100%; max-width:380px; max-height:100%; overflow-y:auto; padding:24px 20px 12px; box-sizing:border-box; text-align:center;">'
+    + '<img src="icone-192.png" alt="" width="72" height="72" style="display:block; margin:0 auto 12px; border-radius:16px;">'
+    + '<div id="tcCarte144Titre" style="font-size:20px; font-weight:700; color:var(--text); line-height:1.3; margin-bottom:16px;">Installer TimeCool sur cet appareil</div>'
+    + '<div id="tcCarte144Action"></div>'
+    + '<button id="tcPlusTard144" onclick="tcFermerCarte144()" style="margin-top:8px; padding:10px 16px; background:none; border:none; color:var(--text-sec); font-size:14px; cursor:pointer;">Plus tard</button></div>';
+  document.body.appendChild(d);
+  tcRendreCarte144();
+}
+function tcMajCarte144() {
+  if (_tcCarte144 === 'attente') tcOuvrirCarte144();
+  else if (_tcCarte144 === 'ouverte') tcRendreCarte144();
+}
+function tcFermerCarte144() {
+  _tcCarte144 = 'fermee';
+  const c = document.getElementById('tcCarteInstaller144');
+  if (c) c.remove();
+}
+/** Le gros bouton : la fenêtre d'installation du navigateur (une fois). Installé : la carte s'en va ; refusé : le geste reste. */
+async function tcInstaller144() {
+  const ev = _tcInstall140;
+  if (!ev) { tcRendreCarte144(); return; }
+  _tcInstall140 = null;
+  let choix = null;
+  try { await ev.prompt(); choix = await ev.userChoice; } catch (e) {}
+  tcMajInstaller140();
+  if (choix && choix.outcome === 'accepted') tcFermerCarte144(); else tcRendreCarte144();
+}
+/** Au démarrage, avec ?installer=1. Chrome et Edge proposent souvent l'installation un instant après l'ouverture : on l'attend
+    1,5 s au plus, pour montrer tout de suite le bon contenu. */
+function tcDemarrerCarte144() {
+  let p = null;
+  try { p = new URLSearchParams(location.search); } catch (e) { return; }
+  if (!p || p.get('installer') !== '1') return;
+  p.delete('installer');
+  try { const q = p.toString(); history.replaceState(history.state, '', location.pathname + (q ? '?' + q : '') + location.hash); } catch (e) {}
+  if (tcEstApplicationNative() || tcInstallee140()) { _tcCarte144 = 'fermee'; return; }
+  if (_tcInstall140 || !('onbeforeinstallprompt' in window)) { tcOuvrirCarte144(); return; }
+  _tcCarte144 = 'attente';
+  setTimeout(function () { if (_tcCarte144 === 'attente') tcOuvrirCarte144(); }, 1500);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tcDemarrerCarte144); else tcDemarrerCarte144();
 
 /** Appelée par Android une fois les contacts lus. */
 function tcContactsRecus(json) {

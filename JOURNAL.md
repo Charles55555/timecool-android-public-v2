@@ -3826,3 +3826,9 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 
 - Configuration professionnelle, étapes 1 à 6 : un mot à trait d’union reste entier (« rendez-vous », « faites-vous »), « ? » reste avec le mot d’avant ; trois métiers, 320 à 390 px. Texte inchangé.
 - Suite verif-titres-etapes143 (5 vérifications, 5 largeurs, onze titres ; rouge sur 82cb5f8). Les suites à empreintes lisent la page sans ces blocs : empreintes d’avant inchangées.
+
+## 19/11/2026 — Mission 144 : la carte « Installer TimeCool sur cet appareil » (CODEUR)
+
+- https://timecool.fr/app/?installer=1 : carte au centre, par-dessus tout (même « Bienvenue ! », sans compte) ; gros bouton « Installer » quand le navigateur le propose (attendu 1,5 s au plus), sinon le geste exact (Chrome, Edge, Safari Mac, iPhone, Android, Firefox ; libellés relus dans l’aide officielle) ; « Plus tard » ; déjà installé ou APK : rien. Paramètre effacé de l’adresse.
+- La ligne du menu (140) monte en haut du menu, bleue et en gras. Aucun service worker ni cache.
+- Suite verif-installer144 (17 vérifications, rouge sur a937ab1) ; verif-installable140 suit la ligne en haut.

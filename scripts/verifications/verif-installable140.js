@@ -93,7 +93,7 @@ const portLibre = () => new Promise((ok2) => { const s = net.createServer(); s.l
       + " window.dispatchEvent(ev); document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; }); localStorage.setItem('tc_permissions_shown', '1');"
       + " userAccount = { firstname: 'Charles', lastname: 'Haddad', reference: 'REFTEST' }; hideAuthFlow(); await new Promise(function (r) { setTimeout(r, 900); }); toggleMenu(); await new Promise(function (r) { setTimeout(r, 500); });"
       + " const z = document.getElementById('tcInstaller140'), m = document.getElementById('menuItems'), b = z.getBoundingClientRect(), menu = document.getElementById('sideMenu').getBoundingClientRect();"
-      + " return { retenu: ev.defaultPrevented, visible: z.style.display !== 'none' && b.height > 0, texte: z.innerText.trim(), apresMenu: m.nextElementSibling === z, dansMenu: b.left >= menu.left - 1 && b.right <= menu.right + 1, police: parseFloat(getComputedStyle(z.firstElementChild).fontSize) };");
+      + " return { retenu: ev.defaultPrevented, visible: z.style.display !== 'none' && b.height > 0, texte: z.innerText.trim(), enHaut: z.nextElementSibling === m, dansMenu: b.left >= menu.left - 1 && b.right <= menu.right + 1, police: parseFloat(getComputedStyle(z.firstElementChild).fontSize) };");
     await js("const z = document.getElementById('tcInstaller140'); z.scrollIntoView({ block: 'end' }); return 1;");
     await capture('1-menu-telephone');
     R.geste = await js("document.querySelector('#tcInstaller140 [role=button]').click(); await new Promise(function (r) { setTimeout(r, 300); }); return { prompts: window.__prompts, cachee: document.getElementById('tcInstaller140').style.display === 'none' };");
@@ -132,7 +132,8 @@ const portLibre = () => new Promise((ok2) => { const s = net.createServer(); s.l
   verifie('aucun service worker, aucun cache après l’ouverture', R.sw === '0 0', R.sw);
   verifie('sans proposition du navigateur, pas de ligne', R.sansEvenement === 'none|', R.sansEvenement);
   const A = R.avecEvenement || {};
-  verifie('le navigateur le permet : « Installer TimeCool sur cet appareil » en bas du menu, discrète ; son petit bandeau est retenu', A.retenu === true && A.visible === true && /Installer TimeCool sur cet appareil$/.test(A.texte || '') && A.apresMenu === true && A.dansMenu === true && A.police <= 13, JSON.stringify(A));
+  // Mission 144 : la ligne monte en haut du menu et devient bien visible.
+  verifie('le navigateur le permet : « Installer TimeCool sur cet appareil » en haut du menu, bien visible ; son petit bandeau est retenu', A.retenu === true && A.visible === true && /Installer TimeCool sur cet appareil$/.test(A.texte || '') && A.enHaut === true && A.dansMenu === true && A.police >= 14, JSON.stringify(A));
   verifie('le geste ouvre la fenêtre d’installation du navigateur, une fois ; la ligne s’en va', R.geste && R.geste.prompts === 1 && R.geste.cachee === true, JSON.stringify(R.geste));
   verifie('déjà installé (appinstalled, ou ouvert dans sa fenêtre) : pas de ligne', R.installee === 'none' && R.fenetre === 'none', R.installee + ' ' + R.fenetre);
   verifie('dans l’application Android : pas de ligne', R.apk === 'none', R.apk);
