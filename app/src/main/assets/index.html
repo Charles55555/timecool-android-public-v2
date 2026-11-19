@@ -32535,6 +32535,27 @@ const TC_MALADE_PERIODES = {
   semaine:          { texte: 'Toute la semaine',           label: 'cette semaine',               get jours() { const j = new Date().getDay(); return [0, j === 0 ? 0 : 7 - j]; }, debut: 0, fin: 1440, mots: /semaine/, cache: true }
 };
 
+// Mission 146 : un jour de la semaine dit dans la phrase (« mercredi », « jeudi après-midi », « mercredi prochain ») : jour_N,
+// jour_N_matin et jour_N_apresmidi, N jours après aujourd'hui (0 : le jour dit tombe aujourd'hui ; 7 : « mercredi prochain » dit
+// un mercredi). Mêmes heures que « demain » et ses deux moitiés. Charly dit la date (« Rien à décaler mercredi 25 novembre. ») :
+// on voit quel mercredi il a pris. Pas de bouton de plus.
+(function () {
+  const NOMS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const nom = function (n) { return NOMS[(new Date().getDay() + n) % 7]; };
+  const dit = function (n) { const d = new Date(); d.setDate(d.getDate() + n); return NOMS[d.getDay()] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + MOIS[d.getMonth()]; };
+  const grand = function (t) { return t.charAt(0).toUpperCase() + t.slice(1); };
+  const midi = function () { return typeof tcMidi133 === 'function' ? tcMidi133() : 720; };
+  for (let n = 0; n <= 7; n++) {
+    TC_MALADE_PERIODES['jour_' + n] = { get texte() { return grand(dit(n)); }, get label() { return dit(n); },
+      jours: [n, n], debut: 0, fin: 1440, get mots() { return new RegExp(nom(n)); }, cache: true };
+    TC_MALADE_PERIODES['jour_' + n + '_matin'] = { get texte() { return grand(dit(n)) + ', le matin'; }, get label() { return dit(n) + ', le matin'; },
+      jours: [n, n], debut: 0, get fin() { return midi(); }, get mots() { return new RegExp(nom(n) + '.*matin'); }, cache: true };
+    TC_MALADE_PERIODES['jour_' + n + '_apresmidi'] = { get texte() { return grand(dit(n)) + ', l’après-midi'; }, get label() { return dit(n) + ', l’après-midi'; },
+      jours: [n, n], get debut() { return midi(); }, fin: 1440, get mots() { return new RegExp(nom(n) + '.*(apres.?midi|aprem)'); }, cache: true };
+  }
+})();
+
 /** « Malade » dans la phrase : le questionnaire guidé, jamais le modèle. Une question (« comment… ? ») n'en est pas une. */
 function tcDetecterMalade(text) {
   const t = tcSansAccents(String(text || '')).replace(/[’']/g, ' ').replace(/\s+/g, ' ').trim();
@@ -32547,10 +32568,59 @@ function tcDetecterMalade(text) {
   return true;
 }
 
-/** Ce que la phrase dit déjà : la période et l'action, pour sauter ces questions. */
-function tcMaladeDansLaPhrase(text) {
+/**
+ * Mission 146 : la moitié de journée dite (« matin », « après-midi », « aprem ») : '_matin', '_apresmidi', ou '' (toute la
+ * journée, ou les deux dites). « depuis ce matin », « cet après-midi » disent quand on est tombé malade : ils ne comptent pas.
+ */
+function tcMaladeMoitie146(sans) {
+  const s = String(sans || '').replace(/[’'´]/g, ' ').replace(/\b(depuis )?(ce matin|ce soir|cet apres[- ]?midi|cette apres[- ]?midi|cette nuit)\b/g, ' ');
+  const matin = /\bmatin(ee)?\b/.test(s), aprem = /apres[- ]?midi|\baprem\b/.test(s);
+  return matin && !aprem ? '_matin' : (aprem && !matin ? '_apresmidi' : '');
+}
+
+/**
+ * Mission 146 : le jour de la semaine dit dans « je suis malade » (« mercredi », « jeudi après-midi », « mercredi prochain »,
+ * « demain mercredi »). null : la phrase ne nomme aucun jour de la semaine (le chemin d'avant, inchangé). {} : la phrase reste
+ * ambiguë (deux jours sans « ou », « de lundi à mercredi », « jusqu'à », « sauf », « depuis », un jour passé, une semaine, une date
+ * à plus d'une semaine) : la question « pour quand ? » reste, avec ses choix. { periode } : un seul jour, le prochain à venir
+ * (aujourd'hui s'il tombe aujourd'hui), avec sa moitié dite. { dits } : plusieurs jours reliés par « ou » : Charly demande lequel,
+ * avec eux seuls (comme la mission 110).
+ */
+function tcMaladeJourDit146(sans) {
+  let s = ' ' + String(sans || '').replace(/[’'´]/g, ' ').replace(/[.,;:!?«»"()]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  if (!/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/.test(s)) return null;
+  // « mercredi de cette semaine » : le même mercredi.
+  s = s.replace(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( \d{1,2})? de cette semaine\b/g, '$1$2');
+  if (/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) (dernier|passe)\b|\b(sauf|excepte|hormis|jusqu|entre)\b|\bdepuis (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|hier)\b|semaine|\bjours\b/.test(s)) return {};
+  const moitie = tcMaladeMoitie146(s);
+  const u = s.replace(/\b(depuis )?(ce matin|ce soir|cet apres[- ]?midi|cette apres[- ]?midi|cette nuit)\b/g, ' ');
+  const now = new Date();
+  const jour0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ecarts = (typeof tcJoursCites === 'function' ? tcJoursCites(u, now, false) : []).map(function (iso) {
+    const p = String(iso).split('-');
+    return Math.round((new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])) - jour0) / 86400000);
+  });
+  if (!ecarts.length || ecarts.some(function (n) { return !(n >= 0 && n <= 7); })) return {};
+  if (ecarts.length === 1) return { periode: 'jour_' + ecarts[0] + moitie };
+  if (!/\bou\b/.test(u)) return {};
+  // Les boutons gardent le mot dit : « Demain », « Après-demain », « Ce qui reste aujourd'hui » ; un jour nommé, son nom.
+  return { dits: ecarts.map(function (n) {
+    if (n === 0 && /\baujourd ?hui\b/.test(u)) return 'aujourdhui';
+    if (n === 1 && /(^|[^-a-z])demain\b/.test(u.replace(/apres[- ]?demain/g, ' '))) return 'demain';
+    if (n === 2 && /apres[- ]?demain/.test(u)) return 'apres_demain';
+    return 'jour_' + n;
+  }) };
+}
+
+/**
+ * Ce que la phrase dit déjà : la période et l'action, pour sauter ces questions. Mission 146 : `joursNommes` (le parcours
+ * « je suis malade ») : un jour de la semaine dit (« mercredi », « jeudi après-midi ») est compris, et « après-demain » garde sa
+ * moitié dite ; sans lui (l'imprévu de la mission 131), rien ne change.
+ */
+function tcMaladeDansLaPhrase(text, joursNommes) {
   const sans = tcSansAccents(String(text || '')).replace(/[’'´]/g, "'");
   const connu = {};
+  const _jour146 = joursNommes ? tcMaladeJourDit146(sans) : null;
   // Mission 110 : plusieurs moments au choix (« demain, d'après-demain ou de cette semaine ») : Charly demande lequel, avec eux seuls.
   const _dits = [];
   if (/aujourd'?hui/.test(sans)) _dits.push('aujourdhui');
@@ -32558,14 +32628,19 @@ function tcMaladeDansLaPhrase(text) {
   if (/apres[- ]?demain/.test(sans)) _dits.push('apres_demain');
   const _semaine = /\b(?:cette|la|ma|toute la) semaine\b(?! prochaine)/.test(sans);
   if (_semaine) _dits.push('semaine');
-  if (_dits.length >= 2 && /\bou\b/.test(sans) && !(_dits.length === 2 && _dits[0] === 'aujourdhui' && _dits[1] === 'demain')) {
+  if (_jour146) {
+    if (_jour146.periode) connu.periode = _jour146.periode;
+    else if (_jour146.dits) connu._periodesDites = _jour146.dits;
+  } else if (_dits.length >= 2 && /\bou\b/.test(sans) && !(_dits.length === 2 && _dits[0] === 'aujourdhui' && _dits[1] === 'demain')) {
     connu._periodesDites = _dits;
   } else if (_semaine && _dits.length === 1) {
     connu.periode = 'semaine';
   } else if (/aujourd'?hui/.test(sans) && /\bdemain\b/.test(sans) && !/apres[- ]?demain/.test(sans)) {
     connu.periode = 'aujourdhui_demain';
   } else if (/apres[- ]?demain/.test(sans)) {
-    connu.periode = 'apres_demain';
+    // Mission 146 : « après-demain matin », « après-demain après-midi » : la moitié dite, comme pour « demain ».
+    const _moitie146 = joursNommes ? tcMaladeMoitie146(sans) : '';
+    connu.periode = _moitie146 ? 'jour_2' + _moitie146 : 'apres_demain';
   } else if (/\bdemain\b/.test(sans)) {
     if (/\bmatin/.test(sans)) connu.periode = 'demain_matin';
     else if (/apres-?midi|\baprem\b/.test(sans)) connu.periode = 'demain_apresmidi';
@@ -32583,7 +32658,7 @@ function tcMaladeDansLaPhrase(text) {
 /** Le bouton ou la phrase : la bulle de l'utilisateur, puis la première question qui reste. */
 async function tcDemarrerMalade(text) {
   if (text) tcPousserMessageUtilisateur(text);
-  await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_MALADE, tcMaladeDansLaPhrase(text));
+  await tcQuestionnaireDemarrer(TC_QUESTIONNAIRE_MALADE, tcMaladeDansLaPhrase(text, true));
 }
 
 /** Les rendez-vous d'une période du questionnaire « malade ». */

@@ -18,11 +18,12 @@ const lignes = fs.readFileSync(fichier, 'utf8').split(/\r?\n/).filter((l) => l.t
 const cas = lignes.map((l) => {
   const [phrase, contexte, attendu] = l.split('|').map((x) => (x || '').trim());
   // Lot 118 : « {date:+8} » devient « 25 novembre », « {jourdate:+8} » « mercredi 25 novembre » (la phrase garde son sens chaque jour).
-  // Examen 130 A : « {num:+1} » devient le numéro seul du jour (« 19 »).
-  const dater = (x) => String(x || '').replace(/\{(date|jourdate|num):([+-]\d+)\}/g, function (m, sorte, n) {
+  // Examen 130 A : « {num:+1} » devient le numéro seul du jour (« 19 »). Mission 146 : « {nomjour:+6} », le nom du jour seul (« mercredi »).
+  const dater = (x) => String(x || '').replace(/\{(date|jourdate|num|nomjour):([+-]\d+)\}/g, function (m, sorte, n) {
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + Number(n));
     if (sorte === 'num') return String(d.getDate());
     const J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    if (sorte === 'nomjour') return J[d.getDay()];
     return (sorte === 'jourdate' ? J[d.getDay()] + ' ' : '') + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + M[d.getMonth()];
   });
   return { phrase: dater(phrase), contexte: contexte ? contexte.split('⏎').map((x) => dater(x.trim())).filter(Boolean) : [], attendu: attendu || '' };

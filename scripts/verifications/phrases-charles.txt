@@ -21,6 +21,24 @@ Quand suis-je libre ce vendredi ? |  | texte:libre ce vendredi && jour:vendredi
 Trouve un rendez-vous commun avec Alice, Chloé et Virginie cette semaine, pour aller boire un verre après le boulot |  | texte:Par téléphone, en personne ou en visio
 Je suis malade, décale ma journée de demain, d’après-demain ou de cette semaine |  | texte:pour quand
 
+# --- Mission 146 (chef, 19/11) : le jour dit dans « je suis malade » ; « {nomjour:+N} » : le nom du jour J+N (la phrase garde son sens chaque jour) ---
+Je suis malade mercredi, annule mes rendez-vous |  | sans:pour quand && sans:pas bien compris && texte:mercredi
+Je suis malade mercredi, décale mes rendez-vous |  | sans:pour quand && sans:pas bien compris && texte:mercredi
+Je suis malade {nomjour:+0}, annule mes rendez-vous |  | sans:pour quand && jour:+0
+Je suis malade {nomjour:+1}, annule mes rendez-vous |  | sans:pour quand && jour:+1
+Je suis malade {nomjour:+2} matin, décale mes rendez-vous |  | sans:pour quand && jour:+2
+Je suis malade {nomjour:+3} après-midi, annule mes rendez-vous |  | sans:pour quand && jour:+3
+Je suis malade {nomjour:+4}, décale mes rendez-vous |  | sans:pour quand && jour:+4
+Je suis malade {nomjour:+6} prochain, annule mes rendez-vous |  | sans:pour quand && jour:+6
+Je suis malade après-demain matin, décale mes rendez-vous |  | sans:pour quand && jour:+2
+Je suis malade lundi et mardi, annule mes rendez-vous |  | texte:pour quand
+Je suis malade {nomjour:+2} ou {nomjour:+5}, décale mes rendez-vous |  | texte:pour quand
+# Mission 146 : les phrases déjà comprises le restent.
+Je suis malade demain, annule mes rendez-vous |  | sans:pour quand && jour:+1
+Je suis malade aujourd’hui, décale mes rendez-vous |  | sans:pour quand
+Je suis malade, décale mes rendez-vous des 2 ou 3 prochains jours |  | sans:pour quand
+Je suis malade, annule mes rendez-vous |  | texte:pour quand
+
 # --- Charles, 17/11 19h30 (mission 117) : « après-demain » lu comme « demain » ---
 Tu peux me dire les rendez-vous que j'ai demain dans agenda ? |  | jour:+1
 Et apres demain ? | Tu peux me dire les rendez-vous que j'ai demain dans agenda ? | jour:+2 && sans:demain \(
