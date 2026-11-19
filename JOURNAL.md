@@ -3801,3 +3801,9 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - En regardant, rien n’est enregistré (configuration en mémoire, photos remises) ; « Voir le récapitulatif » valide. Chaque métier garde sa configuration (e.metiers139).
 - verif-config-metiers139 : 17 vérifications, rouge sur 1bfca84. Empreintes 136/137 lues sans le bouton.
 - Examen de la 139 : en regardant, les photos étaient écrites et envoyées au compte (perdues si l’appli se fermait). Elles vivent désormais dans une copie de travail, écrites seulement à « Voir le récapitulatif ». verif-config-metiers139 : 21 vérifications, rouge sur b86a5fb.
+
+## 19/11/2026 — Mission 140 : TimeCool installable depuis le navigateur (CODEUR)
+
+- web/app/ : manifest.json + icônes « étoiles » (192, 512, masquable 512, iPhone 180), dessinées par scripts/dessiner-icones-web.sh ; publiées par deployer-web.sh à côté de index.html. L’onglet garde l’horloge.
+- index.html : manifeste, icône iPhone, ligne discrète « Installer TimeCool sur cet appareil » en bas du menu (navigateur qui le propose ; iPhone Safari : « Partager, puis Sur l’écran d’accueil » ; jamais installé, jamais dans l’APK).
+- Aucun service worker, aucun cache ; version.json inchangé. Suite verif-installable140 (19 vérifications, rouge sur bc6180b).

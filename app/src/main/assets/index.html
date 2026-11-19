@@ -4,7 +4,13 @@
 <meta charset="UTF-8">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" href="icone-180.png">
+<!-- Mission 140 : TimeCool s'installe depuis le navigateur. Manifeste et icônes (les étoiles de l'application) dans web/app/,
+     publiés par deployer-web.sh. L'onglet garde l'horloge (favicon.ico, icon.svg). Aucun service worker : rien en cache. -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TimeCool">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="theme-color" content="#ffffff">
 <title>TimeCool — Votre agenda intelligent</title>
@@ -1693,6 +1699,7 @@ if (window.pdfjsLib) {
     <div class="menu-subtitle" id="menuSubtitle">Mode Particulier</div>
   </div>
   <div class="menu-section" id="menuItems"></div>
+  <div id="tcInstaller140" style="display:none;"></div><!-- mission 140 : « Installer TimeCool sur cet appareil » -->
 </aside>
 
 <!-- CREATE EVENT MODAL -->
@@ -40896,6 +40903,45 @@ function sendPrevenirMessage(name, text) {
 function tcEstApplicationNative() {
   return !!(window.TimeCoolNatif && typeof window.TimeCoolNatif.estNatif === 'function');
 }
+
+/* Mission 140 (Charles, 19/11) : TimeCool s'installe depuis le navigateur. PC : Chrome, Edge ; Android : Chrome, Samsung ;
+   iPhone : Safari, à la main (« Partager, puis Sur l'écran d'accueil »). Une ligne discrète en bas du menu, seulement quand
+   le navigateur le permet et que TimeCool n'est pas déjà installé, ni dans l'application Android. Le petit bandeau du
+   navigateur est retenu (preventDefault) : rien d'autre ne s'affiche. Aucun service worker : rien n'est gardé en cache. */
+let _tcInstall140 = null;   // l'événement beforeinstallprompt, gardé pour le geste (il ne sert qu'une fois)
+function tcInstallee140() {
+  try {
+    if (navigator.standalone === true) return true;
+    return !!window.matchMedia && ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'].some(function (m) { return window.matchMedia('(display-mode: ' + m + ')').matches; });
+  } catch (e) { return false; }
+}
+/** Safari sur iPhone ou iPad (pas Chrome, Firefox, ni le navigateur d'une autre application). */
+function tcIphoneSafari140() {
+  const ua = String(navigator.userAgent || '');
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+  return ios && /Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\/|FBAN|FBAV|Instagram|Line\//.test(ua);
+}
+function tcMajInstaller140() {
+  const z = document.getElementById('tcInstaller140');
+  if (!z) return;
+  let h = '';
+  if (!tcEstApplicationNative() && !tcInstallee140()) {
+    if (_tcInstall140) h = '<div role="button" tabindex="0" onclick="tcInstaller140()" style="display:flex; align-items:center; gap:14px; padding:14px 16px; cursor:pointer; color:var(--text-sec); font-size:13px;"><span aria-hidden="true" style="font-size:18px;">📲</span><span>Installer TimeCool sur cet appareil</span></div>';
+    else if (tcIphoneSafari140()) h = '<div style="display:flex; align-items:flex-start; gap:14px; padding:14px 16px; color:var(--text-sec); font-size:13px; line-height:1.45;"><span aria-hidden="true" style="font-size:18px;">📲</span><span>Installer TimeCool sur cet appareil :<br>touche Partager <span aria-hidden="true">⬆️</span>, puis « Sur l’écran d’accueil ».</span></div>';
+  }
+  z.innerHTML = h;
+  z.style.display = h ? '' : 'none';
+}
+async function tcInstaller140() {
+  const ev = _tcInstall140;
+  if (!ev) return;
+  _tcInstall140 = null;
+  try { await ev.prompt(); await ev.userChoice; } catch (e) {}
+  tcMajInstaller140();
+}
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); _tcInstall140 = e; tcMajInstaller140(); });
+window.addEventListener('appinstalled', function () { _tcInstall140 = null; tcMajInstaller140(); });
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tcMajInstaller140); else tcMajInstaller140();
 
 /** Appelée par Android une fois les contacts lus. */
 function tcContactsRecus(json) {

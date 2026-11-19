@@ -29,6 +29,14 @@ HORODATAGE=$(date +%s)
 grep -q '__TC_DEPLOIEMENT__' "$SOURCE" \
   || { echo "Marqueur __TC_DEPLOIEMENT__ absent de la source." >&2; exit 1; }
 
+# Mission 140 : le manifeste et les icones de TimeCool installable (web/app/), a cote de index.html, publies avant la page
+# qui les annonce. Meme precaution : tee, jamais cp.
+for FICHIER in "$RACINE"/web/app/*; do
+  [ -f "$FICHIER" ] || continue
+  tee "$CIBLE/$(basename "$FICHIER")" < "$FICHIER" > /dev/null
+  chmod 644 "$CIBLE/$(basename "$FICHIER")" 2>/dev/null || true
+done
+
 # TC_APP_VERSION est estampillee a chaque publication (mission 52, decision du chef) : les testeurs datent leurs passages.
 VERSION_WEB=$(TZ=Europe/Paris date -d "@$HORODATAGE" '+%Y.%m.%d-%H%M')
 sed -e "s/__TC_DEPLOIEMENT__/$HORODATAGE/" -e "s/const TC_APP_VERSION = '[^']*';/const TC_APP_VERSION = '$VERSION_WEB';/" "$SOURCE" | tee "$CIBLE/index.html" > /dev/null
