@@ -3800,3 +3800,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Récapitulatif de la Configuration professionnelle : gros bouton bleu « Voir tous les métiers » au-dessus de la carte « Votre métier » ; il ouvre l’étape 1, le métier enregistré coché. « ← Retour à ma configuration » en haut de chaque étape, tant qu’on regarde.
 - En regardant, rien n’est enregistré (configuration en mémoire, photos remises) ; « Voir le récapitulatif » valide. Chaque métier garde sa configuration (e.metiers139).
 - verif-config-metiers139 : 17 vérifications, rouge sur 1bfca84. Empreintes 136/137 lues sans le bouton.
+- Examen de la 139 : en regardant, les photos étaient écrites et envoyées au compte (perdues si l’appli se fermait). Elles vivent désormais dans une copie de travail, écrites seulement à « Voir le récapitulatif ». verif-config-metiers139 : 21 vérifications, rouge sur b86a5fb.

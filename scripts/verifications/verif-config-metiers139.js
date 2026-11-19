@@ -4,6 +4,8 @@
 // Regarder sans aller jusqu'à « Voir le récapitulatif » n'enregistre rien (ni la configuration, ni les photos). Chaque métier
 // garde sa propre configuration : le coiffeur ou l'avocat montrés, le dentiste revient avec ses actes, ses horaires, sa fiche.
 // Un compte sans configuration : l'étape 1, comme avant. Bloquant : case éteinte = rien ; aucun appel réseau.
+// Examen (19/11) : en regardant, les photos restent en mémoire : rien d'écrit sur l'appareil ni envoyé au compte, même si l'appli
+// se ferme ; « Voir le récapitulatif » les écrit.
 // Usage : node verif-config-metiers139.js <index.html>   (TC_CHROME)
 const fs = require('fs');
 const path = require('path');
@@ -49,8 +51,14 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     e.jours[6] = { actif: true, matin: ['09:00', '12:30'], apres: ['14:00', '17:00'] };
     e.fiche = { nom: 'Dr Charles Haddad', metier: 'Chirurgien-dentiste', adresse: '12 rue de la Paix, 75002 Paris', acces: 'Cabinet au rez-de-chaussée.', presentation: 'Bonjour.', consignes: 'Arrivez 5 minutes avant.', tarifs: 'Conventionné.', paiement: 'Carte bancaire', horaires: '', langues: 'Français', apporter: 'Votre carte Vitale.' };
     var PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-    localStorage.setItem('tc_config_pro', JSON.stringify(e)); localStorage.setItem('tc_config_pro_photo', PHOTO);
+    var PHOTOS0 = JSON.stringify({ cX: PHOTO });
+    localStorage.setItem('tc_config_pro', JSON.stringify(e)); localStorage.setItem('tc_config_pro_photo', PHOTO); localStorage.setItem('tc_config_pro_photos', PHOTOS0);
     var AVANT = brut();
+    var photos = function () { return localStorage.getItem('tc_config_pro_photos'); };
+    // Examen de la 139 : chaque envoi au compte est compté.
+    var syncs = 0, _sync = tcSyncBientot; tcSyncBientot = function () { syncs++; return _sync.apply(this, arguments); };
+    var bin = atob(PHOTO.split(',')[1]), u8 = new Uint8Array(bin.length); for (var k = 0; k < bin.length; k++) u8[k] = bin.charCodeAt(k);
+    var FICHIER = new File([u8], 'c.png', { type: 'image/png' });
     navigate('calendar'); await attendre(150); navigate('configpro'); await attendre(300);
     R.recap = texte(); debords.push(deborde());
     var b = document.getElementById('cpTousMetiers139');
@@ -75,16 +83,30 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // E. « Retour à ma configuration » : le même récapitulatif, rien d'écrit.
     await cliquer('cpRetourConfig139');
     R.recapRetour = texte(); R.gardeRetour = brut() === AVANT; R.sansRetour = !document.getElementById('cpRetourConfig139') && !!document.getElementById('cpTousMetiers139');
-    // F. Montrer le coiffeur : rien n'est écrit ; la photo retirée en regardant revient.
+    // F. Montrer le coiffeur : rien n'est écrit, ni envoyé au compte ; la photo retirée en regardant ne quitte pas l'appareil.
+    var syncs0 = syncs;
     await cliquer('cpTousMetiers139'); carte('Coiffeur').click(); await attendre(80);
     R.c1 = texte(); R.gardeC1 = brut() === AVANT;
     await cliquer('cpSuivant');
     R.c2 = texte(); R.gardeC2 = brut() === AVANT; R.retourC2 = !!document.getElementById('cpRetourConfig139') && corps().firstElementChild === document.getElementById('cpRetourConfig139');
     tcConfigPro121.basculer(tcConfigProLire().familles[0].id); tcConfigPro121.aller(6); await attendre(80);
     R.retourC6 = !!document.getElementById('cpRetourConfig139'); debords.push(deborde());
-    tcConfigPro121.retirerPhoto(); await attendre(30); R.photoRetiree = photo() === null;
+    R.photoAvant = !!corps().querySelector('img[alt="Votre photo"]');
+    tcConfigPro121.retirerPhoto(); await attendre(30);
+    R.photoEcran = !corps().querySelector('img[alt="Votre photo"]'); R.photoGardee = photo() === PHOTO;
+    // Une photo de coiffeur choisie en regardant : en mémoire seulement.
+    tcConfigPro121.photoCoiffeur('cY', { files: [FICHIER] });
+    for (var w = 0; w < 30 && !tcCpPhotos136().cY; w++) await attendre(100);
+    R.photosMemoire = !!tcCpPhotos136().cY; R.photosGardees = photos() === PHOTOS0;
+    R.syncRegard = syncs - syncs0;
     await cliquer('cpRetourConfig139');
-    R.recapF = texte(); R.gardeF = brut() === AVANT; R.photoF = photo() === PHOTO;
+    R.recapF = texte(); R.gardeF = brut() === AVANT; R.photoF = photo() === PHOTO; R.photosF = photos() === PHOTOS0 && !tcCpPhotos136().cY;
+    // F2. L'appli se ferme en regardant (le regard s'arrête sans rouvrir la page) : rien n'est perdu.
+    await cliquer('cpTousMetiers139'); tcConfigPro121.aller(6); await attendre(50); tcConfigPro121.retirerPhoto(); await attendre(30);
+    _tcCpApercu139 = null; _tcConfigPro = null;
+    R.fermeture = { photo: photo() === PHOTO, photos: photos() === PHOTOS0, config: brut() === AVANT };
+    navigate('calendar'); await attendre(150); navigate('configpro'); await attendre(300);
+    R.fermetureRecap = texte() === R.recap;
     // G. Coiffeur, puis retour sur le dentiste : ses actes, ses horaires, sa durée, sa fiche, tels quels.
     await cliquer('cpTousMetiers139'); carte('Coiffeur').click(); await attendre(50);
     await cliquer('cpSuivant'); tcConfigPro121.basculer(tcConfigProLire().familles[1].id);
@@ -118,6 +140,12 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     await cliquer('cpTousMetiers139'); carte('Coiffeur').click(); await attendre(50); tcConfigPro121.aller(6); await attendre(50); tcConfigPro121.retirerPhoto(); await attendre(30);
     navigate('calendar'); await attendre(150); navigate('configpro'); await attendre(300);
     R.sortie = texte(); R.gardeSortie = brut() === AVANT2; R.photoSortie = photo() === PHOTO; R.sortieRetour = !document.getElementById('cpRetourConfig139');
+    // L. Valider en regardant (« Voir le récapitulatif ») : la photo retirée l'est vraiment, et le compte est prévenu.
+    var syncs1 = syncs;
+    await cliquer('cpTousMetiers139'); tcConfigPro121.aller(6); await attendre(50); tcConfigPro121.retirerPhoto(); await attendre(30);
+    R.lAvant = photo() === PHOTO;
+    await cliquer('cpSuivant');
+    R.lValide = { photo: photo(), sync: syncs - syncs1, recap: /^Votre configuration/.test(texte()) };
     // K. Première configuration (pas encore enregistrée) : changer de métier puis revenir ne perd rien.
     localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(50);
     tcConfigPro121.choisirMetier('chirurgien-dentiste'); tcConfigPro121.aller(2); tcConfigPro121.basculer('detartrage'); tcConfigPro121.duree('esthetique', 'blanchiment', 90);
@@ -151,7 +179,11 @@ else {
   verifie('« ← Retour à ma configuration » en haut, toute la largeur, sans défiler ; rien d’écrit en ouvrant la liste', S.retour && S.retour.texte === '← Retour à ma configuration' && S.retour.premier && S.retour.ecran && S.retour.large > 300 && S.gardeE1 === true, JSON.stringify([S.retour, S.gardeE1]));
   verifie('le retour : le même récapitulatif, au caractère près ; rien d’écrit', S.recapRetour === S.recap && S.gardeRetour === true && S.sansRetour === true, JSON.stringify([S.gardeRetour, S.sansRetour]));
   verifie('montrer le coiffeur (étapes 1 et 2, une prestation décochée) : rien n’est écrit ; le retour en haut de chaque étape', /à plusieurs/.test(S.c1 || '') && /TAPE 2 SUR 6/i.test(S.c2 || '') && /Coupe/.test(S.c2 || '') && S.gardeC1 && S.gardeC2 && S.retourC2 && S.retourC6, JSON.stringify([S.gardeC1, S.gardeC2, S.retourC2, S.retourC6, String(S.c2).slice(0, 150)]));
-  verifie('la photo retirée en regardant revient au retour ; le récapitulatif du dentiste, tel quel', S.photoRetiree === true && S.photoF === true && S.gardeF === true && S.recapF === S.recap, JSON.stringify([S.photoRetiree, S.photoF, S.gardeF]));
+  verifie('en regardant, la photo retirée disparaît de l’écran mais pas de l’appareil ; une photo de coiffeur choisie reste en mémoire', S.photoAvant === true && S.photoEcran === true && S.photoGardee === true && S.photosMemoire === true && S.photosGardees === true, JSON.stringify([S.photoAvant, S.photoEcran, S.photoGardee, S.photosMemoire, S.photosGardees]));
+  verifie('en regardant, rien n’est envoyé au compte (aucun tcSyncBientot)', S.syncRegard === 0, S.syncRegard);
+  verifie('le retour : les photos et le récapitulatif du dentiste, tels quels', S.photoF === true && S.photosF === true && S.gardeF === true && S.recapF === S.recap, JSON.stringify([S.photoF, S.photosF, S.gardeF]));
+  verifie('l’appli fermée en regardant (sans rouvrir la page) : photos et configuration intactes', S.fermeture && S.fermeture.photo === true && S.fermeture.photos === true && S.fermeture.config === true && S.fermetureRecap === true, JSON.stringify([S.fermeture, S.fermetureRecap]));
+  verifie('« Voir le récapitulatif » en regardant : la photo retirée l’est vraiment, le compte est prévenu', S.lAvant === true && S.lValide && S.lValide.photo === null && S.lValide.sync >= 1 && S.lValide.recap === true, JSON.stringify([S.lAvant, S.lValide]));
   verifie('coiffeur puis retour au dentiste : ses actes, ses horaires, sa durée et sa fiche, tels quels', S.gMemoire === true && JSON.stringify(S.gCoche) === '["Chirurgien-dentiste"]' && /Panoramique/.test(S.g2 || '') && /Pédodontie/.test(S.g2 || '') && /Scellement de sillons/.test(S.g2 || '')
     && Array.isArray(S.gEtapes) && S.gEtapes.length === 0 && String(S.g5) === '25' && S.g6 === '12 rue de la Paix, 75002 Paris' && S.gardeG && S.gardeG2 && S.recapG === S.recap, JSON.stringify([S.gMemoire, S.gCoche, S.gEtapes, S.g5, S.g6, S.gardeG, S.gardeG2]));
   verifie('valider un autre métier (« Voir le récapitulatif ») : l’avocat enregistré, le dentiste gardé à part, rien du coiffeur regardé', S.gardeH6 === true && S.hValide && S.hValide.metier === 'avocat' && S.hValide.termine === true && S.hValide.dentiste === true && S.hValide.coiffeur === false

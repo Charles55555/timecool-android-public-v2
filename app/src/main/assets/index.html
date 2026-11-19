@@ -11161,19 +11161,20 @@ function tcConfigProSauver() {
 }
 
 /* Mission 139 (Charles, 19/11) : « Voir tous les métiers ». Depuis son récapitulatif, le professionnel regarde les métiers.
-   Tant qu'il ne va pas jusqu'à « Voir le récapitulatif », rien n'est enregistré : ni la configuration (elle reste en mémoire),
-   ni les photos (gardées au début, remises à la fin). Chaque métier garde sa propre configuration : e.metiers139[métier]. */
+   Tant qu'il ne va pas jusqu'à « Voir le récapitulatif », rien n'est écrit, ni sur l'appareil ni sur le compte : la configuration
+   reste en mémoire, les photos aussi (_tcCpApercu139 : leur copie de travail, lue et changée à leur place). Chaque métier garde
+   sa propre configuration : e.metiers139[métier]. */
 const TC_CP_COMMUNS139 = ['v', 'metier', 'etape', 'termine', 'maj', 'metiers139'];
 function tcCpDebutApercu139() {
   let p = null, ps = null;
   try { p = localStorage.getItem(TC_CONFIG_PRO_PHOTO_CLE); ps = localStorage.getItem(TC_CONFIG_PRO_PHOTOS_CLE); } catch (x) {}
   _tcCpApercu139 = { photo: p, photos: ps };
 }
-/** Sans « Voir le récapitulatif » : les photos reviennent comme au début (la configuration, elle, n'a jamais été écrite). */
-function tcCpFinApercu139() {
+/** Fin du regard. Avec « Voir le récapitulatif » (valider) : les photos regardées sont écrites. Sinon, rien n'a jamais été écrit. */
+function tcCpFinApercu139(valider) {
   const a = _tcCpApercu139;
   _tcCpApercu139 = null;
-  if (!a) return;
+  if (!a || !valider) return;
   let change = false;
   [[TC_CONFIG_PRO_PHOTO_CLE, a.photo], [TC_CONFIG_PRO_PHOTOS_CLE, a.photos]].forEach(function (x) {
     try {
@@ -11183,6 +11184,26 @@ function tcCpFinApercu139() {
     } catch (y) {}
   });
   if (change && typeof tcSyncBientot === 'function') tcSyncBientot();
+}
+/** La photo de la fiche ; en regardant, celle de la copie de travail. */
+function tcCpPhotoLire139() {
+  if (_tcCpApercu139) return _tcCpApercu139.photo;
+  try { return localStorage.getItem(TC_CONFIG_PRO_PHOTO_CLE); } catch (x) { return null; }
+}
+/** Écrire la photo de la fiche (null : la retirer). « depuis » : le regard en cours quand la photo a été choisie ; une photo lue
+    après la fin de ce regard (lecture du fichier plus lente que le retour) n'est pas gardée. */
+function tcCpPhotoEcrire139(v, depuis) {
+  if (arguments.length > 1 && depuis !== _tcCpApercu139) return;
+  if (_tcCpApercu139) { _tcCpApercu139.photo = v || null; return; }
+  try { if (v) localStorage.setItem(TC_CONFIG_PRO_PHOTO_CLE, v); else localStorage.removeItem(TC_CONFIG_PRO_PHOTO_CLE); } catch (x) {}
+  if (typeof tcSyncBientot === 'function') tcSyncBientot();
+}
+/** Les photos des coiffeurs ({ id: photo }) : même règle. « sync » : prévenir le compte tout de suite (comme avant). */
+function tcCpPhotosEcrire139(p, sync, depuis) {
+  if (arguments.length > 2 && depuis !== _tcCpApercu139) return;
+  if (_tcCpApercu139) { _tcCpApercu139.photos = JSON.stringify(p); return; }
+  try { localStorage.setItem(TC_CONFIG_PRO_PHOTOS_CLE, JSON.stringify(p)); } catch (x) {}
+  if (sync && typeof tcSyncBientot === 'function') tcSyncBientot();
 }
 /** Le métier change : la configuration de l'ancien est rangée ; celle du nouveau revient s'il a déjà été configuré (rend true). */
 function tcCpChangerMetier139(e, ancien, nouveau) {
@@ -11413,7 +11434,7 @@ const TC_CONFIG_PRO_PHOTOS_CLE = 'tc_config_pro_photos';
 let _tcConfigProCoiffeur136 = null;   // le coiffeur dont on règle les jours (étape 4)
 function tcCpPlusieurs136(e) { return tcCpPrestations136(e) && !!(e.equipe && e.equipe.mode === 'plusieurs'); }
 function tcCpCoiffeurs136(e) { return tcCpPlusieurs136(e) && Array.isArray(e.equipe.coiffeurs) ? e.equipe.coiffeurs : []; }
-function tcCpPhotos136() { try { const p = JSON.parse(localStorage.getItem(TC_CONFIG_PRO_PHOTOS_CLE) || '{}'); return p && typeof p === 'object' && !Array.isArray(p) ? p : {}; } catch (x) { return {}; } }
+function tcCpPhotos136() { try { const p = JSON.parse((_tcCpApercu139 ? _tcCpApercu139.photos : localStorage.getItem(TC_CONFIG_PRO_PHOTOS_CLE)) || '{}'); return p && typeof p === 'object' && !Array.isArray(p) ? p : {}; } catch (x) { return {}; } }
 function tcCpPhotoHTML136(id, taille) {
   const p = tcCpPhotos136()[id];
   return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(p || '') ? '<img src="' + p + '" alt="" style="width:' + taille + 'px; height:' + taille + 'px; border-radius:50%; object-fit:cover; flex-shrink:0;">'
@@ -11785,7 +11806,7 @@ const tcConfigPro121 = {
     if (n === 4 && tcCpJoursErreur136(e)) { _tcConfigProErreur = tcCpJoursErreur136(e); tcRendreConfigPro121(); return; }
     // Examen de la 136 : à plusieurs, seuls les jours de chaque coiffeur comptent (ceux du salon ne sont plus à l'écran).
     if (n === 4 && !(tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length) && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
-    if (n === 6) { e.termine = true; _tcCpApercu139 = null; }   // mission 139 : on enregistre ce qu'on regardait
+    if (n === 6) { e.termine = true; tcCpFinApercu139(true); }   // mission 139 : on enregistre ce qu'on regardait, photos comprises
     tcConfigPro121.aller(Math.min(7, n + 1));
     if (n === 6 && typeof showToast === 'function') showToast('✅ C’est enregistré');
   },
@@ -11801,6 +11822,7 @@ const tcConfigPro121 = {
     tcConfigProSauver();
   },
   photo: function (input) {
+    const _a139 = _tcCpApercu139;   // mission 139 : le regard en cours
     const fichier = input && input.files && input.files[0];
     if (!fichier || !/^image\//.test(fichier.type || '')) return;
     const lecteur = new FileReader();
@@ -11814,8 +11836,7 @@ const tcConfigPro121 = {
         let url = '';
         try { url = c.toDataURL('image/jpeg', 0.82); } catch (x) { url = ''; }
         if (url && url.length < 90000) {
-          try { localStorage.setItem(TC_CONFIG_PRO_PHOTO_CLE, url); } catch (x) {}
-          if (typeof tcSyncBientot === 'function') tcSyncBientot();
+          tcCpPhotoEcrire139(url, _a139);   // mission 139 : en regardant, rien n'est écrit
         } else { _tcConfigProErreur = 'Cette photo est trop grande. Essayez une autre photo.'; }
         tcRendreConfigPro121();
       };
@@ -11823,7 +11844,7 @@ const tcConfigPro121 = {
     };
     lecteur.readAsDataURL(fichier);
   },
-  retirerPhoto: function () { try { localStorage.removeItem(TC_CONFIG_PRO_PHOTO_CLE); } catch (x) {} if (typeof tcSyncBientot === 'function') tcSyncBientot(); tcRendreConfigPro121(); },
+  retirerPhoto: function () { tcCpPhotoEcrire139(null); tcRendreConfigPro121(); },
   ouvrirRemplir: function () { _tcConfigProRemplir = !_tcConfigProRemplir; _tcConfigProErreur = ''; tcRendreConfigPro121(); const z = document.getElementById('cpTexteFiche'); if (z) z.focus(); },
   // « Remplis à ma place » : Charly Pro IA lit le texte collé et remplit la fiche ; le professionnel relit et corrige.
   remplir: async function () {
@@ -12003,11 +12024,12 @@ const tcConfigPro121 = {
     const e = tcConfigProLire();
     if (!e.equipe || !Array.isArray(e.equipe.coiffeurs)) return;
     e.equipe.coiffeurs = e.equipe.coiffeurs.filter(function (x) { return x.id !== id; });
-    const p = tcCpPhotos136(); if (p[id]) { delete p[id]; try { localStorage.setItem(TC_CONFIG_PRO_PHOTOS_CLE, JSON.stringify(p)); } catch (x) {} }
+    const p = tcCpPhotos136(); if (p[id]) { delete p[id]; tcCpPhotosEcrire139(p, false); }
     if (_tcConfigProCoiffeur136 === id) _tcConfigProCoiffeur136 = null;
     tcConfigProSauver(); tcRendreConfigPro121();
   },
   photoCoiffeur: function (id, input) {
+    const _a139 = _tcCpApercu139;   // mission 139 : le regard en cours
     const fichier = input && input.files && input.files[0];
     if (!fichier || !/^image\//.test(fichier.type || '')) return;
     const lecteur = new FileReader();
@@ -12022,8 +12044,7 @@ const tcConfigPro121 = {
         try { url = c.toDataURL('image/jpeg', 0.8); } catch (x) { url = ''; }
         if (url && url.length < 40000) {
           const p = tcCpPhotos136(); p[id] = url;
-          try { localStorage.setItem(TC_CONFIG_PRO_PHOTOS_CLE, JSON.stringify(p)); } catch (x) {}
-          if (typeof tcSyncBientot === 'function') tcSyncBientot();
+          tcCpPhotosEcrire139(p, true, _a139);   // mission 139 : en regardant, rien n'est écrit
         } else { _tcConfigProErreur = 'Cette photo est trop grande. Essayez une autre photo.'; }
         tcRendreConfigPro121();
       };
@@ -12142,7 +12163,7 @@ function tcCpEtape6(e) {
   const fi = tcConfigProFiche(e);
   const M = tcCpMots136(e);
   let photo = '';
-  try { photo = localStorage.getItem(TC_CONFIG_PRO_PHOTO_CLE) || ''; } catch (x) { photo = ''; }
+  photo = tcCpPhotoLire139() || '';   // mission 139 : en regardant, la photo de la copie de travail
   if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(photo)) photo = '';
   return tcCpTitre('Votre fiche professionnelle', M.aide6)
     + '<div style="' + TC_CP_CARTE + ' background:#f3e8fd; border-color:#d7b8f5;">'
