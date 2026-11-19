@@ -3833,3 +3833,10 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - La ligne du menu (140) monte en haut du menu, bleue et en gras. Aucun service worker ni cache.
 - Suite verif-installer144 (17 vérifications, rouge sur a937ab1) ; verif-installable140 suit la ligne en haut.
 - Examen de la 144 : en thème sombre, la carte restait blanche avec le texte clair du thème (illisible) ; elle garde désormais ses couleurs claires, comme les fenêtres de l’appli ; ligne du menu en texte foncé, titre bleu #1a56b8. verif-installer144 : 20 vérifications (contrastes ≥ 4,5 en « Sombre », « Auto » sombre, iPhone), rouge sur 18cec38.
+
+## 19/11/2026 — Mission 145 : import des contacts sans fenêtre pour les comptes de test (session Codeur)
+
+- Charles, 19/11 (« 1 vas y »), pour la vidéo « coiffeur » sur PC : sur navigateur, un compte dont l'adresse finit par @exemple-timecool.fr touche « Importer mes contacts » et reçoit tout de suite les 8 contacts d'exemple, sans la fenêtre d'avertissement. Le message dit « ✅ 8 contacts importés » ; un second toucher n'ajoute rien (« Contacts déjà présents, rien à ajouter »). « Lucas Petit » devient « Hugo Petit » pour ces comptes, parce que le compte de la vidéo s'appelle Lucas.
+- Tout autre compte, y compris les autres adresses de test (@exemple-test.fr…), garde la même fenêtre et les mêmes contacts. L'application Android ne change pas. Aucun SMS, e-mail ni notification : les contacts restent sur le compte.
+- tcEstAdresseExemple145() est posée à côté de la règle des comptes de test (mission 97, toujours écrite une seule fois). Elle garde d'abord ce que tcEstAdresseDeTest accepte, puis seulement le domaine @exemple-timecool.fr.
+- verif-import-test145 : 15 vérifications, dans Chrome à 1920 × 1080, sans réseau. Elle est rouge sur 731eba2 (6 KO).

@@ -41132,6 +41132,10 @@ async function importPhoneContacts() {
     return;
   }
 
+  // Mission 145 (Charles, 19/11) : un compte de test (@exemple-timecool.fr, pour les vidéos) reçoit les contacts d'exemple
+  // tout de suite, sans la fenêtre d'avertissement. Tout autre compte : la même fenêtre qu'avant.
+  if (tcEstAdresseExemple145(userAccount)) { importDemoContactSamples(true); return; }
+
   // Navigateur web : structurellement impossible, jamais un vrai import.
   showSimulationNotice(
     '📱 Importer mes contacts du téléphone\n\n⚠️ Cette fonctionnalité nécessite l\'application Android officielle.\n\nVeux-tu importer 8 contacts d\'exemple pour tester l\'interface ?',
@@ -41139,7 +41143,7 @@ async function importPhoneContacts() {
   );
 }
 
-function importDemoContactSamples() {
+function importDemoContactSamples(compteExemple) {
     const samples = [
       { name: 'Jean Dupont', phone: '+33 6 12 34 56 78', email: 'jean.dupont@email.com' },
       { name: 'Marie Martin', phone: '+33 6 23 45 67 89', email: 'marie.martin@email.com' },
@@ -41150,9 +41154,13 @@ function importDemoContactSamples() {
       { name: 'Thomas Moreau', phone: '+33 6 78 90 12 34', email: 'thomas.moreau@email.com' },
       { name: 'Camille Roux', phone: '+33 6 89 01 23 45', email: 'camille.roux@email.com' }
     ];
+    // Mission 145 : le compte de la vidéo s'appelle Lucas ; pour un compte de test, « Lucas Petit » devient « Hugo Petit ».
+    if (compteExemple) samples.forEach(s => { if (s.name === 'Lucas Petit') { s.name = 'Hugo Petit'; s.email = 'hugo.petit@email.com'; } });
+    let ajoutes = 0;
     samples.forEach(s => {
       // Éviter les doublons
       if (!contactsList.find(c => c.name === s.name)) {
+        ajoutes++;
         contactsList.push({
           id: 'contact_' + Date.now() + '_' + Math.floor(Math.random()*1000),
           ...s,
@@ -41163,7 +41171,9 @@ function importDemoContactSamples() {
     });
     saveContacts();
     renderContacts();
-    showToast('✅ 8 contacts d\'exemple importés');
+    // Mission 145 : pour un compte de test, le message ne dit pas « d'exemple » ; un second toucher n'ajoute rien, et le dit.
+    if (compteExemple) showToast(ajoutes ? '✅ ' + ajoutes + ' contact' + (ajoutes > 1 ? 's' : '') + ' importé' + (ajoutes > 1 ? 's' : '') : 'ℹ️ Contacts déjà présents, rien à ajouter');
+    else showToast('✅ 8 contacts d\'exemple importés');
 }
 
 /** « + Ajouter » : le formulaire d'un nouveau contact. */
@@ -41677,6 +41687,12 @@ function tcEstAdresseDeTest(u) {
 }
 function tcEstCompteTest(u) {
   return tcEstAdresseDeTest(u) || !!(u && u.rangeTests);
+}
+/* Mission 145 (Charles, 19/11) : « Importer mes contacts » sans fenêtre, sur navigateur, seulement pour les adresses
+   @exemple-timecool.fr (les comptes des vidéos), pas pour les autres adresses de test : une adresse de test selon la
+   règle ci-dessus, puis ce seul domaine. */
+function tcEstAdresseExemple145(u) {
+  return tcEstAdresseDeTest(u) && String(u.email).trim().toLowerCase().split('@').pop() === 'exemple-timecool.fr';
 }
 
 /** Mission 103 : range un compte dans « Tests », ou le remet dans « Utilisateurs » (sur le serveur, pour tous les administrateurs). */
