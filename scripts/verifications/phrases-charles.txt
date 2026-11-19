@@ -23,16 +23,25 @@ Je suis malade, décale ma journée de demain, d’après-demain ou de cette sem
 
 # --- Mission 146 (chef, 19/11) : le jour dit dans « je suis malade » ; « {nomjour:+N} » : le nom du jour J+N (la phrase garde son sens chaque jour) ---
 Je suis malade mercredi, annule mes rendez-vous |  | sans:pour quand && sans:pas bien compris && texte:mercredi
-Je suis malade mercredi, décale mes rendez-vous |  | sans:pour quand && sans:pas bien compris && texte:mercredi
+# (« décale » : la carte dit les nouveaux créneaux, pas le jour libéré ; la date se contrôle sur « annule », qui la dit toujours.)
+Je suis malade mercredi, décale mes rendez-vous |  | sans:pour quand && sans:pas bien compris
 Je suis malade {nomjour:+0}, annule mes rendez-vous |  | sans:pour quand && jour:+0
 Je suis malade {nomjour:+1}, annule mes rendez-vous |  | sans:pour quand && jour:+1
-Je suis malade {nomjour:+2} matin, décale mes rendez-vous |  | sans:pour quand && jour:+2
+Je suis malade {nomjour:+1}, décale mes rendez-vous |  | sans:pour quand && texte:Tu es malade\. Je déplace
+Je suis malade {nomjour:+2} matin, annule mes rendez-vous |  | sans:pour quand && jour:+2
+Je suis malade {nomjour:+2} matin, décale mes rendez-vous |  | sans:pour quand && sans:pas bien compris
 Je suis malade {nomjour:+3} après-midi, annule mes rendez-vous |  | sans:pour quand && jour:+3
-Je suis malade {nomjour:+4}, décale mes rendez-vous |  | sans:pour quand && jour:+4
+Je suis malade {nomjour:+4}, annule mes rendez-vous |  | sans:pour quand && jour:+4
+Je suis malade {nomjour:+5}, décale mes rendez-vous |  | sans:pour quand && sans:pas bien compris
 Je suis malade {nomjour:+6} prochain, annule mes rendez-vous |  | sans:pour quand && jour:+6
-Je suis malade après-demain matin, décale mes rendez-vous |  | sans:pour quand && jour:+2
+Je suis malade après-demain matin, annule mes rendez-vous |  | sans:pour quand && jour:+2
 Je suis malade lundi et mardi, annule mes rendez-vous |  | texte:pour quand
 Je suis malade {nomjour:+2} ou {nomjour:+5}, décale mes rendez-vous |  | texte:pour quand
+# Examen 146 : un jour passé (« depuis lundi », « mercredi dernier ») dit quand on est tombé malade, pas le jour à libérer.
+Je suis malade depuis lundi, annule mes rendez-vous de demain |  | sans:pour quand && jour:+1
+Je suis malade depuis mardi, décale ce qui reste aujourd’hui |  | sans:pour quand
+Je suis malade depuis mercredi dernier, annule mes rendez-vous de demain |  | sans:pour quand && jour:+1
+Je suis malade depuis hier, annule mes rendez-vous de {nomjour:+1} |  | sans:pour quand && jour:+1
 # Mission 146 : les phrases déjà comprises le restent.
 Je suis malade demain, annule mes rendez-vous |  | sans:pour quand && jour:+1
 Je suis malade aujourd’hui, décale mes rendez-vous |  | sans:pour quand

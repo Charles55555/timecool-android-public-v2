@@ -32580,18 +32580,25 @@ function tcMaladeMoitie146(sans) {
 
 /**
  * Mission 146 : le jour de la semaine dit dans « je suis malade » (« mercredi », « jeudi après-midi », « mercredi prochain »,
- * « demain mercredi »). null : la phrase ne nomme aucun jour de la semaine (le chemin d'avant, inchangé). {} : la phrase reste
- * ambiguë (deux jours sans « ou », « de lundi à mercredi », « jusqu'à », « sauf », « depuis », un jour passé, une semaine, une date
- * à plus d'une semaine) : la question « pour quand ? » reste, avec ses choix. { periode } : un seul jour, le prochain à venir
+ * « demain mercredi »). null : la phrase ne nomme aucun jour de la semaine à venir (« depuis lundi », « mercredi dernier » ne
+ * comptent pas) : le chemin d'avant, inchangé. {} : la phrase reste ambiguë (deux jours sans « ou », « de lundi à mercredi »,
+ * « jusqu'à », « sauf », une semaine, une date à plus d'une semaine) : la question « pour quand ? » reste, avec ses choix.
+ * { periode } : un seul jour, le prochain à venir
  * (aujourd'hui s'il tombe aujourd'hui), avec sa moitié dite. { dits } : plusieurs jours reliés par « ou » : Charly demande lequel,
  * avec eux seuls (comme la mission 110).
  */
 function tcMaladeJourDit146(sans) {
   let s = ' ' + String(sans || '').replace(/[’'´]/g, ' ').replace(/[.,;:!?«»"()]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  // Examen 146 : un moment passé (« depuis lundi », « depuis hier », « mercredi dernier », « mardi passé ») dit quand on est tombé
+  // malade, pas le jour à libérer : il est retiré avant de chercher le jour, comme « depuis ce matin ». Sans autre jour nommé, le
+  // chemin d'avant (« Je suis malade depuis lundi, annule demain » : demain).
+  s = s.replace(/\bdepuis (?:le |la )?(?:(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: (?:dernier|passe))?|avant[- ]?hier|hier)(?: (?:matin|midi|soir|apres[- ]?midi|aprem))?(?= )/g, ' ')
+    .replace(/\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) (?:dernier|passe)(?: (?:matin|midi|soir|apres[- ]?midi|aprem))?(?= )/g, ' ')
+    .replace(/\s+/g, ' ');
   if (!/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\b/.test(s)) return null;
   // « mercredi de cette semaine » : le même mercredi.
   s = s.replace(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( \d{1,2})? de cette semaine\b/g, '$1$2');
-  if (/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche) (dernier|passe)\b|\b(sauf|excepte|hormis|jusqu|entre)\b|\bdepuis (lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|hier)\b|semaine|\bjours\b/.test(s)) return {};
+  if (/\b(sauf|excepte|hormis|jusqu|entre)\b|semaine|\bjours\b/.test(s)) return {};
   const moitie = tcMaladeMoitie146(s);
   const u = s.replace(/\b(depuis )?(ce matin|ce soir|cet apres[- ]?midi|cette apres[- ]?midi|cette nuit)\b/g, ' ');
   const now = new Date();

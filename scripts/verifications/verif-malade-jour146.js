@@ -99,6 +99,22 @@ const AVANT = [
   ['Je suis malade après-demain, décale tout', '{"periode":"apres_demain","action":"decaler"}']
 ];
 AVANT.forEach(([p, att]) => verifie('« ' + p + ' » : ' + att + ' (comme avant, avec et sans le parcours « malade »)', lire(p) === att && lire(p, false) === att, lire(p) + ' / ' + lire(p, false)));
+// Examen 146 : un jour passé dit quand on est tombé malade ; le moment demandé reste celui d'avant (mesuré sur f58e22b).
+[['Je suis malade depuis lundi, annule mes rendez-vous de demain', '{"periode":"demain","action":"supprimer"}'],
+ ['Je suis malade depuis mardi, décale ce qui reste aujourd’hui', '{"periode":"aujourdhui","action":"decaler"}'],
+ ['J’ai attrapé froid mercredi dernier, annule demain', '{"periode":"demain","action":"supprimer"}'],
+ ['Je suis malade depuis mercredi dernier, annule mes rendez-vous de demain', '{"periode":"demain","action":"supprimer"}'],
+ ['Je suis malade depuis hier soir, décale demain matin', '{"periode":"demain_matin","action":"decaler"}'],
+ ['Je suis malade depuis avant-hier, annule cette semaine', '{"periode":"semaine","action":"supprimer"}'],
+ ['Je suis malade depuis lundi matin, décale aujourd’hui', '{"periode":"aujourdhui","action":"decaler"}'],
+ ['J’étais malade mardi passé, annule mes rendez-vous de demain', '{"periode":"demain","action":"supprimer"}']
+].forEach(([p, att]) => verifie('« ' + p + ' » : le jour passé ne compte pas, ' + att + ' (comme sur f58e22b)', lire(p) === att && lire(p, false) === att, lire(p) + ' / ' + lire(p, false)));
+// … et un jour à venir dit en plus reste compris (jeudi 19 : mercredi = jour_6, vendredi = jour_1).
+verifie('« Je suis malade depuis lundi, annule mes rendez-vous de mercredi » : mercredi 25 (jour_6), pas lundi',
+  lire('Je suis malade depuis lundi, annule mes rendez-vous de mercredi') === '{"periode":"jour_6","action":"supprimer"}', lire('Je suis malade depuis lundi, annule mes rendez-vous de mercredi'));
+verifie('« depuis mercredi dernier, décale vendredi matin » : vendredi 20 au matin (jour_1_matin), « depuis lundi matin » ne donne pas sa matinée',
+  JSON.parse(lire('Je suis malade depuis mercredi dernier, décale vendredi matin')).periode === 'jour_1_matin' && JSON.parse(lire('Je suis malade depuis lundi matin, annule vendredi')).periode === 'jour_1',
+  lire('Je suis malade depuis mercredi dernier, décale vendredi matin') + ' / ' + lire('Je suis malade depuis lundi matin, annule vendredi'));
 verifie('sans le parcours « malade » (l’imprévu de la mission 131) : un jour de la semaine ne change rien', lire('Demain j’ai un imprévu, décale tous mes rendez-vous de mercredi', false) === lire('Demain j’ai un imprévu, décale tous mes rendez-vous', false)
   && !JSON.parse(lire('J’ai un imprévu mercredi, décale tous mes rendez-vous', false)).periode && JSON.parse(lire('après-demain matin, décale', false)).periode === 'apres_demain');
 verifie('« je suis malade » passe le drapeau (tcDemarrerMalade), l’imprévu 131 non', /await tcQuestionnaireDemarrer\(TC_QUESTIONNAIRE_MALADE, tcMaladeDansLaPhrase\(text, true\)\);/.test(page)
