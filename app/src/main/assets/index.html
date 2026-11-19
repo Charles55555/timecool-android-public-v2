@@ -12238,7 +12238,18 @@ function tcCpCase(on) {
 function tcCpTitre(question, aide) {
   return '<div style="font-size:12px; font-weight:700; color:var(--g-blue); text-transform:uppercase; letter-spacing:.3px;">Étape ' + _tcConfigProEtape + ' sur 6</div>'
     + '<div style="font-size:20px; font-weight:700; color:var(--text); margin:4px 0 6px;">' + question + '</div>'
-    + (aide ? '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">' + aide + '</div>' : '');
+    + (aide ? '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">' + aide + '</div>' : '')
+    + tcCpRappelMetier141();   // mission 141
+}
+
+/* Mission 141 (Charles, 19/11) : aux étapes 2 à 6, le métier choisi est rappelé entre l'explication et la première carte, pour
+   qu'on sache toujours où l'on est. En regardant les métiers (mission 139) : le métier regardé (celui de la configuration en mémoire). */
+function tcCpRappelMetier141() {
+  if (_tcConfigProEtape < 2 || _tcConfigProEtape > 6) return '';
+  const m = tcConfigProMetier(tcConfigProLire().metier);
+  if (!m) return '';
+  return '<div id="cpRappelMetier141" style="' + TC_CP_CARTE + '"><span style="font-size:15px; font-weight:700; color:var(--text);">Votre métier&nbsp;:</span> '
+    + '<span style="font-size:15px; color:var(--text);">' + escapeHTMLSafe(m.nom) + '</span></div>';
 }
 
 function tcCpNomEnEdition(fid, sid) {
