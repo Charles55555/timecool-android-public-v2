@@ -3787,3 +3787,10 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - « Vous travaillez seul, ou à plusieurs ? » (coiffeur seulement). À plusieurs : les coiffeurs un par un (prénom, photo) ; « Qui la fait ? » sous chaque prestation ; les jours de chaque coiffeur ; ses créneaux et le total du salon au récapitulatif.
 - Photos dans tc_config_pro_photos (privé, ajouté à verif-config-pro-prive-e2e). Suite verif-config-salon136 (16 vérifications).
 - Examen de la 136 : à plusieurs, l’étape 4 contrôlait encore les jours du salon (impasse si le salon n’avait plus de jour) ; seuls les jours de chaque coiffeur comptent. verif-config-salon136 : 18 vérifications, rouge sur cede390.
+
+## 19/11/2026 — Mission 137 : le métier « Avocat » (CODEUR)
+
+- « Domaine » et « mission » ; 14 domaines décochés au départ ; 11 missions du divorce, 6 missions générales ailleurs.
+- Étape 3 : ses deux rendez-vous (premier contact par téléphone gratuit au départ ; cabinet, prix facultatif ; « Un nouveau client ne prend seul que le premier contact », cochée), 30 minutes pour tout.
+- Fiche : « Maître … », barreau, honoraires, aide juridictionnelle Oui / Non, ses domaines ; « Remplis à ma place » coche les domaines.
+- Dentiste et coiffeur identiques au caractère près (empreintes). Suite verif-config-avocat137 (22 vérifications).

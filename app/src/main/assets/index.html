@@ -11103,7 +11103,26 @@ const TC_PRO_METIERS = [
     { id: 'balayage', nom: 'Balayage', sous: [['balayage', 'Balayage', 150], ['coupe-balayage', 'Coupe et balayage', 180], ['balayage-patine', 'Balayage et patine', 180]] },
     { id: 'patine-decoloration', nom: 'Patine et décoloration', sous: [['patine', 'Patine', 30], ['patine-coupe', 'Patine et coupe', 75], ['decoloration', 'Décoloration', 120]] },
     { id: 'coiffure', nom: 'Coiffure', sous: [['brushing', 'Coiffage et brushing', 45], ['chignon-tresses', 'Chignon et tresses', 60], ['chignon-mariee', 'Chignon de mariée', 90, { horsLigne: true }], ['essai-chignon', 'Essai chignon de mariée', 60]] }
-  ] }
+  ] },
+  // Mission 137 (Charles, 19/11) : l'avocat. On dit domaine et mission. Les domaines sont décochés au départ : l'avocat coche ceux
+  // qu'il pratique. Les 11 missions du divorce (vues sur les écrans montrés par Charles) ; ailleurs, les 6 missions générales
+  // (choix du chef), que l'avocat renomme, retire ou complète. Une seule durée de 30 minutes pour tout.
+  (function () {
+    const g = [['consultation', 'Donner une consultation juridique'], ['suivi', 'Réaliser un suivi juridique'], ['negociation', 'Être assisté dans une négociation'],
+      ['convocation', 'Être assisté pour une convocation au tribunal ou au commissariat'], ['procedure', 'Reprendre une procédure en cours'], ['honoraires', 'Connaître ses honoraires']];
+    const generales = function () { return g.map(function (x) { return [x[0], x[1], 30]; }); };
+    const d = function (id, nom, sous) { return { id: id, nom: nom, gardee: false, sous: sous || generales() }; };
+    return { id: 'avocat', nom: 'Avocat', avocat: true, familles: [
+      d('divorce', 'Divorce et garde d’enfants', [['consultation', 'Donner une consultation juridique', 30], ['convention', 'Rédiger une convention de divorce', 30],
+        ['suivi', 'Réaliser un suivi juridique', 30], ['negociation', 'Être assisté dans une négociation', 30], ['convocation', 'Être assisté pour une convocation au tribunal ou au commissariat', 30],
+        ['procedure', 'Reprendre une procédure en cours', 30], ['amiable', 'Mener une procédure de divorce à l’amiable', 30], ['alteration', 'Mener une procédure de divorce pour altération du lien conjugal', 30],
+        ['faute', 'Mener une procédure de divorce pour faute', 30], ['separation', 'Mener une procédure suite à une séparation de corps', 30], ['honoraires', 'Connaître ses honoraires', 30]]),
+      d('successions', 'Droit des successions'), d('locataire', 'Locataire et propriétaire'), d('immobilier', 'Immobilier et construction'),
+      d('travail', 'Droit du travail et licenciement'), d('harcelement', 'Harcèlement'), d('fiscalite', 'Fiscalité et impôts'), d('routier', 'Permis et infraction routière'),
+      d('penal', 'Pénal : crimes et délits'), d('etrangers', 'Droit des étrangers'), d('commercial', 'Droit commercial'), d('administratif', 'Droit administratif et public'),
+      d('entreprise', 'Création et gestion d’entreprise'), d('autres', 'Autres')
+    ] };
+  })()
 ];
 const TC_PRO_DUREES_ACTE = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 105, 120, 150, 180];
 const TC_PRO_DUREES_RDV = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 105, 120];
@@ -11146,7 +11165,7 @@ function tcOuvrirConfigPro121() {
   _tcConfigProErreur = '';
   const e = tcConfigProLire();
   _tcConfigProEtape = e.termine ? 7 : Math.min(6, Math.max(1, Number(e.etape) || 1));
-  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null; _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProPrestations136 = 0; _tcConfigProCoiffeur136 = null;
+  _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null; _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProPrestations136 = 0; _tcConfigProCoiffeur136 = null; _tcConfigProDomaines137 = 0;
   tcRendreConfigPro121();
 }
 
@@ -11155,7 +11174,7 @@ function tcConfigProMetier(id) { return TC_PRO_METIERS.find(function (m) { retur
 function tcConfigProFamillesDuMetier(id) {
   const m = tcConfigProMetier(id);
   return m ? m.familles.map(function (f) {
-    return { id: f.id, nom: null, propre: false, gardee: true, duree: f.duree || null,
+    return { id: f.id, nom: null, propre: false, gardee: f.gardee !== false, duree: f.duree || null,
       sous: f.sous.map(function (x) { return Object.assign({ id: x[0], nom: null, propre: false, gardee: true, duree: x[2] }, x[3] || {}); }) };
   }) : [];
 }
@@ -11195,6 +11214,7 @@ function tcCpLirePrix136(t) {
 }
 /** Les mots de la page : ceux du chirurgien-dentiste (tels qu'avant), ou ceux d'un métier à prestations. */
 function tcCpMots136(e) {
+  if (tcCpAvocat137(e)) return tcCpMots137();   // mission 137
   if (!tcCpPrestations136(e)) return { titre2: 'Quels actes faites-vous ?', aide2: 'Cochez les actes que vous faites.<br>Vous pouvez les renommer, et en créer d’autres.',
     nomSous: 'Nom de la sous-famille', creerSous: '➕ Créer ma propre sous-famille', nomFamille: 'Nom de la famille d’actes',
     erreurFamille: 'Écrivez le nom de votre famille d’actes.', erreurSous: 'Écrivez le nom de votre sous-famille.', erreurActe: 'Gardez au moins un acte.',
@@ -11226,13 +11246,13 @@ const TC_PRO_FICHE_QUESTIONS_136 = [
   ['horaires', 'Les horaires d’ouverture du salon', 'Facultatif : seulement si vous voulez les montrer.<br>Vos jours et vos horaires de travail (étape 4) ne sont jamais montrés ici.', 2, 'Horaires du salon'],
   ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues']
 ];
-function tcCpQuestions136(e) { return tcCpPrestations136(e) ? TC_PRO_FICHE_QUESTIONS_136 : TC_PRO_FICHE_QUESTIONS; }
+function tcCpQuestions136(e) { return tcCpAvocat137(e) ? TC_PRO_FICHE_QUESTIONS_137 : (tcCpPrestations136(e) ? TC_PRO_FICHE_QUESTIONS_136 : TC_PRO_FICHE_QUESTIONS); }
 const TC_PRO_CONSIGNE_REMPLIR_136 = 'Tu es Charly Pro IA, l’assistant de TimeCool Pro. On te donne le texte ou la capture de la fiche d’un salon de coiffure (par exemple sa page sur un site de prise de rendez-vous). '
   + 'Réponds seulement par un objet JSON, sans aucun texte autour, avec ces clés : nom, metier, adresse, acces, presentation, consignes, paiement, horaires, langues, prestations. '
   + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant le client, sauf « prestations ». Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
   + '« nom » : le nom du salon. « horaires » : seulement les horaires d’ouverture du salon écrits dans le texte. « paiement » : les moyens de paiement séparés par des virgules. '
   + '« prestations » : les prestations écrites dans le texte, chacune { "famille": "…", "nom": "…", "minutes": un nombre ou null, "prix": le prix tel qu’il est écrit (« 80 € », « de 250 € à 280 € », « Sur devis ») ou une chaîne vide } ; une liste vide s’il n’y en a pas.';
-function tcCpConsigneRemplir136(e) { return tcCpPrestations136(e) ? TC_PRO_CONSIGNE_REMPLIR_136 : TC_PRO_CONSIGNE_REMPLIR; }
+function tcCpConsigneRemplir136(e) { return tcCpAvocat137(e) ? TC_PRO_CONSIGNE_REMPLIR_137 : (tcCpPrestations136(e) ? TC_PRO_CONSIGNE_REMPLIR_136 : TC_PRO_CONSIGNE_REMPLIR); }
 let _tcConfigProPrestations136 = 0;   // combien de prestations « Remplis à ma place » vient d'ajouter ou de mettre à jour
 /** Les prestations lues par Charly Pro IA (« Remplis à ma place ») : [{ famille, nom, duree, prix }], sans ce qui n'a pas de nom. */
 function tcCpPrestationsLues136(o, e) {
@@ -11338,7 +11358,9 @@ function tcCpFicheChangerMetier136(e, ancien, nouveau) {
   Object.keys(b).forEach(function (c) { if (!fi[c]) fi[c] = b[c]; });
   // « Dr Charles Haddad », proposé au dentiste, n'est pas un nom de salon.
   const dr = typeof userAccount !== 'undefined' && userAccount ? 'Dr ' + String((userAccount.firstname || '') + ' ' + (userAccount.lastname || '')).trim() : null;
-  if (tcCpPrestations136(e) && dr && fi.nom === dr) fi.nom = '';
+  // Mission 137 : « Maître Charles Haddad » pour l'avocat ; le nom proposé (ou vide) suit le métier, celui écrit reste.
+  const me = dr ? dr.replace(/^Dr /, 'Maître ') : null;
+  if (dr && (fi.nom === dr || fi.nom === me || (!fi.nom && !tcCpPrestations136(e)))) fi.nom = tcCpPrestations136(e) ? '' : (tcCpAvocat137(e) ? me : dr);
 }
 /* Lot 2 : un salon, un ou plusieurs coiffeurs. e.equipe = { mode: 'seul' | 'plusieurs', coiffeurs: [{ id, prenom, jours, sans }] } ;
    « sans » : les prestations qu'il ne fait pas (« famille/prestation »). Les photos : tc_config_pro_photos (une par coiffeur). */
@@ -11448,6 +11470,136 @@ function tcCpJoursErreur136(e) {
   return 'Cochez au moins un jour pour ' + String(c.prenom || 'ce coiffeur') + '.';
 }
 /* ── fin mission 136 (outils) ─────────────────────────────────────────────────────────────────────────────────────── */
+/* ── Mission 137 (Charles, 19/11) : l'avocat ─────────────────────────────────────────────────────────────────────── */
+function tcCpAvocat137(e) { const m = tcConfigProMetier(e && e.metier); return !!(m && m.avocat); }
+function tcCpMots137() {
+  return { titre2: 'Quels domaines pratiquez-vous ?', aide2: 'Cochez vos domaines, puis leurs missions.<br>Vous pouvez les renommer, et en créer d’autres.',
+    nomSous: 'Nom de la mission', creerSous: '➕ Créer ma propre mission', nomFamille: 'Nom du domaine', familleManque: 'Un domaine qui manque ?', creerFamille: '➕ Créer mon propre domaine',
+    erreurFamille: 'Écrivez le nom de votre domaine.', erreurSous: 'Écrivez le nom de votre mission.', erreurActe: 'Cochez au moins un domaine et une mission.',
+    question: 'Question au client', aideQuestion: 'La question à poser pour cette mission.<br>Cochez les réponses qui permettent de prendre rendez-vous.',
+    exempleQuestion: 'Par exemple : Avez-vous des enfants mineurs ?', exemple0: 'Oui', exemple1: 'Non',
+    aide5: 'Tous vos rendez-vous auront cette durée : le premier contact par téléphone comme le rendez-vous au cabinet.<br>Les rendez-vous se suivent, sans pause.', note5: '',
+    aide6: 'C’est la page que verront vos clients.<br>Une réponse est déjà proposée : corrigez-la si besoin.', aideRemplir: '<br>S’il y trouve vos domaines, il les coche aussi.',
+    photo: 'Votre photo', photoAjouter: 'Ajouter ma photo', photoChanger: 'Changer ma photo', recapActes: 'Vos domaines et vos missions', aucun: 'Aucune mission.' };
+}
+// La fiche de l'avocat. [clé, question, aide, lignes, nom court, sorte] ; sorte : « ouinon » (deux boutons), « domaines » (ceux de l'étape 2).
+const TC_PRO_FICHE_QUESTIONS_137 = [
+  ['nom', 'Quel nom voient vos clients ?', 'Par exemple : Maître Marie Martin.', 1, 'Nom'],
+  ['metier', 'Quel métier affichez-vous ?', '', 1, 'Métier'],
+  ['barreau', 'À quel barreau êtes-vous inscrit ?', 'Par exemple : Barreau de Paris.', 1, 'Barreau'],
+  ['adresse', 'Quelle est l’adresse du cabinet ?', 'Numéro, rue, code postal et ville.', 2, 'Adresse'],
+  ['acces', 'Comment vient-on au cabinet ?', 'Métro, bus, étage, code…', 2, 'Accès'],
+  ['presentation', 'Comment vous présentez-vous ?', 'Quelques phrases pour vos clients.', 4, 'Présentation'],
+  ['domaines', 'Vos domaines', 'Ceux que vous avez cochés à l’étape 2.', 0, 'Domaines', 'domaines'],
+  ['honoraires', 'Vos honoraires', 'Facultatif : seulement si vous voulez les montrer.<br>Par exemple : 200 € de l’heure, ou un forfait pour un divorce à l’amiable.', 2, 'Honoraires'],
+  ['paiement', 'Quels moyens de paiement acceptez-vous ?', 'Carte bancaire, virement, chèque…', 1, 'Paiement'],
+  ['aideJuridictionnelle', 'Acceptez-vous l’aide juridictionnelle ?', '', 0, 'Aide juridictionnelle', 'ouinon'],
+  ['horaires', 'Les horaires d’ouverture du cabinet', 'Facultatif : seulement si vous voulez les montrer.<br>Vos jours et vos horaires de travail (étape 4) ne sont jamais montrés ici.', 2, 'Horaires du cabinet'],
+  ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues']
+];
+const TC_PRO_CONSIGNE_REMPLIR_137 = 'Tu es Charly Pro IA, l’assistant de TimeCool Pro. On te donne le texte ou la capture de la fiche d’un avocat (par exemple sa page sur un site de mise en relation avec des avocats). '
+  + 'Réponds seulement par un objet JSON, sans aucun texte autour, avec ces clés : nom, metier, barreau, adresse, acces, presentation, honoraires, paiement, aideJuridictionnelle, horaires, langues, domaines. '
+  + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant le client, sauf « domaines ». Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
+  + '« nom » : « Maître » suivi du prénom et du nom. « aideJuridictionnelle » : « oui », « non », ou une chaîne vide. « horaires » : seulement les horaires d’ouverture du cabinet écrits dans le texte. '
+  + '« paiement » : les moyens de paiement séparés par des virgules. « domaines » : les domaines du droit écrits dans le texte (par exemple « Droit du travail et licenciement ») ; une liste vide s’il n’y en a pas.';
+let _tcConfigProDomaines137 = 0;   // combien de domaines « Remplis à ma place » vient de cocher
+/** Les deux rendez-vous de l'avocat (lus, sans rien écrire) : le premier contact gratuit au départ, la case « nouveau client » cochée. */
+function tcCpRdv137(e) {
+  const r = e && e.rdv137 && typeof e.rdv137 === 'object' ? e.rdv137 : {};
+  return { contact: { prix: (r.contact && r.contact.prix) || { type: 'gratuit' } }, cabinet: { prix: (r.cabinet && r.cabinet.prix) || null }, nouveauContactSeul: r.nouveauContactSeul !== false };
+}
+function tcCpRdvEcrire137(e) { e.rdv137 = tcCpRdv137(e); return e.rdv137; }
+/** « Gratuit », « 50 € », « de 150 € à 200 € », « Sur devis » ; rien sans prix. */
+function tcCpPrix137(p) { return p && p.type === 'gratuit' ? 'Gratuit' : tcCpPrix136(p); }
+/** Les domaines cochés (avec au moins une mission cochée, ou sans mission). */
+function tcCpDomainesGardes137(e) { return (e.familles || []).filter(function (f) { return f.gardee && (!f.sous.length || f.sous.some(function (x) { return x.gardee; })); }); }
+/** Étape 3 de l'avocat : ses deux rendez-vous. */
+function tcCpEtape3_137(e) {
+  const r = tcCpRdv137(e), d = Number(e.dureeRdv) || 30;
+  const prix = function (cle, types, p) {
+    const t = p && p.type ? p.type : '';
+    const montant = function (rang, val, nom) { return '<input type="number" inputmode="decimal" min="0" step="1" aria-label="' + nom + '" value="' + (val > 0 ? val : '') + '" onchange="tcConfigPro121.rdvPrixMontant(\'' + cle + '\', \'' + rang + '\', this.value)" style="' + TC_CP_CHAMP + ' width:84px;"> €'; };
+    return '<select id="cpPrix137_' + cle + '" aria-label="Prix" onchange="tcConfigPro121.rdvPrixType(\'' + cle + '\', this.value)" style="' + TC_CP_CHAMP + '">' + types.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === t ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>'
+      + (t === 'fixe' ? '<div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:14px; color:var(--text);">' + montant('min', p.min, 'Prix') + '</div>' : '')
+      + (t === 'fourchette' ? '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:14px; color:var(--text);">de ' + montant('min', p.min, 'Prix le plus bas') + ' à ' + montant('max', p.max, 'Prix le plus haut') + '</div>' : '');
+  };
+  const carte = function (cle, titre, aide, corps) { return '<div class="cp-rdv137" id="cpRdv137_' + cle + '" style="' + TC_CP_CARTE + '"><div style="font-size:16px; font-weight:700; color:var(--text);">' + titre + '</div><div style="font-size:13px; color:var(--text-sec); line-height:1.45; margin:4px 0 10px;">' + aide + '</div>' + corps + '</div>'; };
+  return tcCpTitre('Vos deux rendez-vous', 'D’abord un premier contact par téléphone.<br>Pendant cet appel, vous proposez, si besoin, un rendez-vous au cabinet.')
+    + carte('contact', '📞 Premier contact par téléphone', 'Un rendez-vous de ' + d + ' minutes (étape 5).<br>Gratuit au départ : vous pouvez demander un prix.', prix('contact', [['gratuit', 'Gratuit'], ['fixe', 'Un prix']], r.contact.prix))
+    + carte('cabinet', '🏛️ Rendez-vous au cabinet', 'Un rendez-vous de ' + d + ' minutes (étape 5).<br>Le prix est facultatif. Sans prix, rien n’est affiché.', prix('cabinet', [['', 'Pas de prix affiché'], ['fixe', 'Un prix'], ['fourchette', 'Une fourchette'], ['devis', 'Sur devis']], r.cabinet.prix))
+    + '<div role="checkbox" aria-checked="' + (r.nouveauContactSeul ? 'true' : 'false') + '" tabindex="0" class="cp-nouveau137" onclick="tcConfigPro121.rdvNouveauSeul()" style="' + TC_CP_CARTE + ' display:flex; align-items:flex-start; gap:10px; cursor:pointer;">' + tcCpCase(r.nouveauContactSeul)
+    + '<span><span style="display:block; font-size:15px; font-weight:700; color:var(--text);">Un nouveau client ne prend seul que le premier contact</span><span style="display:block; font-size:13px; color:var(--text-sec); line-height:1.45; margin-top:2px;">Le rendez-vous au cabinet, c’est vous qui le proposez, après l’appel.</span></span></div>';
+}
+/** Au récapitulatif de l'avocat : ses domaines et leurs missions (une seule durée : pas de durée par mission). */
+function tcCpRecapActes137(e) {
+  return tcCpDomainesGardes137(e).map(function (f) {
+    if (!f.sous.length) return '<div style="padding:4px 0; font-size:14px; font-weight:700; color:var(--text);">' + tcConfigProNomHTML(f, null) + '</div>';
+    return '<div style="padding:6px 0 2px; font-size:14px; font-weight:700; color:var(--text);">' + tcConfigProNomHTML(f, null) + '</div>'
+      + f.sous.filter(function (x) { return x.gardee; }).map(function (x) { return '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text);">• ' + tcConfigProNomHTML(f, x) + '</div>'
+        + (x.question ? '<div style="padding:0 0 2px 28px; font-size:12.5px; color:var(--text-sec);">❓ <span data-notranslate>' + escapeHTMLSafe(x.question.texte) + '</span></div>' : ''); }).join('');
+  }).join('');
+}
+/** Au récapitulatif de l'avocat : ses deux rendez-vous. */
+function tcCpRecapRdv137(e) {
+  const r = tcCpRdv137(e), d = Number(e.dureeRdv) || 30;
+  const ligne = function (t, p) { const x = tcCpPrix137(p); return '<div style="padding:3px 0; font-size:14px; color:var(--text);">' + t + ' · ' + d + ' min' + (x ? ' · ' + escapeHTMLSafe(x) : '') + '</div>'; };
+  return ligne('📞 Premier contact par téléphone', r.contact.prix) + ligne('🏛️ Rendez-vous au cabinet', r.cabinet.prix)
+    + '<div style="padding:3px 0; font-size:13px; color:var(--text-sec);">' + (r.nouveauContactSeul ? '🔒 Un nouveau client ne prend seul que le premier contact.' : 'Un nouveau client peut prendre seul le rendez-vous au cabinet.') + '</div>';
+}
+/** Étape 6 : « Acceptez-vous l'aide juridictionnelle ? » (Oui / Non), et « Vos domaines » (ceux de l'étape 2). */
+function tcCpFicheSpeciale137(e, fi, q) {
+  const titre = '<div style="font-size:15px; font-weight:700; color:var(--text); margin-bottom:4px;">' + q[1] + '</div>' + (q[2] ? '<div style="font-size:12.5px; color:var(--text-sec); line-height:1.45; margin-bottom:6px;">' + q[2] + '</div>' : '');
+  if (q[5] === 'ouinon') {
+    const v = fi[q[0]] || '';
+    return '<div class="cp-ouinon137" style="' + TC_CP_CARTE + '">' + titre + '<div role="radiogroup" aria-label="' + q[4] + '" style="display:flex; gap:8px; margin-top:6px;">' + [['oui', 'Oui'], ['non', 'Non']].map(function (x) {
+      const on = v === x[0];
+      return '<button role="radio" aria-checked="' + (on ? 'true' : 'false') + '" onclick="tcConfigPro121.ficheChoix(\'' + q[0] + '\', \'' + x[0] + '\')" style="' + TC_CP_BOUTON + ' flex:1; background:' + (on ? 'var(--g-blue)' : '#fff') + '; color:' + (on ? '#fff' : 'var(--text)') + '; border:1px solid ' + (on ? 'var(--g-blue)' : 'var(--border)') + ';">' + x[1] + '</button>';
+    }).join('') + '</div></div>';
+  }
+  if (q[5] === 'domaines') {
+    const l = tcCpDomainesGardes137(e);
+    return '<div class="cp-domaines137" style="' + TC_CP_CARTE + '">' + titre + '<div style="font-size:14px; color:var(--text); line-height:1.5;">' + (l.length ? l.map(function (f) { return '• ' + tcConfigProNomHTML(f, null); }).join('<br>') : 'Aucun domaine coché.') + '</div>'
+      + '<button onclick="tcConfigPro121.aller(2)" style="' + TC_CP_PETIT + ' margin-top:8px;">✏️ Changer mes domaines (étape 2)</button></div>';
+  }
+  return '';
+}
+/** La réponse d'une question de la fiche, en texte (récapitulatif) : les domaines cochés, « Oui » ou « Non », sinon le texte écrit. */
+function tcCpValeurFiche137(e, fi, q) {
+  if (q[5] === 'domaines') return tcCpDomainesGardes137(e).map(function (f) { return tcConfigProNom(f, null).texte; }).join(', ');
+  if (q[5] === 'ouinon') return fi[q[0]] === 'oui' ? 'Oui' : (fi[q[0]] === 'non' ? 'Non' : '');
+  return String(fi[q[0]] || '');
+}
+/** « Remplis à ma place » : les domaines lus, et « oui » ou « non » pour l'aide juridictionnelle. */
+function tcCpDomainesLus137(o, e) {
+  if (!tcCpAvocat137(e) || !o || !Array.isArray(o.domaines)) return [];
+  return o.domaines.slice(0, 20).map(function (x) { return String(x || '').replace(/\s+/g, ' ').trim().slice(0, 80); }).filter(Boolean);
+}
+function tcCpNormaliser137(o, prop, e) {
+  if (!tcCpAvocat137(e) || !o) return;
+  const v = o.aideJuridictionnelle;
+  delete prop.aideJuridictionnelle;
+  if (v === true || /^oui/i.test(String(v || ''))) prop.aideJuridictionnelle = 'oui';
+  else if (v === false || /^non/i.test(String(v || ''))) prop.aideJuridictionnelle = 'non';
+}
+/** « Valider ces réponses » : chaque domaine lu est coché (même nom), ou créé. */
+function tcCpAppliquerDomaines137(e, noms) {
+  const norm = function (t) { return tcSansAccents(String(t || '')).toLowerCase().replace(/[’']/g, ' ').replace(/\s+/g, ' ').trim(); };
+  let n = 0;
+  (Array.isArray(noms) ? noms : []).forEach(function (nom) {
+    let fa = e.familles.find(function (x) { return norm(tcConfigProNom(x, null).texte) === norm(nom); });
+    if (!fa) { fa = { id: tcConfigProIdNeuf(), nom: nom, propre: true, gardee: true, duree: 30, sous: [] }; e.familles.push(fa); }
+    fa.gardee = true;
+    if (fa.sous.length && !fa.sous.some(function (x) { return x.gardee; })) fa.sous.forEach(function (x) { x.gardee = true; });
+    n++;
+  });
+  return n;
+}
+function tcCpDomainesProposes137(prop) {
+  const l = prop && Array.isArray(prop._domaines) ? prop._domaines : [];
+  return l.length ? '<div style="padding:8px 0 2px; font-size:14px; font-weight:700; color:var(--text);">Vos domaines (' + l.length + ')</div>'
+    + l.map(function (n) { return '<div style="padding:2px 0 2px 10px; font-size:14px; color:var(--text);">• <span data-notranslate>' + escapeHTMLSafe(n) + '</span></div>'; }).join('') : '';
+}
+/* ── fin mission 137 (outils) ─────────────────────────────────────────────────────────────────────────────────────── */
 
 /** Le nom d'une famille ou d'une sous-famille : le sien s'il l'a changé, sinon celui du métier. */
 function tcConfigProNom(f, so) {
@@ -11502,7 +11654,7 @@ const tcConfigPro121 = {
   choisirMetier: function (id) {
     const e = tcConfigProLire();
     if (!tcConfigProMetier(id)) return;
-    if (e.metier !== id) { const _ancien136 = e.metier; e.metier = id; e.familles = tcConfigProFamillesDuMetier(id); if (typeof tcCpFicheChangerMetier136 === 'function') tcCpFicheChangerMetier136(e, _ancien136, id); }
+    if (e.metier !== id) { const _ancien136 = e.metier; e.metier = id; e.familles = tcConfigProFamillesDuMetier(id); if (typeof tcCpFicheChangerMetier136 === 'function') tcCpFicheChangerMetier136(e, _ancien136, id); if (tcCpAvocat137(e)) e.dureeRdv = 30; }
     _tcConfigProErreur = '';
     tcConfigProSauver(); tcRendreConfigPro121();
   },
@@ -11645,6 +11797,7 @@ const tcConfigPro121 = {
     const prop = {};
     tcCpQuestions136(tcConfigProLire()).forEach(function (q) { const v = o[q[0]]; if (typeof v === 'string' && v.trim()) prop[q[0]] = v.trim().slice(0, 2000); });
     const _pr136 = tcCpPrestationsLues136(o, tcConfigProLire()); if (_pr136.length) prop._prestations = _pr136;   // mission 136 : les prestations lues
+    const _d137 = tcCpDomainesLus137(o, tcConfigProLire()); if (_d137.length) prop._domaines = _d137; tcCpNormaliser137(o, prop, tcConfigProLire());   // mission 137
     if (!Object.keys(prop).length) { _tcConfigProErreur = 'Je n’ai trouvé aucune réponse dans ce texte. Vérifiez le texte collé, ou remplissez les réponses vous-même.'; tcRendreConfigPro121(); return; }
     _tcConfigProPropose = prop; _tcConfigProRempli = 0; _tcConfigProRemplir = false; _tcConfigProTexteColle = '';
     tcRendreConfigPro121();
@@ -11687,7 +11840,8 @@ const tcConfigPro121 = {
         try { const i = reponse.indexOf('{'), j = reponse.lastIndexOf('}'); o = i > -1 && j > i ? JSON.parse(reponse.slice(i, j + 1)) : null; } catch (x) { o = null; }
         const prop = {};
         if (o && typeof o === 'object' && !Array.isArray(o)) { tcCpQuestions136(tcConfigProLire()).forEach(function (q) { const v = o[q[0]]; if (typeof v === 'string' && v.trim()) prop[q[0]] = v.trim().slice(0, 2000); });
-          const _pr136 = tcCpPrestationsLues136(o, tcConfigProLire()); if (_pr136.length) prop._prestations = _pr136; }   // mission 136
+          const _pr136 = tcCpPrestationsLues136(o, tcConfigProLire()); if (_pr136.length) prop._prestations = _pr136;
+          const _d137 = tcCpDomainesLus137(o, tcConfigProLire()); if (_d137.length) prop._domaines = _d137; tcCpNormaliser137(o, prop, tcConfigProLire()); }   // missions 136 et 137
         if (!Object.keys(prop).length) { echec(); return; }
         _tcConfigProLecture = ''; _tcConfigProPropose = prop; _tcConfigProRempli = 0; _tcConfigProRemplir = false;
         tcRendreConfigPro121();
@@ -11737,12 +11891,40 @@ const tcConfigPro121 = {
     const prop = _tcConfigProPropose;
     if (!prop) return;
     const fi = tcConfigProFiche(tcConfigProLire());
-    Object.keys(prop).forEach(function (k) { if (k !== '_prestations') fi[k] = prop[k]; });
+    Object.keys(prop).forEach(function (k) { if (k !== '_prestations' && k !== '_domaines') fi[k] = prop[k]; });
+    _tcConfigProDomaines137 = Array.isArray(prop._domaines) ? tcCpAppliquerDomaines137(tcConfigProLire(), prop._domaines) : 0;   // mission 137
     _tcConfigProPrestations136 = Array.isArray(prop._prestations) ? tcCpAppliquerPrestations136(tcConfigProLire(), prop._prestations) : 0;   // mission 136
-    _tcConfigProRempli = Object.keys(prop).filter(function (k) { return k !== '_prestations'; }).length; _tcConfigProPropose = null;
+    _tcConfigProRempli = Object.keys(prop).filter(function (k) { return k !== '_prestations' && k !== '_domaines'; }).length; _tcConfigProPropose = null;
     tcConfigProSauver(); tcRendreConfigPro121();
   },
-  annulerPropose: function () { _tcConfigProPropose = null; _tcConfigProRempli = 0; _tcConfigProPrestations136 = 0; tcRendreConfigPro121(); },
+  annulerPropose: function () { _tcConfigProPropose = null; _tcConfigProRempli = 0; _tcConfigProPrestations136 = 0; _tcConfigProDomaines137 = 0; tcRendreConfigPro121(); },
+  // Mission 137 : les deux rendez-vous de l'avocat ; « oui » ou « non » dans la fiche (touché deux fois : plus de réponse).
+  rdvPrixType: function (cle, v) {
+    if (cle !== 'contact' && cle !== 'cabinet') return;
+    const r = tcCpRdvEcrire137(tcConfigProLire());
+    const a = r[cle].prix || {};
+    if (cle === 'contact' && v === 'gratuit') r[cle].prix = { type: 'gratuit' };
+    else if (cle === 'cabinet' && v === 'devis') r[cle].prix = { type: 'devis' };
+    else if (v === 'fixe' || (cle === 'cabinet' && v === 'fourchette')) r[cle].prix = Object.assign({ type: v }, a.min > 0 ? { min: a.min } : {}, v === 'fourchette' && a.max > 0 ? { max: a.max } : {});
+    else r[cle].prix = cle === 'contact' ? { type: 'gratuit' } : null;
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
+  rdvPrixMontant: function (cle, rang, v) {
+    if ((cle !== 'contact' && cle !== 'cabinet') || (rang !== 'min' && rang !== 'max')) return;
+    const p = tcCpRdvEcrire137(tcConfigProLire())[cle].prix;
+    if (!p || (p.type !== 'fixe' && p.type !== 'fourchette')) return;
+    const n = Number(String(v || '').replace(',', '.'));
+    if (isFinite(n) && n > 0) p[rang] = Math.round(n * 100) / 100; else delete p[rang];
+    tcConfigProSauver();
+  },
+  rdvNouveauSeul: function () { const r = tcCpRdvEcrire137(tcConfigProLire()); r.nouveauContactSeul = !r.nouveauContactSeul; tcConfigProSauver(); tcRendreConfigPro121(); },
+  ficheChoix: function (champ, v) {
+    const e = tcConfigProLire();
+    if ((v !== 'oui' && v !== 'non') || !tcCpQuestions136(e).some(function (q) { return q[0] === champ && q[5] === 'ouinon'; })) return;
+    const fi = tcConfigProFiche(e);
+    fi[champ] = fi[champ] === v ? '' : v;
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
   // Mission 136, lot 2 : seul ou à plusieurs, les coiffeurs, « Qui la fait ? », le coiffeur dont on règle les jours.
   equipeMode: function (m) {
     const e = tcConfigProLire();
@@ -11876,6 +12058,12 @@ const TC_PRO_FICHE_PROPOSEE = {
     consignes: 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.',
     paiement: 'Carte bancaire, espèces',
     langues: 'Français'
+  },
+  // Mission 137 : l'avocat corrige.
+  'avocat': {
+    presentation: 'Je vous conseille et je vous défends. Le premier contact se fait par téléphone : nous voyons ensemble la suite.',
+    paiement: 'Carte bancaire, virement, chèque',
+    langues: 'Français'
   }
 };
 const TC_PRO_CONSIGNE_REMPLIR = 'Tu es Charly Pro IA, l’assistant de TimeCool Pro. On te donne le texte de la fiche d’un professionnel de santé (par exemple sa page sur un site de prise de rendez-vous). '
@@ -11896,7 +12084,7 @@ function tcConfigProFiche(e) {
   const m = tcConfigProMetier(e.metier);
   const p = TC_PRO_FICHE_PROPOSEE[e.metier] || {};
   const nom = (!tcCpPrestations136(e) && typeof userAccount !== 'undefined' && userAccount && (userAccount.firstname || userAccount.lastname))
-    ? 'Dr ' + String((userAccount.firstname || '') + ' ' + (userAccount.lastname || '')).trim() : '';
+    ? (e.metier === 'avocat' ? 'Maître ' : 'Dr ') + String((userAccount.firstname || '') + ' ' + (userAccount.lastname || '')).trim() : '';
   e.fiche = { nom: nom, metier: m ? m.nom : '', adresse: '', acces: p.acces || '', presentation: p.presentation || '', consignes: p.consignes || '',
     tarifs: p.tarifs || '', paiement: p.paiement || '', horaires: '', langues: p.langues || 'Français', apporter: p.apporter || '' };
   return e.fiche;
@@ -11925,11 +12113,12 @@ function tcCpEtape6(e) {
       + '<div style="font-size:15px; font-weight:700; color:var(--text);">Charly Pro IA a lu votre fiche.</div>'
       + '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin:4px 0 8px;">Voici ce qu’il a trouvé.<br>Rien n’est encore enregistré : c’est vous qui validez.</div>'
       + tcCpQuestions136(e).filter(function (q) { return _tcConfigProPropose[q[0]]; }).map(function (q) { return '<div style="padding:4px 0; font-size:14px; color:var(--text); line-height:1.45;"><b>' + q[4] + '</b> : <span data-notranslate>' + escapeHTMLSafe(_tcConfigProPropose[q[0]]).replace(/\n/g, '<br>') + '</span></div>'; }).join('')
-      + tcCpPrestationsProposees136(_tcConfigProPropose)
+      + tcCpPrestationsProposees136(_tcConfigProPropose) + tcCpDomainesProposes137(_tcConfigProPropose)
       + '<div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">'
       + '<button onclick="tcConfigPro121.validerPropose()" style="' + TC_CP_BOUTON + ' flex:2; background:var(--g-blue); color:#fff; border:none;">Valider ces réponses</button>'
       + '<button onclick="tcConfigPro121.annulerPropose()" style="' + TC_CP_BOUTON + ' flex:1; background:#fff; color:var(--text); border:1px solid var(--border);">Annuler</button></div></div>' : '')
     + (_tcConfigProRempli ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ C’est enregistré : ' + _tcConfigProRempli + ' réponse' + (_tcConfigProRempli > 1 ? 's' : '') + '.<br>Vous pouvez encore les corriger ci-dessous.</div>' : '')
+    + (_tcConfigProDomaines137 ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ ' + _tcConfigProDomaines137 + ' domaine' + (_tcConfigProDomaines137 > 1 ? 's cochés' : ' coché') + ' à l’étape 2.</div>' : '')   // mission 137
     + (_tcConfigProPrestations136 ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ ' + _tcConfigProPrestations136 + ' prestation' + (_tcConfigProPrestations136 > 1 ? 's' : '') + ', avec leur durée et leur prix.<br>Vous pouvez les corriger aux étapes 2 et 3.</div>' : '')   // mission 136
     + '<div style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:14px;">'
     + (photo ? '<img src="' + photo + '" alt="Votre photo" style="width:64px; height:64px; border-radius:50%; object-fit:cover; flex-shrink:0;">'
@@ -11939,6 +12128,7 @@ function tcCpEtape6(e) {
     + (photo ? ' <button onclick="tcConfigPro121.retirerPhoto()" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3;">Retirer</button>' : '')
     + '</div></div>'
     + tcCpQuestions136(e).map(function (q) {
+      if (q[5]) return tcCpFicheSpeciale137(e, fi, q);   // mission 137 : oui ou non, les domaines
       const v = String(fi[q[0]] || '');
       const champ = 'id="cpFiche_' + q[0] + '" data-notranslate oninput="tcConfigPro121.fiche(\'' + q[0] + '\', this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box;' + (q[3] > 1 ? ' resize:vertical;' : '') + '"';
       return '<div style="' + TC_CP_CARTE + '"><label for="cpFiche_' + q[0] + '" style="display:block; font-size:15px; font-weight:700; color:var(--text); margin-bottom:4px;">' + q[1] + '</label>'
@@ -11951,8 +12141,8 @@ function tcCpEtape6(e) {
 function tcCpFicheRecap(e) {
   const fi = e.fiche && typeof e.fiche === 'object' ? e.fiche : null;
   if (!fi) return '<div style="font-size:14px; color:var(--text-sec);">Pas encore remplie.</div>';
-  const lignes = tcCpQuestions136(e).filter(function (q) { return String(fi[q[0]] || '').trim(); }).map(function (q) {
-    return '<div style="padding:3px 0; font-size:14px; color:var(--text); line-height:1.45;"><b>' + q[4] + '</b> : <span data-notranslate>' + escapeHTMLSafe(String(fi[q[0]]).trim()).replace(/\n/g, '<br>') + '</span></div>';
+  const lignes = tcCpQuestions136(e).filter(function (q) { return tcCpValeurFiche137(e, fi, q).trim(); }).map(function (q) {
+    return '<div style="padding:3px 0; font-size:14px; color:var(--text); line-height:1.45;"><b>' + q[4] + '</b> : <span data-notranslate>' + escapeHTMLSafe(tcCpValeurFiche137(e, fi, q).trim()).replace(/\n/g, '<br>') + '</span></div>';
   }).join('');
   return lignes || '<div style="font-size:14px; color:var(--text-sec);">Pas encore remplie.</div>';
 }
@@ -12054,13 +12244,14 @@ function tcCpEtape2(e) {
         + '</div>';
     }).join('')
     + '<div style="' + TC_CP_CARTE + ' background:#f8f9fa;">'
-    + '<div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px;">Une famille qui manque ?</div>'
+    + '<div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px;">' + (M.familleManque || 'Une famille qui manque ?') + '</div>'
     + '<div style="display:flex; gap:6px; flex-wrap:wrap;"><input id="cpNouvelleFamille" type="text" maxlength="80" placeholder="' + M.nomFamille + '" style="' + TC_CP_CHAMP + ' flex:1; min-width:150px;">'
-    + '<button onclick="tcConfigPro121.ajouterFamille()" style="' + TC_CP_PETIT + '">➕ Créer ma propre famille</button></div></div>';
+    + '<button onclick="tcConfigPro121.ajouterFamille()" style="' + TC_CP_PETIT + '">' + (M.creerFamille || '➕ Créer ma propre famille') + '</button></div></div>';
 }
 
 function tcCpEtape3(e) {
   if (tcCpPrestations136(e)) return tcCpEtape3_136(e);   // mission 136
+  if (tcCpAvocat137(e)) return tcCpEtape3_137(e);   // mission 137
   const actes = tcConfigProActes(e);
   return tcCpTitre('Combien de temps vous faut-il ?', 'Pour chaque acte.<br>Cette durée sert à votre organisation.<br>Elle ne change pas la durée de vos rendez-vous (étape 5).')
     + '<div style="' + TC_CP_CARTE + '">' + actes.map(function (a) {
@@ -12150,7 +12341,8 @@ function tcCpRecapitulatif(e) {
     + '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">C’est enregistré sur votre compte.<br>Vous pouvez revenir et tout changer quand vous voulez.</div>'
     + tcCpSection('Votre métier', '<div style="font-size:14px; color:var(--text);">' + (m ? escapeHTMLSafe(m.nom) : '—') + '</div>'
       + (tcCpPlusieurs136(e) ? '<div class="cp-recap-equipe136" style="font-size:14px; color:var(--text); margin-top:4px;">À plusieurs : <span data-notranslate>' + (tcCpCoiffeurs136(e).map(function (c) { return escapeHTMLSafe(c.prenom || '?'); }).join(', ') || '—') + '</span></div>' : ''), 1)
-    + tcCpSection(M.recapActes, (tcCpPrestations136(e) ? tcCpRecapActes136(e) : actes) || '<div style="font-size:14px; color:var(--text-sec);">' + M.aucun + '</div>', 2)
+    + tcCpSection(M.recapActes, (tcCpPrestations136(e) ? tcCpRecapActes136(e) : (tcCpAvocat137(e) ? tcCpRecapActes137(e) : actes)) || '<div style="font-size:14px; color:var(--text-sec);">' + M.aucun + '</div>', 2)
+    + (tcCpAvocat137(e) ? tcCpSection('Vos deux rendez-vous', tcCpRecapRdv137(e), 3) : '')   // mission 137
     + tcCpSection(tcCpPlusieurs136(e) ? 'Les jours de chaque coiffeur' : 'Vos jours et vos horaires', (tcCpPlusieurs136(e) ? tcCpRecapJoursEquipe136(e) : jours) || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour.</div>', 4)
     + tcCpSection('Vos rendez-vous', '<div style="font-size:14px; color:var(--text);">Chaque rendez-vous dure ' + e.dureeRdv + ' minutes.</div>' + c.html
       + '<div style="font-size:14px; font-weight:700; color:var(--g-blue); margin-top:8px;">En tout : ' + c.total + ' créneau' + (c.total > 1 ? 'x' : '') + ' par semaine.</div>', 5)
