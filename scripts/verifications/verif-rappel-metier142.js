@@ -53,12 +53,15 @@ const jouer = (largeur) => {
       var L = lignesDe(x), sp = x.querySelectorAll('span');
       var ligneDe = function (el) { var s = {}; L.chars.forEach(function (c) { if (el.contains(c.n)) s[c.ligne] = 1; }); return Object.keys(s).map(Number); };
       var polices = {}; L.chars.forEach(function (c) { polices[police(c.n)] = 1; });
+      // Le titre de l'étape : aucun mot coupé à son trait d'union, « ? » jamais seul en début de ligne.
+      var LT = q ? lignesDe(q).chars : [], coupes = [];
+      LT.forEach(function (c, i) { if ((c.c === '-' && LT[i + 1] && LT[i + 1].ligne !== c.ligne) || (c.c === '?' && LT[i - 1] && LT[i - 1].ligne !== c.ligne)) coupes.push(c.c + '@' + i); });
       return { n: corps().querySelectorAll('#cpRappelMetier141').length, texte: x.innerText.split(NBSP).join(' ').replace(/\\s+/g, ' ').trim(), lignes: L.n,
-        titre: q ? q.innerText : '', titrePolice: q ? police(q) : '', polices: Object.keys(polices),
+        titre: q ? q.innerText : '', titrePolice: q ? police(q) : '', polices: Object.keys(polices), titreCoupes: coupes,
         lignesEtiquette: sp[0] ? ligneDe(sp[0]) : [], lignesNom: sp[1] ? ligneDe(sp[1]) : [], deuxPoints: (L.chars.filter(function (c) { return c.c === ':'; })[0] || {}).ligne,
         mot: (L.chars.filter(function (c) { return c.c === 'r'; })[0] || {}).ligne, debord: deborde() };
     };
-    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?'); };
+    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace('Quels domaines d’activité <span style="white-space:nowrap;">pratiquez-vous ?</span>', 'Quels domaines pratiquez-vous ?'); };
     ['chirurgien-dentiste', 'coiffeur', 'avocat'].forEach(function (id) {
       var e = { v: 1, metier: id, familles: tcConfigProFamillesDuMetier(id), jours: tcConfigProJoursDefaut(), dureeRdv: id === 'chirurgien-dentiste' ? 20 : 30, etape: 2, termine: false };
       if (id === 'avocat') e.familles[0].gardee = true;
@@ -110,6 +113,10 @@ if (!ko) {
   verifie('à 360 px, « Chirurgien-dentiste » passe entier sur la deuxième ligne', S[360]['chirurgien-dentiste'].e2.lignes === 2 && S[360]['chirurgien-dentiste'].e2.lignesNom[0] === 1, J(S[360]['chirurgien-dentiste'].e2));
   // 4. Le titre de l'avocat, étape 2 ; ceux du dentiste et du coiffeur ne changent pas.
   verifie('avocat, étape 2 : « Quels domaines d’activité pratiquez-vous ? »', A.avocat.titre2 === 'Quels domaines d’activité pratiquez-vous ?' && A.avocat.e2.titre === A.avocat.titre2, J([A.avocat.titre2, A.avocat.e2.titre]));
+  const mal4 = [];
+  // Le titre changé par la mission (les autres titres ne bougent pas : empreintes plus bas).
+  for (const L of [390, 360, 320]) { const M = S[L].avocat.e2; if (!M.titreCoupes || M.titreCoupes.length) mal4.push(L + ' ' + J([M.titre, M.titreCoupes])); }
+  verifie('avocat, étape 2, à 390, 360 et 320 px : le titre ne coupe pas « pratiquez-vous ? » à son trait d’union, « ? » jamais seul', mal4.length === 0, mal4.join(' | '));
   verifie('dentiste et coiffeur, étape 2 : « Quels actes faites-vous ? », « Quelles prestations faites-vous ? » (inchangés)', A['chirurgien-dentiste'].titre2 === 'Quels actes faites-vous ?' && A.coiffeur.titre2 === 'Quelles prestations faites-vous ?', J([A['chirurgien-dentiste'].titre2, A.coiffeur.titre2]));
   // 5. Rien d'autre ne bouge.
   const diff = METIERS.filter(([id]) => h(A[id].html.join('\n§\n')) !== EMPREINTES[id]).map(([id]) => id);

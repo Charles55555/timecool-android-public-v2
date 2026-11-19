@@ -3820,3 +3820,4 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Configuration professionnelle, étapes 2 à 6 : « Votre métier : … » tout en gras, le métier aussi, à la taille du titre de l’étape (20 px) ; même place, même carte. Une ligne à 390 px pour les trois métiers ; plus étroit, deux lignes propres (le métier ne se coupe jamais).
 - Avocat, étape 2 : « Quels domaines d’activité pratiquez-vous ? ».
 - Suite verif-rappel-metier142 (9 vérifications à 390, 360 et 320 px, rouge sur ecf9c94 : 3 KO) ; empreintes des trois métiers sans la ligne et avec l’ancien titre : identiques. verif-rappel-metier141 et verif-config-avocat137 suivent.
+- Reprise de la 142 avant l’examen : le titre de l’avocat se coupait à « pratiquez- / vous ? » ; « pratiquez-vous ? » reste d’un bloc. verif-rappel-metier142 : 10 vérifications (titre à 390, 360, 320 px), rouge sur 86b67bd.
