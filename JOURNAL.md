@@ -3908,3 +3908,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Certains métiers prennent d'autres mots que leur catégorie (4e case) : l'auto-école, le commercial, le recruteur, la boutique de robes de mariée, le tailleur et le bijoutier prennent « prestation ». Le vétérinaire aussi : sa fiche n'a ni carte Vitale ni remboursement.
 - « Remplis à ma place » vouvoie « le patient », « le client » ou « la personne reçue » (M.proche porte l'article).
 - verif-config-metiers147 compte 47 vérifications : les dix catégories et leur nombre de métiers ; 101 métiers génériques par vocabulaire ; le plombier, le notaire, la mairie, le vétérinaire, l'auto-école et le garagiste de l'étape 1 à la fiche. Elle est rouge sur f9d56e1.
+- Examen du lot 2 :
+  - À plusieurs, l'étape 1 disait « Les prestations, les prix et la fiche… » même chez le notaire, le plombier ou la mairie. Le texte suit maintenant les mots du métier : « Les missions… », « Les interventions… », « Les démarches… ».
+  - Choix du chef : l'administration et les associations n'ont plus d'étape des prix. Le compteur (« Étape 3 sur 5 »), « Suivant » et « ← Retour » suivent la liste des étapes du métier (tcCpEtapes147). Le récapitulatif dit « Vos démarches », « Remplis à ma place » ne lit plus de prix pour elles, et le message dit « N démarches ».
+  - Les autres métiers gardent leurs six étapes et leur compteur.
+  - verif-config-metiers147 compte 50 vérifications, dont 3 rouges sur d016de9. Les empreintes 143 du dentiste, du coiffeur et de l'avocat n'ont pas bougé.

@@ -163,7 +163,7 @@ async function parcours() {
       localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
       tcConfigPro121.choisirMetier(id); tcConfigPro121.equipeMode('plusieurs'); await attendre(20);
       const o = { e1: texte().split('Vous travaillez seul, ou à plusieurs ?')[1] || '' };
-      for (const n of [2, 3, 5, 6]) { tcConfigPro121.aller(n); await attendre(20); o['e' + n] = texte(); }
+      for (const n of [2, 3, 4, 5, 6, 7]) { tcConfigPro121.aller(n); await attendre(20); o['e' + n] = texte(); }
       o.fiche = JSON.parse(JSON.stringify(tcConfigProLire().fiche || {}));
       o.familles = tcConfigProLire().familles.map((f) => (f.nom || f.id) + ':' + f.sous.map((x) => x.id).join(','));
       o.consigne = tcCpConsigneRemplir136(tcConfigProLire());
@@ -172,6 +172,22 @@ async function parcours() {
     };
     R.lot2 = {};
     for (const id of ['plombier', 'notaire', 'mairie', 'veterinaire', 'auto-ecole', 'garagiste']) R.lot2[id] = await essayer(id);
+    // Examen du lot 2 (chef) : la mairie n'a pas d'étape des prix ; le compteur, « Suivant » et « ← Retour » suivent.
+    const compteur = () => { const m = /tape (\d) sur (\d)/i.exec(texte()); return m ? m[1] + '/' + m[2] : ''; };
+    localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
+    tcConfigPro121.choisirMetier('mairie'); await attendre(20);
+    const nav = { e1: compteur() };
+    tcConfigPro121.suivant(); await attendre(20); nav.e2 = [compteur(), _tcConfigProEtape];
+    tcConfigPro121.suivant(); await attendre(20); nav.e3 = [compteur(), _tcConfigProEtape, /Quels jours travaillez-vous \?/.test(texte())];
+    tcConfigPro121.retour(); await attendre(20); nav.retour = [compteur(), _tcConfigProEtape];
+    tcConfigPro121.suivant(); tcConfigPro121.suivant(); await attendre(20); nav.e4 = [compteur(), _tcConfigProEtape];
+    tcConfigPro121.suivant(); await attendre(20); nav.e5 = [compteur(), _tcConfigProEtape];
+    tcConfigPro121.suivant(); await attendre(20); nav.recap = texte(); nav.fin = _tcConfigProEtape;
+    tcConfigPro121.aller(3); await attendre(20); nav.aller3 = [compteur(), _tcConfigProEtape];
+    R.nav = nav;
+    localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
+    tcConfigPro121.choisirMetier('notaire'); tcConfigPro121.suivant(); tcConfigPro121.suivant(); await attendre(20);
+    R.navNotaire = [compteur(), _tcConfigProEtape, /Quels prix affichez-vous \?/.test(texte())];
     localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
     entete('artisans').click(); await attendre(20); R.artisans = visibles();
     R.appels = appels; R.debords = debords;
@@ -292,6 +308,17 @@ else {
   verifie('vétérinaire (animaux) : ses 3 familles et 9 prestations de l’ébauche, « Quelles prestations faites-vous ? », une fiche sans carte Vitale ni remboursement',
     J(ve.familles) === J(['consultation:premiere-consultation,consultation-de-suivi,urgence', 'prevention:vaccination,identification,vermifuge-et-antiparasitaire', 'chirurgie:sterilisation,detartrage,autre-operation'])
     && /Quelles prestations faites-vous \?/.test(ve.e2) && /Quel nom voient vos clients \?/.test(ve.e6) && !/carte Vitale|remboursement/i.test(ve.e6) && propre(ve), J(ve.familles));
+  // Examen du lot 2 : à plusieurs, le texte de l'étape 1 suit le métier ; aucun « prestation » chez un métier qui n'en a pas.
+  const tout7 = (o) => o.e1 + o.e2 + o.e3 + o.e4 + o.e5 + o.e6 + o.e7;
+  verifie('à plusieurs : « Les missions, les prix et la fiche… » (notaire), « Les interventions… » (plombier, garagiste), « Les démarches… » (mairie) ; aucun « prestation », de l’étape 1 au récapitulatif',
+    /Les missions, les prix et la fiche sont les mêmes pour tous\./.test(no.e1) && /Les interventions, les prix et la fiche sont les mêmes pour tous\./.test(pl.e1) && /Les interventions, les prix/.test(ga.e1) && /Les démarches, les prix et la fiche sont les mêmes pour tous\./.test(ma.e1)
+    && [no, pl, ga, ma].every((o) => !/prestation/i.test(tout7(o))), J([no, pl, ga, ma].map((o) => (tout7(o).match(/.{0,40}prestation.{0,20}/i) || [''])[0])));
+  const V = S.nav;
+  verifie('mairie (chef) : pas d’étape des prix : « Étape 1 sur 5 », 2 sur 5, puis « Quels jours travaillez-vous ? » en « Étape 3 sur 5 » ; « ← Retour » revient à l’étape 2 ; 4 sur 5, 5 sur 5, puis le récapitulatif',
+    V.e1 === '1/5' && J(V.e2) === J(['2/5', 2]) && J(V.e3) === J(['3/5', 4, true]) && J(V.retour) === J(['2/5', 2]) && J(V.e4) === J(['4/5', 5]) && J(V.e5) === J(['5/5', 6]) && V.fin === 7
+    && J(V.aller3) === J(['3/5', 4]), J(V));
+  verifie('mairie, récapitulatif : « Vos démarches », sans « et leur prix », aucun prix nulle part ; le notaire garde ses six étapes (« Étape 3 sur 6 », « Quels prix affichez-vous ? »)',
+    /Vos démarches/.test(V.recap) && !/prix/i.test(V.recap) && !/prix/i.test(ma.e7) && !/Quels prix/.test(tout7(ma)) && J(S.navNotaire) === J(['3/6', 3, true]), J([V.recap.slice(0, 300), S.navNotaire]));
   verifie('auto-école : les mots « prestation » (des leçons, pas des interventions) ; garagiste : « Quelles interventions faites-vous ? », « Carrosserie »',
     /Quelles prestations faites-vous \?/.test(ae.e2) && /Leçon de conduite/.test(ae.e2) && !/intervention/i.test(ae.e2) && /Quelles interventions faites-vous \?/.test(ga.e2) && /Carrosserie/.test(ga.e2) && propre(ae) && propre(ga), '');
   verifie('aucun appel réseau', S.appels === 0 && P.appels === 0, J([S.appels, P.appels]));

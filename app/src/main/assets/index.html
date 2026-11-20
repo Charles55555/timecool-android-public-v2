@@ -11228,7 +11228,9 @@ const TC_PRO_MOTS_147 = {
       recapActes: 'Vos ' + des + ' et leur prix', aucun: 'Aucune ' + un + '.',
       aide3: 'Pour chaque ' + un + ', si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
       vos: 'Vos ' + des, un: un, des: des, familleDefaut: 'Mes ' + des, listeIA: 'les ' + des + ' écrites dans le texte, chacune',
-      pasSeule: '➕ Seulement avec une autre ' + un, recapPasSeule: '➕ seulement avec une autre ' + un
+      pasSeule: '➕ Seulement avec une autre ' + un, recapPasSeule: '➕ seulement avec une autre ' + un,
+      // Examen du lot 2 : « à plusieurs », les mots du métier (« Les missions, les prix… »), plus ceux de la beauté.
+      intro: 'Ajoutez les personnes qui travaillent avec vous, une par une : leur prénom, et leur photo si elles le veulent.<br>Les ' + des + ', les prix et la fiche sont les mêmes pour tous.<br>Chaque personne a ses jours et ses horaires (étape 4).'
     };
   };
   TC_PRO_MOTS_147.prestation = de({});
@@ -11245,6 +11247,8 @@ const TC_PRO_MOTS_147 = {
     aideRemplir: '<br>S’il y trouve vos démarches, il les coche aussi.',
     question: 'Question à la personne reçue', aide6: 'C’est la page que verront les personnes que vous recevez.<br>Une réponse est déjà proposée : corrigez-la si besoin.',
     proche: 'la personne reçue', horsLigne: '📞 Pas de rendez-vous en ligne : la personne vous appelle',
+    // Examen du lot 2 (chef, 20/11) : pas d'étape des prix pour les démarches ; le récapitulatif dit « Vos démarches ».
+    recapActes: 'Vos démarches', sansPrix: true,
     consigne: '💬 Une consigne que la personne lit avant de choisir (facultatif)', exempleConsigne: 'Par exemple : apportez une pièce d’identité.' }));
 })();
 // Les mots du coiffeur, tels qu'avant la mission 147 (seul ou à plusieurs, réglages, consigne de famille).
@@ -11472,11 +11476,13 @@ function tcCpConsigneRemplir147(e) {
     + 'Réponds seulement par un objet JSON, sans aucun texte autour, avec ces clés : ' + TC_PRO_FICHE_QUESTIONS_147[v].map(function (q) { return q[0]; }).join(', ') + ', prestations. '
     + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant ' + M.proche + ', sauf « prestations ». Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
     + '« horaires » : seulement les horaires d’ouverture écrits dans le texte. « paiement » : les moyens de paiement séparés par des virgules. '
-    + '« prestations » : ' + M.listeIA + ' { "famille": "…", "nom": "…", "minutes": un nombre ou null, "prix": le prix tel qu’il est écrit (« 80 € », « de 250 € à 280 € », « Sur devis ») ou une chaîne vide } ; une liste vide s’il n’y en a pas.';
+    + '« prestations » : ' + M.listeIA + ' { "famille": "…", "nom": "…", "minutes": un nombre ou null'
+    + (M.sansPrix ? '' : ', "prix": le prix tel qu’il est écrit (« 80 € », « de 250 € à 280 € », « Sur devis ») ou une chaîne vide') + ' } ; une liste vide s’il n’y en a pas.';
 }
 /** « 3 actes, avec leur prix. » (après « Valider ces réponses »). */
 function tcCpMessagePrestations147(e, n) {
   const M = tcCpMots147(e);
+  if (M.sansPrix) return n + ' ' + (n > 1 ? M.des : M.un) + '.<br>Vous pouvez les corriger à l’étape 2.';   // examen du lot 2 : sans prix
   return n + ' ' + (n > 1 ? M.des : M.un) + ', avec leur prix.<br>Vous pouvez les corriger aux étapes 2 et 3.';
 }
 /** Étape 3 d'un métier générique : le prix de chaque prestation, facultatif (une seule durée pour tout, à l'étape 5). */
@@ -11513,6 +11519,21 @@ function tcCpRecapActes147(e) {
     return '<div style="padding:6px 0 2px; font-size:14px; font-weight:700; color:var(--text);">' + tcConfigProNomHTML(f, null) + '</div>' + consigne
       + f.sous.filter(function (x) { return x.gardee; }).map(function (x) { return ligne(x, tcConfigProNomHTML(f, x), 14, f.id + '/' + x.id) + (x.question ? '<div style="padding:0 0 2px 28px; font-size:12.5px; color:var(--text-sec);">❓ <span data-notranslate>' + escapeHTMLSafe(x.question.texte) + '</span></div>' : ''); }).join('');
   }).join('');
+}
+/* Examen du lot 2 (chef, 20/11) : les étapes d'un métier. Sans prix (administration et associations) : pas d'étape 3 ; le compteur
+   (« Étape 3 sur 5 »), « Suivant » et « ← Retour » suivent. Les autres métiers : les six étapes, comme avant. */
+function tcCpEtapes147(e) { const M = tcCpGenerique147(e) ? tcCpMots147(e) : null; return M && M.sansPrix ? [1, 2, 4, 5, 6] : [1, 2, 3, 4, 5, 6]; }
+/** L'étape d'après (7 : le récapitulatif) ou d'avant (1 au plus tôt). */
+function tcCpEtapeVoisine147(e, n, sens) {
+  const l = tcCpEtapes147(e);
+  if (sens > 0) return l.filter(function (x) { return x > n; })[0] || 7;
+  const p = l.filter(function (x) { return x < n; });
+  return p.length ? p[p.length - 1] : 1;
+}
+/** « Étape 3 sur 5 » : le rang de l'étape dans les étapes du métier. */
+function tcCpCompteur147() {
+  const l = tcCpEtapes147(tcConfigProLire()), i = l.indexOf(_tcConfigProEtape);
+  return 'Étape ' + (i > -1 ? i + 1 : _tcConfigProEtape) + ' sur ' + l.length;
 }
 /* Étape 1 : les catégories dépliables (fermées au départ, celle du métier choisi ouverte) et « Cherchez votre métier ». */
 let _tcCp147Ouvertes = null;   // les catégories ouvertes (null : seulement celle du métier choisi)
@@ -11767,7 +11788,7 @@ function tcCpPrestationsLues136(o, e) {
     if (!p || typeof p !== 'object') return null;
     const nom = String(p.nom || '').replace(/\s+/g, ' ').trim().slice(0, 80);
     if (!nom) return null;
-    return { famille: String(p.famille || '').replace(/\s+/g, ' ').trim().slice(0, 80) || (tcCpGenerique147(e) ? tcCpMots147(e).familleDefaut : 'Mes prestations'), nom: nom, duree: tcCpDureeProche136(e, p.minutes), prix: tcCpLirePrix136(p.prix) };
+    return { famille: String(p.famille || '').replace(/\s+/g, ' ').trim().slice(0, 80) || (tcCpGenerique147(e) ? tcCpMots147(e).familleDefaut : 'Mes prestations'), nom: nom, duree: tcCpDureeProche136(e, p.minutes), prix: (tcCpGenerique147(e) && tcCpMots147(e).sansPrix) ? null : tcCpLirePrix136(p.prix) };   // examen du lot 2 : sans prix
   }).filter(Boolean);
 }
 /** « Valider ces réponses » : chaque prestation lue rejoint sa famille (même nom) ou une famille neuve ; elle est cochée. */
@@ -12251,10 +12272,10 @@ const tcConfigPro121 = {
     // Examen de la 136 : à plusieurs, seuls les jours de chaque coiffeur comptent (ceux du salon ne sont plus à l'écran).
     if (n === 4 && !(tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length) && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
     if (n === 6) { e.termine = true; tcCpFinApercu139(true); }   // mission 139 : on enregistre ce qu'on regardait, photos comprises
-    tcConfigPro121.aller(Math.min(7, n + 1));
+    tcConfigPro121.aller(tcCpEtapeVoisine147(e, n, 1));   // examen du lot 2 : l'étape d'après du métier (n + 1, sauf sans prix)
     if (n === 6 && typeof showToast === 'function') showToast('✅ C’est enregistré');
   },
-  retour: function () { tcConfigPro121.aller(Math.max(1, _tcConfigProEtape - 1)); },
+  retour: function () { tcConfigPro121.aller(tcCpEtapeVoisine147(tcConfigProLire(), _tcConfigProEtape, -1)); },   // examen du lot 2
   // Mission 139 : « Voir tous les métiers » (depuis le récapitulatif) ; « Retour à ma configuration », sans rien changer.
   tousMetiers: function () { tcCpDebutApercu139(); _tcCp147Ouvertes = null; _tcCp147Cherche = ''; _tcCp147Fermees = []; tcConfigPro121.aller(1); },
   retourConfig: function () { tcOuvrirConfigPro121(); tcConfigProHaut(); },
@@ -12690,7 +12711,7 @@ function tcCpBlocs143(t) {
 }
 
 function tcCpTitre(question, aide) {
-  return '<div style="font-size:12px; font-weight:700; color:var(--g-blue); text-transform:uppercase; letter-spacing:.3px;">Étape ' + _tcConfigProEtape + ' sur 6</div>'
+  return '<div style="font-size:12px; font-weight:700; color:var(--g-blue); text-transform:uppercase; letter-spacing:.3px;">' + tcCpCompteur147() + '</div>'
     + '<div style="font-size:20px; font-weight:700; color:var(--text); margin:4px 0 6px;">' + tcCpBlocs143(question) + '</div>'   // mission 143
     + (aide ? '<div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin-bottom:14px;">' + aide + '</div>' : '')
     + tcCpRappelMetier141();   // mission 141
@@ -12894,6 +12915,8 @@ function tcRendreConfigPro121() {
   const corps = document.getElementById('configProCorps');
   if (!corps) return;
   const e = tcConfigProLire();
+  // Examen du lot 2 : une étape que ce métier n'a pas (l'étape des prix des démarches) : celle d'après.
+  if (_tcConfigProEtape <= 6 && tcCpEtapes147(e).indexOf(_tcConfigProEtape) < 0) _tcConfigProEtape = tcCpEtapeVoisine147(e, _tcConfigProEtape, 1);
   const n = _tcConfigProEtape;
   let h = n === 1 ? tcCpEtape1(e) : n === 2 ? tcCpEtape2(e) : n === 3 ? tcCpEtape3(e) : n === 4 ? tcCpEtape4(e) : n === 5 ? tcCpEtape5(e) : n === 6 ? tcCpEtape6(e) : tcCpRecapitulatif(e);
   if (_tcCpApercu139 && n <= 6) h = '<button id="cpRetourConfig139" onclick="tcConfigPro121.retourConfig()" style="' + TC_CP_BOUTON + ' display:block; width:100%; margin:0 0 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);">← Retour à ma configuration</button>' + h;   // mission 139
