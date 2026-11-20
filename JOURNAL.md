@@ -3863,3 +3863,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - « jour:vendredi » attend exactement aujourd'hui un vendredi, et le vendredi suivant les autres jours. « jour:lundi+7 » ne change pas.
   - Sont rejouées le vendredi et le samedi : « ce vendredi » (Charly IA et Pro), « vendredi pour une urgence », « Dîner chez moi samedi », « Quand suis-je libre demain ? » (Pro). Deux lignes par jour ont été ajoutées pour « Quand suis-je libre demain ? » (pas de créneau le week-end) et pour « Préviens tous mes rendez-vous de cet après-midi… ».
   - Aucune vérification n'est retirée.
+- Examen des corrections de date (EXAMINATEUR, chef) :
+  - La vérification du week-end de verif-demo-pro131 ne testait que des absences : elle passait même sur une erreur. Elle exige maintenant « À quelle heure ? », et une erreur (« Erreur », « Connecte-toi ») n'est jamais acceptée.
+  - Le trou de l'appli : un vendredi ou un samedi, « Mets une réunion avec l'équipe demain après-midi » (et « demain matin », « demain ») partait au modèle. Quand le jour n'a pas de moment libre, la recherche du premier moment libre (tcCreneauLibreSansHeure131) renvoyait null. Le chemin « À quelle heure ? » (tcHeureManquante) refusait ensuite « avec l' ».
+  - La correction : tcCreneauLibreSansHeure131(text, forme) dit seulement la forme de la demande. Un jour sans moment libre (week-end sans plage, règle 43b, ou jour plein) donne « À quelle heure ? », sur place. Un jour avec un moment libre ne change pas.
+  - verif-demo-pro131 compte 82 vérifications, dont « demain matin » et « demain » en vrai ; 6 sont rouges sur 333646e. phrases-charles reçoit 7 lignes et passe à 965 vérifications, dont 38 rouges sur 333646e.

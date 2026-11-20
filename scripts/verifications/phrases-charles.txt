@@ -186,6 +186,15 @@ Préviens tous mes rendez-vous de cet après-midi que j’aurai 15 minutes de re
 # Correction de date (chef, 20/11) : le vendredi de l'agenda d'exemple, « Sport » (sans contact) est l'après-midi ; le samedi, rien.
 Préviens tous mes rendez-vous de cet après-midi que j’aurai 15 minutes de retard | @jour:vendredi | texte:Pour « Sport », je n’ai pas de contact && sans:je ne peux && sans:pas bien compris && sans:Lequel
 Préviens tous mes rendez-vous de cet après-midi que j’aurai 15 minutes de retard | @jour:samedi | texte:aucun rendez-vous cet après-midi && sans:je ne peux && sans:pas bien compris && sans:Lequel
+# Examen des corrections de date (chef, 20/11) : une réunion demain sans heure est comprise sur place tous les jours. Un vendredi ou un
+# samedi, demain n'a pas de créneau par défaut (règle 43b) : « À quelle heure ? », jamais le modèle, jamais une erreur.
+Mets une réunion avec l’équipe demain après-midi | @jours:vendredi,samedi | texte:^À quelle heure \? && sans:Erreur && sans:Connecte-toi
+Mets une réunion avec l’équipe demain matin |  | texte:R[ée]union [ée]quipe, .* à 9h : je te propose ceci && sans:Erreur && sans:Connecte-toi
+Mets une réunion avec l’équipe demain matin | @jour:vendredi | texte:^À quelle heure \? && sans:Erreur && sans:Connecte-toi
+Mets une réunion avec l’équipe demain matin | @jour:samedi | texte:^À quelle heure \? && sans:Erreur && sans:Connecte-toi
+Mets une réunion avec l’équipe demain |  | texte:R[ée]union [ée]quipe, .* à 9h : je te propose ceci && sans:Erreur && sans:Connecte-toi
+Mets une réunion avec l’équipe demain | @jour:vendredi | texte:^À quelle heure \? && sans:Erreur && sans:Connecte-toi
+Mets une réunion avec l’équipe demain | @jour:samedi | texte:^À quelle heure \? && sans:Erreur && sans:Connecte-toi
 # Examen 130 B : un contact nommé : son chemin d’avant (jamais toute la période).
 Dis à Paul que mes rendez-vous de demain ont du retard |  | texte:Paul && sans:Je préviens \d personne && sans:Tu as combien de retard && sans:pas bien compris
 Préviens Paul que j’ai 10 minutes de retard pour tous mes rendez-vous de demain |  | texte:Paul && sans:Je préviens \d personne && sans:Michel && sans:pas bien compris

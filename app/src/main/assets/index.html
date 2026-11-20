@@ -22058,6 +22058,10 @@ function tcHeureManquante(text) {
   if (/\?/.test(brut)) return false;
   // Mission 131 : « Note-moi un rendez-vous demain avec … » : le premier moment libre ce jour-là, pas « À quelle heure ? ».
   if (typeof tcCreneauLibreSansHeure131 === 'function' && tcCreneauLibreSansHeure131(brut)) return false;
+  // Correction de date (chef, 20/11) : la même demande, un jour sans moment libre (un samedi ou un dimanche sans plage ouverte : règle
+  // 43b, jamais un créneau le week-end par défaut ; ou un jour plein) : « À quelle heure ? », sur place, jamais le modèle.
+  // « Mets une réunion avec l'équipe demain après-midi », un vendredi, partait au modèle (« avec l' » ne passait pas plus bas).
+  if (typeof tcCreneauLibreSansHeure131 === 'function' && tcCreneauLibreSansHeure131(brut, true)) return true;
   const t = tcSansAccents(brut).toLowerCase().replace(/[’']/g, ' ');
   if (!/\bavec\s+[a-z]{2,}/.test(t) || t.split(/\s+/).filter(Boolean).length > 12) return false;
   if (tcHeureDansTexte(brut.toLowerCase())) return false;
@@ -22076,8 +22080,10 @@ function tcHeureManquante(text) {
  * « Note-moi un rendez-vous demain avec mon commercial Matériaux » : un rendez-vous avec quelqu'un, un jour, sans heure. Au lieu de
  * « À quelle heure ? », le premier moment libre d'une heure ce jour-là (Mes disponibilités, mon agenda) ; la carte habituelle le
  * propose (on peut le changer). { date, debut } ou null (alors, le chemin d'avant).
+ * Correction de date (chef, 20/11) : `forme` : seulement la forme de la demande (un rendez-vous avec quelqu'un, un jour, sans heure,
+ * sans moment vague) : { date } ou null, que ce jour ait un moment libre ou non.
  */
-function tcCreneauLibreSansHeure131(text) {
+function tcCreneauLibreSansHeure131(text, forme) {
   const t = tcClasseNormaliser(text);
   if (!/^(?:(?:charly|stp|svp|et|peux tu|tu peux)\s+)*(?:note|notes|noter|ajoute|ajouter|mets|mettre|cree|creer|prends|prendre|planifie|planifier|cale|caler|programme|programmer|fixe|fixer|organise|organiser)(?:\s+(?:moi|nous))?\s+(?:un|une|1)\s+(?:nouveau\s+|nouvelle\s+)?(?:rdv|rendez vous|rendezvous|reunion|rencontre)\s/.test(t + ' ')) return null;
   if (!/(^|\s)avec\s/.test(t)) return null;
@@ -22086,6 +22092,7 @@ function tcCreneauLibreSansHeure131(text) {
   if (/(^|\s)(soir|soiree|fin|debut|midi|dejeuner|dejeuners|diner|tot|tard|aube|nuit|petit dejeuner|apres le travail|apres le boulot)(\s|$)/.test(t.replace(/apres midi/g, 'apresmidi'))) return null;
   const jours = tcJoursCites(' ' + t.replace(/apres demain/g, 'apres-demain') + ' ', new Date(), false);
   if (jours.length !== 1) return null;
+  if (forme) return { date: jours[0] };
   const d = new Date(jours[0] + 'T00:00:00');
   const partie = /(^|\s)(matin|matinee)(\s|$)/.test(t) ? 'matin' : (/(^|\s)(apres midi|aprem)(\s|$)/.test(t) ? 'apres-midi' : null);
   // Examen 131 : l'après-midi commence à 14h (comme tcLireDestination130).

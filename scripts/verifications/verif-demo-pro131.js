@@ -103,6 +103,9 @@ const js = (largeur) => `<script>window.addEventListener('load', function () { s
     n0 = charlyIA.history.length; await taper('Je suis empêché demain, décale le rendez-vous Bruno à vendredi'); R.e1b = tout(n0); tcQuestionnaireArreter();
     n0 = charlyIA.history.length; await taper('Ajoute un rendez-vous avec Bruno demain en fin de journée'); R.e2 = tout(n0);
     n0 = charlyIA.history.length; await taper('Mets une réunion avec l’équipe demain après-midi'); R.e3 = tout(n0);
+    // Examen des corrections de date : « demain matin » (la matinée prise par le bloc 9h-12h) et « demain » tout court, sur place.
+    _tcHeureEnAttente = null; n0 = charlyIA.history.length; await taper('Mets une réunion avec l’équipe demain matin'); R.e4 = tout(n0);
+    _tcHeureEnAttente = null; n0 = charlyIA.history.length; await taper('Mets une réunion avec l’équipe demain'); R.e5 = tout(n0);
     R.debord = document.documentElement.scrollWidth - document.documentElement.clientWidth;
   } catch (e) { R.erreur = String(e && e.stack || e); }
   var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(R); document.body.appendChild(pre);
@@ -135,14 +138,18 @@ for (const [taille, w, horloge, demainFerme] of [['téléphone', 390, DIX_HEURES
   verifie(n + 'phrase 1 : « Valider » : le rendez-vous demain 15h-16h, « C’est noté », « Voir dans mon agenda »', JSON.stringify(S.p1b.rdv) === JSON.stringify([[S.pro.demain, 15, 0, 16, 0]]) && /C.est noté/.test(S.p1b.dit) && S.p1b.voir === true, JSON.stringify(S.p1b));
   verifie(n + 'phrase 3 (démonstration) : « Tu as un imprévu. Je déplace 8 rendez-vous. » (la matinée du cabinet, jusqu’à 13h), les créneaux de chacun selon les préférences, le message avec les excuses, un seul « Oui »', /Tu as un imprévu\. Je déplace 8 rendez-vous\./.test(S.p3) && /selon tes préférences et tes disponibilités/.test(S.p3) && /Le message pour Claire : « [\s\S]*Toutes mes excuses\. »/.test(S.p3) && !/Léa|Tom/.test(S.p3) && SANS(S.p3), S.p3);
   verifie(n + 'phrase 3 : après le oui, leurs réponses (vert), le compte rendu (« Claire a choisi … J’ai déplacé … »), l’agenda mis à jour', /VERT C’est bon pour/.test(S.p3b.dit) && /Claire a choisi .*J’ai déplacé « RDV Claire Virtuelle : détartrage »/.test(S.p3b.dit) && S.p3b.claire && S.p3b.claire.indexOf(S.pro.demain) !== 0, JSON.stringify(S.p3b).slice(0, 700));
-  if (demainFerme) verifie(n + 'en vrai, phrase 1, demain ' + demainFerme + ' (aucun créneau par défaut le week-end, règle 43b) : « À quelle heure ? », jamais un créneau proposé', /À quelle heure/.test(S.v1) && !/je te propose ceci/.test(S.v1), S.v1);
+  // Examen des corrections de date : une erreur (« ❌ Erreur », « Connecte-toi ») n'est jamais un résultat accepté.
+  const ERREUR = (x) => /Erreur|Connecte-toi/.test(x);
+  if (demainFerme) verifie(n + 'en vrai, phrase 1, demain ' + demainFerme + ' (aucun créneau par défaut le week-end, règle 43b) : « À quelle heure ? », jamais un créneau proposé, jamais une erreur', /À quelle heure/.test(S.v1) && !/je te propose ceci/.test(S.v1) && !ERREUR(S.v1), S.v1);
   else verifie(n + 'en vrai, phrase 1 : le premier moment libre de demain (12h, après le bloc 9h-12h), sans « À quelle heure ? »', /^Commercial Matériaux, .* à 12h : je te propose ceci/.test(S.v1) && SANS(S.v1), S.v1);
   verifie(n + 'en vrai, phrase 2 : les patients à venir, le message avec « Toutes mes excuses. », un seul « Je lui envoie ? »', /Je préviens 1 personne de ton retard/.test(S.v2) && /Anne Durand/.test(S.v2) && /Toutes mes excuses\./.test(S.v2) && SANS(S.v2), S.v2);
   verifie(n + 'en vrai, phrase 3 : « Tu as un imprévu. », le rendez-vous de demain matin avec Bruno, les excuses', /Tu as un imprévu\./.test(S.v3) && /Bruno/.test(S.v3) && /Toutes mes excuses\./.test(S.v3) && SANS(S.v3), S.v3);
   verifie(n + 'examen : un imprévu qui vise UN rendez-vous (« décale mon rendez-vous de 9h à vendredi », « … le rendez-vous Bruno à vendredi ») : jamais le parcours de toute la journée', !/Tu as un imprévu|Qui prévient/.test(S.e1) && !/Tu as un imprévu|Qui prévient/.test(S.e1b), JSON.stringify([S.e1, S.e1b]));
   verifie(n + 'examen : « … demain en fin de journée » : « À quelle heure ? », jamais 12h', /À quelle heure/.test(S.e2) && !/à 12h|Fin journée/.test(S.e2), S.e2);
-  if (demainFerme) verifie(n + 'examen : « … demain après-midi », demain ' + demainFerme + ' : jamais un créneau proposé le week-end', !/je te propose ceci/.test(S.e3) && !/14h/.test(S.e3), S.e3);
+  if (demainFerme) verifie(n + 'examen : « … demain après-midi », demain ' + demainFerme + ' : « À quelle heure ? », sur place (jamais le modèle, jamais une erreur), jamais un créneau le week-end', /À quelle heure/.test(S.e3) && !/je te propose ceci/.test(S.e3) && !ERREUR(S.e3), S.e3);
   else verifie(n + 'examen : « … demain après-midi » : le premier moment libre à partir de 14h', /à 14h : je te propose ceci/.test(S.e3), S.e3);
+  if (demainFerme) verifie(n + 'examen : « … demain matin » et « … demain », demain ' + demainFerme + ' : « À quelle heure ? », sur place, jamais une erreur', /À quelle heure/.test(S.e4) && /À quelle heure/.test(S.e5) && !/je te propose ceci/.test(S.e4 + S.e5) && !ERREUR(S.e4 + S.e5), JSON.stringify([S.e4, S.e5]));
+  else verifie(n + 'examen : « … demain matin », la matinée prise (bloc 9h-12h) : « À quelle heure ? », sur place ; « … demain » : le premier moment libre (12h)', /À quelle heure/.test(S.e4) && !ERREUR(S.e4) && /à 12h : je te propose ceci/.test(S.e5), JSON.stringify([S.e4, S.e5]));
   verifie(n + 'la page ne déborde pas sur le côté', S.debord <= 0, S.debord);
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
