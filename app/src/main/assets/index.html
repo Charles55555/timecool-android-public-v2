@@ -11168,6 +11168,7 @@ const TC_PRO_MOTS_147 = {
     aide5: 'Tous vos rendez-vous auront cette durée, quel que soit l’acte.<br>Les rendez-vous se suivent, sans pause.', note5: '',
     aide6: 'C’est la page que verront vos patients.<br>Une réponse est déjà proposée : corrigez-la si besoin.', aideRemplir: '<br>S’il y trouve vos actes, il les coche aussi, avec leurs prix.',
     photo: 'Votre photo', photoAjouter: 'Ajouter ma photo', photoChanger: 'Changer ma photo', recapActes: 'Vos actes et leur prix', aucun: 'Aucun acte.',
+    titre5: 'Combien de temps dure un rendez-vous chez vous ?',   // examen 147 : une seule durée pour tout, pas « par défaut »
     titre3: 'Quels prix affichez-vous ?', aide3: 'Pour chaque acte, si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
     vos: 'Vos actes', un: 'acte', des: 'actes', familleDefaut: 'Mes actes', proche: 'patient', listeIA: 'les actes écrits dans le texte, chacun',
     plusieursAide: 'Plusieurs praticiens dans le cabinet, chacun avec ses jours.',
@@ -11189,6 +11190,7 @@ const TC_PRO_MOTS_147 = {
     aide5: 'Tous vos rendez-vous auront cette durée, quelle que soit la prestation.<br>Les rendez-vous se suivent, sans pause.', note5: '',
     aide6: 'C’est la page que verront vos clients.<br>Une réponse est déjà proposée : corrigez-la si besoin.', aideRemplir: '<br>S’il y trouve vos prestations, il les coche aussi, avec leurs prix.',
     photo: 'Votre photo', photoAjouter: 'Ajouter ma photo', photoChanger: 'Changer ma photo', recapActes: 'Vos prestations et leur prix', aucun: 'Aucune prestation.',
+    titre5: 'Combien de temps dure un rendez-vous chez vous ?',
     titre3: 'Quels prix affichez-vous ?', aide3: 'Pour chaque prestation, si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
     vos: 'Vos prestations', un: 'prestation', des: 'prestations', familleDefaut: 'Mes prestations', proche: 'client', listeIA: 'les prestations écrites dans le texte, chacune',
     plusieursAide: 'Plusieurs personnes avec vous, chacune avec ses jours.',
@@ -12711,7 +12713,7 @@ function tcCpLignesCreneaux(e) {
 function tcCpEtape5(e) {
   const c = tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length ? tcCpCreneauxEquipe136(e) : tcCpLignesCreneaux(e);
   const M = tcCpMots136(e);
-  return tcCpTitre('Combien de temps dure un rendez-vous chez vous, par défaut ?', M.aide5)
+  return tcCpTitre(M.titre5 || 'Combien de temps dure un rendez-vous chez vous, par défaut ?', M.aide5)
     + '<div style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:10px; flex-wrap:wrap;"><span style="font-size:15px; color:var(--text);">Un rendez-vous dure</span>'
     + '<select id="cpDureeRdv" aria-label="Durée d’un rendez-vous" onchange="tcConfigPro121.dureeRdv(this.value)" style="' + TC_CP_CHAMP + ' font-weight:700;">'
     + TC_PRO_DUREES_RDV.map(function (d) { return '<option value="' + d + '"' + (d === Number(e.dureeRdv) ? ' selected' : '') + '>' + d + ' minutes</option>'; }).join('')

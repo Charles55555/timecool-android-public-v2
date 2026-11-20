@@ -121,6 +121,7 @@ async function parcours() {
     const cSam = garde().equipe.coiffeurs.filter((c) => c.prenom === 'Sam')[0];
     tcConfigPro121.quiLaFait('ongles', 'pose-de-gel', cSam.id); tcConfigPro121.option('mains', 'depose', 'pasSeule');
     tcConfigPro121.aller(4); await attendre(30); R.manu4 = texte();
+    tcConfigPro121.aller(5); await attendre(30); R.manu5 = texte();
     tcConfigPro121.aller(6); await attendre(30); R.manu6 = { texte: texte(), fiche: JSON.parse(JSON.stringify(tcConfigProLire().fiche || {})) };
     tcConfigPro121.aller(7); await attendre(30); R.manu7 = texte();
     tcConfigPro121.equipeMode('seul'); await attendre(30);
@@ -141,7 +142,7 @@ async function parcours() {
     tcConfigPro121.choisirMetier('coiffeur'); tcConfigPro121.equipeMode('plusieurs'); R.coiffeur1 = texte();
     tcConfigPro121.suivant(); R.coiffeurErreur = _tcConfigProErreur;
     document.getElementById('cpNouveauCoiffeur').value = 'Marie'; tcConfigPro121.ajouterCoiffeur(); tcConfigPro121.aller(2); R.coiffeur2 = texte();
-    tcConfigPro121.aller(3); R.coiffeur3 = texte(); tcConfigPro121.aller(4); R.coiffeur4 = texte();
+    tcConfigPro121.aller(3); R.coiffeur3 = texte(); tcConfigPro121.aller(4); R.coiffeur4 = texte(); tcConfigPro121.aller(5); R.coiffeur5 = texte();
     tcConfigPro121.choisirMetier('chirurgien-dentiste'); tcConfigPro121.aller(3); R.dentiste3 = texte();
     tcConfigPro121.choisirMetier('avocat'); tcConfigPro121.aller(3); R.avocat3 = texte();
     R.appels = appels; R.debords = debords;
@@ -207,7 +208,9 @@ else {
   verifie('étape 2 : créer une famille sans nom : « Écrivez le nom de votre famille d’actes. » ; renommer, décocher, créer : enregistré', S.osteoErreurFamille === 'Écrivez le nom de votre famille d’actes.' && /Adulte \(plus de 16 ans\)/.test(S.osteo2b) && /Bilan postural/.test(S.osteo2b), S.osteoErreurFamille);
   verifie('étape 3 : « Quels prix affichez-vous ? », un prix par acte gardé, aucune durée par acte', /Quels prix affichez-vous \?/.test(S.osteo3.texte) && /Tous vos rendez-vous ont la même durée \(étape 5\)/.test(S.osteo3.texte) && S.osteo3.prix === S.osteo3.actes && S.osteo3.actes === 6 && S.osteo3.durees === 0, J([S.osteo3.prix, S.osteo3.actes, S.osteo3.durees]));
   verifie('étape 4 : « Quels jours travaille chaque praticien ? », Léa et Tom', /Quels jours travaille chaque praticien \?/.test(S.osteo4) && /Choisissez un praticien, puis cochez ses jours\./.test(S.osteo4) && /Léa/.test(S.osteo4) && /Tom/.test(S.osteo4), '');
-  verifie('étape 5 : une seule durée, « quel que soit l’acte », sans la note du balayage', /quel que soit l’acte/.test(S.osteo5.texte) && !S.osteo5.note && !/balayage/i.test(S.osteo5.texte), '');
+  // Examen 147 : une seule durée pour tout : le titre ne dit pas « par défaut » (un acte n'a pas d'autre durée).
+  verifie('étape 5 : « Combien de temps dure un rendez-vous chez vous ? » (sans « par défaut »), une seule durée, « quel que soit l’acte », sans la note du balayage',
+    /Combien de temps dure un rendez-vous chez vous \?/.test(S.osteo5.texte) && !/par défaut/.test(S.osteo5.texte) && /quel que soit l’acte/.test(S.osteo5.texte) && !S.osteo5.note && !/balayage/i.test(S.osteo5.texte), S.osteo5.texte.slice(0, 200));
   verifie('étape 6 : « Quel nom voient vos patients ? », tarifs et remboursement, « Que doit apporter le patient ? » ; nom vide (pas de « Dr »), métier « Ostéopathe », consigne proposée',
     /Quel nom voient vos patients \?/.test(S.osteo6) && /Vos tarifs et le remboursement/.test(S.osteo6) && /Que doit apporter le patient \?/.test(S.osteo6) && S.osteoFiche.nom === '' && S.osteoFiche.metier === 'Ostéopathe' && S.osteoFiche.consignes === 'Merci d’arriver 5 minutes avant votre rendez-vous.' && S.osteoFiche.horaires === '', J(S.osteoFiche));
   verifie('« Remplis à ma place » : la consigne nomme le métier et les clés de la fiche ; « Vos actes (2) », sans durée ; rien d’enregistré avant « Valider »',
@@ -225,8 +228,8 @@ else {
   verifie('manucure : « Plusieurs personnes avec vous », « Ajouter une personne », « ➕ Ajouter cette personne »', /Plusieurs personnes avec vous, chacune avec ses jours\./.test(equipeManu) && /Ajouter une personne/.test(equipeManu) && /➕ Ajouter cette personne/.test(equipeManu) && !/coiffeur|praticien/i.test(equipeManu), equipeManu.slice(0, 700));
   verifie('manucure, étape 2 : « Quelles prestations faites-vous ? », « le client vous appelle », « Seulement avec une autre prestation », « Qui la fait ? »',
     /Quelles prestations faites-vous \?/.test(S.manu2) && /le client vous appelle/.test(S.manu2) && /Seulement avec une autre prestation(?! \()/.test(S.manu2) && /Qui la fait \?/.test(S.manu2) && /Vernis semi-permanent des pieds/.test(S.manu2) && !/salon|coupe|praticien|patient/i.test(S.manu2), '');
-  verifie('manucure, étapes 4 et 6 : « Quels jours travaille chaque personne ? » ; « Quel nom voient vos clients ? », sans tarifs remboursés ; consigne proposée',
-    /Quels jours travaille chaque personne \?/.test(S.manu4) && /Quel nom voient vos clients \?/.test(S.manu6.texte) && !/remboursement|carte Vitale/.test(S.manu6.texte) && S.manu6.fiche.metier === 'Manucure' && S.manu6.fiche.consignes === 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', J(S.manu6.fiche));
+  verifie('manucure, étapes 4, 5 et 6 : « Quels jours travaille chaque personne ? » ; « Combien de temps dure un rendez-vous chez vous ? », « quelle que soit la prestation » ; « Quel nom voient vos clients ? », sans tarifs remboursés ; consigne proposée',
+    /Quels jours travaille chaque personne \?/.test(S.manu4) && /Combien de temps dure un rendez-vous chez vous \?/.test(S.manu5) && !/par défaut/.test(S.manu5) && /quelle que soit la prestation/.test(S.manu5) && /Quel nom voient vos clients \?/.test(S.manu6.texte) && !/remboursement|carte Vitale/.test(S.manu6.texte) && S.manu6.fiche.metier === 'Manucure' && S.manu6.fiche.consignes === 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', J(S.manu6.fiche));
   verifie('manucure, récapitulatif : « Vos prestations et leur prix », « 🚫 pas faite par Sam », « ➕ seulement avec une autre prestation », « Les jours de chaque personne »',
     /Vos prestations et leur prix/.test(S.manu7) && /🚫 pas faite par Sam/.test(S.manu7) && /➕ seulement avec une autre prestation/.test(S.manu7) && /Les jours de chaque personne/.test(S.manu7), '');
   // 5. Chaque métier garde sa configuration ; « Voir tous les métiers ».
@@ -235,9 +238,9 @@ else {
   verifie('regarder le rhumatologue (étape 2, « Mes actes ») n’enregistre rien ; « Retour à ma configuration » : la manucure, telle quelle',
     /Mes actes/.test(S.rhumato.texte) && /Infiltration/.test(S.rhumato.texte) && S.rhumato.inchange && S.retour.inchange && S.retour.recap && S.retour.metier === 'manucure', J([S.rhumato.inchange, S.retour]));
   // 6. Le coiffeur, le dentiste, l'avocat.
-  verifie('le coiffeur garde ses mots : « Plusieurs coiffeurs dans le salon », « Ajouter un coiffeur », son erreur, « (une coupe, une couleur…) », « Quels jours travaille chaque coiffeur ? »',
+  verifie('le coiffeur garde ses mots : « Plusieurs coiffeurs dans le salon », « Ajouter un coiffeur », son erreur, « (une coupe, une couleur…) », « Quels jours travaille chaque coiffeur ? », « …, par défaut ? »',
     /Plusieurs coiffeurs dans le salon, chacun avec ses jours\./.test(S.coiffeur1) && /Ajouter un coiffeur/.test(S.coiffeur1) && S.coiffeurErreur === 'Ajoutez au moins un coiffeur, avec son prénom.'
-    && /Seulement avec une autre prestation \(une coupe, une couleur…\)/.test(S.coiffeur2) && /le client appelle le salon/.test(S.coiffeur2) && /Combien de temps, et à quel prix \?/.test(S.coiffeur3) && /Quels jours travaille chaque coiffeur \?/.test(S.coiffeur4), S.coiffeurErreur);
+    && /Seulement avec une autre prestation \(une coupe, une couleur…\)/.test(S.coiffeur2) && /le client appelle le salon/.test(S.coiffeur2) && /Combien de temps, et à quel prix \?/.test(S.coiffeur3) && /Quels jours travaille chaque coiffeur \?/.test(S.coiffeur4) && /Combien de temps dure un rendez-vous chez vous, par défaut \?/.test(S.coiffeur5), S.coiffeurErreur);
   verifie('le dentiste et l’avocat gardent leur étape 3 (« Combien de temps vous faut-il ? », « Vos deux rendez-vous »)', /Combien de temps vous faut-il \?/.test(S.dentiste3) && /Vos deux rendez-vous/.test(S.avocat3), '');
   verifie('aucun appel réseau', S.appels === 0 && P.appels === 0, J([S.appels, P.appels]));
   verifie('aucun débordement sur le côté, à 390 px et à 1280 px (étape 1 ouverte, étape 2, récapitulatif)', S.debords.concat(P.debords).every((x) => x <= 0), J([S.debords, P.debords]));
