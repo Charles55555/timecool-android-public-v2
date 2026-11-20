@@ -7,6 +7,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
+// Correction de date (chef, 20/11) : les dates attendues se calculent à l'heure de Paris, comme l'appli (le serveur est à l'heure UTC :
+// de 23h à minuit UTC, « après-demain » attendu avait un jour de retard). Chrome, lancé ensuite, hérite du même fuseau.
+process.env.TZ = 'Europe/Paris';
 const page = fs.readFileSync(process.argv[2] || path.join(__dirname, '../../app/src/main/assets/index.html'), 'utf8');
 const fichier = process.argv[3] || path.join(__dirname, 'phrases-charles.txt');
 let ko = 0, ok = 0;
@@ -14,19 +17,32 @@ const echecs = [];
 const verifie = (l, c, d) => { if (c) ok++; else { ko++; echecs.push(l); console.log('  KO ' + l + (d !== undefined ? ' : ' + String(d).slice(0, 500) : '')); } };
 
 // 1. Les phrases.
+// Correction de date (chef, 20/11) : chaque phrase se joue un jour fixe, à 10h, heure de Paris : le mardi 24/11/2026. Sa réponse ne dépend
+// plus du jour ni de l'heure du passage (un vendredi, « demain » tombait un samedi ; la nuit, « ce soir » était passé). Dans le contexte,
+// « @jours:vendredi,samedi » la rejoue aussi ces jours-là, avec les mêmes attendus ; « @jour:vendredi » la joue seulement ce jour-là, avec
+// ses attendus à elle (une même phrase peut avoir une ligne par jour).
+const JOURS_FIXES = { lundi: [2026, 10, 23], mardi: [2026, 10, 24], mercredi: [2026, 10, 25], jeudi: [2026, 10, 26], vendredi: [2026, 10, 20], samedi: [2026, 10, 21], dimanche: [2026, 10, 22] };
 const lignes = fs.readFileSync(fichier, 'utf8').split(/\r?\n/).filter((l) => l.trim() && !/^\s*#/.test(l));
-const cas = lignes.map((l) => {
+const cas = [];
+lignes.forEach((l) => {
   const [phrase, contexte, attendu] = l.split('|').map((x) => (x || '').trim());
-  // Lot 118 : « {date:+8} » devient « 25 novembre », « {jourdate:+8} » « mercredi 25 novembre » (la phrase garde son sens chaque jour).
-  // Examen 130 A : « {num:+1} » devient le numéro seul du jour (« 19 »). Mission 146 : « {nomjour:+6} », le nom du jour seul (« mercredi »).
-  const dater = (x) => String(x || '').replace(/\{(date|jourdate|num|nomjour):([+-]\d+)\}/g, function (m, sorte, n) {
-    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + Number(n));
-    if (sorte === 'num') return String(d.getDate());
-    const J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-    if (sorte === 'nomjour') return J[d.getDay()];
-    return (sorte === 'jourdate' ? J[d.getDay()] + ' ' : '') + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + M[d.getMonth()];
+  const ctx = contexte ? contexte.split('⏎').map((x) => x.trim()).filter(Boolean) : [];
+  let jours = ['mardi'];
+  ctx.forEach((x) => { let m; if ((m = /^@jours:(.+)$/.exec(x))) jours = jours.concat(m[1].split(',').map((y) => y.trim())); else if ((m = /^@jour:(.+)$/.exec(x))) jours = [m[1].trim()]; });
+  jours.filter((j, i) => jours.indexOf(j) === i).forEach((jour) => {
+    if (!JOURS_FIXES[jour]) throw new Error('jour inconnu dans « ' + l + ' » : ' + jour);
+    const base = new Date(JOURS_FIXES[jour][0], JOURS_FIXES[jour][1], JOURS_FIXES[jour][2]);
+    // Lot 118 : « {date:+8} » devient « 25 novembre », « {jourdate:+8} » « mercredi 25 novembre » (la phrase garde son sens chaque jour).
+    // Examen 130 A : « {num:+1} » devient le numéro seul du jour (« 19 »). Mission 146 : « {nomjour:+6} », le nom du jour seul (« mercredi »).
+    const dater = (x) => String(x || '').replace(/\{(date|jourdate|num|nomjour):([+-]\d+)\}/g, function (m, sorte, n) {
+      const d = new Date(base); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + Number(n));
+      if (sorte === 'num') return String(d.getDate());
+      const J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      if (sorte === 'nomjour') return J[d.getDay()];
+      return (sorte === 'jourdate' ? J[d.getDay()] + ' ' : '') + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + M[d.getMonth()];
+    });
+    cas.push({ phrase: dater(phrase), contexte: ctx.filter((x) => !/^@jours?:/.test(x)).map(dater).filter(Boolean), attendu: attendu || '', jour: jour, base: base });
   });
-  return { phrase: dater(phrase), contexte: contexte ? contexte.split('⏎').map((x) => dater(x.trim())).filter(Boolean) : [], attendu: attendu || '' };
 });
 const sansAccents = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 function variantes(p) {
@@ -35,19 +51,21 @@ function variantes(p) {
   return v.filter((x, i) => v.indexOf(x) === i);
 }
 const essais = [];
-cas.forEach((c, i) => variantes(c.phrase).forEach((v, j) => essais.push({ i, j, phrase: v, contexte: c.contexte })));
+cas.forEach((c, i) => variantes(c.phrase).forEach((v, j) => essais.push({ i, j, phrase: v, contexte: c.contexte, jour: JOURS_FIXES[c.jour] })));
 console.log('-- ' + cas.length + ' phrases, ' + essais.length + ' essais (phrases et variantes) --');
 
 // 2. Les dates attendues.
 const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-const aujourdhui = new Date(); aujourdhui.setHours(0, 0, 0, 0);
-function jourAttendu(spec) {
-  const d = new Date(aujourdhui);
+// Le jour attendu se compte à partir du jour fixe de la phrase (« base »), plus du jour du passage.
+function jourAttendu(spec, base) {
+  const d = new Date(base); d.setHours(0, 0, 0, 0);
   let m;
   if ((m = spec.match(/^([+-]\d+)$/))) d.setDate(d.getDate() + Number(m[1]));
   else if ((m = spec.match(/^([a-z]+)-$/))) { const k = JOURS.indexOf(m[1]); d.setDate(d.getDate() - (((d.getDay() - k + 7) % 7) || 7)); }
-  else if ((m = spec.match(/^([a-z]+)(\+\d+)?$/))) { const k = JOURS.indexOf(m[1]); let diff = (k - d.getDay() + 7) % 7; if (diff === 0) diff = 7; d.setDate(d.getDate() + diff + (m[2] ? Number(m[2]) : 0)); }
+  // Correction de date (chef, 20/11) : « jour:vendredi » attend exactement aujourd'hui un vendredi (« ce vendredi » dit un vendredi,
+  // c'est aujourd'hui), et le vendredi suivant les autres jours. « jour:lundi+7 » (« lundi en huit ») garde sa règle d'avant.
+  else if ((m = spec.match(/^([a-z]+)(\+\d+)?$/))) { const k = JOURS.indexOf(m[1]); let diff = (k - d.getDay() + 7) % 7; if (diff === 0 && m[2]) diff = 7; d.setDate(d.getDate() + diff + (m[2] ? Number(m[2]) : 0)); }
   const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   return { iso, texte: JOURS[d.getDay()] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + MOIS[d.getMonth()] };
 }
@@ -58,7 +76,7 @@ function juger(c, r) {
   if (r.erreur) raisons.push('erreur : ' + r.erreur);
   c.attendu.split('&&').map((x) => x.trim()).filter(Boolean).forEach((cond) => {
     let m;
-    if ((m = cond.match(/^jour:(.+)$/))) { const j = jourAttendu(m[1]); if (bas.indexOf(j.texte) < 0 && rep.indexOf(j.iso) < 0) raisons.push('ne parle pas de ' + j.texte); }
+    if ((m = cond.match(/^jour:(.+)$/))) { const j = jourAttendu(m[1], c.base); if (bas.indexOf(j.texte) < 0 && rep.indexOf(j.iso) < 0) raisons.push('ne parle pas de ' + j.texte); }
     else if ((m = cond.match(/^texte:(.+)$/))) { if (!new RegExp(m[1], 'im').test(rep)) raisons.push('pas « ' + m[1] + ' »'); }
     // Mission 127 : le nom en tête de la page (et l'avertissement du bas).
     else if ((m = cond.match(/^page:(.+)$/))) { if (!new RegExp(m[1], 'm').test(r.page || '')) raisons.push('la page ne dit pas « ' + m[1] + ' »'); }
@@ -80,7 +98,7 @@ if (!exe) {
   const js = `<script>window.addEventListener('load', function () { setTimeout(async function () {
     var attendre = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
     var fin = function (res) { var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre); };
-    var ESSAIS = ${JSON.stringify(essais.map((e) => ({ phrase: e.phrase, contexte: e.contexte })))};
+    var ESSAIS = ${JSON.stringify(essais.map((e) => ({ phrase: e.phrase, contexte: e.contexte, jour: e.jour })))};
     var taper = async function (t) { var i = document.getElementById('charlyInput'); i.value = t; await charlySendMessage(); await attendre(2500); };
     try {
       document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
@@ -99,7 +117,7 @@ if (!exe) {
           if (typeof _tcDemo !== 'undefined' && _tcDemo) { tcQuitterDemo({ sansRetour: true }); await attendre(200); }
           // Mission 127 : « @charlypro » : la phrase est tapée sur la page Charly Pro IA (case cochée) ; les autres, sur Charly IA.
           var pro = e.contexte.indexOf('@charlypro') > -1;
-          if (window.__tcDixHeures) window.__tcDixHeures(pro);   // mission 133
+          window.__tcJour(e.jour);   // correction de date : le jour fixe de la phrase, à 10h (mission 133 : le dentiste aussi, à 10h)
           if (typeof tcPasserCharlyVariante === 'function') { if (pro || tcCharlyVariante !== 'ia') { FEATURES.CHARLY_PRO = pro; await tcPasserCharlyVariante(pro ? 'pro' : 'ia', { ouvrir: true }); await attendre(200); } }
           else if (pro) throw new Error('pas de page Charly Pro IA');
           await tcOuvrirDemo(); await attendre(200);
@@ -140,13 +158,13 @@ if (!exe) {
       fin(R);
     } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
   }, 1200); });</script>`;
-  // Mission 133 : « @charlypro » est joué à 10h du jour même (la démonstration du dentiste place ses patients d'aujourd'hui une heure
-  // après l'ouverture, et ses créneaux aux heures du cabinet) : la suite reste vraie à toute heure. Le jour ne change pas ; les sept
-  // jours de la semaine sont rejoués par verif-demo-pro133.
+  // Mission 133 : « @charlypro » était joué à 10h du jour même (la démonstration du dentiste place ses patients d'aujourd'hui une heure
+  // après l'ouverture). Correction de date (chef, 20/11) : toutes les phrases se jouent à 10h de leur jour fixe (le mardi 24/11/2026, ou
+  // celui de « @jour(s): »). Les sept jours de la semaine du dentiste sont rejoués par verif-demo-pro133.
   const horloge = `<script>(function () { var V = Date; window.__tcDecalage = 0;
     class D extends V { constructor(...a) { if (a.length === 0) super(V.now() + window.__tcDecalage); else super(...a); } static now() { return V.now() + window.__tcDecalage; } }
     window.Date = D;
-    window.__tcDixHeures = function (oui) { var n = new V(); window.__tcDecalage = oui ? new V(n.getFullYear(), n.getMonth(), n.getDate(), 10, 0, 0).getTime() - n.getTime() : 0; };
+    window.__tcJour = function (j) { var n = new V(); window.__tcDecalage = new V(j[0], j[1], j[2], 10, 0, 0).getTime() - n.getTime(); };
   })();</script>`;
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-phrases-'));
   fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + horloge).replace('</body>', () => js + '</body>'));
@@ -159,7 +177,7 @@ if (!exe) {
   if (!Array.isArray(R)) verifie('le moteur a rejoué les phrases', false, JSON.stringify(R).slice(0, 300));
   else essais.forEach((e, k) => {
     const raisons = juger(cas[e.i], R[k] || {});
-    verifie('« ' + e.phrase + ' »' + (e.contexte.length ? ' (après « ' + e.contexte.join(' / ') + ' »)' : ''), !raisons.length, raisons.join(' ; ') + ' — ' + JSON.stringify((R[k] || {}).reponses || []).slice(0, 300));
+    verifie('« ' + e.phrase + ' »' + (cas[e.i].jour !== 'mardi' ? ' (un ' + cas[e.i].jour + ')' : '') + (e.contexte.length ? ' (après « ' + e.contexte.join(' / ') + ' »)' : ''), !raisons.length, raisons.join(' ; ') + ' — ' + JSON.stringify((R[k] || {}).reponses || []).slice(0, 300));
   });
 }
 

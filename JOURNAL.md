@@ -3849,3 +3849,17 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - Les périodes jour_0 à jour_7, chacune avec sa matinée et son après-midi, sont cachées : aucun bouton de plus. tcMaladeJourDit146 s'appuie sur tcJoursCites. L'imprévu de la mission 131 lit la même phrase sans le drapeau : il ne change pas. Les phrases déjà comprises (aujourd'hui, demain et ses moitiés, 2 ou 3 prochains jours, cette semaine, « ou » de la 110) donnent le même résultat qu'avant.
 - La suite verif-malade-jour146 compte 31 vérifications. Elle relit les phrases à chaque jour de la semaine, matin et soir, puis joue le vrai parcours dans Chrome, sans réseau. Elle est rouge sur f58e22b. phrases-charles.txt reçoit 15 phrases (98 essais) ; « {nomjour:+N} » donne le nom du jour J+N. Elles sont rouges sur f58e22b : 59 KO.
 - Examen de la 146 : un jour passé faisait perdre le moment demandé. « Je suis malade depuis lundi, annule mes rendez-vous de demain » reposait la question. Désormais « depuis lundi », « depuis hier », « mercredi dernier » et « mardi passé » sont retirés avant de chercher le jour, comme « depuis ce matin ». S'il ne reste aucun jour nommé, Charly reprend le chemin d'avant : demain, aujourd'hui ou la semaine, comme sur f58e22b. verif-malade-jour146 passe à 41 vérifications, dont 8 KO sur 738e353. phrases-charles reçoit 4 phrases de plus. Les lignes « décale » ne contrôlent plus la date, car la carte « décale » dit les nouveaux créneaux et pas le jour libéré : la date se vérifie sur « annule », qui la dit toujours. Ainsi la suite reste juste quel que soit le jour où elle tourne. Au total, 22 phrases et 141 essais, dont 24 KO sur 738e353.
+
+## 20/11/2026 — Corrections de date des suites (CODEUR, avant la mission 147)
+
+- Constat du vendredi 20/11, la nuit : verifier.sh était rouge sur 889e169, la version en ligne, à cause de la date et non du code. Il y avait trois causes :
+  1. « Quand suis-je libre ce vendredi ? » dit un vendredi : Charly répond aujourd'hui, mais la suite attendait le vendredi suivant.
+  2. verif-demo-pro131, partie « en vrai » : demain tombait un samedi, sans créneau par défaut (règle 43b). La suite attendait « 12h » et « 14h ».
+  3. De 23h à minuit UTC, verif-phrases-charles calculait ses dates à l'heure UTC du serveur, alors que l'appli est à l'heure de Paris.
+- L'appli est juste. La démonstration du dentiste marche le vendredi et le samedi comme un autre jour.
+- Ce qui change :
+  - verif-demo-pro131 se joue le mardi 24/11/2026 à 10h, heure de Paris, toutes vérifications inchangées. Elle se joue aussi un vendredi et un samedi, au téléphone, avec la démonstration à l'identique. « En vrai », quand demain est fermé, la réponse est « À quelle heure ? » et jamais un créneau le week-end. 78 vérifications.
+  - verif-phrases-charles calcule ses dates à l'heure de Paris. Chaque phrase se joue un jour fixe, le mardi 24/11/2026 à 10h. « @jours:vendredi,samedi » la rejoue ces jours-là ; « @jour:x » la joue seulement ce jour-là, avec ses attendus.
+  - « jour:vendredi » attend exactement aujourd'hui un vendredi, et le vendredi suivant les autres jours. « jour:lundi+7 » ne change pas.
+  - Sont rejouées le vendredi et le samedi : « ce vendredi » (Charly IA et Pro), « vendredi pour une urgence », « Dîner chez moi samedi », « Quand suis-je libre demain ? » (Pro). Deux lignes par jour ont été ajoutées pour « Quand suis-je libre demain ? » (pas de créneau le week-end) et pour « Préviens tous mes rendez-vous de cet après-midi… ».
+  - Aucune vérification n'est retirée.

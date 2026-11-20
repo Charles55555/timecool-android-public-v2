@@ -27,6 +27,11 @@ verifie('les phrases de la démonstration suivent la démonstration ouverte (tcD
 console.log('-- Dans la page (Chrome) --');
 // Mission 134 : la page joue à 10h du jour même (ses rendez-vous d'aujourd'hui sont placés une heure plus tard) : la suite reste
 // vraie à toute heure (après 21h30, un rendez-vous d'aujourd'hui était déjà fini).
+// Correction de date (chef, 20/11) : la suite jouait le jour réel ; un vendredi, « demain » tombait un samedi, sans créneau par défaut
+// (règle 43b : jamais un créneau le week-end par défaut) et la partie « en vrai » échouait. Elle se joue maintenant un mardi (24/11/2026),
+// à l'heure de Paris, toutes vérifications inchangées ; puis un vendredi (20/11) et un samedi (21/11), au téléphone : la démonstration du
+// dentiste doit y marcher pareil, et « en vrai », demain fermé (samedi, dimanche) : « À quelle heure ? », jamais un créneau le week-end.
+const DIX_HEURES_LE = (a, mo, j) => DIX_HEURES.replace('new V(n.getFullYear(), n.getMonth(), n.getDate(), 10, 0, 0)', 'new V(' + a + ', ' + mo + ', ' + j + ', 10, 0, 0)');
 const DIX_HEURES = `<script>(function () { var V = Date, n = new V(), dec = new V(n.getFullYear(), n.getMonth(), n.getDate(), 10, 0, 0).getTime() - n.getTime();
   class D extends V { constructor(...a) { if (a.length === 0) super(V.now() + dec); else super(...a); } static now() { return V.now() + dec; } }
   window.Date = D; })();</script>`;
@@ -102,10 +107,11 @@ const js = (largeur) => `<script>window.addEventListener('load', function () { s
   } catch (e) { R.erreur = String(e && e.stack || e); }
   var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(R); document.body.appendChild(pre);
 }, 1200); });</script>`;
-for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
+for (const [taille, w, horloge, demainFerme] of [['téléphone', 390, DIX_HEURES_LE(2026, 10, 24), ''], ['PC', 1366, DIX_HEURES_LE(2026, 10, 24), ''],
+  ['téléphone, un vendredi', 390, DIX_HEURES_LE(2026, 10, 20), 'samedi'], ['téléphone, un samedi', 390, DIX_HEURES_LE(2026, 10, 21), 'dimanche']]) {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-131-'));
-  fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + DIX_HEURES).replace('</body>', () => js(w) + '</body>'));
-  const r = spawnSync(exe, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=' + w + ',844', '--virtual-time-budget=120000', '--dump-dom', 'file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')], { encoding: 'utf8', timeout: 400000, maxBuffer: 1 << 28 });
+  fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + horloge).replace('</body>', () => js(w) + '</body>'));
+  const r = spawnSync(exe, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=' + w + ',844', '--virtual-time-budget=120000', '--dump-dom', 'file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')], { encoding: 'utf8', timeout: 400000, maxBuffer: 1 << 28, env: Object.assign({}, process.env, { TZ: 'Europe/Paris' }) });
   try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
   const m = (r.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);
   let S = null;
@@ -117,7 +123,7 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'Charly IA : sa démonstration telle qu’avant (« Démonstration », ses cinq phrases, Michel, Paul…)', /^🎬 Démonstration\s*Quitter$/.test(S.ia.pastille.texte) && S.ia.pastille.h === 40 && S.ia.phrases.length === 5 && /Michel/.test(S.ia.phrases[0]) && S.ia.contacts.indexOf('Michel Virtuel') > -1, JSON.stringify(S.ia));
   const p = S.pro.pastille;
   verifie(n + 'Charly Pro IA : « Démonstration pour un chirurgien-dentiste » (avec « Quitter »), aucun mot retiré, la taille du texte inchangée', /Démonstration\s+pour un chirurgien-dentiste/.test(p.texte) && /Quitter/.test(p.texte) && p.police === S.ia.pastille.police, JSON.stringify(p));
-  verifie(n + (taille === 'téléphone' ? 'au téléphone : sur deux lignes (« Démonstration » / « pour un chirurgien-dentiste »), dans l’écran' : 'au PC : sur une ligne'), taille === 'téléphone' ? (/Démonstration\npour un chirurgien-dentiste/.test(p.texte) && p.h > 40 && p.gauche >= 0 && p.droite <= 390) : (p.h === 40 && !/Démonstration\npour/.test(p.texte)), JSON.stringify(p));
+  verifie(n + (w === 390 ? 'au téléphone : sur deux lignes (« Démonstration » / « pour un chirurgien-dentiste »), dans l’écran' : 'au PC : sur une ligne'), w === 390 ? (/Démonstration\npour un chirurgien-dentiste/.test(p.texte) && p.h > 40 && p.gauche >= 0 && p.droite <= 390) : (p.h === 40 && !/Démonstration\npour/.test(p.texte)), JSON.stringify(p));   // correction de date : le téléphone, aussi un vendredi et un samedi
   verifie(n + 'les six phrases du dentiste, dans l’ordre, texte de Charles', JSON.stringify(S.pro.phrases) === JSON.stringify(PHRASES), JSON.stringify(S.pro.phrases));
   const cs = S.pro.contacts;
   verifie(n + 'les contacts d’exemple : 54 patients (mission 133), l’assistante, le prothésiste, le commercial Matériaux (Virtuel·le, 06 39 98 00 xx, @exemple-timecool.fr)', cs.length === 57 && cs.every(function (c) { return /Virtuel(?:le)?\b/.test(c[0]) && /^06 39 98 00 \d\d$/.test(c[1]) && /@exemple-timecool\.fr$/.test(c[2]); }) && cs.some(function (c) { return /\(assistante\)/.test(c[0]); }) && cs.some(function (c) { return /\(prothésiste\)/.test(c[0]); }) && cs.some(function (c) { return /\(commercial Matériaux\)/.test(c[0]) && !c[3]; }), cs.length + ' : ' + JSON.stringify(cs.filter(function (c) { return !(/Virtuel(?:le)?\b/.test(c[0]) && /^06 39 98 00 \d\d$/.test(c[1]) && /@exemple-timecool\.fr$/.test(c[2])); })));
@@ -129,12 +135,14 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'phrase 1 : « Valider » : le rendez-vous demain 15h-16h, « C’est noté », « Voir dans mon agenda »', JSON.stringify(S.p1b.rdv) === JSON.stringify([[S.pro.demain, 15, 0, 16, 0]]) && /C.est noté/.test(S.p1b.dit) && S.p1b.voir === true, JSON.stringify(S.p1b));
   verifie(n + 'phrase 3 (démonstration) : « Tu as un imprévu. Je déplace 8 rendez-vous. » (la matinée du cabinet, jusqu’à 13h), les créneaux de chacun selon les préférences, le message avec les excuses, un seul « Oui »', /Tu as un imprévu\. Je déplace 8 rendez-vous\./.test(S.p3) && /selon tes préférences et tes disponibilités/.test(S.p3) && /Le message pour Claire : « [\s\S]*Toutes mes excuses\. »/.test(S.p3) && !/Léa|Tom/.test(S.p3) && SANS(S.p3), S.p3);
   verifie(n + 'phrase 3 : après le oui, leurs réponses (vert), le compte rendu (« Claire a choisi … J’ai déplacé … »), l’agenda mis à jour', /VERT C’est bon pour/.test(S.p3b.dit) && /Claire a choisi .*J’ai déplacé « RDV Claire Virtuelle : détartrage »/.test(S.p3b.dit) && S.p3b.claire && S.p3b.claire.indexOf(S.pro.demain) !== 0, JSON.stringify(S.p3b).slice(0, 700));
-  verifie(n + 'en vrai, phrase 1 : le premier moment libre de demain (12h, après le bloc 9h-12h), sans « À quelle heure ? »', /^Commercial Matériaux, .* à 12h : je te propose ceci/.test(S.v1) && SANS(S.v1), S.v1);
+  if (demainFerme) verifie(n + 'en vrai, phrase 1, demain ' + demainFerme + ' (aucun créneau par défaut le week-end, règle 43b) : « À quelle heure ? », jamais un créneau proposé', /À quelle heure/.test(S.v1) && !/je te propose ceci/.test(S.v1), S.v1);
+  else verifie(n + 'en vrai, phrase 1 : le premier moment libre de demain (12h, après le bloc 9h-12h), sans « À quelle heure ? »', /^Commercial Matériaux, .* à 12h : je te propose ceci/.test(S.v1) && SANS(S.v1), S.v1);
   verifie(n + 'en vrai, phrase 2 : les patients à venir, le message avec « Toutes mes excuses. », un seul « Je lui envoie ? »', /Je préviens 1 personne de ton retard/.test(S.v2) && /Anne Durand/.test(S.v2) && /Toutes mes excuses\./.test(S.v2) && SANS(S.v2), S.v2);
   verifie(n + 'en vrai, phrase 3 : « Tu as un imprévu. », le rendez-vous de demain matin avec Bruno, les excuses', /Tu as un imprévu\./.test(S.v3) && /Bruno/.test(S.v3) && /Toutes mes excuses\./.test(S.v3) && SANS(S.v3), S.v3);
   verifie(n + 'examen : un imprévu qui vise UN rendez-vous (« décale mon rendez-vous de 9h à vendredi », « … le rendez-vous Bruno à vendredi ») : jamais le parcours de toute la journée', !/Tu as un imprévu|Qui prévient/.test(S.e1) && !/Tu as un imprévu|Qui prévient/.test(S.e1b), JSON.stringify([S.e1, S.e1b]));
   verifie(n + 'examen : « … demain en fin de journée » : « À quelle heure ? », jamais 12h', /À quelle heure/.test(S.e2) && !/à 12h|Fin journée/.test(S.e2), S.e2);
-  verifie(n + 'examen : « … demain après-midi » : le premier moment libre à partir de 14h', /à 14h : je te propose ceci/.test(S.e3), S.e3);
+  if (demainFerme) verifie(n + 'examen : « … demain après-midi », demain ' + demainFerme + ' : jamais un créneau proposé le week-end', !/je te propose ceci/.test(S.e3) && !/14h/.test(S.e3), S.e3);
+  else verifie(n + 'examen : « … demain après-midi » : le premier moment libre à partir de 14h', /à 14h : je te propose ceci/.test(S.e3), S.e3);
   verifie(n + 'la page ne déborde pas sur le côté', S.debord <= 0, S.debord);
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
