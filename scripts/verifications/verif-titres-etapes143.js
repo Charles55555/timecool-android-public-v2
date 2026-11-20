@@ -13,7 +13,8 @@ const page = fs.readFileSync(process.argv[2] || path.join(__dirname, '../../app/
 let ko = 0, ok = 0;
 const verifie = (l, c, d) => { if (c) ok++; else ko++; console.log('  ' + (c ? 'OK ' : 'KO ') + l + (!c && d !== undefined ? ' : ' + String(d).slice(0, 900) : '')); };
 // Les quatre configurations, étapes 1 à 7, dessinées par la page d'avant la mission 143 (82cb5f8), blocs retirés.
-const EMPREINTES = { dentiste: 'ac6d292915169816', coiffeur: 'b6165651d9de887a', equipe: '0c7010f1681ac6b3', avocat: 'f72625e8301adcc0' };
+// Mission 147 : étapes 2 à 7 seulement (l'étape 1 change), lues sur la page d'avant la mission (889e169).
+const EMPREINTES = { dentiste: 'ac233d86dbe60a71', coiffeur: 'a92a6fca3bd3f44c', equipe: '8ca7140920069ddd', avocat: 'd9b42157f0beb8b6' };
 const candidats = [process.env.TC_CHROME, 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean);
 const exe = candidats.find((x) => { try { return fs.existsSync(x); } catch (e) { return false; } });
 if (!exe) { console.log('NON JOUÉ : pas de Chrome sur ce poste'); process.exit(1); }
@@ -59,7 +60,8 @@ const jouer = (largeur) => {
       if (cle === 'equipe') e.equipe = { mode: 'plusieurs', coiffeurs: [{ id: 'cA', prenom: 'Léa', jours: tcConfigProJoursDefaut(), sans: [] }, { id: 'cB', prenom: 'Tom', jours: tcConfigProJoursDefaut(), sans: [] }] };
       localStorage.setItem('tc_config_pro', JSON.stringify(e)); _tcConfigPro = null; _tcConfigProErreur = ''; tcOuvrirConfigPro121();
       var T = { titres: {}, html: [], debords: [] };
-      for (var n = 1; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); if (n <= 6) T.titres['e' + n] = titre(); T.html.push(normal()); T.debords.push(deborde()); }
+      // Mission 147 : l'étape 1 change (les métiers par catégories : verif-config-metiers147) ; l'empreinte se lit sur les étapes 2 à 7.
+      for (var n = 1; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); if (n <= 6) T.titres['e' + n] = titre(); if (n >= 2) T.html.push(normal()); T.debords.push(deborde()); }
       R[cle] = T;
     });
     R.appels = appels;
@@ -95,7 +97,7 @@ if (!ko) {
   verifie('les onze titres sont tous vus, leur texte inchangé', attendus.every((t) => vus[t]) && Object.keys(vus).length === attendus.length, J(Object.keys(vus)));
   verifie('aucun débordement sur le côté, de 320 à 390 px, étapes 1 à 7', LARGEURS.every((L) => CLES.every((c) => S[L][c].debords.every((x) => x <= 0))), J(LARGEURS.map((L) => CLES.map((c) => S[L][c].debords))));
   const diff = CLES.filter((c) => h(S[390][c].html.join('\n§\n')) !== EMPREINTES[c]);
-  verifie('rien d’autre ne bouge : les quatre configurations, étapes 1 à 7, blocs retirés, au caractère près (page d’avant)', Object.keys(EMPREINTES).length === 4 && diff.length === 0, diff.join(', '));
+  verifie('rien d’autre ne bouge : les quatre configurations, étapes 2 à 7, blocs retirés, au caractère près (page d’avant)', Object.keys(EMPREINTES).length === 4 && diff.length === 0, diff.join(', '));
   verifie('aucun appel réseau', LARGEURS.every((L) => S[L].appels === 0), J(LARGEURS.map((L) => S[L].appels)));
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }

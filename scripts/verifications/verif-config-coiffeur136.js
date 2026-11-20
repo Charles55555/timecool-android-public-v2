@@ -171,7 +171,8 @@ else {
   const sansActe = (t) => !/\bactes?\b/i.test(t) && !/patient/i.test(t);
   verifie('case éteinte (compte ordinaire) : ni entrée de menu, ni page', S.menuEteint === false && S.pageEteinte === 'calendar', JSON.stringify([S.menuEteint, S.pageEteinte]));
   // Mission 137 : d'autres métiers s'ajoutent (« Avocat ») ; la liste reste rangée par ordre alphabétique.
-  verifie('étape 1 : « Chirurgien-dentiste » et « Coiffeur », par ordre alphabétique', S.metiers.indexOf('Chirurgien-dentiste') > -1 && S.metiers.indexOf('Coiffeur') > -1 && JSON.stringify(S.metiers) === JSON.stringify(S.metiers.slice().sort((a, b) => a.localeCompare(b, 'fr'))), JSON.stringify(S.metiers));
+  // Mission 147 : les métiers sont rangés par catégories ; l'ordre alphabétique de chaque catégorie, verif-config-metiers147 le vérifie.
+  verifie('étape 1 : « Chirurgien-dentiste » et « Coiffeur » sont dans la liste', S.metiers.indexOf('Chirurgien-dentiste') > -1 && S.metiers.indexOf('Coiffeur') > -1, JSON.stringify(S.metiers));
   verifie('étape 2 : « Quelles prestations faites-vous ? », les 7 familles et leurs 23 prestations', /Quelles prestations faites-vous \?/.test(S.e2) && S.familles === 'coupes-femme:4 coupes-homme:2 soins:4 coloration:3 balayage:3 patine-decoloration:3 coiffure:4'
     && ['Coupes femme', 'Coupe d’entretien', 'Coupes homme', 'Soins', 'Masque détox', 'Coloration', 'Coupe et coloration racines', 'Balayage', 'Balayage et patine', 'Patine et décoloration', 'Coiffure', 'Essai chignon de mariée'].every((x) => S.e2.indexOf(x) > -1), S.familles);
   verifie('étape 2 : on dit « prestation » et « client », jamais « acte » ni « patient » ; « Créer ma propre famille » et « Créer ma propre prestation »', sansActe(S.e2b) && /Créer ma propre famille/.test(S.e2b) && /Créer ma propre prestation/.test(S.e2b) && /Coupe enfant/.test(S.e2b), S.e2b.slice(0, 300));

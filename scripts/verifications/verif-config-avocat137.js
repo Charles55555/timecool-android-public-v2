@@ -135,7 +135,8 @@ else if (S.erreur) verifie('aucune erreur', false, S.erreur + ' ' + JSON.stringi
 else {
   const sansMots = (t) => !/\bactes?\b/i.test(t) && !/patient/i.test(t) && !/prestation/i.test(t);
   verifie('case éteinte (compte ordinaire) : pas d’entrée de menu', S.menuEteint === false, S.menuEteint);
-  verifie('étape 1 : « Avocat », « Chirurgien-dentiste », « Coiffeur », par ordre alphabétique ; pas de « seul ou à plusieurs » pour l’avocat', JSON.stringify(S.metiers) === '["Avocat","Chirurgien-dentiste","Coiffeur"]' && !/plusieurs/.test(S.e1), JSON.stringify(S.metiers));
+  // Mission 147 : d'autres métiers s'ajoutent, rangés par catégories (verif-config-metiers147 vérifie l'ordre de chaque catégorie).
+  verifie('étape 1 : « Avocat », « Chirurgien-dentiste », « Coiffeur » sont dans la liste ; pas de « seul ou à plusieurs » pour l’avocat', ['Avocat', 'Chirurgien-dentiste', 'Coiffeur'].every((x) => S.metiers.indexOf(x) > -1) && !/plusieurs/.test(S.e1), JSON.stringify(S.metiers));
   verifie('l’avocat : une seule durée de 30 minutes (choisie pour lui à l’étape 5)', S.duree === 30 && S.selectRdv === '30', JSON.stringify([S.duree, S.selectRdv]));
   verifie('étape 2 : « Quels domaines d’activité pratiquez-vous ? » (mission 142), les 14 domaines décochés au départ, sans leurs missions', /Quels domaines d’activité pratiquez-vous \?/.test(S.e2) && S.domaines === 'divorce:11:0 successions:6:0 locataire:6:0 immobilier:6:0 travail:6:0 harcelement:6:0 fiscalite:6:0 routier:6:0 penal:6:0 etrangers:6:0 commercial:6:0 administratif:6:0 entreprise:6:0 autres:6:0'
     && ['Divorce et garde d’enfants', 'Droit des successions', 'Pénal : crimes et délits', 'Création et gestion d’entreprise', 'Autres'].every((x) => S.e2.indexOf(x) > -1) && !/Donner une consultation juridique/.test(S.e2), S.domaines);

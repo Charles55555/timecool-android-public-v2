@@ -11132,6 +11132,303 @@ const TC_PRO_METIERS = [
   })()
 ];
 const TC_PRO_DUREES_ACTE = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 105, 120, 150, 180];
+
+/* ═══ Mission 147 (Charles, 20/11) : tous les métiers à rendez-vous, rangés par catégories ═══════════════════════════════
+   D'après l'ébauche du 18/11 (EBAUCHE-TOUS-LES-METIERS-MODULE-PRO-18-11-2026). Le chirurgien-dentiste, le coiffeur et l'avocat
+   gardent exactement leur parcours. Les autres métiers sont « génériques » : le parcours du coiffeur (familles et prestations à
+   cocher, renommer, retirer, créer ; seul ou à plusieurs ; la fiche avec « Remplis à ma place »), avec les mots de leur catégorie,
+   une seule durée pour tout (étape 5) et un prix facultatif (étape 3). Les questions particulières de l'ébauche (ordonnance, âge
+   de l'enfant, adresse, animal) ne sont pas posées ici. Lot 1 : la santé et la beauté. Toujours derrière la case CONFIG_PRO. */
+const TC_PRO_CATEGORIES_147 = [
+  ['sante', 'Santé'], ['beaute', 'Beauté et bien-être'], ['droit', 'Droit et chiffre'], ['banque', 'Banque, assurance, immobilier'],
+  ['auto', 'Automobile'], ['artisans', 'Artisans et dépannage à domicile'], ['loisirs', 'Enseignement, sport, loisirs'],
+  ['commerce', 'Commerce et conseil'], ['animaux', 'Animaux'], ['administration', 'Administration et associations']
+];
+// Les métiers déjà codés, et leur catégorie.
+const TC_PRO_CATEGORIE_147 = { 'chirurgien-dentiste': 'sante', 'coiffeur': 'beaute', 'avocat': 'droit' };
+// Les mots de chaque catégorie (santé : patient, acte, motif de consultation ; beauté : client, prestation).
+const TC_PRO_VOCABULAIRE_147 = { sante: 'sante', beaute: 'beaute' };
+// Des mots de plus pour la recherche (sans accents) : « kiné » trouve le masseur-kinésithérapeute.
+const TC_PRO_RECHERCHE_147 = {
+  'chirurgien-dentiste': 'dentiste dents', 'coiffeur': 'coiffure cheveux salon', 'avocat': 'droit justice',
+  'masseur-kinesitherapeute': 'kine kinesitherapeute', 'orl': 'oto rhino laryngologiste oreille nez gorge', 'ophtalmologue': 'ophtalmo yeux oeil',
+  'pedicure-podologue': 'podologue pieds semelles', 'medecin-generaliste': 'docteur generaliste', 'psychologue': 'psy', 'psychiatre': 'psy',
+  'gynecologue': 'gyneco', 'dermatologue': 'dermato peau', 'cardiologue': 'cardio coeur', 'gastro-enterologue': 'gastro',
+  'massotherapeute': 'massage masseur', 'manucure': 'ongles prothesiste ongulaire', 'institut-de-beaute': 'estheticienne epilation soins',
+  'barbier': 'barbe', 'tatoueur': 'tatouage', 'perceur': 'piercing', 'centre-d-epilation-au-laser': 'laser epilation'
+};
+// Les mots d'un métier générique, par vocabulaire : ceux des étapes (comme tcCpMots136), puis ceux de la mission 147.
+const TC_PRO_MOTS_147 = {
+  sante: {
+    titre2: 'Quels actes faites-vous ?', aide2: 'Cochez les actes que vous faites.<br>Vos patients les choisiront comme motif de consultation.<br>Vous pouvez les renommer, et en créer d’autres.',
+    nomSous: 'Nom de l’acte', creerSous: '➕ Créer mon propre acte', nomFamille: 'Nom de la famille d’actes', familleManque: 'Une famille qui manque ?', creerFamille: '➕ Créer ma propre famille',
+    erreurFamille: 'Écrivez le nom de votre famille d’actes.', erreurSous: 'Écrivez le nom de votre acte.', erreurActe: 'Gardez au moins un acte.',
+    question: 'Question au patient', aideQuestion: 'La question à poser pour cet acte.<br>Cochez les réponses qui permettent de prendre rendez-vous.',
+    exempleQuestion: 'Par exemple : Est-ce votre première visite ?', exemple0: 'Oui', exemple1: 'Non',
+    aide5: 'Tous vos rendez-vous auront cette durée, quel que soit l’acte.<br>Les rendez-vous se suivent, sans pause.', note5: '',
+    aide6: 'C’est la page que verront vos patients.<br>Une réponse est déjà proposée : corrigez-la si besoin.', aideRemplir: '<br>S’il y trouve vos actes, il les coche aussi, avec leurs prix.',
+    photo: 'Votre photo', photoAjouter: 'Ajouter ma photo', photoChanger: 'Changer ma photo', recapActes: 'Vos actes et leur prix', aucun: 'Aucun acte.',
+    titre3: 'Quels prix affichez-vous ?', aide3: 'Pour chaque acte, si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
+    vos: 'Vos actes', un: 'acte', des: 'actes', familleDefaut: 'Mes actes', proche: 'patient', listeIA: 'les actes écrits dans le texte, chacun',
+    plusieursAide: 'Plusieurs praticiens dans le cabinet, chacun avec ses jours.',
+    intro: 'Ajoutez vos praticiens, un par un : leur prénom, et leur photo s’ils le veulent.<br>Les actes, les prix et la fiche sont ceux du cabinet, les mêmes pour tous.<br>Chaque praticien a ses jours et ses horaires (étape 4).',
+    ariaPrenom: 'Prénom du praticien', ajouterTitre: 'Ajouter un praticien', ajouterBouton: '➕ Ajouter ce praticien',
+    erreurAucun: 'Ajoutez au moins un praticien, avec son prénom.', erreurPrenoms: 'Écrivez le prénom de chaque praticien.', erreurPrenom: 'Écrivez le prénom du praticien.', ce: 'ce praticien',
+    titre4: 'Quels jours travaille chaque praticien ?', aide4: 'Choisissez un praticien, puis cochez ses jours.<br>Pour chaque jour, donnez ses horaires du matin et de l’après-midi.',
+    recapJours: 'Les jours de chaque praticien', pasFaitePar: '🚫 pas fait par ', quiLaFait: 'Qui le fait ?',
+    horsLigne: '📞 Pas de rendez-vous en ligne : le patient appelle le cabinet', pasSeule: '➕ Seulement avec un autre acte',
+    consigne: '💬 Une consigne que le patient lit avant de choisir (facultatif)', exempleConsigne: 'Par exemple : arrivez 10 minutes avant.',
+    recapHorsLigne: '📞 pas de rendez-vous en ligne', recapPasSeule: '➕ seulement avec un autre acte'
+  },
+  beaute: {
+    titre2: 'Quelles prestations faites-vous ?', aide2: 'Cochez les prestations que vous faites.<br>Vous pouvez les renommer, et en créer d’autres.',
+    nomSous: 'Nom de la prestation', creerSous: '➕ Créer ma propre prestation', nomFamille: 'Nom de la famille de prestations', familleManque: 'Une famille qui manque ?', creerFamille: '➕ Créer ma propre famille',
+    erreurFamille: 'Écrivez le nom de votre famille de prestations.', erreurSous: 'Écrivez le nom de votre prestation.', erreurActe: 'Gardez au moins une prestation.',
+    question: 'Question au client', aideQuestion: 'La question à poser pour cette prestation.<br>Cochez les réponses qui permettent de prendre rendez-vous.',
+    exempleQuestion: 'Par exemple : Est-ce votre première visite ?', exemple0: 'Oui', exemple1: 'Non',
+    aide5: 'Tous vos rendez-vous auront cette durée, quelle que soit la prestation.<br>Les rendez-vous se suivent, sans pause.', note5: '',
+    aide6: 'C’est la page que verront vos clients.<br>Une réponse est déjà proposée : corrigez-la si besoin.', aideRemplir: '<br>S’il y trouve vos prestations, il les coche aussi, avec leurs prix.',
+    photo: 'Votre photo', photoAjouter: 'Ajouter ma photo', photoChanger: 'Changer ma photo', recapActes: 'Vos prestations et leur prix', aucun: 'Aucune prestation.',
+    titre3: 'Quels prix affichez-vous ?', aide3: 'Pour chaque prestation, si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
+    vos: 'Vos prestations', un: 'prestation', des: 'prestations', familleDefaut: 'Mes prestations', proche: 'client', listeIA: 'les prestations écrites dans le texte, chacune',
+    plusieursAide: 'Plusieurs personnes avec vous, chacune avec ses jours.',
+    intro: 'Ajoutez les personnes qui travaillent avec vous, une par une : leur prénom, et leur photo si elles le veulent.<br>Les prestations, les prix et la fiche sont les mêmes pour tous.<br>Chaque personne a ses jours et ses horaires (étape 4).',
+    ariaPrenom: 'Prénom de la personne', ajouterTitre: 'Ajouter une personne', ajouterBouton: '➕ Ajouter cette personne',
+    erreurAucun: 'Ajoutez au moins une personne, avec son prénom.', erreurPrenoms: 'Écrivez le prénom de chaque personne.', erreurPrenom: 'Écrivez le prénom de la personne.', ce: 'cette personne',
+    titre4: 'Quels jours travaille chaque personne ?', aide4: 'Choisissez une personne, puis cochez ses jours.<br>Pour chaque jour, donnez ses horaires du matin et de l’après-midi.',
+    recapJours: 'Les jours de chaque personne', pasFaitePar: '🚫 pas faite par ', quiLaFait: 'Qui la fait ?',
+    horsLigne: '📞 Pas de rendez-vous en ligne : le client vous appelle', pasSeule: '➕ Seulement avec une autre prestation',
+    consigne: '💬 Une consigne que le client lit avant de choisir (facultatif)', exempleConsigne: 'Par exemple : arrivez 5 minutes avant.',
+    recapHorsLigne: '📞 pas de rendez-vous en ligne', recapPasSeule: '➕ seulement avec une autre prestation'
+  }
+};
+// Les mots du coiffeur, tels qu'avant la mission 147 (seul ou à plusieurs, réglages, consigne de famille).
+const TC_PRO_EQUIPE_COIFFEUR_147 = {
+  plusieursAide: 'Plusieurs coiffeurs dans le salon, chacun avec ses jours.',
+  intro: 'Ajoutez vos coiffeurs, un par un : leur prénom, et leur photo s’ils le veulent.<br>Les prestations, les prix et la fiche sont ceux du salon, les mêmes pour tous.<br>Chaque coiffeur a ses jours et ses horaires (étape 4).',
+  ariaPrenom: 'Prénom du coiffeur', ajouterTitre: 'Ajouter un coiffeur', ajouterBouton: '➕ Ajouter ce coiffeur',
+  erreurAucun: 'Ajoutez au moins un coiffeur, avec son prénom.', erreurPrenoms: 'Écrivez le prénom de chaque coiffeur.', erreurPrenom: 'Écrivez le prénom du coiffeur.', ce: 'ce coiffeur',
+  titre4: 'Quels jours travaille chaque coiffeur ?', aide4: 'Choisissez un coiffeur, puis cochez ses jours.<br>Pour chaque jour, donnez ses horaires du matin et de l’après-midi.',
+  recapJours: 'Les jours de chaque coiffeur', pasFaitePar: '✂️ pas faite par ', quiLaFait: 'Qui la fait ?',
+  horsLigne: '📞 Pas de rendez-vous en ligne : le client appelle le salon', pasSeule: '➕ Seulement avec une autre prestation (une coupe, une couleur…)',
+  consigne: '💬 Une consigne que le client lit avant de choisir (facultatif)', exempleConsigne: 'Par exemple : venez avec les cheveux fraîchement lavés.'
+};
+// La fiche d'un métier générique : [clé, question, aide, lignes, nom court au récapitulatif].
+const TC_PRO_FICHE_QUESTIONS_147 = {
+  sante: [
+    ['nom', 'Quel nom voient vos patients ?', 'Par exemple : Marie Martin.', 1, 'Nom'],
+    ['metier', 'Quel métier affichez-vous ?', '', 1, 'Métier'],
+    ['adresse', 'Quelle est l’adresse du cabinet ?', 'Numéro, rue, code postal et ville.', 2, 'Adresse'],
+    ['acces', 'Comment entre-t-on dans le cabinet ?', 'Étage, ascenseur, code, accès en fauteuil roulant…', 2, 'Accès'],
+    ['presentation', 'Comment vous présentez-vous ?', 'Quelques phrases pour vos patients.', 4, 'Présentation'],
+    ['consignes', 'Avez-vous des consignes pour vos patients ?', 'Par exemple : merci d’arriver 5 minutes avant.', 3, 'Consignes'],
+    ['tarifs', 'Vos tarifs et le remboursement', 'Conventionné, tiers payant, carte Vitale…', 3, 'Tarifs'],
+    ['paiement', 'Quels moyens de paiement acceptez-vous ?', 'Carte bancaire, chèques, espèces…', 1, 'Paiement'],
+    ['horaires', 'Les horaires d’ouverture du cabinet', 'Facultatif : seulement si vous voulez les montrer.<br>Vos jours et vos horaires de travail (étape 4) ne sont jamais montrés ici.', 2, 'Horaires du cabinet'],
+    ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues'],
+    ['apporter', 'Que doit apporter le patient ?', '', 2, 'À apporter']
+  ],
+  beaute: [
+    ['nom', 'Quel nom voient vos clients ?', 'Par exemple : Institut Marie Beauté.', 1, 'Nom'],
+    ['metier', 'Quel métier affichez-vous ?', '', 1, 'Métier'],
+    ['adresse', 'Quelle est votre adresse ?', 'Numéro, rue, code postal et ville.', 2, 'Adresse'],
+    ['acces', 'Comment vient-on chez vous ?', 'Métro, bus, étage, ascenseur…', 2, 'Accès'],
+    ['presentation', 'Comment vous présentez-vous ?', 'Quelques phrases pour vos clients.', 4, 'Présentation'],
+    ['consignes', 'Avez-vous des consignes pour vos clients ?', 'Par exemple : merci de prévenir 24 h avant pour annuler.', 3, 'Consignes'],
+    ['paiement', 'Quels moyens de paiement acceptez-vous ?', 'Carte bancaire, chèques, espèces…', 1, 'Paiement'],
+    ['horaires', 'Vos horaires d’ouverture', 'Facultatif : seulement si vous voulez les montrer.<br>Vos jours et vos horaires de travail (étape 4) ne sont jamais montrés ici.', 2, 'Horaires d’ouverture'],
+    ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues']
+  ]
+};
+// Les réponses proposées d'un métier générique (le professionnel corrige) : jamais d'horaires, jamais de présentation inventée.
+const TC_PRO_FICHE_PROPOSEE_147 = {
+  sante: { consignes: 'Merci d’arriver 5 minutes avant votre rendez-vous.', paiement: 'Carte bancaire, chèques, espèces', langues: 'Français' },
+  beaute: { consignes: 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', paiement: 'Carte bancaire, espèces', langues: 'Français' }
+};
+// [catégorie, nom du métier, « Famille : élément ; élément | Famille : … »] ; « : a ; b » : la famille par défaut (« Mes actes »).
+// Une ligne de l'ébauche qui regroupe plusieurs métiers (« Ergothérapeute, psychomotricien ») donne un métier par nom.
+const TC_PRO_GENERIQUES_147 = [
+  ['sante', 'Médecin généraliste', 'Consultation : Première consultation ; Consultation de suivi ; Renouvellement d’ordonnance ; Résultats d’examens | Urgence : Consultation urgente du jour | Enfant : Consultation pédiatrique ; Suivi du nourrisson ; Vaccination de l’enfant | Prévention : Vaccination ; Bilan de santé ; Frottis | Certificat : Certificat médical pour le sport ; Autre certificat | Téléconsultation : Consultation vidéo'],
+  ['sante', 'Pédiatre', 'Suivi : Consultation de suivi ; Examen obligatoire du nourrisson ; Première consultation | Urgence : Consultation urgente | Vaccination : Vaccination | Téléconsultation : Consultation vidéo'],
+  ['sante', 'Masseur-kinésithérapeute', 'Bilan : Première séance avec bilan | Rééducation : Séance de rééducation ; Rééducation après une opération ; Rééducation du dos ; Rééducation de l’épaule, du genou, de la cheville | Respiratoire : Kinésithérapie respiratoire de l’adulte ; Kinésithérapie respiratoire du nourrisson | Périnée : Rééducation périnéale | Sport : Kinésithérapie du sport | À domicile : Séance à domicile'],
+  ['sante', 'Ostéopathe', 'Consultation : Adulte ; Enfant ; Nourrisson ; Femme enceinte ; Sportif | Urgence : Consultation urgente'],
+  ['sante', 'Sage-femme', 'Grossesse : Consultation de suivi de grossesse ; Entretien prénatal ; Préparation à la naissance | Après la naissance : Visite après l’accouchement ; Rééducation périnéale ; Suivi de l’allaitement | Gynécologie : Consultation de suivi gynécologique ; Contraception ; Frottis | À domicile : Visite à domicile'],
+  ['sante', 'Infirmier', 'Soins : Prise de sang ; Injection ; Pansement ; Perfusion | Vaccination : Vaccination | Suivi : Suivi d’un traitement ; Surveillance de la tension, du diabète | À domicile : Soin à domicile'],
+  ['sante', 'Psychologue', 'Consultation : Première consultation ; Séance de suivi | Public : Adulte ; Adolescent ; Enfant ; Couple ; Famille | Téléconsultation : Séance vidéo'],
+  ['sante', 'Psychiatre', 'Consultation : Première consultation ; Consultation de suivi ; Renouvellement d’ordonnance | Téléconsultation : Consultation vidéo'],
+  ['sante', 'Ophtalmologue', 'Consultation : Bilan de la vue ; Renouvellement de lunettes ou de lentilles ; Consultation de suivi | Enfant : Bilan de la vue de l’enfant | Urgence : Œil rouge ou douloureux | Examens : Fond d’œil ; Champ visuel | Chirurgie : Consultation avant une opération'],
+  ['sante', 'Orthoptiste', 'Bilan : Bilan orthoptique ; Bilan de la vue avec renouvellement de lunettes | Rééducation : Séance de rééducation'],
+  ['sante', 'Dermatologue', 'Consultation : Première consultation ; Suivi ; Contrôle des grains de beauté | Acte : Retrait d’une lésion ; Traitement de l’acné ; Verrue | Esthétique : Laser ; Injections'],
+  ['sante', 'Gynécologue', 'Consultation : Suivi gynécologique ; Première consultation ; Contraception | Grossesse : Suivi de grossesse ; Échographie | Acte : Frottis ; Pose ou retrait d’un stérilet'],
+  ['sante', 'Cardiologue', 'Consultation : Première consultation ; Suivi | Examens : Électrocardiogramme ; Échographie du cœur ; Test d’effort ; Pose d’un Holter'],
+  ['sante', 'ORL', 'Consultation : Adulte ; Enfant | Examens : Bilan de l’audition ; Bilan des vertiges'],
+  ['sante', 'Pédicure-podologue', 'Soins : Soin de pédicurie ; Ongle incarné ; Soin du pied du diabétique | Semelles : Bilan pour des semelles ; Remise des semelles ; Contrôle des semelles | À domicile : Soin à domicile'],
+  ['sante', 'Orthophoniste', 'Bilan : Bilan du langage oral ; Bilan du langage écrit | Séance : Séance de rééducation de l’enfant ; Séance de rééducation de l’adulte'],
+  ['sante', 'Diététicien', 'Consultation : Premier bilan ; Consultation de suivi | Téléconsultation : Consultation vidéo'],
+  ['sante', 'Radiologue', ': Radiographie ; Échographie ; Scanner ; IRM ; Mammographie'],
+  ['sante', 'Centre d’imagerie', ': Radiographie ; Échographie ; Scanner ; IRM ; Mammographie'],
+  ['sante', 'Laboratoire d’analyses', ': Prise de sang ; Dépistage ; Prélèvement à domicile'],
+  ['sante', 'Rhumatologue', ': Première consultation ; Suivi ; Infiltration'],
+  ['sante', 'Gastro-entérologue', ': Consultation ; Consultation avant un examen'],
+  ['sante', 'Pneumologue', ': Consultation ; Bilan du souffle ; Bilan du sommeil'],
+  ['sante', 'Urologue', ': Consultation ; Suivi'],
+  ['sante', 'Endocrinologue', ': Consultation ; Suivi du diabète ; Suivi de la thyroïde'],
+  ['sante', 'Allergologue', ': Consultation ; Tests ; Désensibilisation'],
+  ['sante', 'Neurologue', ': Consultation ; Suivi'],
+  ['sante', 'Chirurgien', ': Consultation avant une opération ; Consultation après une opération'],
+  ['sante', 'Médecin du sport', ': Consultation ; Certificat ; Test d’effort'],
+  ['sante', 'Ergothérapeute', ': Bilan ; Séance'],
+  ['sante', 'Psychomotricien', ': Bilan ; Séance'],
+  ['sante', 'Audioprothésiste', ': Bilan de l’audition ; Essai d’un appareil ; Réglage et contrôle'],
+  ['sante', 'Opticien', ': Examen de la vue ; Essayage ; Réglage et réparation'],
+  ['beaute', 'Barbier', 'Barbe : Taille de barbe ; Rasage à l’ancienne ; Contours | Coupe : Coupe homme ; Coupe enfant ; Dégradé | Formules : Coupe et barbe | Soins : Soin du visage ; Soin de la barbe'],
+  ['beaute', 'Manucure', 'Mains : Manucure simple ; Pose de vernis ; Vernis semi-permanent ; Dépose | Ongles : Pose de gel ; Remplissage ; Pose de capsules ; Décoration | Pieds : Beauté des pieds ; Vernis semi-permanent des pieds'],
+  ['beaute', 'Institut de beauté', 'Épilation : Sourcils ; Lèvre ; Aisselles ; Maillot ; Demi-jambes ; Jambes entières | Visage : Soin du visage ; Nettoyage de peau ; Soin anti-âge | Corps : Gommage ; Enveloppement ; Modelage | Regard : Teinture des cils ; Rehaussement des cils ; Extensions de cils ; Restructuration des sourcils | Maquillage : Maquillage de jour ; Maquillage de soirée ; Maquillage de mariée | Mains et pieds : Manucure ; Beauté des pieds'],
+  ['beaute', 'Spa', 'Massages : Massage relaxant ; Massage aux pierres chaudes ; Massage en duo | Soins : Soin du visage ; Soin du corps ; Gommage | Espace : Hammam ; Sauna ; Bain | Formules : Demi-journée ; Journée ; Formule en duo'],
+  ['beaute', 'Massothérapeute', ': Massage relaxant ; Massage sportif ; Massage du dos ; Massage pour femme enceinte ; Massage à domicile'],
+  ['beaute', 'Réflexologue', ': Réflexologie des pieds ; Réflexologie des mains ; Réflexologie du visage ; Première séance avec bilan'],
+  ['beaute', 'Sophrologue', ': Première séance ; Séance individuelle ; Séance de groupe ; Séance vidéo'],
+  ['beaute', 'Hypnothérapeute', ': Première séance ; Séance de suivi ; Arrêt du tabac ; Gestion du stress ; Sommeil ; Séance vidéo'],
+  ['beaute', 'Naturopathe', ': Premier bilan ; Consultation de suivi ; Consultation vidéo'],
+  ['beaute', 'Coach de vie', ': Séance découverte ; Séance individuelle ; Séance vidéo'],
+  ['beaute', 'Tatoueur', ': Rendez-vous de projet ; Séance de tatouage ; Retouche'],
+  ['beaute', 'Perceur', ': Piercing ; Contrôle'],
+  ['beaute', 'Esthétique des sourcils et maquillage permanent', ': Première pose ; Retouche'],
+  ['beaute', 'Centre d’épilation au laser', ': Bilan ; Séance'],
+  ['beaute', 'Centre de bronzage', ': Séance']
+];
+/** « Centre d’imagerie » → « centre-d-imagerie » : l'identifiant, stable, d'un métier, d'une famille ou d'une prestation. */
+function tcCpSlug147(t) { return tcSansAccents(String(t || '')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x'; }
+// Les métiers génériques rejoignent la liste (même forme que ceux déjà codés ; durée proposée de 20 min, jamais montrée).
+(function () {
+  TC_PRO_GENERIQUES_147.forEach(function (g) {
+    const id = tcCpSlug147(g[1]), voc = TC_PRO_VOCABULAIRE_147[g[0]];
+    if (!voc || TC_PRO_METIERS.some(function (m) { return m.id === id; })) return;
+    const fids = {};
+    const familles = g[2].split('|').map(function (bloc) {
+      const i = bloc.indexOf(':');
+      const nom = (i > -1 ? bloc.slice(0, i) : '').trim() || TC_PRO_MOTS_147[voc].familleDefaut;
+      let fid = tcCpSlug147(nom); while (fids[fid]) fid += '-2'; fids[fid] = 1;
+      const sids = {};
+      const sous = bloc.slice(i + 1).split(';').map(function (x) { return x.trim(); }).filter(Boolean).map(function (n) {
+        let sid = tcCpSlug147(n); while (sids[sid]) sid += '-2'; sids[sid] = 1;
+        return [sid, n, 20];
+      });
+      return { id: fid, nom: nom, sous: sous };
+    });
+    TC_PRO_METIERS.push({ id: id, nom: g[1], prestations: true, generique147: voc, categorie147: g[0], familles: familles });
+  });
+})();
+/** Le vocabulaire d'un métier générique (« sante », « beaute ») ; '' pour le dentiste, le coiffeur, l'avocat. */
+function tcCpGenerique147(e) { const m = tcConfigProMetier(e && e.metier); return m && m.generique147 ? m.generique147 : ''; }
+function tcCpCategorie147(m) { return m ? (m.categorie147 || TC_PRO_CATEGORIE_147[m.id] || '') : ''; }
+function tcCpMots147(e) { return TC_PRO_MOTS_147[tcCpGenerique147(e)]; }
+/** Les mots de « seul ou à plusieurs », des réglages et de la consigne : ceux du métier générique, sinon ceux du coiffeur. */
+function tcCpEq147(e) { const v = tcCpGenerique147(e); return v ? TC_PRO_MOTS_147[v] : TC_PRO_EQUIPE_COIFFEUR_147; }
+/** Les réponses proposées de la fiche : celles du métier, sinon celles de son vocabulaire. */
+function tcCpProposee147(id) {
+  if (TC_PRO_FICHE_PROPOSEE[id]) return TC_PRO_FICHE_PROPOSEE[id];
+  const m = tcConfigProMetier(id);
+  return m && m.generique147 ? TC_PRO_FICHE_PROPOSEE_147[m.generique147] : null;
+}
+/** « Remplis à ma place » d'un métier générique : les clés de sa fiche, et ses prestations (sans durée montrée). */
+function tcCpConsigneRemplir147(e) {
+  const v = tcCpGenerique147(e), M = TC_PRO_MOTS_147[v], m = tcConfigProMetier(e.metier);
+  return 'Tu es Charly Pro IA, l’assistant de TimeCool Pro. On te donne le texte ou la capture de la fiche d’un professionnel (' + (m ? m.nom : '') + '), par exemple sa page sur un site de prise de rendez-vous. '
+    + 'Réponds seulement par un objet JSON, sans aucun texte autour, avec ces clés : ' + TC_PRO_FICHE_QUESTIONS_147[v].map(function (q) { return q[0]; }).join(', ') + ', prestations. '
+    + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant le ' + M.proche + ', sauf « prestations ». Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
+    + '« horaires » : seulement les horaires d’ouverture écrits dans le texte. « paiement » : les moyens de paiement séparés par des virgules. '
+    + '« prestations » : ' + M.listeIA + ' { "famille": "…", "nom": "…", "minutes": un nombre ou null, "prix": le prix tel qu’il est écrit (« 80 € », « de 250 € à 280 € », « Sur devis ») ou une chaîne vide } ; une liste vide s’il n’y en a pas.';
+}
+/** « 3 actes, avec leur prix. » (après « Valider ces réponses »). */
+function tcCpMessagePrestations147(e, n) {
+  const M = tcCpMots147(e);
+  return n + ' ' + (n > 1 ? M.des : M.un) + ', avec leur prix.<br>Vous pouvez les corriger aux étapes 2 et 3.';
+}
+/** Étape 3 d'un métier générique : le prix de chaque prestation, facultatif (une seule durée pour tout, à l'étape 5). */
+function tcCpEtape3_147(e) {
+  const M = tcCpMots147(e);
+  const types = [['', 'Pas de prix affiché'], ['fixe', 'Un prix'], ['fourchette', 'Une fourchette'], ['devis', 'Sur devis']];
+  return tcCpTitre(M.titre3, M.aide3)
+    + '<div style="' + TC_CP_CARTE + '">' + tcConfigProActes(e).map(function (a) {
+      const o = a.s || a.f;
+      const arg = '\'' + a.f.id + '\', ' + (a.s ? '\'' + a.s.id + '\'' : 'null');
+      const p = o.prix && typeof o.prix === 'object' ? o.prix : {};
+      const t = p.type === 'fixe' || p.type === 'fourchette' || p.type === 'devis' ? p.type : '';
+      const montant = function (rang, val, nom) { return '<input type="number" inputmode="decimal" min="0" step="1" aria-label="' + nom + '" value="' + (val > 0 ? val : '') + '" onchange="tcConfigPro121.prixMontant(' + arg + ', \'' + rang + '\', this.value)" style="' + TC_CP_CHAMP + ' width:84px;"> €'; };
+      return '<div class="cp-prix147" style="padding:10px 0; border-bottom:1px solid var(--border);">'
+        + '<div style="font-size:14px; color:var(--text); line-height:1.35; margin-bottom:6px;">' + (a.s ? '<span style="color:var(--text-sec); font-size:12px;">' + tcConfigProNomHTML(a.f, null) + '</span><br>' : '') + tcConfigProNomHTML(a.f, a.s) + '</div>'
+        + '<select aria-label="Prix" onchange="tcConfigPro121.prixType(' + arg + ', this.value)" style="' + TC_CP_CHAMP + '">' + types.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === t ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>'
+        + (t === 'fixe' ? '<div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:14px; color:var(--text);">' + montant('min', p.min, 'Prix') + '</div>' : '')
+        + (t === 'fourchette' ? '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; font-size:14px; color:var(--text);">de ' + montant('min', p.min, 'Prix le plus bas') + ' à ' + montant('max', p.max, 'Prix le plus haut') + '</div>' : '')
+        + '</div>';
+    }).join('') + '</div>';
+}
+/** Au récapitulatif d'un métier générique : chaque prestation et son prix (pas de durée), ses réglages, la consigne de famille. */
+function tcCpRecapActes147(e) {
+  const W = tcCpMots147(e);
+  const ligne = function (o, nomHTML, retrait, cle) {
+    const prix = tcCpPrix136(o.prix);
+    const plus = [o.horsLigne ? W.recapHorsLigne : '', o.pasSeule ? W.recapPasSeule : '', cle ? tcCpPasFaitePar136(e, cle) : ''].filter(Boolean).join(' · ');
+    return '<div style="padding:2px 0 2px ' + retrait + 'px; font-size:14px; color:var(--text);">' + (retrait ? '• ' : '') + nomHTML + (prix ? ' · ' + escapeHTMLSafe(prix) : '')
+      + (plus ? '<div style="font-size:12.5px; color:var(--text-sec); padding-left:' + (retrait ? 14 : 0) + 'px;">' + plus + '</div>' : '') + '</div>';
+  };
+  return e.familles.filter(function (f) { return f.gardee && (!f.sous.length || f.sous.some(function (x) { return x.gardee; })); }).map(function (f) {
+    const consigne = f.consigne ? '<div style="padding:0 0 2px 14px; font-size:12.5px; color:var(--text-sec);">💬 <span data-notranslate>' + escapeHTMLSafe(f.consigne) + '</span></div>' : '';
+    if (!f.sous.length) return ligne(f, tcConfigProNomHTML(f, null), 0) + consigne;
+    return '<div style="padding:6px 0 2px; font-size:14px; font-weight:700; color:var(--text);">' + tcConfigProNomHTML(f, null) + '</div>' + consigne
+      + f.sous.filter(function (x) { return x.gardee; }).map(function (x) { return ligne(x, tcConfigProNomHTML(f, x), 14, f.id + '/' + x.id) + (x.question ? '<div style="padding:0 0 2px 28px; font-size:12.5px; color:var(--text-sec);">❓ <span data-notranslate>' + escapeHTMLSafe(x.question.texte) + '</span></div>' : ''); }).join('');
+  }).join('');
+}
+/* Étape 1 : les catégories dépliables (fermées au départ, celle du métier choisi ouverte) et « Cherchez votre métier ». */
+let _tcCp147Ouvertes = null;   // les catégories ouvertes (null : seulement celle du métier choisi)
+let _tcCp147Cherche = '';      // ce qui est tapé dans la case de recherche
+let _tcCp147Fermees = [];      // pendant une recherche, les catégories refermées à la main
+function tcCpNorm147(t) { return tcSansAccents(String(t || '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+function tcCpOuvertes147(e) {
+  if (!Array.isArray(_tcCp147Ouvertes)) { const c = tcCpCategorie147(tcConfigProMetier(e && e.metier)); _tcCp147Ouvertes = c ? [c] : []; }
+  return _tcCp147Ouvertes;
+}
+/** Le métier choisi : sa catégorie reste ouverte. */
+function tcCpOuvrir147(id) {
+  const c = tcCpCategorie147(tcConfigProMetier(id)), o = tcCpOuvertes147(tcConfigProLire());
+  if (c && o.indexOf(c) < 0) o.push(c);
+}
+function tcCpListe147(e) {
+  const q = tcCpNorm147(_tcCp147Cherche), mots = q ? q.split(' ') : [];
+  const ouvertes = tcCpOuvertes147(e);
+  const html = TC_PRO_CATEGORIES_147.map(function (c) {
+    const tous = TC_PRO_METIERS.filter(function (m) { return tcCpCategorie147(m) === c[0]; }).sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); });
+    if (!tous.length) return '';
+    const trouve = function (m) { const h = tcCpNorm147(m.nom + ' ' + (TC_PRO_RECHERCHE_147[m.id] || '') + ' ' + c[1]); return mots.every(function (w) { return h.indexOf(w) > -1; }); };
+    const n = q ? tous.filter(trouve).length : tous.length;
+    if (q && !n) return '';
+    const ouverte = q ? _tcCp147Fermees.indexOf(c[0]) < 0 : ouvertes.indexOf(c[0]) > -1;
+    return '<div class="cp-categorie147" data-categorie="' + c[0] + '" style="margin-bottom:10px;">'
+      + '<button type="button" aria-expanded="' + (ouverte ? 'true' : 'false') + '" onclick="tcConfigPro121.categorie147(\'' + c[0] + '\')" style="display:flex; align-items:center; gap:10px; width:100%; box-sizing:border-box; text-align:left; background:#f8f9fa; border:1px solid var(--border); border-radius:12px; padding:12px 14px; min-height:54px; cursor:pointer; font-family:inherit;">'
+      + '<span style="flex:1; min-width:0; font-size:17px; font-weight:700; color:var(--text); line-height:1.3;">' + escapeHTMLSafe(c[1]) + '</span>'
+      + '<span style="flex-shrink:0; font-size:13px; font-weight:600; color:#3c4043; background:#e8eaed; border-radius:12px; padding:3px 10px; white-space:nowrap;">' + n + ' métier' + (n > 1 ? 's' : '') + '</span>'
+      + '<span aria-hidden="true" style="flex-shrink:0; width:22px; text-align:center; font-size:22px; line-height:1; color:var(--g-blue);">' + (ouverte ? '▾' : '▸') + '</span></button>'
+      + '<div class="cp-metiers147" style="padding:8px 0 0 8px;' + (ouverte ? '' : ' display:none;') + '">'
+      + tous.map(function (m) {
+        const on = e.metier === m.id, cache = !!q && !trouve(m);
+        return '<div role="button" tabindex="0" onclick="tcConfigPro121.choisirMetier(\'' + m.id + '\')" style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:12px; cursor:pointer; margin-bottom:8px; padding:12px 14px; border-color:' + (on ? 'var(--g-blue)' : 'var(--border)') + ';' + (cache ? ' display:none;' : '') + '">'
+          + '<span aria-hidden="true" style="flex-shrink:0; width:20px; height:20px; border-radius:50%; border:2px solid ' + (on ? 'var(--g-blue)' : '#9aa0a6') + '; display:inline-flex; align-items:center; justify-content:center;">' + (on ? '<span style="width:10px; height:10px; border-radius:50%; background:var(--g-blue);"></span>' : '') + '</span>'
+          + '<span style="font-size:15px; font-weight:600; color:var(--text); line-height:1.3;">' + escapeHTMLSafe(m.nom) + '</span></div>';
+      }).join('') + '</div></div>';
+  }).join('');
+  return html || '<div role="status" style="font-size:15px; color:var(--text-sec); line-height:1.5; padding:10px 4px 14px;">Aucun métier ne correspond.<br>Essayez un autre mot.</div>';
+}
+/** La liste seule est redessinée : la case de recherche garde le curseur. */
+function tcCpRedessinerListe147() {
+  const l = document.getElementById('cpListe147');
+  if (!l) { tcRendreConfigPro121(); return; }
+  l.innerHTML = tcCpListe147(tcConfigProLire());
+  if (typeof currentLanguage !== 'undefined' && currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
+    setTimeout(function () { translatePageWithGoogle(currentLanguage, true); }, 60);
+  }
+}
+/* ═══ fin mission 147 (données et outils) ═════════════════════════════════════════════════════════════════════════════ */
 const TC_PRO_DUREES_RDV = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 105, 120];
 let _tcConfigPro = null;          // l'état, lu à l'ouverture de la page
 let _tcConfigProEtape = 1;        // 1 à 5 ; 6 = le récapitulatif
@@ -11239,6 +11536,7 @@ function tcOuvrirConfigPro121() {
   const e = tcConfigProLire();
   _tcConfigProEtape = e.termine ? 7 : Math.min(6, Math.max(1, Number(e.etape) || 1));
   _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null; _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProPrestations136 = 0; _tcConfigProCoiffeur136 = null; _tcConfigProDomaines137 = 0;
+  _tcCp147Ouvertes = null; _tcCp147Cherche = ''; _tcCp147Fermees = [];   // mission 147 : l'étape 1 repart fermée (sauf le métier choisi)
   tcRendreConfigPro121();
 }
 
@@ -11287,6 +11585,7 @@ function tcCpLirePrix136(t) {
 }
 /** Les mots de la page : ceux du chirurgien-dentiste (tels qu'avant), ou ceux d'un métier à prestations. */
 function tcCpMots136(e) {
+  if (tcCpGenerique147(e)) return tcCpMots147(e);   // mission 147
   if (tcCpAvocat137(e)) return tcCpMots137();   // mission 137
   if (!tcCpPrestations136(e)) return { titre2: 'Quels actes faites-vous ?', aide2: 'Cochez les actes que vous faites.<br>Vous pouvez les renommer, et en créer d’autres.',
     nomSous: 'Nom de la sous-famille', creerSous: '➕ Créer ma propre sous-famille', nomFamille: 'Nom de la famille d’actes',
@@ -11319,13 +11618,13 @@ const TC_PRO_FICHE_QUESTIONS_136 = [
   ['horaires', 'Les horaires d’ouverture du salon', 'Facultatif : seulement si vous voulez les montrer.<br>Vos jours et vos horaires de travail (étape 4) ne sont jamais montrés ici.', 2, 'Horaires du salon'],
   ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues']
 ];
-function tcCpQuestions136(e) { return tcCpAvocat137(e) ? TC_PRO_FICHE_QUESTIONS_137 : (tcCpPrestations136(e) ? TC_PRO_FICHE_QUESTIONS_136 : TC_PRO_FICHE_QUESTIONS); }
+function tcCpQuestions136(e) { return tcCpGenerique147(e) ? TC_PRO_FICHE_QUESTIONS_147[tcCpGenerique147(e)] : (tcCpAvocat137(e) ? TC_PRO_FICHE_QUESTIONS_137 : (tcCpPrestations136(e) ? TC_PRO_FICHE_QUESTIONS_136 : TC_PRO_FICHE_QUESTIONS)); }
 const TC_PRO_CONSIGNE_REMPLIR_136 = 'Tu es Charly Pro IA, l’assistant de TimeCool Pro. On te donne le texte ou la capture de la fiche d’un salon de coiffure (par exemple sa page sur un site de prise de rendez-vous). '
   + 'Réponds seulement par un objet JSON, sans aucun texte autour, avec ces clés : nom, metier, adresse, acces, presentation, consignes, paiement, horaires, langues, prestations. '
   + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant le client, sauf « prestations ». Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
   + '« nom » : le nom du salon. « horaires » : seulement les horaires d’ouverture du salon écrits dans le texte. « paiement » : les moyens de paiement séparés par des virgules. '
   + '« prestations » : les prestations écrites dans le texte, chacune { "famille": "…", "nom": "…", "minutes": un nombre ou null, "prix": le prix tel qu’il est écrit (« 80 € », « de 250 € à 280 € », « Sur devis ») ou une chaîne vide } ; une liste vide s’il n’y en a pas.';
-function tcCpConsigneRemplir136(e) { return tcCpAvocat137(e) ? TC_PRO_CONSIGNE_REMPLIR_137 : (tcCpPrestations136(e) ? TC_PRO_CONSIGNE_REMPLIR_136 : TC_PRO_CONSIGNE_REMPLIR); }
+function tcCpConsigneRemplir136(e) { return tcCpGenerique147(e) ? tcCpConsigneRemplir147(e) : (tcCpAvocat137(e) ? TC_PRO_CONSIGNE_REMPLIR_137 : (tcCpPrestations136(e) ? TC_PRO_CONSIGNE_REMPLIR_136 : TC_PRO_CONSIGNE_REMPLIR)); }
 let _tcConfigProPrestations136 = 0;   // combien de prestations « Remplis à ma place » vient d'ajouter ou de mettre à jour
 /** Les prestations lues par Charly Pro IA (« Remplis à ma place ») : [{ famille, nom, duree, prix }], sans ce qui n'a pas de nom. */
 function tcCpPrestationsLues136(o, e) {
@@ -11334,7 +11633,7 @@ function tcCpPrestationsLues136(o, e) {
     if (!p || typeof p !== 'object') return null;
     const nom = String(p.nom || '').replace(/\s+/g, ' ').trim().slice(0, 80);
     if (!nom) return null;
-    return { famille: String(p.famille || '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Mes prestations', nom: nom, duree: tcCpDureeProche136(e, p.minutes), prix: tcCpLirePrix136(p.prix) };
+    return { famille: String(p.famille || '').replace(/\s+/g, ' ').trim().slice(0, 80) || (tcCpGenerique147(e) ? tcCpMots147(e).familleDefaut : 'Mes prestations'), nom: nom, duree: tcCpDureeProche136(e, p.minutes), prix: tcCpLirePrix136(p.prix) };
   }).filter(Boolean);
 }
 /** « Valider ces réponses » : chaque prestation lue rejoint sa famille (même nom) ou une famille neuve ; elle est cochée. */
@@ -11358,9 +11657,10 @@ function tcCpAppliquerPrestations136(e, liste) {
 function tcCpPrestationsProposees136(prop) {
   const l = prop && Array.isArray(prop._prestations) ? prop._prestations : [];
   if (!l.length) return '';
-  return '<div style="padding:8px 0 2px; font-size:14px; font-weight:700; color:var(--text);">Vos prestations (' + l.length + ')</div>'
+  const _g147 = tcCpGenerique147(tcConfigProLire());   // mission 147 : un métier générique n'a pas de durée par prestation
+  return '<div style="padding:8px 0 2px; font-size:14px; font-weight:700; color:var(--text);">' + (_g147 ? TC_PRO_MOTS_147[_g147].vos : 'Vos prestations') + ' (' + l.length + ')</div>'
     + l.map(function (p) {
-      const det = [p.duree ? tcCpDuree136(p.duree) : '', tcCpPrix136(p.prix)].filter(Boolean).join(' · ');
+      const det = [p.duree && !_g147 ? tcCpDuree136(p.duree) : '', tcCpPrix136(p.prix)].filter(Boolean).join(' · ');
       return '<div style="padding:2px 0 2px 10px; font-size:14px; color:var(--text); line-height:1.45;">• <span data-notranslate>' + escapeHTMLSafe(p.famille + ' : ' + p.nom) + '</span>' + (det ? ' · ' + escapeHTMLSafe(det) : '') + '</div>';
     }).join('');
 }
@@ -11373,13 +11673,13 @@ function tcCpOptions136(f, so, retrait) {
     return '<div role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '" tabindex="0" onclick="tcConfigPro121.option(' + arg + ', \'' + cle + '\')" style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--text); line-height:1.35; min-height:34px;">' + tcCpCase(on) + '<span>' + texte + '</span></div>';
   };
   return '<div class="cp-options136" style="display:flex; flex-direction:column; gap:2px; padding:0 0 6px ' + (retrait + 32) + 'px;">'
-    + c('horsLigne', '📞 Pas de rendez-vous en ligne : le client appelle le salon') + c('pasSeule', '➕ Seulement avec une autre prestation (une coupe, une couleur…)') + '</div>' + tcCpQuiLaFait136(f, so, retrait);
+    + c('horsLigne', tcCpEq147(tcConfigProLire()).horsLigne) + c('pasSeule', tcCpEq147(tcConfigProLire()).pasSeule) + '</div>' + tcCpQuiLaFait136(f, so, retrait);   // mission 147 : les mots du métier
 }
 /** Étape 2, sous le nom d'une famille gardée : la consigne que le client lit avant de choisir. */
 function tcCpConsigneFamille136(f) {
   if (!tcCpPrestations136(tcConfigProLire())) return '';
-  return '<div style="padding:2px 0 8px 32px;"><label for="cpConsigne_' + f.id + '" style="display:block; font-size:13px; color:var(--text-sec); margin-bottom:4px;">💬 Une consigne que le client lit avant de choisir (facultatif)</label>'
-    + '<textarea id="cpConsigne_' + f.id + '" rows="2" maxlength="300" data-notranslate placeholder="Par exemple : venez avec les cheveux fraîchement lavés." oninput="tcConfigPro121.consigne(\'' + f.id + '\', this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box; resize:vertical;">' + escapeHTMLSafe(f.consigne || '') + '</textarea></div>';
+  return '<div style="padding:2px 0 8px 32px;"><label for="cpConsigne_' + f.id + '" style="display:block; font-size:13px; color:var(--text-sec); margin-bottom:4px;">' + tcCpEq147(tcConfigProLire()).consigne + '</label>'
+    + '<textarea id="cpConsigne_' + f.id + '" rows="2" maxlength="300" data-notranslate placeholder="' + tcCpEq147(tcConfigProLire()).exempleConsigne + '" oninput="tcConfigPro121.consigne(\'' + f.id + '\', this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box; resize:vertical;">' + escapeHTMLSafe(f.consigne || '') + '</textarea></div>';
 }
 /** Étape 3 du coiffeur : la durée et le prix de chaque prestation (le prix est facultatif). */
 function tcCpEtape3_136(e) {
@@ -11405,6 +11705,7 @@ function tcCpEtape3_136(e) {
 }
 /** Au récapitulatif du coiffeur : chaque prestation, sa durée, son prix, ses réglages ; la consigne de la famille. */
 function tcCpRecapActes136(e) {
+  if (tcCpGenerique147(e)) return tcCpRecapActes147(e);   // mission 147 : sans durée par prestation
   const ligne = function (o, nomHTML, retrait, cle) {
     const det = [tcCpDuree136(o.duree || 20), tcCpPrix136(o.prix)].filter(Boolean).join(' · ');
     const plus = [o.horsLigne ? '📞 pas de rendez-vous en ligne' : '', o.pasSeule ? '➕ seulement avec une autre prestation' : '', cle ? tcCpPasFaitePar136(e, cle) : ''].filter(Boolean).join(' · ');
@@ -11422,7 +11723,7 @@ function tcCpRecapActes136(e) {
 function tcCpFicheChangerMetier136(e, ancien, nouveau) {
   const fi = e && e.fiche;
   if (!fi || typeof fi !== 'object') return;
-  const a = TC_PRO_FICHE_PROPOSEE[ancien] || {}, b = TC_PRO_FICHE_PROPOSEE[nouveau] || {};
+  const a = tcCpProposee147(ancien) || {}, b = tcCpProposee147(nouveau) || {};   // mission 147 : un métier générique aussi
   const ma = tcConfigProMetier(ancien), mb = tcConfigProMetier(nouveau);
   Object.keys(fi).forEach(function (c) {
     if (c === 'metier') { if (!fi.metier || (ma && fi.metier === ma.nom)) fi.metier = mb ? mb.nom : ''; return; }
@@ -11459,6 +11760,7 @@ function tcCpJours136(e) {
 /** Étape 1 du coiffeur : « Vous travaillez seul, ou à plusieurs ? », puis ses coiffeurs. */
 function tcCpEquipe136(e) {
   if (!tcCpPrestations136(e)) return '';
+  const W147 = tcCpEq147(e);   // mission 147 : les mots du métier (coiffeur, praticien, personne)
   const plus = !!(e.equipe && e.equipe.mode === 'plusieurs');
   const choix = function (val, titre, aide) {
     const on = (val === 'plusieurs') === plus;
@@ -11468,24 +11770,24 @@ function tcCpEquipe136(e) {
   };
   const l = plus && Array.isArray(e.equipe.coiffeurs) ? e.equipe.coiffeurs : [];
   return '<div style="font-size:17px; font-weight:700; color:var(--text); margin:20px 0 8px;">Vous travaillez seul, ou à plusieurs ?</div>'
-    + choix('seul', 'Seul', 'Un seul agenda : le vôtre.') + choix('plusieurs', 'À plusieurs', 'Plusieurs coiffeurs dans le salon, chacun avec ses jours.')
-    + (plus ? '<div class="cp-equipe136"><div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin:4px 0 10px;">Ajoutez vos coiffeurs, un par un : leur prénom, et leur photo s’ils le veulent.<br>Les prestations, les prix et la fiche sont ceux du salon, les mêmes pour tous.<br>Chaque coiffeur a ses jours et ses horaires (étape 4).</div>'
+    + choix('seul', 'Seul', 'Un seul agenda : le vôtre.') + choix('plusieurs', 'À plusieurs', W147.plusieursAide)
+    + (plus ? '<div class="cp-equipe136"><div style="font-size:14px; color:var(--text-sec); line-height:1.5; margin:4px 0 10px;">' + W147.intro + '</div>'
       + l.map(function (c) {
         return '<div class="cp-coiffeur136" style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' + tcCpPhotoHTML136(c.id, 44)
-          + '<input id="cpPrenom_' + c.id + '" type="text" maxlength="40" data-notranslate aria-label="Prénom du coiffeur" value="' + escapeHTMLSafe(c.prenom || '') + '" oninput="tcConfigPro121.prenomCoiffeur(\'' + c.id + '\', this.value)" style="' + TC_CP_CHAMP + ' flex:1; min-width:110px;">'
+          + '<input id="cpPrenom_' + c.id + '" type="text" maxlength="40" data-notranslate aria-label="' + W147.ariaPrenom + '" value="' + escapeHTMLSafe(c.prenom || '') + '" oninput="tcConfigPro121.prenomCoiffeur(\'' + c.id + '\', this.value)" style="' + TC_CP_CHAMP + ' flex:1; min-width:110px;">'
           + '<label style="' + TC_CP_PETIT + ' display:inline-block;">📷 Photo<input type="file" accept="image/*" onchange="tcConfigPro121.photoCoiffeur(\'' + c.id + '\', this)" style="display:none;"></label>'
           + '<button onclick="tcConfigPro121.retirerCoiffeur(\'' + c.id + '\')" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3;">Retirer</button></div>';
       }).join('')
-      + '<div style="' + TC_CP_CARTE + ' background:#f8f9fa;"><div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px;">Ajouter un coiffeur</div>'
+      + '<div style="' + TC_CP_CARTE + ' background:#f8f9fa;"><div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px;">' + W147.ajouterTitre + '</div>'
       + '<div style="display:flex; gap:6px; flex-wrap:wrap;"><input id="cpNouveauCoiffeur" type="text" maxlength="40" data-notranslate placeholder="Son prénom" onkeydown="if (event.key === \'Enter\') tcConfigPro121.ajouterCoiffeur();" style="' + TC_CP_CHAMP + ' flex:1; min-width:150px;">'
-      + '<button onclick="tcConfigPro121.ajouterCoiffeur()" style="' + TC_CP_PETIT + '">➕ Ajouter ce coiffeur</button></div></div></div>' : '');
+      + '<button onclick="tcConfigPro121.ajouterCoiffeur()" style="' + TC_CP_PETIT + '">' + W147.ajouterBouton + '</button></div></div></div>' : '');
 }
 /** Étape 2, à plusieurs : « Qui la fait ? », un bouton par coiffeur (touché : il ne la fait pas). */
 function tcCpQuiLaFait136(f, so, retrait) {
   const l = tcCpCoiffeurs136(tcConfigProLire());
   if (!l.length) return '';
   const cle = f.id + '/' + so.id;
-  return '<div class="cp-qui136" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:0 0 8px ' + (retrait + 32) + 'px; font-size:13px; color:var(--text-sec);">Qui la fait ?'
+  return '<div class="cp-qui136" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:0 0 8px ' + (retrait + 32) + 'px; font-size:13px; color:var(--text-sec);">' + tcCpEq147(tcConfigProLire()).quiLaFait
     + l.map(function (c) {
       const on = !(Array.isArray(c.sans) && c.sans.indexOf(cle) > -1);
       return '<button aria-pressed="' + (on ? 'true' : 'false') + '" onclick="tcConfigPro121.quiLaFait(\'' + f.id + '\', \'' + so.id + '\', \'' + c.id + '\')" style="' + TC_CP_PETIT + (on ? '' : ' background:#f1f3f4; color:var(--text-sec); border-color:var(--border); text-decoration:line-through;') + '">' + (on ? '✓ ' : '') + '<span data-notranslate>' + escapeHTMLSafe(c.prenom || '?') + '</span></button>';
@@ -11525,14 +11827,14 @@ function tcCpRecapJoursEquipe136(e) {
 /** « pas faite par Julien » (récapitulatif). */
 function tcCpPasFaitePar136(e, cle) {
   const n = tcCpCoiffeurs136(e).filter(function (c) { return Array.isArray(c.sans) && c.sans.indexOf(cle) > -1; }).map(function (c) { return escapeHTMLSafe(c.prenom || '?'); });
-  return n.length ? '✂️ pas faite par ' + n.join(', ') : '';
+  return n.length ? tcCpEq147(e).pasFaitePar + n.join(', ') : '';   // mission 147 : « pas fait par » pour un acte
 }
 /** Étape 1 : à plusieurs, au moins un coiffeur, chacun avec son prénom. */
 function tcCpEquipeErreur136(e) {
   if (!tcCpPlusieurs136(e)) return null;
   const l = tcCpCoiffeurs136(e);
-  if (!l.length) return 'Ajoutez au moins un coiffeur, avec son prénom.';
-  if (l.some(function (c) { return !String(c.prenom || '').trim(); })) return 'Écrivez le prénom de chaque coiffeur.';
+  if (!l.length) return tcCpEq147(e).erreurAucun;   // mission 147
+  if (l.some(function (c) { return !String(c.prenom || '').trim(); })) return tcCpEq147(e).erreurPrenoms;
   return null;
 }
 /** Étape 4 : à plusieurs, chaque coiffeur coche au moins un jour (on montre celui qui n'en a pas). */
@@ -11540,7 +11842,7 @@ function tcCpJoursErreur136(e) {
   const c = tcCpCoiffeurs136(e).find(function (x) { const J = x.jours || e.jours; return !TC_PRO_JOURS.some(function (j) { return J[j[0]] && J[j[0]].actif; }); });
   if (!c) return null;
   _tcConfigProCoiffeur136 = c.id;
-  return 'Cochez au moins un jour pour ' + String(c.prenom || 'ce coiffeur') + '.';
+  return 'Cochez au moins un jour pour ' + String(c.prenom || tcCpEq147(e).ce) + '.';
 }
 /* ── fin mission 136 (outils) ─────────────────────────────────────────────────────────────────────────────────────── */
 /* ── Mission 137 (Charles, 19/11) : l'avocat ─────────────────────────────────────────────────────────────────────── */
@@ -11727,6 +12029,7 @@ const tcConfigPro121 = {
   choisirMetier: function (id) {
     const e = tcConfigProLire();
     if (!tcConfigProMetier(id)) return;
+    tcCpOuvrir147(id);   // mission 147 : sa catégorie reste ouverte
     if (e.metier !== id) { const _ancien136 = e.metier; if (!tcCpChangerMetier139(e, _ancien136, id)) { e.familles = tcConfigProFamillesDuMetier(id); if (typeof tcCpFicheChangerMetier136 === 'function') tcCpFicheChangerMetier136(e, _ancien136, id); if (tcCpAvocat137(e)) e.dureeRdv = 30; } }
     _tcConfigProErreur = '';
     tcConfigProSauver(); tcRendreConfigPro121();
@@ -11819,8 +12122,17 @@ const tcConfigPro121 = {
   },
   retour: function () { tcConfigPro121.aller(Math.max(1, _tcConfigProEtape - 1)); },
   // Mission 139 : « Voir tous les métiers » (depuis le récapitulatif) ; « Retour à ma configuration », sans rien changer.
-  tousMetiers: function () { tcCpDebutApercu139(); tcConfigPro121.aller(1); },
+  tousMetiers: function () { tcCpDebutApercu139(); _tcCp147Ouvertes = null; _tcCp147Cherche = ''; _tcCp147Fermees = []; tcConfigPro121.aller(1); },
   retourConfig: function () { tcOuvrirConfigPro121(); tcConfigProHaut(); },
+  // Mission 147 : ouvrir ou fermer une catégorie de métiers ; chercher un métier (la liste se réduit à chaque lettre).
+  categorie147: function (id) {
+    const e = tcConfigProLire();
+    const l = _tcCp147Cherche.trim() ? _tcCp147Fermees : tcCpOuvertes147(e);
+    const i = l.indexOf(id);
+    if (i > -1) l.splice(i, 1); else l.push(id);
+    tcCpRedessinerListe147();
+  },
+  chercher147: function (v) { _tcCp147Cherche = String(v || '').slice(0, 60); _tcCp147Fermees = []; tcCpRedessinerListe147(); },
   // Étape 6 : une réponse de la fiche, enregistrée à chaque lettre (sans redessiner : le curseur reste où il est).
   fiche: function (champ, v) {
     const fi = tcConfigProFiche(tcConfigProLire());
@@ -12013,7 +12325,7 @@ const tcConfigPro121 = {
     const e = tcConfigProLire();
     const i = document.getElementById('cpNouveauCoiffeur');
     const v = String((i && i.value) || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-    if (!v) { _tcConfigProErreur = 'Écrivez le prénom du coiffeur.'; tcRendreConfigPro121(); return; }
+    if (!v) { _tcConfigProErreur = tcCpEq147(e).erreurPrenom; tcRendreConfigPro121(); return; }   // mission 147
     e.equipe = Object.assign({ mode: 'plusieurs' }, e.equipe || {});
     if (!Array.isArray(e.equipe.coiffeurs)) e.equipe.coiffeurs = [];
     e.equipe.coiffeurs.push({ id: 'c' + tcConfigProIdNeuf(), prenom: v, jours: JSON.parse(JSON.stringify(e.jours || tcConfigProJoursDefaut())), sans: [] });
@@ -12158,7 +12470,7 @@ let _tcConfigProQBrouillon = null;   // la question en cours d'écriture { texte
 function tcConfigProFiche(e) {
   if (e.fiche && typeof e.fiche === 'object') return e.fiche;
   const m = tcConfigProMetier(e.metier);
-  const p = TC_PRO_FICHE_PROPOSEE[e.metier] || {};
+  const p = tcCpProposee147(e.metier) || {};   // mission 147 : un métier générique a les réponses de sa catégorie
   const nom = (!tcCpPrestations136(e) && typeof userAccount !== 'undefined' && userAccount && (userAccount.firstname || userAccount.lastname))
     ? (e.metier === 'avocat' ? 'Maître ' : 'Dr ') + String((userAccount.firstname || '') + ' ' + (userAccount.lastname || '')).trim() : '';
   e.fiche = { nom: nom, metier: m ? m.nom : '', adresse: '', acces: p.acces || '', presentation: p.presentation || '', consignes: p.consignes || '',
@@ -12195,7 +12507,7 @@ function tcCpEtape6(e) {
       + '<button onclick="tcConfigPro121.annulerPropose()" style="' + TC_CP_BOUTON + ' flex:1; background:#fff; color:var(--text); border:1px solid var(--border);">Annuler</button></div></div>' : '')
     + (_tcConfigProRempli ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ C’est enregistré : ' + _tcConfigProRempli + ' réponse' + (_tcConfigProRempli > 1 ? 's' : '') + '.<br>Vous pouvez encore les corriger ci-dessous.</div>' : '')
     + (_tcConfigProDomaines137 ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ ' + _tcConfigProDomaines137 + ' domaine' + (_tcConfigProDomaines137 > 1 ? 's cochés' : ' coché') + ' à l’étape 2.</div>' : '')   // mission 137
-    + (_tcConfigProPrestations136 ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ ' + _tcConfigProPrestations136 + ' prestation' + (_tcConfigProPrestations136 > 1 ? 's' : '') + ', avec leur durée et leur prix.<br>Vous pouvez les corriger aux étapes 2 et 3.</div>' : '')   // mission 136
+    + (_tcConfigProPrestations136 ? '<div role="status" style="' + TC_CP_CARTE + ' background:#e6f4ea; border-color:#b9e1c4; color:#137333; font-size:14px; line-height:1.5;">✅ ' + (tcCpGenerique147(e) ? tcCpMessagePrestations147(e, _tcConfigProPrestations136) : _tcConfigProPrestations136 + ' prestation' + (_tcConfigProPrestations136 > 1 ? 's' : '') + ', avec leur durée et leur prix.<br>Vous pouvez les corriger aux étapes 2 et 3.') + '</div>' : '')   // mission 136
     + '<div style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:14px;">'
     + (photo ? '<img src="' + photo + '" alt="Votre photo" style="width:64px; height:64px; border-radius:50%; object-fit:cover; flex-shrink:0;">'
       : '<div aria-hidden="true" style="width:64px; height:64px; border-radius:50%; background:#e8eaed; display:flex; align-items:center; justify-content:center; font-size:28px; flex-shrink:0;">👤</div>')
@@ -12274,14 +12586,10 @@ function tcCpChampNom(f, so) {
 }
 
 function tcCpEtape1(e) {
-  const metiers = TC_PRO_METIERS.slice().sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); });
-  return tcCpTitre('Quel est votre métier ?', 'Choisissez votre métier dans la liste.')
-    + metiers.map(function (m) {
-      const on = e.metier === m.id;
-      return '<div role="button" tabindex="0" onclick="tcConfigPro121.choisirMetier(\'' + m.id + '\')" style="' + TC_CP_CARTE + ' display:flex; align-items:center; gap:12px; cursor:pointer; border-color:' + (on ? 'var(--g-blue)' : 'var(--border)') + ';">'
-        + '<span aria-hidden="true" style="width:20px; height:20px; border-radius:50%; border:2px solid ' + (on ? 'var(--g-blue)' : '#9aa0a6') + '; display:inline-flex; align-items:center; justify-content:center;">' + (on ? '<span style="width:10px; height:10px; border-radius:50%; background:var(--g-blue);"></span>' : '') + '</span>'
-        + '<span style="font-size:15px; font-weight:600; color:var(--text);">' + escapeHTMLSafe(m.nom) + '</span></div>';
-    }).join('') + tcCpEquipe136(e);
+  // Mission 147 : tous les métiers, rangés par catégories dépliables, et une case pour chercher (la liste se réduit à chaque lettre).
+  return tcCpTitre('Quel est votre métier ?', 'Tapez votre métier, ou touchez sa catégorie.')
+    + '<input id="cpCherche147" type="search" autocomplete="off" enterkeyhint="search" aria-label="Cherchez votre métier" placeholder="🔎 Cherchez votre métier" value="' + escapeHTMLSafe(_tcCp147Cherche) + '" oninput="tcConfigPro121.chercher147(this.value)" style="' + TC_CP_CHAMP + ' display:block; width:100%; box-sizing:border-box; font-size:16px; padding:12px 14px; margin:0 0 14px; border-radius:10px;">'
+    + '<div id="cpListe147">' + tcCpListe147(e) + '</div>' + tcCpEquipe136(e);
 }
 
 function tcCpLigneActe(f, so, retrait) {
@@ -12346,6 +12654,7 @@ function tcCpEtape2(e) {
 }
 
 function tcCpEtape3(e) {
+  if (tcCpGenerique147(e)) return tcCpEtape3_147(e);   // mission 147 : le prix seul (une seule durée pour tout)
   if (tcCpPrestations136(e)) return tcCpEtape3_136(e);   // mission 136
   if (tcCpAvocat137(e)) return tcCpEtape3_137(e);   // mission 137
   const actes = tcConfigProActes(e);
@@ -12368,7 +12677,7 @@ function tcCpChampHeure(j, partie, rang, v) {
 
 function tcCpEtape4(e) {
   const J = tcCpJours136(e);
-  return (tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length ? tcCpTitre('Quels jours travaille chaque coiffeur ?', 'Choisissez un coiffeur, puis cochez ses jours.<br>Pour chaque jour, donnez ses horaires du matin et de l’après-midi.') + tcCpOngletsCoiffeurs136(e)
+  return (tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length ? tcCpTitre(tcCpEq147(e).titre4, tcCpEq147(e).aide4) + tcCpOngletsCoiffeurs136(e)
     : tcCpTitre('Quels jours travaillez-vous ?', 'Cochez vos jours.<br>Pour chaque jour, donnez vos horaires du matin et de l’après-midi.'))
     + '<div style="font-size:13px; color:#137333; background:#e6f4ea; border:1px solid #b9e1c4; border-radius:10px; padding:9px 12px; margin-bottom:12px;">🔒 Vos jours et vos horaires restent privés. Personne d’autre ne les voit.</div>'
     + TC_PRO_JOURS.map(function (x) {
@@ -12440,7 +12749,7 @@ function tcCpRecapitulatif(e) {
       + (tcCpPlusieurs136(e) ? '<div class="cp-recap-equipe136" style="font-size:14px; color:var(--text); margin-top:4px;">À plusieurs : <span data-notranslate>' + (tcCpCoiffeurs136(e).map(function (c) { return escapeHTMLSafe(c.prenom || '?'); }).join(', ') || '—') + '</span></div>' : ''), 1)
     + tcCpSection(M.recapActes, (tcCpPrestations136(e) ? tcCpRecapActes136(e) : (tcCpAvocat137(e) ? tcCpRecapActes137(e) : actes)) || '<div style="font-size:14px; color:var(--text-sec);">' + M.aucun + '</div>', 2)
     + (tcCpAvocat137(e) ? tcCpSection('Vos deux rendez-vous', tcCpRecapRdv137(e), 3) : '')   // mission 137
-    + tcCpSection(tcCpPlusieurs136(e) ? 'Les jours de chaque coiffeur' : 'Vos jours et vos horaires', (tcCpPlusieurs136(e) ? tcCpRecapJoursEquipe136(e) : jours) || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour.</div>', 4)
+    + tcCpSection(tcCpPlusieurs136(e) ? tcCpEq147(e).recapJours : 'Vos jours et vos horaires', (tcCpPlusieurs136(e) ? tcCpRecapJoursEquipe136(e) : jours) || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour.</div>', 4)
     + tcCpSection('Vos rendez-vous', '<div style="font-size:14px; color:var(--text);">Chaque rendez-vous dure ' + e.dureeRdv + ' minutes.</div>' + c.html
       + '<div style="font-size:14px; font-weight:700; color:var(--g-blue); margin-top:8px;">En tout : ' + c.total + ' créneau' + (c.total > 1 ? 'x' : '') + ' par semaine.</div>', 5)
     + tcCpSection('Votre fiche professionnelle', tcCpFicheRecap(e), 6)

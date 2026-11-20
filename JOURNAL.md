@@ -3868,3 +3868,21 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Le trou de l'appli : un vendredi ou un samedi, « Mets une réunion avec l'équipe demain après-midi » (et « demain matin », « demain ») partait au modèle. Quand le jour n'a pas de moment libre, la recherche du premier moment libre (tcCreneauLibreSansHeure131) renvoyait null. Le chemin « À quelle heure ? » (tcHeureManquante) refusait ensuite « avec l' ».
   - La correction : tcCreneauLibreSansHeure131(text, forme) dit seulement la forme de la demande. Un jour sans moment libre (week-end sans plage, règle 43b, ou jour plein) donne « À quelle heure ? », sur place. Un jour avec un moment libre ne change pas.
   - verif-demo-pro131 compte 82 vérifications, dont « demain matin » et « demain » en vrai ; 6 sont rouges sur 333646e. phrases-charles reçoit 7 lignes et passe à 965 vérifications, dont 38 rouges sur 333646e.
+
+## 20/11/2026 — Mission 147, lot 1 : tous les métiers par catégories (santé et beauté) (CODEUR)
+
+- La demande vient de Charles : à l'étape 1 de « Configuration professionnelle », les métiers à rendez-vous sont rangés par catégories. Ils viennent de l'ébauche du 18/11. La page reste toujours derrière la case CONFIG_PRO.
+- Chaque catégorie se déplie. Au départ elle est fermée, sauf celle du métier choisi, qui est ouverte. Son nom est en gros et donne le nombre de métiers. Dans chaque catégorie, les métiers sont par ordre alphabétique.
+- Une case « Cherchez votre métier » réduit la liste à chaque lettre, sans tenir compte des accents ni des majuscules. Elle trouve aussi des mots en plus : « kiné », « psy », « massage ». Si rien ne correspond, la page dit « Aucun métier ne correspond. Essayez un autre mot. ».
+- Lot 1 : Santé compte 34 métiers, Beauté et bien-être 16, et Droit et chiffre a l'avocat. Les métiers « en une ligne » de l'ébauche comptent aussi, rangés dans la famille « Mes actes » ou « Mes prestations ». Une ligne qui nomme plusieurs métiers en donne un par nom : Ergothérapeute et Psychomotricien, Radiologue et Centre d'imagerie.
+- Un métier pas encore codé suit le parcours du coiffeur en version générique (tcCpGenerique147) :
+  - les familles et les prestations de l'ébauche, à cocher, renommer, retirer ou créer ;
+  - une seule durée pour tout, à l'étape 5 ;
+  - un prix facultatif, à l'étape 3 « Quels prix affichez-vous ? » ;
+  - seul ou à plusieurs ;
+  - la fiche, avec « Remplis à ma place ».
+- Chaque catégorie a ses mots. En santé : patient, acte, motif de consultation, praticien. En beauté : client, prestation, personne.
+- Les questions particulières de l'ébauche ne sont pas posées.
+- Le dentiste, le coiffeur et l'avocat gardent leur parcours. Pour les étapes 2 à 7, leurs empreintes sont identiques à celles de 889e169. Les mots du coiffeur passent par TC_PRO_EQUIPE_COIFFEUR_147, inchangés. « Voir tous les métiers » n'enregistre toujours rien, et chaque métier garde sa configuration.
+- La suite verif-config-metiers147 compte 41 vérifications, à 390 et 1280 px. Elle est rouge sur 889e169.
+- Quatre suites ont suivi l'étape 1 nouvelle. verif-config-pro cherche « Santé » au lieu du dentiste, puisque les catégories sont fermées. verif-config-coiffeur136 et verif-config-avocat137 vérifient la présence des métiers ; l'ordre alphabétique de chaque catégorie se vérifie dans la 147. Dans verif-titres-etapes143, l'empreinte porte sur les étapes 2 à 7, relevées sur 889e169.
