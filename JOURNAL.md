@@ -3913,3 +3913,7 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Choix du chef : l'administration et les associations n'ont plus d'étape des prix. Le compteur (« Étape 3 sur 5 »), « Suivant » et « ← Retour » suivent la liste des étapes du métier (tcCpEtapes147). Le récapitulatif dit « Vos démarches », « Remplis à ma place » ne lit plus de prix pour elles, et le message dit « N démarches ».
   - Les autres métiers gardent leurs six étapes et leur compteur.
   - verif-config-metiers147 compte 50 vérifications, dont 3 rouges sur d016de9. Les empreintes 143 du dentiste, du coiffeur et de l'avocat n'ont pas bougé.
+- Examen du correctif du lot 2 : chez la mairie et l'association, les jours sont à l'« Étape 3 sur 5 », mais deux textes disaient encore « (étape 4) ».
+  - Les 26 renvois « (étape N) » des textes de « Configuration professionnelle » s'écrivent maintenant « (étape ⟦N⟧) ». Au dessin, tcCpRenvois147 les remplace par le rang affiché de l'étape dans les étapes du métier. Les métiers à six étapes gardent leurs numéros, et la 148 ne cassera aucun renvoi.
+  - renvois.js vérifie le nombre de chaque texte remplacé.
+  - verif-config-metiers147 compte 51 vérifications. Pour la mairie, le notaire et le coiffeur, à plusieurs, chaque renvoi visible désigne l'étape affichée de son sujet, et aucun renvoi n'est oublié. Elle est rouge sur 2762872. Les empreintes 143 n'ont pas bougé.

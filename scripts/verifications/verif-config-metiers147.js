@@ -188,6 +188,18 @@ async function parcours() {
     localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
     tcConfigPro121.choisirMetier('notaire'); tcConfigPro121.suivant(); tcConfigPro121.suivant(); await attendre(20);
     R.navNotaire = [compteur(), _tcConfigProEtape, /Quels prix affichez-vous \?/.test(texte())];
+    // Examen du correctif du lot 2 : chaque renvoi « (étape N) » désigne l'étape affichée « Étape N sur … » de ce sujet (à plusieurs,
+    // de l'étape 1 au récapitulatif, et le message de « Remplis à ma place »).
+    const pagesDe = async (id) => {
+      localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
+      tcConfigPro121.choisirMetier(id); tcConfigPro121.equipeMode('plusieurs'); await attendre(20);
+      document.getElementById('cpNouveauCoiffeur').value = 'Léa'; tcConfigPro121.ajouterCoiffeur(); await attendre(20);
+      const pages = [];
+      for (const n of [1, 2, 3, 4, 5, 6, 7]) { tcConfigPro121.aller(n); await attendre(20); pages.push({ interne: _tcConfigProEtape, compteur: compteur(), texte: texte() }); }
+      _tcConfigProPrestations136 = 2; tcConfigPro121.aller(6); await attendre(20); pages.push({ interne: 6, compteur: compteur(), texte: texte() }); _tcConfigProPrestations136 = 0;
+      return pages;
+    };
+    R.renvois = { mairie: await pagesDe('mairie'), notaire: await pagesDe('notaire'), coiffeur: await pagesDe('coiffeur') };
     localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
     entete('artisans').click(); await attendre(20); R.artisans = visibles();
     R.appels = appels; R.debords = debords;
@@ -319,6 +331,20 @@ else {
     && J(V.aller3) === J(['3/5', 4]), J(V));
   verifie('mairie, récapitulatif : « Vos démarches », sans « et leur prix », aucun prix nulle part ; le notaire garde ses six étapes (« Étape 3 sur 6 », « Quels prix affichez-vous ? »)',
     /Vos démarches/.test(V.recap) && !/prix/i.test(V.recap) && !/prix/i.test(ma.e7) && !/Quels prix/.test(tout7(ma)) && J(S.navNotaire) === J(['3/6', 3, true]), J([V.recap.slice(0, 300), S.navNotaire]));
+  // Examen du correctif du lot 2 : les renvois « (étape N) » ; [motif, étapes internes visées].
+  const PATRONS = [[/horaires(?: de travail)? \(étape (\d)\)/g, [4]], [/même durée \(étape (\d)\)/g, [5]], [/durée de vos rendez-vous \(étape (\d)\)/g, [5]],
+    [/Aucun jour coché \(étape (\d)\)/g, [4]], [/corriger à l’étape (\d)/g, [2]], [/corriger aux étapes (\d) et (\d)/g, [2, 3]], [/en ligne » \(étape (\d)\)/g, [2]]];
+  const renvois = (pages) => {
+    const rang = {}; pages.forEach((p) => { if (p.compteur) rang[p.interne] = Number(p.compteur.split('/')[0]); });
+    const tous = pages.map((p) => p.texte).join('\n'), faux = [];
+    let vus = 0;
+    PATRONS.forEach(([re, cibles]) => { let m; re.lastIndex = 0; while ((m = re.exec(tous))) { vus++; cibles.forEach((c, k) => { if (Number(m[k + 1]) !== rang[c]) faux.push(m[0] + ' (attendu : étape ' + rang[c] + ')'); }); } });
+    if (/⟦|⟧/.test(tous)) faux.push('un renvoi non remplacé');
+    return { vus, faux };
+  };
+  const RV = { mairie: renvois(S.renvois.mairie), notaire: renvois(S.renvois.notaire), coiffeur: renvois(S.renvois.coiffeur) };
+  verifie('renvois « (étape N) » : la mairie (5 étapes) dit « étape 3 » pour ses jours, partout ; le notaire et le coiffeur (6 étapes) gardent leurs numéros ; aucun renvoi faux ni oublié',
+    RV.mairie.vus >= 3 && RV.notaire.vus >= 4 && RV.coiffeur.vus >= 5 && !RV.mairie.faux.length && !RV.notaire.faux.length && !RV.coiffeur.faux.length, J(RV));
   verifie('auto-école : les mots « prestation » (des leçons, pas des interventions) ; garagiste : « Quelles interventions faites-vous ? », « Carrosserie »',
     /Quelles prestations faites-vous \?/.test(ae.e2) && /Leçon de conduite/.test(ae.e2) && !/intervention/i.test(ae.e2) && /Quelles interventions faites-vous \?/.test(ga.e2) && /Carrosserie/.test(ga.e2) && propre(ae) && propre(ga), '');
   verifie('aucun appel réseau', S.appels === 0 && P.appels === 0, J([S.appels, P.appels]));
