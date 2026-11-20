@@ -105,6 +105,17 @@ async function parcours() {
     tcConfigPro121.retourConfig(); await attendre(20); R.retourConfig = [brut() === AVANT, /^Votre configuration/.test(texte())];
     // F. Les autres métiers : un générique (sept étapes), la mairie (six, sans prix).
     neuf('osteopathe'); tcConfigPro121.aller(4.5); await attendre(20); R.osteo = [compteur(), /Votre métier\s*:\s*Ostéopathe/.test(texte())];
+    // Examen de la 148 : une date passée est refusée ; aujourd'hui est accepté ; une journée passée déjà enregistrée reste, marquée.
+    const n0 = new Date(), hier = tcISO(new Date(n0.getFullYear(), n0.getMonth(), n0.getDate() - 1)), auj = tcISO(n0);
+    R.min = [(document.getElementById('cpDate148') || { getAttribute: () => null }).getAttribute('min'), auj];
+    tcConfigPro121.brouillon148('date', 0, hier); tcConfigPro121.ajouterJour148(); await attendre(20);
+    R.hier = [_tcConfigProErreur, (garde().regles148 || {}).jours === undefined || garde().regles148.jours.length === 0];
+    tcConfigPro121.brouillon148('date', 0, '2020-01-15'); tcConfigPro121.ajouterJour148(); R.annee = _tcConfigProErreur;
+    tcConfigPro121.brouillon148('date', 0, auj); tcConfigPro121.ajouterJour148(); await attendre(20);
+    R.auj = [_tcConfigProErreur, garde().regles148.jours.map((j) => j.date)];
+    const ro = tcCpReglesEcrire148(tcConfigProLire()); ro.jours = [{ date: hier, ferme: true }].concat(ro.jours); tcRendreConfigPro121(); await attendre(20);
+    R.passee = [/\(date passée\)/.test(texte()), tcCpRegles148(tcConfigProLire()).jours.length];
+    tcConfigPro121.aller(7); await attendre(20); R.passeeRecap = /\(date passée\)/.test(texte());
     neuf('mairie'); tcConfigPro121.aller(4.5); await attendre(20); R.mairie = compteur(); tcConfigPro121.retour(); await attendre(20); R.mairieRetour = [compteur(), _tcConfigProEtape];
     R.sousTitre = (document.querySelector('#page-configpro .page-subtitle') || {}).innerText || '';
     R.appels = appels; R.debords = debords;
@@ -156,6 +167,9 @@ else {
     J(S.avocat) === J(['5/7', true]) && S.regard && J(S.retourConfig) === J([true, true]), J([S.avocat, S.regard, S.retourConfig]));
   verifie('tous les métiers : l’ostéopathe (« Étape 5 sur 7 », « Votre métier : Ostéopathe »), la mairie sans étape des prix (« Étape 4 sur 6 », « ← Retour » : ses jours, 3 sur 6)',
     J(S.osteo) === J(['5/7', true]) && S.mairie === '4/6' && J(S.mairieRetour) === J(['3/6', 4]), J([S.osteo, S.mairie, S.mairieRetour]));
+  verifie('examen : une date passée (hier, une faute d’année) : « Choisissez une date à venir. », rien d’enregistré ; aujourd’hui : accepté ; le calendrier commence aujourd’hui',
+    J(S.hier) === J(['Choisissez une date à venir.', true]) && S.annee === 'Choisissez une date à venir.' && S.auj[0] === '' && J(S.auj[1]) === J([S.min[1]]) && S.min[0] === S.min[1], J([S.hier, S.annee, S.auj, S.min]));
+  verifie('examen : une journée passée déjà enregistrée reste (rien n’est effacé seul), marquée « (date passée) » à l’étape et au récapitulatif', S.passee[0] && S.passee[1] === 2 && S.passeeRecap, J([S.passee, S.passeeRecap]));
   verifie('le sous-titre de la page ne compte plus les étapes (six ou sept selon le métier) : « Votre agenda professionnel et votre fiche, étape par étape. »', S.sousTitre === 'Votre agenda professionnel et votre fiche, étape par étape.', S.sousTitre);
   verifie('aucun appel réseau', S.appels === 0 && P.appels === 0, J([S.appels, P.appels]));
   verifie('aucun débordement sur le côté, à 390 px et à 1280 px (l’étape, ses horaires ouverts, le récapitulatif)', S.debords.concat(P.debords).every((x) => x <= 0), J([S.debords, P.debords]));

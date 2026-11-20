@@ -11632,6 +11632,8 @@ function tcCpDate148(iso) {
 function tcCpPlageTexte148(p) { return tcConfigProHeure(p[0]) && tcConfigProHeure(p[1]) ? tcConfigProHeure(p[0]) + ' à ' + tcConfigProHeure(p[1]) : ''; }
 /** « fermé », « 9h à 12h, puis 14h à 16h ». */
 function tcCpHorairesJour148(j) { return j.ferme ? 'fermé' : ([tcCpPlageTexte148(j.matin), tcCpPlageTexte148(j.apres)].filter(Boolean).join(', puis ') || 'fermé'); }
+/** Examen de la 148 : une journée déjà enregistrée dont la date est passée reste (rien n'est effacé seul), marquée « (date passée) ». */
+function tcCpPassee148(j) { return j.date < tcISO(new Date()) ? ' <span style="color:var(--text-sec);">(date passée)</span>' : ''; }
 function tcCpLibelle148(l, v) { const x = l.filter(function (y) { return y[0] === v; })[0]; return x ? x[1] : String(v); }
 /** L'étape « Vos règles de réservation ». */
 function tcCpEtapeRegles148(e) {
@@ -11653,12 +11655,12 @@ function tcCpEtapeRegles148(e) {
     + carte('cpRegleJours148', 'Une journée avec des horaires différents', 'Un jour de fête ou de congé : vos horaires de ce jour-là, sans changer votre semaine habituelle.',
       (r.jours.length ? r.jours.map(function (j) {
         return '<div class="cp-jour148" style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); font-size:14px; color:var(--text); line-height:1.4;">'
-          + '<span><b>' + escapeHTMLSafe(tcCpDate148(j.date)) + '</b> : ' + escapeHTMLSafe(tcCpHorairesJour148(j)) + '</span>'
+          + '<span><b>' + escapeHTMLSafe(tcCpDate148(j.date)) + '</b> : ' + escapeHTMLSafe(tcCpHorairesJour148(j)) + tcCpPassee148(j) + '</span>'
           + '<button onclick="tcConfigPro121.retirerJour148(\'' + j.date + '\')" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3; flex-shrink:0;">Retirer</button></div>';
       }).join('') : '<div style="font-size:14px; color:var(--text-sec); margin-bottom:6px;">Aucune journée pour l’instant.</div>')
       + '<div style="background:#f8f9fa; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-top:10px;">'
       + '<label for="cpDate148" style="display:block; font-size:14px; font-weight:700; color:var(--text); margin-bottom:6px;">Ajouter une journée</label>'
-      + '<input id="cpDate148" type="date" value="' + escapeHTMLSafe(b.date || '') + '" onchange="tcConfigPro121.brouillon148(\'date\', 0, this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box; margin-bottom:8px;">'
+      + '<input id="cpDate148" type="date" min="' + tcISO(new Date()) + '" value="' + escapeHTMLSafe(b.date || '') + '" onchange="tcConfigPro121.brouillon148(\'date\', 0, this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box; margin-bottom:8px;">'
       + '<div role="radiogroup" aria-label="Ce jour-là" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">' + bouton('ferme', 'Fermé ce jour-là') + bouton('ouvert', 'Avec ces horaires') + '</div>'
       + (b.ferme ? '' : '<div style="' + ligne + '"><span style="min-width:82px;">Le matin</span> de ' + heure('matin', 0, b.matin[0], 'Début du matin') + ' à ' + heure('matin', 1, b.matin[1], 'Fin du matin') + '</div>'
         + '<div style="' + ligne + '"><span style="min-width:82px;">L’après-midi</span> de ' + heure('apres', 0, b.apres[0], 'Début de l’après-midi') + ' à ' + heure('apres', 1, b.apres[1], 'Fin de l’après-midi') + '</div>')
@@ -11675,7 +11677,7 @@ function tcCpRecapRegles148(e) {
   const r = tcCpRegles148(e);
   const ligne = function (t) { return '<div style="padding:3px 0; font-size:14px; color:var(--text); line-height:1.45;">' + t + '</div>'; };
   const corps = ligne('On peut réserver au plus tôt ' + tcCpLibelle148(TC_CP_AVANCE148, r.avance) + ' avant le rendez-vous, et au plus tard ' + tcCpLibelle148(TC_CP_DELAI148, r.delai) + ' avant.')
-    + (r.jours.length ? ligne('<b>Journées aux horaires différents</b>') + r.jours.map(function (j) { return '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text);">• ' + escapeHTMLSafe(tcCpDate148(j.date)) + ' : ' + escapeHTMLSafe(tcCpHorairesJour148(j)) + '</div>'; }).join('')
+    + (r.jours.length ? ligne('<b>Journées aux horaires différents</b>') + r.jours.map(function (j) { return '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text);">• ' + escapeHTMLSafe(tcCpDate148(j.date)) + ' : ' + escapeHTMLSafe(tcCpHorairesJour148(j)) + tcCpPassee148(j) + '</div>'; }).join('')
       : ligne('Aucune journée aux horaires différents.'))
     + ligne(r.pause ? 'Une pause de ' + r.pause + ' minutes entre deux rendez-vous.' : 'Pas de pause entre deux rendez-vous.')
     + ligne(r.max ? 'Au plus ' + r.max + ' rendez-vous par jour.' : 'Pas de limite de rendez-vous par jour.');
@@ -12390,6 +12392,8 @@ const tcConfigPro121 = {
     const d = document.getElementById('cpDate148');
     if (!b.date && d && /^\d{4}-\d{2}-\d{2}$/.test(d.value || '')) b.date = d.value;   // la date choisie (onchange) d'abord, le champ sinon
     if (!b.date) { _tcConfigProErreur = 'Choisissez une date.'; tcRendreConfigPro121(); return; }
+    // Examen de la 148 : une date passée (une faute d'année) ferait une règle morte : refusée.
+    if (b.date < tcISO(new Date())) { _tcConfigProErreur = 'Choisissez une date à venir.'; tcRendreConfigPro121(); return; }
     let jour = { date: b.date, ferme: true };
     if (!b.ferme) {
       const m = tcConfigProCreneaux(b.matin, 5), a = tcConfigProCreneaux(b.apres, 5);

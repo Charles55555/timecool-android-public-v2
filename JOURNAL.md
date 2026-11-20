@@ -3939,3 +3939,8 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Elles font un « Suivant » de plus après les horaires.
   - Les compteurs passent « sur 7 », et le renvoi de la durée passe à l'« étape 6 ».
   - Les empreintes du dentiste, du coiffeur et de l'avocat se lisent sans le cadre de la 148 au récapitulatif, avec le compteur et les renvois d'avant. Sinon elles sont identiques, au caractère près.
+- Examen de la 148 : une journée aux horaires différents pouvait avoir une date passée, une faute d'année par exemple, et faire une règle morte.
+  - Une date avant aujourd'hui est maintenant refusée avec « Choisissez une date à venir. ». Le calendrier commence aujourd'hui (min) et aujourd'hui est accepté.
+  - Une journée passée déjà enregistrée reste : rien n'est effacé seul. Elle est marquée « (date passée) » à l'étape et au récapitulatif.
+  - verif-config-regles148 compte 21 vérifications, dont 2 rouges sur 7013bb2.
+  - Le chef a validé les choix : une seule série de règles pour l'établissement, un délai de 15 min à 2 jours, un horizon de 7 jours à 1 an, et le sous-titre « étape par étape ».
