@@ -51,8 +51,10 @@ const jouer = (largeur) => {
       var lignes = []; l.forEach(function (c) { lignes[c.ligne] = (lignes[c.ligne] || '') + c.c; });
       return { texte: q.innerText.split(NBSP).join(' '), lignes: lignes, coupes: coupes };
     };
+    // Mission 148 : l'empreinte d'avant se lit sans l'étape « Vos règles de réservation » (sans son cadre au récapitulatif, avec le compteur
+    // et les renvois d'avant : « sur 6 », une étape de moins à partir de la durée). verif-config-regles148 vérifie la nouvelle étape.
     var normal = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '')
-      .replace(new RegExp('<span (?:class="cp-bloc143" )?style="white-space:nowrap;">([^<]*)</span>', 'g'), '$1'); };
+      .replace(new RegExp('<span (?:class="cp-bloc143" )?style="white-space:nowrap;">([^<]*)</span>', 'g'), '$1').replace(new RegExp('<div id="cpRecapRegles148">[^]*?</div><!--/cpRecapRegles148-->'), '').replace(/(Étape|étape|étapes) ([0-9])/g, function (m, a, c) { return a + ' ' + (Number(c) >= 6 ? Number(c) - 1 : c); }).replace(/ sur 7</g, ' sur 6<'); };
     var CONFIGS = { dentiste: 'chirurgien-dentiste', coiffeur: 'coiffeur', equipe: 'coiffeur', avocat: 'avocat' };
     Object.keys(CONFIGS).forEach(function (cle) {
       var id = CONFIGS[cle];

@@ -78,6 +78,8 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     R.e4 = texte();
     tcConfigPro121.jour(6); tcConfigPro121.heure(1, 'matin', 1, '12:10'); tcConfigPro121.heure(2, 'apres', 1, '13:00'); tcConfigPro121.heure(3, 'matin', 1, '09:00'); await attendre(50);
     bouton(/Suivant/).click(); await attendre(100);
+    // Mission 148 : « Vos règles de réservation » vient après les horaires ; ses valeurs de départ, puis « Suivant ».
+    R.e45 = texte(); bouton(/Suivant/).click(); await attendre(100);
     tcConfigPro121.dureeRdv(20); await attendre(50);
     R.e5 = texte();
     R.debord = (function () { var c = document.getElementById('page-configpro'); return c.scrollWidth - c.clientWidth; })();
@@ -152,7 +154,7 @@ for (const [taille, w] of [['téléphone', 390], ['PC', 1366]]) {
   verifie(n + 'étape 5 : une fin avant le début donne un message, jamais un nombre négatif', /L’après-midi : pas de créneau \(la fin est avant le début\)/.test(S.e5) && !/-\d+ créneau/.test(S.e5), S.e5);
   verifie(n + 'étape 5 : 9h à 9h : « la fin est la même que le début »', /Le matin : pas de créneau \(la fin est la même que le début\)/.test(S.e5), S.e5);
   verifie(n + 'étape 5 : le total de la semaine (lundi à samedi)', /En tout : 105 créneaux par semaine\./.test(S.e5), S.e5.slice(-200));
-  verifie(n + 'étape 6 : la fiche, question par question, « Remplis à ma place » en haut', /Étape 6 sur 6/i.test(S.e6) && /Votre fiche professionnelle/.test(S.e6) && /Remplis à ma place/.test(S.e6) && /Quelle est l’adresse du cabinet \?/.test(S.e6) && /Que doit apporter le patient \?/.test(S.e6), S.e6.slice(0, 300));
+  verifie(n + 'étape 6 : la fiche, question par question, « Remplis à ma place » en haut', /Étape 7 sur 7/i.test(S.e6) && /Votre fiche professionnelle/.test(S.e6) && /Remplis à ma place/.test(S.e6) && /Quelle est l’adresse du cabinet \?/.test(S.e6) && /Que doit apporter le patient \?/.test(S.e6), S.e6.slice(0, 300));
   verifie(n + 'étape 6 : les horaires du cabinet vides au départ (jamais ceux de l’étape 4)', S.horairesFiche === '', S.horairesFiche);
   verifie(n + '« Remplis à ma place » puis « Valider ces réponses » : la fiche remplie, ce qui manque garde la réponse proposée', S.fiche && S.fiche.nom === 'Dr Paul Martin' && S.fiche.adresse === '12 rue de la Paix, 75002 Paris' && S.fiche.horaires === 'Lundi au vendredi, 8h à 19h' && /cabinet de chirurgie dentaire/.test(S.fiche.presentation) && /Charly Pro IA a lu votre fiche/.test(S.e6b) && /Rien n’est encore enregistré/.test(S.e6b) && /C’est enregistré : 5 réponses/.test(S.valide), JSON.stringify(S.fiche));
   verifie(n + '« Remplis à ma place » : en attente, rien n’est enregistré avant « Valider ces réponses »', S.enAttente && S.enAttente.nom === 'Dr Charles Haddad' && S.enAttente.garde !== 'Dr Paul Martin', JSON.stringify(S.enAttente));

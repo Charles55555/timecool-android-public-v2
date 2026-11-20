@@ -48,7 +48,9 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // Mission 139 : l'empreinte se lit sans le bouton « Voir tous les métiers » (le reste ne bouge pas).
     // Mission 141 : et sans la ligne « Votre métier : … » des étapes 2 à 6 (verif-rappel-metier141 la vérifie).
     // Mission 143 : et sans les blocs des titres d'étape (verif-titres-etapes143 les vérifie).
-    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1'); };
+    // Mission 148 : l'empreinte d'avant se lit sans l'étape « Vos règles de réservation » (sans son cadre au récapitulatif, avec le compteur
+    // et les renvois d'avant : « sur 6 », une étape de moins à partir de la durée). verif-config-regles148 vérifie la nouvelle étape.
+    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace(new RegExp('<div id="cpRecapRegles148">[^]*?</div><!--/cpRecapRegles148-->'), '').replace(/(Étape|étape|étapes) ([0-9])/g, function (m, a, c) { return a + ' ' + (Number(c) >= 6 ? Number(c) - 1 : c); }).replace(/ sur 7</g, ' sur 6<'); };
     var C = {};
     for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); C['etape' + n] = corps(); }
     _tcConfigProEtape = 4; tcConfigPro121.choisirCoiffeur('cB'); C.etape4julien = corps();
@@ -86,6 +88,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     tcConfigPro121.suivant(); await attendre(80);
     R.e4 = texte(); debords.push(deborde());
     tcConfigPro121.suivant(); await attendre(80);
+    tcConfigPro121.suivant(); await attendre(80);   // mission 148 : « Vos règles de réservation », avec ses valeurs de départ
     R.e5 = texte(); R.selectRdv = (document.getElementById('cpDureeRdv') || {}).value; debords.push(deborde());
     tcConfigPro121.suivant(); await attendre(120);
     // E. Étape 6 : la fiche.
@@ -145,7 +148,7 @@ else {
     && (S.e2b.match(/Donner une consultation juridique/g) || []).length === 2 && (S.e2b.match(/Reprendre une procédure en cours/g) || []).length === 2, S.e2b.slice(0, 400));
   verifie('étape 2 : « domaine » et « mission » (ni acte, ni patient, ni prestation) ; « Un domaine qui manque ? », « Créer mon propre domaine », « Créer ma propre mission »', sansMots(S.e2b) && /Un domaine qui manque \?/.test(S.e2b) && /Créer mon propre domaine/.test(S.e2b) && /Créer ma propre mission/.test(S.e2b), S.e2b.slice(-300));
   verifie('les messages : « Écrivez le nom de votre domaine. », « Écrivez le nom de votre mission. » ; la question au client', S.erreurDomaine === 'Écrivez le nom de votre domaine.' && S.erreurMission === 'Écrivez le nom de votre mission.' && /Question au client/.test(S.question) && /cette mission/.test(S.question) && S.questionExemple === 'Par exemple : Avez-vous des enfants mineurs ?', JSON.stringify([S.erreurDomaine, S.erreurMission, S.questionExemple]));
-  verifie('étape 3 : « Vos deux rendez-vous » : premier contact par téléphone (gratuit), rendez-vous au cabinet (sans prix), « Un nouveau client ne prend seul que le premier contact » cochée ; 30 minutes chacun', /Vos deux rendez-vous/.test(S.e3) && /📞 Premier contact par téléphone/.test(S.e3) && /🏛️ Rendez-vous au cabinet/.test(S.e3) && (S.e3.match(/Un rendez-vous de 30 minutes \(étape 5\)/g) || []).length === 2
+  verifie('étape 3 : « Vos deux rendez-vous » : premier contact par téléphone (gratuit), rendez-vous au cabinet (sans prix), « Un nouveau client ne prend seul que le premier contact » cochée ; 30 minutes chacun', /Vos deux rendez-vous/.test(S.e3) && /📞 Premier contact par téléphone/.test(S.e3) && /🏛️ Rendez-vous au cabinet/.test(S.e3) && (S.e3.match(/Un rendez-vous de 30 minutes \(étape 6\)/g) || []).length === 2
     && S.e3defaut.contact === 'gratuit' && S.e3defaut.cabinet === '' && S.e3defaut.case === 'true' && S.e3defaut.garde && /Un nouveau client ne prend seul que le premier contact/.test(S.e3) && sansMots(S.e3), JSON.stringify(S.e3defaut));
   verifie('les deux rendez-vous enregistrés : le premier contact à 30 €, le cabinet de 150 à 200 €, la case décochée puis recochée', JSON.stringify(S.rdv) === JSON.stringify({ contact: { prix: { type: 'fixe', min: 30 } }, cabinet: { prix: { type: 'fourchette', min: 150, max: 200 } }, nouveauContactSeul: true }) && S.caseDecochee === false, JSON.stringify([S.rdv, S.caseDecochee]));
   verifie('étape 4 : comme avant (« Quels jours travaillez-vous ? », privés)', /Quels jours travaillez-vous \?/.test(S.e4) && /restent privés/.test(S.e4) && !/coiffeur/i.test(S.e4), S.e4.slice(0, 200));

@@ -3917,3 +3917,25 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Les 26 renvois « (étape N) » des textes de « Configuration professionnelle » s'écrivent maintenant « (étape ⟦N⟧) ». Au dessin, tcCpRenvois147 les remplace par le rang affiché de l'étape dans les étapes du métier. Les métiers à six étapes gardent leurs numéros, et la 148 ne cassera aucun renvoi.
   - renvois.js vérifie le nombre de chaque texte remplacé.
   - verif-config-metiers147 compte 51 vérifications. Pour la mairie, le notaire et le coiffeur, à plusieurs, chaque renvoi visible désigne l'étape affichée de son sujet, et aucun renvoi n'est oublié. Elle est rouge sur 2762872. Les empreintes 143 n'ont pas bougé.
+
+## 20/11/2026 — Mission 148 : l'étape « Vos règles de réservation » (CODEUR)
+
+- Charles, 20/11 : une étape de plus dans « Configuration professionnelle », pour tous les métiers, inspirée des plannings de rendez-vous de Google Agenda. Elle vient après les jours et les horaires, avant la durée d'un rendez-vous, et reste toujours derrière la case CONFIG_PRO.
+- Elle a quatre réglages facultatifs, chacun avec une phrase d'explication et une valeur de départ :
+  1. Jusqu'à quand on peut réserver : au plus tôt 60 jours avant le rendez-vous, au plus tard 1 heure avant.
+  2. Une journée avec des horaires différents : une date, « Fermé ce jour-là » ou le matin et l'après-midi, sans toucher à la semaine habituelle. La liste des journées a un bouton « Retirer » ; la même date remplace l'ancienne.
+  3. Une pause entre deux rendez-vous : une case et une durée ; au départ, pas de pause, puis 10 minutes si on coche.
+  4. Un maximum de rendez-vous par jour : une case et un nombre de 1 à 50 ; au départ, pas de limite, puis 8 si on coche.
+- Au départ, rien n'est écrit. Au premier « Suivant », les valeurs de départ sont enregistrées dans tc_config_pro (e.regles148), par métier. « Voir tous les métiers » n'écrit rien.
+- L'étape porte le numéro interne 4,5 (TC_CP_ETAPE_REGLES148), dans la liste des étapes du métier (tcCpEtapes147) :
+  - le compteur affiche « Étape 5 sur 7 » (« 4 sur 6 » pour une démarche), et « Suivant » et « ← Retour » suivent ;
+  - les renvois (« la même durée (étape 6) ») suivent aussi, sans renuméroter le code ;
+  - « Votre métier : … » est rappelé en haut ;
+  - le récapitulatif a une section « Vos règles de réservation » avec « ✏️ Modifier » ;
+  - le sous-titre de la page dit « étape par étape » au lieu de « en six étapes ».
+- Ces règles ne changent encore aucune prise de rendez-vous : les créneaux de l'étape d'après restent les mêmes, et rien d'autre ne lit regles148 (la démonstration du dentiste non plus).
+- La suite verif-config-regles148 compte 19 vérifications, à 390 et 1280 px. Elle est rouge sur a7176a2.
+- Neuf suites suivent l'étape de plus, adaptées par suites148.js : chaque texte est compté, rien n'est retiré.
+  - Elles font un « Suivant » de plus après les horaires.
+  - Les compteurs passent « sur 7 », et le renvoi de la durée passe à l'« étape 6 ».
+  - Les empreintes du dentiste, du coiffeur et de l'avocat se lisent sans le cadre de la 148 au récapitulatif, avec le compteur et les renvois d'avant. Sinon elles sont identiques, au caractère près.

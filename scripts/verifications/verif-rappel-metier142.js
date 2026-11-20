@@ -61,7 +61,9 @@ const jouer = (largeur) => {
         lignesEtiquette: sp[0] ? ligneDe(sp[0]) : [], lignesNom: sp[1] ? ligneDe(sp[1]) : [], deuxPoints: (L.chars.filter(function (c) { return c.c === ':'; })[0] || {}).ligne,
         mot: (L.chars.filter(function (c) { return c.c === 'r'; })[0] || {}).ligne, debord: deborde() };
     };
-    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?'); };   // mission 143 : les blocs des titres retirés
+    // Mission 148 : l'empreinte d'avant se lit sans l'étape « Vos règles de réservation » (sans son cadre au récapitulatif, avec le compteur
+    // et les renvois d'avant : « sur 6 », une étape de moins à partir de la durée). verif-config-regles148 vérifie la nouvelle étape.
+    var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?').replace(new RegExp('<div id="cpRecapRegles148">[^]*?</div><!--/cpRecapRegles148-->'), '').replace(/(Étape|étape|étapes) ([0-9])/g, function (m, a, c) { return a + ' ' + (Number(c) >= 6 ? Number(c) - 1 : c); }).replace(/ sur 7</g, ' sur 6<'); };   // mission 143 : les blocs des titres retirés
     ['chirurgien-dentiste', 'coiffeur', 'avocat'].forEach(function (id) {
       var e = { v: 1, metier: id, familles: tcConfigProFamillesDuMetier(id), jours: tcConfigProJoursDefaut(), dureeRdv: id === 'chirurgien-dentiste' ? 20 : 30, etape: 2, termine: false };
       if (id === 'avocat') e.familles[0].gardee = true;

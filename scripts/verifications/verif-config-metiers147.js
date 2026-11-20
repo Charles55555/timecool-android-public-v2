@@ -112,6 +112,7 @@ async function parcours() {
     tcConfigPro121.prixType(fb.id, sp.id, 'fourchette'); tcConfigPro121.prixMontant(fb.id, sp.id, 'min', '40'); tcConfigPro121.prixMontant(fb.id, sp.id, 'max', '60');
     R.osteo3b = texte();
     tcConfigPro121.suivant(); await attendre(30); R.osteo4 = texte();
+    tcConfigPro121.suivant(); await attendre(30);   // mission 148 : « Vos règles de réservation », avec ses valeurs de départ
     tcConfigPro121.suivant(); await attendre(30); R.osteo5 = { texte: texte(), note: !!corps().querySelector('.cp-note136') };
     tcConfigPro121.suivant(); await attendre(30); R.osteo6 = texte(); R.osteoFiche = JSON.parse(JSON.stringify(tcConfigProLire().fiche || {}));
     // « Remplis à ma place » : le modèle est remplacé ici ; rien ne part.
@@ -180,8 +181,9 @@ async function parcours() {
     tcConfigPro121.suivant(); await attendre(20); nav.e2 = [compteur(), _tcConfigProEtape];
     tcConfigPro121.suivant(); await attendre(20); nav.e3 = [compteur(), _tcConfigProEtape, /Quels jours travaillez-vous \?/.test(texte())];
     tcConfigPro121.retour(); await attendre(20); nav.retour = [compteur(), _tcConfigProEtape];
-    tcConfigPro121.suivant(); tcConfigPro121.suivant(); await attendre(20); nav.e4 = [compteur(), _tcConfigProEtape];
+    tcConfigPro121.suivant(); tcConfigPro121.suivant(); await attendre(20); nav.e4 = [compteur(), _tcConfigProEtape, /Vos règles de réservation/.test(texte())];   // mission 148
     tcConfigPro121.suivant(); await attendre(20); nav.e5 = [compteur(), _tcConfigProEtape];
+    tcConfigPro121.suivant(); await attendre(20); nav.e6 = [compteur(), _tcConfigProEtape];
     tcConfigPro121.suivant(); await attendre(20); nav.recap = texte(); nav.fin = _tcConfigProEtape;
     tcConfigPro121.aller(3); await attendre(20); nav.aller3 = [compteur(), _tcConfigProEtape];
     R.nav = nav;
@@ -265,7 +267,7 @@ else {
     /Quels actes faites-vous \?/.test(S.osteo2) && /motif de consultation/.test(S.osteo2) && ['Consultation', 'Femme enceinte', 'Sportif', 'Urgence', 'Consultation urgente', '➕ Créer mon propre acte', '➕ Créer ma propre famille'].every((x) => S.osteo2.indexOf(x) > -1) && /Votre métier\s*:\s*Ostéopathe/.test(S.osteo2), S.osteo2.slice(0, 400));
   verifie('étape 2 : « le patient appelle le cabinet », « Seulement avec un autre acte », « Qui le fait ? » ; rien du coiffeur', /Pas de rendez-vous en ligne : le patient appelle le cabinet/.test(S.osteo2) && /Seulement avec un autre acte/.test(S.osteo2) && /Qui le fait \?/.test(S.osteo2) && !/coiffeur|coupe|salon|cheveux/i.test(S.osteo2), '');
   verifie('étape 2 : créer une famille sans nom : « Écrivez le nom de votre famille d’actes. » ; renommer, décocher, créer : enregistré', S.osteoErreurFamille === 'Écrivez le nom de votre famille d’actes.' && /Adulte \(plus de 16 ans\)/.test(S.osteo2b) && /Bilan postural/.test(S.osteo2b), S.osteoErreurFamille);
-  verifie('étape 3 : « Quels prix affichez-vous ? », un prix par acte gardé, aucune durée par acte', /Quels prix affichez-vous \?/.test(S.osteo3.texte) && /Tous vos rendez-vous ont la même durée \(étape 5\)/.test(S.osteo3.texte) && S.osteo3.prix === S.osteo3.actes && S.osteo3.actes === 6 && S.osteo3.durees === 0, J([S.osteo3.prix, S.osteo3.actes, S.osteo3.durees]));
+  verifie('étape 3 : « Quels prix affichez-vous ? », un prix par acte gardé, aucune durée par acte', /Quels prix affichez-vous \?/.test(S.osteo3.texte) && /Tous vos rendez-vous ont la même durée \(étape 6\)/.test(S.osteo3.texte) && S.osteo3.prix === S.osteo3.actes && S.osteo3.actes === 6 && S.osteo3.durees === 0, J([S.osteo3.prix, S.osteo3.actes, S.osteo3.durees]));
   verifie('étape 4 : « Quels jours travaille chaque praticien ? », Léa et Tom', /Quels jours travaille chaque praticien \?/.test(S.osteo4) && /Choisissez un praticien, puis cochez ses jours\./.test(S.osteo4) && /Léa/.test(S.osteo4) && /Tom/.test(S.osteo4), '');
   // Examen 147 : une seule durée pour tout : le titre ne dit pas « par défaut » (un acte n'a pas d'autre durée).
   verifie('étape 5 : « Combien de temps dure un rendez-vous chez vous ? » (sans « par défaut »), une seule durée, « quel que soit l’acte », sans la note du balayage',
@@ -326,11 +328,12 @@ else {
     /Les missions, les prix et la fiche sont les mêmes pour tous\./.test(no.e1) && /Les interventions, les prix et la fiche sont les mêmes pour tous\./.test(pl.e1) && /Les interventions, les prix/.test(ga.e1) && /Les démarches, les prix et la fiche sont les mêmes pour tous\./.test(ma.e1)
     && [no, pl, ga, ma].every((o) => !/prestation/i.test(tout7(o))), J([no, pl, ga, ma].map((o) => (tout7(o).match(/.{0,40}prestation.{0,20}/i) || [''])[0])));
   const V = S.nav;
-  verifie('mairie (chef) : pas d’étape des prix : « Étape 1 sur 5 », 2 sur 5, puis « Quels jours travaillez-vous ? » en « Étape 3 sur 5 » ; « ← Retour » revient à l’étape 2 ; 4 sur 5, 5 sur 5, puis le récapitulatif',
-    V.e1 === '1/5' && J(V.e2) === J(['2/5', 2]) && J(V.e3) === J(['3/5', 4, true]) && J(V.retour) === J(['2/5', 2]) && J(V.e4) === J(['4/5', 5]) && J(V.e5) === J(['5/5', 6]) && V.fin === 7
-    && J(V.aller3) === J(['3/5', 4]), J(V));
-  verifie('mairie, récapitulatif : « Vos démarches », sans « et leur prix », aucun prix nulle part ; le notaire garde ses six étapes (« Étape 3 sur 6 », « Quels prix affichez-vous ? »)',
-    /Vos démarches/.test(V.recap) && !/prix/i.test(V.recap) && !/prix/i.test(ma.e7) && !/Quels prix/.test(tout7(ma)) && J(S.navNotaire) === J(['3/6', 3, true]), J([V.recap.slice(0, 300), S.navNotaire]));
+  // Mission 148 : « Vos règles de réservation » s'ajoute après les jours (4 sur 6) : la mairie a six étapes, sans celle des prix.
+  verifie('mairie (chef) : pas d’étape des prix : « Étape 1 sur 6 », 2 sur 6, puis « Quels jours travaillez-vous ? » en « Étape 3 sur 6 » ; « ← Retour » revient à l’étape 2 ; « Vos règles de réservation » 4 sur 6, 5 sur 6, 6 sur 6, puis le récapitulatif',
+    V.e1 === '1/6' && J(V.e2) === J(['2/6', 2]) && J(V.e3) === J(['3/6', 4, true]) && J(V.retour) === J(['2/6', 2]) && J(V.e4) === J(['4/6', 4.5, true]) && J(V.e5) === J(['5/6', 5]) && J(V.e6) === J(['6/6', 6]) && V.fin === 7
+    && J(V.aller3) === J(['3/6', 4]), J(V));
+  verifie('mairie, récapitulatif : « Vos démarches », sans « et leur prix », aucun prix nulle part ; le notaire garde son étape des prix (« Étape 3 sur 7 », « Quels prix affichez-vous ? »)',
+    /Vos démarches/.test(V.recap) && !/prix/i.test(V.recap) && !/prix/i.test(ma.e7) && !/Quels prix/.test(tout7(ma)) && J(S.navNotaire) === J(['3/7', 3, true]), J([V.recap.slice(0, 300), S.navNotaire]));
   // Examen du correctif du lot 2 : les renvois « (étape N) » ; [motif, étapes internes visées].
   const PATRONS = [[/horaires(?: de travail)? \(étape (\d)\)/g, [4]], [/même durée \(étape (\d)\)/g, [5]], [/durée de vos rendez-vous \(étape (\d)\)/g, [5]],
     [/Aucun jour coché \(étape (\d)\)/g, [4]], [/corriger à l’étape (\d)/g, [2]], [/corriger aux étapes (\d) et (\d)/g, [2, 3]], [/en ligne » \(étape (\d)\)/g, [2]]];

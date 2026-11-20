@@ -47,7 +47,9 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // Mission 139 : l'empreinte se lit sans le bouton « Voir tous les métiers » (le reste ne bouge pas).
     // Mission 141 : et sans la ligne « Votre métier : … » des étapes 2 à 6 (verif-rappel-metier141 la vérifie).
     // Mission 143 : et sans les blocs des titres d'étape (verif-titres-etapes143 les vérifie).
-    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1'); };
+    // Mission 148 : l'empreinte d'avant se lit sans l'étape « Vos règles de réservation » (sans son cadre au récapitulatif, avec le compteur
+    // et les renvois d'avant : « sur 6 », une étape de moins à partir de la durée). verif-config-regles148 vérifie la nouvelle étape.
+    var corps = function () { return document.getElementById('configProCorps').innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '').replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace(new RegExp('<div id="cpRecapRegles148">[^]*?</div><!--/cpRecapRegles148-->'), '').replace(/(Étape|étape|étapes) ([0-9])/g, function (m, a, c) { return a + ' ' + (Number(c) >= 6 ? Number(c) - 1 : c); }).replace(/ sur 7</g, ' sur 6<'); };
     var D = {};
     for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); D['etape' + n] = corps(); }
     _tcConfigProEtape = 2; tcConfigPro121.ouvrirQuestion('consultation-dentaire', 'controle'); D.editeurNeuf = corps(); tcConfigPro121.qAnnuler();
@@ -117,6 +119,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // D. Étapes 4 et 5.
     R.e4 = texte(); debords.push(deborde());
     tcConfigPro121.suivant(); await attendre(100);
+    tcConfigPro121.suivant(); await attendre(100);   // mission 148 : « Vos règles de réservation », avec ses valeurs de départ
     R.e5 = texte(); debords.push(deborde());
     tcConfigPro121.suivant(); await attendre(150);
     // E. Étape 6 : la fiche du salon ; « Remplis à ma place » avec des prestations.

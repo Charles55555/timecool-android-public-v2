@@ -1294,7 +1294,7 @@ if (window.pdfjsLib) {
 <div class="page" id="page-configpro">
   <div class="page-header">
     <div class="page-title">🩺 Configuration professionnelle</div>
-    <div class="page-subtitle">Votre agenda professionnel et votre fiche, en six étapes.</div>
+    <div class="page-subtitle">Votre agenda professionnel et votre fiche, étape par étape.</div>
   </div>
   <div class="main"><div id="configProCorps" style="padding:14px; max-width:720px; margin:0 auto;"></div></div>
 </div>
@@ -11522,7 +11522,8 @@ function tcCpRecapActes147(e) {
 }
 /* Examen du lot 2 (chef, 20/11) : les étapes d'un métier. Sans prix (administration et associations) : pas d'étape 3 ; le compteur
    (« Étape 3 sur 5 »), « Suivant » et « ← Retour » suivent. Les autres métiers : les six étapes, comme avant. */
-function tcCpEtapes147(e) { const M = tcCpGenerique147(e) ? tcCpMots147(e) : null; return M && M.sansPrix ? [1, 2, 4, 5, 6] : [1, 2, 3, 4, 5, 6]; }
+// Mission 148 : « Vos règles de réservation » (TC_CP_ETAPE_REGLES148), après les jours et les horaires, pour tous les métiers.
+function tcCpEtapes147(e) { const M = tcCpGenerique147(e) ? tcCpMots147(e) : null; return M && M.sansPrix ? [1, 2, 4, TC_CP_ETAPE_REGLES148, 5, 6] : [1, 2, 3, 4, TC_CP_ETAPE_REGLES148, 5, 6]; }
 /** L'étape d'après (7 : le récapitulatif) ou d'avant (1 au plus tôt). */
 function tcCpEtapeVoisine147(e, n, sens) {
   const l = tcCpEtapes147(e);
@@ -11595,6 +11596,92 @@ function tcCpRedessinerListe147() {
   }
 }
 /* ═══ fin mission 147 (données et outils) ═════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ Mission 148 (Charles, 20/11) : « Vos règles de réservation » ═════════════════════════════════════════════════════
+   Une étape de plus pour tous les métiers, après les jours et les horaires (étape interne 4), avant la durée d'un rendez-vous (5).
+   Quatre réglages facultatifs, inspirés des plannings de rendez-vous de Google Agenda, avec une valeur de départ : jusqu'à quand on peut
+   réserver (au plus tôt 60 jours avant le rendez-vous, au plus tard 1 heure avant), des journées aux horaires différents ou fermées
+   (sans toucher à la semaine habituelle), une pause entre deux rendez-vous (aucune), un nombre maximum de rendez-vous par jour (aucun).
+   Enregistrés avec le reste, par métier (e.regles148), lus par aucun autre compte, montrés au récapitulatif. Ils ne changent encore
+   aucune prise de rendez-vous. Toujours derrière la case CONFIG_PRO. */
+const TC_CP_ETAPE_REGLES148 = 4.5;   // entre les horaires (4) et la durée (5) : le compteur, « Suivant », « ← Retour » et les renvois suivent
+const TC_CP_AVANCE148 = [[7, '7 jours'], [14, '14 jours'], [30, '30 jours'], [60, '60 jours'], [90, '90 jours'], [180, '6 mois'], [365, '1 an']];
+const TC_CP_DELAI148 = [[15, '15 minutes'], [30, '30 minutes'], [60, '1 heure'], [120, '2 heures'], [240, '4 heures'], [720, '12 heures'], [1440, '1 jour'], [2880, '2 jours']];
+const TC_CP_PAUSES148 = [5, 10, 15, 20, 30, 45, 60];
+let _tcCp148Brouillon = null;   // la journée en cours d'ajout : { date, ferme, matin: [début, fin], apres: [début, fin] }
+function tcCpPlage148(p) { return Array.isArray(p) && p.length === 2 ? [String(p[0] || ''), String(p[1] || '')] : ['', '']; }
+/** Les règles du métier, avec leurs valeurs de départ (rien n'est écrit ici). */
+function tcCpRegles148(e) {
+  const r = e && e.regles148 && typeof e.regles148 === 'object' && !Array.isArray(e.regles148) ? e.regles148 : {};
+  const parmi = function (l, v, d) { return l.some(function (x) { return (Array.isArray(x) ? x[0] : x) === Number(v); }) ? Number(v) : d; };
+  const jours = (Array.isArray(r.jours) ? r.jours : []).filter(function (j) { return j && /^\d{4}-\d{2}-\d{2}$/.test(String(j.date || '')); })
+    .map(function (j) { return j.ferme ? { date: j.date, ferme: true } : { date: j.date, matin: tcCpPlage148(j.matin), apres: tcCpPlage148(j.apres) }; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
+  return { avance: parmi(TC_CP_AVANCE148, r.avance, 60), delai: parmi(TC_CP_DELAI148, r.delai, 60), jours: jours,
+    pause: parmi(TC_CP_PAUSES148, r.pause, 0), max: Number(r.max) >= 1 && Number(r.max) <= 50 ? Math.round(Number(r.max)) : 0 };
+}
+function tcCpReglesEcrire148(e) { e.regles148 = tcCpRegles148(e); return e.regles148; }
+/** « jeudi 24 décembre 2026 ». */
+function tcCpDate148(iso) {
+  const d = new Date(String(iso) + 'T12:00:00');
+  if (isNaN(d.getTime())) return String(iso);
+  const J = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'], M = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  return J[d.getDay()] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + M[d.getMonth()] + ' ' + d.getFullYear();
+}
+/** Une plage écrite (« 9h à 12h »), ou '' si elle est vide. */
+function tcCpPlageTexte148(p) { return tcConfigProHeure(p[0]) && tcConfigProHeure(p[1]) ? tcConfigProHeure(p[0]) + ' à ' + tcConfigProHeure(p[1]) : ''; }
+/** « fermé », « 9h à 12h, puis 14h à 16h ». */
+function tcCpHorairesJour148(j) { return j.ferme ? 'fermé' : ([tcCpPlageTexte148(j.matin), tcCpPlageTexte148(j.apres)].filter(Boolean).join(', puis ') || 'fermé'); }
+function tcCpLibelle148(l, v) { const x = l.filter(function (y) { return y[0] === v; })[0]; return x ? x[1] : String(v); }
+/** L'étape « Vos règles de réservation ». */
+function tcCpEtapeRegles148(e) {
+  const r = tcCpRegles148(e);
+  const b = _tcCp148Brouillon || (_tcCp148Brouillon = { date: '', ferme: true, matin: ['09:00', '12:00'], apres: ['14:00', '18:00'] });
+  const carte = function (id, titre, phrase, corps) {
+    return '<div class="cp-regle148" id="' + id + '" style="' + TC_CP_CARTE + '"><div style="font-size:16px; font-weight:700; color:var(--text);">' + titre + '</div>'
+      + '<div style="font-size:13.5px; color:var(--text-sec); line-height:1.45; margin:4px 0 10px;">' + phrase + '</div>' + corps + '</div>';
+  };
+  const liste = function (id, l, v, geste, nom) { return '<select id="' + id + '" aria-label="' + nom + '" onchange="tcConfigPro121.' + geste + '(this.value)" style="' + TC_CP_CHAMP + ' font-weight:700;">' + l.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === v ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>'; };
+  const ligne = 'display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:15px; color:var(--text); line-height:1.5; margin:4px 0;';
+  const coche = function (geste, on, texte) { return '<div role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '" tabindex="0" onclick="tcConfigPro121.' + geste + '()" style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:15px; color:var(--text); min-height:36px;">' + tcCpCase(on) + '<span>' + texte + '</span></div>'; };
+  const heure = function (partie, rang, v, nom) { return '<input type="time" step="300" value="' + escapeHTMLSafe(v || '') + '" aria-label="' + nom + '" onchange="tcConfigPro121.brouillon148(\'' + partie + '\', ' + rang + ', this.value)" style="' + TC_CP_CHAMP + ' width:108px;">'; };
+  const bouton = function (val, texte) { const on = !!b.ferme === (val === 'ferme'); return '<button role="radio" aria-checked="' + (on ? 'true' : 'false') + '" onclick="tcConfigPro121.brouillon148(\'ferme\', 0, \'' + val + '\')" style="' + TC_CP_BOUTON + ' flex:1; min-width:130px; background:' + (on ? 'var(--g-blue)' : '#fff') + '; color:' + (on ? '#fff' : 'var(--text)') + '; border:1px solid ' + (on ? 'var(--g-blue)' : 'var(--border)') + ';">' + texte + '</button>'; };
+  return tcCpTitre('Vos règles de réservation', 'Quatre réglages, tous facultatifs.<br>Une valeur est déjà proposée : changez-la si vous voulez.')
+    + carte('cpRegleQuand148', 'Jusqu’à quand peut-on réserver ?', 'Personne ne réserve trop loin à l’avance, ni à la dernière minute.',
+      '<div style="' + ligne + '">Au plus tôt ' + liste('cpAvance148', TC_CP_AVANCE148, r.avance, 'avance148', 'Au plus tôt') + ' avant le rendez-vous.</div>'
+      + '<div style="' + ligne + '">Au plus tard ' + liste('cpDelai148', TC_CP_DELAI148, r.delai, 'delai148', 'Au plus tard') + ' avant le rendez-vous.</div>')
+    + carte('cpRegleJours148', 'Une journée avec des horaires différents', 'Un jour de fête ou de congé : vos horaires de ce jour-là, sans changer votre semaine habituelle.',
+      (r.jours.length ? r.jours.map(function (j) {
+        return '<div class="cp-jour148" style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); font-size:14px; color:var(--text); line-height:1.4;">'
+          + '<span><b>' + escapeHTMLSafe(tcCpDate148(j.date)) + '</b> : ' + escapeHTMLSafe(tcCpHorairesJour148(j)) + '</span>'
+          + '<button onclick="tcConfigPro121.retirerJour148(\'' + j.date + '\')" style="' + TC_CP_PETIT + ' color:#c5221f; border-color:#f5b8b3; flex-shrink:0;">Retirer</button></div>';
+      }).join('') : '<div style="font-size:14px; color:var(--text-sec); margin-bottom:6px;">Aucune journée pour l’instant.</div>')
+      + '<div style="background:#f8f9fa; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-top:10px;">'
+      + '<label for="cpDate148" style="display:block; font-size:14px; font-weight:700; color:var(--text); margin-bottom:6px;">Ajouter une journée</label>'
+      + '<input id="cpDate148" type="date" value="' + escapeHTMLSafe(b.date || '') + '" onchange="tcConfigPro121.brouillon148(\'date\', 0, this.value)" style="' + TC_CP_CHAMP + ' width:100%; box-sizing:border-box; margin-bottom:8px;">'
+      + '<div role="radiogroup" aria-label="Ce jour-là" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">' + bouton('ferme', 'Fermé ce jour-là') + bouton('ouvert', 'Avec ces horaires') + '</div>'
+      + (b.ferme ? '' : '<div style="' + ligne + '"><span style="min-width:82px;">Le matin</span> de ' + heure('matin', 0, b.matin[0], 'Début du matin') + ' à ' + heure('matin', 1, b.matin[1], 'Fin du matin') + '</div>'
+        + '<div style="' + ligne + '"><span style="min-width:82px;">L’après-midi</span> de ' + heure('apres', 0, b.apres[0], 'Début de l’après-midi') + ' à ' + heure('apres', 1, b.apres[1], 'Fin de l’après-midi') + '</div>')
+      + '<button id="cpAjouterJour148" onclick="tcConfigPro121.ajouterJour148()" style="' + TC_CP_PETIT + ' margin-top:6px;">➕ Ajouter cette journée</button></div>')
+    + carte('cpReglePause148', 'Une pause entre deux rendez-vous', 'Le temps de souffler, ou de tout préparer avant le rendez-vous suivant.',
+      coche('pause148', r.pause > 0, 'Faire une pause entre deux rendez-vous')
+      + (r.pause > 0 ? '<div style="' + ligne + ' padding-left:32px;">Une pause de ' + liste('cpPause148', TC_CP_PAUSES148.map(function (m) { return [m, m + ' minutes']; }), r.pause, 'pauseDuree148', 'Durée de la pause') + '</div>' : ''))
+    + carte('cpRegleMax148', 'Un nombre maximum de rendez-vous par jour', 'Au-delà, la journée est complète : on ne peut plus réserver ce jour-là.',
+      coche('max148', r.max > 0, 'Limiter le nombre de rendez-vous par jour')
+      + (r.max > 0 ? '<div style="' + ligne + ' padding-left:32px;">Au plus <input id="cpMax148" type="number" inputmode="numeric" min="1" max="50" step="1" aria-label="Nombre de rendez-vous par jour" value="' + r.max + '" onchange="tcConfigPro121.maxNombre148(this.value)" style="' + TC_CP_CHAMP + ' width:76px; font-weight:700;"> rendez-vous par jour.</div>' : ''));
+}
+/** Au récapitulatif. Le cadre porte un repère (cpRecapRegles148) : les suites à empreintes d'avant la mission le lisent sans lui. */
+function tcCpRecapRegles148(e) {
+  const r = tcCpRegles148(e);
+  const ligne = function (t) { return '<div style="padding:3px 0; font-size:14px; color:var(--text); line-height:1.45;">' + t + '</div>'; };
+  const corps = ligne('On peut réserver au plus tôt ' + tcCpLibelle148(TC_CP_AVANCE148, r.avance) + ' avant le rendez-vous, et au plus tard ' + tcCpLibelle148(TC_CP_DELAI148, r.delai) + ' avant.')
+    + (r.jours.length ? ligne('<b>Journées aux horaires différents</b>') + r.jours.map(function (j) { return '<div style="padding:2px 0 2px 14px; font-size:14px; color:var(--text);">• ' + escapeHTMLSafe(tcCpDate148(j.date)) + ' : ' + escapeHTMLSafe(tcCpHorairesJour148(j)) + '</div>'; }).join('')
+      : ligne('Aucune journée aux horaires différents.'))
+    + ligne(r.pause ? 'Une pause de ' + r.pause + ' minutes entre deux rendez-vous.' : 'Pas de pause entre deux rendez-vous.')
+    + ligne(r.max ? 'Au plus ' + r.max + ' rendez-vous par jour.' : 'Pas de limite de rendez-vous par jour.');
+  return '<div id="cpRecapRegles148">' + tcCpSection('Vos règles de réservation', corps, TC_CP_ETAPE_REGLES148) + '</div><!--/cpRecapRegles148-->';
+}
+/* ═══ fin mission 148 (outils) ═════════════════════════════════════════════════════════════════════════════════════════ */
 const TC_PRO_DUREES_RDV = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 90, 105, 120];
 let _tcConfigPro = null;          // l'état, lu à l'ouverture de la page
 let _tcConfigProEtape = 1;        // 1 à 5 ; 6 = le récapitulatif
@@ -11703,6 +11790,7 @@ function tcOuvrirConfigPro121() {
   _tcConfigProEtape = e.termine ? 7 : Math.min(6, Math.max(1, Number(e.etape) || 1));
   _tcConfigProRemplir = false; _tcConfigProLecture = ''; _tcConfigProRempli = 0; _tcConfigProPropose = null; _tcConfigProQ = null; _tcConfigProQBrouillon = null; _tcConfigProPrestations136 = 0; _tcConfigProCoiffeur136 = null; _tcConfigProDomaines137 = 0;
   _tcCp147Ouvertes = null; _tcCp147Cherche = ''; _tcCp147Fermees = [];   // mission 147 : l'étape 1 repart fermée (sauf le métier choisi)
+  _tcCp148Brouillon = null;   // mission 148 : la journée en cours d'ajout repart vide
   tcRendreConfigPro121();
 }
 
@@ -12280,6 +12368,7 @@ const tcConfigPro121 = {
     if (n === 2 && !tcConfigProActes(e).length) { _tcConfigProErreur = tcCpMots136(e).erreurActe; tcRendreConfigPro121(); return; }
     if (n === 1 && tcCpEquipeErreur136(e)) { _tcConfigProErreur = tcCpEquipeErreur136(e); tcRendreConfigPro121(); return; }   // mission 136, lot 2
     if (n === 4 && tcCpJoursErreur136(e)) { _tcConfigProErreur = tcCpJoursErreur136(e); tcRendreConfigPro121(); return; }
+    if (n === TC_CP_ETAPE_REGLES148) tcCpReglesEcrire148(e);   // mission 148 : les valeurs de départ sont enregistrées avec le reste
     // Examen de la 136 : à plusieurs, seuls les jours de chaque coiffeur comptent (ceux du salon ne sont plus à l'écran).
     if (n === 4 && !(tcCpPlusieurs136(e) && tcCpCoiffeurs136(e).length) && !TC_PRO_JOURS.some(function (x) { return e.jours[x[0]] && e.jours[x[0]].actif; })) { _tcConfigProErreur = 'Cochez au moins un jour.'; tcRendreConfigPro121(); return; }
     if (n === 6) { e.termine = true; tcCpFinApercu139(true); }   // mission 139 : on enregistre ce qu'on regardait, photos comprises
@@ -12287,6 +12376,38 @@ const tcConfigPro121 = {
     if (n === 6 && typeof showToast === 'function') showToast('✅ C’est enregistré');
   },
   retour: function () { tcConfigPro121.aller(tcCpEtapeVoisine147(tcConfigProLire(), _tcConfigProEtape, -1)); },   // examen du lot 2
+  // Mission 148 : « Vos règles de réservation ». Chaque choix est enregistré tout de suite (en regardant les métiers : rien n'est écrit).
+  avance148: function (v) { const r = tcCpReglesEcrire148(tcConfigProLire()); if (TC_CP_AVANCE148.some(function (x) { return x[0] === Number(v); })) r.avance = Number(v); tcConfigProSauver(); tcRendreConfigPro121(); },
+  delai148: function (v) { const r = tcCpReglesEcrire148(tcConfigProLire()); if (TC_CP_DELAI148.some(function (x) { return x[0] === Number(v); })) r.delai = Number(v); tcConfigProSauver(); tcRendreConfigPro121(); },
+  brouillon148: function (champ, rang, v) {
+    const b = _tcCp148Brouillon || (_tcCp148Brouillon = { date: '', ferme: true, matin: ['09:00', '12:00'], apres: ['14:00', '18:00'] });
+    if (champ === 'date') { b.date = /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : ''; return; }
+    if (champ === 'ferme') { b.ferme = v === 'ferme'; _tcConfigProErreur = ''; tcRendreConfigPro121(); return; }
+    if ((champ === 'matin' || champ === 'apres') && (rang === 0 || rang === 1)) b[champ][rang] = /^\d{1,2}:\d{2}$/.test(String(v || '')) ? String(v).padStart(5, '0') : '';
+  },
+  ajouterJour148: function () {
+    const e = tcConfigProLire(), b = _tcCp148Brouillon || {};
+    const d = document.getElementById('cpDate148');
+    if (!b.date && d && /^\d{4}-\d{2}-\d{2}$/.test(d.value || '')) b.date = d.value;   // la date choisie (onchange) d'abord, le champ sinon
+    if (!b.date) { _tcConfigProErreur = 'Choisissez une date.'; tcRendreConfigPro121(); return; }
+    let jour = { date: b.date, ferme: true };
+    if (!b.ferme) {
+      const m = tcConfigProCreneaux(b.matin, 5), a = tcConfigProCreneaux(b.apres, 5);
+      const vide = function (p) { return !p[0] && !p[1]; };
+      if ((m.msg && !vide(b.matin)) || (a.msg && !vide(b.apres)) || (vide(b.matin) && vide(b.apres))) { _tcConfigProErreur = 'Vérifiez les horaires : la fin doit venir après le début.'; tcRendreConfigPro121(); return; }
+      jour = { date: b.date, matin: vide(b.matin) ? ['', ''] : b.matin.slice(), apres: vide(b.apres) ? ['', ''] : b.apres.slice() };
+    }
+    const r = tcCpReglesEcrire148(e);
+    r.jours = r.jours.filter(function (j) { return j.date !== jour.date; }).concat([jour]).sort(function (x, y) { return x.date < y.date ? -1 : 1; });
+    _tcCp148Brouillon = { date: '', ferme: true, matin: ['09:00', '12:00'], apres: ['14:00', '18:00'] };
+    _tcConfigProErreur = '';
+    tcConfigProSauver(); tcRendreConfigPro121();
+  },
+  retirerJour148: function (date) { const r = tcCpReglesEcrire148(tcConfigProLire()); r.jours = r.jours.filter(function (j) { return j.date !== date; }); tcConfigProSauver(); tcRendreConfigPro121(); },
+  pause148: function () { const r = tcCpReglesEcrire148(tcConfigProLire()); r.pause = r.pause > 0 ? 0 : 10; tcConfigProSauver(); tcRendreConfigPro121(); },
+  pauseDuree148: function (v) { const r = tcCpReglesEcrire148(tcConfigProLire()); if (TC_CP_PAUSES148.indexOf(Number(v)) > -1) r.pause = Number(v); tcConfigProSauver(); tcRendreConfigPro121(); },
+  max148: function () { const r = tcCpReglesEcrire148(tcConfigProLire()); r.max = r.max > 0 ? 0 : 8; tcConfigProSauver(); tcRendreConfigPro121(); },
+  maxNombre148: function (v) { const r = tcCpReglesEcrire148(tcConfigProLire()); const n = Math.round(Number(v)); r.max = n >= 1 ? Math.min(50, n) : 1; tcConfigProSauver(); tcRendreConfigPro121(); },
   // Mission 139 : « Voir tous les métiers » (depuis le récapitulatif) ; « Retour à ma configuration », sans rien changer.
   tousMetiers: function () { tcCpDebutApercu139(); _tcCp147Ouvertes = null; _tcCp147Cherche = ''; _tcCp147Fermees = []; tcConfigPro121.aller(1); },
   retourConfig: function () { tcOuvrirConfigPro121(); tcConfigProHaut(); },
@@ -12916,6 +13037,7 @@ function tcCpRecapitulatif(e) {
     + tcCpSection(M.recapActes, (tcCpPrestations136(e) ? tcCpRecapActes136(e) : (tcCpAvocat137(e) ? tcCpRecapActes137(e) : actes)) || '<div style="font-size:14px; color:var(--text-sec);">' + M.aucun + '</div>', 2)
     + (tcCpAvocat137(e) ? tcCpSection('Vos deux rendez-vous', tcCpRecapRdv137(e), 3) : '')   // mission 137
     + tcCpSection(tcCpPlusieurs136(e) ? tcCpEq147(e).recapJours : 'Vos jours et vos horaires', (tcCpPlusieurs136(e) ? tcCpRecapJoursEquipe136(e) : jours) || '<div style="font-size:14px; color:var(--text-sec);">Aucun jour.</div>', 4)
+    + tcCpRecapRegles148(e)   // mission 148
     + tcCpSection('Vos rendez-vous', '<div style="font-size:14px; color:var(--text);">Chaque rendez-vous dure ' + e.dureeRdv + ' minutes.</div>' + c.html
       + '<div style="font-size:14px; font-weight:700; color:var(--g-blue); margin-top:8px;">En tout : ' + c.total + ' créneau' + (c.total > 1 ? 'x' : '') + ' par semaine.</div>', 5)
     + tcCpSection('Votre fiche professionnelle', tcCpFicheRecap(e), 6)
@@ -12929,7 +13051,7 @@ function tcRendreConfigPro121() {
   // Examen du lot 2 : une étape que ce métier n'a pas (l'étape des prix des démarches) : celle d'après.
   if (_tcConfigProEtape <= 6 && tcCpEtapes147(e).indexOf(_tcConfigProEtape) < 0) _tcConfigProEtape = tcCpEtapeVoisine147(e, _tcConfigProEtape, 1);
   const n = _tcConfigProEtape;
-  let h = n === 1 ? tcCpEtape1(e) : n === 2 ? tcCpEtape2(e) : n === 3 ? tcCpEtape3(e) : n === 4 ? tcCpEtape4(e) : n === 5 ? tcCpEtape5(e) : n === 6 ? tcCpEtape6(e) : tcCpRecapitulatif(e);
+  let h = n === 1 ? tcCpEtape1(e) : n === 2 ? tcCpEtape2(e) : n === 3 ? tcCpEtape3(e) : n === 4 ? tcCpEtape4(e) : n === TC_CP_ETAPE_REGLES148 ? tcCpEtapeRegles148(e) : n === 5 ? tcCpEtape5(e) : n === 6 ? tcCpEtape6(e) : tcCpRecapitulatif(e);
   if (_tcCpApercu139 && n <= 6) h = '<button id="cpRetourConfig139" onclick="tcConfigPro121.retourConfig()" style="' + TC_CP_BOUTON + ' display:block; width:100%; margin:0 0 14px; background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);">← Retour à ma configuration</button>' + h;   // mission 139
   if (_tcConfigProErreur) h += '<div role="alert" style="color:#c5221f; font-size:14px; font-weight:600; margin:4px 0 10px;">' + escapeHTMLSafe(_tcConfigProErreur) + '</div>';
   if (n <= 6) {

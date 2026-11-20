@@ -95,8 +95,10 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     a.fiche = { nom: 'Maître Charles Haddad', metier: 'Avocat', adresse: '3 place du Palais, 75001 Paris', barreau: 'Paris' };
     ouvrir(a); R.avocat = etapes(); R.recapAvocat = carteRecap();
     // L'avocat sans la ligne, étape par étape (empreintes) ; dessiné sans « Voir tous les métiers ».
+    // Mission 148 : l'empreinte d'avant se lit sans l'étape « Vos règles de réservation » (sans son cadre au récapitulatif, avec le compteur
+    // et les renvois d'avant : « sur 6 », une étape de moins à partir de la durée). verif-config-regles148 vérifie la nouvelle étape.
     var sans = function () { return corps().innerHTML.replace(new RegExp('<button id="cpTousMetiers139"[^>]*>[^<]*</button>'), '').replace(new RegExp('<div id="cpRappelMetier141"[^>]*>.*?</div>'), '')
-      .replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?'); };   // mission 143 : les blocs des titres retirés   // mission 142 : le titre de l'étape 2 de l'avocat
+      .replace(new RegExp('<span class="cp-bloc143"[^>]*>([^<]*)</span>', 'g'), '$1').replace('Quels domaines d’activité pratiquez-vous ?', 'Quels domaines pratiquez-vous ?').replace(new RegExp('<div id="cpRecapRegles148">[^]*?</div><!--/cpRecapRegles148-->'), '').replace(/(Étape|étape|étapes) ([0-9])/g, function (m, a, c) { return a + ' ' + (Number(c) >= 6 ? Number(c) - 1 : c); }).replace(/ sur 7</g, ' sur 6<'); };   // mission 143 : les blocs des titres retirés   // mission 142 : le titre de l'étape 2 de l'avocat
     var H = {}; for (var n = 2; n <= 7; n++) { _tcConfigProEtape = n; tcRendreConfigPro121(); H['etape' + n] = sans(); } R.html = H;
     // B. Le vrai parcours d'un avocat neuf : il touche « Avocat », puis « Suivant ».
     localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; _tcConfigProEtape = 1; _tcConfigProErreur = '';
@@ -118,7 +120,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     await cliquer(boutons('← Retour')); R.rRetour1 = mesure();
     await cliquer(carte('Coiffeur'));
     var R2 = [];
-    for (var k = 2; k <= 6; k++) { await cliquer(document.getElementById('cpSuivant')); var m = mesure(); m.n2 = _tcConfigProEtape; m.erreur = _tcConfigProErreur; R2.push(m); }
+    for (var k = 2; k <= 7; k++) { await cliquer(document.getElementById('cpSuivant')); var m = mesure(); m.n2 = _tcConfigProEtape; m.erreur = _tcConfigProErreur; R2.push(m); }
     R.rCoiffeur = R2;
     await cliquer(document.getElementById('cpRetourConfig139')); R.rRecap = mesure();
     R.rRien = localStorage.getItem('tc_config_pro') === avant;
@@ -142,7 +144,7 @@ else {
   const J = (x) => JSON.stringify(x);
   // Une étape de 2 à 6 : une seule ligne « Votre métier : <nom> », sous l'explication, avant la première carte, sur une ligne.
   const bonne = (M, nom, explication) => M && M.n === 1 && M.texte === 'Votre métier : ' + nom && M.insecable && M.lignes === 1 && M.visible && M.dedans && M.parent
-    && /^ÉTAPE [2-6] SUR 6$/i.test(M.etape.trim()) && /^20px 700 /.test(M.question) && /^14px 400 /.test(M.explicationPolice) && (!explication || M.explication.indexOf(explication) === 0)
+    && /^ÉTAPE [2-7] SUR 7$/i.test(M.etape.trim()) && /^20px 700 /.test(M.question) && /^14px 400 /.test(M.explicationPolice) && (!explication || M.explication.indexOf(explication) === 0)
     && M.ecarts[0] >= 10 && M.ecarts[1] >= 10 && M.debord <= 0;
   const trois = [['dentiste', 'Chirurgien-dentiste', 'Cochez les actes que vous faites.'], ['coiffeur', 'Coiffeur', 'Cochez les prestations que vous faites.'], ['avocat', 'Avocat', 'Cochez vos domaines, puis leurs missions.']];
   for (const [cle, nom, aide2] of trois) {
@@ -164,7 +166,7 @@ else {
   // En regardant les métiers.
   verifie('« Voir tous les métiers » : pas de ligne au récapitulatif, ni à l’étape 1', S.r7.n === 0 && S.r1.n === 0, J([S.r7, S.r1]));
   verifie('en regardant l’avocat : « Votre métier : Avocat », sous l’explication (le bouton « Retour à ma configuration » reste en haut)', bonne(S.rAvocat, 'Avocat', 'Cochez vos domaines') && S.rRetourEnHaut && S.rAvocat.rang === 4, J(S.rAvocat));
-  verifie('en regardant le coiffeur ensuite (« ← Retour », « Coiffeur »), aux étapes 2 à 6 : « Votre métier : Coiffeur »', S.rRetour1.n === 0 && S.rCoiffeur.length === 5 && S.rCoiffeur.every((M, i) => M.n2 === i + 2 && !M.erreur && bonne(M, 'Coiffeur', '')), J(S.rCoiffeur.map((M) => [M.n2, M.erreur, M.texte, M.lignes, M.ecarts])));
+  verifie('en regardant le coiffeur ensuite (« ← Retour », « Coiffeur »), aux étapes 2 à 6 : « Votre métier : Coiffeur »', S.rRetour1.n === 0 && S.rCoiffeur.length === 6 && S.rCoiffeur.every((M, i) => M.n2 === [2, 3, 4, 4.5, 5, 6][i] && !M.erreur && bonne(M, 'Coiffeur', '')), J(S.rCoiffeur.map((M) => [M.n2, M.erreur, M.texte, M.lignes, M.ecarts])));
   verifie('« Retour à ma configuration » : son récapitulatif, sans la ligne ; rien n’a été écrit ; son étape 2 rappelle « Chirurgien-dentiste »', S.rRecap.n === 0 && S.rRien && bonne(S.rDentiste2, 'Chirurgien-dentiste', 'Cochez les actes'), J([S.rRecap.n, S.rRien, S.rDentiste2]));
   const diff = Object.keys(EMPREINTES).filter((k) => h(S.html[k]) !== EMPREINTES[k]);
   verifie('rien d’autre ne bouge : l’avocat, ses étapes 2 à 7 sans cette ligne, au caractère près (page d’avant la mission)', Object.keys(EMPREINTES).length === 6 && diff.length === 0, diff.join(', '));

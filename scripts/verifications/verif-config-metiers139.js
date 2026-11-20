@@ -122,7 +122,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // H. Valider l'avocat (jusqu'à « Voir le récapitulatif ») : il est enregistré ; le dentiste est gardé à part.
     await cliquer('cpTousMetiers139'); carte('Avocat').click(); await attendre(50);
     await cliquer('cpSuivant'); tcConfigPro121.basculer('divorce'); await attendre(30);
-    for (var i = 2; i <= 5; i++) await cliquer('cpSuivant');
+    for (var i = 2; i <= 6; i++) await cliquer('cpSuivant');   // mission 148 : une étape de plus
     R.h6 = texte().slice(0, 200); R.gardeH6 = brut() === AVANT;
     await cliquer('cpSuivant');
     var g = JSON.parse(brut() || 'null') || {};
@@ -131,7 +131,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     // I. Revenir au dentiste et valider : sa configuration au caractère près, le même récapitulatif.
     await cliquer('cpTousMetiers139'); carte('Chirurgien-dentiste').click(); await attendre(50);
     R.iMemoire = champs(tcConfigProLire()) === champs(JSON.parse(AVANT));
-    for (var j = 1; j <= 6; j++) await cliquer('cpSuivant');
+    for (var j = 1; j <= 7; j++) await cliquer('cpSuivant');   // mission 148 : une étape de plus
     var g2 = JSON.parse(brut() || 'null') || {};
     R.iValide = { metier: g2.metier, termine: g2.termine, dentiste: champs(g2) === champs(JSON.parse(AVANT)), avocat: !!(g2.metiers139 && g2.metiers139.avocat && g2.metiers139.avocat.familles.some(function (f) { return f.id === 'divorce' && f.gardee; })) };
     R.recapI = texte();
@@ -169,16 +169,16 @@ if (!S) verifie('la page a rejoué le parcours', false, (r.stdout || '').slice(-
 else {
   if (S.erreur) verifie('le parcours sans erreur', false, S.erreur);
   verifie('case éteinte : ni entrée de menu, ni page', S.menuEteint === false && S.pageEteinte !== 'configpro', S.menuEteint + ' ' + S.pageEteinte);
-  verifie('un compte sans configuration : l’étape 1, comme avant, sans bouton ; rien d’écrit', /TAPE 1 SUR 6/i.test(S.neuf || '') && /Quel est votre métier/.test(S.neuf || '') && S.neufBoutons && !S.neufBoutons[0] && !S.neufBoutons[1] && S.neufGarde === null, JSON.stringify([String(S.neuf).slice(0, 120), S.neufBoutons, S.neufGarde]));
+  verifie('un compte sans configuration : l’étape 1, comme avant, sans bouton ; rien d’écrit', /TAPE 1 SUR 7/i.test(S.neuf || '') && /Quel est votre métier/.test(S.neuf || '') && S.neufBoutons && !S.neufBoutons[0] && !S.neufBoutons[1] && S.neufGarde === null, JSON.stringify([String(S.neuf).slice(0, 120), S.neufBoutons, S.neufGarde]));
   verifie('une configuration enregistrée : la page s’ouvre sur « Votre configuration »', /^Votre configuration/.test(S.recap || '') && /Chirurgien-dentiste/.test(S.recap || ''), String(S.recap).slice(0, 200));
   const B = S.bouton || {};
   verifie('le gros bouton « Voir tous les métiers », juste au-dessus de la carte « Votre métier »', B.texte === 'Voir tous les métiers' && B.suivant === 'Votre métier' && B.dessous === true && /Vous pouvez revenir/.test(B.avant || ''), JSON.stringify(B));
   verifie('bien visible : toute la largeur, 52 px de haut, bleu, texte blanc en 16 px, sans défiler', B.large >= B.corps - 1 && B.haut >= 52 && B.fond === 'rgb(26, 115, 232)' && B.couleur === 'rgb(255, 255, 255)' && B.police >= 16 && B.ecran === true, JSON.stringify(B));
-  verifie('il ouvre la liste « Quel est votre métier ? », le métier enregistré coché (lui seul)', /TAPE 1 SUR 6/i.test(S.e1 || '') && /Quel est votre métier/.test(S.e1 || '') && JSON.stringify(S.coches) === '["Chirurgien-dentiste"]'
+  verifie('il ouvre la liste « Quel est votre métier ? », le métier enregistré coché (lui seul)', /TAPE 1 SUR 7/i.test(S.e1 || '') && /Quel est votre métier/.test(S.e1 || '') && JSON.stringify(S.coches) === '["Chirurgien-dentiste"]'
     && ['Avocat', 'Chirurgien-dentiste', 'Coiffeur'].every((x) => (S.metiers || []).includes(x)), JSON.stringify([S.metiers, S.coches]));
   verifie('« ← Retour à ma configuration » en haut, toute la largeur, sans défiler ; rien d’écrit en ouvrant la liste', S.retour && S.retour.texte === '← Retour à ma configuration' && S.retour.premier && S.retour.ecran && S.retour.large > 300 && S.gardeE1 === true, JSON.stringify([S.retour, S.gardeE1]));
   verifie('le retour : le même récapitulatif, au caractère près ; rien d’écrit', S.recapRetour === S.recap && S.gardeRetour === true && S.sansRetour === true, JSON.stringify([S.gardeRetour, S.sansRetour]));
-  verifie('montrer le coiffeur (étapes 1 et 2, une prestation décochée) : rien n’est écrit ; le retour en haut de chaque étape', /à plusieurs/.test(S.c1 || '') && /TAPE 2 SUR 6/i.test(S.c2 || '') && /Coupe/.test(S.c2 || '') && S.gardeC1 && S.gardeC2 && S.retourC2 && S.retourC6, JSON.stringify([S.gardeC1, S.gardeC2, S.retourC2, S.retourC6, String(S.c2).slice(0, 150)]));
+  verifie('montrer le coiffeur (étapes 1 et 2, une prestation décochée) : rien n’est écrit ; le retour en haut de chaque étape', /à plusieurs/.test(S.c1 || '') && /TAPE 2 SUR 7/i.test(S.c2 || '') && /Coupe/.test(S.c2 || '') && S.gardeC1 && S.gardeC2 && S.retourC2 && S.retourC6, JSON.stringify([S.gardeC1, S.gardeC2, S.retourC2, S.retourC6, String(S.c2).slice(0, 150)]));
   verifie('en regardant, la photo retirée disparaît de l’écran mais pas de l’appareil ; une photo de coiffeur choisie reste en mémoire', S.photoAvant === true && S.photoEcran === true && S.photoGardee === true && S.photosMemoire === true && S.photosGardees === true, JSON.stringify([S.photoAvant, S.photoEcran, S.photoGardee, S.photosMemoire, S.photosGardees]));
   verifie('en regardant, rien n’est envoyé au compte (aucun tcSyncBientot)', S.syncRegard === 0, S.syncRegard);
   verifie('le retour : les photos et le récapitulatif du dentiste, tels quels', S.photoF === true && S.photosF === true && S.gardeF === true && S.recapF === S.recap, JSON.stringify([S.photoF, S.photosF, S.gardeF]));

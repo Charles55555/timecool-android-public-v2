@@ -75,6 +75,7 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
     var g = garde();
     R.jours = { marieSamedi: g.equipe.coiffeurs[0].jours['6'].actif, julienSamedi: g.equipe.coiffeurs[1].jours['6'].actif, julienLundi: g.equipe.coiffeurs[1].jours['1'].apres[1], julienMardi: g.equipe.coiffeurs[1].jours['2'].actif, salonSamedi: g.jours['6'].actif };
     tcConfigPro121.suivant(); await attendre(50);
+    tcConfigPro121.suivant(); await attendre(50);   // mission 148 : « Vos règles de réservation », avec ses valeurs de départ
     // Étape 5 : les créneaux de chaque coiffeur.
     R.e5 = texte(); debords.push(deborde());
     tcConfigPro121.suivant(); await attendre(50); tcConfigPro121.suivant(); await attendre(80);
@@ -127,7 +128,7 @@ else {
   verifie('le récapitulatif : « À plusieurs : Marie, Julien », les jours de chaque coiffeur, « pas faite par Julien »', /À plusieurs : Marie, Julien/.test(S.recap) && /Les jours de chaque coiffeur/.test(S.recap) && /Marie\s*Lundi : 9h à 12h, puis 14h à 18h[\s\S]*Samedi/.test(S.recap) && /Julien\s*Lundi : 9h à 12h, puis 14h à 16h/.test(S.recap) && /Balayage · 2 h 30\s*✂️ pas faite par Julien/.test(S.recap) && /En tout : 141 créneaux par semaine\./.test(S.recap), S.recap.slice(0, 1200));
   verifie('retirer un coiffeur ; revenir à « Seul » : les jours du professionnel et le récapitulatif d’avant', S.retire === 'Marie' && /Quels jours travaillez-vous \?/.test(S.seulApres) && /Vos jours et vos horaires/.test(S.recapSeul) && !/À plusieurs|pas faite par/.test(S.recapSeul), S.retire + ' ' + S.recapSeul.slice(0, 300));
   verifie('seul, sans jour : « Cochez au moins un jour. » (comme avant)', S.impasseSeul[0] === 4 && S.impasseSeul[1] === 'Cochez au moins un jour.', JSON.stringify(S.impasseSeul));
-  verifie('à plusieurs, le salon sans jour et Julien avec le mardi : « Suivant » mène à l’étape 5 (pas d’impasse)', S.impasse[0] === 5 && S.impasse[1] === '' && S.impasse[2] === '' && S.impasse[3] === '2', JSON.stringify(S.impasse));
+  verifie('à plusieurs, le salon sans jour et Julien avec le mardi : « Suivant » mène à l’étape d’après, « Vos règles de réservation » (mission 148 ; pas d’impasse)', S.impasse[0] === 4.5 && S.impasse[1] === '' && S.impasse[2] === '' && S.impasse[3] === '2', JSON.stringify(S.impasse));
   verifie('la page ne déborde pas sur le côté (390 px), à chaque étape', S.debords.every((x) => x <= 0), JSON.stringify(S.debords));
   verifie('aucun appel réseau', S.appels === 0, S.appels);
 }
