@@ -11138,7 +11138,8 @@ const TC_PRO_DUREES_ACTE = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 75, 9
    gardent exactement leur parcours. Les autres métiers sont « génériques » : le parcours du coiffeur (familles et prestations à
    cocher, renommer, retirer, créer ; seul ou à plusieurs ; la fiche avec « Remplis à ma place »), avec les mots de leur catégorie,
    une seule durée pour tout (étape 5) et un prix facultatif (étape 3). Les questions particulières de l'ébauche (ordonnance, âge
-   de l'enfant, adresse, animal) ne sont pas posées ici. Lot 1 : la santé et la beauté. Toujours derrière la case CONFIG_PRO. */
+   de l'enfant, adresse, animal) ne sont pas posées ici. Lot 1 : la santé et la beauté ; lot 2 : les huit autres catégories.
+   Toujours derrière la case CONFIG_PRO. */
 const TC_PRO_CATEGORIES_147 = [
   ['sante', 'Santé'], ['beaute', 'Beauté et bien-être'], ['droit', 'Droit et chiffre'], ['banque', 'Banque, assurance, immobilier'],
   ['auto', 'Automobile'], ['artisans', 'Artisans et dépannage à domicile'], ['loisirs', 'Enseignement, sport, loisirs'],
@@ -11146,8 +11147,12 @@ const TC_PRO_CATEGORIES_147 = [
 ];
 // Les métiers déjà codés, et leur catégorie.
 const TC_PRO_CATEGORIE_147 = { 'chirurgien-dentiste': 'sante', 'coiffeur': 'beaute', 'avocat': 'droit' };
-// Les mots de chaque catégorie (santé : patient, acte, motif de consultation ; beauté : client, prestation).
-const TC_PRO_VOCABULAIRE_147 = { sante: 'sante', beaute: 'beaute' };
+// Les mots de chaque catégorie (santé : patient, acte, motif de consultation ; beauté : client, prestation). Lot 2 : droit et chiffre,
+// banque, assurance, immobilier, commerce et conseil : client, domaine, mission ; automobile, artisans : client, intervention ;
+// enseignement, sport, loisirs, animaux : client, prestation ; administration et associations : la personne reçue, démarche.
+// Un métier peut prendre d'autres mots que sa catégorie (4e case de TC_PRO_GENERIQUES_147 : l'auto-école, le vétérinaire…).
+const TC_PRO_VOCABULAIRE_147 = { sante: 'sante', beaute: 'beaute', droit: 'conseil', banque: 'conseil', auto: 'intervention', artisans: 'intervention',
+  loisirs: 'prestation', commerce: 'conseil', animaux: 'prestation', administration: 'demarche' };
 // Des mots de plus pour la recherche (sans accents) : « kiné » trouve le masseur-kinésithérapeute.
 const TC_PRO_RECHERCHE_147 = {
   'chirurgien-dentiste': 'dentiste dents', 'coiffeur': 'coiffure cheveux salon', 'avocat': 'droit justice',
@@ -11155,7 +11160,12 @@ const TC_PRO_RECHERCHE_147 = {
   'pedicure-podologue': 'podologue pieds semelles', 'medecin-generaliste': 'docteur generaliste', 'psychologue': 'psy', 'psychiatre': 'psy',
   'gynecologue': 'gyneco', 'dermatologue': 'dermato peau', 'cardiologue': 'cardio coeur', 'gastro-enterologue': 'gastro',
   'massotherapeute': 'massage masseur', 'manucure': 'ongles prothesiste ongulaire', 'institut-de-beaute': 'estheticienne epilation soins',
-  'barbier': 'barbe', 'tatoueur': 'tatouage', 'perceur': 'piercing', 'centre-d-epilation-au-laser': 'laser epilation'
+  'barbier': 'barbe', 'tatoueur': 'tatouage', 'perceur': 'piercing', 'centre-d-epilation-au-laser': 'laser epilation',
+  'notaire': 'droit succession', 'expert-comptable': 'comptable compta impots', 'agent-immobilier': 'immobilier maison appartement',
+  'garagiste': 'garage mecanicien voiture', 'centre-de-controle-technique': 'voiture', 'auto-ecole': 'permis conduite code',
+  'plombier': 'plomberie fuite', 'electricien': 'electricite', 'chauffagiste': 'chaudiere chauffage', 'serrurier': 'serrure porte cle',
+  'coach-sportif': 'sport', 'professeur-particulier': 'cours soutien scolaire', 'photographe': 'photo', 'veterinaire': 'veto animaux chien chat',
+  'toiletteur': 'chien chat toilettage', 'educateur-canin': 'chien dressage', 'mairie': 'passeport carte identite etat civil'
 };
 // Les mots d'un métier générique, par vocabulaire : ceux des étapes (comme tcCpMots136), puis ceux de la mission 147.
 const TC_PRO_MOTS_147 = {
@@ -11170,7 +11180,7 @@ const TC_PRO_MOTS_147 = {
     photo: 'Votre photo', photoAjouter: 'Ajouter ma photo', photoChanger: 'Changer ma photo', recapActes: 'Vos actes et leur prix', aucun: 'Aucun acte.',
     titre5: 'Combien de temps dure un rendez-vous chez vous ?',   // examen 147 : une seule durée pour tout, pas « par défaut »
     titre3: 'Quels prix affichez-vous ?', aide3: 'Pour chaque acte, si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
-    vos: 'Vos actes', un: 'acte', des: 'actes', familleDefaut: 'Mes actes', proche: 'patient', listeIA: 'les actes écrits dans le texte, chacun',
+    vos: 'Vos actes', un: 'acte', des: 'actes', familleDefaut: 'Mes actes', proche: 'le patient', listeIA: 'les actes écrits dans le texte, chacun',
     plusieursAide: 'Plusieurs praticiens dans le cabinet, chacun avec ses jours.',
     intro: 'Ajoutez vos praticiens, un par un : leur prénom, et leur photo s’ils le veulent.<br>Les actes, les prix et la fiche sont ceux du cabinet, les mêmes pour tous.<br>Chaque praticien a ses jours et ses horaires (étape 4).',
     ariaPrenom: 'Prénom du praticien', ajouterTitre: 'Ajouter un praticien', ajouterBouton: '➕ Ajouter ce praticien',
@@ -11192,7 +11202,7 @@ const TC_PRO_MOTS_147 = {
     photo: 'Votre photo', photoAjouter: 'Ajouter ma photo', photoChanger: 'Changer ma photo', recapActes: 'Vos prestations et leur prix', aucun: 'Aucune prestation.',
     titre5: 'Combien de temps dure un rendez-vous chez vous ?',
     titre3: 'Quels prix affichez-vous ?', aide3: 'Pour chaque prestation, si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
-    vos: 'Vos prestations', un: 'prestation', des: 'prestations', familleDefaut: 'Mes prestations', proche: 'client', listeIA: 'les prestations écrites dans le texte, chacune',
+    vos: 'Vos prestations', un: 'prestation', des: 'prestations', familleDefaut: 'Mes prestations', proche: 'le client', listeIA: 'les prestations écrites dans le texte, chacune',
     plusieursAide: 'Plusieurs personnes avec vous, chacune avec ses jours.',
     intro: 'Ajoutez les personnes qui travaillent avec vous, une par une : leur prénom, et leur photo si elles le veulent.<br>Les prestations, les prix et la fiche sont les mêmes pour tous.<br>Chaque personne a ses jours et ses horaires (étape 4).',
     ariaPrenom: 'Prénom de la personne', ajouterTitre: 'Ajouter une personne', ajouterBouton: '➕ Ajouter cette personne',
@@ -11204,6 +11214,39 @@ const TC_PRO_MOTS_147 = {
     recapHorsLigne: '📞 pas de rendez-vous en ligne', recapPasSeule: '➕ seulement avec une autre prestation'
   }
 };
+// Lot 2 : les autres vocabulaires, sur la base de la beauté (client, « personne » à plusieurs), avec leurs mots à eux.
+(function () {
+  const de = function (o) { return Object.assign({}, TC_PRO_MOTS_147.beaute, o); };
+  const nom = function (un, des) {   // « mission », « missions » (des mots féminins : une, cette, la ou l’)
+    const la = /^[aeiouéèh]/i.test(un) ? 'l’' : 'la ';
+    return {
+      titre2: 'Quelles ' + des + ' proposez-vous ?', aide2: 'Cochez les ' + des + ' que vous proposez.<br>Vous pouvez les renommer, et en créer d’autres.',
+      nomSous: 'Nom de ' + la + un, creerSous: '➕ Créer ma propre ' + un, erreurSous: 'Écrivez le nom de votre ' + un + '.', erreurActe: 'Gardez au moins une ' + un + '.',
+      aideQuestion: 'La question à poser pour cette ' + un + '.<br>Cochez les réponses qui permettent de prendre rendez-vous.',
+      aide5: 'Tous vos rendez-vous auront cette durée, quelle que soit ' + la + un + '.<br>Les rendez-vous se suivent, sans pause.',
+      aideRemplir: '<br>S’il y trouve vos ' + des + ', il les coche aussi, avec leurs prix.',
+      recapActes: 'Vos ' + des + ' et leur prix', aucun: 'Aucune ' + un + '.',
+      aide3: 'Pour chaque ' + un + ', si vous le voulez.<br>Le prix est facultatif. Sans prix, rien n’est affiché.<br>Tous vos rendez-vous ont la même durée (étape 5).',
+      vos: 'Vos ' + des, un: un, des: des, familleDefaut: 'Mes ' + des, listeIA: 'les ' + des + ' écrites dans le texte, chacune',
+      pasSeule: '➕ Seulement avec une autre ' + un, recapPasSeule: '➕ seulement avec une autre ' + un
+    };
+  };
+  TC_PRO_MOTS_147.prestation = de({});
+  TC_PRO_MOTS_147.conseil = de(Object.assign(nom('mission', 'missions'), {
+    nomFamille: 'Nom du domaine', familleManque: 'Un domaine qui manque ?', creerFamille: '➕ Créer mon propre domaine', erreurFamille: 'Écrivez le nom de votre domaine.',
+    exempleConsigne: 'Par exemple : apportez les documents utiles.' }));
+  TC_PRO_MOTS_147.intervention = de(Object.assign(nom('intervention', 'interventions'), {
+    titre2: 'Quelles interventions faites-vous ?', aide2: 'Cochez les interventions que vous faites.<br>Vous pouvez les renommer, et en créer d’autres.',
+    nomFamille: 'Nom de la famille d’interventions', erreurFamille: 'Écrivez le nom de votre famille d’interventions.',
+    exempleConsigne: 'Par exemple : prévenez-nous 24 h avant pour annuler.' }));
+  TC_PRO_MOTS_147.demarche = de(Object.assign(nom('démarche', 'démarches'), {
+    aide2: 'Cochez les démarches pour lesquelles on prend rendez-vous.<br>Vous pouvez les renommer, et en créer d’autres.',
+    nomFamille: 'Nom du service', familleManque: 'Un service qui manque ?', creerFamille: '➕ Créer mon propre service', erreurFamille: 'Écrivez le nom de votre service.',
+    aideRemplir: '<br>S’il y trouve vos démarches, il les coche aussi.',
+    question: 'Question à la personne reçue', aide6: 'C’est la page que verront les personnes que vous recevez.<br>Une réponse est déjà proposée : corrigez-la si besoin.',
+    proche: 'la personne reçue', horsLigne: '📞 Pas de rendez-vous en ligne : la personne vous appelle',
+    consigne: '💬 Une consigne que la personne lit avant de choisir (facultatif)', exempleConsigne: 'Par exemple : apportez une pièce d’identité.' }));
+})();
 // Les mots du coiffeur, tels qu'avant la mission 147 (seul ou à plusieurs, réglages, consigne de famille).
 const TC_PRO_EQUIPE_COIFFEUR_147 = {
   plusieursAide: 'Plusieurs coiffeurs dans le salon, chacun avec ses jours.',
@@ -11242,12 +11285,47 @@ const TC_PRO_FICHE_QUESTIONS_147 = {
     ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues']
   ]
 };
+// Lot 2 : la fiche des autres vocabulaires.
+(function () {
+  const horaires = ['horaires', 'Vos horaires d’ouverture', 'Facultatif : seulement si vous voulez les montrer.<br>Vos jours et vos horaires de travail (étape 4) ne sont jamais montrés ici.', 2, 'Horaires d’ouverture'];
+  const metier = ['metier', 'Quel métier affichez-vous ?', '', 1, 'Métier'], langues = ['langues', 'Quelles langues parlez-vous ?', '', 1, 'Langues'];
+  const paiement = ['paiement', 'Quels moyens de paiement acceptez-vous ?', 'Carte bancaire, virement, chèque, espèces…', 1, 'Paiement'];
+  TC_PRO_FICHE_QUESTIONS_147.prestation = TC_PRO_FICHE_QUESTIONS_147.beaute.map(function (q) { return q[0] === 'nom' ? ['nom', 'Quel nom voient vos clients ?', 'Par exemple : Marie Martin.', 1, 'Nom'] : q; });
+  TC_PRO_FICHE_QUESTIONS_147.conseil = [
+    ['nom', 'Quel nom voient vos clients ?', 'Par exemple : Cabinet Marie Martin.', 1, 'Nom'], metier,
+    ['adresse', 'Quelle est l’adresse de votre cabinet ou de votre agence ?', 'Numéro, rue, code postal et ville.', 2, 'Adresse'],
+    ['acces', 'Comment vient-on chez vous ?', 'Métro, bus, étage, code…', 2, 'Accès'],
+    ['presentation', 'Comment vous présentez-vous ?', 'Quelques phrases pour vos clients.', 4, 'Présentation'],
+    ['consignes', 'Avez-vous des consignes pour vos clients ?', 'Par exemple : apportez les documents utiles à votre rendez-vous.', 3, 'Consignes'],
+    ['tarifs', 'Vos tarifs ou vos honoraires', 'Facultatif : seulement si vous voulez les montrer.', 2, 'Tarifs'], paiement, horaires, langues
+  ];
+  TC_PRO_FICHE_QUESTIONS_147.intervention = [
+    ['nom', 'Quel nom voient vos clients ?', 'Par exemple : Martin Dépannage.', 1, 'Nom'], metier,
+    ['adresse', 'Quelle est votre adresse ?', 'Numéro, rue, code postal et ville.', 2, 'Adresse'],
+    ['zone', 'Où intervenez-vous ?', 'Par exemple : Paris et la petite couronne.', 2, 'Zone d’intervention'],
+    ['presentation', 'Comment vous présentez-vous ?', 'Quelques phrases pour vos clients.', 4, 'Présentation'],
+    ['consignes', 'Avez-vous des consignes pour vos clients ?', 'Par exemple : merci de prévenir 24 h avant pour annuler.', 3, 'Consignes'],
+    ['tarifs', 'Vos tarifs', 'Facultatif : par exemple, le prix du déplacement ou le devis gratuit.', 2, 'Tarifs'], paiement, horaires, langues
+  ];
+  TC_PRO_FICHE_QUESTIONS_147.demarche = [
+    ['nom', 'Quel nom voient les personnes que vous recevez ?', 'Par exemple : Mairie de Vincennes.', 1, 'Nom'], metier,
+    ['adresse', 'Quelle est votre adresse ?', 'Numéro, rue, code postal et ville.', 2, 'Adresse'],
+    ['acces', 'Comment vient-on chez vous ?', 'Métro, bus, étage, accès en fauteuil roulant…', 2, 'Accès'],
+    ['presentation', 'Comment vous présentez-vous ?', 'Quelques phrases pour les personnes que vous recevez.', 4, 'Présentation'],
+    ['consignes', 'Avez-vous des consignes ?', 'Par exemple : apportez une pièce d’identité.', 3, 'Consignes'], horaires, langues
+  ];
+})();
 // Les réponses proposées d'un métier générique (le professionnel corrige) : jamais d'horaires, jamais de présentation inventée.
 const TC_PRO_FICHE_PROPOSEE_147 = {
   sante: { consignes: 'Merci d’arriver 5 minutes avant votre rendez-vous.', paiement: 'Carte bancaire, chèques, espèces', langues: 'Français' },
-  beaute: { consignes: 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', paiement: 'Carte bancaire, espèces', langues: 'Français' }
+  beaute: { consignes: 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', paiement: 'Carte bancaire, espèces', langues: 'Français' },
+  prestation: { consignes: 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', paiement: 'Carte bancaire, espèces', langues: 'Français' },
+  conseil: { consignes: 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', paiement: 'Carte bancaire, virement, chèque', langues: 'Français' },
+  intervention: { consignes: 'Merci de prévenir au moins 24 h avant pour annuler ou déplacer votre rendez-vous.', paiement: 'Carte bancaire, chèque, espèces', langues: 'Français' },
+  demarche: { consignes: 'Merci d’arriver 5 minutes avant votre rendez-vous.', langues: 'Français' }
 };
-// [catégorie, nom du métier, « Famille : élément ; élément | Famille : … »] ; « : a ; b » : la famille par défaut (« Mes actes »).
+// [catégorie, nom du métier, « Famille : élément ; élément | Famille : … », vocabulaire s'il n'est pas celui de la catégorie] ;
+// « : a ; b » : la famille par défaut (« Mes actes », « Mes missions »…).
 // Une ligne de l'ébauche qui regroupe plusieurs métiers (« Ergothérapeute, psychomotricien ») donne un métier par nom.
 const TC_PRO_GENERIQUES_147 = [
   ['sante', 'Médecin généraliste', 'Consultation : Première consultation ; Consultation de suivi ; Renouvellement d’ordonnance ; Résultats d’examens | Urgence : Consultation urgente du jour | Enfant : Consultation pédiatrique ; Suivi du nourrisson ; Vaccination de l’enfant | Prévention : Vaccination ; Bilan de santé ; Frottis | Certificat : Certificat médical pour le sport ; Autre certificat | Téléconsultation : Consultation vidéo'],
@@ -11297,14 +11375,68 @@ const TC_PRO_GENERIQUES_147 = [
   ['beaute', 'Perceur', ': Piercing ; Contrôle'],
   ['beaute', 'Esthétique des sourcils et maquillage permanent', ': Première pose ; Retouche'],
   ['beaute', 'Centre d’épilation au laser', ': Bilan ; Séance'],
-  ['beaute', 'Centre de bronzage', ': Séance']
+  ['beaute', 'Centre de bronzage', ': Séance'],
+  // Lot 2 (ébauche, partie C).
+  ['droit', 'Notaire', ': Achat ou vente d’un bien ; Succession ; Donation ; Contrat de mariage ou PACS ; Création de société ; Signature d’un acte'],
+  ['droit', 'Commissaire de justice', ': Constat ; Recouvrement ; Signification d’un acte'],
+  ['droit', 'Expert-comptable', ': Premier rendez-vous ; Bilan annuel ; Création d’entreprise ; Déclaration d’impôts ; Point de gestion'],
+  ['droit', 'Conseiller en gestion de patrimoine', ': Premier bilan ; Suivi ; Placement ; Retraite'],
+  ['droit', 'Courtier en crédit', ': Étude du projet ; Signature'],
+  ['droit', 'Courtier en assurance', ': Étude du projet ; Signature'],
+  ['banque', 'Conseiller bancaire', ': Ouverture de compte ; Crédit immobilier ; Crédit à la consommation ; Épargne ; Point annuel'],
+  ['banque', 'Agent d’assurance', ': Devis ; Souscription ; Déclaration d’un sinistre ; Point annuel'],
+  ['banque', 'Agent immobilier', ': Estimation d’un bien ; Visite ; Signature d’un mandat ; Remise des clés'],
+  ['banque', 'Diagnostiqueur immobilier', ': Diagnostic avant une vente ; Diagnostic avant une location'],
+  ['auto', 'Garagiste', ': Révision ; Vidange ; Freins ; Pneus ; Climatisation ; Diagnostic d’une panne ; Carrosserie'],
+  ['auto', 'Centre de contrôle technique', ': Contrôle technique ; Contre-visite'],
+  ['auto', 'Auto-école', ': Leçon de conduite ; Leçon de code ; Examen blanc ; Rendez-vous d’inscription', 'prestation'],
+  ['auto', 'Lavage et préparation', ': Lavage extérieur ; Nettoyage intérieur ; Formule complète'],
+  ['artisans', 'Plombier', ': Dépannage ; Fuite ; Chauffe-eau ; Devis de travaux'],
+  ['artisans', 'Électricien', ': Dépannage ; Mise aux normes ; Devis de travaux'],
+  ['artisans', 'Chauffagiste', ': Entretien de la chaudière ; Dépannage ; Devis d’installation'],
+  ['artisans', 'Serrurier', ': Ouverture de porte ; Changement de serrure ; Devis'],
+  ['artisans', 'Peintre', ': Visite pour un devis ; Début du chantier ; Point de chantier'],
+  ['artisans', 'Menuisier', ': Visite pour un devis ; Début du chantier ; Point de chantier'],
+  ['artisans', 'Maçon', ': Visite pour un devis ; Début du chantier ; Point de chantier'],
+  ['artisans', 'Carreleur', ': Visite pour un devis ; Début du chantier ; Point de chantier'],
+  ['artisans', 'Jardinier', ': Entretien ; Taille ; Devis'],
+  ['artisans', 'Paysagiste', ': Entretien ; Taille ; Devis'],
+  ['artisans', 'Ménage et aide à domicile', ': Première visite ; Prestation régulière'],
+  ['artisans', 'Réparateur d’électroménager', ': Diagnostic ; Réparation ; Retrait de l’appareil'],
+  ['artisans', 'Réparateur de téléphone', ': Diagnostic ; Réparation ; Retrait de l’appareil'],
+  ['artisans', 'Réparateur d’ordinateur', ': Diagnostic ; Réparation ; Retrait de l’appareil'],
+  ['loisirs', 'Professeur particulier', ': Cours d’essai ; Cours ; Stage'],
+  ['loisirs', 'Professeur de musique', ': Cours d’essai ; Cours individuel ; Cours collectif'],
+  ['loisirs', 'Coach sportif', ': Séance d’essai ; Séance individuelle ; Séance en petit groupe ; Bilan'],
+  ['loisirs', 'Professeur de yoga', ': Cours d’essai ; Cours individuel ; Cours collectif'],
+  ['loisirs', 'Professeur de pilates', ': Cours d’essai ; Cours individuel ; Cours collectif'],
+  ['loisirs', 'Moniteur de ski', ': Leçon individuelle ; Leçon collective ; Stage'],
+  ['loisirs', 'Moniteur de voile', ': Leçon individuelle ; Leçon collective ; Stage'],
+  ['loisirs', 'Moniteur d’équitation', ': Leçon individuelle ; Leçon collective ; Stage'],
+  ['loisirs', 'Moniteur de tennis', ': Leçon individuelle ; Leçon collective ; Stage'],
+  ['loisirs', 'Photographe', ': Séance de portrait ; Séance de famille ; Mariage ; Remise des photos'],
+  ['commerce', 'Commercial', ': Rendez-vous de découverte ; Démonstration ; Signature ; Suivi du client', 'prestation'],
+  ['commerce', 'Consultant', ': Premier échange ; Séance de travail ; Formation ; Bilan'],
+  ['commerce', 'Formateur', ': Premier échange ; Séance de travail ; Formation ; Bilan'],
+  ['commerce', 'Architecte', ': Premier rendez-vous ; Visite sur place ; Présentation du projet ; Suivi de chantier'],
+  ['commerce', 'Décorateur', ': Premier rendez-vous ; Visite sur place ; Présentation du projet ; Suivi de chantier'],
+  ['commerce', 'Recruteur', ': Entretien téléphonique ; Entretien ; Entretien final', 'prestation'],
+  ['commerce', 'Boutique de robes de mariée', ': Essayage ; Prise de mesures ; Retouches ; Retrait', 'prestation'],
+  ['commerce', 'Tailleur', ': Essayage ; Prise de mesures ; Retouches ; Retrait', 'prestation'],
+  ['commerce', 'Bijoutier', ': Essayage ; Prise de mesures ; Retouches ; Retrait', 'prestation'],
+  ['animaux', 'Vétérinaire', 'Consultation : Première consultation ; Consultation de suivi ; Urgence | Prévention : Vaccination ; Identification ; Vermifuge et antiparasitaire | Chirurgie : Stérilisation ; Détartrage ; Autre opération'],
+  ['animaux', 'Toiletteur', ': Bain ; Tonte ; Coupe aux ciseaux ; Griffes'],
+  ['animaux', 'Éducateur canin', ': Bilan ; Séance individuelle ; Cours collectif'],
+  ['animaux', 'Garde d’animaux', ': Visite à domicile ; Promenade ; Garde'],
+  ['administration', 'Mairie', ': Carte d’identité et passeport ; État civil ; Urbanisme'],
+  ['administration', 'Association', ': Accueil ; Permanence ; Rendez-vous d’accompagnement']
 ];
 /** « Centre d’imagerie » → « centre-d-imagerie » : l'identifiant, stable, d'un métier, d'une famille ou d'une prestation. */
 function tcCpSlug147(t) { return tcSansAccents(String(t || '')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x'; }
 // Les métiers génériques rejoignent la liste (même forme que ceux déjà codés ; durée proposée de 20 min, jamais montrée).
 (function () {
   TC_PRO_GENERIQUES_147.forEach(function (g) {
-    const id = tcCpSlug147(g[1]), voc = TC_PRO_VOCABULAIRE_147[g[0]];
+    const id = tcCpSlug147(g[1]), voc = g[3] || TC_PRO_VOCABULAIRE_147[g[0]];
     if (!voc || TC_PRO_METIERS.some(function (m) { return m.id === id; })) return;
     const fids = {};
     const familles = g[2].split('|').map(function (bloc) {
@@ -11338,7 +11470,7 @@ function tcCpConsigneRemplir147(e) {
   const v = tcCpGenerique147(e), M = TC_PRO_MOTS_147[v], m = tcConfigProMetier(e.metier);
   return 'Tu es Charly Pro IA, l’assistant de TimeCool Pro. On te donne le texte ou la capture de la fiche d’un professionnel (' + (m ? m.nom : '') + '), par exemple sa page sur un site de prise de rendez-vous. '
     + 'Réponds seulement par un objet JSON, sans aucun texte autour, avec ces clés : ' + TC_PRO_FICHE_QUESTIONS_147[v].map(function (q) { return q[0]; }).join(', ') + ', prestations. '
-    + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant le ' + M.proche + ', sauf « prestations ». Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
+    + 'Chaque valeur est une chaîne courte, écrite simplement, en vouvoyant ' + M.proche + ', sauf « prestations ». Si une information n’est pas dans le texte, mets une chaîne vide : n’invente jamais rien. '
     + '« horaires » : seulement les horaires d’ouverture écrits dans le texte. « paiement » : les moyens de paiement séparés par des virgules. '
     + '« prestations » : ' + M.listeIA + ' { "famille": "…", "nom": "…", "minutes": un nombre ou null, "prix": le prix tel qu’il est écrit (« 80 € », « de 250 € à 280 € », « Sur devis ») ou une chaîne vide } ; une liste vide s’il n’y en a pas.';
 }

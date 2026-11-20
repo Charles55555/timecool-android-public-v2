@@ -3887,3 +3887,24 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
 - La suite verif-config-metiers147 compte 41 vérifications, à 390 et 1280 px. Elle est rouge sur 889e169.
 - Examen de la 147 : pour un métier générique, l'étape 5 disait « Combien de temps dure un rendez-vous chez vous, par défaut ? ». Ce « par défaut » laissait croire qu'un acte pouvait avoir une autre durée. Pour ces métiers seulement, le titre devient « Combien de temps dure un rendez-vous chez vous ? » ; le dentiste, le coiffeur et l'avocat gardent leur titre. verif-config-metiers147 vérifie ce titre pour l'ostéopathe et la manucure, et que le coiffeur garde le sien. Elle compte toujours 41 vérifications, dont 2 rouges sur e914641.
 - Quatre suites ont suivi l'étape 1 nouvelle. verif-config-pro cherche « Santé » au lieu du dentiste, puisque les catégories sont fermées. verif-config-coiffeur136 et verif-config-avocat137 vérifient la présence des métiers ; l'ordre alphabétique de chaque catégorie se vérifie dans la 147. Dans verif-titres-etapes143, l'empreinte porte sur les étapes 2 à 7, relevées sur 889e169.
+
+## 20/11/2026 — Mission 147, lot 2 : les huit autres catégories de métiers (CODEUR)
+
+- Ajout de 53 métiers de l'ébauche, partie C, dans l'ordre demandé :
+  - Droit et chiffre : 7, avec l'avocat ;
+  - Banque, assurance, immobilier : 4 ;
+  - Automobile : 4 ;
+  - Artisans et dépannage à domicile : 14 ;
+  - Enseignement, sport, loisirs : 10 ;
+  - Commerce et conseil : 9 ;
+  - Animaux : 4, dont le vétérinaire avec ses familles ;
+  - Administration et associations : 2.
+- Une ligne qui nomme plusieurs métiers en donne un par nom : Peintre, Menuisier, Maçon et Carreleur ; Jardinier et Paysagiste ; les trois réparateurs ; Professeur de yoga et Professeur de pilates ; les quatre moniteurs ; Consultant et Formateur ; Architecte et Décorateur ; Courtier en crédit et Courtier en assurance ; Boutique de robes de mariée, Tailleur et Bijoutier. L'opticien est déjà en Santé.
+- Les mots de chaque catégorie, sur la base de la beauté (client, « personne » à plusieurs) :
+  - droit, banque, conseil : domaine, mission ;
+  - automobile, artisans : intervention, et la fiche demande « Où intervenez-vous ? » ;
+  - loisirs, animaux : prestation, avec des exemples neutres ;
+  - administration : démarche, service, « la personne reçue », sans question de paiement.
+- Certains métiers prennent d'autres mots que leur catégorie (4e case) : l'auto-école, le commercial, le recruteur, la boutique de robes de mariée, le tailleur et le bijoutier prennent « prestation ». Le vétérinaire aussi : sa fiche n'a ni carte Vitale ni remboursement.
+- « Remplis à ma place » vouvoie « le patient », « le client » ou « la personne reçue » (M.proche porte l'article).
+- verif-config-metiers147 compte 47 vérifications : les dix catégories et leur nombre de métiers ; 101 métiers génériques par vocabulaire ; le plombier, le notaire, la mairie, le vétérinaire, l'auto-école et le garagiste de l'étape 1 à la fiche. Elle est rouge sur f9d56e1.

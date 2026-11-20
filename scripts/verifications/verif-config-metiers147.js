@@ -26,8 +26,21 @@ const ATTENDUS = {
     'Psychologue', 'Psychomotricien', 'Radiologue', 'Rhumatologue', 'Sage-femme', 'Urologue'],
   beaute: ['Barbier', 'Centre de bronzage', 'Centre d’épilation au laser', 'Coach de vie', 'Coiffeur', 'Esthétique des sourcils et maquillage permanent', 'Hypnothérapeute',
     'Institut de beauté', 'Manucure', 'Massothérapeute', 'Naturopathe', 'Perceur', 'Réflexologue', 'Sophrologue', 'Spa', 'Tatoueur'],
-  droit: ['Avocat']
+  // Lot 2 : les huit autres catégories (une ligne de l'ébauche à plusieurs métiers en donne un par nom).
+  droit: ['Avocat', 'Commissaire de justice', 'Conseiller en gestion de patrimoine', 'Courtier en assurance', 'Courtier en crédit', 'Expert-comptable', 'Notaire'],
+  banque: ['Agent d’assurance', 'Agent immobilier', 'Conseiller bancaire', 'Diagnostiqueur immobilier'],
+  auto: ['Auto-école', 'Centre de contrôle technique', 'Garagiste', 'Lavage et préparation'],
+  artisans: ['Carreleur', 'Chauffagiste', 'Électricien', 'Jardinier', 'Maçon', 'Ménage et aide à domicile', 'Menuisier', 'Paysagiste', 'Peintre', 'Plombier',
+    'Réparateur d’électroménager', 'Réparateur d’ordinateur', 'Réparateur de téléphone', 'Serrurier'],
+  loisirs: ['Coach sportif', 'Moniteur d’équitation', 'Moniteur de ski', 'Moniteur de tennis', 'Moniteur de voile', 'Photographe', 'Professeur de musique', 'Professeur de pilates',
+    'Professeur de yoga', 'Professeur particulier'],
+  commerce: ['Architecte', 'Bijoutier', 'Boutique de robes de mariée', 'Commercial', 'Consultant', 'Décorateur', 'Formateur', 'Recruteur', 'Tailleur'],
+  animaux: ['Éducateur canin', 'Garde d’animaux', 'Toiletteur', 'Vétérinaire'],
+  administration: ['Association', 'Mairie']
 };
+const CATEGORIES = [['sante', 'Santé'], ['beaute', 'Beauté et bien-être'], ['droit', 'Droit et chiffre'], ['banque', 'Banque, assurance, immobilier'], ['auto', 'Automobile'],
+  ['artisans', 'Artisans et dépannage à domicile'], ['loisirs', 'Enseignement, sport, loisirs'], ['commerce', 'Commerce et conseil'], ['animaux', 'Animaux'], ['administration', 'Administration et associations']];
+const toutes = (ouverte) => CATEGORIES.map((c) => c[0] + ':' + (c[0] === ouverte));
 
 /** Dans la page : le parcours, de bout en bout. */
 async function parcours() {
@@ -145,6 +158,22 @@ async function parcours() {
     tcConfigPro121.aller(3); R.coiffeur3 = texte(); tcConfigPro121.aller(4); R.coiffeur4 = texte(); tcConfigPro121.aller(5); R.coiffeur5 = texte();
     tcConfigPro121.choisirMetier('chirurgien-dentiste'); tcConfigPro121.aller(3); R.dentiste3 = texte();
     tcConfigPro121.choisirMetier('avocat'); tcConfigPro121.aller(3); R.avocat3 = texte();
+    // I. Lot 2 : un métier de chaque nouveau vocabulaire (et deux métiers aux mots d'une autre catégorie), de l'étape 1 à la fiche.
+    const essayer = async (id) => {
+      localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
+      tcConfigPro121.choisirMetier(id); tcConfigPro121.equipeMode('plusieurs'); await attendre(20);
+      const o = { e1: texte().split('Vous travaillez seul, ou à plusieurs ?')[1] || '' };
+      for (const n of [2, 3, 5, 6]) { tcConfigPro121.aller(n); await attendre(20); o['e' + n] = texte(); }
+      o.fiche = JSON.parse(JSON.stringify(tcConfigProLire().fiche || {}));
+      o.familles = tcConfigProLire().familles.map((f) => (f.nom || f.id) + ':' + f.sous.map((x) => x.id).join(','));
+      o.consigne = tcCpConsigneRemplir136(tcConfigProLire());
+      debords.push(deborde());
+      return o;
+    };
+    R.lot2 = {};
+    for (const id of ['plombier', 'notaire', 'mairie', 'veterinaire', 'auto-ecole', 'garagiste']) R.lot2[id] = await essayer(id);
+    localStorage.removeItem('tc_config_pro'); _tcConfigPro = null; tcOuvrirConfigPro121(); await attendre(20);
+    entete('artisans').click(); await attendre(20); R.artisans = visibles();
     R.appels = appels; R.debords = debords;
   } catch (x) { R.erreur = String(x && x.stack || x); }
   const pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(R); document.body.appendChild(pre);
@@ -169,15 +198,17 @@ else {
   // 1. L'étape 1.
   const N = S.neuf;
   verifie('étape 1 : « Quel est votre métier ? », « Tapez votre métier, ou touchez sa catégorie. », la case « Cherchez votre métier »', /Quel est votre métier \?/.test(N.texte) && /Tapez votre métier, ou touchez sa catégorie\./.test(N.texte) && N.cherche && /Cherchez votre métier/.test(N.place || ''), N.place);
-  verifie('les catégories, dans l’ordre, avec leur nombre de métiers : Santé (34), Beauté et bien-être (16), Droit et chiffre (1)', J(N.cats.map((c) => c.id + ' ' + c.titre)) === J(['sante Santé 34 métiers ▸', 'beaute Beauté et bien-être 16 métiers ▸', 'droit Droit et chiffre 1 métier ▸']), J(N.cats.map((c) => c.titre)));
+  const titresAttendus = CATEGORIES.map((c) => { const n = ATTENDUS[c[0]].length; return c[0] + ' ' + c[1] + ' ' + n + ' métier' + (n > 1 ? 's' : '') + ' ▸'; });
+  verifie('les dix catégories, dans l’ordre demandé, avec leur nombre de métiers (Santé 34, Beauté et bien-être 16, Droit et chiffre 7, …, Administration et associations 2)', J(N.cats.map((c) => c.id + ' ' + c.titre)) === J(titresAttendus), J(N.cats.map((c) => c.titre)));
   verifie('compte neuf : toutes fermées, aucun métier visible ; rien d’écrit', N.cats.every((c) => !c.ouverte) && N.visibles.length === 0 && N.garde === null, J([N.visibles, N.garde]));
   const ordre = (l) => J(l) === J(l.slice().sort((a, b) => a.localeCompare(b, 'fr')));
-  verifie('chaque catégorie : exactement les métiers de l’ébauche, par ordre alphabétique (santé 34, beauté 16, droit et chiffre : Avocat)',
-    N.cats.every((c) => ordre(c.metiers) && J(c.metiers) === J(ATTENDUS[c.id].slice().sort((a, b) => a.localeCompare(b, 'fr')))), J(N.cats.map((c) => [c.id, c.metiers.filter((x) => ATTENDUS[c.id].indexOf(x) < 0), ATTENDUS[c.id].filter((x) => c.metiers.indexOf(x) < 0)])));
+  verifie('chaque catégorie : exactement les métiers de l’ébauche, par ordre alphabétique (les dix catégories)',
+    N.cats.length === 10 && N.cats.every((c) => ordre(c.metiers) && J(c.metiers) === J(ATTENDUS[c.id].slice().sort((a, b) => a.localeCompare(b, 'fr')))), J(N.cats.map((c) => [c.id, c.metiers.filter((x) => ATTENDUS[c.id].indexOf(x) < 0), ATTENDUS[c.id].filter((x) => c.metiers.indexOf(x) < 0)])));
   const L = S.lesMetiers;
   const parId = {}; L.forEach((m) => { parId[m.id] = m; });
-  verifie('48 métiers génériques (33 de santé, 15 de beauté), identifiants uniques ; le dentiste, le coiffeur, l’avocat restent ce qu’ils étaient',
-    L.length === 48 && L.filter((m) => m.v === 'sante').length === 33 && L.filter((m) => m.v === 'beaute').length === 15 && new Set(L.map((m) => m.id)).size === 48 && S.anciens.every((x) => x[1] && x[2] && x[3]), J([L.length, S.anciens]));
+  const parVoc = {}; L.forEach((m) => { parVoc[m.v] = (parVoc[m.v] || 0) + 1; });
+  verifie('101 métiers génériques (santé 33, beauté 15, mission 14, intervention 17, prestation 20, démarche 2), identifiants uniques ; le dentiste, le coiffeur, l’avocat restent ce qu’ils étaient',
+    L.length === 101 && J(parVoc) === J({ sante: 33, beaute: 15, conseil: 14, intervention: 17, prestation: 20, demarche: 2 }) && new Set(L.map((m) => m.id)).size === 101 && S.anciens.every((x) => x[1] && x[2] && x[3]), J([L.length, parVoc, S.anciens]));
   verifie('chaque famille a au moins une prestation ; les lignes de l’ébauche à plusieurs métiers donnent un métier par nom (Ergothérapeute, Psychomotricien ; Radiologue, Centre d’imagerie)',
     L.every((m) => m.f.every((f) => f.split(':')[2].length > 0)) && ['ergotherapeute', 'psychomotricien', 'radiologue', 'centre-d-imagerie'].every((id) => parId[id]), J(L.filter((m) => m.f.some((f) => !f.split(':')[2])).map((m) => m.id)));
   verifie('médecin généraliste : ses 6 familles et 16 actes de l’ébauche', J(parId['medecin-generaliste'].f) === J(['consultation:Consultation:premiere-consultation=Première consultation;consultation-de-suivi=Consultation de suivi;renouvellement-d-ordonnance=Renouvellement d’ordonnance;resultats-d-examens=Résultats d’examens',
@@ -186,7 +217,7 @@ else {
   verifie('une ligne de l’ébauche (« Rhumatologue : première consultation ; suivi ; infiltration ») : la famille « Mes actes » ; en beauté, « Mes prestations »',
     J(parId.rhumatologue.f) === J(['mes-actes:Mes actes:premiere-consultation=Première consultation;suivi=Suivi;infiltration=Infiltration']) && J(parId['centre-de-bronzage'].f) === J(['mes-prestations:Mes prestations:seance=Séance']), J([parId.rhumatologue.f, parId['centre-de-bronzage'].f]));
   verifie('« Santé » touchée : elle s’ouvre (ses 34 métiers visibles, les autres fermées) ; touchée encore : elle se ferme',
-    J(S.ouvert.cats) === J(['sante:true', 'beaute:false', 'droit:false']) && S.ouvert.visibles.length === 34 && J(S.referme.cats) === J(['sante:false', 'beaute:false', 'droit:false']) && S.referme.visibles === 0, J([S.ouvert.cats, S.ouvert.visibles.length, S.referme]));
+    J(S.ouvert.cats) === J(toutes('sante')) && S.ouvert.visibles.length === 34 && J(S.referme.cats) === J(toutes('')) && S.referme.visibles === 0, J([S.ouvert.cats, S.ouvert.visibles.length, S.referme]));
   // 2. La recherche.
   verifie('« kiné » : seulement « Masseur-kinésithérapeute », dans « Santé 1 métier » ouverte ; le curseur reste dans la case', J(S.kine.visibles) === J(['Masseur-kinésithérapeute']) && J(S.kine.cats) === J(['Santé 1 métier ▾']) && S.kine.focus === 'cpCherche147', J(S.kine));
   verifie('« DERMATO » (majuscules, sans accent) : « Dermatologue » ; « santé » : les 34 de la santé ; « coiffure » : « Coiffeur »', J(S.derm.visibles) === J(['Dermatologue']) && S.sante.visibles.length === 34 && J(S.coiffure.visibles) === J(['Coiffeur']), J([S.derm.visibles, S.sante.visibles.length, S.coiffure.visibles]));
@@ -234,7 +265,7 @@ else {
     /Vos prestations et leur prix/.test(S.manu7) && /🚫 pas faite par Sam/.test(S.manu7) && /➕ seulement avec une autre prestation/.test(S.manu7) && /Les jours de chaque personne/.test(S.manu7), '');
   // 5. Chaque métier garde sa configuration ; « Voir tous les métiers ».
   verifie('changer de métier puis revenir : la manucure garde son équipe et ses réglages ; l’ostéopathe est rangé à part', S.garde.metier === 'manucure' && J(S.garde.sam) === J(['ongles/pose-de-gel']) && S.garde.osteo, J(S.garde));
-  verifie('« Voir tous les métiers » : la catégorie du métier enregistré ouverte (lui seul coché)', J(S.tous.cats) === J(['sante:false', 'beaute:true', 'droit:false']) && J(S.tous.coche) === J(['Manucure']), J(S.tous));
+  verifie('« Voir tous les métiers » : la catégorie du métier enregistré ouverte (lui seul coché)', J(S.tous.cats) === J(toutes('beaute')) && J(S.tous.coche) === J(['Manucure']), J(S.tous));
   verifie('regarder le rhumatologue (étape 2, « Mes actes ») n’enregistre rien ; « Retour à ma configuration » : la manucure, telle quelle',
     /Mes actes/.test(S.rhumato.texte) && /Infiltration/.test(S.rhumato.texte) && S.rhumato.inchange && S.retour.inchange && S.retour.recap && S.retour.metier === 'manucure', J([S.rhumato.inchange, S.retour]));
   // 6. Le coiffeur, le dentiste, l'avocat.
@@ -242,6 +273,27 @@ else {
     /Plusieurs coiffeurs dans le salon, chacun avec ses jours\./.test(S.coiffeur1) && /Ajouter un coiffeur/.test(S.coiffeur1) && S.coiffeurErreur === 'Ajoutez au moins un coiffeur, avec son prénom.'
     && /Seulement avec une autre prestation \(une coupe, une couleur…\)/.test(S.coiffeur2) && /le client appelle le salon/.test(S.coiffeur2) && /Combien de temps, et à quel prix \?/.test(S.coiffeur3) && /Quels jours travaille chaque coiffeur \?/.test(S.coiffeur4) && /Combien de temps dure un rendez-vous chez vous, par défaut \?/.test(S.coiffeur5), S.coiffeurErreur);
   verifie('le dentiste et l’avocat gardent leur étape 3 (« Combien de temps vous faut-il ? », « Vos deux rendez-vous »)', /Combien de temps vous faut-il \?/.test(S.dentiste3) && /Vos deux rendez-vous/.test(S.avocat3), '');
+  // 7. Lot 2 : les mots de chaque nouvelle catégorie.
+  const T = S.lot2, pl = T.plombier, no = T.notaire, ma = T.mairie, ve = T.veterinaire, ae = T['auto-ecole'], ga = T.garagiste;
+  const propre = (o) => !/coiffeur|salon|cheveux|patient|praticien|la intervention|undefined|\bnull\b/i.test(o.e1 + o.e2 + o.e3 + o.e5 + o.e6);
+  verifie('« Artisans et dépannage à domicile » ouverte : ses 14 métiers, un par nom (Peintre, Menuisier, Maçon, Carreleur…), par ordre alphabétique', J(S.artisans) === J(ATTENDUS.artisans.slice().sort((a, b) => a.localeCompare(b, 'fr'))), J(S.artisans));
+  verifie('plombier (artisans) : « Plusieurs personnes avec vous », « Quelles interventions faites-vous ? », « Mes interventions », « le client vous appelle », « Seulement avec une autre intervention » ; étapes 3 et 5 ; la fiche demande « Où intervenez-vous ? »',
+    /Plusieurs personnes avec vous/.test(pl.e1) && /Quelles interventions faites-vous \?/.test(pl.e2) && /Mes interventions/.test(pl.e2) && /Dépannage/.test(pl.e2) && /➕ Créer ma propre intervention/.test(pl.e2)
+    && /Pas de rendez-vous en ligne : le client vous appelle/.test(pl.e2) && /Seulement avec une autre intervention/.test(pl.e2) && /Pour chaque intervention/.test(pl.e3)
+    && /Combien de temps dure un rendez-vous chez vous \?/.test(pl.e5) && /quelle que soit l’intervention/.test(pl.e5) && /Où intervenez-vous \?/.test(pl.e6) && /Quel nom voient vos clients \?/.test(pl.e6)
+    && pl.fiche.metier === 'Plombier' && propre(pl), pl.e2.slice(0, 300));
+  verifie('notaire (droit et chiffre) : « Quelles missions proposez-vous ? », « Mes missions », « Succession », « ➕ Créer mon propre domaine » ; « Vos tarifs ou vos honoraires » ; Charly Pro IA vouvoie « le client »',
+    /Quelles missions proposez-vous \?/.test(no.e2) && /Mes missions/.test(no.e2) && /Succession/.test(no.e2) && /➕ Créer ma propre mission/.test(no.e2) && /Un domaine qui manque \?/.test(no.e2) && /➕ Créer mon propre domaine/.test(no.e2)
+    && /quelle que soit la mission/.test(no.e5) && /Vos tarifs ou vos honoraires/.test(no.e6) && /en vouvoyant le client/.test(no.consigne) && /les missions écrites dans le texte/.test(no.consigne) && propre(no), no.e2.slice(0, 300));
+  verifie('mairie (administration) : « Quelles démarches proposez-vous ? », « Carte d’identité et passeport », « la personne vous appelle », « ➕ Créer mon propre service » ; la fiche, sans paiement ; Charly Pro IA vouvoie « la personne reçue »',
+    /Quelles démarches proposez-vous \?/.test(ma.e2) && /Carte d’identité et passeport/.test(ma.e2) && /État civil/.test(ma.e2) && /la personne vous appelle/.test(ma.e2) && /➕ Créer mon propre service/.test(ma.e2)
+    && /Quel nom voient les personnes que vous recevez \?/.test(ma.e6) && !/moyens de paiement/.test(ma.e6) && !ma.fiche.paiement && /en vouvoyant la personne reçue/.test(ma.consigne)
+    && /clés : nom, metier, adresse, acces, presentation, consignes, horaires, langues, prestations/.test(ma.consigne) && !/client/i.test(ma.e2) && propre(ma), ma.e2.slice(0, 300));
+  verifie('vétérinaire (animaux) : ses 3 familles et 9 prestations de l’ébauche, « Quelles prestations faites-vous ? », une fiche sans carte Vitale ni remboursement',
+    J(ve.familles) === J(['consultation:premiere-consultation,consultation-de-suivi,urgence', 'prevention:vaccination,identification,vermifuge-et-antiparasitaire', 'chirurgie:sterilisation,detartrage,autre-operation'])
+    && /Quelles prestations faites-vous \?/.test(ve.e2) && /Quel nom voient vos clients \?/.test(ve.e6) && !/carte Vitale|remboursement/i.test(ve.e6) && propre(ve), J(ve.familles));
+  verifie('auto-école : les mots « prestation » (des leçons, pas des interventions) ; garagiste : « Quelles interventions faites-vous ? », « Carrosserie »',
+    /Quelles prestations faites-vous \?/.test(ae.e2) && /Leçon de conduite/.test(ae.e2) && !/intervention/i.test(ae.e2) && /Quelles interventions faites-vous \?/.test(ga.e2) && /Carrosserie/.test(ga.e2) && propre(ae) && propre(ga), '');
   verifie('aucun appel réseau', S.appels === 0 && P.appels === 0, J([S.appels, P.appels]));
   verifie('aucun débordement sur le côté, à 390 px et à 1280 px (étape 1 ouverte, étape 2, récapitulatif)', S.debords.concat(P.debords).every((x) => x <= 0), J([S.debords, P.debords]));
 }
