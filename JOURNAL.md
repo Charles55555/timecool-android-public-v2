@@ -4112,3 +4112,28 @@ Charles, 22/11 : une démonstration qui montre tout ce que Charly et TimeCool sa
   - verif-bulle-choix ouvre la démonstration de la 107 sans l'accord.
   - verif-campagne1 suit le mot « Exemple » après le titre (titre toujours échappé).
   - verif-blocage-silence : toute fiche voyage, sauf les exemples gardés.
+
+## 22/11/2026 — Démonstration « Valérie » : les 12 vidéos (CODEUR)
+
+Charles, 22/11 : chaque vidéo doit pouvoir être jouée et filmée dans la démonstration. Une phrase par vidéo, dans son ordre. Le vrai moteur de Charly répond quand il sait le faire ; sinon, la démonstration joue la scène (tcDemoScenarioV), et la scène sert de cahier des charges.
+- Les 12, et ce qui est vrai :
+  1. « Je suis malade, décale ma journée de demain ». Vrai : la journée décalée, les excuses préparées, les réponses ; « remets-les » existe.
+  2. « Je suis en retard de 10 minutes, préviens tout le monde ». Vrai : Emma, le restaurant (le café dans l'heure est avec Emma ET Chez Marguerite) et Sophie sont prévenus. Puis la route jusqu'au restaurant et « Y aller » (démonstration).
+  3. « Organise un dîner entre copines avec Emma, Léa et Inès ». Vrai : rendez-vous à plusieurs, créneaux communs.
+  4. « Note un cours de piano avec Clara mercredi à 17h ». Vrai. Dans la démonstration, un rendez-vous noté avec un contact d'exemple qui a son adresse à Paris se tient chez lui (rue de Sèvres).
+  5. « Envoie trois créneaux à Julien pour un déjeuner ». Simulé, à coder : trois midis libres pour les deux, « selon tes préférences et tes disponibilités enregistrées ». Julien en choisit un, c'est dans l'agenda.
+  6. « Dis à Sophie que je l'appelle mardi soir ». Le message est vrai. Sa traduction et la réponse de Sophie en anglais sont simulées (sans réseau) ; dans le produit, le serveur traduit à l'envoi.
+  7. « Comment je vais chez le dentiste mardi ? ». Simulé, à coder : le trajet depuis chez Valérie, l'heure de départ, « Y aller ». Le calcul du trajet et « Y aller » existent dans le produit.
+  8. « Montre-moi mes disponibilités ». Vrai : la page s'ouvre dans la démonstration. Le résumé de Charly est joué.
+  9. « Qui m'a demandé un rendez-vous ? ». Vrai : les deux demandes, la messagerie.
+  10. « Invite ma voisine Jeanne sur TimeCool ». L'invitation est vraie, avec le texte de Charles. L'inscription de Jeanne est simulée.
+  11. « Qu'est-ce que tu as le droit de faire ? ». Vrai : les trois niveaux de « Ma confiance en Charly » et le réglage choisi. L'explication est jouée.
+  12. « C'est gratuit ? ». Vrai : gratuit, sans publicité, sans cookie (aucun cookie ni traceur dans l'appli). Maya, l'installation.
+- Dans la démonstration de Valérie, Disponibilités, Messagerie et Paramètres s'ouvrent sans l'arrêter. Ce qu'on y voit vient de la copie de la démonstration, rien n'est écrit pour de vrai.
+- Chef, 22/11 :
+  - Chacun répond à sa façon : un commerce au vouvoiement (« C'est noté, nous gardons votre table. »), un docteur ou le patron (« Très bien, mardi 24 novembre à 10h30 me convient. »), un proche comme avant.
+  - Sophie et Maria répondent dans leur langue.
+  - Là où l'on montre un prénom seul (« Bonjour … » d'un message, bulle d'attente, bulle de réponse), un commerce garde son nom entier (« Chez Marguerite ») et un docteur devient « Dr Fontaine » (tcPrenomOuNom). Cela vaut aussi hors de la démonstration. tcPrenomPresentable ne change pas (examen) : il décide aussi qui reçoit l'invitation amicale, jamais un docteur.
+- Le rythme reste celui de la mission 108 : chaque message part l'un après l'autre (bulle et feuilles), « C'est fait », puis chaque réponse arrive l'une après l'autre.
+- Rien ne sort : aucun appel réseau, aucun lien ouvert, aucune trace après « Tout supprimer ».
+- Nouvelle suite verif-demo-videos : les 12 vidéos dans Chrome, sans réseau. Elle est rouge sur 61f2ad8. verif-demo-valerie suit les 12 phrases et le café avec le restaurant.

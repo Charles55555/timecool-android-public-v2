@@ -73,7 +73,7 @@ async function dansLaPage(D) {
       parJour: (function () { const n = {}; ex.forEach((e) => { n[e.date] = (n[e.date] || 0) + 1; }); return Object.keys(n).map((k) => n[k]); })(),
       sansLieu: ex.filter((e) => !e.lieu && e.type !== 'telephone').map((e) => e.title),
       couleurs: ex.filter((e) => ['travail', 'sante', 'famille', 'amis', 'sport'].indexOf(e.cat) < 0).map((e) => e.title),
-      bientotMin: Math.round((debutBientot - maintenant) / 60000), bientotAvec: bientot ? bientot.contact : '', bientotTitre: bientot ? bientot.title : '',
+      bientotMin: Math.round((debutBientot - maintenant) / 60000), bientotAvec: bientot ? (bientot.invites || []).map((i) => i.prenom).join(',') : '', bientotTitre: bientot ? bientot.title : '',
       dureeMin: Math.min.apply(null, events.map((e) => (e.endH * 60 + e.endM) - (e.startH * 60 + e.startM))),
       dispo: JSON.stringify(_dispoData), validation: localStorage.getItem('tc_rdv_validation'),
       demandes: tcConversationsAffichables().filter((m) => tcDemandeRdvEnAttente(m)).map((m) => m.with + (tcDemandeRdvEnAttente(m).demandeur ? ' (inconnu)' : '')),
@@ -221,11 +221,11 @@ if (T.erreur || !T.dedans) {
   verifie('« vous » au patron, aux docteurs, aux commerces, à la cliente, au kiné, à la professeure', eq(D.vous, ['Philippe Garnier', 'Dr Claire Fontaine', 'Dr Antoine Mercier', 'Salon Nicolas Durand', 'Clara Simon', 'Chez Marguerite', 'Le Comptoir Bleu', 'Nadia Cohen', 'Paul Girard', 'La Table de Lison']), D.vous.join(' | '));
   verifie('la semaine en cours, du lundi, et la suivante, jusqu’au dimanche : 3 à 5 rendez-vous par jour', D.premier === D.lundi && D.dernier === D.dimancheSuivant && D.parJour.length === 14 && D.parJour.every((n) => n >= 3 && n <= 5), D.premier + ' → ' + D.dernier + ' ' + JSON.stringify(D.parJour));
   verifie('chaque rendez-vous : un lieu à Paris (sauf un appel), la couleur de sa catégorie, « Exemple »', !D.sansLieu.length && !D.couleurs.length && D.evExemple === D.events, JSON.stringify([D.sansLieu, D.couleurs, D.evExemple, D.events]));
-  verifie('toujours un rendez-vous dans l’heure qui vient : « Café avec Emma, Chez Marguerite »', D.bientotMin >= 25 && D.bientotMin <= 40 && D.bientotAvec === 'demo_v_emma' && D.bientotTitre === 'Café avec Emma, Chez Marguerite', D.bientotMin + ' min, ' + D.bientotAvec + ', ' + D.bientotTitre);
+  verifie('toujours un rendez-vous dans l’heure qui vient : « Café avec Emma, Chez Marguerite », avec Emma et le restaurant', D.bientotMin >= 25 && D.bientotMin <= 40 && D.bientotAvec === 'Emma,Chez Marguerite' && D.bientotTitre === 'Café avec Emma, Chez Marguerite', D.bientotMin + ' min, ' + D.bientotAvec + ', ' + D.bientotTitre);
   verifie('chaque rendez-vous d’exemple dure au moins une heure (titre et « Exemple » lisibles dans la semaine)', D.dureeMin >= 60, D.dureeMin);
   verifie('les disponibilités d’exemple, actives (« Toujours attendre ma validation » décoché, dans la démonstration seulement)', /"travail":\[\{"jours":\[1,2,3,4,5\],"debut":"09:00","fin":"12:00"\}/.test(D.dispo) && /"personnel":\[\{"jours":\[7\]/.test(D.dispo) && D.validation === '0', D.dispo + ' / ' + D.validation);
   verifie('deux demandes dans la messagerie : Maman, et un inconnu avec sa carte', eq(D.demandes, ['Monique Roux', 'Bastien Morel (inconnu)']), D.demandes.join(' | '));
-  verifie('les phrases de la démonstration parlent des contacts de Valérie', D.phrases.length === 5 && /ma copine Emma/.test(D.phrases[0]) && /Emma, Léa et Inès/.test(D.phrases[3]), D.phrases.join(' | '));
+  verifie('les phrases de la démonstration parlent des contacts de Valérie (une par vidéo : verif-demo-videos)', D.phrases.length === 12 && /Je suis malade/.test(D.phrases[0]) && /Emma, Léa et Inès/.test(D.phrases[2]), D.phrases.join(' | '));
   verifie('le mot « Exemple » sur chaque fiche', T.marquesFiches === T.nFiches && T.nFiches > 0 && T.marque === true, T.marquesFiches + ' / ' + T.nFiches + ' / ' + T.marque);
   verifie('rien n’est écrit sur l’appareil pendant la démonstration', D.stockage === 0, D.stockage);
   verifie('une demande acceptée : le rendez-vous entre dans l’agenda d’exemple, la demande est traitée', T.demande.events === 1 && /Monique Roux/.test(T.demande.rdv) && T.demande.exemple === true && T.demande.reste === 1, JSON.stringify(T.demande));
