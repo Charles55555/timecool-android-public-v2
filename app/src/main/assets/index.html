@@ -36708,6 +36708,36 @@ let _contactsRecents = false;
 let _contactsCategorie = '';
 
 /**
+ * Le bouton de tri allume en haut de « Mes contacts » (Charles, 22/11) : '' pour « Tous », une des
+ * cinq categories des pastilles « Ce contact fait partie de : », ou 'non_classes'.
+ *
+ * Il se combine avec la recherche, les recents, les inscrits TimeCool et la reglette : il retire de
+ * la liste ceux qui ne sont pas sous le bouton, rien d'autre. Jamais garde d'une visite a l'autre :
+ * navigate le remet sur « Tous ». Le filtre ci-dessus (_contactsCategorie, bandeau « Qui peut
+ * reserver pour … ») est un autre ecran, que plus aucun bouton n'ouvre depuis « Choisir qui » ; il
+ * ne se combinait avec rien. Pendant lui, la rangee s'efface.
+ */
+let _contactsTri = '';
+
+/** Les cinq categories ou l'on range un contact : « Mon temps libre » est une permission, pas un rangement. */
+const TC_TRI_CATEGORIES = DISPO_CATEGORIES.filter(function (cat) { return cat.id !== 'personnel'; });
+
+/** Ce contact est-il sous ce bouton ? Range dans deux categories, il est sous les deux ; « Non classés » : aucune des cinq. */
+function tcContactDansTri(c, tri) {
+  if (!tri) return true;
+  const cats = c && Array.isArray(c.categories) ? c.categories : [];
+  if (tri === 'non_classes') return !TC_TRI_CATEGORIES.some(function (cat) { return cats.indexOf(cat.id) > -1; });
+  return cats.indexOf(tri) > -1;
+}
+
+/** Tout le carnet sous le bouton allume (le carnet lui-meme pour « Tous » : rien n'est recopie). */
+function tcContactsDuTri() {
+  if (!Array.isArray(contactsList)) return [];
+  if (!_contactsTri) return contactsList;
+  return contactsList.filter(function (c) { return tcContactDansTri(c, _contactsTri); });
+}
+
+/**
  * Sous quelle lettre ranger ce contact.
  *
  * Les accents rejoignent leur lettre de base : \u00ab \u00c9mile \u00bb se cherche
@@ -36726,16 +36756,17 @@ function tcLettreContact(c) {
 function tcContactsParLettre() {
   const compte = {};
   if (!Array.isArray(contactsList)) return compte;
-  contactsList.forEach(function (c) {
+  // Sous un bouton de tri, la reglette ne compte que ceux du bouton (Charles, 22/11).
+  (typeof tcContactsDuTri === 'function' ? tcContactsDuTri() : contactsList).forEach(function (c) {
     const l = tcLettreContact(c);
     compte[l] = (compte[l] || 0) + 1;
   });
   return compte;
 }
 
-/** La page doit-elle passer par la reglette ? */
+/** La page doit-elle passer par la reglette ? (Sous un bouton de tri : s'il y a plus de 200 contacts sous ce bouton.) */
 function tcContactsParLettres() {
-  return Array.isArray(contactsList) && contactsList.length > TC_CONTACTS_SEUIL;
+  return Array.isArray(contactsList) && (typeof tcContactsDuTri === 'function' ? tcContactsDuTri() : contactsList).length > TC_CONTACTS_SEUIL;
 }
 
 /**
@@ -36745,13 +36776,19 @@ function tcContactsParLettres() {
  * carnet, pas dans la lettre affichee \u2014 sinon taper un nom ne
  * donnerait rien tant qu'on n'aurait pas devine sa premiere lettre.
  */
-function tcContactsAffiches() {
+function tcContactsAffiches(sansTri) {
   if (!Array.isArray(contactsList)) return [];
+  // Le bouton de tri allume retire ceux qui n'y sont pas, quelle que soit la liste (Charles, 22/11).
+  // sansTri : la liste de « Tous », celle que les boutons comptent.
+  const trier = function (l) {
+    return (!sansTri && typeof _contactsTri !== 'undefined' && _contactsTri && typeof tcContactDansTri === 'function')
+      ? l.filter(function (c) { return tcContactDansTri(c, _contactsTri); }) : l;
+  };
   // Les inscrits l'emportent aussi sur la reglette : on vient voir qui
   // est deja la, pas parcourir l'alphabet.
-  if (_contactsRecents) return tcContactsRecents();
+  if (_contactsRecents) return trier(tcContactsRecents());
   if (_contactsTimeCool) {
-    return contactsList.filter(function (c) { return isTimeCoolUser(c); })
+    return trier(contactsList.filter(function (c) { return isTimeCoolUser(c); }))
       .sort(function (a, b) { return (a.name || '').localeCompare(b.name || '', 'fr'); });
   }
   // Temps libre : on vient CHOISIR qui peut deranger, donc tout le carnet est la, les
@@ -36793,7 +36830,7 @@ function tcContactsAffiches() {
   } else {
     liste = contactsList;
   }
-  return liste.slice().sort(function (a, b) {
+  return trier(liste).slice().sort(function (a, b) {
     return (a.name || '').localeCompare(b.name || '', 'fr');
   });
 }
@@ -37017,11 +37054,169 @@ function tcContactsInviteHTML() {
  */
 function tcContactsEnTeteHTML() {
   const total = Array.isArray(contactsList) ? contactsList.length : 0;
-  return '<div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">'
+  // Le compte reste le total du carnet, quel que soit le bouton de tri allume (Charles, 22/11).
+  return '<div id="ctEnTete" style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">'
     + '<button onclick="importPhoneContacts()" style="padding:10px 14px; background:var(--g-blue); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">\ud83d\udcf1 Importer mes contacts</button>'
     + '<button onclick="addContactManually()" style="padding:10px 14px; background:var(--g-green); color:white; border:none; border-radius:12px; font-size:13px; font-weight:600; cursor:pointer;">+ Ajouter</button>'
-    + '<div style="font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; margin-left:auto;">\ud83d\udc65 ' + total.toLocaleString('fr-FR') + ' contacts</div>'
+    + '<div id="ctCompte" style="font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; margin-left:auto;">\ud83d\udc65 ' + total.toLocaleString('fr-FR') + ' contacts</div>'
+    + (typeof tcRangeeTriHTML === 'function' ? tcRangeeTriHTML() : '')
     + '</div>';
+}
+
+/* \u2500\u2500 Les boutons de tri par categorie (Charles, 22/11) \u2500\u2500
+   Tous \u00b7 Mon travail \u00b7 Ma sant\u00e9 \u00b7 Ma famille \u00b7 Mes amis et loisirs \u00b7 Mon sport \u00b7 Non class\u00e9s, chacun a la couleur de
+   sa categorie, avec son nombre. Sous \u00ab Importer \u00bb et \u00ab + Ajouter \u00bb : sur une seule ligne qui glisse au doigt sur un
+   telephone ; sur la ligne de \u00ab + Ajouter \u00bb sur un PC quand elle y tient. Les nombres comptent la liste de \u00ab Tous \u00bb
+   (recherche, recents ou inscrits TimeCool compris) : chaque bouton annonce ce qu'il montrera. */
+
+/** La liste que montrerait \u00ab Tous \u00bb : tout le carnet, ou ce que la recherche, les recents ou les inscrits en gardent. */
+function tcContactsBaseDuTri() {
+  if (!Array.isArray(contactsList)) return [];
+  if (!_contactsRecents && !_contactsTimeCool && !contactsSearchQuery.trim()) return contactsList;
+  return tcContactsAffiches(true);
+}
+
+/** Combien sous chaque bouton, en un seul passage sur la liste. */
+function tcComptesTri() {
+  const base = tcContactsBaseDuTri();
+  const n = { '': base.length, non_classes: 0 };
+  TC_TRI_CATEGORIES.forEach(function (cat) { n[cat.id] = 0; });
+  base.forEach(function (c) {
+    const cats = c && Array.isArray(c.categories) ? c.categories : [];
+    let range = false;
+    TC_TRI_CATEGORIES.forEach(function (cat) { if (cats.indexOf(cat.id) > -1) { n[cat.id]++; range = true; } });
+    if (!range) n.non_classes++;
+  });
+  return n;
+}
+
+/** Les sept boutons, dans l'ordre de Charles ; libelles et emojis des pastilles, couleurs de la palette des categories. */
+function tcBoutonsTri() {
+  return [{ id: '', cle: 'tous', libelle: 'Tous', couleurs: null }]
+    .concat(TC_TRI_CATEGORIES.map(function (cat) { return { id: cat.id, cle: cat.id, libelle: cat.icon + ' ' + cat.label, couleurs: cat }; }))
+    .concat([{ id: 'non_classes', cle: 'non_classes', libelle: 'Non class\u00e9s', couleurs: TC_COULEURS_CATEGORIES.perso }]);
+}
+
+/** La rangee. \u00ab Tous \u00bb a le bleu des boutons \u00ab Mes contacts r\u00e9cents \u00bb ; \u00ab Non class\u00e9s \u00bb, le gris neutre de la palette. */
+function tcRangeeTriHTML() {
+  if (_contactsCategorie) return '';
+  const n = tcComptesTri();
+  const boutons = tcBoutonsTri().map(function (b) {
+    const actif = (_contactsTri || '') === b.id;
+    const k = b.couleurs;
+    const teinte = k
+      ? (actif ? ' background:' + k.texte + '; color:#fff; border:1.5px solid ' + k.texte + ';'
+               : ' background:' + k.bg + '; color:' + k.texte + '; border:1.5px solid ' + k.color + ';')
+      : (actif ? ' background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);'
+               : ' background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);');
+    return '<button type="button" onclick="tcChoisirTri(\'' + b.id + '\')" aria-pressed="' + actif + '" style="flex-shrink:0;'
+      + ' padding:8px 12px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; white-space:nowrap;' + teinte + '">'
+      + '<span>' + b.libelle + '</span><span id="ctTriN_' + b.cle + '"> (' + (n[b.id] || 0) + ')</span></button>';
+  }).join('');
+  return '<div id="ctTri" style="flex:0 0 100%; min-width:0; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; padding-bottom:2px;">'
+    + '<div id="ctTriRang" style="display:flex; gap:6px; width:max-content;">' + boutons + '</div></div>';
+}
+
+/** Pendant la frappe : seuls les nombres changent, et la rangee reste ou le doigt l'a laissee. */
+function tcMajComptesTri() {
+  if (!document.getElementById('ctTri')) return;
+  const n = tcComptesTri();
+  tcBoutonsTri().forEach(function (b) {
+    const e = document.getElementById('ctTriN_' + b.cle);
+    if (e) e.textContent = ' (' + (n[b.id] || 0) + ')';
+  });
+}
+
+/** Toucher un bouton : la liste ne garde que ceux qui y sont. La recherche et les recents restent ; la lettre, non. */
+function tcChoisirTri(tri) {
+  _contactsTri = tri || '';
+  _contactsLettre = '';
+  renderContacts();
+  // La page n'est retraduite qu'en changeant de page : sans cela, les libelles reviendraient en francais.
+  if (typeof currentLanguage !== 'undefined' && currentLanguage && currentLanguage !== 'fr' && typeof translatePageWithGoogle === 'function') {
+    setTimeout(function () { translatePageWithGoogle(currentLanguage, true); }, 60);
+  }
+}
+
+/** Personne sous le bouton : une phrase simple, et le geste qui y remedie. */
+function tcTriVideHTML() {
+  const cat = TC_TRI_CATEGORIES.find(function (c) { return c.id === _contactsTri; });
+  // Espaces insecables : le nom ne se coupe jamais en fin de ligne (\u00ab \ud83c\udfe5 | Ma sant\u00e9 \u00bb).
+  const nom = '\u00ab\u00a0' + (cat ? cat.icon + '\u00a0' + cat.label : 'Non class\u00e9s') + '\u00a0\u00bb';
+  let icone = cat ? cat.icon : '\ud83d\udc65', titre, aide;
+  if (tcContactsDuTri().length === 0) {
+    if (cat) {
+      titre = 'Personne dans ' + nom + ' pour l\u2019instant.';
+      aide = 'Pour y ranger quelqu\u2019un, touche \u00ab Tous \u00bb, puis ' + nom + ' sur sa fiche.';
+    } else {
+      icone = '\u2705';
+      titre = 'Tous tes contacts sont rang\u00e9s.';
+      aide = 'Chacun est d\u00e9j\u00e0 dans au moins une cat\u00e9gorie.';
+    }
+  } else if (_contactsRecents) {
+    titre = 'Aucun contact r\u00e9cent dans ' + nom + '.';
+    aide = 'Touche \u00ab Tous \u00bb pour voir les autres.';
+  } else if (_contactsTimeCool) {
+    titre = 'Aucun contact TimeCool dans ' + nom + '.';
+    aide = 'Touche \u00ab Tous \u00bb pour voir les autres.';
+  } else {
+    titre = 'Aucun r\u00e9sultat dans ' + nom + '.';
+    aide = 'Essaie un autre nom, ou touche \u00ab Tous \u00bb pour chercher partout.';
+  }
+  return '<div style="text-align:center; padding:40px 20px;">'
+    + '<div style="font-size:44px; margin-bottom:12px;">' + icone + '</div>'
+    + '<div style="font-size:15px; font-weight:600; color:var(--text); margin-bottom:6px;">' + titre + '</div>'
+    + '<div style="font-size:12.5px; color:var(--text-sec); line-height:1.5;">' + aide + '</div></div>';
+}
+
+/**
+ * Ou poser la rangee. Sur un PC, elle monte sur la ligne de \u00ab + Ajouter \u00bb quand elle y tient en entier (le compte reste
+ * a droite) ; sinon elle reste dessous, repliee sur deux lignes si la page est large (a la souris, rien ne glisse).
+ * Sur un telephone, rien n'est mesure : une seule ligne, dessous, qui glisse au doigt.
+ */
+function tcPlacerTri() {
+  const tete = document.getElementById('ctEnTete'), tri = document.getElementById('ctTri');
+  const rang = document.getElementById('ctTriRang'), compte = document.getElementById('ctCompte');
+  if (!tete || !tri || !rang || !compte) return;
+  let mode = 'dessous';
+  if ((window.innerWidth || 0) >= 600 && tete.offsetParent) {
+    const place = tete.clientWidth;
+    let largeur = 6 * Math.max(0, rang.children.length - 1), autres = 0;
+    for (let i = 0; i < rang.children.length; i++) largeur += rang.children[i].offsetWidth;
+    for (let i = 0; i < tete.children.length; i++) {
+      const e = tete.children[i];
+      if (e !== tri && e !== compte) autres += e.offsetWidth + 8;
+    }
+    if (autres + largeur + 8 + compte.offsetWidth <= place - 2) mode = 'ligne';
+    else if (largeur > place) mode = 'repliee';
+  }
+  if (tri.dataset.mode === mode) return;
+  tri.dataset.mode = mode;
+  tri.style.flex = mode === 'ligne' ? '0 1 auto' : '0 0 100%';
+  tri.style.order = mode === 'ligne' ? '1' : '';
+  compte.style.order = mode === 'ligne' ? '2' : '';
+  rang.style.flexWrap = mode === 'repliee' ? 'wrap' : 'nowrap';
+  rang.style.width = mode === 'repliee' ? 'auto' : 'max-content';
+}
+
+/* Fenetre agrandie, libelles traduits (plus longs), nombres qui changent : la place est remesuree a l'image suivante,
+   jamais pendant l'observation elle-meme. */
+let _tcTriObservateur = null, _tcTriImage = 0;
+function tcApresRenduTri(x) {
+  if (_tcTriObservateur) _tcTriObservateur.disconnect();
+  const tri = document.getElementById('ctTri');
+  if (!tri) return;
+  if (x) tri.scrollLeft = x;
+  tcPlacerTri();
+  if (typeof ResizeObserver !== 'function') return;
+  if (!_tcTriObservateur) {
+    _tcTriObservateur = new ResizeObserver(function () {
+      if (_tcTriImage) return;
+      _tcTriImage = requestAnimationFrame(function () { _tcTriImage = 0; tcPlacerTri(); });
+    });
+  }
+  _tcTriObservateur.observe(document.getElementById('ctEnTete'));
+  _tcTriObservateur.observe(document.getElementById('ctTriRang'));
 }
 
 /** La liste, ou l'invitation a choisir. */
@@ -37030,12 +37225,18 @@ function tcContactsListeHTML() {
       && !_contactsLettre && !contactsSearchQuery.trim()) {
     return tcContactsInviteHTML();
   }
-  return renderContactsListHTML(tcContactsAffiches());
+  const liste = tcContactsAffiches();
+  // Personne sous le bouton de tri : le dire simplement (la liste vide ordinaire parlerait d'importer).
+  if (!liste.length && typeof _contactsTri !== 'undefined' && _contactsTri && !_contactsCategorie
+      && Array.isArray(contactsList) && contactsList.length && typeof tcTriVideHTML === 'function') return tcTriVideHTML();
+  return renderContactsListHTML(liste);
 }
 
 function renderContacts() {
   const c = document.getElementById('contactsContent');
   if (!c) return;
+  // La rangee de tri garde sa place sous le doigt d'un rendu a l'autre.
+  const triAvant = document.getElementById('ctTri'), triX = triAvant ? triAvant.scrollLeft : 0;
 
   c.innerHTML = `
     <div style="font-size:13px;color:#5f6368;margin-bottom:14px;line-height:1.6;padding:12px 14px;background:#f8f9fa;border-radius:12px;">
@@ -37059,6 +37260,7 @@ function renderContacts() {
 
   `;
   tcRestaurerZonesRdv();
+  if (typeof tcApresRenduTri === 'function') tcApresRenduTri(triX);
 }
 
 function renderContactsListHTML(contacts) {
@@ -39147,6 +39349,8 @@ function renderContactsList() {
   if (contactsSearchQuery.trim()) { _contactsLettre = ''; _contactsTimeCool = false; _contactsRecents = false; }
   container.innerHTML = tcContactsListeHTML();
   tcRestaurerZonesRdv();
+  // Les nombres des boutons de tri suivent la recherche (et une pastille touchee sur une fiche).
+  if (typeof tcMajComptesTri === 'function') tcMajComptesTri();
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -42365,8 +42569,13 @@ function tcPlaceAppeler(bouton) {
 // Override navigate pour la page contacts
 const _origNavigate_v50 = navigate;
 navigate = function(page) {
+  // Le bouton de tri n'est pas garde d'une visite a l'autre : on arrive toujours sur « Tous » (Charles, 22/11).
+  const venuDAilleurs = page === 'contacts' && currentPage !== 'contacts';
   _origNavigate_v50(page);
-  if (page === 'contacts') renderContacts();
+  if (page === 'contacts') {
+    if (venuDAilleurs && typeof _contactsTri !== 'undefined') _contactsTri = '';
+    renderContacts();
+  }
 };
 
 

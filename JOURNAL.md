@@ -4009,3 +4009,41 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
     - rien en clair après la suppression de « Psychiatre Dr Essai » et de ses notes, qui reviennent intacts ;
     - les deux clés sont refusées par tcCleTransferable.
   - À savoir, non changé : la conversation de Charly (timecool_charly_historique) reste en clair sur l'appareil et voyage à l'appairage, comme avant.
+
+## 22/11/2026 — Boutons de tri par catégorie dans « Mes contacts » (CODEUR)
+
+Charles, 22/11 : sous « Importer mes contacts » et « + Ajouter », une rangée de boutons pour trier la liste d'un geste.
+- Les boutons, dans l'ordre : Tous · 💼 Mon travail · 🏥 Ma santé · 👨‍👩‍👧 Ma famille · 🎉 Mes amis et loisirs · 🏋️ Mon sport · Non classés.
+  - Mêmes libellés et mêmes émojis que les pastilles « Ce contact fait partie de : » (DISPO_CATEGORIES, sans « Mon temps libre »).
+  - Couleurs de la palette (TC_COULEURS_CATEGORIES) : fond clair, bord et texte de la catégorie. Allumé : fond foncé (sa couleur « texte »), écriture blanche.
+  - « Tous » a le bleu des boutons « Mes contacts récents ». « Non classés » a le gris neutre de la palette (« perso »).
+  - Chaque bouton a son nombre entre parenthèses. « Tous » est allumé au départ.
+- Rangé dans deux catégories, un contact est sous les deux.
+- « Non classés » : aucune des cinq catégories. Un contact qui n'a que « Même en temps libre » est non classé : c'est une permission, pas un rangement.
+- Le tri se combine avec la recherche, « Mes contacts récents », « Mes contacts TimeCool » et la réglette A-Z (plus de 200 contacts sous le bouton).
+  - Les nombres comptent la liste de « Tous ». Avec une recherche ou les récents, chaque bouton annonce donc ce qu'il montrera.
+  - Pendant la frappe, seuls les nombres changent.
+  - « 👥 N contacts », en haut à droite, reste le total.
+  - Toucher un bouton efface la lettre choisie, mais pas la recherche ni les récents.
+  - Toucher deux fois le même bouton le laisse allumé.
+- Personne sous un bouton : une phrase simple.
+  - « Personne dans « 🏥 Ma santé » pour l'instant. » / « Pour y ranger quelqu'un, touche « Tous », puis « 🏥 Ma santé » sur sa fiche. »
+  - « Tous tes contacts sont rangés. » / « Chacun est déjà dans au moins une catégorie. »
+  - Avec une recherche : « Aucun résultat dans « … ». » / « Essaie un autre nom, ou touche « Tous » pour chercher partout. »
+  - Avec les récents : « Aucun contact récent dans « … ». » Avec les inscrits : « Aucun contact TimeCool dans « … ». » Puis : « Touche « Tous » pour voir les autres. »
+- Pas gardé d'une visite à l'autre : arriver sur la page depuis une autre page rallume « Tous » (navigate). Un nouveau rendu sur la même page (synchronisation) garde le bouton.
+- La place :
+  - Téléphone : sous le compte, une seule ligne qui glisse au doigt. Rien ne déborde à 320 px. La ligne reste où le doigt l'a laissée après un toucher.
+  - PC : la rangée monte sur la ligne de « + Ajouter », le compte à droite, quand elle y tient en entier (mesure : tcPlacerTri). Sinon, elle reste dessous, repliée sur deux lignes si la page est large.
+  - Une observation de taille remesure à l'image suivante (fenêtre agrandie, libellés traduits). Rien n'est mesuré sous 600 px.
+- Les 16 langues : la page est traduite en direct (Google, avec cache), comme avant.
+  - Les libellés des catégories sont le même texte que les pastilles, donc la même traduction. « Tous » et « Non classés » passent par elle aussi.
+  - Une traduction est relancée après un toucher. Sans cela, les libellés revenaient en français.
+- Filtre jumeau trouvé : _contactsCategorie (bandeau « Qui peut réserver pour … » et « Tout voir »).
+  - Plus aucun bouton ne l'ouvre depuis « Choisir qui » : tcVoirContactsDeCategorie n'a plus d'appel.
+  - Il ne se combinait avec rien (« les filtres ne s'empilent pas »).
+  - Gardé tel quel : pendant lui, la rangée s'efface.
+- Fluidité : un seul passage sur la liste pour les sept nombres, et « Tous » ne recopie rien.
+- Nouvelle suite verif-tri-contacts : 56 vérifications. Elle joue le vrai parcours dans Chrome (compte et contacts d'essai, sans réseau), à 360, 320, 800 et 1600 px. Elle est rouge sur 8dc9f56 (45 KO).
+  - Limite : ce Chrome d'essai (temps simulé) ne dessine aucune image, donc l'observation de taille n'y part jamais. La suite appelle tcPlacerTri à la main et vérifie son branchement.
+  - Vérifié à part, dans un vrai Chrome (captures) : à 1600 px sur la ligne, à 1000 px dessous, à 700 px repliée, puis de nouveau sur la ligne à 1600 px.
