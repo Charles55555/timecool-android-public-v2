@@ -3974,3 +3974,27 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Connecté : la traduction Google de la page la traduit à l'affichage, comme tous les textes. Le nouveau texte est une nouvelle clé du cache, donc il est retraduit.
   - Sans compte : elle reste en français.
 - Nouvelle suite verif-devise, 5 vérifications, dont 4 rouges sur 9e0504a.
+
+## 22/11/2026 — « Remets-les » marche après une fermeture de l'appli (CODEUR)
+
+- Charles, 22/11 : après « Je suis malade, décale tous mes rendez-vous de demain » et « C'est fait », si l'appli ou le navigateur était fermé puis rouvert, « remets-les » partait au modèle, qui proposait un autre agenda.
+  - Cause : le souvenir de la dernière suppression ou du dernier déplacement (_tcMarcheArriere) vivait seulement dans la mémoire de la page.
+- Où le souvenir est gardé : sur l'appareil, dans la clé timecool_charly_marche_arriere (timecool_charly_marche_arriere_pro pour Charly Pro IA).
+  - Il est gardé pour ce compte seulement, et 48 heures après le dernier changement, donc y compris le lendemain matin.
+  - Clé sans préfixe « tc_ » : la synchronisation l'ignore, comme la conversation.
+  - Jamais pendant la démonstration.
+  - Chaque changement du souvenir est recopié (tcGarderMarcheArriere). Quand la page n'a rien en mémoire, il est relu (tcRelireMarcheArriere).
+- Sur un second appareil, rien n'est gardé. « Remets-les » répond « Je n'ai rien à remettre : je ne retrouve aucun rendez-vous supprimé ou déplacé récemment sur cet appareil. », jamais le modèle.
+- Confirmation : comme avant, Charly remet tout de suite, puis dit ce qu'il a fait (« ↩️ C'est fait : 3 rendez-vous remis à leur place : … »). Il n'y a pas de question avant.
+- Ce qui ne peut plus être remis est dit, rendez-vous par rendez-vous, et le reste est remis. Textes nouveaux :
+  - « « X » a été supprimé depuis. Je ne le remets pas. »
+  - « « X » a été changé depuis. Je n'y touche pas. » (la place « après » est notée au déplacement ; un lot replacé par Charly la met à jour)
+  - « « X » : sa place d'avant (lundi 23 novembre, 09h à 10h) est déjà passée. Il reste où il est. »
+  - « « X » : sa place d'avant (…) est prise par « Y ». Il reste où il est. » ; pour une suppression : « « X » : sa place (…) est prise par « Y ». Je ne le remets pas. »
+  - « Je n'ai rien remis. » quand plus rien ne peut l'être.
+  - « C'était il y a plus de deux jours : je ne remets plus ces rendez-vous tout seul. Tu peux les changer dans ton agenda. »
+- Les phrases reconnues :
+  - Souvenir revenu de l'appareil, trop vieux ou absent : seulement « remets-les » tout court (« remets les à leur place stp », « et remets-les »…). « Remets le son des rappels » reste aux réglages.
+  - Souvenir de la même session : comme avant.
+- Nouvelle suite verif-remets-les, 19 vérifications. Elle joue le vrai parcours : Chrome lancé le dimanche soir, fermé, puis relancé sur le même profil le lundi 7h30. Elle est rouge sur 2f71b2f.
+- Deux phrases de plus dans phrases-charles : « remets-les » sans rien avant, et « remets-les » après « malade… décale… demain » puis « oui ».

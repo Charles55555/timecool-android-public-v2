@@ -19558,6 +19558,66 @@ let _tcMarcheArriere = null;
 /** Garde de quoi remettre ces rendez-vous tels qu'ils étaient. */
 function tcMemoriserSuppression(cible) {
   _tcMarcheArriere = { type: 'suppression', rdvs: cible.map(function (e) { return Object.assign({}, e); }) };
+  if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere();
+}
+
+/* ═══ « Remets-les » après une fermeture de l'appli (chef, 22/11/2026, ok de Charles) ═══
+   La dernière suppression ou le dernier déplacement est aussi gardé sur l'appareil, pour ce compte et cette page de Charly
+   (Charly IA ou Charly Pro IA), 48 heures. Clé sans préfixe « tc_ » : la synchronisation l'ignore (comme la conversation).
+   Jamais pendant la démonstration. Chaque changement de _tcMarcheArriere est recopié par tcGarderMarcheArriere ; quand
+   la mémoire est vide (appli rouverte), tcRelireMarcheArriere la reprend de l'appareil. */
+const TC_MARCHE_ARRIERE_CLE = 'timecool_charly_marche_arriere';
+const TC_MARCHE_ARRIERE_DUREE_MS = 48 * 3600 * 1000;
+/** « Remets-les » tout court (avec « et », « stp », « à leur place »…) : la seule forme reconnue quand rien n'est gardé. */
+const TC_REMETS_SEUL = /^(et |charly |stp |svp )*(remets|remet|remettez|remettre)( les| le| la| tout| tous)?( a (leur|sa) place| comme avant)?( stp| svp| s'?il te plait| merci)?$/;
+function tcCleMarcheArriere() {
+  return (typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro') ? TC_MARCHE_ARRIERE_CLE + '_pro' : TC_MARCHE_ARRIERE_CLE;
+}
+function tcCompteMarcheArriere() { return typeof tcSyncCompte === 'function' ? tcSyncCompte() : null; }
+function tcDemoMarcheArriere() { return typeof tcDemoActive === 'function' && !!tcDemoActive(); }
+/** L'appareil garde la même chose que la mémoire ; rien en mémoire : la clé part. */
+function tcGarderMarcheArriere() {
+  if (tcDemoMarcheArriere()) return;
+  try {
+    if (!_tcMarcheArriere) { localStorage.removeItem(tcCleMarcheArriere()); return; }
+    if (!_tcMarcheArriere.t) _tcMarcheArriere.t = Date.now();
+    localStorage.setItem(tcCleMarcheArriere(), JSON.stringify({ compte: tcCompteMarcheArriere(), m: _tcMarcheArriere }));
+  } catch (e) {}
+}
+/** Mémoire vide (l'appli a été fermée) : ce que l'appareil a gardé pour ce compte, même trop vieux (tcMarcheArriere le dit). */
+function tcRelireMarcheArriere() {
+  if (_tcMarcheArriere || tcDemoMarcheArriere()) return;
+  try {
+    const brut = localStorage.getItem(tcCleMarcheArriere());
+    const g = brut ? JSON.parse(brut) : null;
+    if (!g || !g.m || !Array.isArray(g.m.rdvs) || !g.m.rdvs.length || !g.compte || g.compte !== tcCompteMarcheArriere()) return;
+    _tcMarcheArriere = g.m;
+    _tcMarcheArriere._relu = true;
+  } catch (e) {}
+}
+function tcMarcheArriereTropVieille(m) { return !!(m && m.t && Date.now() - m.t > TC_MARCHE_ARRIERE_DUREE_MS); }
+/** La place d'un rendez-vous : son jour et ses heures. */
+function tcPlaceMarcheArriere(e) {
+  return { date: e.date, startH: Number(e.startH), startM: Number(e.startM || 0), endH: Number(e.endH), endM: Number(e.endM || 0) };
+}
+function tcMemePlaceMarcheArriere(e, p) {
+  return !!e && !!p && e.date === p.date && Number(e.startH) === Number(p.startH) && Number(e.startM || 0) === Number(p.startM || 0)
+    && Number(e.endH) === Number(p.endH) && Number(e.endM || 0) === Number(p.endM || 0);
+}
+/** Le début de cette place est déjà passé. */
+function tcPlacePasseeMarcheArriere(p) {
+  const j = String(p.date || '').split('-').map(Number);
+  if (j.length !== 3 || !j[0]) return false;
+  return new Date(j[0], j[1] - 1, j[2], Number(p.startH) || 0, Number(p.startM || 0)) < new Date();
+}
+/** Un autre rendez-vous (hors du lot remis) occupe cette place : on le rend, sinon null. */
+function tcPlacePriseMarcheArriere(p, ids) {
+  const debut = Number(p.startH) * 60 + Number(p.startM || 0), fin = Number(p.endH) * 60 + Number(p.endM || 0);
+  const mode = p.mode || 'user';
+  return (Array.isArray(events) ? events : []).find(function (e) {
+    return e && !e.allDay && !e.demo && ids.indexOf(e.id) < 0 && (e.mode || 'user') === mode && tcEvenementCouvre(e, p.date)
+      && (Number(e.startH) * 60 + Number(e.startM || 0)) < fin && (Number(e.endH) * 60 + Number(e.endM || 0)) > debut;
+  }) || null;
 }
 
 /**
@@ -19573,20 +19633,45 @@ function tcDetecterMarcheArriere(text) {
   if (explicite) return true;
   const remettre = /\b(remets|remet|remettre|remettez)\b/.test(t) && !/\b(un|une)\b/.test(t);
   const erreur = /(je me suis trompe|c'?etait une erreur|je n'?aurais pas du|pas voulu)/.test(t);
-  return !!_tcMarcheArriere && (remettre || erreur);
+  // Chef, 22/11 : appli rouverte, le souvenir revient de l'appareil. Revenu de l'appareil, trop vieux ou absent : seulement
+  // « remets-les » tout court, qui a toujours sa réponse claire (jamais le modèle, qui proposait autre chose) ; « remets le
+  // son… » reste aux réglages. En mémoire depuis cette ouverture : comme avant.
+  if (typeof tcRelireMarcheArriere === 'function') tcRelireMarcheArriere();
+  // Appels défensifs : des suites chargent ces fonctions une à une, sans les nouvelles (elles retrouvent alors l'ancien chemin).
+  const seul = typeof TC_REMETS_SEUL !== 'undefined' && TC_REMETS_SEUL.test(t);
+  const vieille = typeof tcMarcheArriereTropVieille === 'function' && tcMarcheArriereTropVieille(_tcMarcheArriere);
+  if (!_tcMarcheArriere || _tcMarcheArriere._relu || vieille) return seul;
+  return remettre || erreur;
 }
 
 /** Remet la dernière suppression ou le dernier déplacement, et le dit. */
 async function tcMarcheArriere(text) {
   tcPousserMessageUtilisateur(text);
+  if (typeof tcRelireMarcheArriere === 'function') tcRelireMarcheArriere();
   const m = _tcMarcheArriere;
   const dire = function (texte) { charlyIA.history.push({ role: 'system_info', content: texte }); renderCharlyChat(); };
-  if (!m) { dire('Je n\'ai rien à remettre : rien n\'a été supprimé ni déplacé récemment.'); return; }
+  if (!m) { dire('Je n\'ai rien à remettre : je ne retrouve aucun rendez-vous supprimé ou déplacé récemment sur cet appareil.'); return; }
   _tcMarcheArriere = null;
-  const remis = [];
+  if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere();
+  // Chef, 22/11 : au-delà de 48 heures, Charly ne remet plus rien tout seul, et le dit.
+  if (typeof tcMarcheArriereTropVieille === 'function' && tcMarcheArriereTropVieille(m)) {
+    dire('C\'était il y a plus de deux jours : je ne remets plus ces rendez-vous tout seul. Tu peux les changer dans ton agenda.');
+    return;
+  }
+  // Chef, 22/11 : ce qui ne peut plus être remis est dit, rendez-vous par rendez-vous ; le reste est remis.
+  const remis = [], refus = [];
+  const ids = m.rdvs.map(function (r) { return r.id; });
+  const nom = function (r, ev) { return '« ' + ((ev && ev.title) || r.title || 'Un rendez-vous') + ' »'; };
+  const place = function (r) { return '(' + (typeof tcJourLisible === 'function' ? tcJourLisible(r.date) : r.date) + ', ' + tcFormaterHeure(r) + ')'; };
+  // Sans ces fonctions (suites qui chargent la page morceau par morceau) : l'ancien chemin, tout est remis.
+  const memePlace = function (e, p) { return typeof tcMemePlaceMarcheArriere === 'function' ? tcMemePlaceMarcheArriere(e, p) : null; };
+  const placePrise = function (p) { return typeof tcPlacePriseMarcheArriere === 'function' ? tcPlacePriseMarcheArriere(p, ids) : null; };
+  const placePassee = function (p) { return typeof tcPlacePasseeMarcheArriere === 'function' && tcPlacePasseeMarcheArriere(p); };
   if (m.type === 'suppression') {
     m.rdvs.forEach(function (copie) {
       if (events.some(function (e) { return e.id === copie.id; })) return;
+      const prise = placePrise(copie);
+      if (prise) { refus.push(nom(copie) + ' : sa place ' + place(copie) + ' est prise par « ' + prise.title + ' ». Je ne le remets pas.'); return; }
       // L'identifiant d'origine est gardé (testeurs, 15/10 : un rendez-vous partagé retrouve son lien). Depuis « ce que
       // j'ai changé ici gagne » (mission 23), un rendez-vous présent ici sans empreinte est tenu pour modifié ici : la
       // suppression annoncée par le serveur ne l'efface pas, et il repart au tour suivant (le serveur le remet en vie).
@@ -19596,14 +19681,20 @@ async function tcMarcheArriere(text) {
   } else {
     m.rdvs.forEach(function (avant) {
       const ev = events.find(function (e) { return e.id === avant.id; });
-      if (!ev) return;
+      if (!ev) { refus.push(nom(avant) + ' a été supprimé depuis. Je ne le remets pas.'); return; }
+      if (avant.apres && memePlace(ev, avant.apres) === false) { refus.push(nom(avant, ev) + ' a été changé depuis. Je n\'y touche pas.'); return; }
+      if (memePlace(ev, avant) === false) {
+        if (placePassee(avant)) { refus.push(nom(avant, ev) + ' : sa place d\'avant ' + place(avant) + ' est déjà passée. Il reste où il est.'); return; }
+        const prise = placePrise(Object.assign({}, avant, { mode: ev.mode }));
+        if (prise) { refus.push(nom(avant, ev) + ' : sa place d\'avant ' + place(avant) + ' est prise par « ' + prise.title + ' ». Il reste où il est.'); return; }
+      }
       ev.date = avant.date;
       if (avant.dateFin) ev.dateFin = avant.dateFin; else delete ev.dateFin;
       ev.startH = avant.startH; ev.startM = avant.startM; ev.endH = avant.endH; ev.endM = avant.endM;
       remis.push(ev);
     });
   }
-  if (!remis.length) { dire('Ces rendez-vous sont déjà en place.'); return; }
+  if (!remis.length) { dire(refus.length ? 'Je n\'ai rien remis.\n' + refus.join('\n') : 'Ces rendez-vous sont déjà en place.'); return; }
   saveEventsToStorage();
   if (currentPage === 'calendar') render();
   addDemarche({
@@ -19626,6 +19717,7 @@ async function tcMarcheArriere(text) {
   const ou = m.type === 'deplacement' ? (remis.length === 1 ? ' à sa place' : ' à leur place') : '';
   dire('↩️ C\'est fait : ' + (remis.length === 1 ? '« ' + remis[0].title + ' » est remis' : remis.length + ' rendez-vous remis') + ou + ' :\n'
     + remis.map(function (e) { return '• ' + e.title + ' — ' + tcFormaterDateHumaine(e.date) + ' ' + tcFormaterHeure(e); }).join('\n')
+    + (refus.length ? '\n' + refus.join('\n') : '')
     + (contacts.length ? '\nPense à prévenir ' + tcQuestionnaireNoms(contacts) + ' que c\'est maintenu.' : ''));
   showToast('↩️ Rendez-vous remis');
   // Des créneaux placés par Charly (mission 73) : il prévient lui-même que c'est maintenu (chef, 03/11).
@@ -19756,7 +19848,7 @@ function _tcLigneRdv(ev) {
 function tcAppliquerDeplacement(liste, options) {
   const o = options || {};
   _tcMarcheArriere = { type: 'deplacement', rdvs: liste.map(function (x) {
-    return { id: x.ev.id, date: x.ev.date, dateFin: x.ev.dateFin, startH: x.ev.startH, startM: x.ev.startM, endH: x.ev.endH, endM: x.ev.endM };
+    return { id: x.ev.id, title: x.ev.title, date: x.ev.date, dateFin: x.ev.dateFin, startH: x.ev.startH, startM: x.ev.startM, endH: x.ev.endH, endM: x.ev.endM };
   }) };
   liste.forEach(function (x) {
     const ev = x.ev, p = x.p;
@@ -19766,6 +19858,9 @@ function tcAppliquerDeplacement(liste, options) {
     ev.endH = p.endH; ev.endM = p.endM;
     if (p.lieu) ev.lieu = p.lieu;
   });
+  // Chef, 22/11 : la place où Charly les a mis, pour savoir à la remise si quelqu'un les a changés depuis.
+  if (typeof tcPlaceMarcheArriere === 'function') _tcMarcheArriere.rdvs.forEach(function (r) { const x = liste.filter(function (y) { return y.ev.id === r.id; })[0]; if (x) r.apres = tcPlaceMarcheArriere(x.ev); });
+  if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere();
   saveEventsToStorage();
   if (currentPage === 'calendar') render();
   const lignes = liste.map(x => '• ' + _tcLigneRdv(x.ev)).join('\n');
@@ -19842,7 +19937,7 @@ function tcExecuterDeplacement(liste) {
   // Profil 3 (mission 73c) : Charly envoie seul, puis le bilan (rangé aussi au Journal d’activité, mission 91).
   if (profil === 3) {
     const lotId = 'lot-' + Date.now();
-    if (sans.length) { tcAppliquerDeplacement(sans); if (_tcMarcheArriere) _tcMarcheArriere.lot = lotId; }
+    if (sans.length) { tcAppliquerDeplacement(sans); if (_tcMarcheArriere) { _tcMarcheArriere.lot = lotId; if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere(); } }
     return tcProposerLesCreneaux(avec, { lot: lotId }).then(function (envoi) { tcDireBilanPropositions(envoi.lignes, envoi.res.envois); tcJournaliserCompteRendu(envoi.lignes); });
   }
   // Mission 91 (Charles, 15/11) : au profil 2, rien ne part et rien ne s’écrit avant UN oui, sur la carte du profil 1 ; elle
@@ -19930,7 +20025,7 @@ async function tcRepondreDeplacement(text) {
     return true;
   }
   const lotId = 'lot-' + Date.now();
-  if (sans.length && _tcMarcheArriere && _tcMarcheArriere.type === 'deplacement') _tcMarcheArriere.lot = lotId;
+  if (sans.length && _tcMarcheArriere && _tcMarcheArriere.type === 'deplacement') { _tcMarcheArriere.lot = lotId; if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere(); }
   // Mission 91 : au profil 2, les créneaux montrés avant le oui partent tels quels ; le choix du contact sera placé seul.
   const envoi = await tcProposerLesCreneaux(avec, attente.items ? Object.assign({ lot: lotId, items: attente.items }, attente.confiance ? { confiance: attente.confiance } : {}) : { lot: lotId });
   tcDireBilanPropositions(envoi.lignes, envoi.res.envois);
@@ -31921,7 +32016,7 @@ async function tcQuestionnaireExecuter(r, fin) {
     supprimes = presents;
     if (supprimes.length) tcSupprimerRdvs(supprimes, { silencieux: true });
   }
-  if ((deplaces.length || supprimes.length) && _tcMarcheArriere) _tcMarcheArriere.prevenus = [];
+  if ((deplaces.length || supprimes.length) && _tcMarcheArriere) { _tcMarcheArriere.prevenus = []; if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere(); }
   const touches = r.action === 'decaler' ? deplaces.map(function (x) { return x.ev; }).concat(groupes) : (r.action === 'retard' ? presents : supprimes);
   const contacts = tcQuestionnaireContacts(touches);
   // Mission 108 : ceux à qui Charly écrit vraiment (messagerie TimeCool) : « Charly envoie à Paul… » pendant les envois.
@@ -31952,7 +32047,7 @@ async function tcQuestionnaireExecuter(r, fin) {
   }
   // Un seul lot : les rendez-vous déplacés d'office (sans contact) et ceux proposés se remettent ensemble (TESTEURS, 03/11).
   const lotId = 'lot-' + Date.now();
-  if (aProposer.length && deplaces.length && _tcMarcheArriere && _tcMarcheArriere.type === 'deplacement') _tcMarcheArriere.lot = lotId;
+  if (aProposer.length && deplaces.length && _tcMarcheArriere && _tcMarcheArriere.type === 'deplacement') { _tcMarcheArriere.lot = lotId; if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere(); }
   // Mission 91 : au profil 2, les créneaux montrés dans le récapitulatif partent tels quels ; le choix sera placé seul.
   // Mission 91 : les créneaux calculés avant le récapitulatif partent (tous profils) ; au profil 2, le oui est déjà donné.
   const montres = Array.isArray(r._creneaux) ? aProposer.map(function (x) {
@@ -32110,10 +32205,13 @@ function tcDeplacerDansLeLot(liste, options) {
   if (!lot || !m || m === prev || m.type !== 'deplacement') return;
   m.lot = lot;
   if (prev && prev.type === 'deplacement' && prev.lot === lot) {
-    m.rdvs = prev.rdvs.concat(m.rdvs.filter(function (r) { return !prev.rdvs.some(function (q) { return q.id === r.id; }); }));
+    // Chef, 22/11 : un rendez-vous déjà du lot, replacé par Charly, garde sa place d'avant et prend sa nouvelle place « après ».
+    m.rdvs = prev.rdvs.map(function (q) { const r = m.rdvs.filter(function (x) { return x.id === q.id; })[0]; return r && r.apres ? Object.assign({}, q, { apres: r.apres }) : q; })
+      .concat(m.rdvs.filter(function (r) { return !prev.rdvs.some(function (q) { return q.id === r.id; }); }));
     if (prev.propositions) m.propositions = prev.propositions.slice();
     if (Array.isArray(prev.prevenus)) m.prevenus = prev.prevenus.slice();
   }
+  if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere();
 }
 
 /** Le message au contact : le modèle « Je décale » des Paramètres ; les créneaux suivent (boutons, ou le lien). */
@@ -32625,6 +32723,7 @@ function tcNoterPourMarcheArriere(p, ev) {
   if (!_tcMarcheArriere.rdvs.some(function (r) { return r.id === ev.id; })) return;
   (_tcMarcheArriere.propositions = _tcMarcheArriere.propositions || []).push({ p: p, evId: ev.id });
   _tcMarcheArriere.prevenus = [];
+  if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere();
 }
 
 /**
@@ -33098,7 +33197,7 @@ if (typeof window !== 'undefined' && typeof setInterval === 'function') {
 
 /** Un contact vraiment prévenu : la marche arrière (« remets-les ») ne rappellera que ceux-là. */
 function tcQuestionnaireNoterPrevenu(nom) {
-  if (_tcMarcheArriere && Array.isArray(_tcMarcheArriere.prevenus) && _tcMarcheArriere.prevenus.indexOf(nom) < 0) _tcMarcheArriere.prevenus.push(nom);
+  if (_tcMarcheArriere && Array.isArray(_tcMarcheArriere.prevenus) && _tcMarcheArriere.prevenus.indexOf(nom) < 0) { _tcMarcheArriere.prevenus.push(nom); if (typeof tcGarderMarcheArriere === 'function') tcGarderMarcheArriere(); }
 }
 
 /** Le bilan avec ses boutons « Envoyer à … » (un par message SMS ou email) ; un bouton déjà touché le dit et s'éteint. */
