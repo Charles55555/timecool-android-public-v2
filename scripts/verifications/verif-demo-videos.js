@@ -109,6 +109,18 @@ async function dansLaPage(D) {
     n0 = charlyIA.history.length;
     await dire('C’est gratuit ?');
     R.videos.gratuit = { apres: depuis(n0), boutons: boutons() };
+    // Chef, 22/11 : dans une autre langue, les textes des scènes sont traduits d'avance (traducteur d'essai, hors ligne).
+    tcQuitterDemo({ sansRetour: true }); await attendre(300);
+    const trad0 = translateText;
+    translateText = async function (t, l) { TC_TRANSLATE_CACHE[l + ':' + t] = '[' + l + '] ' + t; return '[' + l + '] ' + t; };
+    currentLanguage = 'de';
+    await ouvrir();
+    await dire('Envoie trois créneaux à Julien pour un déjeuner'); await attendre(3000);
+    await dire('Montre-moi mes disponibilités');
+    const texteDe = document.getElementById('charlyChatBody').innerText;
+    R.langue = { creneaux: /\[de\] Je propose à Julien trois créneaux/.test(texteDe), puce: /\[de\] • \S+ \d+ \S+ à \d+h/.test(texteDe), julien: /\[de\] Julien a choisi/.test(texteDe),
+      dispos: /\[de\] 💼 Mon travail/.test(texteDe), bouton: /\[de\] 🕘 Ouvrir mes disponibilités/.test(texteDe) };
+    currentLanguage = 'fr'; translateText = trad0;
     // Rien n'est sorti, rien n'est resté.
     tcQuitterDemo({ sansRetour: true }); await attendre(400);
     let traces = 0; for (let i = 0; i < localStorage.length; i++) { const v = localStorage.getItem(localStorage.key(i)) || ''; if (/demo_v_|DEMO-V-|"exemple":true/.test(v)) traces++; }
@@ -180,6 +192,10 @@ if (T.erreur || !T.videos) {
     && /c’est le niveau 1/.test(tout(V.confiance.apres)) && V.confiance.page === 'settings' && V.confiance.demo === true, JSON.stringify([V.confiance.page, V.confiance.demo]) + ' ' + tout(V.confiance.apres));
   verifie('12. gratuit, sans publicité et sans cookie ; Maya ; l’installation', /TimeCool est gratuit, sans publicité et sans cookie/.test(tout(V.gratuit.apres)) && /Maya/.test(tout(V.gratuit.apres))
     && V.gratuit.boutons.some((b) => /Parler à Maya/.test(b)), tout(V.gratuit.apres));
+  titre('Dans une autre langue (chef, 22/11)');
+  const Lg = T.langue || {};
+  verifie('les textes des scènes jouées sont traduits d’avance, à l’ouverture (créneaux, puces datées, choix de Julien, disponibilités, boutons)',
+    Lg.creneaux && Lg.puce && Lg.julien && Lg.dispos && Lg.bouton, JSON.stringify(Lg));
   titre('Rien ne sort, rien ne reste');
   verifie('aucun appel réseau, aucun lien ouvert (SMS, e-mail, GPS) pendant les 12 vidéos', T.fin.appels === 0 && T.fin.href === true, JSON.stringify(T.fin));
   verifie('après « Tout supprimer » : aucune trace sur l’appareil', T.fin.traces === 0, T.fin.traces);

@@ -4149,3 +4149,16 @@ Charles, 22/11 (choix A, transmis par le chef) : un dimanche, « Je suis malade,
 - verif-demo-pro131b : le cas « dimanche » revient. Le dimanche 22/11 à 10h, la phrase 6 prend le 22, puis du lundi 23 au dimanche 29, avec les dates dites. La phrase 6 du mardi lit aussi la période datée.
 - verif-remets-les : 4 vérifications du chiffrement qui manque.
 - verif-demo-pro133 attendait, un dimanche, les seuls patients du dimanche (le défaut lui-même). Elle attend maintenant ceux du dimanche suivant aussi. verif-pliage134 lit « Je déplace 50 rendez-vous », suivi au besoin de la période datée.
+
+## 22/11/2026 — Démonstration « Valérie » : les scènes jouées dans les autres langues (CODEUR)
+
+Chef, 22/11 : les textes des 6 scènes jouées par la démonstration (vidéos 5, 7, 8, 10, 11, 12) restaient en français dans une autre langue. La démonstration ne traduit que ce qu'elle connaît à l'ouverture : les réponses arrivent quand le réseau est déjà coupé.
+- Chaque texte de scène vient d'une fonction pure : créneaux de Julien, trajet, disponibilités, invitation, confiance, gratuit, Sophie et Maria, route du restaurant.
+  - La scène l'appelle au moment de parler.
+  - tcDemoLignesScenesV l'appelle aussi à l'ouverture, sur les données de la démonstration.
+- tcOuvrirDemo fabrique d'abord les données, puis les fait traduire avec ces lignes (tcDemoTraduire, mêmes 4 secondes au plus), et seulement ensuite coupe le réseau.
+  - En français, rien ne change.
+  - Une ligne qui a changé entre-temps (un rendez-vous déplacé pendant la démonstration) reste en français.
+- Les boutons des scènes et le message de « Y aller » sont traduits aussi.
+- Les réponses des contacts d'exemple restent dans leur langue, comme dans la vraie messagerie.
+- verif-demo-videos : un passage en allemand, avec un traducteur d'essai hors ligne. Les lignes des créneaux, les puces datées, le choix de Julien, les disponibilités et leur bouton sont traduits. 22 vérifications, rouge sur la page d'avant.

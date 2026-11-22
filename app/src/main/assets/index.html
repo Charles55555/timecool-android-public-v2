@@ -15303,63 +15303,16 @@ function tcDemoQuandV(date, h, m) {
   return J[d.getDay()] + ' ' + d.getDate() + ' ' + M[d.getMonth()] + ' à ' + h + 'h' + (m ? String(m).padStart(2, '0') : '');
 }
 
-/** Vidéo 5 : trois créneaux pour déjeuner avec Julien ; il en choisit un, le rendez-vous entre dans l'agenda. */
-async function tcDemoSceneCreneauxV() {
-  const etat = _tcDemo;
-  const julien = contactsList.find(function (c) { return c.id === 'demo_v_julien'; });
-  if (!julien) return;
-  await tcEtapeAttente(tcTexteAttente('agenda'));
-  await tcEtapeAttente(tcTexteAttente('consulte', [julien.name]));
-  // Le midi, en semaine, à partir de demain : libre chez Valérie et chez Julien ; un par jour, trois en tout.
-  const moi = tcDemoOccupationsMoi(), lui = etat.agendas[julien.referenceCompte] || [], choix = [];
-  for (let j = 1; j <= 14 && choix.length < 3; j++) {
-    const d = tcDemoJour(j);
-    if (d.getDay() === 0 || d.getDay() === 6) continue;
-    const date = tcISO(d);
-    const h = [[12, 30], [13, 0], [12, 0]].find(function (x) { const a = x[0] * 60 + x[1]; return tcDemoLibre(moi, date, a, a + 60) && tcDemoLibre(lui, date, a, a + 60); });
-    if (h) choix.push({ date: date, h: h[0], m: h[1] });
-  }
-  if (!choix.length) { tcDemoDireV('Je ne trouve pas de midi libre pour vous deux ces deux prochaines semaines.'); return; }
-  await tcEtapeAttente(tcTexteAttente('envoi', [julien.name]), 'envoi');
-  await tcFinEtapes();
-  if (_tcDemo !== etat) return;
-  tcDemoDireV('Je propose à Julien trois créneaux pour déjeuner, selon tes préférences et tes disponibilités enregistrées :\n'
-    + choix.map(function (c) { return '• ' + tcDemoQuandV(c.date, c.h, c.m); }).join('\n') + '\nC’est envoyé. Il choisit d’un geste.');
-  const pris = choix[Math.min(1, choix.length - 1)];
-  tcDemoReponseDe(julien.referenceCompte, 'Va pour ' + tcDemoQuandV(pris.date, pris.h, pris.m) + ' !', function () {
-    const p = pris.date.split('-').map(Number);
-    const ev = tcDemoRdv('v_julien_' + pris.date, new Date(p[0], p[1] - 1, p[2]), pris.h, pris.m, 60, 'Déjeuner avec Julien', 'famille');
-    ev.exemple = true; ev.contact = julien.id; ev.lieu = '60 rue Oberkampf, 75011 Paris';
-    events.push(ev);
-    lui.push({ date: pris.date, debut: pris.h * 60 + pris.m, fin: pris.h * 60 + pris.m + 60 });
-    tcDemoDireV('Julien a choisi ' + tcDemoQuandV(pris.date, pris.h, pris.m) + '. C’est dans ton agenda.', [], [ev.id]);
-  });
-}
-
-/** Vidéo 7 : le trajet jusqu'au dentiste, l'heure de départ, « Y aller ». */
-async function tcDemoSceneTrajetV() {
-  const maintenant = new Date();
-  const ev = events.filter(function (e) { return e && e.exemple && /^Dentiste/.test(e.title); })
-    .find(function (e) { const p = e.date.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2], e.startH, e.startM) > maintenant; });
-  await tcEtapeAttente(tcTexteAttente('agenda'));
-  await tcEtapeAttente('Charly calcule ton trajet…');
-  await tcFinEtapes();
-  if (!ev) { tcDemoDireV('Je ne trouve plus de rendez-vous chez le dentiste dans ton agenda.'); return; }
-  const depart = ev.startH * 60 + ev.startM - 20;
-  tcDemoDireV('Ton rendez-vous : « ' + ev.title + ' », ' + tcDemoQuandV(ev.date, ev.startH, ev.startM) + ', ' + ev.lieu + '.\n'
-    + 'Depuis chez toi, rue de Rivoli : 8 minutes en métro (ligne 4, de Châtelet à Étienne Marcel), ou 15 minutes à pied.\n'
-    + 'Pars à ' + Math.floor(depart / 60) + 'h' + String(depart % 60).padStart(2, '0') + ' : tu arrives 5 minutes en avance.',
-    [['🧭 Y aller', 'tcDemoYAllerV()']], [ev.id]);
-}
-
-/** « Y aller », dans la démonstration : rien ne s'ouvre, on le dit. */
-function tcDemoYAllerV() { showToast('🧭 ' + tcDemoTexte('Dans ton agenda, « Y aller » ouvre le GPS de ton téléphone.')); }
-
-/** Vidéo 8 : les disponibilités par catégorie, le temps libre protégé ; la page « Mes disponibilités ». */
-async function tcDemoSceneDisposV() {
-  await tcEtapeAttente(tcTexteAttente('agenda'));
-  await tcFinEtapes();
-  tcDemoDireV('Voici tes disponibilités, catégorie par catégorie :\n'
+/*
+ * Les textes des scènes (chef, 22/11 : « dans les autres langues ») : chacun vient d'une fonction pure, appelée par la scène ET à
+ * l'ouverture de la démonstration (tcDemoLignesScenesV), pour être traduit d'avance, avant que le réseau soit coupé. Une ligne qui
+ * a changé depuis (un rendez-vous déplacé entre-temps) reste en français.
+ */
+const TC_DEMO_V_SCENES_FIXES = {
+  midiIntrouvable: 'Je ne trouve pas de midi libre pour vous deux ces deux prochaines semaines.',
+  dentisteIntrouvable: 'Je ne trouve plus de rendez-vous chez le dentiste dans ton agenda.',
+  gps: 'Dans ton agenda, « Y aller » ouvre le GPS de ton téléphone.',
+  dispos: 'Voici tes disponibilités, catégorie par catégorie :\n'
     + '💼 Mon travail : du lundi au vendredi, de 9h à 12h et de 14h à 18h\n'
     + '🏥 Ma santé : du lundi au vendredi, de 12h à 14h et de 18h à 19h\n'
     + '👨‍👩‍👧 Ma famille : tous les soirs de 19h à 21h, et le dimanche de 11h à 17h\n'
@@ -15367,7 +15320,136 @@ async function tcDemoSceneDisposV() {
     + '🏋️ Mon sport : le mardi et le jeudi de 18h30 à 20h, et le samedi de 10h à 12h\n'
     + '🔒 Ton temps libre est protégé : le dimanche matin et chaque soir après 21h.\n'
     + 'Chacun de tes contacts prend rendez-vous dans les heures de sa catégorie, jamais ailleurs.',
-    [['🕘 Ouvrir mes disponibilités', "navigate('dispo')"]]);
+  jeanneDeja: 'Jeanne a déjà TimeCool. Tu la trouves dans « Mes contacts TimeCool ».',
+  jeanneInscrite: 'Jeanne est maintenant sur TimeCool ✓. Tu la trouves dans « Mes contacts TimeCool », et les boutons de tri rangent tes contacts par catégorie.',
+  gratuit: 'Oui : TimeCool est gratuit, sans publicité et sans cookie.\n'
+    + 'Une question ? Maya, ton aide, te répond dans la messagerie.\n'
+    + 'Pour l’avoir sur ton téléphone ou ton ordinateur : Paramètres, puis « Installer l’application ».',
+  boutons: ['🧭 Y aller', '🕘 Ouvrir mes disponibilités', '👥 Voir mes contacts', '⚙️ Ouvrir les paramètres', '💬 Parler à Maya']
+};
+
+/** Vidéo 5 : les trois midis libres pour Valérie et Julien (un par jour, en semaine, à partir de demain), et celui qu'il prend. */
+function tcDemoChoixJulienV(evs, contacts, agendas) {
+  const julien = (contacts || []).find(function (c) { return c.id === 'demo_v_julien'; });
+  if (!julien) return null;
+  const moi = (evs || []).filter(function (e) { return e && e.mode === 'user'; }).map(function (e) { return { date: e.date, debut: e.startH * 60 + (e.startM || 0), fin: e.endH * 60 + (e.endM || 0) }; });
+  const lui = (agendas && agendas[julien.referenceCompte]) || [], choix = [];
+  for (let j = 1; j <= 14 && choix.length < 3; j++) {
+    const d = tcDemoJour(j);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const date = tcISO(d);
+    const h = [[12, 30], [13, 0], [12, 0]].find(function (x) { const a = x[0] * 60 + x[1]; return tcDemoLibre(moi, date, a, a + 60) && tcDemoLibre(lui, date, a, a + 60); });
+    if (h) choix.push({ date: date, h: h[0], m: h[1] });
+  }
+  return { julien: julien, lui: lui, choix: choix, pris: choix.length ? choix[Math.min(1, choix.length - 1)] : null };
+}
+function tcDemoTexteCreneauxV(choix) {
+  return 'Je propose à Julien trois créneaux pour déjeuner, selon tes préférences et tes disponibilités enregistrées :\n'
+    + choix.map(function (c) { return '• ' + tcDemoQuandV(c.date, c.h, c.m); }).join('\n') + '\nC’est envoyé. Il choisit d’un geste.';
+}
+function tcDemoTexteJulienV(pris) { return 'Julien a choisi ' + tcDemoQuandV(pris.date, pris.h, pris.m) + '. C’est dans ton agenda.'; }
+
+/** Vidéo 7 : le prochain rendez-vous chez le dentiste, et le texte du trajet. */
+function tcDemoDentisteV(evs) {
+  const maintenant = new Date();
+  return (evs || []).filter(function (e) { return e && e.exemple && /^Dentiste/.test(e.title); })
+    .find(function (e) { const p = e.date.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2], e.startH, e.startM) > maintenant; }) || null;
+}
+function tcDemoTexteTrajetV(ev) {
+  const depart = ev.startH * 60 + ev.startM - 20;
+  return 'Ton rendez-vous : « ' + ev.title + ' », ' + tcDemoQuandV(ev.date, ev.startH, ev.startM) + ', ' + ev.lieu + '.\n'
+    + 'Depuis chez toi, rue de Rivoli : 8 minutes en métro (ligne 4, de Châtelet à Étienne Marcel), ou 15 minutes à pied.\n'
+    + 'Pars à ' + Math.floor(depart / 60) + 'h' + String(depart % 60).padStart(2, '0') + ' : tu arrives 5 minutes en avance.';
+}
+
+/** Vidéo 10 : l'invitation à Jeanne, telle que Charly la montre. */
+function tcDemoTexteInvitationV(jeanne) {
+  const invitation = typeof tcTexteInvitationTimeCool === 'function' ? tcTexteInvitationTimeCool(jeanne) : '';
+  return 'Jeanne n’a pas encore TimeCool. Je lui envoie l’invitation :\n« ' + invitation + ' »';
+}
+
+/** Vidéo 11 : les trois niveaux, et celui choisi. */
+function tcDemoTexteConfianceV(n) {
+  return 'Tu choisis jusqu’où je vais seul, en trois niveaux :\n'
+    + TC_CONFIANCE_PROFILS.map(function (p) { return p.n + '. ' + p.texte; }).join('\n')
+    + '\nAujourd’hui, c’est le niveau ' + n + '. Tu le changes quand tu veux, dans Paramètres : « Ma confiance en Charly ».';
+}
+
+/** Vidéo 6 : ce que Charly dit d'un message à Sophie (anglais) ou à Maria (espagnol), et de sa réponse. */
+function tcDemoTexteLangueV(c, langue, r) {
+  return c.firstname + ' lit et écrit en ' + (langue === 'en' ? 'anglais' : 'espagnol') + '. Je lui ai écrit dans sa langue' + (r.trad ? ' : « ' + r.trad + ' »' : '.')
+    + '\nSa réponse, en français : « ' + r.repFr + ' »';
+}
+
+/** Vidéo 2 : la route jusqu'au restaurant ou au bar prévenu d'un retard. */
+function tcDemoTexteRouteV(c, route) { return 'Pour y aller : ' + c.name + ', ' + c.address + ', ' + route + '.'; }
+
+/** Toutes les lignes que les scènes diront, dans l'état où la démonstration s'ouvre : traduites d'avance (autres langues). */
+function tcDemoLignesScenesV(d) {
+  const l = [];
+  const ajouter = function (t) { String(t || '').split('\n').forEach(function (x) { if (x && l.indexOf(x) < 0) l.push(x); }); };
+  try {
+    Object.keys(TC_DEMO_V_SCENES_FIXES).forEach(function (k) { [].concat(TC_DEMO_V_SCENES_FIXES[k]).forEach(ajouter); });
+    const j = tcDemoChoixJulienV(d.events, d.contacts, d.agendas);
+    if (j && j.choix.length) { ajouter(tcDemoTexteCreneauxV(j.choix)); ajouter(tcDemoTexteJulienV(j.pris)); }
+    const dent = tcDemoDentisteV(d.events);
+    if (dent) ajouter(tcDemoTexteTrajetV(dent));
+    const jeanne = d.contacts.find(function (c) { return c.id === 'demo_v_jeanne'; });
+    if (jeanne) ajouter(tcDemoTexteInvitationV(jeanne));
+    [1, 2, 3].forEach(function (n) { ajouter(tcDemoTexteConfianceV(n)); });
+    const prenom = (typeof userAccount !== 'undefined' && userAccount && userAccount.firstname) || '';
+    d.contacts.forEach(function (c) {
+      if (c.langue === 'en' || c.langue === 'es') {
+        ['retard', 'Bonjour ' + c.firstname + ', ' + prenom + ' me demande de te dire : je l’appelle mardi soir.', ''].forEach(function (t) { ajouter(tcDemoTexteLangueV(c, c.langue, tcDemoTraductionV(t, c.langue))); });
+      }
+      if (typeof TC_DEMO_V_ROUTES !== 'undefined' && TC_DEMO_V_ROUTES[c.id]) ajouter(tcDemoTexteRouteV(c, TC_DEMO_V_ROUTES[c.id]));
+    });
+  } catch (e) {}
+  return l;
+}
+
+/** Vidéo 5 : trois créneaux pour déjeuner avec Julien ; il en choisit un, le rendez-vous entre dans l'agenda. */
+async function tcDemoSceneCreneauxV() {
+  const etat = _tcDemo;
+  const j = tcDemoChoixJulienV(events, contactsList, etat.agendas);
+  if (!j) return;
+  const julien = j.julien;
+  await tcEtapeAttente(tcTexteAttente('agenda'));
+  await tcEtapeAttente(tcTexteAttente('consulte', [julien.name]));
+  if (!j.choix.length) { tcDemoDireV(TC_DEMO_V_SCENES_FIXES.midiIntrouvable); return; }
+  await tcEtapeAttente(tcTexteAttente('envoi', [julien.name]), 'envoi');
+  await tcFinEtapes();
+  if (_tcDemo !== etat) return;
+  tcDemoDireV(tcDemoTexteCreneauxV(j.choix));
+  const pris = j.pris;
+  tcDemoReponseDe(julien.referenceCompte, 'Va pour ' + tcDemoQuandV(pris.date, pris.h, pris.m) + ' !', function () {
+    const p = pris.date.split('-').map(Number);
+    const ev = tcDemoRdv('v_julien_' + pris.date, new Date(p[0], p[1] - 1, p[2]), pris.h, pris.m, 60, 'Déjeuner avec Julien', 'famille');
+    ev.exemple = true; ev.contact = julien.id; ev.lieu = '60 rue Oberkampf, 75011 Paris';
+    events.push(ev);
+    j.lui.push({ date: pris.date, debut: pris.h * 60 + pris.m, fin: pris.h * 60 + pris.m + 60 });
+    tcDemoDireV(tcDemoTexteJulienV(pris), [], [ev.id]);
+  });
+}
+
+/** Vidéo 7 : le trajet jusqu'au dentiste, l'heure de départ, « Y aller ». */
+async function tcDemoSceneTrajetV() {
+  const ev = tcDemoDentisteV(events);
+  await tcEtapeAttente(tcTexteAttente('agenda'));
+  await tcEtapeAttente('Charly calcule ton trajet…');
+  await tcFinEtapes();
+  if (!ev) { tcDemoDireV(TC_DEMO_V_SCENES_FIXES.dentisteIntrouvable); return; }
+  tcDemoDireV(tcDemoTexteTrajetV(ev), [['🧭 Y aller', 'tcDemoYAllerV()']], [ev.id]);
+}
+
+/** « Y aller », dans la démonstration : rien ne s'ouvre, on le dit. */
+function tcDemoYAllerV() { showToast('🧭 ' + tcDemoTexte(TC_DEMO_V_SCENES_FIXES.gps)); }
+
+/** Vidéo 8 : les disponibilités par catégorie, le temps libre protégé ; la page « Mes disponibilités ». */
+async function tcDemoSceneDisposV() {
+  await tcEtapeAttente(tcTexteAttente('agenda'));
+  await tcFinEtapes();
+  tcDemoDireV(TC_DEMO_V_SCENES_FIXES.dispos, [['🕘 Ouvrir mes disponibilités', "navigate('dispo')"]]);
 }
 
 /** Vidéo 10 : Jeanne, la voisine, n'a pas TimeCool : l'invitation part (en image), elle s'inscrit. */
@@ -15376,19 +15458,17 @@ async function tcDemoSceneInviterV() {
   const jeanne = contactsList.find(function (c) { return c.id === 'demo_v_jeanne'; });
   if (!jeanne) return;
   await tcEtapeAttente(tcTexteAttente('contacts'));
-  if (jeanne.isTimeCool) { await tcFinEtapes(); tcDemoDireV('Jeanne a déjà TimeCool. Tu la trouves dans « Mes contacts TimeCool ».', [['👥 Voir mes contacts', "navigate('contacts')"]]); return; }
-  const invitation = typeof tcTexteInvitationTimeCool === 'function' ? tcTexteInvitationTimeCool(jeanne) : '';
+  if (jeanne.isTimeCool) { await tcFinEtapes(); tcDemoDireV(TC_DEMO_V_SCENES_FIXES.jeanneDeja, [['👥 Voir mes contacts', "navigate('contacts')"]]); return; }
   await tcEtapeAttente(tcTexteAttente('envoi', [jeanne.name]), 'envoi');
   await tcFinEtapes();
   if (_tcDemo !== etat) return;
-  tcDemoDireV('Jeanne n’a pas encore TimeCool. Je lui envoie l’invitation :\n« ' + invitation + ' »');
+  tcDemoDireV(tcDemoTexteInvitationV(jeanne));
   // Elle répond, et s'inscrit : la voilà parmi tes contacts TimeCool (dans la démonstration seulement).
   jeanne.referenceCompte = 'DEMO-V-JEANNE';
   etat.agendas[jeanne.referenceCompte] = [];
   tcDemoReponseDe(jeanne.referenceCompte, 'Merci, je viens de m’inscrire !', function () {
     jeanne.isTimeCool = true;
-    tcDemoDireV('Jeanne est maintenant sur TimeCool ✓. Tu la trouves dans « Mes contacts TimeCool », et les boutons de tri rangent tes contacts par catégorie.',
-      [['👥 Voir mes contacts', "navigate('contacts')"]]);
+    tcDemoDireV(TC_DEMO_V_SCENES_FIXES.jeanneInscrite, [['👥 Voir mes contacts', "navigate('contacts')"]]);
   });
 }
 
@@ -15396,19 +15476,13 @@ async function tcDemoSceneInviterV() {
 async function tcDemoSceneConfianceV() {
   await tcFinEtapes();
   const n = typeof tcConfianceCharly === 'function' ? tcConfianceCharly(true) : 1;
-  tcDemoDireV('Tu choisis jusqu’où je vais seul, en trois niveaux :\n'
-    + TC_CONFIANCE_PROFILS.map(function (p) { return p.n + '. ' + p.texte; }).join('\n')
-    + '\nAujourd’hui, c’est le niveau ' + n + '. Tu le changes quand tu veux, dans Paramètres : « Ma confiance en Charly ».',
-    [['⚙️ Ouvrir les paramètres', "navigate('settings')"]]);
+  tcDemoDireV(tcDemoTexteConfianceV(n), [['⚙️ Ouvrir les paramètres', "navigate('settings')"]]);
 }
 
 /** Vidéo 12 : gratuit, sans pub, sans cookie ; Maya pour l'aide ; installer l'appli. */
 async function tcDemoSceneGratuitV() {
   await tcFinEtapes();
-  tcDemoDireV('Oui : TimeCool est gratuit, sans publicité et sans cookie.\n'
-    + 'Une question ? Maya, ton aide, te répond dans la messagerie.\n'
-    + 'Pour l’avoir sur ton téléphone ou ton ordinateur : Paramètres, puis « Installer l’application ».',
-    [['💬 Parler à Maya', 'tcDemoMayaV()'], ['⚙️ Ouvrir les paramètres', "navigate('settings')"]]);
+  tcDemoDireV(TC_DEMO_V_SCENES_FIXES.gratuit, [['💬 Parler à Maya', 'tcDemoMayaV()'], ['⚙️ Ouvrir les paramètres', "navigate('settings')"]]);
 }
 
 /** « Parler à Maya » : sa conversation, dans la messagerie. */
@@ -15579,8 +15653,7 @@ function tcDemoServeur() {
       if ((_l === 'en' || _l === 'es') && typeof tcDemoTraductionV === 'function') {
         const r = tcDemoTraductionV(texte, _l);
         tcDemoReponseDe(reference, r.rep, function () {
-          tcDemoDireV(_c.firstname + ' lit et écrit en ' + (_l === 'en' ? 'anglais' : 'espagnol') + '. Je lui ai écrit dans sa langue' + (r.trad ? ' : « ' + r.trad + ' »' : '.')
-            + '\nSa réponse, en français : « ' + r.repFr + ' »');
+          tcDemoDireV(tcDemoTexteLangueV(_c, _l, r));
         });
         return { ok: true };
       }
@@ -15589,7 +15662,7 @@ function tcDemoServeur() {
       if (_tcDemo && _tcDemo.valerie && _c && typeof tcDemoReponseV === 'function') {
         const _route = /retard/i.test(String(texte || '')) && typeof TC_DEMO_V_ROUTES !== 'undefined' ? TC_DEMO_V_ROUTES[_c.id] : '';
         tcDemoReponseDe(reference, tcDemoReponseV(_c, texte), _route ? function () {
-          tcDemoDireV('Pour y aller : ' + _c.name + ', ' + _c.address + ', ' + _route + '.', [['🧭 Y aller', 'tcDemoYAllerV()']]);
+          tcDemoDireV(tcDemoTexteRouteV(_c, _route), [['🧭 Y aller', 'tcDemoYAllerV()']]);
         } : undefined);
         return { ok: true };
       }
@@ -15694,7 +15767,7 @@ function tcDemoTexte(fr) {
 }
 
 /** Tous les textes de la démonstration, traduits d'avance (ligne par ligne). */
-async function tcDemoTraduire() {
+async function tcDemoTraduire(enPlus) {
   const l = (typeof currentLanguage !== 'undefined') ? currentLanguage : 'fr';
   if (!l || l === 'fr' || typeof translateText !== 'function') return;
   const tout = [];
@@ -15705,6 +15778,8 @@ async function tcDemoTraduire() {
   // Démonstration « Valérie » : l'accord, la sortie, ses phrases.
   if (typeof TC_DEMO_V_TEXTES !== 'undefined') Object.keys(TC_DEMO_V_TEXTES).forEach(function (k) { String(TC_DEMO_V_TEXTES[k]).split('\n').forEach(function (x) { tout.push(x); }); });
   if (typeof TC_DEMO_PHRASES_V !== 'undefined') TC_DEMO_PHRASES_V.forEach(function (p) { tout.push(p.texte); });
+  // Chef, 22/11 : les lignes des scènes de Valérie, calculées à l'ouverture (dates, noms, créneaux).
+  if (Array.isArray(enPlus)) enPlus.forEach(function (x) { if (x && tout.indexOf(x) < 0) tout.push(x); });
   try { await Promise.race([Promise.all(tout.map(function (x) { return translateText(x, l); })), new Promise(function (r) { setTimeout(r, 4000); })]); } catch (e) {}
 }
 
@@ -15881,13 +15956,14 @@ async function tcOuvrirDemo(options) {
   // Examen : dans une autre langue, la traduction des textes peut prendre quelques secondes : le bouton le montre.
   const bouton = document.getElementById('tcBoutonDemo');
   if (bouton && typeof currentLanguage !== 'undefined' && currentLanguage && currentLanguage !== 'fr') { bouton.disabled = true; bouton.style.opacity = '0.6'; bouton.textContent = '⏳ ' + bouton.textContent; }
-  await tcDemoTraduire();
-  if (_tcDemo) return;
   // Mission 131 : ouverte dans Charly Pro IA, la démonstration du chirurgien-dentiste.
   const _pro131 = typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro';
   // Démonstration « Valérie » (Charles, 22/11) : après l'accord, ses données (la 107 reste pour les suites qui l'ouvrent sans accord).
   const _valerie = !_pro131 && !!(options && options.valerie) && typeof tcDemoDonneesValerie === 'function';
   const donnees = _pro131 && typeof tcDemoDonneesPro === 'function' ? tcDemoDonneesPro() : (_valerie ? tcDemoDonneesValerie() : tcDemoDonnees());
+  // Chef, 22/11 : les textes des scènes de Valérie sont traduits d'avance avec les autres, avant que le réseau soit coupé.
+  await tcDemoTraduire(_valerie && typeof tcDemoLignesScenesV === 'function' ? tcDemoLignesScenesV(donnees) : null);
+  if (_tcDemo) return;
   const S = Storage.prototype;
   const etat = {
     faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(), occupe: 0, attentes: [], quitterApres: false,
