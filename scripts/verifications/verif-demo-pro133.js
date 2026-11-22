@@ -87,7 +87,7 @@ const js = (pc) => `<script>window.addEventListener('load', function () { setTim
     await neuve(); n0 = charlyIA.history.length; await tcDemoJouer('reunion'); await attendre(2500); R.p5 = tout(n0);
     var i5 = document.getElementById('charlyInput'); i5.value = 'En personne'; await charlySendMessage(); await attendre(9000);
     var g = charlyIA.history.filter(function (m) { return m && m._groupe; }).pop(); R.p5g = g ? (g._groupe.creneaux || []).map(function (c) { return [c.date, c.heure * 60 + (c.minute || 0), (c.heure + (c.duree || 1)) * 60 + (c.minute || 0)]; }) : null; R.ev5 = agenda();
-    await neuve(); var avant6 = agenda(), now6 = new Date(), m6 = now6.getHours() * 60 + now6.getMinutes(), jfin = new Date(); jfin.setDate(jfin.getDate() + (jfin.getDay() === 0 ? 0 : 7 - jfin.getDay()));
+    await neuve(); var avant6 = agenda(), now6 = new Date(), m6 = now6.getHours() * 60 + now6.getMinutes(), jfin = new Date(); jfin.setDate(jfin.getDate() + (jfin.getDay() === 0 ? 7 : 7 - jfin.getDay()));   // un dimanche : jusqu'au dimanche suivant (Charles, 22/11, choix A)
     R.attendus6 = avant6.filter(function (e) { return e[0] >= R.auj && e[0] <= tcISO(jfin) && !(e[0] === R.auj && e[2] <= m6); }).length;
     R.dispo6 = R.dispo0; n0 = charlyIA.history.length; await tcDemoJouer('malade'); await attendre(6000); R.p6 = tout(n0);
     R.p6oui = await oui(); R.p6b = tout(n0); R.avant6 = avant6; R.apres6 = agenda();

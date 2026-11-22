@@ -13,9 +13,9 @@ console.log('-- Dans la page (Chrome) --');
 // Mission 134 : la page joue à 10h du jour même (ses rendez-vous d'aujourd'hui sont placés une heure plus tard) : la suite reste
 // vraie à toute heure (après 21h30, un rendez-vous d'aujourd'hui était déjà fini).
 // Correction de date (chef, 22/11/2026) : le mardi 24/11/2026 à 10h, heure de Paris, quel que soit le jour du passage.
-// Défaut du dimanche signalé, en attente de Charles : un dimanche, « Je suis malade, décale tous mes patients de la semaine » (et le
-// bouton « Toute la semaine ») ne prend que le dimanche même (ici Inès et Nina), pas la semaine qui commence demain (règle de la
-// mission 58). Pas de cas « dimanche » ici tant que ce défaut existe.
+// Défaut du dimanche corrigé (Charles, 22/11, choix A) : un dimanche, « Je suis malade, décale tous mes patients de la semaine » (et
+// le bouton « Toute la semaine ») prennent aujourd'hui ET la semaine qui commence demain, du lundi au dimanche suivants ; Charly dit
+// la période avec ses dates. Le cas « dimanche » est en fin de suite (le dimanche 22/11/2026 à 10h).
 const DIX_HEURES = `<script>(function () { var V = Date, dec = new V(2026, 10, 24, 10, 0, 0).getTime() - V.now();
   class D extends V { constructor(...a) { if (a.length === 0) super(V.now() + dec); else super(...a); } static now() { return V.now() + dec; } }
   window.Date = D; })();</script>`;
@@ -114,11 +114,11 @@ else {
   const SANS = (x) => !/je ne peux|pas bien compris|Lequel|Dans la démonstration, je te montre/.test(x);
   verifie('démonstration, phrase 5 : l’assistante et le prothésiste trouvés, « Par téléphone, en personne ou en visio ? »', /Par téléphone, en personne ou en visio/.test(S.d5) && SANS(S.d5), S.d5);
   verifie('démonstration, phrase 5, « En personne » : « Charly consulte les préférences et les disponibilités de Sophie… », « … de Marc… », puis les créneaux communs', S.statuts5.some(function (x) { return /consulte les préférences et les disponibilités de Sophie/.test(x); }) && S.statuts5.some(function (x) { return /consulte les préférences et les disponibilités de Marc/.test(x); }) && /\[groupe [1-9]/.test(S.d5b) && /vous êtes tous libres \(toi, Sophie et Marc\)/.test(S.d5b) && !/(Samedi|Dimanche) \d/.test(S.d5b) && !/· 8h/.test(S.d5b) && SANS(S.d5b), JSON.stringify([S.statuts5, S.d5b]));
-  verifie('démonstration, phrase 6 : « Tu es malade. Je déplace … rendez-vous », les patients de la semaine', /Tu es malade\. Je déplace \d+ rendez-vous\./.test(S.d6) && /Claire/.test(S.d6) && SANS(S.d6), S.d6);
+  verifie('démonstration, phrase 6 : « Tu es malade. Je déplace … rendez-vous cette semaine, d’aujourd’hui mardi 24 novembre au dimanche 29 novembre. », les patients de la semaine', /Tu es malade\. Je déplace \d+ rendez-vous cette semaine, d’aujourd’hui mardi 24 novembre au dimanche 29 novembre\./.test(S.d6) && /Claire/.test(S.d6) && SANS(S.d6), S.d6);
   verifie('démonstration, phrase 6 : après le oui, leurs choix (vert) et le compte rendu', /VERT C’est bon pour/.test(S.d6b) && /a choisi .*J’ai déplacé/.test(S.d6b), S.d6b.slice(-500));
   verifie('en vrai, phrase 4 : les créneaux libres de vendredi', /Voici ce qui est libre ce vendredi/.test(S.v4) && SANS(S.v4), S.v4);
   verifie('en vrai, phrase 5 sans fiche (décision du chef) : « Je m’en occupe. Je ne trouve pas ton assistante ni ton prothésiste dans tes contacts. », un bouton par personne, puis tes créneaux libres ; jamais le modèle', /Je m’en occupe\. Je ne trouve pas ton assistante ni ton prothésiste dans tes contacts\./.test(S.v5) && /Voici ce qui est libre/.test(S.v5) && JSON.stringify(S.v5boutons) === JSON.stringify(['Ajouter ton assistante', 'Ajouter ton prothésiste']) && SANS(S.v5), JSON.stringify([S.v5, S.v5boutons]));
-  verifie('en vrai, phrase 6 : « Tu es malade. Je déplace … rendez-vous » (les patients de la semaine)', /Tu es malade\. Je déplace \d+ rendez-vous\./.test(S.v6) && SANS(S.v6), S.v6);
+  verifie('en vrai, phrase 6 : « Tu es malade. Je déplace … rendez-vous cette semaine, d’aujourd’hui mardi 24 novembre au dimanche 29 novembre. » (les patients de la semaine)', /Tu es malade\. Je déplace \d+ rendez-vous cette semaine, d’aujourd’hui mardi 24 novembre au dimanche 29 novembre\./.test(S.v6) && SANS(S.v6), S.v6);
   verifie('défaut ancien : « Préviens Paul et Marie que j’ai 10 minutes de retard » prévient les deux (un seul « Je leur envoie ? »)', /Je préviens 2 personnes de ton retard/.test(S.dA) && /Paul Martin/.test(S.dA) && /Marie Durand/.test(S.dA) && /Je leur envoie \?/.test(S.dA) && SANS(S.dA), S.dA);
   verifie('défaut ancien : « Préviens mes clients de demain sauf Paul… » : Marie et Zoé, pas Paul, et la carte le dit', /Je préviens 2 personnes de ton retard, demain/.test(S.dB) && /Marie Durand/.test(S.dB) && /Zoé Petit/.test(S.dB) && !/• Paul Martin/.test(S.dB) && /Je ne préviens pas Paul\./.test(S.dB) && SANS(S.dB), S.dB);
   verifie('une seule personne nommée (« Préviens Paul… ») : le retard d’avant, inchangé', /Je préviens Paul de ton retard/.test(S.dC), S.dC);
@@ -136,6 +136,49 @@ else {
   verifie('mission 132 : « Quand suis-je libre avec ma femme cette semaine ? » : pareil', /Je m’en occupe\. Je ne trouve pas ta femme dans tes contacts\./.test(S.y4) && /Voici ce qui est libre|Je ne vois aucun créneau libre/.test(S.y4) && JSON.stringify(S.y4b) === JSON.stringify(['Ajouter un contact']), JSON.stringify([S.y4, S.y4b]));
   verifie('mission 132 : « Quand suis-je libre avec Paul ? » (une fiche) : jamais « Je ne trouve pas »', !/Je ne trouve pas/.test(S.y5), S.y5);
   verifie('examen 132 : « … , sauf contrordre », « sauf changement » : tout le monde, sans « Je ne trouve pas » (un mot en minuscules n’est pas un prénom)', /Je préviens 3 personnes de ton retard, demain/.test(S.y6) && !/Je ne trouve pas|Contrordre/.test(S.y6) && /Je préviens 3 personnes de ton retard, demain/.test(S.y6b) && !/Je ne trouve pas|Changement/.test(S.y6b), JSON.stringify([S.y6, S.y6b]));
+}
+console.log('-- Un dimanche (le 22/11/2026 à 10h) --');
+{
+  const DIMANCHE = DIX_HEURES.replace('new V(2026, 10, 24, 10, 0, 0)', 'new V(2026, 10, 22, 10, 0, 0)');
+  const jsD = `<script>window.addEventListener('load', function () { setTimeout(async function () {
+  var attendre = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var R = {};
+  try {
+    document.querySelectorAll('#onboardingScreen,[id^=ob],#permissionsScreen,#welcomeSplash').forEach(function (e) { e.style.display = 'none'; });
+    localStorage.setItem('tc_permissions_shown', '1');
+    window.fetch = function () { return Promise.reject(new Error('hors ligne')); };
+    userAccount = { firstname: 'Charles', lastname: 'Haddad', reference: 'REFTEST' };
+    tcCharlyPret = function () { return true; };
+    hideAuthFlow(); navigate('assistant'); await attendre(500);
+    if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 40; TC_ATTENTE_DUREES.vrai = 40; TC_ATTENTE_DUREES.feuilles = 40; TC_ATTENTE_DUREES.consulte = 40; }
+    FEATURES.CHARLY_PRO = true;
+    await tcPasserCharlyVariante('pro', { ouvrir: true }); await attendre(300);
+    await tcOuvrirDemo(); await attendre(400);
+    R.jour = new Date().getDay();
+    R.dates = tcMaladeRdv('semaine').map(function (e) { return e.date; }).sort();
+    R.bouton = TC_MALADE_PERIODES.semaine.texte;
+    var n0 = charlyIA.history.length;
+    await tcDemoJouer('malade'); await attendre(9000);
+    R.d6 = charlyIA.history.slice(n0).filter(function (m) { return m && m.role !== 'user'; }).map(function (m) { return String(m.content || '').replace(/<[^>]+>/g, ' '); }).join(' | ');
+    tcQuitterDemo({ sansRetour: true }); await attendre(300);
+  } catch (e) { R.erreur = String(e && e.stack || e); }
+  var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(R); document.body.appendChild(pre);
+}, 1200); });</script>`;
+  const dossierD = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-131b-dim-'));
+  fs.writeFileSync(path.join(dossierD, 'p.html'), page.replace('<head>', () => '<head>' + DIMANCHE).replace('</body>', () => jsD + '</body>'));
+  const rD = spawnSync(exe, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossierD, 'pr'), '--window-size=390,844', '--virtual-time-budget=60000', '--dump-dom', 'file:///' + path.join(dossierD, 'p.html').replace(/\\/g, '/')], { encoding: 'utf8', timeout: 300000, maxBuffer: 1 << 28, env: Object.assign({}, process.env, { TZ: 'Europe/Paris' }) });
+  try { fs.rmSync(dossierD, { recursive: true, force: true }); } catch (e) {}
+  const mD = (rD.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);
+  let D = null;
+  try { D = mD ? JSON.parse(mD[1].replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')) : null; } catch (e) { D = null; }
+  if (!D || D.erreur) verifie('un dimanche : la page a rejoué la phrase 6', false, D ? D.erreur : (rD.stdout || '').slice(-300));
+  else {
+    const lundi = D.dates.filter(function (d) { return d >= '2026-11-23' && d <= '2026-11-29'; });
+    verifie('un dimanche : « Toute la semaine » prend aujourd’hui (le 22) ET la semaine qui commence demain (du lundi 23 au dimanche 29)',
+      D.jour === 0 && D.dates[0] === '2026-11-22' && lundi.length > 0 && D.dates[D.dates.length - 1] <= '2026-11-29', JSON.stringify(D.dates));
+    verifie('un dimanche, phrase 6 : « Je déplace N rendez-vous cette semaine, d’aujourd’hui dimanche 22 novembre au dimanche 29 novembre. », tous ces patients',
+      new RegExp('Tu es malade\\. Je déplace ' + D.dates.length + ' rendez-vous cette semaine, d’aujourd’hui dimanche 22 novembre au dimanche 29 novembre\\.').test(D.d6.replace(/\u00a0/g, ' ')), D.dates.length + ' / ' + D.d6.slice(0, 400));
+  }
 }
 if (!ok && !ko) { console.log('NON JOUÉ : 0 vérification'); process.exit(1); }
 console.log((ko ? ko + ' anomalie(s)' : 'OK') + ' : ' + ok + ' vérifications');

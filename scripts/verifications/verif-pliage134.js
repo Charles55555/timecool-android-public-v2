@@ -122,7 +122,7 @@ else {
   // A. Le récapitulatif.
   const jr = lignesVues(S.recap.vu).filter((l) => JOUR.test(l) && / rendez-vous à décaler$/.test(l));
   const totalJr = jr.reduce((t, l) => t + Number((l.match(/ : (\d+) rendez-vous/) || [])[1] || 0), 0);
-  verifie('récapitulatif avant le « oui » (50 patients) : « Je déplace 50 rendez-vous », une ligne par jour (« Lundi 23 : 2 rendez-vous à décaler »…), aucun rendez-vous listé', /Tu es malade\. Je déplace 50 rendez-vous\./.test(S.recap.vu) && jr.length >= 2 && totalJr === 50 && rdvVus(S.recap.vu) === 0 && /Je leur envoie \?/.test(S.recap.vu), JSON.stringify([jr, totalJr, rdvVus(S.recap.vu)]));
+  verifie('récapitulatif avant le « oui » (50 patients) : « Je déplace 50 rendez-vous », une ligne par jour (« Lundi 23 : 2 rendez-vous à décaler »…), aucun rendez-vous listé', /Tu es malade\. Je déplace 50 rendez-vous(?: cette semaine, d’aujourd’hui [^.]+)?\./.test(S.recap.vu) && jr.length >= 2 && totalJr === 50 && rdvVus(S.recap.vu) === 0 && /Je leur envoie \?/.test(S.recap.vu), JSON.stringify([jr, totalJr, rdvVus(S.recap.vu)]));
   verifie('récapitulatif : « Voir le détail » dans la bulle, au-dessus de « Oui, envoie » ; le message garde tout son texte (50 rendez-vous)', S.recap.plie && S.recap.boutonDansBulle && rdvVus(S.recap.contenu) === 50, JSON.stringify([S.recap.plie, S.recap.boutonDansBulle, rdvVus(S.recap.contenu)]));
   verifie('récapitulatif : « Voir le détail » déplie tout avant le « oui » (les 50 rendez-vous)', rdvVus(S.recapOuvert) >= 50, rdvVus(S.recapOuvert));
   // A. Après le « oui ».

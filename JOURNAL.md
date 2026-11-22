@@ -4137,3 +4137,15 @@ Charles, 22/11 : chaque vidéo doit pouvoir être jouée et filmée dans la dém
 - Le rythme reste celui de la mission 108 : chaque message part l'un après l'autre (bulle et feuilles), « C'est fait », puis chaque réponse arrive l'une après l'autre.
 - Rien ne sort : aucun appel réseau, aucun lien ouvert, aucune trace après « Tout supprimer ».
 - Nouvelle suite verif-demo-videos : les 12 vidéos dans Chrome, sans réseau. Elle est rouge sur 61f2ad8. verif-demo-valerie suit les 12 phrases et le café avec le restaurant.
+
+## 22/11/2026 — Le défaut du dimanche, et le souvenir de « remets-les » quand le chiffrement manque (CODEUR)
+
+Charles, 22/11 (choix A, transmis par le chef) : un dimanche, « Je suis malade, décale tous mes rendez-vous (ou patients) de la semaine » et le bouton « Toute la semaine » prennent aujourd'hui ET la semaine qui commence demain, du lundi au dimanche suivants (règle de la mission 58). Avant, ils ne prenaient que le dimanche même.
+- TC_MALADE_PERIODES.semaine : un dimanche, d'aujourd'hui au dimanche suivant (7 jours après). Les autres jours, comme avant : d'aujourd'hui à dimanche.
+- Charly dit la période avec ses dates : « Tu es malade. Je déplace 9 rendez-vous cette semaine, d'aujourd'hui dimanche 22 novembre au dimanche 29 novembre. ».
+  - Même chose dans « Voici tes rendez-vous … » et « Rien à décaler … ».
+- Les autres parcours qui lisent « cette semaine » passent par tcPeriodeAgenda, qui suit déjà la mission 58 : un dimanche, du lundi au dimanche suivants. Ils ne changent pas. Seul « malade » prend aussi le dimanche même (choix A de Charles).
+- Examen (remède d'une ligne) : quand le chiffrement manque (échec, ou résultat sans « tcenc: »), le souvenir de « remets-les » s'efface. Sinon, un « remets-les » après une fermeture repartait d'un geste plus ancien. Un échec en retard n'efface jamais le souvenir d'un geste plus récent.
+- verif-demo-pro131b : le cas « dimanche » revient. Le dimanche 22/11 à 10h, la phrase 6 prend le 22, puis du lundi 23 au dimanche 29, avec les dates dites. La phrase 6 du mardi lit aussi la période datée.
+- verif-remets-les : 4 vérifications du chiffrement qui manque.
+- verif-demo-pro133 attendait, un dimanche, les seuls patients du dimanche (le défaut lui-même). Elle attend maintenant ceux du dimanche suivant aussi. verif-pliage134 lit « Je déplace 50 rendez-vous », suivi au besoin de la période datée.

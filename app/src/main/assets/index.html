@@ -20253,9 +20253,11 @@ function tcGarderMarcheArriere() {
     if (!_tcMarcheArriere.t) _tcMarcheArriere.t = Date.now();
     const compte = tcCompteMarcheArriere(), t = _tcMarcheArriere.t, clair = JSON.stringify(_tcMarcheArriere);
     Promise.resolve(typeof tcEncrypt === 'function' ? tcEncrypt(clair) : null).then(function (chiffre) {
-      if (numero !== _tcGarderMarcheArriereNumero || typeof chiffre !== 'string' || chiffre.indexOf('tcenc:') !== 0) return;
+      if (numero !== _tcGarderMarcheArriereNumero) return;
+      // Examen (22/11) : pas de chiffrement, pas de souvenir : l'ancien ne doit pas survivre au nouveau geste.
+      if (typeof chiffre !== 'string' || chiffre.indexOf('tcenc:') !== 0) { localStorage.removeItem(cle); return; }
       localStorage.setItem(cle, JSON.stringify({ compte: compte, t: t, chiffre: chiffre }));
-    }).catch(function () {});
+    }).catch(function () { if (numero === _tcGarderMarcheArriereNumero) { try { localStorage.removeItem(cle); } catch (e) {} } });
   } catch (e) {}
 }
 /** Mémoire vide (l'appli a été fermée) : ce que l'appareil a gardé pour ce compte, déchiffré, même trop vieux (tcMarcheArriere
@@ -32578,6 +32580,8 @@ function tcQuestionnaireRecap(r) {
   if (tcRecapEnvoi(r)) {
     const _carte131 = tcCarteEnvoiCreneaux({
       malade: r._parcours === 'malade', imprevu: r._parcours === 'imprevu131',
+      // Charles, 22/11 : « Toute la semaine » est dite avec ses dates (un dimanche : aujourd'hui, puis du lundi au dimanche suivants).
+      periode: r.periode === 'semaine' && typeof TC_MALADE_PERIODES !== 'undefined' && TC_MALADE_PERIODES.semaine ? TC_MALADE_PERIODES.semaine.label : '',
       items: r._creneaux,
       deplaces: r._liste.filter(function (x) { return x.p && !tcContactDuRdv(x.ev) && !tcEstRdvAPlusieurs(x.ev); }),
       groupes: r._liste.filter(function (x) { return x.p && tcEstRdvAPlusieurs(x.ev); }).map(function (x) { return x.ev; }),
@@ -33126,7 +33130,7 @@ function tcCarteEnvoiCreneaux(o) {
     lignes.push('Je lui envoie ?');
     return { lignes: lignes, envoi: true };
   }
-  lignes.push(debut + 'Je déplace ' + total + ' rendez-vous.');
+  lignes.push(debut + 'Je déplace ' + total + ' rendez-vous' + (o.periode ? ' ' + o.periode : '') + '.');
   lignes.push(libre);
   deplaces.forEach(function (x) { lignes.push('« ' + x.ev.title + ' » : ' + tcJourLisible(x.p.date) + ', ' + heure(x.p) + '.'); });
   groupes.forEach(function (e) { lignes.push('« ' + e.title + ' » avec ' + tcPrenomsInvites(e) + ' : je les préviens. Il reste à sa place.'); });
@@ -33925,8 +33929,10 @@ const TC_MALADE_PERIODES = {
   aujourdhui_demain: { texte: 'Aujourd’hui et demain',   label: 'pour aujourd’hui et demain',  jours: [0, 1], debut: 0,   fin: 1440, mots: /aujourd.*demain/, cache: true },
   // « malade après-demain » dit dans la phrase (TESTEURS, 03/11) : pas de bouton de plus.
   apres_demain:     { texte: 'Après-demain',               label: 'après-demain',                jours: [2, 2], debut: 0,   fin: 1440, mots: /apres.?demain/, cache: true },
-  // Mission 110 : « cette semaine » : d'aujourd'hui à dimanche.
-  semaine:          { texte: 'Toute la semaine',           label: 'cette semaine',               get jours() { const j = new Date().getDay(); return [0, j === 0 ? 0 : 7 - j]; }, debut: 0, fin: 1440, mots: /semaine/, cache: true }
+  // Mission 110 : « cette semaine » : d'aujourd'hui à dimanche. Charles, 22/11 (choix A) : un dimanche, aujourd'hui ET la semaine
+  // qui commence demain, du lundi au dimanche suivants (règle de la mission 58). Charly dit la période avec ses dates.
+  semaine:          { texte: 'Toute la semaine',           get label() { return typeof tcLabelSemaineMalade === 'function' ? tcLabelSemaineMalade() : 'cette semaine'; },
+    get jours() { const j = new Date().getDay(); return [0, j === 0 ? 7 : 7 - j]; }, debut: 0, fin: 1440, mots: /semaine/, cache: true }
 };
 
 // Mission 146 : un jour de la semaine dit dans la phrase (« mercredi », « jeudi après-midi », « mercredi prochain ») : jour_N,
@@ -33949,6 +33955,15 @@ const TC_MALADE_PERIODES = {
       jours: [n, n], get debut() { return midi(); }, fin: 1440, get mots() { return new RegExp(nom(n) + '.*(apres.?midi|aprem)'); }, cache: true };
   }
 })();
+
+/** « cette semaine, d'aujourd'hui dimanche 22 novembre au dimanche 29 novembre » : la période de « Toute la semaine », datée. */
+function tcLabelSemaineMalade() {
+  const NOMS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  const dit = function (n) { const d = new Date(); d.setDate(d.getDate() + n); return NOMS[d.getDay()] + ' ' + (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + MOIS[d.getMonth()]; };
+  const j = new Date().getDay();
+  return 'cette semaine, d’aujourd’hui ' + dit(0) + ' au ' + dit(j === 0 ? 7 : 7 - j);
+}
 
 /** « Malade » dans la phrase : le questionnaire guidé, jamais le modèle. Une question (« comment… ? ») n'en est pas une. */
 function tcDetecterMalade(text) {

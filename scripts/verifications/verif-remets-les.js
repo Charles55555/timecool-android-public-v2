@@ -283,6 +283,38 @@ if (!res || res.erreur || !res.r1 || !res.cas) {
   verifie('démonstration : rien n’est gardé sur l’appareil', C.demo && C.demo.cle === false, JSON.stringify(C.demo));
   verifie('Charly Pro IA : sa propre clé (timecool_charly_marche_arriere_pro)', C.pro && C.pro.pro && !C.pro.ia, JSON.stringify(C.pro));
 }
-console.log('');
-console.log(ko ? ko + ' anomalie(s) sur ' + (ok + ko) + '.' : 'OK : ' + ok + ' vérifications.');
-process.exit(ko ? 1 : 0);
+// Examen (22/11) : sans chiffrement, pas de souvenir. L'ancien ne survit pas à un nouveau geste (« remets-les » après une fermeture
+// partirait d'un geste plus ancien) ; mais un échec en retard n'efface jamais le souvenir d'un geste plus récent.
+(async function () {
+  titre('4. Le chiffrement manque');
+  const vm = require('vm');
+  const corps = (nom) => { const d = page.indexOf('function ' + nom + '('); if (d < 0) return ''; let n = 0; for (let j = page.indexOf('{', d); j < page.length; j++) { if (page[j] === '{') n++; else if (page[j] === '}' && --n === 0) return page.slice(d, j + 1); } return ''; };
+  const stock = {};
+  const ctx = vm.createContext({ Promise: Promise, JSON: JSON, Date: Date, setTimeout: setTimeout,
+    localStorage: { getItem: (k) => (k in stock ? stock[k] : null), setItem: (k, v) => { stock[k] = String(v); }, removeItem: (k) => { delete stock[k]; } } });
+  vm.runInContext('var _tcGarderMarcheArriereNumero = 0; var _tcMarcheArriere = null; var tcEncrypt = null;'
+    + ' function tcDemoMarcheArriere() { return false; } function tcCleMarcheArriere() { return "k"; } function tcCompteMarcheArriere() { return "REF"; }\n' + corps('tcGarderMarcheArriere'), ctx);
+  const tic = () => new Promise((r) => setTimeout(r, 60));
+  stock.k = 'ancien';
+  vm.runInContext('_tcMarcheArriere = { rdvs: [1] }; tcEncrypt = function () { return Promise.reject(new Error("clé absente")); }; tcGarderMarcheArriere();', ctx);
+  await tic();
+  const rejet = !('k' in stock);
+  stock.k = 'ancien';
+  vm.runInContext('tcEncrypt = function () { return Promise.resolve(null); }; tcGarderMarcheArriere();', ctx);
+  await tic();
+  const vide = !('k' in stock);
+  vm.runInContext('tcEncrypt = function () { return Promise.resolve("tcenc:abc"); }; tcGarderMarcheArriere();', ctx);
+  await tic();
+  const garde = /"chiffre":"tcenc:abc"/.test(stock.k || '');
+  vm.runInContext('var _n = 0; tcEncrypt = function () { _n++; return _n === 1 ? new Promise(function (r, x) { setTimeout(function () { x(new Error("lent")); }, 20); }) : Promise.resolve("tcenc:neuf"); };'
+    + ' tcGarderMarcheArriere(); tcGarderMarcheArriere();', ctx);
+  await tic();
+  const recent = /"chiffre":"tcenc:neuf"/.test(stock.k || '');
+  verifie('le chiffrement échoue (promesse rejetée) : l’ancien souvenir s’efface', rejet);
+  verifie('le chiffrement ne rend rien de chiffré : l’ancien souvenir s’efface', vide);
+  verifie('le chiffrement marche : le souvenir est gardé, chiffré', garde, stock.k);
+  verifie('un échec en retard n’efface pas le souvenir d’un geste plus récent', recent, stock.k);
+  console.log('');
+  console.log(ko ? ko + ' anomalie(s) sur ' + (ok + ko) + '.' : 'OK : ' + ok + ' vérifications.');
+  process.exit(ko ? 1 : 0);
+})();
