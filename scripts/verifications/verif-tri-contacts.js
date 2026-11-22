@@ -5,9 +5,16 @@
 // - Rangé dans deux catégories, un contact est sous les deux ; « Non classés » = aucune des cinq catégories.
 // - Le tri se combine avec la recherche et avec « Mes contacts récents » ; « N contacts » en haut à droite reste le total.
 // - Catégorie vide : une phrase simple. Le choix n'est pas gardé d'une visite à l'autre.
-// - Téléphone : une seule ligne qui glisse au doigt, rien ne déborde à 320 px. PC : sur la ligne de « + Ajouter » si elle y tient.
 // - Les libellés passent par la traduction de la page, y compris après un toucher.
-// Le vrai parcours dans Chrome, sans réseau, sur un compte d'essai et des contacts d'essai ; quatre largeurs : 320, 360, 800, 1600.
+// Retouche (Charles, 22/11, « pas assez claire comme ça ») :
+// - Deux lignes, toujours, sur PC comme sur téléphone : « Importer mes contacts » et le bouton vert, puis les catégories,
+//   seules. La rangée ne remonte plus jamais sur la ligne des deux boutons.
+// - Le bouton vert : « + Ajouter un contact manuellement » (et les aides de Charly et de Maya le nomment ainsi).
+// - Téléphone (360 et 320 px) : les deux boutons côte à côte, ils se partagent la largeur, même hauteur, texte sur deux
+//   lignes au plus dedans ; rien ne déborde. La rangée glisse toujours au doigt.
+// - Boutons des catégories : une seule taille, la même sur PC et téléphone, environ les deux tiers d'avant (34 → 24 px).
+// - Le compteur « N contacts » reste visible en entier, à 1600 px et moins.
+// Le vrai parcours dans Chrome, sans réseau, sur un compte d'essai et des contacts d'essai ; cinq largeurs : 320, 360, 800, 1000, 1600.
 // Usage : node verif-tri-contacts.js <index.html>
 const fs = require('fs');
 const path = require('path');
@@ -55,14 +62,20 @@ async function dansLaPage(D) {
   const boutonTimeCool = () => Array.prototype.slice.call(document.querySelectorAll('#contactsContent button')).find((b) => /Mes contacts TimeCool/.test(b.textContent));
   const boite = (e) => { const r = e.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom) }; };
   const rgb = (hex) => { const h = hex.replace('#', ''); return 'rgb(' + [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)).join(', ') + ')'; };
+  // Lignes de texte dans un bouton : les hauts distincts des morceaux de texte.
+  const lignesDe = (e) => { const g = document.createRange(); g.selectNodeContents(e); const h = new Set(); Array.prototype.forEach.call(g.getClientRects(), (x) => { if (x.width > 0) h.add(Math.round(x.top)); }); return h.size; };
   const mesure = () => {
     const tete = document.getElementById('ctEnTete'), tri = document.getElementById('ctTri'), cpt = document.getElementById('ctCompte');
     if (!tete || !tri || !cpt) return { absent: true };
-    const btn = tete.querySelectorAll(':scope > button');
+    const btn = Array.prototype.slice.call(tete.querySelectorAll('button')).filter((b) => !tri.contains(b));
+    if (btn.length < 2) return { absent: true, boutons: btn.length };
     const main = document.querySelector('#page-contacts .main'), cc = document.getElementById('contactsContent');
+    const s = rang()[1] ? getComputedStyle(rang()[1]) : {};
     return {
-      mode: tri.dataset.mode || '', tete: boite(tete), imp: boite(btn[0]), aj: boite(btn[1]), compte: boite(cpt), tri: boite(tri),
+      tete: boite(tete), imp: boite(btn[0]), aj: boite(btn[1]), compte: boite(cpt), tri: boite(tri),
+      ajTexte: btn[1].textContent.trim(), impLignes: lignesDe(btn[0]), ajLignes: lignesDe(btn[1]),
       lignes: Array.from(new Set(rang().map((b) => Math.round(b.getBoundingClientRect().top)))).length,
+      hauteurs: rang().map((b) => Math.round(b.getBoundingClientRect().height)), police: s.fontSize,
       glisse: tri.scrollWidth > tri.clientWidth + 1,
       deborde: main.scrollWidth > main.clientWidth + 1 || document.documentElement.scrollWidth > window.innerWidth + 1 || cc.scrollWidth > cc.clientWidth + 1,
       dernier: boite(rang()[rang().length - 1])
@@ -83,14 +96,18 @@ async function dansLaPage(D) {
     R.depart = { textes: textes(), presses: presses(), fiches: fiches().length, compte: compte(), mesure: mesure() };
     if (!D.complet || R.depart.mesure.absent) {
       if (D.largeur >= 1000 && !R.depart.mesure.absent) {
-        // La fenêtre rétrécit (ici : la zone des contacts) : la rangée redescend, puis remonte. Dans l'appli, l'observation de
-        // taille appelle tcPlacerTri à l'image suivante ; ce Chrome d'essai (temps simulé) ne dessine aucune image, elle n'y part
-        // jamais : on appelle ce qu'elle appelle (son branchement est vérifié dans le texte de la page).
+        // La zone des contacts rétrécit (fenêtre à côté d'une autre) : la rangée reste dessous, repliée, sans déborder.
         const cc = document.getElementById('contactsContent');
-        cc.style.width = '700px'; cc.style.boxSizing = 'border-box'; tcPlacerTri(); await attendre(100);
+        cc.style.width = '700px'; cc.style.boxSizing = 'border-box'; await attendre(100);
         R.etroit = mesure();
-        cc.style.width = ''; tcPlacerTri(); await attendre(100);
-        R.large = mesure();
+        cc.style.width = ''; await attendre(100);
+      }
+      if (D.largeur <= 360 && !R.depart.mesure.absent) {
+        // Des libellés plus longs, comme une traduction (allemand) : toujours côte à côte, rien ne déborde.
+        const long = { '📱 Importer mes contacts': '📱 Meine Kontakte importieren', '+ Ajouter un contact manuellement': '+ Einen Kontakt manuell hinzufügen' };
+        document.querySelectorAll('#ctEnTete button').forEach((b) => { const k = b.textContent.trim(); if (long[k]) b.textContent = long[k]; });
+        await attendre(100);
+        R.traduit = mesure();
       }
       fin(R); return;
     }
@@ -101,7 +118,7 @@ async function dansLaPage(D) {
     R.couleurs = rang().map((b) => { const s = getComputedStyle(b); return { fond: s.backgroundColor, bord: s.borderTopColor, texte: s.color }; });
     R.palette = {};
     ['travail', 'sante', 'famille', 'amis', 'sport', 'perso'].forEach((k) => { const p = TC_COULEURS_CATEGORIES[k]; R.palette[k] = { bg: rgb(p.bg), color: rgb(p.color), texte: rgb(p.texte) }; });
-    R.bleu = getComputedStyle(document.querySelector('#ctEnTete > button')).backgroundColor;
+    R.bleu = getComputedStyle(document.querySelector('#ctEnTete button[onclick^="importPhoneContacts"]')).backgroundColor;
     // Chaque bouton.
     R.sous = {};
     for (const cle of ['famille', 'amis', 'travail', 'sport', 'sante', 'non_classes', 'tous']) {
@@ -293,38 +310,68 @@ if (T.erreur || !T.depart) {
 }
 
 titre('9. La place à l’écran');
+const present = (L, X) => {
+  const bon = X && !X.erreur && X.depart && !X.depart.mesure.absent;
+  if (!bon) verifie(L + ' px : les deux boutons et la rangée sont dans la page', false, X && (X.erreur || JSON.stringify(X.depart)));
+  return bon;
+};
+// Le compteur en entier : ni coupé à droite, ni hors de l'en-tête.
+const compteEntier = (m) => m.compte.l >= m.tete.l && m.compte.r <= m.tete.r + 1 && m.compte.r - m.compte.l >= 60;
+const tailles = {};
 const telephone = (L, X) => {
-  if (!X || X.erreur || !X.depart || X.depart.mesure.absent) { verifie(L + ' px : la rangée est dans la page', false, X && (X.erreur || JSON.stringify(X.depart))); return; }
+  if (!present(L, X)) return;
   const m = X.depart.mesure;
-  verifie(L + ' px : « Importer mes contacts » et « + Ajouter » sur la même ligne, le compte à droite, comme avant', m.imp.t === m.aj.t && Math.abs(m.compte.r - m.tete.r) <= 1 && m.compte.t >= m.imp.b, JSON.stringify(m));
-  verifie(L + ' px : la rangée est dessous, sur une seule ligne', m.mode === 'dessous' && m.tri.t >= m.compte.b && m.lignes === 1, m.mode + ', ' + m.lignes + ' ligne(s)');
-  verifie(L + ' px : elle glisse au doigt, sans rien faire déborder', m.glisse === true && m.deborde === false && m.tri.l >= m.tete.l && m.tri.r <= m.tete.r, JSON.stringify(m));
+  tailles[L] = m;
+  verifie(L + ' px : le bouton vert s’appelle « + Ajouter un contact manuellement »', m.ajTexte === '+ Ajouter un contact manuellement', m.ajTexte);
+  verifie(L + ' px : les deux boutons côte à côte, même hauteur, ils se partagent la largeur', m.imp.t === m.aj.t && m.imp.b === m.aj.b && m.imp.r < m.aj.l
+    && Math.abs(m.imp.l - m.tete.l) <= 1 && Math.abs(m.aj.r - m.tete.r) <= 1 && m.imp.r - m.imp.l >= 100, JSON.stringify({ imp: m.imp, aj: m.aj, tete: m.tete }));
+  verifie(L + ' px : le texte de chacun tient sur deux lignes au plus, dans le bouton', m.impLignes <= 2 && m.ajLignes <= 2, m.impLignes + ' / ' + m.ajLignes);
+  verifie(L + ' px : le compteur, entier, à droite sous les boutons', compteEntier(m) && Math.abs(m.compte.r - m.tete.r) <= 1 && m.compte.t >= m.imp.b, JSON.stringify({ compte: m.compte, tete: m.tete }));
+  verifie(L + ' px : les catégories dessous, seules, sur une seule ligne', m.tri.t >= m.compte.b && m.tri.t >= m.aj.b && m.lignes === 1, m.lignes + ' ligne(s), ' + JSON.stringify(m.tri));
+  verifie(L + ' px : elles glissent au doigt, sans rien faire déborder', m.glisse === true && m.deborde === false && m.tri.l >= m.tete.l && m.tri.r <= m.tete.r, JSON.stringify(m));
+  if (L !== 320) return;
+  const t = X.traduit;
+  verifie(L + ' px : des libellés plus longs (traduction) : toujours côte à côte, rien ne déborde', t && !t.absent && t.imp.t === t.aj.t && t.imp.b === t.aj.b
+    && t.aj.r <= t.tete.r + 1 && t.deborde === false && compteEntier(t), JSON.stringify(t));
 };
 telephone(360, T);
 telephone(320, jouer(320, false));
+const pc = (L, X) => {
+  if (!present(L, X)) return;
+  const m = X.depart.mesure;
+  tailles[L] = m;
+  const ligne1 = Math.max(m.imp.b, m.aj.b, m.compte.b);
+  verifie('PC ' + L + ' px : ligne 1, « Importer mes contacts » et « + Ajouter un contact manuellement », le compteur à droite', m.imp.t === m.aj.t && m.imp.r < m.aj.l
+    && m.ajTexte === '+ Ajouter un contact manuellement' && m.impLignes === 1 && m.ajLignes === 1
+    && m.compte.t >= m.imp.t - 2 && m.compte.b <= m.imp.b + 2 && Math.abs(m.compte.r - m.tete.r) <= 1, JSON.stringify(m));
+  verifie('PC ' + L + ' px : le compteur, entier', compteEntier(m), JSON.stringify({ compte: m.compte, tete: m.tete }));
+  verifie('PC ' + L + ' px : ligne 2, les catégories seules : elles ne remontent pas sur la ligne des boutons', m.tri.t >= ligne1 && Math.abs(m.tri.l - m.tete.l) <= 1 && m.lignes === 1, JSON.stringify(m.tri) + ', ' + m.lignes + ' ligne(s)');
+  verifie('PC ' + L + ' px : rien ne glisse ni ne déborde', m.glisse === false && m.deborde === false, JSON.stringify(m));
+  return X;
+};
 {
-  const X = jouer(1600, false);
-  if (!X || X.erreur || !X.depart || X.depart.mesure.absent) verifie('PC 1600 px : la rangée est dans la page', false, X && (X.erreur || JSON.stringify(X.depart)));
-  else {
-    const m = X.depart.mesure;
-    verifie('PC 1600 px : sur la ligne de « + Ajouter », le compte toujours à droite', m.mode === 'ligne' && m.tri.l > m.aj.r && m.compte.l > m.tri.r && Math.abs(m.compte.r - m.tete.r) <= 1
-      && Math.abs((m.tri.t + m.tri.b) / 2 - (m.imp.t + m.imp.b) / 2) <= 3 && m.lignes === 1, JSON.stringify(m));
-    verifie('PC 1600 px : rien ne glisse ni ne déborde', m.glisse === false && m.deborde === false, JSON.stringify(m));
-    verifie('la fenêtre rétrécit : la rangée redescend sous les boutons, sans déborder', X.etroit && X.etroit.mode !== 'ligne' && X.etroit.tri.t >= X.etroit.imp.b && X.etroit.deborde === false && X.etroit.glisse === false, JSON.stringify(X.etroit));
-    verifie('et remonte quand elle s’élargit', X.large && X.large.mode === 'ligne', JSON.stringify(X.large));
-    verifie('la place est remesurée seule : l’observation de taille (en-tête et rangée) appelle tcPlacerTri à l’image suivante',
-      /new ResizeObserver\(function \(\) \{\s*if \(_tcTriImage\) return;\s*_tcTriImage = requestAnimationFrame\(function \(\) \{ _tcTriImage = 0; tcPlacerTri\(\); \}\);/.test(page)
-      && page.indexOf("_tcTriObservateur.observe(document.getElementById('ctEnTete'));") > -1 && page.indexOf("_tcTriObservateur.observe(document.getElementById('ctTriRang'));") > -1);
-  }
+  const X = pc(1600, jouer(1600, false));
+  if (X) verifie('la zone des contacts rétrécit (700 px) : les catégories restent dessous, repliées, sans déborder ; le compteur reste entier', X.etroit && !X.etroit.absent
+    && X.etroit.tri.t >= Math.max(X.etroit.imp.b, X.etroit.aj.b) && X.etroit.lignes <= 2 && X.etroit.deborde === false && X.etroit.glisse === false && compteEntier(X.etroit), JSON.stringify(X.etroit));
 }
+pc(1000, jouer(1000, false));
 {
   const X = jouer(800, false);
-  if (!X || X.erreur || !X.depart || X.depart.mesure.absent) verifie('PC 800 px : la rangée est dans la page', false, X && (X.erreur || JSON.stringify(X.depart)));
-  else {
+  if (present(800, X)) {
     const m = X.depart.mesure;
-    verifie('PC 800 px : pas la place sur la ligne : dessous, en deux lignes au plus, rien qui glisse ni déborde', m.mode !== 'ligne' && m.tri.t >= m.imp.b && m.lignes <= 2 && m.glisse === false && m.deborde === false, JSON.stringify(m));
+    verifie('PC 800 px : les catégories dessous, en deux lignes au plus, rien qui glisse ni déborde ; le compteur entier', m.tri.t >= Math.max(m.imp.b, m.aj.b, m.compte.b)
+      && m.lignes <= 2 && m.glisse === false && m.deborde === false && compteEntier(m), JSON.stringify(m));
   }
 }
+{
+  const a = tailles[360], b = tailles[1600];
+  verifie('les boutons des catégories : une seule taille, la même sur PC et sur téléphone, environ les deux tiers d’avant (34 → 24 px, texte 11 px)',
+    a && b && a.police === '11px' && b.police === '11px' && a.hauteurs.every((h) => h >= 22 && h <= 26) && JSON.stringify(a.hauteurs) === JSON.stringify(b.hauteurs),
+    a && b && (a.police + ' ' + JSON.stringify(a.hauteurs) + ' / ' + b.police + ' ' + JSON.stringify(b.hauteurs)));
+}
+verifie('les aides de Charly et de Maya nomment le bouton « + Ajouter un contact manuellement », jamais plus « + Ajouter » seul',
+  !/«[  ]\+ Ajouter[  ]»/.test(page) && (page.match(/«[  ]\+ Ajouter un contact manuellement[  ]»/g) || []).length >= 6
+  && page.indexOf("'+ Ajouter un contact manuellement', 'Enregistrer'") > -1);
 
 console.log('');
 console.log(ko ? ko + ' anomalie(s) sur ' + (ok + ko) + ' vérifications.' : 'OK : ' + ok + ' vérifications.');

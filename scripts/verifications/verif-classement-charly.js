@@ -1271,12 +1271,12 @@ verifie('« où est mon rdv ? » et « c’est où ? » : question d information
 
     // 3. « comment j'ajoute un contact » (#243) : le vrai chemin.
     const aide = ['comment j’ajoute un contact', 'Comment ajouter un contact ?', 'comment je fais pour créer un nouveau contact', 'je veux ajouter un contact', 'ajoute un contact', 'où j’ajoute un contact ?', 'Comment on ajoute des contacts dans l’appli ?'];
-    const sansChemin = aide.filter((p) => { const r = classer(p); return !(r.classe === 'aide' && r.nature === 'reponse' && /^Menu ☰ > Mes contacts, puis le bouton vert « \+ Ajouter » en haut de la page/.test(r.question)); });
+    const sansChemin = aide.filter((p) => { const r = classer(p); return !(r.classe === 'aide' && r.nature === 'reponse' && /^Menu ☰ > Mes contacts, puis le bouton vert « \+ Ajouter un contact manuellement » en haut de la page/.test(r.question)); });
     const imp = classer('comment j’importe mes contacts ?');
-    verifie('« comment j’ajoute un contact » et ses variantes (' + aide.length + ') → « Menu ☰ > Mes contacts, puis le bouton vert « + Ajouter » … » (une réponse) ; « comment j’importe mes contacts ? » → « … « 📱 Importer mes contacts » … »',
+    verifie('« comment j’ajoute un contact » et ses variantes (' + aide.length + ') → « Menu ☰ > Mes contacts, puis le bouton vert « + Ajouter un contact manuellement » … » (une réponse) ; « comment j’importe mes contacts ? » → « … « 📱 Importer mes contacts » … »',
       !sansChemin.length && imp.classe === 'aide' && /^Menu ☰ > Mes contacts, puis le bouton « 📱 Importer mes contacts »/.test(imp.question), sansChemin.map((p) => p + ' → ' + classer(p).classe).join(' | ') + ' | ' + imp.question);
-    verifie('le chemin dit existe dans la page : « Mes contacts » au menu, « + Ajouter » et « Importer mes contacts » en haut de la page Contacts, « Enregistrer » au formulaire',
-      page.indexOf("{id:'contacts', icon:'👥', label:'Mes contacts'}") > -1 && page.indexOf('onclick="addContactManually()"') > -1 && page.indexOf('+ Ajouter</button>') > -1 && page.indexOf(' Importer mes contacts</button>') > -1 && page.indexOf('>Enregistrer') > -1);
+    verifie('le chemin dit existe dans la page : « Mes contacts » au menu, « + Ajouter un contact manuellement » et « Importer mes contacts » en haut de la page Contacts, « Enregistrer » au formulaire',
+      page.indexOf("{id:'contacts', icon:'👥', label:'Mes contacts'}") > -1 && page.indexOf('onclick="addContactManually()"') > -1 && page.indexOf('+ Ajouter un contact manuellement</button>') > -1 && page.indexOf(' Importer mes contacts</button>') > -1 && page.indexOf('>Enregistrer') > -1);
     const pasAide = ['ajoute le numéro de Hugo', 'comment ajouter un rdv', 'ajoute Paul à mes contacts', 'comment j’ajoute un rendez-vous avec Paul'].filter((p) => classer(p).classe === 'aide');
     verifie('« ajoute le numéro de Hugo », « comment ajouter un rdv », « ajoute Paul à mes contacts » ne sont pas l’aide', !pasAide.length, pasAide.join(' | '));
 

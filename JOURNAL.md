@@ -4047,3 +4047,29 @@ Charles, 22/11 : sous « Importer mes contacts » et « + Ajouter », une rangé
 - Nouvelle suite verif-tri-contacts : 56 vérifications. Elle joue le vrai parcours dans Chrome (compte et contacts d'essai, sans réseau), à 360, 320, 800 et 1600 px. Elle est rouge sur 8dc9f56 (45 KO).
   - Limite : ce Chrome d'essai (temps simulé) ne dessine aucune image, donc l'observation de taille n'y part jamais. La suite appelle tcPlacerTri à la main et vérifie son branchement.
   - Vérifié à part, dans un vrai Chrome (captures) : à 1600 px sur la ligne, à 1000 px dessous, à 700 px repliée, puis de nouveau sur la ligne à 1600 px.
+
+## 22/11/2026 — Rangée de tri de « Mes contacts » retouchée : deux lignes, toujours (CODEUR)
+
+Charles a vu la rangée (864d2e9) sur son PC : « pas assez claire comme ça ».
+- Deux lignes, toujours, sur PC comme sur téléphone :
+  - ligne 1 : « 📱 Importer mes contacts » et le bouton vert (avec, sur PC, le compteur à droite) ;
+  - ligne 2 : les boutons des catégories, seuls.
+  - La rangée ne remonte plus jamais sur la ligne des boutons. tcPlacerTri, l'observation de taille et l'image suivante sont supprimés : plus rien à mesurer, la feuille de style suffit.
+  - Sur un PC trop étroit (600 px et plus), la rangée se replie. Sous 600 px, elle glisse au doigt, comme avant.
+- Le bouton vert s'appelle « + Ajouter un contact manuellement ».
+  - La traduction de la page (16 langues) le prend comme les autres textes.
+  - Les aides le nomment ainsi : Charly (3 réponses), la FAQ de Maya et la hotline Q5.1 / Q5.2.
+- Téléphone, 360 et 320 px compris : les deux boutons sont côte à côte et se partagent la largeur (2 pour 3, le vert a le texte le plus long). Ils ont la même hauteur, et leur texte passe sur deux lignes dedans.
+  - À parts égales, le vert passait sur trois lignes à 320 px.
+  - Avec des libellés plus longs (essai en allemand), un bouton peut passer sur trois lignes, mais rien ne déborde.
+- Boutons des catégories : une seule taille, la même sur PC et sur téléphone, environ les deux tiers d'avant.
+  - 24 px de haut au lieu de 34, texte en 11 px au lieu de 12,5, écart de 5 px au lieu de 6.
+  - Compromis convenu avec Charles (« deux fois plus petit ») pour rester facile à toucher du doigt.
+- Le compteur « 👥 N contacts » ne rétrécit plus : s'il manque de place, il passe à la ligne, en entier.
+  - Sur téléphone, il garde sa place d'avant : seul, à droite, sous les deux boutons.
+  - Vérifié entier de 320 à 2400 px.
+  - La coupure vue par Charles ne s'est pas reproduite avec 864d2e9 dans mon Chrome à 1600 px.
+- Inchangé : nombres, couleurs, « Non classés », recherche, récents, réglette, traduction après un toucher.
+- verif-tri-contacts : 69 vérifications, rouge sur 864d2e9 (11 KO).
+  - Contrôlé : la place à 320, 360, 800, 1000 et 1600 px, une zone de contacts rétrécie à 700 px, des libellés longs à 320 px, la taille des catégories, et l'absence de « + Ajouter » seul dans les aides.
+  - verif-classement-charly suit le nouveau nom.
