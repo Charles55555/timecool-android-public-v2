@@ -4,6 +4,10 @@
 //   et rappelé par Charly ; sans lieu dit, rien n'est inventé en vrai ;
 // - démonstration : une adresse d'exemple à Paris pour chaque rendez-vous, « En visio » / « Par téléphone » sans trajet,
 //   « Temps de trajet » répond avec une durée d'exemple depuis le 12 rue du Commerce (15e), sans aucun appel extérieur.
+// Correction de date (chef, 22/11/2026) : la page joue le mardi 24/11/2026 à 10h, heure de Paris, quel que soit le jour du passage.
+// Un dimanche, le test du doigt était rouge à tort : le rendez-vous visé (« demain ») tombe un lundi, dans la première colonne de la
+// semaine, et le « voisin de gauche » posé la veille est dans la semaine d'avant, hors de l'écran ; la gauche est libre, l'appli y met
+// 👉 sans rien recouvrir. Un cas « dimanche » le vérifie (dimanche 22/11 à 10h).
 // Usage : node verif-lieu-avec.js <index.html> <backend/api/index.php>   (TC_CHROME : Chrome sans tête)
 const fs = require('fs');
 const path = require('path');
@@ -121,13 +125,20 @@ const js = `<script>window.addEventListener('load', function () { setTimeout(asy
   } catch (e) { R.erreur = String(e && e.stack || e); }
   fin(R);
 }, 1200); });</script>`;
-const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-118-'));
-fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('</body>', () => js + '</body>'));
-const r = spawnSync(exe, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=390,844', '--virtual-time-budget=120000', '--dump-dom', 'file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')], { encoding: 'utf8', timeout: 600000, maxBuffer: 1 << 28 });
-try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
-const m = (r.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);
-let S = null;
-try { S = m ? JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')) : null; } catch (e) { S = null; }
+const JOUR_FIXE = '2026-11-24T10:00:00', DIMANCHE = '2026-11-22T10:00:00';
+const horloge = (iso) => `<script>(function () { var V = Date, dec = new V(${JSON.stringify(iso)}).getTime() - V.now();
+  class D extends V { constructor(...a) { if (a.length === 0) super(V.now() + dec); else super(...a); } static now() { return V.now() + dec; } }
+  window.Date = D; })();</script>`;
+let r = null;
+const jouer = (iso) => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-118-'));
+  fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + horloge(iso)).replace('</body>', () => js + '</body>'));
+  r = spawnSync(exe, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=390,844', '--virtual-time-budget=120000', '--dump-dom', 'file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')], { encoding: 'utf8', timeout: 600000, maxBuffer: 1 << 28, env: Object.assign({}, process.env, { TZ: 'Europe/Paris' }) });
+  try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
+  const m = (r.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);
+  try { return m ? JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')) : null; } catch (e) { return null; }
+};
+const S = jouer(JOUR_FIXE);
 if (!S) { verifie('la page a rejoué le parcours', false, (r.stdout || r.stderr || '').slice(-300)); }
 else {
   if (S.erreur) verifie('aucune erreur', false, S.erreur);
@@ -143,6 +154,10 @@ else {
   verifie('démonstration : aucun appel extérieur', S.exterieur === 0, S.exterieur);
   verifie('le doigt passe au-dessus (👇), avec le même espace, quand la colonne de gauche est prise', S.dessus && S.dessus[0] === '👇' && S.dessus[1] >= 10 && S.dessus[1] <= 28 && S.dessus[3] === false, JSON.stringify(S.dessus));
   verifie('à gauche et au-dessus pris : le doigt va ailleurs (👈 à droite, sinon 👆 en dessous), sans recouvrir de voisin', S.droite && (S.droite[0] === '👈' || S.droite[0] === '👆') && S.droite[3] === false, JSON.stringify(S.droite));
+  // Un dimanche (chef, 22/11) : « demain » est lundi, première colonne ; la veille n'est pas à l'écran, la gauche est libre.
+  const D = jouer(DIMANCHE);
+  verifie('un dimanche (22/11) : le rendez-vous de lundi est en première colonne, rien à sa gauche : le doigt 👉 à gauche, sans recouvrir de voisin, avec ou sans le dessus pris',
+    D && !D.erreur && D.dessus && D.dessus[0] === '👉' && D.dessus[3] === false && D.droite && D.droite[0] === '👉' && D.droite[3] === false, JSON.stringify(D ? [D.dessus, D.droite, D.erreur] : null));
   verifie('en vrai : « Avec » montre tous les invités', /Avec[\s\S]*Marc, Lou/i.test(S.ficheVrai || ''), S.ficheVrai);
   verifie('en vrai, sans lieu dit : rien n’est inventé', /Dentiste/.test(S.vraiSansLieu) && !/📍/.test(S.vraiSansLieu) && !/Wagram/.test(S.vraiSansLieu), S.vraiSansLieu);
 }

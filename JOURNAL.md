@@ -3944,3 +3944,20 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Une journée passée déjà enregistrée reste : rien n'est effacé seul. Elle est marquée « (date passée) » à l'étape et au récapitulatif.
   - verif-config-regles148 compte 21 vérifications, dont 2 rouges sur 7013bb2.
   - Le chef a validé les choix : une seule série de règles pour l'établissement, un délai de 15 min à 2 jours, un horizon de 7 jours à 1 an, et le sous-titre « étape par étape ».
+
+## 22/11/2026 — Trois suites rouges un dimanche : fixées à mardi 10h, après diagnostic (CODEUR)
+
+- Ce dimanche matin, verifier.sh était rouge sur trois suites, déjà rouges sur 61ffac2, la version publiée. Avant de fixer la date, le chef a demandé qui avait tort un dimanche : le test, ou l'appli.
+- verif-phrases-tiktok, phrase 5 (« cette semaine, après le boulot ») : le test avait tort.
+  - Un dimanche, l'appli suit la règle de la mission 58 : « cette semaine » est la semaine qui commence demain. Elle propose mardi, mercredi et jeudi à 18h.
+  - Le test croyait que « cette semaine » un dimanche ne contenait que ce dimanche.
+  - Il joue maintenant le mardi 24/11 à 10h. Un cas « dimanche 22/11 » attend des créneaux du lundi 23 au dimanche 29, à 18h ou après : 37 vérifications.
+- verif-lieu-avec, le doigt : le test avait tort.
+  - Un dimanche, le rendez-vous visé (« demain ») tombe un lundi, dans la première colonne de la semaine. Le voisin de gauche posé la veille est dans la semaine d'avant, hors de l'écran.
+  - La gauche est donc libre, et l'appli y met 👉 sans rien recouvrir.
+  - La suite joue maintenant le mardi 24/11 à 10h. Un cas « dimanche » attend 👉 à gauche, sans recouvrir de voisin : 18 vérifications.
+- verif-demo-pro131b, phrase 6 : l'appli a tort. Défaut du dimanche signalé, en attente de Charles.
+  - Un dimanche, « Je suis malade, décale tous mes patients de la semaine » ne déplace que les patients du dimanche même (Inès et Nina), aucun du lundi au samedi.
+  - Le bouton « Toute la semaine » fait pareil. Le parcours « malade » lit « la semaine » comme « d'aujourd'hui à dimanche », pas selon la règle de la mission 58.
+  - Rien n'est corrigé dans l'appli. La suite joue le mardi 24/11 à 10h, sans cas « dimanche » tant que le défaut existe (décision du chef).
+- Dans les trois suites, Chrome tourne à l'heure de Paris (TZ Europe/Paris). Rien d'autre ne change.

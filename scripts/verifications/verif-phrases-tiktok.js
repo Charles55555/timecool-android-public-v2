@@ -1,6 +1,9 @@
 // Mission 110 (Charles, 17/11 16h25) : les six phrases de TikTok, TAPÉES mot pour mot, aboutissent toutes, dans la
 // démonstration (seules, et juste après une autre proposition en cours) et en vrai. « Quel type de professionnel ? »
 // ne sort jamais quand un prénom de contact est dans la phrase ; un contact inconnu : « Je m'en occupe. Je ne trouve pas … ».
+// Correction de date (chef, 22/11/2026) : la page joue le mardi 24/11/2026 à 10h, heure de Paris, quel que soit le jour du passage.
+// Un dimanche, la suite était rouge à tort : « cette semaine » y est la semaine qui commence demain (règle de la mission 58), et le
+// test la croyait réduite au dimanche même. Un cas « dimanche » le vérifie (dimanche 22/11 à 10h : du lundi 23 au dimanche 29).
 // Usage : node verif-phrases-tiktok.js <index.html>
 const fs = require('fs');
 const path = require('path');
@@ -32,7 +35,11 @@ const exe = candidats.find((x) => { try { return fs.existsSync(x); } catch (e) {
 if (!exe) {
   console.log('  (non joué : pas de Chrome sur ce poste ; à rejouer avec TC_CHROME sur un poste qui en a un)');
 } else {
-  const jouer = (corps) => {
+  const JOUR_FIXE = '2026-11-24T10:00:00', DIMANCHE = '2026-11-22T10:00:00';
+  const horloge = (iso) => `<script>(function () { var V = Date, dec = new V(${JSON.stringify(iso)}).getTime() - V.now();
+  class D extends V { constructor(...a) { if (a.length === 0) super(V.now() + dec); else super(...a); } static now() { return V.now() + dec; } }
+  window.Date = D; })();</script>`;
+  const jouer = (corps, iso) => {
     const js = `<script>window.addEventListener('load', function () { setTimeout(async function () {
       var attendre = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
       var fin = function (res) { var pre = document.createElement('pre'); pre.id = 'res'; pre.textContent = JSON.stringify(res); document.body.appendChild(pre); };
@@ -68,9 +75,9 @@ if (!exe) {
       } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
     }, 1200); });</script>`;
     const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-tiktok-'));
-    fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('</body>', () => js + '</body>'));
+    fs.writeFileSync(path.join(dossier, 'p.html'), page.replace('<head>', () => '<head>' + horloge(iso || JOUR_FIXE)).replace('</body>', () => js + '</body>'));
     const args = ['--headless=new', '--disable-gpu', '--allow-file-access-from-files', '--user-data-dir=' + path.join(dossier, 'pr'), '--window-size=390,844', '--virtual-time-budget=400000', '--dump-dom'];
-    const r = spawnSync(exe, args.concat(['file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')]), { encoding: 'utf8', timeout: 400000, maxBuffer: 1 << 28 });
+    const r = spawnSync(exe, args.concat(['file:///' + path.join(dossier, 'p.html').replace(/\\/g, '/')]), { encoding: 'utf8', timeout: 400000, maxBuffer: 1 << 28, env: Object.assign({}, process.env, { TZ: 'Europe/Paris' }) });
     try { fs.rmSync(dossier, { recursive: true, force: true }); } catch (e) {}
     const m = (r.stdout || '').match(/<pre id="res">([\s\S]*?)<\/pre>/);
     try { return m ? JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&nbsp;/g, '\u00a0')) : {}; } catch (e) { return {}; }
@@ -132,6 +139,14 @@ if (!exe) {
     if (!x[0]) verifie('contact inconnu : « Je m’en occupe. Je ne trouve pas Gérard dans tes contacts. », le bouton « Ajouter Gérard », jamais de questionnaire',
       (S.inconnu || []).some(function (t) { return /^Je m’en occupe\. Je ne trouve pas Gérard dans tes contacts\./.test(t); }) && S.boutonAjouter && !(S.inconnu || []).some(function (t) { return PRO.test(t); }), JSON.stringify([S.inconnu, S.boutonAjouter]));
   });
+
+  // Un dimanche (chef, 22/11) : « cette semaine, … après le boulot » prend la semaine qui commence demain (mission 58), à 18h ou après.
+  {
+    const S = jouer(demo(false), DIMANCHE), p5 = (S.p || [])[4];
+    verifie('5. un dimanche (22/11) : « … cette semaine, … après le boulot » : des créneaux du lundi 23 au dimanche 29 novembre, à partir de 18h, puis calé',
+      p5 && p5.groupes.length === 1 && p5.groupes[0].c.length && p5.groupes[0].c.every(function (c) { return c[1] >= 18 && c[0] >= '2026-11-23' && c[0] <= '2026-11-29'; })
+      && p5.nouveaux.some(function (e) { return /Alice Virtuelle/.test(e[2]) && e[1] >= 18 && e[0] >= '2026-11-23' && e[0] <= '2026-11-29'; }), JSON.stringify(p5 ? [p5.groupes, p5.nouveaux, p5.tout] : S));
+  }
 
   // En vrai (hors démonstration) : une carte proposée en cours, puis « Demande un rendez-vous demain à mon ami Michel » : la carte
   // tombe et Charly cherche les créneaux communs, sans passer par le modèle.
