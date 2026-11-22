@@ -134,8 +134,9 @@ verifie('les noms sont nettoyés dès l\'inscription (prénom et nom)', /'prenom
 
 titre('2. L\'application : titres échappés, éléments reçus assainis');
 const sites = [
-  ['semaine', '<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div>'],
-  ['jour', '<div class="day-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div>'],
+  // Démonstration « Valérie » (22/11) : le mot « Exemple » suit le titre (tcMarqueExemple, texte fixe échappé).
+  ['semaine', '<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span>${typeof tcMarqueExemple === \'function\' ? tcMarqueExemple(e) : \'\'}</div>'],
+  ['jour', '<div class="day-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span>${typeof tcMarqueExemple === \'function\' ? tcMarqueExemple(e) : \'\'}</div>'],
   ['journal d\'activité', "${d.icon || '📋'} ${escapeHTMLSafe(d.title)}</div>"],
   ['carte de proposition', '${escapeHTMLSafe(p.title)}${'],
   ['conflit (nouveau)', '<b>${escapeHTMLSafe(c.newProposal.title)}</b>'],

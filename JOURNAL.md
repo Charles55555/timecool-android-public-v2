@@ -4073,3 +4073,42 @@ Charles a vu la rangée (864d2e9) sur son PC : « pas assez claire comme ça ».
 - verif-tri-contacts : 69 vérifications, rouge sur 864d2e9 (11 KO).
   - Contrôlé : la place à 320, 360, 800, 1000 et 1600 px, une zone de contacts rétrécie à 700 px, des libellés longs à 320 px, la taille des catégories, et l'absence de « + Ajouter » seul dans les aides.
   - verif-classement-charly suit le nouveau nom.
+
+## 22/11/2026 — Démonstration « Valérie », le socle : accord, données, sortie propre (CODEUR)
+
+Charles, 22/11 : une démonstration qui montre tout ce que Charly et TimeCool savent faire, avec des données inventées et cohérentes. Il s'en servira pour filmer 12 vidéos. La démonstration de la 107 évolue, elle n'est pas doublée.
+- C'est le même bac à sable que la 107. Pendant la démonstration, rien n'est écrit sur l'appareil et rien ne sort : réseau coupé, aucun SMS, e-mail ni notification.
+- « Voir la démonstration » : Charly demande d'abord l'accord, avec le texte exact de Charles.
+  - « C'est parti » ouvre la démonstration.
+  - « Pas maintenant » n'ouvre rien : Charly répond « Quand tu veux… ».
+  - Charly Pro IA (le dentiste) n'a pas d'accord à donner et ne change pas.
+- Les données de Valérie (rue de Rivoli, près du Châtelet) :
+  - 25 contacts, ceux de la liste de Charles : 20 avec TimeCool, 5 sans.
+    - Chaque fiche a un prénom, un nom, une adresse, un portable, un e-mail, une catégorie, tu ou vous, et une langue (Sophie en anglais, Maria en espagnol).
+    - Numéros 06 39 98 10 01 à 25, e-mails @exemple-timecool.fr : ils ne peuvent appartenir à personne.
+  - La semaine en cours, du lundi au dimanche, et la suivante (chef : un dimanche soir, il reste des jours devant).
+    - Elles sont recalées à chaque ouverture, avec 3 à 5 rendez-vous par jour, chacun à la couleur de sa catégorie, avec la personne et un lieu à Paris.
+    - Chaque rendez-vous dure au moins une heure (chef : le titre se lit au tournage).
+  - Toujours « Café avec Emma, Chez Marguerite » dans les 25 à 40 minutes, pour « Prévenir d'un retard ».
+  - Les disponibilités d'exemple : actives, « Toujours attendre ma validation » décoché dans la démonstration seulement. Le temps libre protégé couvre le dimanche matin et chaque soir après 21h.
+  - Dans la messagerie, deux demandes en attente : Maman, et Bastien Morel, un inconnu, avec sa carte. « Proposer un créneau » met le rendez-vous dans l'agenda d'exemple, rien ne sort.
+  - Le mot « Exemple » est sur chaque fiche et sur chaque rendez-vous : semaine, jour, mois et détail. Sur un téléphone, la semaine abrège déjà les titres (« d…e ») : le mot s'y cache, il se lit dans le jour, le mois et le détail.
+  - Les phrases : les cinq gestes de la 107, avec les gens de Valérie. Les 12 vidéos viennent au commit suivant.
+- « Stopper la démo » : Charly demande « Tout supprimer » ou « Garder les exemples » (texte exact).
+  - « Tout supprimer » : plus aucune trace, rien n'avait été écrit. Ses contacts, ses rendez-vous et ses réglages reviennent intacts.
+  - « Garder les exemples » : les contacts et les rendez-vous d'exemple rejoignent les vrais, tels qu'à la sortie, sur CET appareil seulement.
+    - Ils ne partent pas au serveur : la synchronisation les ignore et ne les efface pas, la détection des inscrits non plus.
+    - Ils ne sont pas recopiés à l'appairage, et le téléphone ne les rappelle jamais.
+    - Ses disponibilités restent les siennes. Les demandes d'exemple ne sont pas gardées.
+  - « Supprimer les exemples » : sous le message de Charly, et dans Paramètres tant qu'il en reste.
+- Rien n'est jamais envoyé à un exemple (tcEstExemple), dans la démonstration comme après :
+  - côté serveur : message, demande, rendez-vous à plusieurs, proposition de créneaux, convocation ;
+  - côté téléphone : invitation, SMS, e-mail, lien de créneaux.
+  - On voit le message préparé, avec « C'est un exemple : rien n'est envoyé. ».
+  - Examen : une proposition de décalage (« je suis malade » après « Garder ») ne part pas non plus vers un exemple, avec ou sans TimeCool. Pas d'appel, pas de bouton d'envoi, le rendez-vous n'est pas marqué ; le bilan dit « Rien n’est envoyé à un exemple ». Le serveur refuse aussi une proposition qui remplace un rendez-vous demo_, même sans référence.
+- Les données de la 107 restent, pour les 8 suites qui ouvrent la démonstration sans accord. Leur migration viendra plus tard (chef).
+- Nouvelle suite verif-demo-valerie : le parcours complet dans Chrome, sans réseau. Elle est rouge sur 3316858.
+  - verif-demo-charly et verif-accueil-charly : le bouton passe désormais par l'accord.
+  - verif-bulle-choix ouvre la démonstration de la 107 sans l'accord.
+  - verif-campagne1 suit le mot « Exemple » après le titre (titre toujours échappé).
+  - verif-blocage-silence : toute fiche voyage, sauf les exemples gardés.

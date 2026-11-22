@@ -160,7 +160,8 @@ verifie('le menu de la fiche propose « Débloquer l’accès » quand le contac
   vm.runInContext("toggleContactBlock('c1')", ctx);
   verifie('et re-bloque : blocked:true, message « ne t’arrivent plus »', ctx.contactsList[0].blocked === true && /ne t’arrivent plus/.test(ctx.toasts[1]), ctx.toasts[1]);
 }
-verifie('la fiche est synchronisee vers le serveur comme tout contact (la famille « contact » voyage) : le serveur lit blocked', /contact: \{\s+lire: function \(\) \{ return typeof contactsList === 'undefined' \? \[\] : contactsList; \}/.test(page));
+// Démonstration « Valérie » (22/11) : seuls les contacts d'exemple gardés restent sur l'appareil ; toute autre fiche voyage.
+verifie('la fiche est synchronisee vers le serveur comme tout contact (la famille « contact » voyage) : le serveur lit blocked', /contact: \{\s+(?:\/\/[^\n]*\n\s+)?lire: function \(\) \{ return typeof contactsList === 'undefined' \? \[\] : contactsList\.filter\(function \(c\) \{ return !tcEstDemonstration\(c\); \}\); \}/.test(page));
 verifie('vocabulaire calme dans les nouveaux textes', !/sans ton accord|réserver seul/.test(page.slice(page.indexOf('Acc\\u00e8s bloqu\\u00e9.</b>'), page.indexOf('Acc\\u00e8s bloqu\\u00e9.</b>') + 300)));
 
 console.log('');

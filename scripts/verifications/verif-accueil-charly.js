@@ -69,7 +69,7 @@ try { vm.runInContext(code.join('\n'), ctx); } catch (e) { verifie('chargement d
   const seul = vm.runInContext('tcRendreAccueilCharly(tcMessageAccueilCharly(), true)', ctx);
   verifie('seul : au milieu de la page (horizontalement et verticalement)', /id="tcAccueilCharly" style="min-height:100%;[^"]*display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;/.test(seul), seul.slice(0, 300));
   verifie('seul : largeur bornée, rien ne dépasse (retour à la ligne)', /max-width:560px; overflow-wrap:break-word;/.test(seul));
-  verifie('l exemple en texte simple ; un seul bouton : « Voir la démonstration »', (seul.match(/class="tc-accueil-exemple"/g) || []).length === 1 && (seul.match(/<button/g) || []).length === 1 && /<button id="tcBoutonDemo" onclick="tcOuvrirDemo\(\)"[^>]*>Voir la démonstration<\/button>/.test(seul));
+  verifie('l exemple en texte simple ; un seul bouton : « Voir la démonstration »', (seul.match(/class="tc-accueil-exemple"/g) || []).length === 1 && (seul.match(/<button/g) || []).length === 1 && /<button id="tcBoutonDemo" onclick="tcDemanderAccordDemo\(\)"[^>]*>Voir la démonstration<\/button>/.test(seul));   // 22/11 : l'accord d'abord
   verifie('chaque ligne a son bloc', ATTENDU.slice(0, -1).every((l) => seul.indexOf('>' + l + '</div>') > -1));
   const bulle = vm.runInContext('tcRendreAccueilCharly(tcMessageAccueilCharly(), false)', ctx);
   verifie('dans une conversation commencée : la même chose dans une bulle de Charly (le bouton aussi)', /^<bulle>/.test(bulle) && (bulle.match(/tc-accueil-exemple/g) || []).length === 1 && /tcBoutonDemo/.test(bulle) && bulle.indexOf('tcAccueilCharly') < 0);
@@ -116,7 +116,7 @@ try { vm.runInContext(code.join('\n'), ctx); } catch (e) { verifie('chargement d
   verifie('Charly Pro IA : huit lignes, le texte dicté par Charles, mot pour mot (même salutation)', JSON.stringify(lignesPro) === JSON.stringify(ATTENDU_PRO), JSON.stringify(lignesPro));
   const msgPro = vm.runInContext('tcMessageAccueilCharly()', ctx);
   const seulPro = vm.runInContext('tcRendreAccueilCharly(tcMessageAccueilCharly(), true)', ctx);
-  verifie('Charly Pro IA : l accueil rangé est marqué pro, dessiné avec ses lignes, son exemple et le bouton', msgPro.pro === true && msgPro.v === 107 && seulPro.indexOf('Je suis Charly Pro IA') > -1 && seulPro.indexOf('tc-accueil-exemple') > -1 && seulPro.indexOf('mon commercial demain à 15h durant 30 minutes') > -1 && seulPro.indexOf('contacts clients d’exemple') > -1 && seulPro.indexOf('tcOuvrirDemo()') > -1, seulPro.slice(0, 300));
+  verifie('Charly Pro IA : l accueil rangé est marqué pro, dessiné avec ses lignes, son exemple et le bouton', msgPro.pro === true && msgPro.v === 107 && seulPro.indexOf('Je suis Charly Pro IA') > -1 && seulPro.indexOf('tc-accueil-exemple') > -1 && seulPro.indexOf('mon commercial demain à 15h durant 30 minutes') > -1 && seulPro.indexOf('contacts clients d’exemple') > -1 && seulPro.indexOf('tcDemanderAccordDemo()') > -1, seulPro.slice(0, 300));
   ctx.tcCharlyVariante = 'ia';
   const lignesIA = vm.runInContext('tcLignesAccueilCharly()', ctx);
   verifie('Charly IA : son accueil ne change pas d un mot (et n est pas marqué pro)', JSON.stringify(lignesIA) === JSON.stringify(ATTENDU) && !vm.runInContext('tcMessageAccueilCharly()', ctx).pro, JSON.stringify(lignesIA));

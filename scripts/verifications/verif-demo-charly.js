@@ -200,7 +200,9 @@ function monde(jour) {
   }
 
   console.log('-- 7. La page --');
-  verifie('le bouton « Voir la démonstration » ouvre la démonstration', /<button id="tcBoutonDemo" onclick="tcOuvrirDemo\(\)"/.test(page));
+  // Démonstration « Valérie » (Charles, 22/11) : le bouton demande d'abord l'accord, puis ouvre la démonstration (verif-demo-valerie).
+  verifie('le bouton « Voir la démonstration » ouvre la démonstration (après l’accord)', /<button id="tcBoutonDemo" onclick="tcDemanderAccordDemo\(\)"/.test(page)
+    && /return tcOuvrirDemo\(\{ valerie: true \}\);/.test(page));
   verifie('les messages de la démonstration ont leur dessin', /if \(m && m\._demo\) return tcRendreDemo\(m\);/.test(page));
   verifie('« Demande un rendez-vous … à Michel » passe avant le classement et le modèle', page.indexOf('await tcDemanderRdvContact107(text)) return;') > page.indexOf('await tcDemanderDispoContactM65(text)) return;') && page.indexOf('await tcDemanderRdvContact107(text)) return;') < page.indexOf('const _prevenance = tcDetecterPrevenance(text);'));
   verifie('la période (« demain ») va jusqu au serveur', /(?:r = await|return) TC_BACKEND\.proposerRdvGroupe\(references, duree, type, options \|\| undefined\);/.test(page) && /await tcProposerRdvGroupe\(q\.references, q\.duree, '', type, q\.options\);/.test(page));

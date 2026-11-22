@@ -59,6 +59,8 @@ if (!exe) {
       var bd = document.getElementById('tcBoutonDemo'); if (bd) bd.click(); await attendre(1500);
       if (typeof TC_ATTENTE_DUREES !== 'undefined') { TC_ATTENTE_DUREES.demo = 100; TC_ATTENTE_DUREES.feuilles = 100; TC_ATTENTE_DUREES.consulte = 100; }
       R.ouverture = conv();
+      // Démonstration « Valérie » (22/11) : le bouton demande d'abord l'accord ; ce parcours joue la démonstration de la 107.
+      if (typeof tcDemoActive === 'function' && !tcDemoActive()) { await tcOuvrirDemo(); await attendre(1500); }
       // La démonstration : une phrase touchée (une bulle), « Oui, envoie » (une bulle), « En personne », un créneau.
       Array.prototype.filter.call(document.querySelectorAll('.tc-demo-phrase'), function (x) { return x.getAttribute('onclick').indexOf('retard') > -1; })[0].click(); await attendre(2500);
       await cliquer('Oui, envoie'); await attendre(1500);

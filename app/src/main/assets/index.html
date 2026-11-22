@@ -720,6 +720,13 @@ select option { background:#fff; color:#202124; }   /* fenetre native des listes
   #ctBoutons > button:last-child { flex:3 1 0; }
 }
 @media (min-width:600px) { #ctTriRang { flex-wrap:wrap; width:auto; } }
+/* Demonstration « Valerie » (Charles, 22/11) : le mot « Exemple » sur chaque contact et chaque rendez-vous invente. */
+.tc-exemple { display:inline-block; margin-left:5px; padding:0 6px; border-radius:7px; background:#f1f3f4; color:#5f6368;
+  border:1px solid #dadce0; font-size:10px; font-weight:700; line-height:15px; vertical-align:1px; white-space:nowrap; }
+.week-event .tc-exemple, .day-event .tc-exemple, .month-event-pill .tc-exemple { background:rgba(255,255,255,0.88); border-color:transparent;
+  font-size:8.5px; line-height:12px; padding:0 4px; margin-left:3px; }
+/* Semaine sur un telephone : les titres y sont deja abreges (« d…e ») ; le mot se lit dans le jour, le mois et le detail. */
+@media (max-width:599px) { .week-event .tc-exemple { display:none; } }
 </style>
 <!-- PDF.js pour lecture des fichiers PDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -2483,6 +2490,7 @@ function tcProgrammerRappels() {
 
   (events || []).forEach(function (e, index) {
     if (!e || e.mode !== 'user' || !e.date) return;
+    if (typeof tcEstDemonstration === 'function' && tcEstDemonstration(e)) return;   // un exemple gardé ne sonne jamais (chef, 22/11)
     const [an, mois, jour] = String(e.date).split('-').map(Number);
     if (!an || !mois || !jour) return;
     const debut = new Date(an, mois - 1, jour, e.startH || 0, e.startM || 0).getTime();
@@ -4717,7 +4725,7 @@ function renderMonth() {
       dayEvents.slice(0, maxShown).forEach(ev => {
         const color = catColor(ev.cat);
         const startStr = tcHorairePlage(ev);
-        html += `<div class="month-event-pill${tcTexteSombre(color) ? ' chip-texte-sombre' : ''}" style="background:${color};">${startStr} <span class="tc-titre-case">${escapeHTMLSafe(ev.title)}</span></div>`;
+        html += `<div class="month-event-pill${tcTexteSombre(color) ? ' chip-texte-sombre' : ''}" style="background:${color};">${startStr} <span class="tc-titre-case">${escapeHTMLSafe(ev.title)}</span>${typeof tcMarqueExemple === 'function' ? tcMarqueExemple(ev) : ''}</div>`;
       });
       if (dayEvents.length > maxShown) {
         html += `<div class="month-event-more">+${dayEvents.length - maxShown} autres</div>`;
@@ -5112,7 +5120,7 @@ function renderWeek() {
         evt.style.height = `${hb.px}px`;
         evt.style.left = `${50 + di*colWidth + 1}px`;
         evt.style.width = `${colWidth - 2}px`;
-        evt.innerHTML = `<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
+        evt.innerHTML = `<div class="week-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span>${typeof tcMarqueExemple === 'function' ? tcMarqueExemple(e) : ''}</div><div class="week-event-time">${tcHorairePlage(e)}</div>`;
         if (e._dispo133 && colWidth < 90) { const _t133 = evt.querySelector('.tc-titre-case'); if (_t133) _t133.textContent = 'Dispo'; }   // mission 133
         evt.onclick = () => openEventModal(e);
         if (e.id !== undefined && e.id !== null && evt.setAttribute) evt.setAttribute('data-ev-id', String(e.id));   // mission 111 : « Voir dans mon agenda »
@@ -5231,7 +5239,7 @@ function renderDay() {
     const hb = tcHauteurBloc('day', dm);
     if (hb.court) evt.classList.add('bloc-court');
     evt.style.height = `${hb.px}px`;
-    evt.innerHTML = `<div class="day-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span></div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}${tcMarqueDecalage(e) ? ' · en cours de décalage' : ''}</div>`;
+    evt.innerHTML = `<div class="day-event-title">${tcMarqueDecalage(e)}${tcIconeType(e)}<span class="tc-titre-case">${escapeHTMLSafe(e.title)}</span>${typeof tcMarqueExemple === 'function' ? tcMarqueExemple(e) : ''}</div><div class="day-event-time">${String(e.startH).padStart(2,'0')}:${String(e.startM).padStart(2,'0')} – ${String(e.endH).padStart(2,'0')}:${String(e.endM).padStart(2,'0')}${tcMarqueDecalage(e) ? ' · en cours de décalage' : ''}</div>`;
     evt.onclick = () => openEventModal(e);
     tcRendreDeplacable(evt, e, { vue: 'day', pxParMin: 48/60, colWidth: 0, di: 0 });
     body.appendChild(evt);
@@ -5685,7 +5693,8 @@ function tcLigneVideFiche(champ) {
 function openEventModal(e) {
   if (e && e._dispo133 && typeof tcFicheDispo133 === 'function') return tcFicheDispo133(e);   // mission 133
   currentEvent = e;
-  document.getElementById('emTitle').textContent = tcMarqueDecalage(e) + tcIconeType(e) + e.title + (tcMarqueDecalage(e) ? ' (en cours de décalage)' : '');
+  document.getElementById('emTitle').textContent = tcMarqueDecalage(e) + tcIconeType(e) + e.title + (tcMarqueDecalage(e) ? ' (en cours de décalage)' : '')
+    + (e && e.exemple && typeof tcDemoTexte === 'function' ? ' · ' + tcDemoTexte(TC_DEMO_V_TEXTES.exemple) : '');
   const dateStr = tcPeriodeLisible(e);
   // Une journee entiere n'a pas d'horaire : afficher « 00:00 - 23:59 »
   // serait exact et incomprehensible.
@@ -10750,6 +10759,8 @@ function renderSettingsInterne() {
       </div>
     </div>
 
+    ${typeof tcExemplesCadreHTML === 'function' ? tcExemplesCadreHTML() : ''}
+
     <div style="text-align:center; padding:20px; font-size:11px; color:#5f6368; font-style:italic;">
       "Ton temps est la seule ressource que tu ne pourras jamais fabriquer !"
     </div>
@@ -14597,7 +14608,7 @@ function tcRendreAccueilCharly(m, seul) {
     + '</div>';
   if (demo.length >= 3) {
     html += '<div style="margin-top:22px;">' + demo.slice(0, -1).map(ligne).join('')
-      + '<button id="tcBoutonDemo" onclick="tcOuvrirDemo()" style="margin-top:10px; padding:12px 22px; background:var(--g-blue); color:#fff; border:none; border-radius:22px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 3px 10px rgba(26,115,232,0.25);">'
+      + '<button id="tcBoutonDemo" onclick="tcDemanderAccordDemo()" style="margin-top:10px; padding:12px 22px; background:var(--g-blue); color:#fff; border:none; border-radius:22px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 3px 10px rgba(26,115,232,0.25);">'
       + escapeHTML(demo[demo.length - 1]) + '</button></div>';
   }
   if (!seul) return tcBulleCharly(html);
@@ -14690,7 +14701,11 @@ const TC_DEMO_CABINET_131 = '12 rue de la Paix, 75002 Paris';
 /** La démonstration ouverte est-elle celle du chirurgien-dentiste ? */
 function tcDemoPro() { return !!(typeof _tcDemo !== 'undefined' && _tcDemo && _tcDemo.pro); }
 /** Les phrases de la démonstration ouverte. */
-function tcDemoPhrases() { return (typeof tcDemoPro === 'function' && tcDemoPro()) ? TC_DEMO_PHRASES_PRO : TC_DEMO_PHRASES; }
+function tcDemoPhrases() {
+  if (typeof tcDemoPro === 'function' && tcDemoPro()) return TC_DEMO_PHRASES_PRO;
+  // Démonstration « Valérie » (Charles, 22/11) : ses phrases, avec ses contacts.
+  return (typeof _tcDemo !== 'undefined' && _tcDemo && _tcDemo.valerie && typeof TC_DEMO_PHRASES_V !== 'undefined') ? TC_DEMO_PHRASES_V : TC_DEMO_PHRASES;
+}
 
 /** Mission 133 (Charles, 18/11) : les 16 cases de 30 minutes du cabinet d'exemple (9h-13h, 14h-18h), en minutes depuis minuit. */
 const TC_DEMO_CASES133 = [540, 570, 600, 630, 660, 690, 720, 750, 840, 870, 900, 930, 960, 990, 1020, 1050];
@@ -14927,6 +14942,318 @@ function tcDemoDonnees() {
   return { events: evs, contacts: contacts, agendas: agendas };
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   DÉMONSTRATION « VALÉRIE » (Charles, 22/11) : la démonstration de Charly IA montre tout, avec des données inventées et
+   cohérentes (Valérie, rue de Rivoli, près du Châtelet). Elle fait évoluer la 107 : même bac à sable (rien n'est écrit pendant
+   la démonstration, rien ne sort : réseau coupé, aucun SMS, e-mail ni notification).
+   - « Voir la démonstration » : Charly demande d'abord l'accord (texte de Charles) : « C'est parti » · « Pas maintenant ».
+   - 25 contacts complets (20 avec TimeCool, 5 sans), la semaine en cours (lundi-dimanche) et la suivante, recalées à chaque
+     ouverture, un rendez-vous dans l'heure qui vient, les disponibilités d'exemple, deux demandes dans la messagerie (Maman et
+     un inconnu). Chaque contact et chaque rendez-vous porte le mot « Exemple ».
+   - « Stopper la démo » : « Tout supprimer » (rien n'avait été écrit : tout revient comme avant) ou « Garder les exemples » :
+     les contacts et les rendez-vous d'exemple restent sur CET appareil, marqués « Exemple » ; jamais envoyés au serveur ni
+     recopiés à l'appairage, et rien ne leur est jamais envoyé (tcEstExemple) ; « Supprimer les exemples » dans Paramètres.
+   Numéros 06 39 98 10 xx, adresses @exemple-timecool.fr : ils ne peuvent appartenir à personne.
+   ═══════════════════════════════════════════════════════════════ */
+const TC_DEMO_V_TEXTES = {
+  accord: 'Je te montre tout ce que je sais faire ? Pour ça, j’ai besoin de ton accord pour :\n1. ajouter 25 contacts inventés ;\n2. remplir ton agenda d’une semaine de rendez-vous inventés, pour simuler différentes actions ;\n3. simuler le paramétrage de tes disponibilités en fonction de tes contacts.\nPas d’inquiétude : tes vrais contacts et tes vrais rendez-vous ne bougent pas. Quand tu arrêtes la démo, tout peut disparaître d’un seul geste.',
+  oui: 'C’est parti',
+  non: 'Pas maintenant',
+  plusTard: 'D’accord. Quand tu veux, touche « Voir la démonstration ».',
+  intro: 'Voici ton agenda d’exemple : une semaine de rendez-vous et 25 contacts.\nTouche une phrase pour voir ce que je fais.',
+  stopper: 'Stopper la démo',
+  question: 'Tu veux que je supprime tout, ou tu préfères garder ces exemples pour t’en inspirer ? De toute façon, tu pourras les supprimer quand tu voudras.',
+  toutSupprimer: 'Tout supprimer',
+  garder: 'Garder les exemples',
+  supprime: 'C’est fait : tout est supprimé. Tes vrais contacts et tes vrais rendez-vous sont là, comme avant.',
+  garde: 'C’est gardé. Chaque contact et chaque rendez-vous d’exemple porte le mot « Exemple ». Rien ne leur est jamais envoyé.\nPour les enlever : Paramètres, puis « Supprimer les exemples ».',
+  supprimerExemples: 'Supprimer les exemples',
+  exemplesSupprimes: 'Les exemples sont supprimés.',
+  exemple: 'Exemple',
+  rienEnvoye: 'C’est un exemple : rien n’est envoyé.',
+  cadreTitre: 'Exemples de la démonstration',
+  cadreTexte: 'Tu as gardé des contacts et des rendez-vous d’exemple. Ils portent le mot « Exemple ».'
+};
+
+/** Les phrases de la démonstration de Valérie (les mêmes gestes que la 107, avec ses contacts). */
+const TC_DEMO_PHRASES_V = [
+  { id: 'emma', texte: 'Demande un rendez-vous demain à ma copine Emma' },
+  { id: 'retard', texte: 'Préviens Emma que j’aurai 10 minutes de retard' },
+  { id: 'vendredi', texte: 'Quand suis-je libre ce vendredi ?' },
+  { id: 'groupe', texte: 'Trouve un rendez-vous commun avec Emma, Léa et Inès' },
+  { id: 'malade', texte: 'Je suis malade, décale ma journée de demain' }
+];
+
+/** La semaine en cours et la suivante : un dimanche soir, la démonstration a encore des jours devant elle. */
+const TC_DEMO_V_SEMAINES = 2;
+
+/**
+ * Les 25 contacts de Valérie : [clé, prénom, nom, nom affiché, lien, catégorie, vouvoie, adresse, a TimeCool, langue].
+ * Les cinq derniers n'ont pas TimeCool (pour « Inviter sur TimeCool »).
+ */
+const TC_DEMO_V_CONTACTS = [
+  ['philippe', 'Philippe', 'Garnier', '', 'patron', 'travail', true, '40 boulevard Haussmann, 75009 Paris', true],
+  ['sarah', 'Sarah', 'Benali', '', 'collègue', 'travail', false, '15 rue de la Paix, 75002 Paris', true],
+  ['marc', 'Marc', 'Dubois', '', 'collègue', 'travail', false, '88 rue La Fayette, 75010 Paris', true],
+  ['claire', 'Claire', 'Fontaine', 'Dr Claire Fontaine', 'dentiste', 'sante', true, '27 rue de Turbigo, 75003 Paris', true],
+  ['antoine', 'Antoine', 'Mercier', 'Dr Antoine Mercier', 'médecin', 'sante', true, '61 rue Saint-Antoine, 75004 Paris', true],
+  ['monique', 'Monique', 'Roux', '', 'maman', 'famille', false, '142 rue de Vaugirard, 75015 Paris', true],
+  ['julien', 'Julien', 'Roux', '', 'frère', 'famille', false, '73 rue Oberkampf, 75011 Paris', true],
+  ['camille', 'Camille', 'Roux', '', 'sœur', 'famille', false, '18 rue des Martyrs, 75009 Paris', true],
+  ['emma', 'Emma', 'Leroy', '', 'copine', 'amis', false, '45 rue Montorgueil, 75002 Paris', true],
+  ['lea', 'Léa', 'Marchand', '', 'copine', 'amis', false, '102 rue de Charonne, 75011 Paris', true],
+  ['sophie', 'Sophie', 'Carter', '', 'copine', 'amis', false, '14 Camden Road, Londres NW1, Royaume-Uni', true, 'en'],
+  ['ines', 'Inès', 'Moreau', '', 'copine', 'amis', false, '56 rue Mouffetard, 75005 Paris', true],
+  ['thomas', 'Thomas', 'Petit', '', 'copain', 'amis', false, '91 rue de Belleville, 75020 Paris', true],
+  ['lucas', 'Lucas', 'Bernard', '', 'copain', 'amis', false, '35 avenue de Clichy, 75017 Paris', true],
+  ['karim', 'Karim', 'Haddou', '', 'coach sportif', 'sport', false, '120 rue de Rennes, 75006 Paris', true],
+  ['maria', 'Maria', 'Lopez', '', 'prof de yoga', 'sport', false, '22 rue Lepic, 75018 Paris', true, 'es'],
+  ['nicolas', 'Nicolas', 'Durand', 'Salon Nicolas Durand', 'coiffeur', 'amis', true, '210 rue Saint-Honoré, 75001 Paris', true],
+  ['clara', 'Clara', 'Simon', '', 'professeure de piano', 'amis', true, '64 rue de Sèvres, 75007 Paris', true],
+  ['marguerite', '', '', 'Chez Marguerite', 'restaurant', 'amis', true, '9 rue Montorgueil, 75002 Paris', true],
+  ['comptoir', '', '', 'Le Comptoir Bleu', 'bar', 'amis', true, '128 rue Oberkampf, 75011 Paris', true],
+  ['nadia', 'Nadia', 'Cohen', '', 'cliente', 'travail', true, '33 rue de Rome, 75008 Paris', false],
+  ['paul', 'Paul', 'Girard', '', 'kiné', 'sante', true, '50 rue du Temple, 75003 Paris', false],
+  ['hugo', 'Hugo', 'Roux', '', 'cousin', 'famille', false, '77 rue de Tolbiac, 75013 Paris', false],
+  ['jeanne', 'Jeanne', 'Lambert', '', 'voisine', 'amis', false, '118 rue de Rivoli, 75004 Paris', false],
+  ['lison', '', '', 'La Table de Lison', 'restaurant', 'amis', true, '17 rue des Rosiers, 75004 Paris', false]
+];
+
+/** Le bureau de Valérie : les réunions s'y tiennent. */
+const TC_DEMO_V_BUREAU = '40 boulevard Haussmann, 75009 Paris';
+
+/**
+ * Sa semaine : [jour (1 = lundi … 7 = dimanche), heure, minute, durée (minutes), titre, catégorie, avec qui (clés), lieu, type].
+ * Chef, 22/11 : une heure au moins, pour que le titre et le mot « Exemple » se lisent dans la semaine (tournage).
+ * Lieu : une clé de contact (son adresse), une adresse, ou rien (un appel).
+ */
+const TC_DEMO_V_SEMAINE = [
+  [1, 10, 0, 60, 'Réunion d’équipe', 'travail', ['philippe'], 'bureau'],
+  [1, 12, 30, 75, 'Déjeuner avec Sarah Benali', 'travail', ['sarah'], '12 rue de la Paix, 75002 Paris'],
+  [1, 19, 0, 120, 'Dîner chez Maman', 'famille', ['monique'], 'monique'],
+  [2, 9, 30, 60, 'Point client', 'travail', [], 'bureau'],
+  [2, 12, 15, 60, 'Dentiste, Dr Fontaine', 'sante', ['claire'], 'claire'],
+  [2, 18, 30, 60, 'Coach sportif, Karim', 'sport', ['karim'], 'karim'],
+  [2, 20, 30, 60, 'Appel avec Sophie', 'amis', ['sophie'], '', 'telephone'],
+  [3, 10, 0, 60, 'Présentation au patron', 'travail', ['philippe'], 'bureau'],
+  [3, 13, 0, 60, 'Déjeuner avec Julien', 'famille', ['julien'], '60 rue Oberkampf, 75011 Paris'],
+  [3, 18, 0, 60, 'Médecin, Dr Mercier', 'sante', ['antoine'], 'antoine'],
+  [4, 9, 0, 60, 'Réunion d’équipe', 'travail', ['philippe'], 'bureau'],
+  [4, 14, 0, 60, 'Rendez-vous cliente, Nadia Cohen', 'travail', ['nadia'], 'nadia'],
+  [4, 18, 0, 90, 'Verre entre copines au Comptoir Bleu', 'amis', ['emma', 'lea', 'ines'], 'comptoir'],
+  [4, 21, 0, 120, 'Dîner Chez Marguerite avec Emma et Léa', 'amis', ['emma', 'lea'], 'marguerite'],
+  [5, 9, 30, 60, 'Point de la semaine', 'travail', [], 'bureau'],
+  [5, 12, 30, 60, 'Déjeuner avec Camille', 'famille', ['camille'], '24 rue des Martyrs, 75009 Paris'],
+  [5, 17, 30, 60, 'Coiffeur', 'amis', ['nicolas'], 'nicolas'],
+  [5, 19, 30, 90, 'Apéro avec Lucas', 'amis', ['lucas'], '12 rue des Dames, 75017 Paris'],
+  [6, 10, 0, 60, 'Yoga avec Maria', 'sport', ['maria'], 'maria'],
+  [6, 14, 30, 120, 'Shopping avec Emma', 'amis', ['emma'], '101 rue Rambuteau, 75001 Paris'],
+  [6, 20, 0, 150, 'Dîner entre amis', 'amis', ['emma', 'lea', 'thomas', 'lucas'], 'lison'],
+  [7, 11, 30, 150, 'Brunch en famille', 'famille', ['monique', 'julien', 'camille'], 'monique'],
+  [7, 15, 0, 90, 'Balade avec Inès', 'amis', ['ines'], '57 rue Cuvier, 75005 Paris'],
+  [7, 18, 0, 60, 'Appel avec Sophie', 'amis', ['sophie'], '', 'telephone']
+];
+
+/** Ses disponibilités d'exemple, par catégorie (jours : 1 = lundi … 7 = dimanche). « personnel » : le temps libre protégé. */
+function tcDemoDispoValerie() {
+  const p = function (jours, debut, fin) { return { jours: jours, debut: debut, fin: fin }; };
+  const semaine = [1, 2, 3, 4, 5], tous = [1, 2, 3, 4, 5, 6, 7];
+  return {
+    travail: [p(semaine, '09:00', '12:00'), p(semaine, '14:00', '18:00')],
+    sante: [p(semaine, '12:00', '14:00'), p(semaine, '18:00', '19:00')],
+    famille: [p(tous, '19:00', '21:00'), p([7], '11:00', '17:00')],
+    amis: [p([5], '19:00', '23:00'), p([6], '14:00', '23:00')],
+    sport: [p([2, 4], '18:30', '20:00'), p([6], '10:00', '12:00')],
+    personnel: [p([7], '07:00', '12:00'), p(tous, '21:00', '23:59')]
+  };
+}
+
+/** Un contact, un rendez-vous ou une référence de la démonstration de Valérie (gardé ou non) : jamais rien ne lui est envoyé. */
+function tcEstExemple(x) {
+  if (!x) return false;
+  if (typeof x === 'string') return x.indexOf('DEMO-V-') === 0;
+  return x.exemple === true || (typeof x.id === 'string' && x.id.indexOf('demo_v_') === 0)
+    || (typeof x.referenceCompte === 'string' && x.referenceCompte.indexOf('DEMO-V-') === 0);
+}
+
+/** Le mot « Exemple », à côté d'un rendez-vous ou d'un contact inventé (rien pour les autres). */
+function tcMarqueExemple(x) {
+  if (!x || !x.exemple) return '';
+  return '<span class="tc-exemple" data-notranslate>' + escapeHTML(typeof tcDemoTexte === 'function' ? tcDemoTexte(TC_DEMO_V_TEXTES.exemple) : TC_DEMO_V_TEXTES.exemple) + '</span>';
+}
+
+/** Les données de Valérie, placées par rapport à aujourd'hui (fabriquées à l'ouverture, jamais au chargement). */
+function tcDemoDonneesValerie() {
+  const maintenant = new Date();
+  const ilYA = function (minutes) { return new Date(maintenant.getTime() - minutes * 60000).toISOString(); };
+  // Les contacts : fiches complètes, ajoutées il y a deux mois (ils ne sont pas des « contacts récents »).
+  const parCle = {};
+  const contacts = TC_DEMO_V_CONTACTS.map(function (x, i) {
+    const nom = x[3] || (x[1] + ' ' + x[2]);
+    const local = tcSansAccents((x[1] ? x[1] + '.' + x[2] : nom).toLowerCase()).replace(/[^a-z0-9.]+/g, '.').replace(/^\.+|\.+$/g, '');
+    const c = {
+      id: 'demo_v_' + x[0], name: nom, firstname: x[1] || nom, lastname: x[2] || '', phone: '06 39 98 10 ' + String(i + 1).padStart(2, '0'),
+      email: local + '@exemple-timecool.fr', address: x[7], categories: [x[5]], vouvoie: x[6], isTimeCool: x[8], lien: x[4],
+      createdAt: ilYA(60 * 24 * 60), demo: true, exemple: true
+    };
+    if (x[9]) c.langue = x[9];
+    if (x[8]) c.referenceCompte = 'DEMO-V-' + x[0].toUpperCase();
+    parCle[x[0]] = c;
+    return c;
+  });
+  const lieu = function (l) { return l === 'bureau' ? TC_DEMO_V_BUREAU : (parCle[l] ? parCle[l].address : l); };
+  const relier = function (ev, cles) {
+    const avec = cles.map(function (k) { return parCle[k]; }).filter(Boolean);
+    if (avec.length === 1) ev.contact = avec[0].id;
+    else if (avec.length > 1) ev.invites = avec.map(function (c) { return { reference: c.referenceCompte, prenom: c.firstname }; });
+    return ev;
+  };
+  // La semaine en cours, du lundi au dimanche, et la suivante.
+  const lundi = tcDemoJour(-((maintenant.getDay() + 6) % 7));
+  const evs = [];
+  for (let s = 0; s < TC_DEMO_V_SEMAINES; s++) {
+    TC_DEMO_V_SEMAINE.forEach(function (r) {
+      const d = new Date(lundi); d.setDate(lundi.getDate() + s * 7 + r[0] - 1);
+      const ev = tcDemoRdv('v_' + tcISO(d) + '_' + r[1] + 'h' + String(r[2]).padStart(2, '0'), d, r[1], r[2], r[3], r[4], r[5]);
+      ev.exemple = true;
+      if (r[7]) ev.lieu = lieu(r[7]);
+      if (r[8]) ev.type = r[8];
+      evs.push(relier(ev, r[6]));
+    });
+  }
+  // Toujours un rendez-vous dans l'heure qui vient (« Prévenir d'un retard ») : dans 25 à 40 minutes, au quart d'heure.
+  const debut = new Date(Math.ceil((maintenant.getTime() + 25 * 60000) / (15 * 60000)) * 15 * 60000);
+  const bientot = tcDemoRdv('v_bientot', new Date(debut.getFullYear(), debut.getMonth(), debut.getDate()), debut.getHours(), debut.getMinutes(), 60, 'Café avec Emma, Chez Marguerite', 'amis');
+  bientot.exemple = true;
+  bientot.lieu = parCle.marguerite.address;
+  evs.push(relier(bientot, ['emma']));
+  evs.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (a.startH * 60 + a.startM) - (b.startH * 60 + b.startM); });
+  // L'agenda de chaque contact avec TimeCool : les rendez-vous qu'il partage avec Valérie (créneaux communs, réponses).
+  const agendas = {};
+  contacts.forEach(function (c) { if (c.referenceCompte) agendas[c.referenceCompte] = []; });
+  evs.forEach(function (e) {
+    const refs = (e.invites || []).map(function (i) { return i.reference; });
+    const seul = e.contact && contacts.find(function (c) { return c.id === e.contact; });
+    if (seul && seul.referenceCompte) refs.push(seul.referenceCompte);
+    refs.forEach(function (r) { if (agendas[r]) agendas[r].push({ date: e.date, debut: e.startH * 60 + e.startM, fin: e.endH * 60 + e.endM }); });
+  });
+  // La messagerie : deux demandes en attente, de Maman et d'un inconnu (sa carte d'identité, « Proposer un créneau », « Refuser »).
+  const conversations = [
+    { reference: 'DEMO-V-MONIQUE', with: parCle.monique.name, maj: ilYA(40), thread: [
+      { from: 'them', texte: 'Coucou ! Tu viens déjeuner à la maison samedi prochain ?', le: ilYA(40), genre: 'demande_rdv', rdv: 990001, type: 'physique' }
+    ] },
+    { reference: 'DEMO-V-BASTIEN', with: 'Bastien Morel', maj: ilYA(150), thread: [
+      { from: 'them', texte: 'Bonjour ! Je suis Bastien, un ami de Julien. On peut prendre un café ensemble ?', le: ilYA(150), genre: 'demande_rdv', rdv: 990002, type: 'physique',
+        demandeur: { prenom: 'Bastien', nom: 'Morel', telephone: '06 39 98 10 30', email: 'bastien.morel@exemple-timecool.fr', cree_le: ilYA(90 * 24 * 60) } }
+    ] }
+  ];
+  return { events: evs, contacts: contacts, agendas: agendas, conversations: conversations, dispo: tcDemoDispoValerie() };
+}
+
+/** « Voir la démonstration » (Charly IA) : Charly demande d'abord l'accord. Charly Pro IA : la démonstration du dentiste, comme avant. */
+async function tcDemanderAccordDemo() {
+  if (typeof tcDemoActive === 'function' && tcDemoActive()) return;
+  if (typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro') return tcOuvrirDemo();
+  // Dans une autre langue, la traduction des textes peut prendre quelques secondes : le bouton le montre.
+  const bouton = document.getElementById('tcBoutonDemo');
+  if (bouton && typeof currentLanguage !== 'undefined' && currentLanguage && currentLanguage !== 'fr') { bouton.disabled = true; bouton.style.opacity = '0.6'; bouton.textContent = '⏳ ' + bouton.textContent; }
+  await tcDemoTraduire();
+  if (typeof tcDemoActive === 'function' && tcDemoActive()) return;
+  charlyIA.history.push({ role: 'assistant', content: TC_DEMO_V_TEXTES.accord, appText: true, _app: true, _demo: { accord: true } });
+  if (typeof navigate === 'function' && typeof currentPage !== 'undefined' && currentPage !== 'assistant') navigate('assistant');
+  renderCharlyChat();
+}
+
+/** « C'est parti » · « Pas maintenant ». */
+function tcRepondreAccordDemo(oui) {
+  const m = charlyIA.history.filter(function (x) { return x && x._demo && x._demo.accord && !x._demo.repondu; }).pop();
+  if (!m || tcDemoActive()) return;
+  m._demo.repondu = true;
+  charlyIA.history.push({ role: 'user', content: tcDemoTexte(oui ? TC_DEMO_V_TEXTES.oui : TC_DEMO_V_TEXTES.non), _choix: true });
+  if (!oui) {
+    charlyIA.history.push({ role: 'assistant', content: TC_DEMO_V_TEXTES.plusTard, appText: true, _app: true, _demo: {} });
+    renderCharlyChat();
+    return;
+  }
+  renderCharlyChat();
+  return tcOuvrirDemo({ valerie: true });
+}
+
+/** « Stopper la démo » : Charly demande « Tout supprimer » ou « Garder les exemples » (après le message en cours). */
+async function tcDemanderStopDemo() {
+  const etat = _tcDemo;
+  if (!etat) return;
+  if (!etat.valerie) return tcQuitterDemo();
+  await tcDemoAttendre(etat);
+  if (_tcDemo !== etat) return;
+  const ouverte = charlyIA.history.some(function (x) { return x && x._demo && x._demo.stop && !x._demo.repondu; });
+  if (!ouverte) charlyIA.history.push({ role: 'assistant', content: TC_DEMO_V_TEXTES.question, appText: true, _app: true, _demo: { stop: true } });
+  if (typeof currentPage !== 'undefined' && currentPage !== 'assistant') navigate('assistant');
+  renderCharlyChat();
+}
+
+/** « Tout supprimer » · « Garder les exemples ». */
+function tcRepondreStopDemo(garder) {
+  const etat = _tcDemo;
+  if (!etat) return;
+  const m = charlyIA.history.filter(function (x) { return x && x._demo && x._demo.stop && !x._demo.repondu; }).pop();
+  if (m) m._demo.repondu = true;
+  if (!garder) return tcQuitterDemo();
+  // Ce qui reste : les contacts et les rendez-vous d'exemple, tels qu'ils sont à cet instant (un rendez-vous décalé reste décalé).
+  const copie = function (x) { return JSON.parse(JSON.stringify(x)); };
+  tcQuitterDemo({ garder: {
+    contacts: contactsList.filter(function (c) { return c && c.exemple; }).map(copie),
+    events: events.filter(function (e) { return e && e.exemple; }).map(copie)
+  } });
+}
+
+/** Des exemples sont-ils gardés sur cet appareil ? */
+function tcExemplesGardes() {
+  const c = Array.isArray(contactsList) ? contactsList.filter(function (x) { return x && x.exemple; }).length : 0;
+  const e = Array.isArray(events) ? events.filter(function (x) { return x && x.exemple; }).length : 0;
+  return { contacts: c, events: e, total: c + e };
+}
+
+/** « Supprimer les exemples » : les contacts et les rendez-vous d'exemple gardés quittent l'appareil ; le reste ne bouge pas. */
+async function tcSupprimerExemples() {
+  if (typeof tcDemoActive === 'function' && tcDemoActive()) return;
+  contactsList = (contactsList || []).filter(function (c) { return !(c && c.exemple); });
+  events = (events || []).filter(function (e) { return !(e && e.exemple); });
+  saveContacts();
+  try { await saveEventsToStorage(); } catch (e) {}
+  if (typeof showToast === 'function') showToast('🗑️ ' + tcDemoTexte(TC_DEMO_V_TEXTES.exemplesSupprimes));
+  try { if (typeof render === 'function') render(); } catch (e) {}
+  if (typeof currentPage !== 'undefined') {
+    if (currentPage === 'settings' && typeof renderSettings === 'function') renderSettings();
+    if (currentPage === 'contacts' && typeof renderContacts === 'function') renderContacts();
+    if (currentPage === 'assistant' && typeof renderCharlyChat === 'function') renderCharlyChat();
+  }
+}
+
+/** Le cadre de Paramètres : seulement quand des exemples sont gardés. */
+function tcExemplesCadreHTML() {
+  if (typeof tcDemoActive === 'function' && tcDemoActive()) return '';
+  if (!tcExemplesGardes().total) return '';
+  return '<div id="tcCadreExemples" style="background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin:16px 0;">'
+    + '<div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px;">🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_V_TEXTES.cadreTitre)) + '</div>'
+    + '<div style="font-size:12.5px; color:var(--text-sec); line-height:1.5; margin-bottom:10px;">' + escapeHTML(tcDemoTexte(TC_DEMO_V_TEXTES.cadreTexte)) + '</div>'
+    + '<button onclick="tcSupprimerExemples()" style="width:100%; padding:12px; background:#fff; color:var(--g-red); border:1.5px solid #f5b8b3; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer;">🗑️ ' + escapeHTML(tcDemoTexte(TC_DEMO_V_TEXTES.supprimerExemples)) + '</button></div>';
+}
+
+/** Un appel au serveur qui viserait un contact d'exemple (référence DEMO-V-…) : rien ne part. */
+function tcArgumentsExemple(args) {
+  const vise = function (x) {
+    if (!x) return false;
+    if (typeof x === 'string') return tcEstExemple(x);
+    if (Array.isArray(x)) return x.some(function (y) { return typeof y === 'string' ? tcEstExemple(y) : !!(y && typeof y === 'object' && tcEstExemple(String(y.reference || y.referenceCompte || ''))); });
+    // Examen : une proposition de décalage à un contact sans TimeCool n'a pas de référence, mais elle remplace un rendez-vous d'exemple.
+    if (typeof x === 'object') return tcEstExemple(String(x.reference || x.referenceCompte || '')) || (Array.isArray(x.references) && vise(x.references)) || (Array.isArray(x.membres) && vise(x.membres))
+      || (typeof x.remplace === 'string' && x.remplace.indexOf('demo_') === 0);
+    return false;
+  };
+  return Array.prototype.some.call(args, vise);
+}
+
 /** Une plage [debut, fin[ (minutes) de ce jour est-elle libre dans cette liste d'occupations ? */
 function tcDemoLibre(occupations, date, debut, fin) {
   return !occupations.some(function (o) { return o.date === date && o.debut < fin && o.fin > debut; });
@@ -14946,6 +15273,12 @@ function tcDemoServeur() {
   const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   const libelle = function (d) { return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()]; };
   const jourDe = function (iso) { const p = String(iso).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+  // Démonstration « Valérie » : une demande de la messagerie d'exemple traitée, dans la copie de la démonstration.
+  const marquerDemande = function (rdv) {
+    const l = tcConversations();
+    l.forEach(function (c) { (c.thread || []).forEach(function (t) { if (t.rdv === Number(rdv)) t.traite = true; }); });
+    tcPoserConversations(l);
+  };
   return {
     // Comme creneauxCommuns (API) : de 8h à 20h, le meilleur de chaque jour (ou par_jour), trois en tout (ou combien).
     async proposerRdvGroupe(references, duree, type, options) {
@@ -15001,6 +15334,22 @@ function tcDemoServeur() {
       return { ok: true, libelle: libelle(jourDe(date)), heure: String(heure).padStart(2, '0') + ':00', inclus: prenoms, exclus: [], lieu: ev.lieu };
     },
     estConnecte() { return true; },
+    // Démonstration « Valérie » : une demande de la messagerie d'exemple, acceptée (« Proposer un créneau ») ou refusée. Rien ne
+    // sort : le rendez-vous entre dans l'agenda d'exemple, la demande est marquée traitée dans la copie de la démonstration.
+    async proposerCreneauRdv(rdv, date, debut, duree, type) {
+      await new Promise(function (r) { setTimeout(r, 500); });
+      const conv = tcConversations().find(function (c) { return (c.thread || []).some(function (t) { return t.rdv === Number(rdv); }); });
+      const c = conv && contactsList.find(function (x) { return x.referenceCompte === conv.reference; });
+      const h = String(debut || '').split(':').map(Number);
+      const ev = tcDemoRdv('v_demande_' + rdv, jourDe(date), h[0] || 0, h[1] || 0, Number(duree) || 60, 'RDV ' + (conv ? conv.with : ''), c && c.categories && c.categories[0] ? c.categories[0] : 'perso');
+      if (_tcDemo && _tcDemo.valerie) ev.exemple = true;
+      if (type) ev.type = type;
+      if (c) ev.contact = c.id;
+      events.push(ev);
+      marquerDemande(rdv);
+      return { ok: true };
+    },
+    async refuserRdv(rdv) { marquerDemande(rdv); return { ok: true }; },
     async propositions() {
       return _tcDemo ? _tcDemo.propositions.filter(function (p) { return !p.traite && p.etat !== 'attente'; }).map(function (p) { return Object.assign({}, p); }) : [];
     },
@@ -15072,7 +15421,10 @@ function tcDemoBandeau(montrer) {
     b.innerHTML = '<div class="tc-demo-pastille" style="display:inline-flex; align-items:center; gap:10px; ' + ((typeof tcDemoPro === 'function' && tcDemoPro()) ? 'min-height:40px; box-sizing:border-box; padding:5px 5px 5px 14px;' : 'height:40px; box-sizing:border-box; padding:0 5px 0 14px;') + ' background:#1a47d6; color:#fff; border-radius:20px; box-shadow:0 2px 6px rgba(26,71,214,0.28); font-size:14px; font-weight:700; white-space:nowrap;">'
       + ((typeof tcDemoPro === 'function' && tcDemoPro()) ? '<span class="tc-demo-titre-pro" style="text-align:center; line-height:1.25;">🎬 ' + tcDemoTexte(TC_DEMO_TEXTES_PRO.bandeau).split('\n').map(function (x) { return escapeHTML(x); }).join('<br class="tc-demo-coupe"> ') + '</span>'
         : '<span>🎬 ' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.bandeau)) + '</span>')
-      + '<button onclick="tcQuitterDemo()" style="padding:6px 14px; background:#fff; color:#1a47d6; border:none; border-radius:15px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.quitter)) + '</button></div>';
+      // Démonstration « Valérie » : « Stopper la démo », qui demande « Tout supprimer » ou « Garder les exemples ».
+      + ((_tcDemo && _tcDemo.valerie)
+        ? '<button onclick="tcDemanderStopDemo()" style="padding:6px 14px; background:#fff; color:#1a47d6; border:none; border-radius:15px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_V_TEXTES.stopper)) + '</button></div>'
+        : '<button onclick="tcQuitterDemo()" style="padding:6px 14px; background:#fff; color:#1a47d6; border:none; border-radius:15px; font-size:13px; font-weight:700; cursor:pointer;">' + escapeHTML(tcDemoTexte(TC_DEMO_TEXTES.quitter)) + '</button></div>');
     document.body.appendChild(b);
   }
   document.body.style.paddingTop = '';
@@ -15112,6 +15464,9 @@ async function tcDemoTraduire() {
   // Mission 131 : les phrases et les textes du dentiste aussi.
   TC_DEMO_PHRASES.concat(typeof TC_DEMO_PHRASES_PRO !== 'undefined' ? TC_DEMO_PHRASES_PRO : []).forEach(function (p) { tout.push(p.texte); });
   if (typeof TC_DEMO_TEXTES_PRO !== 'undefined') Object.keys(TC_DEMO_TEXTES_PRO).forEach(function (k) { String(TC_DEMO_TEXTES_PRO[k]).split('\n').forEach(function (x) { tout.push(x); }); });
+  // Démonstration « Valérie » : l'accord, la sortie, ses phrases.
+  if (typeof TC_DEMO_V_TEXTES !== 'undefined') Object.keys(TC_DEMO_V_TEXTES).forEach(function (k) { String(TC_DEMO_V_TEXTES[k]).split('\n').forEach(function (x) { tout.push(x); }); });
+  if (typeof TC_DEMO_PHRASES_V !== 'undefined') TC_DEMO_PHRASES_V.forEach(function (p) { tout.push(p.texte); });
   try { await Promise.race([Promise.all(tout.map(function (x) { return translateText(x, l); })), new Promise(function (r) { setTimeout(r, 4000); })]); } catch (e) {}
 }
 
@@ -15124,6 +15479,19 @@ function tcDemoMessagePhrases(texte) {
 function tcRendreDemo(m) {
   const d = m._demo || {};
   let h = escapeHTML(tcDemoTexte(m.content || '')).replace(/\n/g, '<br>');
+  // Démonstration « Valérie » : l'accord (« C'est parti » · « Pas maintenant »), la sortie (« Tout supprimer » · « Garder les
+  // exemples »), et « Supprimer les exemples » sous le message qui dit qu'ils sont gardés.
+  const _bouton = function (geste, texte, plein) {
+    return '<button onclick="' + geste + '" style="flex:1 1 140px; padding:10px 14px; border-radius:16px; font-size:14px; font-weight:700; cursor:pointer; '
+      + (plein ? 'background:var(--g-blue); color:#fff; border:1.5px solid var(--g-blue);' : 'background:#fff; color:var(--g-blue); border:1.5px solid var(--g-blue);') + '">' + escapeHTML(tcDemoTexte(texte)) + '</button>';
+  };
+  const _deux = function (a, b) { return '<div class="tc-demo-choix" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">' + a + b + '</div>'; };
+  if (d.accord && !d.repondu && !_tcDemo) h += _deux(_bouton('tcRepondreAccordDemo(true)', TC_DEMO_V_TEXTES.oui, true), _bouton('tcRepondreAccordDemo(false)', TC_DEMO_V_TEXTES.non, false));
+  if (d.stop && !d.repondu && _tcDemo) h += _deux(_bouton('tcRepondreStopDemo(false)', TC_DEMO_V_TEXTES.toutSupprimer, false), _bouton('tcRepondreStopDemo(true)', TC_DEMO_V_TEXTES.garder, false));
+  if (d.garde && !_tcDemo && typeof tcExemplesGardes === 'function' && tcExemplesGardes().total) {
+    h += '<div style="margin-top:10px;"><button onclick="tcSupprimerExemples()" style="padding:9px 16px; background:#fff; color:var(--g-red); border:1.5px solid #f5b8b3; border-radius:16px; font-size:13px; font-weight:700; cursor:pointer;">🗑️ '
+      + escapeHTML(tcDemoTexte(TC_DEMO_V_TEXTES.supprimerExemples)) + '</button></div>';
+  }
   const derniers = charlyIA.history.filter(function (x) { return x && x._demo && x._demo.phrases; }).pop();
   if (d.phrases && _tcDemo && m === derniers) {
     const restent = (typeof tcDemoPhrases === 'function' ? tcDemoPhrases() : TC_DEMO_PHRASES).filter(function (p) { return !_tcDemo.faites[p.id]; });
@@ -15206,7 +15574,7 @@ function tcDemoQuestionEnCours() {
       || (x._questionType && x._questionType.etat === 'choix') || (x._groupe && x._groupe.etat === 'choix')) return true;
   }
   if (m.role !== 'assistant' && m.role !== 'system_info') return true;
-  if (m._demo) return !!m._demo.phrases;
+  if (m._demo) return !!m._demo.phrases || !!(m._demo.stop && !m._demo.repondu);
   if (m._questionnaire && m._questionnaire.etat === 'choix') return true;
   if (m._reponseCreneau && !m._reponseCreneau._resolu) return true;
   if (m._groupe && m._groupe.etat !== 'fait') return true;
@@ -15265,7 +15633,7 @@ function tcDemoRemplacer(nom, f) {
 }
 
 /** « Voir la démonstration » : les vraies données de côté, les données d'exemple, le stockage et le réseau coupés. */
-async function tcOuvrirDemo() {
+async function tcOuvrirDemo(options) {
   if (_tcDemo) return;
   // Examen : dans une autre langue, la traduction des textes peut prendre quelques secondes : le bouton le montre.
   const bouton = document.getElementById('tcBoutonDemo');
@@ -15274,7 +15642,9 @@ async function tcOuvrirDemo() {
   if (_tcDemo) return;
   // Mission 131 : ouverte dans Charly Pro IA, la démonstration du chirurgien-dentiste.
   const _pro131 = typeof tcCharlyVariante !== 'undefined' && tcCharlyVariante === 'pro';
-  const donnees = _pro131 && typeof tcDemoDonneesPro === 'function' ? tcDemoDonneesPro() : tcDemoDonnees();
+  // Démonstration « Valérie » (Charles, 22/11) : après l'accord, ses données (la 107 reste pour les suites qui l'ouvrent sans accord).
+  const _valerie = !_pro131 && !!(options && options.valerie) && typeof tcDemoDonneesValerie === 'function';
+  const donnees = _pro131 && typeof tcDemoDonneesPro === 'function' ? tcDemoDonneesPro() : (_valerie ? tcDemoDonneesValerie() : tcDemoDonnees());
   const S = Storage.prototype;
   const etat = {
     faites: {}, agendas: donnees.agendas, cale: false, copie: {}, lisibles: tcDemoClesLisibles(), occupe: 0, attentes: [], quitterApres: false,
@@ -15291,6 +15661,17 @@ async function tcOuvrirDemo() {
   };
   _tcDemo = etat;
   etat.pro = _pro131;
+  etat.valerie = _valerie;
+  if (_valerie) {
+    // Ses disponibilités d'exemple (actives : « Toujours attendre ma validation » décoché) et les deux demandes de la messagerie,
+    // dans la copie de la démonstration : les vrais réglages et la vraie messagerie ne sont ni lus ni touchés.
+    etat.copie[TC_DISPO_KEY] = JSON.stringify(donnees.dispo);
+    etat.copie[TC_RDV_VALIDATION_KEY] = '0';
+    etat.copie[TC_CONVERSATIONS_KEY] = JSON.stringify(donnees.conversations);
+    if (typeof _tcRdvTraites !== 'undefined') donnees.conversations.forEach(function (c) { (c.thread || []).forEach(function (t) { if (t.rdv) delete _tcRdvTraites[t.rdv]; }); });
+  }
+  // Les disponibilités en mémoire sont relues (celles de la démonstration ici, les vraies à la sortie).
+  if (typeof _dispoData !== 'undefined') _dispoData = null;
   // Mission 131 : la démonstration du dentiste montre le profil 2 (un seul oui, les choix placés, le compte rendu).
   if (_pro131 && typeof TC_CONFIANCE_KEY !== 'undefined') etat.copie[TC_CONFIANCE_KEY] = '2';
   // 1. Le stockage : jamais écrit ; une lecture voit la copie de la démonstration, ou un réglage d'affichage.
@@ -15360,7 +15741,7 @@ async function tcOuvrirDemo() {
   if (typeof birthdays !== 'undefined') birthdays = [];
   charlyIA.config.demoMode = true;
   charlyIA._historiqueCharge = true;
-  charlyIA.history = [tcDemoMessagePhrases(TC_DEMO_TEXTES.intro)];
+  charlyIA.history = [tcDemoMessagePhrases(_valerie ? TC_DEMO_V_TEXTES.intro : TC_DEMO_TEXTES.intro)];
   tcDemoBandeau(true);
   navigate('assistant');
   renderCharlyChat();
@@ -15375,7 +15756,7 @@ function tcDemoAttendre(etat) {
 function tcDemoLibere(etat) {
   if (etat.occupe > 0) return;
   const attentes = etat.attentes.splice(0);
-  if (etat.quitterApres && _tcDemo === etat) tcQuitterDemo();
+  if (etat.quitterApres && _tcDemo === etat) tcQuitterDemo(etat.quitterOptions || undefined);
   attentes.forEach(function (r) { r(); });
 }
 
@@ -15385,6 +15766,7 @@ function tcQuitterDemo(options) {
   if (!etat) return;
   if (etat.occupe > 0) {
     etat.quitterApres = true;
+    etat.quitterOptions = options || null;   // « Garder les exemples » touché pendant que Charly travaille : gardé quand même
     const b = document.querySelector('#tcDemoBandeau button');
     if (b) { b.disabled = true; b.style.opacity = '0.6'; }
     return;
@@ -15406,7 +15788,25 @@ function tcQuitterDemo(options) {
   _tcDemo = null;
   tcDemoBandeau(false);
   if (_tcEtape) { clearTimeout(_tcEtape.garde); _tcEtape = null; tcDefinirStatutCharly(TC_STATUT_REPOS, false); }
-  charlyIA.history.push({ role: 'assistant', content: etat.pro ? TC_DEMO_TEXTES_PRO.apresQuitter : TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
+  // Les vraies disponibilités reviennent en mémoire ; les demandes d'exemple n'ont jamais existé.
+  if (typeof _dispoData !== 'undefined') _dispoData = null;
+  if (etat.valerie && typeof _tcRdvTraites !== 'undefined') { delete _tcRdvTraites[990001]; delete _tcRdvTraites[990002]; }
+  const garder = etat.valerie && options && options.garder;
+  if (garder) {
+    // « Garder les exemples » : les contacts et les rendez-vous d'exemple rejoignent les vrais, sur CET appareil seulement
+    // (la synchronisation, l'appairage et les rappels les laissent de côté ; rien ne leur est jamais envoyé).
+    const ids = {}, eids = {};
+    (garder.contacts || []).forEach(function (c) { ids[c.id] = true; });
+    (garder.events || []).forEach(function (e) { eids[e.id] = true; });
+    contactsList = (contactsList || []).filter(function (c) { return !(c && ids[c.id]); }).concat(garder.contacts || []);
+    events = (events || []).filter(function (e) { return !(e && eids[e.id]); }).concat(garder.events || []);
+    try { saveContacts(); } catch (e) {}
+    try { Promise.resolve(saveEventsToStorage()).catch(function () {}); } catch (e) {}
+    charlyIA.history.push({ role: 'assistant', content: TC_DEMO_V_TEXTES.garde, appText: true, _app: true, _demo: { garde: true } });
+  } else {
+    if (etat.valerie) charlyIA.history.push({ role: 'assistant', content: TC_DEMO_V_TEXTES.supprime, appText: true, _app: true, _demo: {} });
+    charlyIA.history.push({ role: 'assistant', content: etat.pro ? TC_DEMO_TEXTES_PRO.apresQuitter : TC_DEMO_TEXTES.apresQuitter, appText: true, _app: true, _demo: { importer: true } });
+  }
   if (!(options && options.sansRetour)) navigate('assistant');
   renderCharlyChat();
   try { if (typeof render === 'function') render(); } catch (e) {}
@@ -32254,9 +32654,16 @@ function tcHeureSql(h, m) { return String(h).padStart(2, '0') + ':' + String(m |
  * « Envoyer à … ») ; l'application ne peut pas envoyer seule un SMS ou un e-mail. Le rendez-vous est marqué.
  */
 async function tcEnvoyerPropositions(items) {
-  const res = { proposes: [], envois: [], echecs: [], sansMoyen: [], details: [], sansCreneau: [] };
+  const res = { proposes: [], envois: [], echecs: [], sansMoyen: [], details: [], sansCreneau: [], exemples: [] };
   for (const it of items) {
     const c = it.contact, ev = it.ev;
+    // Démonstration « Valérie » (examen, 22/11) : un contact ou un rendez-vous d'exemple ne reçoit jamais rien (ni carte, ni lien,
+    // ni bouton d'envoi) ; le rendez-vous n'est pas marqué. Dans la démonstration seulement, un exemple qui a TimeCool répond par
+    // le serveur de la démonstration (rien ne sort non plus).
+    if (typeof tcEstExemple === 'function' && (tcEstExemple(c) || tcEstExemple(ev)) && !(c && c.referenceCompte && typeof tcDemoActive === 'function' && tcDemoActive())) {
+      if (res.exemples.indexOf(c.name) < 0) res.exemples.push(c.name);
+      continue;
+    }
     const texte = tcPropositionTexte(c, ev) + (it.excuses ? ' Toutes mes excuses.' : '');   // mission 131
     const corps = {
       titre: ev.title || null, remplace: String(ev.id), texte: texte, avant: tcPropositionLibelle(ev),
@@ -32303,6 +32710,7 @@ function tcLignesPropositions(res, profil) {
   if (aEnvoyer.length) l.push('• Message prêt avec le lien des créneaux, à envoyer toi-même d’un geste (SMS ou email) : ' + tcNomsLisibles(aEnvoyer));
   if (res.echecs.length) l.push('• Pas envoyé, la connexion a manqué : ' + tcNomsLisibles(res.echecs) + '. Redemande-moi dans un instant.');
   if (res.sansMoyen.length) l.push('• Sans numéro ni email dans ta fiche contact, rien n’est parti : ' + tcNomsLisibles(res.sansMoyen));
+  if (res.exemples && res.exemples.length) l.push('• Rien n’est envoyé à un exemple : ' + tcNomsLisibles(res.exemples));
   // Au profil 3, Charly place seul : il ne demande pas avant d'écrire (TESTEURS, 03/11).
   // Mission 91 : au profil 2 aussi, le oui est déjà donné : le créneau choisi se place seul.
   if (res.details.length) l.push('Ces rendez-vous restent à leur place, marqués ⏳, jusqu’à la réponse. ' + ((profil || (typeof tcConfianceCharly === 'function' ? tcConfianceCharly() : 1)) >= 2
@@ -37287,7 +37695,7 @@ function renderContactsListHTML(contacts) {
           <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px; position:relative;">
             <div data-notranslate style="width:42px; height:42px; border-radius:50%; background:${color}; color:white; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; flex-shrink:0;">${initials}</div>
             <div style="flex:1; min-width:0;">
-              <div style="font-size:14px; font-weight:600; color:var(--text);"><span data-notranslate>${escapeHTMLSafe(c.name)}</span>${onTC ? '<span class="tc-badge"><i>\u2713</i>TIMECOOL</span>' : ''}</div>
+              <div style="font-size:14px; font-weight:600; color:var(--text);"><span data-notranslate>${escapeHTMLSafe(c.name)}</span>${onTC ? '<span class="tc-badge"><i>\u2713</i>TIMECOOL</span>' : ''}${typeof tcMarqueExemple === 'function' ? tcMarqueExemple(c) : ''}</div>
               ${_contactsRecents ? tcLigneAjouteLe(c) : ''}
               ${tcLigneCoordonnee(c, 'phone')}
               ${tcLigneCoordonnee(c, 'email')}
@@ -38007,8 +38415,9 @@ async function tcRafraichirBadgesContacts() {
   if (!TC_BACKEND.estConnecte() || !Array.isArray(contactsList) || !contactsList.length) return;
   let inscrits;
   try {
+    // Démonstration « Valérie » : un contact d'exemple gardé ne part jamais au serveur, et garde son badge inventé.
     inscrits = await TC_BACKEND.detecterContactsInscrits(
-      contactsList.map(c => ({ id: c.id, email: c.email, telephone: c.phone }))
+      contactsList.filter(c => !tcEstDemonstration(c)).map(c => ({ id: c.id, email: c.email, telephone: c.phone }))
     );
   } catch (e) {
     // Hors ligne : on laisse les badges dans l'etat connu, sans en inventer.
@@ -38017,6 +38426,7 @@ async function tcRafraichirBadgesContacts() {
   }
   let change = false;
   contactsList.forEach(function (c) {
+    if (tcEstDemonstration(c)) return;
     const etait = c.isTimeCool;
     const trouve = inscrits.get(c.id);
     c.isTimeCool = !!trouve;
@@ -38956,6 +39366,21 @@ const TC_BACKEND = {
   }
 };
 
+/* Démonstration « Valérie » (chef, 22/11) : un exemple gardé ne déclenche jamais de vrai envoi. Ce qui viserait un contact
+   d'exemple (référence DEMO-V-…) ne part pas : un message, une demande, une proposition, une convocation. */
+['demanderRdv', 'proposerRdvGroupe', 'confirmerRdvGroupe', 'envoyerMessage', 'envoyerConvocation', 'propositionCreer', 'propositionLibres', 'exchangePublicKey'].forEach(function (k) {
+  const vrai = TC_BACKEND[k];
+  if (typeof vrai !== 'function') return;
+  TC_BACKEND[k] = function () {
+    if (typeof tcArgumentsExemple === 'function' && tcArgumentsExemple(arguments)) {
+      const e = new Error(TC_DEMO_V_TEXTES.rienEnvoye);
+      e.code = 'exemple';
+      return Promise.reject(e);
+    }
+    return vrai.apply(this, arguments);
+  };
+});
+
 /* ══════════════════════════════════════════════════════════════
    ENVOYER LES CRÉNEAUX DIRECTEMENT — pour un contact sans TimeCool
    Voir TIMECOOL_Spec_Reponse_Contact_Sans_App.md
@@ -38997,6 +39422,8 @@ async function sendCreneauxDirect(contactId, channel) {
   const ov = document.getElementById('sendCreneauxOv');
   const slots = ov ? ov._slots : null;
   if (!c || !slots) return;
+  // Démonstration « Valérie » : à un contact d'exemple, rien ne part (ni lien, ni SMS, ni e-mail).
+  if (typeof tcEstExemple === 'function' && tcEstExemple(c)) { showToast('🎬 ' + tcDemoTexte(TC_DEMO_V_TEXTES.rienEnvoye)); return; }
 
   const prenom = tcPrenomPresentable(c.name);
   const organizerName = (userAccount && userAccount.firstname) || 'Un utilisateur TimeCool';
@@ -39151,6 +39578,12 @@ function inviteContact(contactId) {
    * jamais ete enregistre et menait a une page morte.
    */
   const txt = tcTexteInvitationTimeCool(contact);
+  // Démonstration « Valérie » : une invitation à un contact d'exemple ne part jamais (on voit l'invitation préparée).
+  if (typeof tcEstExemple === 'function' && tcEstExemple(contact)) {
+    sendPrevenirMessage(contact.name || '', txt);
+    showToast('\u{1F48C} ' + tcDemoTexte(TC_DEMO_V_TEXTES.rienEnvoye));
+    return;
+  }
   if (contact.phone) {
     try { window.location.href = tcLienSms(contact.phone, txt); } catch(e) {}
   }
@@ -40000,9 +40433,15 @@ const TC_SYNC_TYPES = {
     poser: function (liste) { birthdays = liste; saveBirthdays(); }
   },
   contact: {
-    lire: function () { return typeof contactsList === 'undefined' ? [] : contactsList; },
+    // Démonstration « Valérie » : les contacts d'exemple gardés restent sur cet appareil (comme les rendez-vous de démonstration).
+    lire: function () { return typeof contactsList === 'undefined' ? [] : contactsList.filter(function (c) { return !tcEstDemonstration(c); }); },
     id: function (o) { return o.id; },
-    poser: function (liste) { contactsList = liste; saveContacts(); }
+    ignorer: function (uid) { return typeof uid === 'string' && uid.indexOf('demo_') === 0; },
+    poser: function (liste) {
+      const garde = (typeof contactsList === 'undefined' ? [] : contactsList).filter(tcEstDemonstration);
+      contactsList = liste.filter(function (c) { return !tcEstDemonstration(c); }).concat(garde);
+      saveContacts();
+    }
   },
   /*
    * Les groupes de la messagerie (nom, membres par identifiant, trace, convocations locales) : un objet par groupe,
@@ -41063,7 +41502,11 @@ function tcReglagesTransferables() {
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     if (!tcCleTransferable(k)) continue;
-    const v = localStorage.getItem(k);
+    let v = localStorage.getItem(k);
+    // Démonstration « Valérie » : les contacts d'exemple gardés restent sur CET appareil (pas de recopie trompeuse).
+    if (k === 'timecool_contacts' && v) {
+      try { const l = JSON.parse(v); if (Array.isArray(l)) v = JSON.stringify(l.filter(function (c) { return !tcEstDemonstration(c); })); } catch (e) {}
+    }
     if (v !== null) r[k] = v;
   }
   return r;
@@ -41827,6 +42270,12 @@ function cycleRecipientStatus(convocId, idx) {
  */
 async function tcTransmettrePrevenance(contact, texte, sujet) {
   const nom = (contact && contact.name) || _prevenirName || '';
+  // Démonstration « Valérie » : un contact d'exemple ne reçoit jamais rien (ni SMS ni e-mail) ; on voit le message préparé.
+  // Dans la démonstration, un exemple qui a TimeCool « répond » par la messagerie d'exemple (rien ne sort non plus).
+  if (typeof tcEstExemple === 'function' && tcEstExemple(contact) && !(contact.referenceCompte && typeof tcDemoActive === 'function' && tcDemoActive())) {
+    sendPrevenirMessage(nom, texte);
+    return 'exemple';
+  }
   if (contact && contact.referenceCompte) {
     try {
       await TC_BACKEND.envoyerMessage(
@@ -41858,6 +42307,7 @@ async function tcTransmettrePrevenance(contact, texte, sujet) {
 /** Ce qu'il faut dire une fois le message parti — ou pas parti. */
 function tcDirePrevenance(chemin, nom) {
   if (chemin === 'timecool') { showToast('✅ ' + nom + ' prévenu(e)'); return; }
+  if (chemin === 'exemple') { showToast('🎬 ' + tcDemoTexte(TC_DEMO_V_TEXTES.rienEnvoye)); return; }
   if (chemin === 'sms' || chemin === 'email') {
     showToast('✅ Message prêt pour ' + nom + ' — envoie-le');
     return;
