@@ -5573,6 +5573,8 @@ function tcYAller(lieu) {
   // n'a aucune permission a reclamer pour cela.
   const url = 'https://www.google.com/maps/dir/?api=1&destination='
     + encodeURIComponent(adresse);
+  // Démonstration (chef, 22/11) : les liens vers dehors y sont coupés ; l'itinéraire Google Maps est la seule sortie permise.
+  if (typeof tcDemoOuvrirMaps === 'function' && tcDemoOuvrirMaps(url)) return;
   if (typeof tcOuvrirAilleurs === 'function') tcOuvrirAilleurs(url);
   else window.open(url, '_blank');
 }
@@ -15439,11 +15441,33 @@ async function tcDemoSceneTrajetV() {
   await tcEtapeAttente('Charly calcule ton trajet…');
   await tcFinEtapes();
   if (!ev) { tcDemoDireV(TC_DEMO_V_SCENES_FIXES.dentisteIntrouvable); return; }
-  tcDemoDireV(tcDemoTexteTrajetV(ev), [['🧭 Y aller', 'tcDemoYAllerV()']], [ev.id]);
+  tcDemoDireV(tcDemoTexteTrajetV(ev), [['🧭 Y aller', "tcDemoYAllerV('" + ev.id + "')"]], [ev.id]);
 }
 
-/** « Y aller », dans la démonstration : rien ne s'ouvre, on le dit. */
-function tcDemoYAllerV() { showToast('🧭 ' + tcDemoTexte(TC_DEMO_V_SCENES_FIXES.gps)); }
+/**
+ * « Y aller », dans la démonstration (chef, 22/11) : l'itinéraire Google Maps vers l'adresse de l'exemple, comme hors démonstration.
+ * id : le rendez-vous (vidéo 7, le dentiste) ou le contact (vidéo 2, le restaurant prévenu du retard), cherché dans les données
+ * de la démonstration.
+ */
+function tcDemoYAllerV(id) {
+  const ev = (events || []).find(function (e) { return e && e.id === id; });
+  const c = ev ? null : (contactsList || []).find(function (x) { return x && x.id === id; });
+  const adresse = String((ev ? ev.lieu : (c && c.address)) || '').trim();
+  if (adresse && typeof tcYAller === 'function') { tcYAller(adresse); return; }
+  showToast('🧭 ' + tcDemoTexte(TC_DEMO_V_SCENES_FIXES.gps));
+}
+
+/**
+ * Pendant la démonstration, tcOuvrirAilleurs ne fait rien (SMS, e-mail, WhatsApp : rien ne sort). Seul l'itinéraire Google Maps
+ * passe, par la vraie fonction mise de côté à l'ouverture : une adresse, rien d'autre. Rend true quand la démonstration est
+ * ouverte (le lien est alors traité ici, ouvert ou non), false sinon (tcYAller fait comme d'habitude).
+ */
+function tcDemoOuvrirMaps(url) {
+  if (typeof _tcDemo === 'undefined' || !_tcDemo) return false;
+  const vraie = _tcDemo.fonctions && _tcDemo.fonctions.tcOuvrirAilleurs;
+  if (typeof vraie === 'function' && /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=[^&#]+$/.test(String(url))) vraie(url);
+  return true;
+}
 
 /** Vidéo 8 : les disponibilités par catégorie, le temps libre protégé ; la page « Mes disponibilités ». */
 async function tcDemoSceneDisposV() {
@@ -15662,7 +15686,7 @@ function tcDemoServeur() {
       if (_tcDemo && _tcDemo.valerie && _c && typeof tcDemoReponseV === 'function') {
         const _route = /retard/i.test(String(texte || '')) && typeof TC_DEMO_V_ROUTES !== 'undefined' ? TC_DEMO_V_ROUTES[_c.id] : '';
         tcDemoReponseDe(reference, tcDemoReponseV(_c, texte), _route ? function () {
-          tcDemoDireV(tcDemoTexteRouteV(_c, _route), [['🧭 Y aller', 'tcDemoYAllerV()']]);
+          tcDemoDireV(tcDemoTexteRouteV(_c, _route), [['🧭 Y aller', "tcDemoYAllerV('" + _c.id + "')"]]);
         } : undefined);
         return { ok: true };
       }

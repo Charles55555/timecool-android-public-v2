@@ -4162,3 +4162,20 @@ Chef, 22/11 : les textes des 6 scènes jouées par la démonstration (vidéos 5,
 - Les boutons des scènes et le message de « Y aller » sont traduits aussi.
 - Les réponses des contacts d'exemple restent dans leur langue, comme dans la vraie messagerie.
 - verif-demo-videos : un passage en allemand, avec un traducteur d'essai hors ligne. Les lignes des créneaux, les puces datées, le choix de Julien, les disponibilités et leur bouton sont traduits. 22 vérifications, rouge sur la page d'avant.
+
+## 22/11/2026 — Démonstration « Valérie » : « Y aller » ouvre vraiment Google Maps (CODEUR)
+
+Charles, 22/11 (soir), sur son téléphone : dans la fiche d'un rendez-vous d'exemple (Rendez-vous cliente, Nadia Cohen, 33 rue de Rome), « Y aller » ne faisait rien et ne disait rien. La démonstration coupe tcOuvrirAilleurs (SMS, e-mail, WhatsApp : rien ne sort), et « Y aller » passait par elle.
+- tcYAller : pendant la démonstration, l'itinéraire passe par tcDemoOuvrirMaps.
+  - Elle reprend la vraie tcOuvrirAilleurs, mise de côté à l'ouverture de la démonstration.
+  - Elle n'ouvre qu'une adresse Google Maps (https://www.google.com/maps/dir/?api=1&destination=…, sans autre paramètre).
+  - Tout le reste du bac à sable reste fermé : un SMS, WhatsApp ou un lien Maps retouché ne s'ouvrent pas.
+- Page de Charly, vidéos 7 (le dentiste) et 2 (le restaurant prévenu du retard) : « Y aller » ouvre l'itinéraire vers l'adresse de l'exemple, à la place du petit message « ouvre le GPS de ton téléphone ».
+  - Ce message reste, seulement si l'adresse manque.
+- Hors démonstration, rien ne change.
+- verif-demo-videos :
+  - « Y aller » ouvre Maps vers 27 rue de Turbigo, 9 rue Montorgueil et 33 rue de Rome ;
+  - le reste reste fermé ;
+  - après la démonstration, « Y aller » marche comme avant ;
+  - rouge sur la page d'avant.
+- Dans la même suite, l'horloge de la page part maintenant du dimanche 22/11 17h20. Avant, le contrôle « Sophie prévenue du retard » dépendait de l'heure de la vérification : il était rouge à 22h, même sur la page d'avant.

@@ -1,6 +1,7 @@
 // Démonstration « Valérie », les 12 vidéos (Charles, 22/11/2026) : chaque phrase de la liste se joue dans la démonstration,
-// dans l'ordre de Charles, et montre ce que la vidéo doit filmer. Rien ne sort (aucun appel réseau, aucun lien ouvert), rien
-// n'est écrit sur l'appareil. Le vrai parcours dans Chrome, sans réseau, sur un compte d'essai ; une démonstration neuve par vidéo.
+// dans l'ordre de Charles, et montre ce que la vidéo doit filmer. Rien ne sort (aucun appel réseau, aucun lien ouvert sauf
+// l'itinéraire Google Maps de « Y aller », chef 22/11), rien n'est écrit sur l'appareil. Le vrai parcours dans Chrome, sans réseau,
+// sur un compte d'essai ; une démonstration neuve par vidéo.
 // Usage : node verif-demo-videos.js <index.html>
 const fs = require('fs');
 const path = require('path');
@@ -56,6 +57,8 @@ async function dansLaPage(D) {
     await dire('Je suis en retard de 10 minutes, préviens tout le monde'); const m2 = depuis(n0);
     await toucher('Oui, envoie-leur');
     R.videos.retard = { avant: m2, apres: depuis(n0), noms: charlyIA.history.slice(n0).filter((m) => m._tiers).map((m) => m._tiers.prenom) };
+    // Chef, 22/11 : « Y aller » ouvre l'itinéraire Google Maps vers le restaurant.
+    let o0 = window.__ouverts.length; await toucher('Y aller'); R.videos.retard.maps = window.__ouverts.slice(o0);
     // 3. Dîner entre copines.
     await ouvrir(); n0 = charlyIA.history.length;
     await dire('Organise un dîner entre copines avec Emma, Léa et Inès');
@@ -78,7 +81,20 @@ async function dansLaPage(D) {
     // 7. Y aller.
     await ouvrir(); n0 = charlyIA.history.length;
     await dire('Comment je vais chez le dentiste mardi ?');
-    R.videos.trajet = { apres: depuis(n0), boutons: boutons() };
+    R.videos.trajet = { apres: depuis(n0), boutons: boutons(), lieu: (tcDemoDentisteV(events) || {}).lieu };
+    // Chef, 22/11 : « Y aller » ouvre l'itinéraire Google Maps vers le dentiste ; dans la fiche d'un rendez-vous d'exemple aussi.
+    o0 = window.__ouverts.length; await toucher('Y aller'); R.videos.trajet.maps = window.__ouverts.slice(o0);
+    const nadia = events.find((e) => /^Rendez-vous cliente, Nadia Cohen/.test(e.title));
+    if (nadia) openEventModal(nadia); await attendre(300);
+    const bFiche = Array.prototype.slice.call(document.querySelectorAll('#emBody button')).find((x) => /Y aller/.test(x.textContent));
+    o0 = window.__ouverts.length; if (bFiche) bFiche.click(); await attendre(300);
+    R.fiche = { lieu: nadia && nadia.lieu, bouton: !!bFiche, maps: window.__ouverts.slice(o0) };
+    closeEventModal();
+    // Le reste du bac à sable reste fermé : un SMS, WhatsApp, une autre adresse que Maps ne s'ouvrent pas.
+    o0 = window.__ouverts.length;
+    tcOuvrirAilleurs('sms:0639981001?body=x'); tcOuvrirAilleurs('https://wa.me/33639981001');
+    if (typeof tcDemoOuvrirMaps === 'function') { tcDemoOuvrirMaps('sms:0639981001'); tcDemoOuvrirMaps('https://www.google.com/maps/dir/?api=1&destination=x&origin=y'); }
+    R.ferme = window.__ouverts.slice(o0);
     // 8. Les disponibilités, puis leur page (la démonstration reste ouverte).
     await ouvrir(); n0 = charlyIA.history.length;
     await dire('Montre-moi mes disponibilités');
@@ -123,15 +139,23 @@ async function dansLaPage(D) {
     currentLanguage = 'fr'; translateText = trad0;
     // Rien n'est sorti, rien n'est resté.
     tcQuitterDemo({ sansRetour: true }); await attendre(400);
+    // Après la démonstration, « Y aller » marche comme avant.
+    o0 = window.__ouverts.length; tcYAller('10 rue de la Paix, 75002 Paris'); R.apres = window.__ouverts.slice(o0);
     let traces = 0; for (let i = 0; i < localStorage.length; i++) { const v = localStorage.getItem(localStorage.key(i)) || ''; if (/demo_v_|DEMO-V-|"exemple":true/.test(v)) traces++; }
-    R.fin = { appels: window.__appels, href: location.href === href, traces: traces, erreurs: window.__erreurs };
+    R.fin = { appels: window.__appels, href: location.href === href, traces: traces, erreurs: window.__erreurs, ouverts: window.__ouverts };
     fin(R);
   } catch (e) { fin({ erreur: String(e && e.stack || e), R }); }
 }
 
 function jouer(largeur) {
   const compte = JSON.stringify({ firstname: 'Valérie', lastname: 'Essai', email: 'valerie.essai.videos@exemple-timecool.fr', reference: 'REFESSAIVIDEOS' });
-  const tete = '<script>(function () { window.__appels = 0; window.__erreurs = [];'
+  // Ce que la page ouvrirait (un onglet, l'application Maps du téléphone) est noté, rien ne s'ouvre.
+  const tete = '<script>(function () { window.__appels = 0; window.__erreurs = []; window.__ouverts = [];'
+    + ' window.open = function (u) { window.__ouverts.push(String(u)); return {}; };'
+    // L'horloge de la page part du dimanche 22/11/2026, 17h20 (heure de Paris), puis avance : les 12 vidéos jouent toujours le même
+    // agenda (le café dans la demi-heure, l'appel avec Sophie à 18h, le patron demain), quels que soient le jour et l'heure de la vérification.
+    + ' var V = Date, d0 = new V(2026, 10, 22, 17, 20).getTime() - V.now();'
+    + ' window.Date = class extends V { constructor() { if (arguments.length) super(...arguments); else super(V.now() + d0); } static now() { return V.now() + d0; } };'
     + ' window.addEventListener("error", function (e) { window.__erreurs.push(String(e && e.message)); });'
     + ' window.fetch = function () { window.__appels++; return Promise.reject(new Error("hors ligne")); };'
     + ' try { localStorage.clear(); localStorage.setItem("timecool_user_account", ' + JSON.stringify(compte) + '); localStorage.setItem("timecool_session_active", "true");'
@@ -192,12 +216,25 @@ if (T.erreur || !T.videos) {
     && /c’est le niveau 1/.test(tout(V.confiance.apres)) && V.confiance.page === 'settings' && V.confiance.demo === true, JSON.stringify([V.confiance.page, V.confiance.demo]) + ' ' + tout(V.confiance.apres));
   verifie('12. gratuit, sans publicité et sans cookie ; Maya ; l’installation', /TimeCool est gratuit, sans publicité et sans cookie/.test(tout(V.gratuit.apres)) && /Maya/.test(tout(V.gratuit.apres))
     && V.gratuit.boutons.some((b) => /Parler à Maya/.test(b)), tout(V.gratuit.apres));
+  titre('« Y aller » ouvre Google Maps (chef, 22/11)');
+  const MAPS = 'https://www.google.com/maps/dir/?api=1&destination=';
+  const vers = (l) => (l || []).map((u) => u.indexOf(MAPS) === 0 ? 'Maps → ' + decodeURIComponent(u.slice(MAPS.length)) : u);
+  verifie('7. page de Charly : « Y aller » ouvre l’itinéraire vers le dentiste (27 rue de Turbigo), une seule fois',
+    JSON.stringify(vers(V.trajet.maps)) === JSON.stringify(['Maps → ' + V.trajet.lieu]) && /^27 rue de Turbigo, 75003 Paris$/.test(V.trajet.lieu), JSON.stringify(vers(V.trajet.maps)) + ' / ' + V.trajet.lieu);
+  verifie('2. page de Charly : « Y aller » ouvre l’itinéraire vers Chez Marguerite (9 rue Montorgueil)',
+    JSON.stringify(vers(V.retard.maps)) === JSON.stringify(['Maps → 9 rue Montorgueil, 75002 Paris']), JSON.stringify(vers(V.retard.maps)));
+  const Fi = T.fiche || {};
+  verifie('fiche du rendez-vous d’exemple (Rendez-vous cliente, Nadia Cohen) : « Y aller » ouvre l’itinéraire vers 33 rue de Rome',
+    Fi.bouton === true && Fi.lieu === '33 rue de Rome, 75008 Paris' && JSON.stringify(vers(Fi.maps)) === JSON.stringify(['Maps → 33 rue de Rome, 75008 Paris']), JSON.stringify(Fi));
+  verifie('le reste reste fermé pendant la démonstration : un SMS, WhatsApp, un lien Maps retouché ne s’ouvrent pas', Array.isArray(T.ferme) && T.ferme.length === 0, JSON.stringify(T.ferme));
+  verifie('après la démonstration, « Y aller » marche comme avant', JSON.stringify(vers(T.apres)) === JSON.stringify(['Maps → 10 rue de la Paix, 75002 Paris']), JSON.stringify(T.apres));
   titre('Dans une autre langue (chef, 22/11)');
   const Lg = T.langue || {};
   verifie('les textes des scènes jouées sont traduits d’avance, à l’ouverture (créneaux, puces datées, choix de Julien, disponibilités, boutons)',
     Lg.creneaux && Lg.puce && Lg.julien && Lg.dispos && Lg.bouton, JSON.stringify(Lg));
   titre('Rien ne sort, rien ne reste');
-  verifie('aucun appel réseau, aucun lien ouvert (SMS, e-mail, GPS) pendant les 12 vidéos', T.fin.appels === 0 && T.fin.href === true, JSON.stringify(T.fin));
+  verifie('aucun appel réseau ; aucun lien ouvert (SMS, e-mail) pendant les 12 vidéos, sauf les itinéraires Google Maps de « Y aller »',
+    T.fin.appels === 0 && T.fin.href === true && T.fin.ouverts.length === 4 && T.fin.ouverts.every((u) => /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=[^&#]+$/.test(u)), JSON.stringify(T.fin));
   verifie('après « Tout supprimer » : aucune trace sur l’appareil', T.fin.traces === 0, T.fin.traces);
   verifie('aucune erreur dans la page', !T.fin.erreurs.length, T.fin.erreurs.join(' | '));
 }
