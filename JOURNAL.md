@@ -3961,3 +3961,16 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Le bouton « Toute la semaine » fait pareil. Le parcours « malade » lit « la semaine » comme « d'aujourd'hui à dimanche », pas selon la règle de la mission 58.
   - Rien n'est corrigé dans l'appli. La suite joue le mardi 24/11 à 10h, sans cas « dimanche » tant que le défaut existe (décision du chef).
 - Dans les trois suites, Chrome tourne à l'heure de Paris (TZ Europe/Paris). Rien d'autre ne change.
+
+## 22/11/2026 — La devise finit par un point d'exclamation, comme sur le site (CODEUR)
+
+- Charles, 22/11 : « Ton temps est la seule ressource que tu ne pourras jamais fabriquer ! », avec une espace insécable avant « ! ».
+- Deux endroits dans la page, rien d'autre ne change : en bas de l'écran d'accueil (« Slogan en bas ») et en bas de Paramètres, avant « Supprimer mon compte ». Les guillemets droits et le style restent.
+- Recherche dans tout le dépôt :
+  - aucune autre devise, ni dans l'API, ni dans les e-mails, ni dans les textes d'aide (Maya) ;
+  - la copie iPhone ios/TimeCool/web/index.html est ignorée par git, et preparer-ios.sh la recopie depuis la page : elle suivra seule ;
+  - la présentation de Charly ne cite plus la devise depuis longtemps (verif-presentation-charly).
+- Autres langues : la devise n'est pas dans les textes figés (TC_ACCUEIL_TEXTES).
+  - Connecté : la traduction Google de la page la traduit à l'affichage, comme tous les textes. Le nouveau texte est une nouvelle clé du cache, donc il est retraduit.
+  - Sans compte : elle reste en français.
+- Nouvelle suite verif-devise, 5 vérifications, dont 4 rouges sur 9e0504a.
