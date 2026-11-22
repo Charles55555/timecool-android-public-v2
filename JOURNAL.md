@@ -3998,3 +3998,14 @@ Chef, 17/11 (Charles, après essai : l avion « complètement nul »).
   - Souvenir de la même session : comme avant.
 - Nouvelle suite verif-remets-les, 19 vérifications. Elle joue le vrai parcours : Chrome lancé le dimanche soir, fermé, puis relancé sur le même profil le lundi 7h30. Elle est rouge sur 2f71b2f.
 - Deux phrases de plus dans phrases-charles : « remets-les » sans rien avant, et « remets-les » après « malade… décale… demain » puis « oui ».
+- Examen de « remets-les » : 2 défauts, corrigés.
+  - Le souvenir était écrit en clair sur l'appareil. Pour une suppression, c'était la copie entière des rendez-vous (titre, notes, lieu), alors que les rendez-vous vivants sont chiffrés.
+    - Il est maintenant chiffré avec la clé de l'appareil (tcEncrypt), comme les rendez-vous. En clair, il ne reste que le compte et l'heure.
+    - L'enregistrement est asynchrone, numéroté : un chiffrement plus ancien qui finit après n'écrase jamais le plus récent.
+    - Sans chiffrement possible, rien n'est gardé.
+    - La relecture déchiffre (tcRelireMarcheArriere est asynchrone, appelée par tcMarcheArriere seulement). La détection n'en a pas besoin : rien en mémoire, ou un souvenir relu, donne la même réponse, « remets-les » tout court.
+  - Le souvenir voyageait à l'appairage : tcCleTransferable acceptait les deux clés. Elles sont maintenant dans TC_JAMAIS_TRANSFERE, et le souvenir reste sur CET appareil.
+  - verif-remets-les compte 22 vérifications, dont 3 rouges sur 41f9669 :
+    - rien en clair après la suppression de « Psychiatre Dr Essai » et de ses notes, qui reviennent intacts ;
+    - les deux clés sont refusées par tcCleTransferable.
+  - À savoir, non changé : la conversation de Charly (timecool_charly_historique) reste en clair sur l'appareil et voyage à l'appairage, comme avant.

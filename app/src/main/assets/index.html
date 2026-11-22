@@ -19563,9 +19563,11 @@ function tcMemoriserSuppression(cible) {
 
 /* ═══ « Remets-les » après une fermeture de l'appli (chef, 22/11/2026, ok de Charles) ═══
    La dernière suppression ou le dernier déplacement est aussi gardé sur l'appareil, pour ce compte et cette page de Charly
-   (Charly IA ou Charly Pro IA), 48 heures. Clé sans préfixe « tc_ » : la synchronisation l'ignore (comme la conversation).
-   Jamais pendant la démonstration. Chaque changement de _tcMarcheArriere est recopié par tcGarderMarcheArriere ; quand
-   la mémoire est vide (appli rouverte), tcRelireMarcheArriere la reprend de l'appareil. */
+   (Charly IA ou Charly Pro IA), 48 heures. Clé sans préfixe « tc_ » : la synchronisation l'ignore (comme la conversation) ;
+   l'appairage aussi (TC_JAMAIS_TRANSFERE) : le souvenir reste sur CET appareil. Chiffré avec la clé de l'appareil, comme
+   les rendez-vous (examen : titres et notes jamais en clair) ; en clair, seulement le compte et l'heure. Jamais pendant la
+   démonstration. Chaque changement de _tcMarcheArriere est recopié par tcGarderMarcheArriere ; quand la mémoire est vide
+   (appli rouverte), tcMarcheArriere le reprend de l'appareil (tcRelireMarcheArriere). */
 const TC_MARCHE_ARRIERE_CLE = 'timecool_charly_marche_arriere';
 const TC_MARCHE_ARRIERE_DUREE_MS = 48 * 3600 * 1000;
 /** « Remets-les » tout court (avec « et », « stp », « à leur place »…) : la seule forme reconnue quand rien n'est gardé. */
@@ -19575,23 +19577,36 @@ function tcCleMarcheArriere() {
 }
 function tcCompteMarcheArriere() { return typeof tcSyncCompte === 'function' ? tcSyncCompte() : null; }
 function tcDemoMarcheArriere() { return typeof tcDemoActive === 'function' && !!tcDemoActive(); }
-/** L'appareil garde la même chose que la mémoire ; rien en mémoire : la clé part. */
+/** Le numéro du dernier changement : un chiffrement plus ancien qui finit après n'écrase jamais le plus récent. */
+let _tcGarderMarcheArriereNumero = 0;
+/** L'appareil garde la même chose que la mémoire, chiffrée ; rien en mémoire : la clé part. Sans chiffrement possible : rien
+    n'est gardé (la remise ne vaut alors que jusqu'à la fermeture, comme avant). */
 function tcGarderMarcheArriere() {
   if (tcDemoMarcheArriere()) return;
+  const numero = ++_tcGarderMarcheArriereNumero;
   try {
-    if (!_tcMarcheArriere) { localStorage.removeItem(tcCleMarcheArriere()); return; }
+    const cle = tcCleMarcheArriere();
+    if (!_tcMarcheArriere) { localStorage.removeItem(cle); return; }
     if (!_tcMarcheArriere.t) _tcMarcheArriere.t = Date.now();
-    localStorage.setItem(tcCleMarcheArriere(), JSON.stringify({ compte: tcCompteMarcheArriere(), m: _tcMarcheArriere }));
+    const compte = tcCompteMarcheArriere(), t = _tcMarcheArriere.t, clair = JSON.stringify(_tcMarcheArriere);
+    Promise.resolve(typeof tcEncrypt === 'function' ? tcEncrypt(clair) : null).then(function (chiffre) {
+      if (numero !== _tcGarderMarcheArriereNumero || typeof chiffre !== 'string' || chiffre.indexOf('tcenc:') !== 0) return;
+      localStorage.setItem(cle, JSON.stringify({ compte: compte, t: t, chiffre: chiffre }));
+    }).catch(function () {});
   } catch (e) {}
 }
-/** Mémoire vide (l'appli a été fermée) : ce que l'appareil a gardé pour ce compte, même trop vieux (tcMarcheArriere le dit). */
-function tcRelireMarcheArriere() {
+/** Mémoire vide (l'appli a été fermée) : ce que l'appareil a gardé pour ce compte, déchiffré, même trop vieux (tcMarcheArriere
+    le dit). */
+async function tcRelireMarcheArriere() {
   if (_tcMarcheArriere || tcDemoMarcheArriere()) return;
   try {
     const brut = localStorage.getItem(tcCleMarcheArriere());
     const g = brut ? JSON.parse(brut) : null;
-    if (!g || !g.m || !Array.isArray(g.m.rdvs) || !g.m.rdvs.length || !g.compte || g.compte !== tcCompteMarcheArriere()) return;
-    _tcMarcheArriere = g.m;
+    if (!g || typeof g.chiffre !== 'string' || g.chiffre.indexOf('tcenc:') !== 0 || !g.compte || g.compte !== tcCompteMarcheArriere()) return;
+    const clair = await tcDecrypt(g.chiffre);
+    const m = clair ? JSON.parse(clair) : null;
+    if (!m || !Array.isArray(m.rdvs) || !m.rdvs.length || _tcMarcheArriere) return;
+    _tcMarcheArriere = m;
     _tcMarcheArriere._relu = true;
   } catch (e) {}
 }
@@ -19633,10 +19648,9 @@ function tcDetecterMarcheArriere(text) {
   if (explicite) return true;
   const remettre = /\b(remets|remet|remettre|remettez)\b/.test(t) && !/\b(un|une)\b/.test(t);
   const erreur = /(je me suis trompe|c'?etait une erreur|je n'?aurais pas du|pas voulu)/.test(t);
-  // Chef, 22/11 : appli rouverte, le souvenir revient de l'appareil. Revenu de l'appareil, trop vieux ou absent : seulement
-  // « remets-les » tout court, qui a toujours sa réponse claire (jamais le modèle, qui proposait autre chose) ; « remets le
-  // son… » reste aux réglages. En mémoire depuis cette ouverture : comme avant.
-  if (typeof tcRelireMarcheArriere === 'function') tcRelireMarcheArriere();
+  // Chef, 22/11 : appli rouverte, le souvenir revient de l'appareil (tcMarcheArriere le relit). Revenu de l'appareil, trop
+  // vieux ou absent : seulement « remets-les » tout court, qui a toujours sa réponse claire (jamais le modèle, qui proposait
+  // autre chose) ; « remets le son… » reste aux réglages. En mémoire depuis cette ouverture : comme avant.
   // Appels défensifs : des suites chargent ces fonctions une à une, sans les nouvelles (elles retrouvent alors l'ancien chemin).
   const seul = typeof TC_REMETS_SEUL !== 'undefined' && TC_REMETS_SEUL.test(t);
   const vieille = typeof tcMarcheArriereTropVieille === 'function' && tcMarcheArriereTropVieille(_tcMarcheArriere);
@@ -19647,7 +19661,7 @@ function tcDetecterMarcheArriere(text) {
 /** Remet la dernière suppression ou le dernier déplacement, et le dit. */
 async function tcMarcheArriere(text) {
   tcPousserMessageUtilisateur(text);
-  if (typeof tcRelireMarcheArriere === 'function') tcRelireMarcheArriere();
+  if (typeof tcRelireMarcheArriere === 'function') await tcRelireMarcheArriere();
   const m = _tcMarcheArriere;
   const dire = function (texte) { charlyIA.history.push({ role: 'system_info', content: texte }); renderCharlyChat(); };
   if (!m) { dire('Je n\'ai rien à remettre : je ne retrouve aucun rendez-vous supprimé ou déplacé récemment sur cet appareil.'); return; }
@@ -40842,7 +40856,11 @@ const TC_JAMAIS_TRANSFERE = [
   // rejouerait a chaque tour, effacant sans fin ce que la lecture vient
   // de rapporter.
   'tc_nettoyage',              // TC_NETTOYAGE_KEY
-  'tc_maj_ignoree'             // TC_MAJ_IGNOREE_KEY
+  'tc_maj_ignoree',            // TC_MAJ_IGNOREE_KEY
+  // « Remets-les » (chef, 22/11) : le souvenir de la dernière suppression ou du dernier déplacement reste sur CET appareil
+  // (examen : recopié à l'appairage, un « remets-les » sur le second appareil serait parti du souvenir du premier).
+  'timecool_charly_marche_arriere',     // TC_MARCHE_ARRIERE_CLE
+  'timecool_charly_marche_arriere_pro'  // sa clé pour Charly Pro IA
 ];
 
 /** Une clé a-t-elle le droit de voyager ? */

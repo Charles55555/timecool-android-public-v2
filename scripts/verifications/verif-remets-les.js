@@ -5,6 +5,7 @@
 // 1. Le vrai parcours dans Chrome, sans réseau : « Je suis malade, décale tous mes rendez-vous de demain » → « Oui, vas-y » le
 //    dimanche soir ; Chrome FERMÉ puis relancé sur le même profil (l'appli fermée puis rouverte), le lundi 7h30 : « remets-les ».
 // 2. Les cas limites, mémoire vidée comme à une fermeture.
+// Examen : le souvenir est chiffré avec la clé de l'appareil (aucun titre ni note en clair) et ne voyage jamais à l'appairage.
 // Usage : node verif-remets-les.js <index.html>
 const fs = require('fs');
 const path = require('path');
@@ -66,7 +67,11 @@ async function dansLaPage(D) {
       const oui = Array.prototype.slice.call(document.querySelectorAll('#charlyChatBody button')).filter((x) => !x.disabled && x.offsetParent && /Oui, vas-y/.test(x.innerText)).pop();
       if (oui) { const n = charlyIA.history.length; oui.click(); await attendre(4000); r1.fait = charlyIA.history.slice(n).map((m) => String(m.content || '').replace(/<[^>]+>/g, ' ')); }
       r1.apres = ['lun1', 'lun2', 'lun3'].map((x) => ou('vr_' + x));
-      try { const g = JSON.parse(localStorage.getItem(cle) || 'null'); r1.garde = g && { compte: g.compte, n: g.m.rdvs.length, apres: g.m.rdvs.every((r) => r.apres && r.title), t: !!g.m.t }; } catch (e) { r1.garde = String(e); }
+      await attendre(400);
+      try {
+        const brut = localStorage.getItem(cle) || '', g = JSON.parse(brut || 'null'), m = g && g.chiffre ? JSON.parse((await tcDecrypt(g.chiffre)) || 'null') : null;
+        r1.garde = g && { compte: g.compte, chiffre: /^tcenc:/.test(g.chiffre || ''), clair: /Réunion|Dentiste|Foot/.test(brut), n: m && m.rdvs.length, apres: !!m && m.rdvs.every((r) => r.apres && r.title), t: !!(m && m.t) && m.t === g.t };
+      } catch (e) { r1.garde = String(e); }
       await saveEventsToStorage(); await attendre(500);
       localStorage.setItem('__res1', JSON.stringify(r1));
       localStorage.setItem('__phase', '2');
@@ -83,14 +88,14 @@ async function dansLaPage(D) {
     C.remets.cle = !!localStorage.getItem(cle);
     C.encore = await taper('remets-les');
     // Une fermeture : la mémoire de la page se vide, l'appareil garde.
-    const fermer = () => { _tcMarcheArriere = null; };
+    const fermer = async () => { await attendre(400); _tcMarcheArriere = null; };
     const poser = async (liste) => { events = events.filter((e) => e && !/^vx_/.test(String(e.id))); liste.forEach((e) => events.push(Object.assign({ cat: 'blue', mode: 'user', calendarId: 'cal_default' }, e))); await saveEventsToStorage(); };
     const X = (id, date, h, m, h2, m2, title) => ({ id: 'vx_' + id, date, startH: h, startM: m, endH: h2, endM: m2, title });
     const vers = (id, date, h, m, h2, m2) => ({ ev: events.find((e) => e.id === 'vx_' + id), p: { date, startH: h, startM: m, endH: h2, endM: m2 } });
     // Les cas : supprimé, changé à la main, place prise, intact.
     await poser([X('a', '2026-11-23', 10, 0, 11, 0, 'Rdv A'), X('b', '2026-11-23', 11, 0, 12, 0, 'Rdv B'), X('c', '2026-11-23', 15, 0, 16, 0, 'Rdv C'), X('d', '2026-11-23', 17, 0, 18, 0, 'Rdv D')]);
     tcAppliquerDeplacement([vers('a', '2026-11-25', 8, 0, 9, 0), vers('b', '2026-11-25', 9, 0, 10, 0), vers('c', '2026-11-25', 10, 0, 11, 0), vers('d', '2026-11-25', 11, 0, 12, 0)], { silencieux: true });
-    fermer();
+    await fermer();
     events = events.filter((e) => e.id !== 'vx_b');
     Object.assign(events.find((e) => e.id === 'vx_c'), { startH: 14, endH: 15 });
     events.push({ id: 'vx_plombier', date: '2026-11-23', startH: 17, startM: 0, endH: 17, endM: 30, title: 'Plombier', cat: 'blue', mode: 'user', calendarId: 'cal_default' });
@@ -101,14 +106,14 @@ async function dansLaPage(D) {
     window.__tcHorloge('2026-11-23T15:30:00');
     await poser([X('e', '2026-11-23', 9, 0, 10, 0, 'Rdv E'), X('f', '2026-11-23', 14, 0, 15, 0, 'Rdv F'), X('g', '2026-11-23', 21, 0, 22, 0, 'Rdv G')]);
     tcAppliquerDeplacement([vers('e', '2026-11-26', 9, 0, 10, 0), vers('f', '2026-11-26', 10, 0, 11, 0), vers('g', '2026-11-26', 11, 0, 12, 0)], { silencieux: true });
-    fermer();
+    await fermer();
     C.passe = await taper('remets-les');
     C.passe.places = ['e', 'f', 'g'].map((x) => ou('vx_' + x));
     // Plus de deux jours.
     window.__tcHorloge('2026-11-23T08:00:00');
     await poser([X('h', '2026-11-27', 9, 0, 10, 0, 'Rdv H')]);
     tcAppliquerDeplacement([vers('h', '2026-11-28', 9, 0, 10, 0)], { silencieux: true });
-    fermer();
+    await fermer();
     window.__tcHorloge('2026-11-25T09:00:00');
     C.vieux = await taper('remets-les');
     C.vieux.place = ou('vx_h'); C.vieux.cle = !!localStorage.getItem(cle);
@@ -118,46 +123,60 @@ async function dansLaPage(D) {
     window.__tcHorloge('2026-11-23T08:00:00');
     await poser([X('i', '2026-11-27', 9, 0, 10, 0, 'Rdv I')]);
     tcAppliquerDeplacement([vers('i', '2026-11-28', 9, 0, 10, 0)], { silencieux: true });
-    fermer();
+    await fermer();
     const garde = localStorage.getItem(cle) || '';
     localStorage.setItem(cle, garde.replace('"compte":"REFESSAIREMETS"', '"compte":"AUTRECOMPTE"'));
     C.autreCompte = await taper('remets-les');
-    fermer();
+    await fermer();
     localStorage.setItem(cle, garde);
     C.bonCompte = await taper('remets-les');
     C.bonCompte.place = ou('vx_i');
     // Un second appareil : rien de gardé ici.
     await poser([X('j2', '2026-11-27', 9, 0, 10, 0, 'Rdv J2')]);
     tcAppliquerDeplacement([vers('j2', '2026-11-28', 9, 0, 10, 0)], { silencieux: true });
-    fermer(); localStorage.removeItem(cle);
+    await fermer(); localStorage.removeItem(cle);
     C.autreAppareil = await taper('remets-les');
     C.autreAppareil.place = ou('vx_j2');
     // Une suppression, puis la place de l'un prise.
     await poser([X('j', '2026-11-27', 10, 0, 11, 0, 'Rdv J'), X('k', '2026-11-27', 12, 0, 13, 0, 'Rdv K')]);
     tcSupprimerRdvs(events.filter((e) => e.id === 'vx_j' || e.id === 'vx_k'), { silencieux: true });
-    fermer();
+    await fermer();
     events.push({ id: 'vx_visite', date: '2026-11-27', startH: 12, startM: 0, endH: 12, endM: 30, title: 'Visite', cat: 'blue', mode: 'user', calendarId: 'cal_default' });
     C.suppression = await taper('remets-les');
     C.suppression.places = ['j', 'k'].map((x) => ou('vx_' + x));
+    // Examen : un rendez-vous supprimé n'est jamais lisible en clair sur l'appareil (titre, notes), et revient intact.
+    events = events.filter((e) => e && !/^vx_/.test(String(e.id)));
+    events.push({ id: 'vx_psy', date: '2026-11-27', startH: 16, startM: 0, endH: 17, endM: 0, title: 'Psychiatre Dr Essai', notes: 'note secrète essai', cat: 'blue', mode: 'user', calendarId: 'cal_default' });
+    await saveEventsToStorage();
+    tcSupprimerRdvs(events.filter((e) => e.id === 'vx_psy'), { silencieux: true });
+    await attendre(400);
+    const brutPsy = localStorage.getItem(cle) || '';
+    C.prive = { garde: !!brutPsy, titre: /Psychiatre/.test(brutPsy), notes: /note secr/.test(brutPsy), chiffre: /tcenc:/.test(brutPsy) };
+    await fermer();
+    Object.assign(C.prive, await taper('remets-les'));
+    const psy = events.find((e) => e && e.id === 'vx_psy');
+    C.prive.revenu = psy ? psy.title + ' / ' + psy.notes + ' / ' + place(psy) : 'absent';
+    C.transfert = typeof tcCleTransferable === 'function' ? { ia: tcCleTransferable(cle), pro: tcCleTransferable(cle + '_pro'), conversation: tcCleTransferable('timecool_charly_historique') } : null;
     // Un lot replacé deux fois par Charly (créneau choisi, puis un autre) : remis à sa toute première place, pas « changé depuis ».
     await poser([X('l', '2026-11-27', 15, 0, 16, 0, 'Rdv L')]);
     const evL = events.find((e) => e.id === 'vx_l'); evL.lotDecalage = { id: 'lotEssai' };
     tcDeplacerDansLeLot([{ ev: evL, p: { date: '2026-11-28', startH: 9, startM: 0, endH: 10, endM: 0 } }], { silencieux: true });
     tcDeplacerDansLeLot([{ ev: evL, p: { date: '2026-11-28', startH: 11, startM: 0, endH: 12, endM: 0 } }], { silencieux: true });
-    fermer();
+    await fermer();
     C.lot = await taper('remets-les');
     C.lot.place = ou('vx_l');
     // Ce que « remets-les » reconnaît quand rien n'est gardé, ou quand le souvenir revient de l'appareil.
-    fermer(); localStorage.removeItem(cle);
+    await fermer(); localStorage.removeItem(cle);
     C.lecture = { vide: {}, relu: {} };
     const PH = ['remets-les', 'Remets les à leur place stp', 'et remets-les', 'remets le son des rappels', 'remets mes rappels la veille', 'remets le rdv de Paul demain', 'je me suis trompé'];
     PH.forEach((p) => { C.lecture.vide[p] = tcDetecterMarcheArriere(p); });
     await poser([X('m', '2026-11-27', 9, 0, 10, 0, 'Rdv M')]);
     tcAppliquerDeplacement([vers('m', '2026-11-28', 9, 0, 10, 0)], { silencieux: true });
-    fermer();
-    PH.forEach((p) => { fermer(); C.lecture.relu[p] = tcDetecterMarcheArriere(p); });
+    await fermer();
+    for (const p of PH) { await fermer(); await tcRelireMarcheArriere(); C.lecture.relu[p] = tcDetecterMarcheArriere(p); }
+    C.lecture.reluCharge = !!(_tcMarcheArriere && _tcMarcheArriere._relu);
     // Sans fermeture : comme avant (« je me suis trompé » remet aussi).
-    fermer(); localStorage.removeItem(cle);
+    await fermer(); localStorage.removeItem(cle);
     await poser([X('n', '2026-11-27', 9, 0, 10, 0, 'Rdv N')]);
     tcAppliquerDeplacement([vers('n', '2026-11-28', 9, 0, 10, 0)], { silencieux: true });
     C.memeSession = { lecture: tcDetecterMarcheArriere('je me suis trompé') };
@@ -169,13 +188,15 @@ async function dansLaPage(D) {
     tcDemoActive = function () { return true; };
     await poser([X('o', '2026-11-27', 9, 0, 10, 0, 'Rdv O')]);
     tcAppliquerDeplacement([vers('o', '2026-11-28', 9, 0, 10, 0)], { silencieux: true });
+    await attendre(400);
     C.demo = { cle: !!localStorage.getItem(cle) };
-    tcDemoActive = demo; fermer();
+    tcDemoActive = demo; await fermer();
     const variante = tcCharlyVariante;
     tcCharlyVariante = 'pro';
     tcAppliquerDeplacement([vers('o', '2026-11-29', 9, 0, 10, 0)], { silencieux: true });
+    await attendre(400);
     C.pro = { pro: !!localStorage.getItem(cle + '_pro'), ia: !!localStorage.getItem(cle) };
-    tcCharlyVariante = variante; fermer();
+    tcCharlyVariante = variante; await fermer();
     fin(res);
   } catch (e) { fin({ erreur: String(e && e.stack || e) }); }
 }
@@ -214,8 +235,8 @@ if (!res || res.erreur || !res.r1 || !res.cas) {
   titre('1. Le dimanche soir, puis l’appli fermée et rouverte le lundi 7h30');
   verifie('« Je suis malade, décale tous mes rendez-vous de demain » → « Oui, vas-y » : les trois rendez-vous de lundi sont déplacés',
     r1.apres && r1.apres.every((p) => p !== 'absent' && !/^2026-11-23 /.test(p)) && /C’est fait|C'est fait/.test((r1.fait || []).join(' ')), JSON.stringify([r1.apres, r1.fait, r1.boutons]));
-  verifie('le souvenir est gardé sur l’appareil : ce compte, les trois rendez-vous avec leur place d’avant et d’après, l’heure',
-    r1.garde && r1.garde.compte === 'REFESSAIREMETS' && r1.garde.n === 3 && r1.garde.apres && r1.garde.t, JSON.stringify(r1.garde));
+  verifie('le souvenir est gardé sur l’appareil, chiffré (aucun titre en clair) : ce compte, les trois rendez-vous avec leur place d’avant et d’après, l’heure',
+    r1.garde && r1.garde.compte === 'REFESSAIREMETS' && r1.garde.chiffre && !r1.garde.clair && r1.garde.n === 3 && r1.garde.apres && r1.garde.t, JSON.stringify(r1.garde));
   verifie('appli rouverte : la mémoire de la page est vide, les rendez-vous sont toujours déplacés, l’appareil a gardé le souvenir',
     C.reouverture.memoire && C.reouverture.avant.every((p) => !/^2026-11-23 /.test(p)) && C.reouverture.cle, JSON.stringify(C.reouverture));
   verifie('« remets-les » le lendemain matin : « C’est fait : 3 rendez-vous remis à leur place », sans le modèle',
@@ -247,11 +268,17 @@ if (!res || res.erreur || !res.r1 || !res.cas) {
     /« Rdv J » est remis/.test(s) && /« Rdv K » : sa place \(vendredi 27 novembre, 12h à 13h\) est prise par « Visite »\. Je ne le remets pas\./.test(s) && JSON.stringify(C.suppression.places) === JSON.stringify(['2026-11-27 10h-11h', 'absent']), s);
   verifie('un lot replacé deux fois par Charly : remis à sa toute première place (pas « changé depuis »)',
     /« Rdv L » est remis à sa place/.test(txt(C.lot)) && C.lot.place === '2026-11-27 15h-16h', txt(C.lot) + ' ' + C.lot.place);
+  verifie('examen : un rendez-vous supprimé (« Psychiatre Dr Essai », ses notes) n’est jamais lisible en clair sur l’appareil, seulement chiffré',
+    C.prive && C.prive.garde && C.prive.chiffre && !C.prive.titre && !C.prive.notes, JSON.stringify(C.prive));
+  verifie('… et « remets-les » après fermeture le remet intact : titre, notes, place',
+    C.prive && C.prive.revenu === 'Psychiatre Dr Essai / note secrète essai / 2026-11-27 16h-17h' && /« Psychiatre Dr Essai » est remis/.test(txt(C.prive)), C.prive && C.prive.revenu + ' ' + txt(C.prive));
+  verifie('examen : le souvenir ne voyage jamais à l’appairage (timecool_charly_marche_arriere et _pro refusées par tcCleTransferable)',
+    C.transfert && C.transfert.ia === false && C.transfert.pro === false, JSON.stringify(C.transfert));
   titre('3. Les phrases');
   const L = C.lecture;
   verifie('rien de gardé : « remets-les », « Remets les à leur place stp », « et remets-les » ont leur réponse ; « remets le son des rappels », « remets mes rappels la veille », « remets le rdv de Paul demain », « je me suis trompé » vont ailleurs',
     L.vide['remets-les'] && L.vide['Remets les à leur place stp'] && L.vide['et remets-les'] && !L.vide['remets le son des rappels'] && !L.vide['remets mes rappels la veille'] && !L.vide['remets le rdv de Paul demain'] && !L.vide['je me suis trompé'], JSON.stringify(L.vide));
-  verifie('souvenir revenu de l’appareil : pareil (les réglages ne sont pas pris pour une remise)', JSON.stringify(L.relu) === JSON.stringify(L.vide), JSON.stringify(L.relu));
+  verifie('souvenir revenu de l’appareil (déchiffré) : pareil (les réglages ne sont pas pris pour une remise)', L.reluCharge === true && JSON.stringify(L.relu) === JSON.stringify(L.vide), JSON.stringify([L.reluCharge, L.relu]));
   verifie('sans fermeture, comme avant : « je me suis trompé » est une remise, « remets-les » remet', C.memeSession.lecture && /« Rdv N » est remis à sa place/.test(txt(C.memeSession)) && C.memeSession.place === '2026-11-27 9h-10h', JSON.stringify(C.memeSession));
   verifie('démonstration : rien n’est gardé sur l’appareil', C.demo && C.demo.cle === false, JSON.stringify(C.demo));
   verifie('Charly Pro IA : sa propre clé (timecool_charly_marche_arriere_pro)', C.pro && C.pro.pro && !C.pro.ia, JSON.stringify(C.pro));
